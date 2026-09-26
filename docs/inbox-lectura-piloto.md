@@ -4,15 +4,15 @@ Desarrollado en local el 25 de septiembre de 2026, en `codex/inbox-lectura`, sob
 
 ## Qué permite
 
-El acceso **Inbox** del sidebar y el botón **Abrir inbox** de Configuración → Integraciones abren `/inbox` en otra pestaña, sin el sidebar de Grafo. Se muestran cuando la recepción del piloto está habilitada y existe al menos un mensaje validado del contacto autorizado en el canal actual. Lee los mensajes guardados por el piloto: muestra los últimos 50 y permite cargar anteriores. Actualiza al pulsar **Actualizar** o volver a la pestaña; todavía no tiene actualización continua.
+El acceso **Inbox** del sidebar abre `/inbox` en otra pestaña, sin el sidebar de Grafo. Por decisión del 26/09 permanece visible para el rol autorizado, independientemente de la conexión, el plan o de tener mensajes. El botón de Configuración → Integraciones sigue siendo un atajo desde la recepción validada. Lee los mensajes guardados por el piloto: muestra los últimos 50 y permite cargar anteriores. Actualiza al pulsar **Actualizar** o volver a la pestaña; todavía no tiene actualización continua.
 
 El contexto se busca automáticamente por teléfono completo entre los clientes y sus contactos, dentro de la misma empresa. Una coincidencia muestra la ficha y las órdenes recientes permitidas. Varias coincidencias requieren elegir la ficha antes de mostrar sus órdenes; ninguna coincidencia indica que se debe registrar el teléfono en el cliente o contacto correspondiente. La selección es temporal y se vuelve a validar en cada consulta.
 
 Esta entrega conserva el alcance del piloto: **un contacto autorizado, una empresa y acceso de administrador con `configuracion.gestionar`**. No habilita todavía el inbox para operadores ni la conexión de otras empresas.
 
-El menú consulta `GET /integraciones/meta/inbox/disponibilidad`, que sólo devuelve identidad y un booleano: no descarga mensajes ni contactos. Se revalida al navegar, volver a la pestaña y actualizar la recepción desde Configuración. Mientras se comprueba, si falla, si cambia la identidad o si falta el plan/permiso, permanece oculto. La ruta privada y la API conservan sus controles aunque se conozca la URL.
+El menú ya no consulta disponibilidad ni descarga mensajes/contactos. La ruta privada y la API conservan sus controles de sesión, permisos, plan y empresa aunque se conozca la URL. Mostrar el acceso no concede permisos sobre conversaciones.
 
-**Alcance de esa señal:** comprueba que la recepción del piloto fue validada; no asegura que el token de envío siga vigente ni realiza una consulta en vivo a Meta. Todavía no existe el alta Cloud por empresa. Cuando se implemente, esta condición deberá depender del estado de la conexión y su suscripción al canal, sin exigir conversaciones previas. No usar el estado de Wati para habilitar este inbox.
+Sin recepción configurada, la vista muestra una bienvenida y **Conectar WhatsApp**. El botón está deshabilitado con un aviso de disponibilidad futura porque el alta por empresa todavía no está implementada; no lleva a Wati ni simula autorizaciones. Un error de sesión/API conserva su estado de error y no se presenta como desconexión. Un piloto configurado sin mensajes mantiene la bandeja vacía. El endpoint de disponibilidad anterior se conserva por compatibilidad, sin consumidores en la web: su resultado no prueba la salud de Meta.
 
 ## Qué queda pendiente
 
@@ -45,6 +45,8 @@ node scripts/preview-inbox.mjs
 
 Abrir `http://127.0.0.1:3015/lectura`. Utiliza el componente real de lectura con un proveedor de datos ficticios: 53 mensajes, un cliente y una orden. No carga `.env`, no conecta con Meta ni con la API y no permite comprobar el login real. Los enlaces a fichas y órdenes no tienen destino en este servidor aislado. La raíz sigue mostrando el prototipo completo; `/abrir` muestra su acceso en nueva pestaña.
 
+`/sin-conectar` muestra la bienvenida real con una respuesta ficticia sin conexión. No abre Meta ni solicita permisos.
+
 Para probar con la aplicación local completa, seguir `docs/desarrollo-local.md`, mantener desactivadas las tareas programadas y usar únicamente sus accesos locales. No copiar credenciales de staging.
 
 ## Verificación realizada
@@ -55,7 +57,9 @@ Para probar con la aplicación local completa, seguir `docs/desarrollo-local.md`
 - Ensayo en PostgreSQL local con 115 mensajes ficticios: historial completo sin saltos ni duplicados, separación entre empresas/canales/contactos, cursor ajeno rechazado, contacto secundario, coincidencias múltiples y piloto apagado.
 - Chrome en escritorio y 390 × 844: historial por páginas, contexto, fecha de entrega, tema y último mensaje al entrar al chat móvil.
 
-Revisión posterior del acceso condicional: 26 pruebas de API y 31 de web aprobadas, incluyendo recepción sin comprobar, plan/permisos, fallo de consulta, cambio de identidad, respuesta tardía y enlace real del sidebar en nueva pestaña. TypeScript de web/API y ESLint del alcance también comprobados. No agrega migraciones ni llamadas a Meta.
+Revisión del acceso condicional del 25/09 (comportamiento reemplazado el 26/09): 26 pruebas de API y 31 de web aprobadas, incluyendo recepción sin comprobar, plan/permisos, fallo de consulta, cambio de identidad, respuesta tardía y enlace real del sidebar en nueva pestaña. TypeScript de web/API y ESLint del alcance también comprobados. No agregó migraciones ni llamadas a Meta.
+
+Revisión del acceso permanente del 26/09: 45 pruebas de web aprobadas (sidebar sin consultas de conexión, plan, permisos, bienvenida, errores, sesión y lectura), TypeScript de la web, ESLint del alcance y guardia de CSS. Se retiró el hook que ocultaba el menú. Verificación visual local en escritorio y 390 × 844, con ambos temas. Este cambio sólo modifica UI/navegación; no habilita el alta real ni despliega staging.
 
 El ensayo de PostgreSQL está en `apps/api/scripts/deploy/verify-meta-inbox.cjs`. Exige una base cuyo nombre termine en `_test` y coincida con `DEPLOY_DATABASE_NAME`; crea identificadores propios y elimina solamente esos datos al terminar. Usar `VERIFY_META_SOURCE=true` con `ts-node/register/transpile-only` para ejecutarlo desde fuentes. No ejecutarlo contra staging ni producción.
 

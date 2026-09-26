@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/empty";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import { getMetaRecepcion, type RecepcionMeta } from "@/lib/meta-recepcion-api";
-import { INBOX_CONEXION_ACTUALIZADA } from "@/lib/meta-inbox-api";
 
 const tipos: Record<string, string> = {
   text: "Texto",
@@ -62,7 +61,6 @@ export function MetaRecepcionCard({ inicial }: { inicial: RecepcionMeta }) {
     } finally {
       lock.current = false;
       setOcupado(false);
-      window.dispatchEvent(new Event(INBOX_CONEXION_ACTUALIZADA));
     }
   }
 

@@ -16,6 +16,16 @@
 .loading {
   color: var(--muted-text);
 }
+.welcome {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
 .older {
   display: flex;
   justify-content: center;
@@ -24,8 +34,5 @@
 @media (max-width: 700px) {
   .headerActions {
     gap: 4px;
-  }
-  .headerActions a {
-    display: none;
   }
 }

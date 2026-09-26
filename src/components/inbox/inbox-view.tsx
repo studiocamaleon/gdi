@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -15,7 +16,7 @@ import {
 import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import brand from "@/components/design-system/brand-workspace-theme.module.css";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -56,6 +57,7 @@ import {
 import { cn } from "@/lib/utils";
 import s from "./inbox-workspace.module.css";
 import live from "./inbox-view.module.css";
+import { InboxBienvenida } from "./inbox-bienvenida";
 
 const tipos: Record<string, string> = {
   image: "Imagen",
@@ -375,7 +377,9 @@ export function InboxView({
           <div className={s.previewBar}>
             <span>
               <span className={s.previewDot} />
-              Prueba interna · contacto autorizado · sólo lectura
+              {estado === "listo"
+                ? "Prueba interna · contacto autorizado · sólo lectura"
+                : "Grafo Inbox · WhatsApp"}
             </span>
             <div>{iconoTema}</div>
           </div>
@@ -384,7 +388,7 @@ export function InboxView({
               <GrafoprintBrand compact />
               <div>
                 <h1>
-                  Conversaciones<span>.</span>
+                  Inbox<span>.</span>
                 </h1>
                 <p>
                   {identidad.empresa} · {identidad.operador}
@@ -392,13 +396,9 @@ export function InboxView({
               </div>
             </div>
             <div className={live.headerActions}>
-              <Button
-                nativeButton={false}
-                variant="outline"
-                render={<a href="/configuracion/integraciones" />}
-              >
+              <Link href="/" className={buttonVariants({ variant: "outline" })}>
                 Volver a Grafo
-              </Button>
+              </Link>
               <Button
                 variant="outline"
                 disabled={ocupado}
@@ -415,22 +415,22 @@ export function InboxView({
               <Skeleton className="h-16 w-full" />
               <Skeleton className="h-32 w-full" />
             </div>
+          ) : estado === "inactivo" ? (
+            <div className={live.welcome}>
+              <InboxBienvenida />
+            </div>
           ) : estado !== "listo" || !datos ? (
             <div className={live.fallback}>
               <Alert variant={estado === "error" ? "destructive" : "default"}>
                 <AlertTitle>
-                  {estado === "inactivo"
-                    ? "Inbox no disponible para esta empresa"
-                    : estado === "sesion"
-                      ? "Cambió tu sesión"
-                      : "No pudimos cargar las conversaciones"}
+                  {estado === "sesion"
+                    ? "Cambió tu sesión"
+                    : "No pudimos cargar las conversaciones"}
                 </AlertTitle>
                 <AlertDescription>
-                  {estado === "inactivo"
-                    ? "La recepción de prueba todavía no está habilitada para esta empresa."
-                    : estado === "sesion"
-                      ? "Volvé a Grafo y abrí el inbox desde la cuenta actual."
-                      : "Revisá tu acceso y volvé a actualizar. Los mensajes se ocultaron hasta recuperar la conexión."}
+                  {estado === "sesion"
+                    ? "Volvé a Grafo y abrí el inbox desde la cuenta actual."
+                    : "Revisá tu acceso y volvé a actualizar. Los mensajes se ocultaron hasta recuperar la conexión."}
                 </AlertDescription>
               </Alert>
             </div>

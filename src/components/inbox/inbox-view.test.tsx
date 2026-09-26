@@ -100,19 +100,27 @@ it("presenta adjuntos por su tipo sin descargar ni renderizar URLs", async () =>
   );
   expect(container.querySelector("img, video, audio")).toBeNull();
 });
-it("distingue piloto inactivo y recepción sin mensajes", async () => {
+it("muestra la bienvenida sin conexión y no confunde un piloto vacío con uno desconectado", async () => {
   cargar.mockResolvedValueOnce(null);
   await render();
-  expect(container.textContent).toContain("Inbox no disponible");
+  expect(container.textContent).toContain("Tu WhatsApp, dentro de Grafo");
+  const conectar = [...container.querySelectorAll("button")].find((b) =>
+    b.textContent?.includes("Conectar WhatsApp"),
+  );
+  expect(conectar?.disabled).toBe(true);
+  expect(container.textContent).toContain("disponible próximamente");
+  expect(container.querySelector("[role=log]")).toBeNull();
   cargar.mockResolvedValue({ ...base, mensajes: [] });
   await click("Actualizar");
   expect(container.textContent).toContain("Todavía no hay mensajes");
+  expect(container.textContent).not.toContain("Conectar WhatsApp");
 });
 it("el error de actualización retira mensajes y contexto, luego permite recuperarlos", async () => {
   await render();
   cargar.mockRejectedValueOnce(new Error("403"));
   await click("Actualizar");
   expect(container.textContent).toContain("No pudimos cargar");
+  expect(container.textContent).not.toContain("Conectar WhatsApp");
   expect(container.textContent).not.toContain("Estudio Oliva");
   expect(container.querySelector("[role=log]")).toBeNull();
   await click("Actualizar");
@@ -194,7 +202,7 @@ it("ignora una respuesta tardía después de un refresco que denegó el acceso",
   await render();
   cargar.mockResolvedValueOnce(null);
   await act(async () => window.dispatchEvent(new Event("focus")));
-  expect(container.textContent).toContain("Inbox no disponible");
+  expect(container.textContent).toContain("Tu WhatsApp, dentro de Grafo");
   await act(async () => resolver(base));
   expect(container.textContent).not.toContain("Estudio Oliva");
   expect(cargar.mock.calls[0][1]?.aborted).toBe(true);

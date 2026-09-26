@@ -7,7 +7,7 @@ import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { InboxView } from "@/components/inbox/inbox-view";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Conversaciones | Grafoprint" };
+export const metadata = { title: "Inbox | Grafoprint" };
 
 /** Ruta privada independiente: conserva sesión y cambio de clave obligatorio. */
 export default async function InboxPage() {

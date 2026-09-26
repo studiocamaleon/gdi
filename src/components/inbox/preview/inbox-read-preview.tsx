@@ -59,3 +59,8 @@ const cargar: CargarInbox = async (query) =>
 export function InboxReadPreview() {
   return <InboxView identidad={identidad} cargar={cargar} />;
 }
+
+const sinConexion: CargarInbox = async () => null;
+export function InboxWelcomePreview() {
+  return <InboxView identidad={identidad} cargar={sinConexion} />;
+}

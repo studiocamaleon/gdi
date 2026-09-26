@@ -4,6 +4,8 @@ Relevamiento: 25/09/2026. **Estado: diseño para implementar; la importación no
 
 ## Qué ofreceremos al cliente
 
+**Criterio de entrega acordado el 26/09:** preparar infraestructura y UI para que, cuando Meta habilite el acceso necesario, una empresa pueda conectar su número y trabajar con las conversaciones que Meta permita sincronizar. El trabajo no termina al tener una maqueta ni un botón visible. Deben funcionar el alta real, el aislamiento por empresa, el historial, los mensajes nuevos, las respuestas, los adjuntos disponibles, los estados y la recuperación ante fallos. La comprobación real del flujo permitido por Meta sigue siendo una condición de salida, aunque las pruebas locales ya pasen.
+
 Al conectar su WhatsApp Business con Grafo, el negocio podrá autorizar que se incorpore su historial disponible. Podrá seguir usando el celular y ver en Grafo los mensajes que envíe desde allí. La conexión y la importación tendrán estados separados: una cuenta puede estar conectada aunque el negocio no comparta su historial.
 
 Límites verificados en la [guía oficial de coexistencia](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users):
@@ -113,7 +115,7 @@ El número de prueba de Cloud API utilizado en el piloto **no valida** una impor
 
 1. Modelo general de conexión, conversación, mensaje y seguimiento de importación; migraciones aditivas y permisos por empresa.
 2. Procesadores locales de historial/contactos/ecos y recepción duradera, con datos ficticios. Reprocesamiento seguro, eventos grandes, métricas y controles de acceso.
-3. Orquestación del alta y solicitudes a Meta; estados y progreso visibles en Configuración e Inbox. El acceso al inbox dependerá de una conexión válida, no de tener un primer mensaje.
+3. Orquestación del alta y solicitudes a Meta; estados y progreso visibles en Configuración e Inbox. Por decisión del 26/09, el acceso al inbox permanece visible para el rol autorizado aun sin conexión; dentro se ofrece conectar o se muestran las conversaciones según el estado comprobado del canal.
 4. Pruebas agrupadas en staging con una cuenta propia elegible, cuando Meta habilite el flujo. Revisar los permisos reales y el consentimiento antes de esa prueba.
 5. Completar envío, plantillas, archivos y reglas de atención; validar el circuito completo antes de ofrecer conexión a clientes.
 

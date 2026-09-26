@@ -19,6 +19,7 @@ if (!/^\d{4,5}$/.test(port) || Number(port) > 65535)
 mkdirSync(join(preview, "app"));
 mkdirSync(join(preview, "app/abrir"));
 mkdirSync(join(preview, "app/lectura"));
+mkdirSync(join(preview, "app/sin-conectar"));
 symlinkSync(
   realpathSync(join(root, "node_modules")),
   join(preview, "node_modules"),
@@ -63,6 +64,10 @@ writeFileSync(
 writeFileSync(
   join(preview, "app/lectura/page.tsx"),
   'import {InboxReadPreview} from "@/components/inbox/preview/inbox-read-preview"; export default function Page(){return <InboxReadPreview/>;}',
+);
+writeFileSync(
+  join(preview, "app/sin-conectar/page.tsx"),
+  'import {InboxWelcomePreview} from "@/components/inbox/preview/inbox-read-preview"; export default function Page(){return <InboxWelcomePreview/>;}',
 );
 writeFileSync(
   join(preview, "app/layout.tsx"),

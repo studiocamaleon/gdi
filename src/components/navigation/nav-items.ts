@@ -327,19 +327,14 @@ export function navPara(
   permisos: Set<string> | null,
   pais: string = "AR",
   funciones?: Record<string, boolean>,
-  conexiones?: { inboxDisponible?: boolean },
 ): NavItem[] {
-  // A diferencia del menú legacy, Inbox nunca se ofrece por falta de datos.
-  const disponibles = NAV.filter(
-    item => item.key !== "inbox" || (
-      conexiones?.inboxDisponible === true &&
-      permisos?.has("configuracion.gestionar") === true &&
-      funciones?.whatsapp_automatico === true
-    ),
-  );
+  // Inbox tiene una bienvenida aun sin conexión o mensajes. La visibilidad
+  // conserva permisos; los datos y las acciones siguen protegidos en la API.
+  const disponibles = NAV;
   // El filtro por país corre SIEMPRE, incluso sin permisos: un tenant chileno
   // sin lista de permisos no tiene por qué ver el circuito fiscal argentino.
   const porPlan = (href: string) => {
+    if (href === "/inbox") return true;
     if (href === "/reportes")
       return reportesVisibles(p => !permisos || permisos.has(p), funciones).length > 0;
     const clave = capacidadDeRuta(href);

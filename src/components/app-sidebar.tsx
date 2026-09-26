@@ -5,7 +5,6 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowUpRight, Layers3, MessageCircle, X } from "lucide-react";
-import { useInboxDisponible } from "@/components/inbox/use-inbox-disponible";
 
 import { type CurrentUser, type TenantSummary } from "@/lib/auth";
 import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
@@ -352,11 +351,6 @@ function filtrarNav(nav: NavItem[], q: string): NavItem[] {
 export function AppSidebar({ currentUser }: AppSidebarProps) {
   const funciones = useFuncionesPlan();
   const pathname = usePathname();
-  const inboxDisponible = useInboxDisponible(
-    currentUser,
-    funciones.whatsapp_automatico === true,
-    pathname,
-  );
   // Lo que este usuario puede ver. Se calcula una vez y de acá sale todo el
   // resto: qué grupos hay, cuál está activo y qué encuentra el buscador.
   const nav = React.useMemo(
@@ -365,9 +359,8 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         permisosDe(currentUser),
         currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
         funciones,
-        { inboxDisponible },
       ),
-    [currentUser, funciones, inboxDisponible],
+    [currentUser, funciones],
   );
   // El ancla del pie. Se muestra si le queda alguna sección: el Administrativo
   // entra por Datos fiscales y Métodos de pago sin tener `configuracion.ver`.

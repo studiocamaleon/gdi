@@ -26,15 +26,17 @@ const hijos = (permisos: string[], grupo: string) => {
     : [];
 };
 
-describe("Inbox requiere disponibilidad confirmada", () => {
-  it("no aparece por defecto ni con permisos o plan desconocidos", () => {
+describe("Inbox permanece visible sin consultar la conexión", () => {
+  it.each([undefined, { whatsapp_automatico: false }, { whatsapp_automatico: true }])("aparece con permiso aunque el plan sea %j", (funciones) => {
     const acceso = new Set(["configuracion.gestionar"]);
-    expect(navPara(acceso).some(i => i.key === "inbox")).toBe(false);
-    expect(navPara(null, "AR", { whatsapp_automatico: true }, { inboxDisponible: true }).some(i => i.key === "inbox")).toBe(false);
-    expect(navPara(acceso, "AR", undefined, { inboxDisponible: true }).some(i => i.key === "inbox")).toBe(false);
+    expect(navPara(acceso, "AR", funciones).some(i => i.key === "inbox")).toBe(true);
   });
-  it("con permiso, plan y conexión se ofrece en otra pestaña y se puede buscar por WhatsApp", () => {
-    const item = navPara(new Set(["configuracion.gestionar"]), "AR", { whatsapp_automatico: true }, { inboxDisponible: true }).find(i => i.key === "inbox");
+  it("mantiene los permisos y el fallback de sesiones legacy", () => {
+    expect(navPara(new Set()).some(i => i.key === "inbox")).toBe(false);
+    expect(navPara(null).some(i => i.key === "inbox")).toBe(true);
+  });
+  it("se ofrece en otra pestaña y se puede buscar por WhatsApp", () => {
+    const item = navPara(new Set(["configuracion.gestionar"])).find(i => i.key === "inbox");
     expect(item).toMatchObject({ href: "/inbox", label: "Inbox", nuevaPestana: true, buscar: expect.arrayContaining(["whatsapp"]) });
   });
 });
