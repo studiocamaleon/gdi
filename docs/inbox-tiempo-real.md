@@ -1,6 +1,6 @@
 # Inbox en tiempo real
 
-Implementación local del 26/09/2026, rama `codex/inbox-lectura`. Se conecta a la recepción del piloto; todavía no habilita envío, varios contactos, alta por empresa ni historial de coexistencia. No se desplegó en staging.
+Implementación inicial local del 26/09/2026, rama `codex/inbox-lectura`. Se conectó primero a la recepción del piloto. La ampliación del mismo día en `codex/inbox-conversaciones-generales` incorpora [varios contactos, mensajes generales y autorización por vínculo](meta-inbox-lectura-general.md). Sigue sin habilitar envíos ni acreditar una importación real completa. No se desplegó en staging.
 
 Commits del bloque: `c2f2dc037` (API y persistencia) y `f8fef7b61` (web y reconexión).
 
@@ -30,6 +30,7 @@ La web de venta en Vercel no participa. El Inbox usa la aplicación y API previs
 - Se agrupan avisos durante 250 ms para evitar una consulta por cada mensaje de una ráfaga. La UI serializa sus lecturas automáticas y recuerda avisos que llegan durante una consulta.
 - Al perder SSE, el navegador reintenta con espera creciente hasta 15 segundos y conserva una consulta periódica de respaldo. Sin latidos durante más de 45 segundos, el control de respaldo fuerza reconexión. Las pestañas ocultas pausan el canal; al volver consultan otra vez.
 - La actualización conserva los mensajes anteriores cargados si la nueva página se solapa con ellos. Si durante una desconexión llegaron más de una página y ya no hay solapamiento, se muestra la ventana reciente y se permite paginar desde allí: no se presenta una conversación con un hueco invisible.
+- La regla de solapamiento anterior se mantiene en el piloto. El lector general refresca todo el tramo visible, hasta 500 mensajes, para reflejar también ediciones y eliminaciones antiguas. Un corte se indica en pantalla y permite paginar hacia atrás.
 - Leer mensajes anteriores no salta automáticamente al final cuando llega uno nuevo. Si el operador ya estaba cerca del final, sí se acompaña la conversación. Una lectura tiene un plazo de 15 segundos.
 
 El indicador «Actualización en vivo» describe la conexión entre el navegador y Grafo después de una lectura correcta. No certifica la salud de Meta. El respaldo de 15 segundos no es una garantía de entrega de WhatsApp: depende también de Meta, la red y la disponibilidad de la base.
@@ -68,6 +69,6 @@ La migración también se aplicó a `gdi_saas` local, sin seed/reset y con permi
 
 ## Qué sigue
 
-La próxima etapa debe conectar cada empresa con Embedded Signup y resolver su canal de forma única. Después, historial/contacts/echoes de coexistencia, envío y estados de entrega, adjuntos y trabajo del equipo. Cada nuevo cambio persistente del Inbox deberá actualizar la revisión en su misma transacción y avisar tras confirmar. Esas funciones aún no están conectadas a este circuito; no se deben presentar como terminadas por tener SSE.
+La conexión por empresa y la lectura de historial/contacts/echoes y estados de entrega ya tienen implementación local apagada y pruebas sintéticas. Restan reconciliación de importaciones, desconexión/reconexión, envíos, adjuntos y trabajo del equipo, además del ensayo real. Cada nuevo cambio persistente del Inbox debe actualizar la revisión en su misma transacción y avisar tras confirmar. Tener SSE no completa esas funciones.
 
 Referencias del protocolo: [SSE en MDN](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [semántica de Redis Pub/Sub](https://redis.io/docs/latest/develop/pubsub/). El diseño evita usar Pub/Sub como almacenamiento porque sus avisos no se conservan durante desconexiones.

@@ -49,7 +49,7 @@ La variable nueva `META_INBOX_RECEPCION_ENABLED` queda desactivada por defecto. 
 
 En desarrollo, `GRAFO_LOCAL_DISABLE_CRON=true` con `NODE_ENV=development` también impide arrancar este bucle automático. Las pruebas invocan el procesador directamente con datos ficticios en la base de tests. No se habilitaron variables reales, solicitudes, suscripciones ni conexiones nuevas a Meta.
 
-Actualización del mismo día: la [orquestación, el SDK y los estados de alta](meta-conexion-empresas.md) ya están implementados y continúan deshabilitados. Los puntos 1 y la parte de alta de 2/3 quedaron cubiertos; sigue pendiente conectar la bandeja general, reconciliar importaciones y validar el recorrido real.
+Actualización del mismo día: la [orquestación, el SDK y los estados de alta](meta-conexion-empresas.md) y la [lectura general con SSE](meta-inbox-lectura-general.md) ya están implementados y continúan deshabilitados. Los puntos 1/2 y la presentación de estados de 3 quedaron cubiertos; sigue pendiente reconciliar importaciones y validar el recorrido real.
 
 Plan de integración:
 

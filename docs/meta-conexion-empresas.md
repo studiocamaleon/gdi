@@ -70,7 +70,7 @@ La pantalla muestra preparación, solicitudes aceptadas, progreso informado por 
 
 ## Qué falta, en orden
 
-1. Conectar la lectura, lista de conversaciones, paginación y permisos del tiempo real al modelo general. La bandeja y su SSE aún leen el piloto anterior; no muestran todavía todas las tablas de conversaciones recién preparadas.
+1. Completado en local: [lectura general, lista de conversaciones, paginación y SSE por empresa](meta-inbox-lectura-general.md). Continúa apagado mediante `META_INBOX_LECTURA_ENABLED=false`; no se validó todavía con datos reales de coexistencia.
 2. Reconciliar bloques de historial y eventos tardíos, resolver resultados inciertos y ofrecer desconexión/reconexión coordinada. No hay aún un botón que repita una importación.
 3. Medir recepción y procesamiento con carga representativa, revisar el límite HTTP de 3 MB y la capacidad compartida del worker; añadir métricas y reglas de conservación de crudos.
 4. Desplegar el lote revisado a staging con flags apagados, registrar dominios HTTPS y configurar Facebook Login for Business. Activar primero el sandbox para una empresa de ensayo; probar allí el SDK real y documentar su resultado.
@@ -88,6 +88,7 @@ Valores privados, fuera de Git:
 - `META_CONEXION_TENANT_IDS`: UUID de empresas de ensayo, separados por comas. Vacío significa ninguna.
 - `META_SANDBOX_WABA_ID`: WABA de la cuenta sandbox reclamada en Meta. Obligatorio en modo sandbox.
 - `META_INBOX_RECEPCION_ENABLED=true`: además del modo y la lista, necesario para coexistencia. Preparar API y calc-worker juntos.
+- `META_INBOX_LECTURA_ENABLED=true`: habilita en la API la lectura y el stream generales. No activa recepción ni solicitudes. Sigue en `false` durante este recorrido local.
 
 No copiar credenciales de staging a local. Los valores reales siguen sin habilitarse. `GRAFO_LOCAL_DISABLE_CRON=true` con `NODE_ENV=development` mantiene apagados tanto el alta automática como el procesador de recepción en este recorrido local. Los tests invocan los servicios directamente con cuentas ficticias y Graph simulado.
 
