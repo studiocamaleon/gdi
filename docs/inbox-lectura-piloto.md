@@ -4,7 +4,7 @@ Desarrollado en local el 25 de septiembre de 2026, en `codex/inbox-lectura`, sob
 
 ## Qué permite
 
-El acceso **Inbox** del sidebar abre `/inbox` en otra pestaña, sin el sidebar de Grafo. Por decisión del 26/09 permanece visible para el rol autorizado, independientemente de la conexión, el plan o de tener mensajes. El botón de Configuración → Integraciones sigue siendo un atajo desde la recepción validada. Lee los mensajes guardados por el piloto: muestra los últimos 50 y permite cargar anteriores. Actualiza al pulsar **Actualizar** o volver a la pestaña; todavía no tiene actualización continua.
+El acceso **Inbox** del sidebar abre `/inbox` en otra pestaña, sin el sidebar de Grafo. Por decisión del 26/09 permanece visible para el rol autorizado, independientemente de la conexión, el plan o de tener mensajes. El botón de Configuración → Integraciones sigue siendo un atajo desde la recepción validada. Lee los mensajes guardados por el piloto: muestra los últimos 50 y permite cargar anteriores. Desde el 26/09 incorpora [actualización en tiempo real](inbox-tiempo-real.md), reconexión y respaldo, además de **Actualizar** y la consulta al volver a la pestaña.
 
 El contexto se busca automáticamente por teléfono completo entre los clientes y sus contactos, dentro de la misma empresa. Una coincidencia muestra la ficha y las órdenes recientes permitidas. Varias coincidencias requieren elegir la ficha antes de mostrar sus órdenes; ninguna coincidencia indica que se debe registrar el teléfono en el cliente o contacto correspondiente. La selección es temporal y se vuelve a validar en cada consulta.
 
@@ -35,7 +35,7 @@ La muestra de diseño mantiene sus acciones simuladas por separado. La ruta priv
 5. Se reutiliza `WhatsappContextoService`, con sus permisos de clientes y órdenes. No se reutiliza la ruta de la extensión Chrome ni su capacidad comercial.
 6. Si falla la consulta, se retira la información anterior. Si cambia la empresa o usuario de la sesión, se pide volver a abrir desde la cuenta actual. Las respuestas tardías de consultas canceladas se descartan.
 
-No agrega migraciones, variables de entorno, credenciales, webhooks ni envíos a Meta. Requiere la tabla de mensajes incorporada por el bloque previo de recepción.
+La lectura inicial no agregó migraciones ni credenciales. La ampliación de tiempo real agrega `20260926040000_inbox_revision` y reutiliza Redis. Requiere la tabla de mensajes del bloque previo de recepción. No agrega envíos a Meta.
 
 ## Cómo revisar sin conectar servicios
 

@@ -10,7 +10,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 - Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
 - API: `http://127.0.0.1:3001/api`.
-- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 284 migraciones aplicadas al 26/09, sin ejecutar seed.
+- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 285 migraciones aplicadas al 26/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
 - PDF: contenedor existente `gdi-saas-pdf-renderer`, puerto 3002.
 - Workers: procesos locales de cálculos/entregas y documentos PDF.
@@ -60,3 +60,5 @@ El worktree usa la configuración **local** existente: `.env.local` es un enlace
 Se aplicaron únicamente `20260925210000_meta_cloud_piloto` y `20260925223000_meta_recepcion_piloto`. Son cambios aditivos, sin seed ni reset. Se comprobaron los permisos del rol de ejecución sobre la tabla nueva.
 
 Comprobaciones: API en `http://127.0.0.1:3001/api` con base disponible, página principal con sesión local, workers de cálculos y PDF iniciados, enlace Inbox visible en el sidebar y bienvenida real de `/inbox` en otra pestaña. La muestra aislada del puerto 3015 se detuvo para liberar recursos; ahora se utiliza la aplicación completa en `http://localhost:3000`.
+
+Ampliación del 26/09: aplicada también `20260926040000_inbox_revision`, con permisos del rol de ejecución comprobados. La [base de tiempo real](inbox-tiempo-real.md) usa Redis local. El piloto real sigue desactivado: las pruebas de mensajes y reconexión utilizan empresas sintéticas en `gdi_saas_test`, no los datos de la empresa local ni Meta.
