@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp en el Inbox
 
-Implementado y comprobado en local el 26/09/2026, rama inicial `codex/inbox-plantillas`, ampliada en `codex/inbox-plantillas-archivos` y `codex/inbox-documentos-comerciales`. Todavía no activado en staging ni probado con un destinatario real.
+Implementado y comprobado en local el 26/09/2026, rama inicial `codex/inbox-plantillas`, ampliada en `codex/inbox-plantillas-archivos` y `codex/inbox-documentos-comerciales`. Todavía no activado en staging ni probado desde el Inbox con un destinatario real. El catálogo real ya se consultó con el cliente de Grafo; se creó una plantilla de PDF en la cuenta oficial de prueba, pendiente de aprobación. Ver [ensayo real de plantillas](./meta-prueba-plantillas.md).
 
 ## Para qué sirve
 

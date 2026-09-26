@@ -312,3 +312,13 @@ Lucas completó el ingreso normal a la empresa demo. Desde Configuración → In
 Chrome repitió el desafío Basic durante el acceso manual. El ensayo HTTP con las credenciales privadas vigentes respondió 200; se recordó que la puerta usa `grafoprint`, distinto de los usuarios de empresa/Plataforma, y se dejó un archivo privado local para copiar la clave. Lucas confirmó después su ingreso. No se rotaron contraseñas ni se desactivó la protección.
 
 La inspección del token informó vencimiento a las 23:00 UTC del 25/09 (20:00 de Argentina). Renovarlo antes de continuar pruebas posteriores. La app sigue sin publicar y no se cambiaron sus solicitudes de revisión. El ensayo verifica el número oficial de prueba, no onboarding de clientes, coexistencia ni inbox.
+
+## Renovación del piloto y preparación de plantilla PDF — 26 de septiembre
+
+El catálogo real rechazó el token anterior por vencimiento. Lucas renovó el identificador desde Meta. Se actualizó únicamente `META_PILOT_ACCESS_TOKEN` en los secretos de `grafoprint-staging-api`; la importación terminó correctamente y generó la release 9. La máquina existente volvió a `started`, con el control HTTP `passing`, mismos recursos y misma imagen `sha256:ccf65db71c98a649b36793aed49a4a264b39d81bf1902a0ac678f0dc0ccae4e0` del código `7efabd87213e`. No se desplegaron cambios de código ni migraciones. Los workers y la web no recibieron el token.
+
+Comprobaciones posteriores: salud web `200`, salud API `200` con `database: up`; acceso anónimo a otra ruta de API rechazado. Graph confirmó que el número pertenece a la WABA configurada y que la app está suscripta. El webhook respondió correctamente al challenge privado. Las credenciales permanecen fuera de Git y no se copiaron al entorno de la aplicación local.
+
+El cliente actual de Grafo consultó el catálogo real y reconoció texto, imagen y el carrusel no compatible. Al faltar una plantilla de PDF, se presentó `grafoprint_documento_pedido_v1`, `es_AR`, `UTILITY`, encabezado documental y dos variables. Meta devolvió `PENDING`; la consulta de las 22:29 UTC conservó ese estado. La muestra subida a Meta contiene únicamente datos ficticios y la indicación de que no tiene validez comercial. **No se envió ningún mensaje en este ensayo** mientras la plantilla está pendiente.
+
+Procedimiento y límites en [meta-prueba-plantillas.md](../../docs/meta-prueba-plantillas.md). El ensayo preparado reutiliza el cliente de Meta en un proceso de operador independiente; no equivale a haber publicado ni validado el nuevo Inbox en staging. No se modificó la revisión de la aplicación, producción, tamaños ni presupuesto.
