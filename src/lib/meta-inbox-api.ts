@@ -115,6 +115,7 @@ export const abrirAdjuntoInbox: AbrirAdjuntoInbox = (id, signal) =>
   );
 
 export type RespuestaInbox = {
+  plantillasHabilitadas?: boolean;
   habilitado: boolean;
   abierta: boolean;
   hasta: string | null;
@@ -143,3 +144,45 @@ export const enviarTextoInbox: EnviarTextoInbox = (id, dto, signal) =>
       signal,
     },
   );
+
+export type { PlantillaInbox } from "../../apps/api/src/common/inbox/plantillas";
+import type { PlantillaInbox } from "../../apps/api/src/common/inbox/plantillas";
+export type PedidoPlantillaInbox = {
+  clave: string;
+  canalId: string;
+  plantillaId: string;
+  version: string;
+  pagina: string | null;
+  valores: string[];
+  consentimientoConfirmado: boolean;
+};
+export type PlantillasInboxApi = {
+  listar: (
+    canalId: string,
+    despues?: string | null,
+    signal?: AbortSignal,
+  ) => Promise<{
+    canalId: string;
+    plantillas: PlantillaInbox[];
+    siguiente: string | null;
+  }>;
+  enviar: (
+    conversacionId: string,
+    dto: PedidoPlantillaInbox,
+    signal?: AbortSignal,
+  ) => Promise<IntentoInbox>;
+};
+export const plantillasInboxApi: PlantillasInboxApi = {
+  listar: (canalId, despues, signal) => {
+    const params = new URLSearchParams({ canalId });
+    if (despues) params.set("despues", despues);
+    return apiRequest(`/integraciones/meta/inbox/plantillas?${params}`, {
+      signal,
+    });
+  },
+  enviar: (id, dto, signal) =>
+    apiRequest(
+      `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/plantilla`,
+      { method: "POST", body: JSON.stringify(dto), signal },
+    ),
+};

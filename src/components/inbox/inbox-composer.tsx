@@ -169,8 +169,8 @@ export function InboxComposer({
       {!abierta && (
         <Alert>
           <AlertDescription>
-            Para retomar esta conversación hace falta una plantilla aprobada.
-            Por ahora, podés responder cuando el cliente vuelva a escribir.
+            Para retomar esta conversación hace falta una plantilla aprobada. El
+            texto libre vuelve a habilitarse cuando el cliente escriba.
           </AlertDescription>
         </Alert>
       )}

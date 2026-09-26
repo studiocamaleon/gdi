@@ -60,6 +60,8 @@ import s from "./inbox-workspace.module.css";
 import live from "./inbox-view.module.css";
 import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxConexion } from "./inbox-conexion";
+import { InboxPlantillas, type BorradoresPlantilla } from "./inbox-plantillas";
+import type { PlantillasInboxApi } from "@/lib/meta-inbox-api";
 import { InboxComposer, type BorradoresInbox } from "./inbox-composer";
 import { InboxAdjunto } from "./inbox-adjunto";
 import { InboxMessageStatus } from "./inbox-message-status";
@@ -101,6 +103,7 @@ export function InboxView({
   conexionApi,
   abrirAdjunto,
   enviarTexto,
+  plantillasApi,
 }: {
   identidad: InboxIdentidad;
   cargar?: CargarInbox;
@@ -108,6 +111,7 @@ export function InboxView({
   conexionApi?: MetaConexionApi;
   abrirAdjunto?: AbrirAdjuntoInbox;
   enviarTexto?: EnviarTextoInbox;
+  plantillasApi?: PlantillasInboxApi;
 }) {
   const [datos, setDatos] = useState<MetaInbox | null>(null);
   const [estado, setEstado] = useState<
@@ -122,6 +126,7 @@ export function InboxView({
   const [contextoAbierto, setContextoAbierto] = useState(false);
   const [conexionAbierta, setConexionAbierta] = useState(false);
   const borradores = useRef<BorradoresInbox>(new Map());
+  const borradoresPlantillas = useRef<BorradoresPlantilla>(new Map());
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const elegido = useRef<string | undefined>(undefined);
@@ -225,6 +230,7 @@ export function InboxView({
         if (!resultado) {
           datosActuales.current = null;
           borradores.current.clear();
+          borradoresPlantillas.current.clear();
           setDatos(null);
           conversacionElegida.current = undefined;
           setEstado("inactivo");
@@ -238,6 +244,7 @@ export function InboxView({
         ) {
           datosActuales.current = null;
           borradores.current.clear();
+          borradoresPlantillas.current.clear();
           setDatos(null);
           conversacionElegida.current = undefined;
           setEstado("sesion");
@@ -304,6 +311,7 @@ export function InboxView({
         setEstado(denegado ? "sesion" : "error");
         if (denegado) {
           borradores.current.clear();
+          borradoresPlantillas.current.clear();
           setCanalHabilitado(false);
         }
         elegido.current = undefined;
@@ -324,6 +332,7 @@ export function InboxView({
 
   useEffect(() => {
     borradores.current.clear();
+    borradoresPlantillas.current.clear();
     elegido.current = undefined;
     conversacionElegida.current = undefined;
     datosActuales.current = null;
@@ -356,6 +365,7 @@ export function InboxView({
         controller.current?.abort();
         datosActuales.current = null;
         borradores.current.clear();
+        borradoresPlantillas.current.clear();
         setDatos(null);
         conversacionElegida.current = undefined;
         setEstado("sesion");
@@ -917,9 +927,12 @@ export function InboxView({
                             >
                               {m.eliminado ? (
                                 <p>Mensaje eliminado</p>
-                              ) : ["text", "button", "interactive"].includes(
-                                  m.tipo,
-                                ) ? (
+                              ) : [
+                                  "text",
+                                  "button",
+                                  "interactive",
+                                  "template",
+                                ].includes(m.tipo) ? (
                                 <p>{m.texto}</p>
                               ) : m.adjunto ? (
                                 <>
@@ -949,6 +962,9 @@ export function InboxView({
                                 </>
                               )}
                               <div className={s.messageMeta}>
+                                {m.tipo === "template" && (
+                                  <span>Plantilla</span>
+                                )}
                                 {m.editado && !m.eliminado && (
                                   <span>Editado</span>
                                 )}
@@ -1036,6 +1052,26 @@ export function InboxView({
                           </p>
                         </div>
                       )}
+                      {datos.respuesta?.plantillasHabilitadas &&
+                        datos.canalId &&
+                        datos.conversacionId && (
+                          <InboxPlantillas
+                            key={`plantillas:${identidad.empresaId}:${identidad.usuarioId}:${datos.canalId}:${datos.conversacionId}`}
+                            canalId={datos.canalId}
+                            conversacionId={datos.conversacionId}
+                            destino={nombre}
+                            api={plantillasApi}
+                            borradores={borradoresPlantillas.current}
+                            scope={`${datos.canalId}:${datos.conversacionId}`}
+                            actualizar={() =>
+                              consultar(
+                                { clienteId: elegido.current },
+                                false,
+                                true,
+                              )
+                            }
+                          />
+                        )}
                     </div>
                   </>
                 )}

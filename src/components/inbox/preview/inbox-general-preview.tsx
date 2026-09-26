@@ -1,4 +1,6 @@
 "use client";
+import { textoPlantilla } from "../../../../apps/api/src/common/inbox/plantillas";
+import type { PlantillaInbox, PlantillasInboxApi } from "@/lib/meta-inbox-api";
 import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxView } from "../inbox-view";
 import type {
@@ -158,6 +160,99 @@ const enviar: EnviarTextoInbox = async (id, dto) => {
   intentos.set(dto.clave, enviado);
   return enviado;
 };
+const plantillasDemo: PlantillaInbox[] = [
+  {
+    id: "101",
+    nombre: "trabajo_listo",
+    idioma: "es_AR",
+    categoria: "UTILITY",
+    estado: "APPROVED",
+    formato: "NAMED",
+    encabezado: "¡Tu trabajo está listo!",
+    cuerpo:
+      "Hola, {{nombre}}. Ya podés retirar tu pedido {{pedido}}. Te esperamos en {{direccion}}. ¡Gracias por elegirnos!",
+    pie: "Tu idea, hecha realidad.",
+    botones: [],
+    variables: [
+      { componente: "body", nombre: "nombre" },
+      { componente: "body", nombre: "pedido" },
+      { componente: "body", nombre: "direccion" },
+    ],
+    motivo: null,
+    version: "demo-listo",
+    pagina: null,
+  },
+  {
+    id: "102",
+    nombre: "confirmacion_pedido",
+    idioma: "es_AR",
+    categoria: "UTILITY",
+    estado: "APPROVED",
+    formato: "POSITIONAL",
+    encabezado: "Pedido confirmado",
+    cuerpo:
+      "Hola, {{1}}. Recibimos tu pedido {{2}}. Te avisaremos por acá cuando esté listo.",
+    pie: "Gracias por confiar en nuestro equipo.",
+    botones: [{ texto: "Tengo una consulta", destino: "" }],
+    variables: [
+      { componente: "body", nombre: "1" },
+      { componente: "body", nombre: "2" },
+    ],
+    motivo: null,
+    version: "demo-pedido",
+    pagina: null,
+  },
+  {
+    id: "103",
+    nombre: "catalogo_con_imagen",
+    idioma: "es_AR",
+    categoria: "MARKETING",
+    estado: "APPROVED",
+    formato: "NAMED",
+    encabezado: "",
+    cuerpo: "Descubrí nuestras novedades.",
+    pie: "",
+    botones: [],
+    variables: [],
+    motivo:
+      "El envío de plantillas con archivos estará disponible en otra etapa.",
+    version: "demo-imagen",
+    pagina: null,
+  },
+];
+const plantillasApi: PlantillasInboxApi = {
+  listar: async (canalId) => ({
+    canalId,
+    plantillas: plantillasDemo,
+    siguiente: null,
+  }),
+  enviar: async (id, dto) => {
+    if (intentos.has(dto.clave)) return intentos.get(dto.clave)!;
+    const p = plantillasDemo.find((p) => p.id === dto.plantillaId);
+    if (!p || p.motivo || !conversaciones[id])
+      throw new Error("Plantilla ficticia no disponible");
+    const r = {
+      id: crypto.randomUUID(),
+      clave: dto.clave,
+      estado: "ACEPTADO",
+      codigo: null,
+      texto: null,
+      creadoEl: new Date().toISOString(),
+      mensajeId: crypto.randomUUID(),
+    };
+    conversaciones[id].push({
+      id: r.mensajeId,
+      nombreContacto: null,
+      tipo: "template",
+      texto: textoPlantilla(p, dto.valores),
+      enviadoEl: r.creadoEl,
+      direccion: "SALIENTE",
+      estadoEntrega: "DEMO",
+    });
+    intentos.set(dto.clave, r);
+    return r;
+  },
+};
 const cargar: CargarInbox = async (query) => {
   const lista = contactos.filter((c) =>
     `${c.nombre} ${c.telefono}`
@@ -189,6 +284,7 @@ const cargar: CargarInbox = async (query) => {
     usuarioId: identidad.usuarioId,
     origen: "GENERAL",
     respuesta: {
+      plantillasHabilitadas: true,
       habilitado: true,
       abierta: contacto?.id !== "clara",
       servidorEl: new Date().toISOString(),
@@ -287,6 +383,7 @@ export function InboxGeneralPreview() {
       tiempoReal={null}
       conexionApi={conexionApi}
       enviarTexto={enviar}
+      plantillasApi={plantillasApi}
       abrirAdjunto={async () => ({
         url: "/dev/diseno/inbox/archivo",
         nombre: "Ejemplo-inbox.pdf",
