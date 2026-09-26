@@ -103,6 +103,7 @@ Estas son propuestas para nuestro sistema, no requisitos textuales de Meta.
 
 | Componente actual | Resultado de la revisión |
 | --- | --- |
+| `MetaConexionService`, `MetaAutorizacion` y `MetaVinculo` | Base del 26/09: autorización, cifrado y reserva de activos comprobados. Sin controlador HTTP ni activación; ver [detalle y validación](meta-conexion-empresas.md). |
 | `WebhooksWhatsappService` | Verifica firma y conserva cambios con datos de cuenta/número. Los eventos de historial, contactos y ecos permanecen crudos: no se incorporan al inbox. |
 | `MetaCloudClient` | Sólo implementa el envío de una plantilla. Faltan las solicitudes `smb_app_data` y su seguimiento. |
 | `MensajeWhatsappRecibido` e inbox | Lectura del piloto de un contacto autorizado. Falta el modelo general de conversaciones y mensajes entrantes/salientes. |

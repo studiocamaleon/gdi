@@ -60,6 +60,8 @@ El [relevamiento específico de historial](meta-coexistencia-historial.md) detal
 
 El siguiente grupo debe completar, en este orden:
 
+**Avance del 26/09:** la [base de autorización por empresa](meta-conexion-empresas.md) implementa las reservas únicas, intentos ligados a sesión, canje, cifrado y validación de activos. Está probada localmente y todavía no expuesta por HTTP. No equivale a completar el alta, la activación ni la importación descritas abajo.
+
 1. Asociaciones únicas de cuenta/número con empresa y sesiones de autorización vinculadas al usuario, con expiración y protección contra reutilización. Validar los activos con Meta antes de confiar en los IDs del navegador.
 2. Canje y almacenamiento cifrado del token por empresa, recuperación de pasos incompletos y desconexión explícita. No tocar WATI ni activar notificaciones automáticamente.
 3. Procesadores de `account_update`, `history`, `smb_app_state_sync` y `smb_message_echoes`, con deduplicación, recuperación, límites, monitoreo y conservación acordada. El historial no debe abrir la ventana de atención como si fuera un mensaje nuevo.

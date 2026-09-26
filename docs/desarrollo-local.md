@@ -10,7 +10,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 - Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
 - API: `http://127.0.0.1:3001/api`.
-- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 285 migraciones aplicadas al 26/09, sin ejecutar seed.
+- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 286 migraciones aplicadas al 26/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
 - PDF: contenedor existente `gdi-saas-pdf-renderer`, puerto 3002.
 - Workers: procesos locales de cálculos/entregas y documentos PDF.
@@ -62,3 +62,5 @@ Se aplicaron únicamente `20260925210000_meta_cloud_piloto` y `20260925223000_me
 Comprobaciones: API en `http://127.0.0.1:3001/api` con base disponible, página principal con sesión local, workers de cálculos y PDF iniciados, enlace Inbox visible en el sidebar y bienvenida real de `/inbox` en otra pestaña. La muestra aislada del puerto 3015 se detuvo para liberar recursos; ahora se utiliza la aplicación completa en `http://localhost:3000`.
 
 Ampliación del 26/09: aplicada también `20260926040000_inbox_revision`, con permisos del rol de ejecución comprobados. La [base de tiempo real](inbox-tiempo-real.md) usa Redis local. El piloto real sigue desactivado: las pruebas de mensajes y reconexión utilizan empresas sintéticas en `gdi_saas_test`, no los datos de la empresa local ni Meta.
+
+Segundo bloque del 26/09: mismo worktree, ahora en `codex/meta-conexion-empresas`, partiendo de `9eb99f37a`. Aplicada `20260926100000_meta_conexion_empresas` en desarrollo y tests, con permisos de `grafo_app` comprobados. La [base de autorización por empresa](meta-conexion-empresas.md) se prueba sin exposición HTTP y sin llamadas reales a Meta. Los servicios siguen en sus puertos; cron e integración real siguen apagados. Al regenerar Prisma fue necesario reiniciar únicamente el proceso local de la API, cuyo cierre estaba esperando conexiones persistentes; no se reinició Docker.
