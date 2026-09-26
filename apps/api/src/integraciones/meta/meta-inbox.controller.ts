@@ -1,11 +1,13 @@
 import { MetaEnviosService } from './inbox/meta-envios.service';
 import {
+  AbrirArchivoPlantillaDto,
   CatalogoPlantillasInboxDto,
   EnviarPlantillaInboxDto,
   EnviarTextoInboxDto,
 } from './inbox/meta-envios.dto';
 import { MetaAdjuntosService } from './inbox/meta-adjuntos.service';
 import {
+  Redirect,
   Controller,
   Get,
   Post,
@@ -100,6 +102,24 @@ export class MetaInboxController {
     @Query() dto: CatalogoPlantillasInboxDto,
   ) {
     return this.envios.archivosPlantilla(auth, ipDeRequest(req), id, dto);
+  }
+  @Get('conversaciones/:id/archivos-plantilla/:archivoId')
+  @Header('Cache-Control', 'private, no-store')
+  @Redirect()
+  abrirArchivoPlantilla(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('archivoId', ParseUUIDPipe) archivoId: string,
+    @Query() dto: AbrirArchivoPlantillaDto,
+  ) {
+    return this.envios.abrirArchivoPlantilla(
+      auth,
+      ipDeRequest(req),
+      id,
+      archivoId,
+      dto,
+    );
   }
   @Post('conversaciones/:id/plantilla')
   @HttpCode(200)

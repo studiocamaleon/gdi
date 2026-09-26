@@ -45,7 +45,11 @@ const secretos = {
 const capacidades = { exigirOperacionTx: jest.fn(), exigirIncluida: jest.fn() },
   bus = { avisar: jest.fn() };
 const pdf = Buffer.from('%PDF-1.7 ejemplo sintetico');
-const storage = { cabecera: jest.fn(), leerCabecera: jest.fn() };
+const storage = {
+  cabecera: jest.fn(),
+  leerCabecera: jest.fn(),
+  firmarDescarga: jest.fn(),
+};
 const archivos = new MetaArchivosPlantillaService(
   db,
   new WhatsappContextoService(db),
@@ -154,7 +158,7 @@ async function webhook(
         ],
       },
     },
-    canal.numero!,
+    canal.numero,
   ).operaciones;
   await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "MetaVinculo" WHERE id=${canal.id}::uuid FOR NO KEY UPDATE`;
@@ -202,6 +206,11 @@ afterEach(async () => {
   await db.inboxAdjunto.deleteMany({ where });
   await db.inboxMensaje.deleteMany({ where });
   await db.archivo.deleteMany({ where });
+  await db.documentoPdf.deleteMany({ where });
+  await db.cotizacion.deleteMany({ where });
+  await db.comprobante.deleteMany({ where });
+  await db.puntoVenta.deleteMany({ where });
+  await db.configuracionFiscal.deleteMany({ where });
   await db.cliente.deleteMany({ where });
   await db.inboxConversacion.deleteMany({ where });
   await db.inboxCanalRevision.deleteMany({ where });
@@ -506,7 +515,7 @@ it('una correlación que parece UUID pero es inválida no bloquea el webhook', a
         ],
       },
     },
-    canal.numero!,
+    canal.numero,
   );
   expect(normalizado.operaciones[0]).not.toHaveProperty('correlacion');
   await expect(
@@ -927,7 +936,7 @@ it('una imagen RGB válida se envía mediante ID de Meta', async () => {
           type: 'header',
           parameters: [{ type: 'image', image: { id: '56789' } }],
         },
-      ]),
+      ]) as unknown,
     }),
   );
 });
@@ -950,4 +959,340 @@ it('rechaza el ID de un archivo perteneciente a otra empresa', async () => {
     await db.archivo.deleteMany({ where: { tenantId: otra.id } });
     await db.tenant.delete({ where: { id: otra.id } });
   }
+});
+
+const listarArchivos = () =>
+  runWithTenant(auth.tenantId, () =>
+    archivos.listar(auth, '127.0.0.1', conv.id, dto().canalId),
+  );
+async function prepararComercial(
+  tipo: 'presupuesto' | 'comprobante',
+  revision = 2,
+) {
+  const base = await prepararArchivo();
+  let entityId: string;
+  let documentoPdfId: string | null = null;
+  if (tipo === 'presupuesto') {
+    const c = await db.cotizacion.create({
+      data: {
+        tenantId: auth.tenantId,
+        clienteId: base.cliente.id,
+        numero: 'PRES-2026-0001',
+        estado: 'enviado',
+        fechaEnvio: new Date(),
+      },
+    });
+    entityId = c.id;
+    if (revision)
+      documentoPdfId = (
+        await db.documentoPdf.create({
+          data: {
+            tenantId: auth.tenantId,
+            cotizacionId: c.id,
+            revision,
+            plantillaVersion: 'prueba',
+            datosHash: 'ficticio',
+            datosJson: {},
+            estado: 'LISTO',
+          },
+        })
+      ).id;
+  } else {
+    const config = await db.configuracionFiscal.create({
+      data: {
+        tenantId: auth.tenantId,
+        razonSocial: 'Emisor ficticio',
+        cuit: '00000000000',
+      },
+    });
+    const punto = await db.puntoVenta.create({
+      data: {
+        tenantId: auth.tenantId,
+        configuracionFiscalId: config.id,
+        numero: 1,
+        nombre: 'Prueba',
+      },
+    });
+    entityId = (
+      await db.comprobante.create({
+        data: {
+          tenantId: auth.tenantId,
+          clienteId: base.cliente.id,
+          puntoVentaId: punto.id,
+          tipo: 'factura',
+          letra: 'C',
+          numero: 42,
+          fecha: new Date(),
+          estado: 'emitido',
+          receptorSnapshot: {},
+          itemsJson: [],
+          netoGravado: 100,
+          ivaPorAlicuota: [],
+          total: 100,
+          idempotencyKey: randomUUID(),
+        },
+      })
+    ).id;
+  }
+  const file = await db.archivo.update({
+    where: { id: base.file.id },
+    data: {
+      clienteId: null,
+      generado: true,
+      scope: tipo === 'presupuesto' ? 'COTIZACION' : 'COMPROBANTE',
+      cotizacionId: tipo === 'presupuesto' ? entityId : null,
+      comprobanteId: tipo === 'comprobante' ? entityId : null,
+      documentoPdfId,
+    },
+  });
+  const listado = await listarArchivos();
+  return {
+    ...base,
+    file,
+    entityId,
+    documentoPdfId,
+    dto: {
+      ...base.dto,
+      archivoVersion:
+        listado.archivos.find((f) => f.id === file.id)?.version ??
+        'a'.repeat(64),
+    },
+  };
+}
+async function permisosComerciales(permisos: string[]) {
+  const rol = await db.rol.create({
+    data: {
+      tenantId: auth.tenantId,
+      nombre: 'Acceso de prueba',
+      permisos: ['configuracion.gestionar', 'crm.ver', ...permisos],
+    },
+  });
+  await db.membership.update({
+    where: { id: auth.membershipId },
+    data: { rolId: rol.id },
+  });
+}
+it.each(['presupuesto', 'comprobante'] as const)(
+  'envía el PDF emitido de %s sin generar ni cambiar el documento',
+  async (tipo) => {
+    const { dto: d, file } = await prepararComercial(tipo);
+    const listado = await listarArchivos();
+    expect(listado.archivos).toEqual([
+      expect.objectContaining({
+        id: file.id,
+        origen: tipo === 'presupuesto' ? 'PRESUPUESTO' : 'COMPROBANTE',
+        referencia:
+          tipo === 'presupuesto' ? 'PRES-2026-0001' : 'Factura C 0001-00000042',
+      }),
+    ]);
+    expect(JSON.stringify(listado)).not.toContain(file.key);
+    const [antes, despues] = [
+      await db.archivo.findUnique({ where: { id: file.id } }),
+      await enviarPlantilla(d),
+    ];
+    expect(despues.estado).toBe('ACEPTADO');
+    expect(client.enviarPlantilla).toHaveBeenCalledTimes(1);
+    expect(await db.archivo.findUnique({ where: { id: file.id } })).toEqual(
+      antes,
+    );
+  },
+);
+it.each(['borrador', 'pendiente_aprobacion', 'rechazado', 'vencido'])(
+  'excluye presupuesto %s al listar y ante un ID directo',
+  async (estado) => {
+    const { dto: d, entityId } = await prepararComercial('presupuesto');
+    await db.cotizacion.update({ where: { id: entityId }, data: { estado } });
+    expect((await listarArchivos()).archivos).toEqual([]);
+    await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+    expect(client.subirArchivo).not.toHaveBeenCalled();
+  },
+);
+it('no ofrece la revisión de vista previa aunque el presupuesto ya se emitió', async () => {
+  const { dto: d } = await prepararComercial('presupuesto', 1);
+  expect((await listarArchivos()).archivos).toEqual([]);
+  await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+});
+it.each(['PENDIENTE', 'PROCESANDO', 'FALLIDO'])(
+  'no usa el PDF legado para sustituir una revisión emitida %s',
+  async (estado) => {
+    const {
+      file,
+      entityId,
+      dto: d,
+    } = await prepararComercial('presupuesto', 0);
+    expect((await listarArchivos()).archivos[0].id).toBe(file.id);
+    await db.documentoPdf.create({
+      data: {
+        tenantId: auth.tenantId,
+        cotizacionId: entityId,
+        revision: 2,
+        plantillaVersion: 'prueba',
+        datosHash: 'ficticio',
+        datosJson: {},
+        estado,
+      },
+    });
+    expect((await listarArchivos()).archivos).toEqual([]);
+    await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+  },
+);
+it('admite un presupuesto emitido legado si no hay revisión 2', async () => {
+  const { dto: d } = await prepararComercial('presupuesto', 0);
+  expect((await enviarPlantilla(d)).estado).toBe('ACEPTADO');
+});
+it.each(['borrador', 'en_proceso', 'por_verificar', 'rechazado', 'anulado'])(
+  'excluye comprobante %s',
+  async (estado) => {
+    const { entityId, dto: d } = await prepararComercial('comprobante');
+    await db.comprobante.update({ where: { id: entityId }, data: { estado } });
+    expect((await listarArchivos()).archivos).toEqual([]);
+    await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+    expect(client.subirArchivo).not.toHaveBeenCalled();
+  },
+);
+it.each(['presupuesto', 'comprobante'] as const)(
+  'respeta el permiso actual de %s y no el de la sesión antigua',
+  async (tipo) => {
+    const { dto: d } = await prepararComercial(tipo);
+    await permisosComerciales([
+      tipo === 'presupuesto' ? 'administracion.ver' : 'comercial.ver',
+    ]);
+    expect((await listarArchivos()).archivos).toEqual([]);
+    await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+    expect(client.subirArchivo).not.toHaveBeenCalled();
+  },
+);
+it.each(['presupuesto', 'comprobante'] as const)(
+  'excluye %s de otro cliente',
+  async (tipo) => {
+    const { dto: d, entityId } = await prepararComercial(tipo);
+    const otroCliente = await db.cliente.create({
+      data: {
+        tenantId: auth.tenantId,
+        nombre: 'Otro cliente ficticio',
+        telefonoCodigo: '+1',
+        telefonoNumero: '6505550199',
+        paisCodigo: 'US',
+      },
+    });
+    if (tipo === 'presupuesto')
+      await db.cotizacion.update({
+        where: { id: entityId },
+        data: { clienteId: otroCliente.id },
+      });
+    else
+      await db.comprobante.update({
+        where: { id: entityId },
+        data: { clienteId: otroCliente.id },
+      });
+    expect((await listarArchivos()).archivos).toEqual([]);
+    await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+  },
+);
+it('bloquea la anulación durante la subida antes de enviar el WhatsApp', async () => {
+  const { dto: d, entityId } = await prepararComercial('comprobante');
+  client.subirArchivo.mockImplementation(async () => {
+    await db.comprobante.update({
+      where: { id: entityId },
+      data: { anuladoEl: new Date() },
+    });
+    return '56789';
+  });
+  expect((await enviarPlantilla(d)).estado).toBe('RECHAZADO');
+  expect(client.enviarPlantilla).not.toHaveBeenCalled();
+});
+it('invalidar la versión del comprobante obliga a revisar nuevamente el PDF', async () => {
+  const { dto: d, entityId } = await prepararComercial('comprobante');
+  await db.comprobante.update({
+    where: { id: entityId },
+    data: { updatedAt: new Date(Date.now() + 1000) },
+  });
+  await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+});
+it('firma una apertura breve y vuelve a comprobar permisos antes de devolverla', async () => {
+  const { dto: d, file } = await prepararComercial('presupuesto');
+  const abrir = () =>
+    runWithTenant(auth.tenantId, () =>
+      archivos.abrir(
+        auth,
+        '127.0.0.1',
+        conv.id,
+        d.canalId,
+        file.id,
+        d.archivoVersion,
+      ),
+    );
+  storage.firmarDescarga.mockResolvedValue('https://files.example.invalid/pdf');
+  expect(await abrir()).toEqual({
+    url: 'https://files.example.invalid/pdf',
+    statusCode: 302,
+  });
+  expect(storage.firmarDescarga).toHaveBeenCalledWith(
+    file.key,
+    expect.objectContaining({
+      expiraSegundos: 60,
+      contentType: 'application/pdf',
+      disposition: expect.stringContaining('attachment;') as unknown,
+    }),
+  );
+  storage.firmarDescarga.mockImplementation(async () => {
+    await permisosComerciales([]);
+    return 'https://files.example.invalid/ya-no-autorizado';
+  });
+  await expect(abrir()).rejects.toThrow('archivo cambió');
+});
+
+it.each(['presupuesto', 'comprobante'] as const)(
+  'rechaza una relación de %s con un documento de otra empresa',
+  async (tipo) => {
+    const { entityId, dto: d } = await prepararComercial(tipo);
+    const otra = await db.tenant.create({
+      data: { nombre: 'Empresa ajena ficticia', slug: `ajena-${randomUUID()}` },
+    });
+    try {
+      if (tipo === 'presupuesto')
+        await db.cotizacion.update({
+          where: { id: entityId },
+          data: { tenantId: otra.id },
+        });
+      else
+        await db.comprobante.update({
+          where: { id: entityId },
+          data: { tenantId: otra.id },
+        });
+      expect((await listarArchivos()).archivos).toEqual([]);
+      await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+      expect(client.subirArchivo).not.toHaveBeenCalled();
+    } finally {
+      if (tipo === 'presupuesto')
+        await db.cotizacion.update({
+          where: { id: entityId },
+          data: { tenantId: auth.tenantId },
+        });
+      else
+        await db.comprobante.update({
+          where: { id: entityId },
+          data: { tenantId: auth.tenantId },
+        });
+      await db.tenant.delete({ where: { id: otra.id } });
+    }
+  },
+);
+it('no acepta un archivo unido a la revisión emitida de un presupuesto distinto', async () => {
+  const { file, cliente, dto: d } = await prepararComercial('presupuesto');
+  const otra = await db.cotizacion.create({
+    data: {
+      tenantId: auth.tenantId,
+      numero: 'PRES-2026-0002',
+      clienteId: cliente.id,
+      estado: 'enviado',
+      fechaEnvio: new Date(),
+    },
+  });
+  await db.archivo.update({
+    where: { id: file.id },
+    data: { cotizacionId: otra.id },
+  });
+  expect((await listarArchivos()).archivos).toEqual([]);
+  await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
 });

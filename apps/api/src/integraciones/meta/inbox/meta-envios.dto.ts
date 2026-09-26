@@ -23,6 +23,10 @@ export class CatalogoPlantillasInboxDto {
   @IsString() @MaxLength(80) canalId!: string;
   @IsOptional() @IsString() @MaxLength(2048) despues?: string;
 }
+export class AbrirArchivoPlantillaDto {
+  @IsString() @MaxLength(80) canalId!: string;
+  @IsString() @Matches(/^[a-f0-9]{64}$/) version!: string;
+}
 export class EnviarPlantillaInboxDto {
   @IsOptional() @IsUUID('4') archivoId?: string;
   @IsOptional() @IsString() @Matches(/^[a-f0-9]{64}$/) archivoVersion?: string;

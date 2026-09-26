@@ -17,6 +17,10 @@ let app: INestApplication<Server>;
 const abrirAdjunto = jest
   .fn()
   .mockResolvedValue({ url: 'https://files.example.invalid/privado' });
+const abrirArchivoPlantilla = jest.fn().mockResolvedValue({
+  url: 'https://files.example.invalid/pdf',
+  statusCode: 302,
+});
 const archivosPlantilla = jest.fn().mockResolvedValue({ archivos: [] });
 const catalogo = jest.fn().mockResolvedValue({ plantillas: [] });
 const enviarPlantilla = jest.fn().mockResolvedValue({ estado: 'ACEPTADO' });
@@ -31,7 +35,13 @@ beforeAll(async () => {
     providers: [
       {
         provide: MetaEnviosService,
-        useValue: { enviar, catalogo, enviarPlantilla, archivosPlantilla },
+        useValue: {
+          enviar,
+          catalogo,
+          enviarPlantilla,
+          archivosPlantilla,
+          abrirArchivoPlantilla,
+        },
       },
       { provide: MetaAdjuntosService, useValue: { abrir: abrirAdjunto } },
       { provide: MetaInboxService, useValue: { consultar, disponibilidad } },
@@ -392,5 +402,47 @@ it('el selector de archivos exige el mismo acceso y rechaza tenant/URL suministr
     expect.any(String),
     '11111111-1111-4111-8111-111111111111',
     { canalId: textoDto.canalId },
+  );
+});
+
+it('abrir un documento exige identidad, versión y acceso y no permite cambiar de tenant', async () => {
+  const ruta =
+    '/api/integraciones/meta/inbox/conversaciones/11111111-1111-4111-8111-111111111111/archivos-plantilla/22222222-2222-4222-8222-222222222222';
+  const query = { canalId: textoDto.canalId, version: 'a'.repeat(64) };
+  await request(app.getHttpServer()).get(ruta).query(query).expect(403);
+  await request(app.getHttpServer())
+    .get(ruta)
+    .query(query)
+    .set('x-actor', 'OPERADOR')
+    .expect(403);
+  await request(app.getHttpServer())
+    .get(ruta)
+    .query(query)
+    .set('x-actor', 'ADMINISTRADOR')
+    .set('x-impersonacion', '1')
+    .expect(403);
+  await request(app.getHttpServer())
+    .get(ruta)
+    .query({ ...query, version: 'otra' })
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect(400);
+  await request(app.getHttpServer())
+    .get(ruta)
+    .query({ ...query, tenantId: 'ajena' })
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect(400);
+  await request(app.getHttpServer())
+    .get(ruta)
+    .query(query)
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect('Cache-Control', 'private, no-store')
+    .expect('Location', 'https://files.example.invalid/pdf')
+    .expect(302);
+  expect(abrirArchivoPlantilla).toHaveBeenCalledWith(
+    expect.objectContaining({ tenantId: 'propia' }),
+    expect.any(String),
+    '11111111-1111-4111-8111-111111111111',
+    '22222222-2222-4222-8222-222222222222',
+    query,
   );
 });

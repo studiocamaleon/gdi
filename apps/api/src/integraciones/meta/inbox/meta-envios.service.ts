@@ -52,6 +52,22 @@ export class MetaEnviosService {
     private readonly archivos: MetaArchivosPlantillaService,
   ) {}
 
+  abrirArchivoPlantilla(
+    auth: CurrentAuth,
+    ip: string,
+    conversacionId: string,
+    archivoId: string,
+    dto: { canalId: string; version: string },
+  ) {
+    return this.archivos.abrir(
+      auth,
+      ip,
+      conversacionId,
+      dto.canalId,
+      archivoId,
+      dto.version,
+    );
+  }
   archivosPlantilla(
     auth: CurrentAuth,
     ip: string,

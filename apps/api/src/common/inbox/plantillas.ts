@@ -33,6 +33,8 @@ export type ComponenteEnvioPlantilla =
       )[];
     };
 export type ArchivoPlantillaInbox = {
+  origen?: 'CLIENTE' | 'PRESUPUESTO' | 'COMPROBANTE';
+  referencia?: string;
   id: string;
   version: string;
   nombre: string;
