@@ -89,7 +89,7 @@ export function ModelParameters({
           <FieldGroup>
             {id !== "open-back" &&
               n("base", "Espesor del fondo impreso", 0.5, 20)}
-            {n("wall", "Pared exterior", 1, 5)}
+            {n("wall", "Pared exterior", 0.5, 5)}
             {n(
               "innerWall",
               "Pared interior de apoyo",
@@ -121,7 +121,7 @@ export function ModelParameters({
               {id === "double-support"
                 ? n("pvc", "Espesor del PVC", 0, 20)
                 : n("base", "Espesor del fondo impreso", 0.5, 20)}
-              {n("wall", "Pared exterior", 1, 5)}
+              {n("wall", "Pared exterior", 0.5, 5)}
               {n("height", "Altura de la pared exterior", 10, 150)}
             </FieldGroup>
           </Section>
@@ -141,7 +141,7 @@ export function ModelParameters({
           <FieldGroup>
             {n("borderWidth", "Ancho del borde frontal", 0, 10)}
             {n("borderThickness", "Espesor del borde frontal", 0.5, 20)}
-            {n("wall", "Pared exterior", 1, 5)}
+            {n("wall", "Pared exterior", 0.5, 5)}
             {n("innerWall", "Pared interior de apoyo", 0, 5)}
             {n("height", "Altura de la pared", 0, 150)}
             {n("pvc", "Espesor del PVC", 0, 50)}
@@ -168,12 +168,12 @@ export function ModelParameters({
                 }
               />
               {n("base", "Espesor de la cara impresa", 0.5, 10)}
-              {n("wall", "Espesor de la pared exterior", 1, 12)}
+              {n("wall", "Espesor de la pared exterior", 0.5, 12)}
               {v.doubleHalo ? (
                 <>
                   {n("outerHeight", "Altura de la pared exterior", 5, 80)}
                   {n("gap", "Espacio entre paredes", 0.5, 20)}
-                  {n("innerWall", "Espesor de la pared interior", 1, 12)}
+                  {n("innerWall", "Espesor de la pared interior", 0.5, 12)}
                   {n("height", "Altura de la pared interior", 5, 80)}
                 </>
               ) : (

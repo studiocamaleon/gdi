@@ -1,4 +1,5 @@
 import type { LightboxParameters } from "./types";
+import { lightboxFixingWall } from "./lightbox-wall";
 
 export const LIGHTBOX_MOUNT_STYLES = {
   straight: { label: "Recto", description: "Un brazo central discreto, con apoyo curvo y fijación desde el interior." },
@@ -16,7 +17,7 @@ export function mountHoles(p: LightboxParameters) {
   }));
 }
 export function mountMetadata(p: LightboxParameters) {
-  const count = p.mount ? 4 : 0, gripLength = p.wall + p.jointClearance - .6;
+  const count = p.mount ? 4 : 0, gripLength = lightboxFixingWall(p) + p.jointClearance - .6;
   return {
     enabled: p.mount, style: p.mountStyle, separate: true, armCount: p.mount ? 1 : 0,
     fastening: "inside-inserts" as const,
@@ -39,7 +40,7 @@ export function validateSeparateMount(p: LightboxParameters) {
     for (const { angle } of [...mountHoles(p), { angle: Math.PI }]) {
       const relative = angle - phase;
       const delta = Math.abs(relative - Math.round(relative / step) * step);
-      if ((p.diameter / 2 - p.wall - 12) * Math.sin(delta) < 18)
+      if ((p.diameter / 2 - lightboxFixingWall(p) - 12) * Math.sin(delta) < 18)
         throw new Error("La unión de sectores alcanza una fijación del brazo central. Aumentá el diámetro, reducí la altura del brazo o elegí menos sectores.");
     }
   }

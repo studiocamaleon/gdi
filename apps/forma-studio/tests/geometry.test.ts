@@ -27,6 +27,28 @@ const outlines: Contours[] = [
   ],
 ];
 describe("Sólidos fabricables", () => {
+  for (const style of STYLES.filter((s) => s.id !== "curved"))
+    it(`conserva una pared de 0,8 mm al guardar y generar ${style.name}`, () => {
+      const project = chooseStyle(newProject(), style.id);
+      project.params.wall = 0.8;
+      const restored = parseProject(JSON.parse(JSON.stringify(project)));
+      expect(restored.params.wall).toBe(0.8);
+      const model = buildModel(wasm, { project: restored, shapes: outlines, mode: "letters" });
+      expect(model.parts.some((part) => part.layer === "body")).toBe(true);
+      for (const part of model.parts) {
+        expect(part.volume).toBeGreaterThan(0);
+        expect(part.positions.every(Number.isFinite)).toBe(true);
+        const solid = new wasm.Manifold(new wasm.Mesh({ numProp: 3, vertProperties: part.positions, triVerts: part.indices }));
+        try { expect(solid.status()).toBe("NoError"); } finally { solid.delete(); }
+      }
+    });
+  it("el volumen del cuerpo usa 0,8 mm sin redondearlo a 1 mm", () => {
+    const project = newProject();
+    project.params = { ...project.params, base: 2, height: 35, wall: 0.8, innerWall: 0, acrylic: 0 };
+    const model = buildModel(wasm, { project, shapes: [[[[0, 0], [100, 0], [100, 80], [0, 80]]]], mode: "letters" });
+    const expected = 100 * 80 * 2 + (100 * 80 - (100 - 1.6) * (80 - 1.6)) * 35;
+    expect(model.parts.filter(part => part.layer === "body").reduce((sum, part) => sum + part.volume, 0)).toBeCloseTo(expected, 0);
+  });
   for (const style of STYLES)
     it(`genera ${style.name} con agujeros conservados`, () => {
       const project = chooseStyle(newProject(), style.id);
