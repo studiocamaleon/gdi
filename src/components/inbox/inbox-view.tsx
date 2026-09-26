@@ -889,6 +889,11 @@ export function InboxView({
                           >
                             <div
                               className={s.bubble}
+                              data-content={
+                                !m.eliminado && m.adjunto
+                                  ? "adjunto"
+                                  : undefined
+                              }
                               data-kind={
                                 m.direccion === "SALIENTE"
                                   ? "salida"
@@ -901,26 +906,31 @@ export function InboxView({
                                   m.tipo,
                                 ) ? (
                                 <p>{m.texto}</p>
+                              ) : m.adjunto ? (
+                                <>
+                                  <InboxAdjunto
+                                    key={`${datos.canalId}:${m.id}:${m.adjunto.version}`}
+                                    mensajeId={m.id}
+                                    tipo={m.tipo}
+                                    adjunto={m.adjunto}
+                                    abrir={abrirAdjunto}
+                                  />
+                                  {m.texto && (
+                                    <p className={s.attachmentCaption}>
+                                      {m.texto}
+                                    </p>
+                                  )}
+                                </>
                               ) : (
                                 <>
                                   <Badge variant="secondary">
                                     {tipos[m.tipo] || "Otro contenido"}
                                   </Badge>
                                   {m.texto && <p>{m.texto}</p>}
-                                  {m.adjunto ? (
-                                    <InboxAdjunto
-                                      key={`${datos.canalId}:${m.id}:${m.adjunto.version}`}
-                                      mensajeId={m.id}
-                                      tipo={m.tipo}
-                                      adjunto={m.adjunto}
-                                      abrir={abrirAdjunto}
-                                    />
-                                  ) : (
-                                    <p>
-                                      Este contenido todavía no se puede abrir
-                                      en Grafo.
-                                    </p>
-                                  )}
+                                  <p>
+                                    Este contenido todavía no se puede abrir en
+                                    Grafo.
+                                  </p>
                                 </>
                               )}
                               <div className={s.messageMeta}>
