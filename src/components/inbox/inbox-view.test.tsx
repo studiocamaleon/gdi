@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { InboxView } from "./inbox-view";
 import type { CargarInbox, MetaInbox } from "@/lib/meta-inbox-api";
+import type { EscucharInbox } from "@/lib/inbox-tiempo-real";
 
 const identidad = {
   empresaId: "empresa-1",
@@ -53,11 +54,80 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+it("una consulta sin respuesta vence y permite reintentar", async () => {
+  vi.useFakeTimers();
+  cargar.mockImplementationOnce(
+    (_query, signal) =>
+      new Promise((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => reject(new Error("cancelada")),
+          { once: true },
+        );
+      }),
+  );
+  await render();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15000);
+  });
+  expect(container.textContent).toContain("No pudimos cargar");
+  expect(container.querySelector("[role=log]")).toBeNull();
+  await click("Actualizar");
+  expect(container.textContent).toContain("Estudio Oliva");
 });
 const render = () =>
   act(async () =>
-    root.render(<InboxView identidad={identidad} cargar={cargar} />),
+    root.render(
+      <InboxView identidad={identidad} cargar={cargar} tiempoReal={null} />,
+    ),
   );
+it("un aviso actualiza sin desmontar el chat, conserva la lectura y elimina datos al revocar", async () => {
+  let eventos!: Parameters<EscucharInbox>[0];
+  const dejar = vi.fn();
+  const tiempoReal: EscucharInbox = (opciones) => {
+    eventos = opciones;
+    return dejar;
+  };
+  await act(async () =>
+    root.render(
+      <InboxView
+        identidad={identidad}
+        cargar={cargar}
+        tiempoReal={tiempoReal}
+      />,
+    ),
+  );
+  const log = container.querySelector<HTMLElement>("[role=log]")!;
+  Object.defineProperties(log, {
+    scrollHeight: { value: 1200, configurable: true },
+    clientHeight: { value: 200, configurable: true },
+  });
+  log.scrollTop = 100;
+  cargar.mockResolvedValue({
+    ...base,
+    mensajes: [
+      ...base.mensajes,
+      {
+        ...mensaje,
+        id: "m3",
+        texto: "Llega sin recargar",
+        enviadoEl: "2026-09-25T12:01:00.000Z",
+      },
+    ],
+  });
+  await act(async () => {
+    await eventos.actualizar(new AbortController().signal);
+  });
+  expect(container.querySelector("[role=log]")).toBe(log);
+  expect(log.textContent).toContain("Llega sin recargar");
+  expect(log.scrollTop).toBe(100);
+  await act(async () => eventos.accesoCerrado());
+  expect(container.textContent).not.toContain("Estudio Oliva");
+  expect(container.querySelector("[role=log]")).toBeNull();
+  expect(dejar).toHaveBeenCalledOnce();
+});
 async function click(label: string) {
   const button = [...container.querySelectorAll("button")].find(
     (b) => b.textContent?.trim() === label,

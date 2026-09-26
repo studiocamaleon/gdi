@@ -58,6 +58,21 @@ import { cn } from "@/lib/utils";
 import s from "./inbox-workspace.module.css";
 import live from "./inbox-view.module.css";
 import { InboxBienvenida } from "./inbox-bienvenida";
+import { ApiError } from "@/lib/api";
+import { combinarInbox } from "@/lib/inbox-combinar";
+import {
+  escucharInbox,
+  type EscucharInbox,
+  type EstadoInboxVivo,
+} from "@/lib/inbox-tiempo-real";
+
+const estadosConexion: Record<EstadoInboxVivo, string> = {
+  conectando: "Conectando actualización en vivo",
+  en_vivo: "Actualización en vivo",
+  reconectando: "Reconectando · actualización periódica",
+  sin_conexion: "Sin conexión a Internet",
+  pausado: "Actualización pausada",
+};
 
 const tipos: Record<string, string> = {
   image: "Imagen",
@@ -76,15 +91,19 @@ const tipos: Record<string, string> = {
 export function InboxView({
   identidad,
   cargar = getMetaInbox,
+  tiempoReal = escucharInbox,
 }: {
   identidad: InboxIdentidad;
   cargar?: CargarInbox;
+  tiempoReal?: EscucharInbox | null;
 }) {
   const [datos, setDatos] = useState<MetaInbox | null>(null);
   const [estado, setEstado] = useState<
     "cargando" | "listo" | "inactivo" | "error" | "sesion"
   >("cargando");
   const [ocupado, setOcupado] = useState(false);
+  const [canalHabilitado, setCanalHabilitado] = useState(false);
+  const [conexion, setConexion] = useState<EstadoInboxVivo>("conectando");
   const [busqueda, setBusqueda] = useState("");
   const [oscuro, setOscuro] = useState(false);
   const [movilChat, setMovilChat] = useState(false);
@@ -93,30 +112,64 @@ export function InboxView({
   const controller = useRef<AbortController | null>(null);
   const elegido = useRef<string | undefined>(undefined);
   const thread = useRef<HTMLDivElement>(null);
-  const posicion = useRef<{ altura: number; top: number } | null>(null);
+  const posicion = useRef<{
+    altura: number;
+    top: number;
+    anteriores: boolean;
+  } | null>(null);
+  const finalizacion = useRef<Promise<void> | null>(null);
   const { fechaHora } = useFecha();
   const tema = cn(brand.theme, brand.legacy);
   const apariencia = oscuro ? "dark" : "light";
 
   const consultar = useCallback(
-    async (query: InboxConsulta = {}, anteriores = false) => {
+    async (
+      query: InboxConsulta = {},
+      anteriores = false,
+      silencioso = false,
+      signal?: AbortSignal,
+    ): Promise<boolean> => {
+      // Un aviso no interrumpe una página que el usuario está cargando.
+      while (silencioso && signal && finalizacion.current) {
+        await finalizacion.current;
+        if (signal?.aborted) return false;
+      }
+      if (signal?.aborted) return false;
+      if (silencioso && signal) query = { clienteId: elegido.current };
       controller.current?.abort();
       const control = new AbortController();
       controller.current = control;
       const numero = ++requestId.current;
-      setOcupado(true);
-      if (!anteriores) {
+      let finalizar!: () => void;
+      finalizacion.current = new Promise<void>((resolve) => {
+        finalizar = resolve;
+      });
+      const cancelar = () => control.abort();
+      signal?.addEventListener("abort", cancelar, { once: true });
+      let agotado = false;
+      const limite = setTimeout(() => {
+        agotado = true;
+        control.abort();
+      }, 15000);
+      if (!silencioso) setOcupado(true);
+      if (!anteriores && !silencioso) {
         setDatos(null);
         setEstado("cargando");
       }
       try {
         const resultado = await cargar(query, control.signal);
-        if (control.signal.aborted || numero !== requestId.current) return;
+        if (agotado) throw new ApiError("La consulta tardó demasiado.", 503);
+        if (
+          (control.signal.aborted && !agotado) ||
+          numero !== requestId.current
+        )
+          return false;
         if (!resultado) {
           setDatos(null);
           setEstado("inactivo");
+          setCanalHabilitado(false);
           elegido.current = undefined;
-          return;
+          return false;
         }
         if (
           resultado.empresaId !== identidad.empresaId ||
@@ -124,46 +177,60 @@ export function InboxView({
         ) {
           setDatos(null);
           setEstado("sesion");
+          setCanalHabilitado(false);
           elegido.current = undefined;
-          return;
+          return false;
         }
         elegido.current = query.clienteId;
         posicion.current =
-          anteriores && thread.current
+          thread.current &&
+          (anteriores ||
+            (silencioso &&
+              thread.current.scrollHeight -
+                thread.current.scrollTop -
+                thread.current.clientHeight >
+                80))
             ? {
                 altura: thread.current.scrollHeight,
                 top: thread.current.scrollTop,
+                anteriores,
               }
             : null;
         setDatos((prev) => {
-          if (
-            !anteriores ||
-            !prev ||
-            prev.contacto.telefono !== resultado.contacto.telefono
-          )
-            return resultado;
-          const unicos = new Map(
-            [...resultado.mensajes, ...prev.mensajes].map((m) => [m.id, m]),
-          );
-          return {
-            ...resultado,
-            mensajes: [...unicos.values()].sort(
-              (a, b) =>
-                a.enviadoEl.localeCompare(b.enviadoEl) ||
-                a.id.localeCompare(b.id),
-            ),
-          };
+          return anteriores || silencioso
+            ? combinarInbox(
+                prev,
+                resultado,
+                anteriores ? "anteriores" : "reciente",
+              )
+            : resultado;
         });
         setEstado("listo");
-      } catch {
-        if (control.signal.aborted || numero !== requestId.current) return;
+        setCanalHabilitado(true);
+        return true;
+      } catch (error) {
+        if (
+          (control.signal.aborted && !agotado) ||
+          numero !== requestId.current
+        )
+          return false;
         // Un error también al paginar retira toda la información privada.
         setDatos(null);
-        setEstado("error");
+        const denegado =
+          error instanceof ApiError && [401, 403].includes(error.status);
+        setEstado(denegado ? "sesion" : "error");
+        if (denegado) setCanalHabilitado(false);
         elegido.current = undefined;
+        return false;
       } finally {
-        if (numero === requestId.current && !control.signal.aborted)
+        clearTimeout(limite);
+        signal?.removeEventListener("abort", cancelar);
+        if (numero === requestId.current) {
+          finalizacion.current = null;
+          controller.current = null;
           setOcupado(false);
+        }
+        finalizar();
       }
     },
     [cargar, identidad.empresaId, identidad.usuarioId],
@@ -171,10 +238,11 @@ export function InboxView({
 
   useEffect(() => {
     elegido.current = undefined;
+    setCanalHabilitado(false);
     void consultar();
     const refrescar = () => {
       if (document.visibilityState === "visible")
-        void consultar({ clienteId: elegido.current });
+        void consultar({ clienteId: elegido.current }, false, true);
     };
     window.addEventListener("focus", refrescar);
     document.addEventListener("visibilitychange", refrescar);
@@ -185,11 +253,37 @@ export function InboxView({
     };
   }, [consultar]);
   useEffect(() => {
+    if (!canalHabilitado || !tiempoReal) return;
+    return tiempoReal({
+      identidad: {
+        empresaId: identidad.empresaId,
+        usuarioId: identidad.usuarioId,
+      },
+      actualizar: (signal) =>
+        consultar({ clienteId: elegido.current }, false, true, signal),
+      estado: setConexion,
+      accesoCerrado: () => {
+        controller.current?.abort();
+        setDatos(null);
+        setEstado("sesion");
+        setCanalHabilitado(false);
+        elegido.current = undefined;
+      },
+    });
+  }, [
+    canalHabilitado,
+    tiempoReal,
+    consultar,
+    identidad.empresaId,
+    identidad.usuarioId,
+  ]);
+  useEffect(() => {
     if (!thread.current || !datos) return;
     thread.current.scrollTop = posicion.current
       ? posicion.current.top +
-        thread.current.scrollHeight -
-        posicion.current.altura
+        (posicion.current.anteriores
+          ? thread.current.scrollHeight - posicion.current.altura
+          : 0)
       : thread.current.scrollHeight;
     posicion.current = null;
   }, [datos, movilChat]);
@@ -567,7 +661,7 @@ export function InboxView({
                         <EmptyTitle>Todavía no hay mensajes</EmptyTitle>
                         <EmptyDescription>
                           Los mensajes nuevos recibidos del contacto autorizado
-                          aparecerán acá al actualizar.
+                          aparecerán acá automáticamente.
                         </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
@@ -623,10 +717,19 @@ export function InboxView({
               </aside>
             </div>
           )}
-          <div className={s.statusBar} role="status">
-            {datos
-              ? `${datos.mensajes.length} mensajes cargados · se actualiza al volver a esta pestaña`
-              : "Conexión privada de Grafo"}
+          <div className={cn(s.statusBar, live.connectionStatus)} role="status">
+            {datos ? (
+              <>
+                <span>{datos.mensajes.length} mensajes cargados</span>
+                {tiempoReal ? (
+                  <Badge variant="outline">{estadosConexion[conexion]}</Badge>
+                ) : (
+                  <span>Vista de prueba</span>
+                )}
+              </>
+            ) : (
+              "Conexión privada de Grafo"
+            )}
           </div>
           <Sheet
             open={contextoAbierto && estado === "listo" && Boolean(datos)}

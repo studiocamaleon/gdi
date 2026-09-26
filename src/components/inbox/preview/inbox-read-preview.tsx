@@ -57,10 +57,12 @@ const cargar: CargarInbox = async (query) =>
     },
   }) satisfies MetaInbox;
 export function InboxReadPreview() {
-  return <InboxView identidad={identidad} cargar={cargar} />;
+  return <InboxView identidad={identidad} cargar={cargar} tiempoReal={null} />;
 }
 
 const sinConexion: CargarInbox = async () => null;
 export function InboxWelcomePreview() {
-  return <InboxView identidad={identidad} cargar={sinConexion} />;
+  return (
+    <InboxView identidad={identidad} cargar={sinConexion} tiempoReal={null} />
+  );
 }

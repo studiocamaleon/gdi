@@ -3,6 +3,13 @@
   align-items: center;
   gap: 8px;
 }
+.connectionStatus {
+  gap: 8px;
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 34px;
+  padding-block: 6px;
+}
 .loading,
 .fallback {
   display: flex;
