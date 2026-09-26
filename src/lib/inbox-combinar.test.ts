@@ -41,3 +41,36 @@ it("no mezcla identidades ni canales y actualiza el cursor al cargar anteriores"
   expect(anterior.mensajes).toHaveLength(4);
   expect(anterior.anterior).toBeNull();
 });
+it("el refresco general reemplaza la ventana completa sin resucitar textos eliminados", () => {
+  const anterior = {
+    ...pagina([1, 2, 3]),
+    origen: "GENERAL" as const,
+    canalId: "alta-1",
+    conversacionId: "chat-1",
+  };
+  const actual = {
+    ...anterior,
+    mensajes: [
+      { ...anterior.mensajes[0], texto: null, eliminado: true },
+      ...anterior.mensajes.slice(1),
+    ],
+  };
+  expect(combinarInbox(anterior, actual, "reciente")).toEqual(actual);
+  const acotada = {
+    ...actual,
+    mensajes: actual.mensajes.slice(1),
+    ventanaAcotada: true,
+  };
+  expect(combinarInbox(anterior, acotada, "reciente").mensajes).toHaveLength(2);
+  expect(
+    combinarInbox(anterior, { ...actual, canalId: "alta-2" }, "anteriores")
+      .canalId,
+  ).toBe("alta-2");
+  expect(
+    combinarInbox(
+      anterior,
+      { ...actual, conversacionId: "chat-2" },
+      "anteriores",
+    ),
+  ).toEqual({ ...actual, conversacionId: "chat-2" });
+});

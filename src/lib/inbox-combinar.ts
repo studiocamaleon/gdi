@@ -9,11 +9,16 @@ export function combinarInbox(
 ): MetaInbox {
   if (
     !prev ||
+    prev.canalId !== actual.canalId ||
+    prev.conversacionId !== actual.conversacionId ||
     prev.contacto.telefono !== actual.contacto.telefono ||
     prev.empresaId !== actual.empresaId ||
     prev.usuarioId !== actual.usuarioId
   )
     return actual;
+  // El general vuelve a consultar toda la ventana visible: no conservar textos
+  // antiguos que pudieron editarse o eliminarse fuera de la página reciente.
+  if (actual.origen === "GENERAL" && modo === "reciente") return actual;
   const ids = new Set(prev.mensajes.map((m) => m.id));
   if (modo === "reciente" && !actual.mensajes.some((m) => ids.has(m.id)))
     return actual;
@@ -22,6 +27,12 @@ export function combinarInbox(
   );
   return {
     ...actual,
+    ...(actual.origen === "GENERAL"
+      ? {
+          conversaciones: prev.conversaciones,
+          listaAnterior: prev.listaAnterior,
+        }
+      : {}),
     anterior: modo === "anteriores" ? actual.anterior : prev.anterior,
     mensajes: [...mensajes.values()].sort(
       (a, b) =>

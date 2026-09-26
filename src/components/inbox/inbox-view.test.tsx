@@ -6,7 +6,20 @@ import { InboxView } from "./inbox-view";
 import type { CargarInbox, MetaInbox } from "@/lib/meta-inbox-api";
 import type { EscucharInbox } from "@/lib/inbox-tiempo-real";
 
-vi.mock('@/lib/meta-conexion-api',()=>({metaConexionApi:{estado:vi.fn().mockResolvedValue({empresaId:'empresa-1',usuarioId:'user-1',modo:null,disponible:false,sandboxVerificadoEl:null,canal:null})}}));
+vi.mock("@/lib/meta-conexion-api", () => ({
+  metaConexionApi: {
+    estado: vi
+      .fn()
+      .mockResolvedValue({
+        empresaId: "empresa-1",
+        usuarioId: "user-1",
+        modo: null,
+        disponible: false,
+        sandboxVerificadoEl: null,
+        canal: null,
+      }),
+  },
+}));
 const identidad = {
   empresaId: "empresa-1",
   usuarioId: "user-1",
@@ -277,4 +290,203 @@ it("ignora una respuesta tardía después de un refresco que denegó el acceso",
   await act(async () => resolver(base));
   expect(container.textContent).not.toContain("Estudio Oliva");
   expect(cargar.mock.calls[0][1]?.aborted).toBe(true);
+});
+
+const general = (conversacionId = "chat-1"): MetaInbox => ({
+  ...structuredClone(base),
+  origen: "GENERAL",
+  canalId: "alta-1",
+  conversacionId,
+  contacto: {
+    telefono: conversacionId === "chat-1" ? "+16505550123" : "+16505550124",
+    nombre: conversacionId === "chat-1" ? "Alma" : "Bruno",
+  },
+  contexto: conversacionId === "chat-1" ? structuredClone(base.contexto) : null,
+  mensajes: [
+    {
+      ...mensaje,
+      id: `${conversacionId}-m1`,
+      texto:
+        conversacionId === "chat-1" ? "Consulta de Alma" : "Consulta de Bruno",
+      direccion: "ENTRANTE",
+    },
+  ],
+  conversaciones: [
+    {
+      id: "chat-1",
+      nombre: "Alma",
+      telefono: "+16505550123",
+      ultimoMensaje: null,
+    },
+    {
+      id: "chat-2",
+      nombre: "Bruno",
+      telefono: "+16505550124",
+      ultimoMensaje: null,
+    },
+  ],
+  listaAnterior: null,
+});
+async function abrir(nombre: string) {
+  const boton = container.querySelector<HTMLButtonElement>(
+    `button[aria-label="Abrir conversación con ${nombre}"]`,
+  )!;
+  expect(boton).toBeTruthy();
+  await act(async () => boton.click());
+}
+it("cambia entre chats sin mezclar contexto y descarta la respuesta de una selección anterior", async () => {
+  cargar.mockResolvedValue(general());
+  await render();
+  let resolver!: (value: MetaInbox) => void;
+  cargar.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolver = resolve;
+      }),
+  );
+  await abrir("Bruno");
+  expect(container.querySelector("[role=log]")?.textContent).not.toContain(
+    "Consulta de Alma",
+  );
+  expect(container.textContent).not.toContain("Estudio Oliva");
+  expect(cargar.mock.calls[1][0]).toMatchObject({ conversacionId: "chat-2" });
+  await abrir("Alma");
+  await act(async () => resolver(general("chat-2")));
+  expect(container.querySelector("[role=log]")?.textContent).toContain(
+    "Consulta de Alma",
+  );
+  expect(container.querySelector("[role=log]")?.textContent).not.toContain(
+    "Consulta de Bruno",
+  );
+  expect(container.textContent).toContain("Estudio Oliva");
+});
+it("la actualización viva pide toda la ventana visible y reemplaza ediciones y eliminaciones", async () => {
+  cargar.mockResolvedValue({ ...general(), anterior: "chat-1-m1" });
+  let eventos!: Parameters<EscucharInbox>[0];
+  const tiempoReal: EscucharInbox = (o) => {
+    eventos = o;
+    return () => {};
+  };
+  await act(async () =>
+    root.render(
+      <InboxView
+        identidad={identidad}
+        cargar={cargar}
+        tiempoReal={tiempoReal}
+      />,
+    ),
+  );
+  const viejo = {
+    ...mensaje,
+    id: "anterior",
+    texto: "Texto antiguo visible",
+    enviadoEl: "2026-09-24T10:00:00Z",
+  };
+  cargar.mockResolvedValueOnce({
+    ...general(),
+    mensajes: [viejo],
+    anterior: null,
+  });
+  await click("Cargar mensajes anteriores");
+  expect(cargar.mock.calls[1][0]).toMatchObject({
+    conversacionId: "chat-1",
+    antesDe: "chat-1-m1",
+  });
+  expect(container.querySelector("[role=log]")?.textContent).toContain(
+    "Texto antiguo visible",
+  );
+  cargar.mockResolvedValueOnce({
+    ...general(),
+    mensajes: [
+      { ...viejo, texto: null, eliminado: true },
+      {
+        ...general().mensajes[0],
+        texto: "Texto corregido",
+        direccion: "SALIENTE",
+        editado: true,
+        estadoEntrega: "READ",
+        delCelular: true,
+        delHistorial: true,
+      },
+    ],
+  });
+  await act(async () => {
+    await eventos.actualizar(new AbortController().signal);
+  });
+  expect(cargar.mock.calls[2][0]).toMatchObject({
+    conversacionId: "chat-1",
+    desdeId: "anterior",
+  });
+  const log = container.querySelector("[role=log]")!;
+  for (const texto of [
+    "Mensaje eliminado",
+    "Texto corregido",
+    "Editado",
+    "Leído",
+    "Historial",
+    "Desde WhatsApp Business",
+  ])
+    expect(log.textContent).toContain(texto);
+  expect(log.textContent).not.toContain("Texto antiguo visible");
+  expect(log.querySelector("[data-kind=salida]")).not.toBeNull();
+});
+it("agrega páginas de conversaciones sin cambiar el chat y permite buscar en el servidor", async () => {
+  vi.useFakeTimers();
+  cargar.mockResolvedValue({ ...general(), listaAnterior: "cursor-pagina" });
+  await render();
+  cargar.mockResolvedValueOnce({
+    ...general(),
+    conversaciones: [
+      {
+        id: "chat-3",
+        nombre: "Clara",
+        telefono: "+16505550125",
+        ultimoMensaje: null,
+      },
+    ],
+  });
+  await click("Más conversaciones");
+  expect(cargar.mock.calls[1][0]).toMatchObject({
+    conversacionId: "chat-1",
+    listaAntesDe: "cursor-pagina",
+  });
+  expect(
+    container.querySelectorAll('button[aria-label^="Abrir conversación"]'),
+  ).toHaveLength(3);
+  const input = container.querySelector<HTMLInputElement>(
+    'input[aria-label="Buscar contacto"]',
+  )!;
+  cargar.mockResolvedValueOnce({ ...general(), conversaciones: [] });
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "desconocido");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0]).toMatchObject({
+    busqueda: "desconocido",
+    conversacionId: "chat-1",
+  });
+  expect(container.textContent).toContain("Sin coincidencias");
+  expect(container.querySelector("[role=log]")?.textContent).toContain(
+    "Consulta de Alma",
+  );
+});
+it("una bandeja conectada sin mensajes no inventa un contacto ni vuelve a solicitar conexión", async () => {
+  cargar.mockResolvedValue({
+    ...general(),
+    contacto: { telefono: "" },
+    conversacionId: null,
+    mensajes: [],
+    conversaciones: [],
+    contexto: null,
+  });
+  await render();
+  expect(container.textContent).toContain("Tu bandeja está preparada");
+  expect(container.querySelector("[role=log]")).toBeNull();
+  expect(container.textContent).not.toContain("Conectar WhatsApp");
 });

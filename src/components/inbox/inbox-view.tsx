@@ -87,7 +87,7 @@ const tipos: Record<string, string> = {
   button: "Respuesta a botón",
 };
 
-/** Sólo lectura del piloto. No comparte estado ni acciones simuladas del prototipo. */
+/** Lectura del canal general o del piloto. No hay acciones de envío simuladas. */
 export function InboxView({
   identidad,
   cargar = getMetaInbox,
@@ -111,6 +111,9 @@ export function InboxView({
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const elegido = useRef<string | undefined>(undefined);
+  const conversacionElegida = useRef<string | undefined>(undefined);
+  const datosActuales = useRef<MetaInbox | null>(null);
+  const filtroActual = useRef("");
   const thread = useRef<HTMLDivElement>(null);
   const posicion = useRef<{
     altura: number;
@@ -136,6 +139,21 @@ export function InboxView({
       }
       if (signal?.aborted) return false;
       if (silencioso && signal) query = { clienteId: elegido.current };
+      if (datosActuales.current?.origen === "GENERAL") {
+        const conversacionId =
+          query.conversacionId ?? conversacionElegida.current;
+        query = {
+          busqueda: filtroActual.current,
+          ...query,
+          conversacionId,
+          ...(silencioso &&
+          !query.antesDe &&
+          conversacionId === datosActuales.current.conversacionId &&
+          datosActuales.current.mensajes[0]
+            ? { desdeId: datosActuales.current.mensajes[0].id }
+            : {}),
+        };
+      }
       controller.current?.abort();
       const control = new AbortController();
       controller.current = control;
@@ -151,10 +169,34 @@ export function InboxView({
         agotado = true;
         control.abort();
       }, 15000);
-      if (!silencioso) setOcupado(true);
+      if (!silencioso || query.listaAntesDe) setOcupado(true);
       if (!anteriores && !silencioso) {
-        setDatos(null);
-        setEstado("cargando");
+        if (
+          datosActuales.current?.origen === "GENERAL" &&
+          query.conversacionId
+        ) {
+          const previa = datosActuales.current;
+          const contacto = previa.conversaciones?.find(
+            (c) => c.id === query.conversacionId,
+          );
+          const vacio = {
+            ...previa,
+            conversacionId: query.conversacionId,
+            contacto: {
+              telefono: contacto?.telefono ?? "",
+              nombre: contacto?.nombre,
+            },
+            mensajes: [],
+            contexto: null,
+            anterior: null,
+          };
+          datosActuales.current = vacio;
+          setDatos(vacio);
+        } else {
+          datosActuales.current = null;
+          setDatos(null);
+          setEstado("cargando");
+        }
       }
       try {
         const resultado = await cargar(query, control.signal);
@@ -165,7 +207,9 @@ export function InboxView({
         )
           return false;
         if (!resultado) {
+          datosActuales.current = null;
           setDatos(null);
+          conversacionElegida.current = undefined;
           setEstado("inactivo");
           setCanalHabilitado(false);
           elegido.current = undefined;
@@ -175,13 +219,22 @@ export function InboxView({
           resultado.empresaId !== identidad.empresaId ||
           resultado.usuarioId !== identidad.usuarioId
         ) {
+          datosActuales.current = null;
           setDatos(null);
+          conversacionElegida.current = undefined;
           setEstado("sesion");
           setCanalHabilitado(false);
           elegido.current = undefined;
           return false;
         }
+        if (
+          query.conversacionId &&
+          resultado.origen === "GENERAL" &&
+          resultado.conversacionId !== query.conversacionId
+        )
+          throw new ApiError("Cambió la conversación.", 409);
         elegido.current = query.clienteId;
+        conversacionElegida.current = resultado.conversacionId ?? undefined;
         posicion.current =
           thread.current &&
           (anteriores ||
@@ -196,15 +249,26 @@ export function InboxView({
                 anteriores,
               }
             : null;
-        setDatos((prev) => {
-          return anteriores || silencioso
+        const previa = datosActuales.current;
+        let siguiente =
+          anteriores || silencioso
             ? combinarInbox(
-                prev,
+                previa,
                 resultado,
                 anteriores ? "anteriores" : "reciente",
               )
             : resultado;
-        });
+        if (query.listaAntesDe && previa?.canalId === resultado.canalId) {
+          const filas = new Map(
+            [
+              ...(previa?.conversaciones ?? []),
+              ...(resultado.conversaciones ?? []),
+            ].map((c) => [c.id, c]),
+          );
+          siguiente = { ...siguiente, conversaciones: [...filas.values()] };
+        }
+        datosActuales.current = siguiente;
+        setDatos(siguiente);
         setEstado("listo");
         setCanalHabilitado(true);
         return true;
@@ -215,6 +279,7 @@ export function InboxView({
         )
           return false;
         // Un error también al paginar retira toda la información privada.
+        datosActuales.current = null;
         setDatos(null);
         const denegado =
           error instanceof ApiError && [401, 403].includes(error.status);
@@ -238,6 +303,9 @@ export function InboxView({
 
   useEffect(() => {
     elegido.current = undefined;
+    conversacionElegida.current = undefined;
+    datosActuales.current = null;
+    filtroActual.current = "";
     setCanalHabilitado(false);
     void consultar();
     const refrescar = () => {
@@ -264,7 +332,9 @@ export function InboxView({
       estado: setConexion,
       accesoCerrado: () => {
         controller.current?.abort();
+        datosActuales.current = null;
         setDatos(null);
+        conversacionElegida.current = undefined;
         setEstado("sesion");
         setCanalHabilitado(false);
         elegido.current = undefined;
@@ -288,8 +358,17 @@ export function InboxView({
     posicion.current = null;
   }, [datos, movilChat]);
 
+  useEffect(() => {
+    filtroActual.current = busqueda;
+    if (datosActuales.current?.origen !== "GENERAL") return;
+    const timer = setTimeout(() => {
+      void consultar({ clienteId: elegido.current, busqueda }, false, true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [busqueda, consultar]);
   const nombre =
     datos?.contexto?.cliente?.nombre ||
+    datos?.contacto.nombre ||
     [...(datos?.mensajes ?? [])].reverse().find((m) => m.nombreContacto)
       ?.nombreContacto ||
     datos?.contacto.telefono ||
@@ -323,146 +402,158 @@ export function InboxView({
       <TooltipContent>Cambiar apariencia</TooltipContent>
     </Tooltip>
   );
-  const panelContexto = (
-    <>
-      <div className={s.contextTitle}>
-        <span>EN GRAFO</span>
-        <Badge variant="outline">{cliente ? "Por teléfono" : "Contexto"}</Badge>
-      </div>
-      {!contexto ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>Contexto restringido</EmptyTitle>
-            <EmptyDescription>
-              Tu acceso no incluye la consulta de clientes.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <>
-          <div className={s.phoneMatch}>
-            <span>Teléfono del contacto</span>
-            <strong>{datos?.contacto.telefono}</strong>
-            <p>
-              La búsqueda incluye clientes y contactos de {identidad.empresa}.
-            </p>
-          </div>
-          {contexto.estado === "sin_coincidencias" ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>Número no registrado</EmptyTitle>
-                <EmptyDescription>
-                  Registrá este teléfono en la ficha del cliente o de su
-                  contacto. Al actualizar aparecerá su información.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : !cliente ? (
-            <>
-              <p className={s.matchHelp}>
-                Este teléfono aparece en varias fichas. Elegí cuál corresponde a
-                esta conversación.
+  const panelContexto =
+    datos?.origen === "GENERAL" && !datos.conversacionId ? (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Contexto del cliente</EmptyTitle>
+          <EmptyDescription>
+            Elegí una conversación para ver su relación con Grafo.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    ) : (
+      <>
+        <div className={s.contextTitle}>
+          <span>EN GRAFO</span>
+          <Badge variant="outline">
+            {cliente ? "Por teléfono" : "Contexto"}
+          </Badge>
+        </div>
+        {!contexto ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>Contexto restringido</EmptyTitle>
+              <EmptyDescription>
+                Tu acceso no incluye la consulta de clientes.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <>
+            <div className={s.phoneMatch}>
+              <span>Teléfono del contacto</span>
+              <strong>{datos?.contacto.telefono}</strong>
+              <p>
+                La búsqueda incluye clientes y contactos de {identidad.empresa}.
               </p>
-              {contexto.coincidencias.map((c) => (
-                <Button
-                  key={c.id}
-                  variant="outline"
-                  disabled={ocupado}
-                  onClick={() => void consultar({ clienteId: c.id })}
-                >
-                  {c.nombre}
-                  {!c.activo && " · Inactivo"}
-                </Button>
-              ))}
-            </>
-          ) : (
-            <>
-              <div className={s.clientIdentity}>
-                <Avatar size="lg">
-                  <AvatarFallback>{iniciales}</AvatarFallback>
-                </Avatar>
-                <h3>{cliente.nombre}</h3>
-                {cliente.razonSocial && <p>{cliente.razonSocial}</p>}
-                <Badge variant="outline">
-                  {cliente.activo
-                    ? "Cliente de la gráfica"
-                    : "Cliente inactivo"}
-                </Badge>
-              </div>
-              {cliente.contactos.length > 0 && (
+            </div>
+            {contexto.estado === "sin_coincidencias" ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>Número no registrado</EmptyTitle>
+                  <EmptyDescription>
+                    Registrá este teléfono en la ficha del cliente o de su
+                    contacto. Al actualizar aparecerá su información.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : !cliente ? (
+              <>
                 <p className={s.matchHelp}>
-                  Contactos coincidentes: {cliente.contactos.join(", ")}
+                  Este teléfono aparece en varias fichas. Elegí cuál corresponde
+                  a esta conversación.
                 </p>
-              )}
-              <Button
-                nativeButton={false}
-                variant="outline"
-                render={
-                  <a
-                    href={`/clientes/${encodeURIComponent(cliente.id)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  />
-                }
-              >
-                Abrir ficha
-                <ArrowUpRight data-icon="inline-end" />
-              </Button>
-              {contexto.coincidencias.length > 1 && (
-                <Button
-                  variant="ghost"
-                  disabled={ocupado}
-                  onClick={() => void consultar()}
-                >
-                  Revisar otra coincidencia
-                </Button>
-              )}
-              <Separator />
-              <div className={s.sectionHeading}>
-                <h3>Órdenes recientes</h3>
-                <span>{contexto.ordenes.length}</span>
-              </div>
-              {!contexto.permisos.ordenes ? (
-                <p className={s.matchHelp}>
-                  Tu acceso no incluye la consulta de órdenes.
-                </p>
-              ) : contexto.ordenes.length === 0 ? (
-                <p className={s.matchHelp}>
-                  Este cliente todavía no tiene órdenes.
-                </p>
-              ) : (
-                contexto.ordenes.map((orden) => (
-                  <a
-                    key={orden.id}
-                    className={s.workCard}
-                    href={`/produccion/ordenes/${encodeURIComponent(orden.id)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                {contexto.coincidencias.map((c) => (
+                  <Button
+                    key={c.id}
+                    variant="outline"
+                    disabled={ocupado}
+                    onClick={() => void consultar({ clienteId: c.id })}
                   >
-                    <span className={s.workHeading}>
-                      <b>{orden.numero}</b>
-                      <ArrowUpRight size={15} />
-                    </span>
-                    <strong>
-                      {orden.items[0]?.nombre || "Orden de trabajo"}
-                    </strong>
-                    <span className={s.workFooter}>
-                      {orden.estado.replace(/_/g, " ")}
-                    </span>
-                    <span className={s.workFooter}>
-                      {orden.fechaEntrega
-                        ? `Entrega: ${fechaConDia(orden.fechaEntrega)}`
-                        : "Sin fecha de entrega"}
-                    </span>
-                  </a>
-                ))
-              )}
-            </>
-          )}
-        </>
-      )}
-    </>
-  );
+                    {c.nombre}
+                    {!c.activo && " · Inactivo"}
+                  </Button>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className={s.clientIdentity}>
+                  <Avatar size="lg">
+                    <AvatarFallback>{iniciales}</AvatarFallback>
+                  </Avatar>
+                  <h3>{cliente.nombre}</h3>
+                  {cliente.razonSocial && <p>{cliente.razonSocial}</p>}
+                  <Badge variant="outline">
+                    {cliente.activo
+                      ? "Cliente de la gráfica"
+                      : "Cliente inactivo"}
+                  </Badge>
+                </div>
+                {cliente.contactos.length > 0 && (
+                  <p className={s.matchHelp}>
+                    Contactos coincidentes: {cliente.contactos.join(", ")}
+                  </p>
+                )}
+                <Button
+                  nativeButton={false}
+                  variant="outline"
+                  render={
+                    <a
+                      href={`/clientes/${encodeURIComponent(cliente.id)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  }
+                >
+                  Abrir ficha
+                  <ArrowUpRight data-icon="inline-end" />
+                </Button>
+                {contexto.coincidencias.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    disabled={ocupado}
+                    onClick={() => void consultar()}
+                  >
+                    Revisar otra coincidencia
+                  </Button>
+                )}
+                <Separator />
+                <div className={s.sectionHeading}>
+                  <h3>Órdenes recientes</h3>
+                  <span>{contexto.ordenes.length}</span>
+                </div>
+                {!contexto.permisos.ordenes ? (
+                  <p className={s.matchHelp}>
+                    Tu acceso no incluye la consulta de órdenes.
+                  </p>
+                ) : contexto.ordenes.length === 0 ? (
+                  <p className={s.matchHelp}>
+                    Este cliente todavía no tiene órdenes.
+                  </p>
+                ) : (
+                  contexto.ordenes.map((orden) => (
+                    <a
+                      key={orden.id}
+                      className={s.workCard}
+                      href={`/produccion/ordenes/${encodeURIComponent(orden.id)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span className={s.workHeading}>
+                        <b>{orden.numero}</b>
+                        <ArrowUpRight size={15} />
+                      </span>
+                      <strong>
+                        {orden.items[0]?.nombre || "Orden de trabajo"}
+                      </strong>
+                      <span className={s.workFooter}>
+                        {orden.estado.replace(/_/g, " ")}
+                      </span>
+                      <span className={s.workFooter}>
+                        {orden.fechaEntrega
+                          ? `Entrega: ${fechaConDia(orden.fechaEntrega)}`
+                          : "Sin fecha de entrega"}
+                      </span>
+                    </a>
+                  ))
+                )}
+              </>
+            )}
+          </>
+        )}
+      </>
+    );
 
   return (
     <DesignSystemProvider appearance={apariencia} theme="brand">
@@ -472,7 +563,9 @@ export function InboxView({
             <span>
               <span className={s.previewDot} />
               {estado === "listo"
-                ? "Prueba interna · contacto autorizado · sólo lectura"
+                ? datos?.origen === "GENERAL"
+                  ? "Grafo Inbox · conversaciones sincronizadas · sólo lectura"
+                  : "Prueba interna · contacto autorizado · sólo lectura"
                 : "Grafo Inbox · WhatsApp"}
             </span>
             <div>{iconoTema}</div>
@@ -537,7 +630,10 @@ export function InboxView({
                 <div className={s.listTop}>
                   <div className={s.listTitle}>
                     <h2>Bandeja de entrada</h2>
-                    <Badge variant="secondary">1</Badge>
+                    <Badge variant="secondary">
+                      {datos.conversaciones?.length ?? 1}
+                      {datos.listaAnterior ? "+" : ""}
+                    </Badge>
                   </div>
                   <InputGroup>
                     <InputGroupAddon>
@@ -552,38 +648,89 @@ export function InboxView({
                   </InputGroup>
                 </div>
                 <div className={s.conversations}>
-                  {coincide ? (
-                    <button
-                      type="button"
-                      className={s.conversation}
-                      data-active="true"
-                      onClick={() => setMovilChat(true)}
-                      aria-label={`Abrir conversación con ${nombre}`}
-                    >
-                      <Avatar>
-                        <AvatarFallback>{iniciales}</AvatarFallback>
-                      </Avatar>
-                      <span className={s.conversationBody}>
-                        <span className={s.nameLine}>
-                          <strong>{nombre}</strong>
+                  {(datos.origen === "GENERAL"
+                    ? (datos.conversaciones ?? [])
+                    : coincide
+                      ? [
+                          {
+                            id: "piloto",
+                            nombre,
+                            telefono: datos.contacto.telefono,
+                            ultimoMensaje: datos.mensajes.at(-1) ?? null,
+                          },
+                        ]
+                      : []
+                  ).map((c) => {
+                    const titulo = c.nombre || c.telefono;
+                    return (
+                      <button
+                        type="button"
+                        key={c.id}
+                        className={s.conversation}
+                        data-active={
+                          datos.origen === "GENERAL"
+                            ? datos.conversacionId === c.id
+                            : true
+                        }
+                        aria-label={`Abrir conversación con ${titulo}`}
+                        onClick={() => {
+                          setMovilChat(true);
+                          if (
+                            datos.origen === "GENERAL" &&
+                            datos.conversacionId !== c.id
+                          ) {
+                            elegido.current = undefined;
+                            conversacionElegida.current = c.id;
+                            void consultar({ conversacionId: c.id });
+                          }
+                        }}
+                      >
+                        <Avatar>
+                          <AvatarFallback>
+                            {titulo
+                              .replace(/[^\p{L}\p{N}\s]/gu, "")
+                              .split(/\s+/)
+                              .slice(0, 2)
+                              .map((x) => x[0] ?? "")
+                              .join("")
+                              .toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className={s.conversationBody}>
+                          <span className={s.nameLine}>
+                            <strong>{titulo}</strong>
+                          </span>
+                          <span className={s.company}>{c.telefono}</span>
+                          <span className={s.snippet}>
+                            {c.ultimoMensaje?.eliminado
+                              ? "Mensaje eliminado"
+                              : c.ultimoMensaje?.texto ||
+                                tipos[c.ultimoMensaje?.tipo ?? ""] ||
+                                "Sin texto"}
+                          </span>
+                          <span className={s.conversationFoot}>
+                            {c.ultimoMensaje
+                              ? fechaHora(c.ultimoMensaje.enviadoEl)
+                              : "WhatsApp"}
+                          </span>
                         </span>
-                        <span className={s.company}>
-                          {datos.contacto.telefono}
-                        </span>
-                        <span className={s.snippet}>
-                          {datos.mensajes.at(-1)?.texto || "Contacto de prueba"}
-                        </span>
-                        <span className={s.conversationFoot}>
-                          WhatsApp · Recepción
-                        </span>
-                      </span>
-                    </button>
-                  ) : (
+                      </button>
+                    );
+                  })}
+                  {(datos.origen === "GENERAL"
+                    ? !datos.conversaciones?.length
+                    : !coincide) && (
                     <Empty>
                       <EmptyHeader>
-                        <EmptyTitle>Sin coincidencias</EmptyTitle>
+                        <EmptyTitle>
+                          {busqueda
+                            ? "Sin coincidencias"
+                            : "Todavía no hay conversaciones"}
+                        </EmptyTitle>
                         <EmptyDescription>
-                          Probá con otro nombre o teléfono.
+                          {busqueda
+                            ? "Probá con otro nombre o teléfono."
+                            : "Aparecerán aquí a medida que se reciban."}
                         </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
@@ -591,123 +738,215 @@ export function InboxView({
                 </div>
                 <div className={s.listBottom}>
                   <MessageCircle size={14} />
-                  Canal de prueba de Meta
+                  {datos.origen === "GENERAL"
+                    ? "WhatsApp de la empresa"
+                    : "Canal de prueba de Meta"}
+                  {datos.listaAnterior && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={ocupado}
+                      onClick={() =>
+                        void consultar(
+                          {
+                            listaAntesDe: datos.listaAnterior!,
+                            clienteId: elegido.current,
+                          },
+                          false,
+                          true,
+                        )
+                      }
+                    >
+                      Más conversaciones
+                    </Button>
+                  )}
                 </div>
               </section>
               <section
                 className={s.chatPane}
                 aria-label="Conversación recibida"
               >
-                <header className={s.chatHeader}>
-                  <div className={s.chatPerson}>
-                    <span className={s.backMobile}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Volver a conversaciones"
-                        onClick={() => setMovilChat(false)}
-                      >
-                        <ArrowLeft />
-                      </Button>
-                    </span>
-                    <Avatar size="lg">
-                      <AvatarFallback>{iniciales}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h2>{nombre}</h2>
-                      <p>{datos.contacto.telefono}</p>
-                    </div>
-                  </div>
-                  <span className={s.contextMobile}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Ver contexto del cliente"
-                      onClick={() => setContextoAbierto(true)}
-                    >
-                      <UserRound />
-                    </Button>
-                  </span>
-                </header>
-                <div
-                  className={s.thread}
-                  ref={thread}
-                  role="log"
-                  aria-label="Mensajes recibidos"
-                  aria-live="polite"
-                >
-                  {datos.anterior && (
-                    <div className={live.older}>
-                      <Button
-                        variant="outline"
-                        disabled={ocupado}
-                        onClick={() =>
-                          void consultar(
-                            {
-                              antesDe: datos.anterior!,
-                              clienteId: elegido.current,
-                            },
-                            true,
-                          )
-                        }
-                      >
-                        {ocupado ? "Cargando…" : "Cargar mensajes anteriores"}
-                      </Button>
-                    </div>
-                  )}
-                  {datos.mensajes.length === 0 ? (
-                    <Empty>
-                      <EmptyHeader>
-                        <EmptyTitle>Todavía no hay mensajes</EmptyTitle>
-                        <EmptyDescription>
-                          Los mensajes nuevos recibidos del contacto autorizado
-                          aparecerán acá automáticamente.
-                        </EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
-                  ) : (
-                    datos.mensajes.map((m) => (
-                      <div
-                        key={m.id}
-                        className={s.messageRow}
-                        data-kind="entrada"
-                      >
-                        <div className={s.bubble} data-kind="entrada">
-                          {m.tipo === "text" ? (
-                            <p>{m.texto}</p>
-                          ) : (
-                            <>
-                              <Badge variant="secondary">
-                                {tipos[m.tipo] || "Otro contenido"}
-                              </Badge>
-                              <p>
-                                Este contenido todavía no se puede abrir en
-                                Grafo.
-                              </p>
-                            </>
-                          )}
-                          <div className={s.messageMeta}>
-                            <time dateTime={m.enviadoEl}>
-                              {fechaHora(m.enviadoEl)}
-                            </time>
-                          </div>
+                {datos.origen === "GENERAL" && !datos.conversacionId ? (
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyTitle>Tu bandeja está preparada</EmptyTitle>
+                      <EmptyDescription>
+                        Las conversaciones recibidas aparecerán aquí. Podés
+                        cambiar la búsqueda para encontrar otros contactos.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : (
+                  <>
+                    <header className={s.chatHeader}>
+                      <div className={s.chatPerson}>
+                        <span className={s.backMobile}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Volver a conversaciones"
+                            onClick={() => setMovilChat(false)}
+                          >
+                            <ArrowLeft />
+                          </Button>
+                        </span>
+                        <Avatar size="lg">
+                          <AvatarFallback>{iniciales}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <h2>{nombre}</h2>
+                          <p>{datos.contacto.telefono}</p>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
-                <div className={s.composer}>
-                  <div className={s.unavailable}>
-                    <LockKeyhole size={18} />
-                    <div>
-                      <strong>Recepción de prueba</strong>
-                      <p>
-                        Las respuestas desde el inbox todavía no están
-                        habilitadas.
-                      </p>
+                      <span className={s.contextMobile}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Ver contexto del cliente"
+                          onClick={() => setContextoAbierto(true)}
+                        >
+                          <UserRound />
+                        </Button>
+                      </span>
+                    </header>
+                    <div
+                      className={s.thread}
+                      ref={thread}
+                      role="log"
+                      aria-label="Mensajes recibidos"
+                      aria-live="polite"
+                    >
+                      {datos.ventanaAcotada && (
+                        <Alert>
+                          <AlertTitle>
+                            Ventana de lectura actualizada
+                          </AlertTitle>
+                          <AlertDescription>
+                            Mostramos los 500 mensajes más recientes. Podés
+                            volver a cargar los anteriores.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {datos.anterior && (
+                        <div className={live.older}>
+                          <Button
+                            variant="outline"
+                            disabled={ocupado}
+                            onClick={() =>
+                              void consultar(
+                                {
+                                  antesDe: datos.anterior!,
+                                  clienteId: elegido.current,
+                                },
+                                true,
+                              )
+                            }
+                          >
+                            {ocupado
+                              ? "Cargando…"
+                              : "Cargar mensajes anteriores"}
+                          </Button>
+                        </div>
+                      )}
+                      {datos.mensajes.length === 0 ? (
+                        <Empty>
+                          <EmptyHeader>
+                            <EmptyTitle>
+                              {ocupado
+                                ? "Cargando conversación…"
+                                : "Todavía no hay mensajes"}
+                            </EmptyTitle>
+                            <EmptyDescription>
+                              Los mensajes de esta conversación aparecerán acá
+                              automáticamente.
+                            </EmptyDescription>
+                          </EmptyHeader>
+                        </Empty>
+                      ) : (
+                        datos.mensajes.map((m) => (
+                          <div
+                            key={m.id}
+                            className={s.messageRow}
+                            data-kind={
+                              m.direccion === "SALIENTE" ? "salida" : "entrada"
+                            }
+                          >
+                            <div
+                              className={s.bubble}
+                              data-kind={
+                                m.direccion === "SALIENTE"
+                                  ? "salida"
+                                  : "entrada"
+                              }
+                            >
+                              {m.eliminado ? (
+                                <p>Mensaje eliminado</p>
+                              ) : ["text", "button", "interactive"].includes(
+                                  m.tipo,
+                                ) ? (
+                                <p>{m.texto}</p>
+                              ) : (
+                                <>
+                                  <Badge variant="secondary">
+                                    {tipos[m.tipo] || "Otro contenido"}
+                                  </Badge>
+                                  {m.texto && <p>{m.texto}</p>}
+                                  <p>
+                                    Este contenido todavía no se puede abrir en
+                                    Grafo.
+                                  </p>
+                                </>
+                              )}
+                              <div className={s.messageMeta}>
+                                {m.editado && !m.eliminado && (
+                                  <span>Editado</span>
+                                )}
+                                {m.delHistorial && <span>Historial</span>}
+                                {m.delCelular && (
+                                  <span>Desde WhatsApp Business</span>
+                                )}
+                                {m.direccion === "SALIENTE" &&
+                                  m.estadoEntrega && (
+                                    <span>
+                                      {(
+                                        {
+                                          PENDING: "Pendiente",
+                                          ERROR: "No entregado",
+                                          SENT: "Enviado",
+                                          DELIVERED: "Entregado",
+                                          READ: "Leído",
+                                          PLAYED: "Reproducido",
+                                        } as Record<string, string>
+                                      )[m.estadoEntrega] ?? "Estado recibido"}
+                                    </span>
+                                  )}
+                                <time dateTime={m.enviadoEl}>
+                                  {fechaHora(m.enviadoEl)}
+                                </time>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
-                  </div>
-                </div>
+                    <div className={s.composer}>
+                      <div className={s.unavailable}>
+                        <LockKeyhole size={18} />
+                        <div>
+                          <strong>
+                            {datos.origen === "GENERAL"
+                              ? "Conversaciones sincronizadas"
+                              : "Recepción de prueba"}
+                          </strong>
+                          <p>
+                            Las respuestas desde el inbox todavía no están
+                            habilitadas.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
               <aside
                 className={s.contextPane}
