@@ -13,6 +13,7 @@ import {
   Select,
   SelectContent,
   SelectGroup,
+  SelectLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -45,6 +46,12 @@ import {
   vistaPlantilla,
 } from "../../../apps/api/src/common/inbox/plantillas";
 import s from "./inbox-plantillas.module.css";
+const origenesArchivo = [
+  { id: "PRESUPUESTO", nombre: "Presupuestos emitidos" },
+  { id: "COMPROBANTE", nombre: "Comprobantes emitidos" },
+  { id: "CLIENTE", nombre: "Archivos del cliente" },
+] as const;
+const etiquetaArchivo = (f: ArchivoPlantillaInbox) => f.referencia || f.nombre;
 export type BorradorPlantilla = {
   plantilla: PlantillaInbox;
   valores: string[];
@@ -88,7 +95,7 @@ export function InboxPlantillas({
   const [archivosEstado, setArchivosEstado] = useState("");
   const [revisionArchivos, setRevisionArchivos] = useState(0);
   const opcionesArchivo = useMemo(
-    () => archivos.map((f) => ({ value: f.id, label: f.nombre })),
+    () => archivos.map((f) => ({ value: f.id, label: etiquetaArchivo(f) })),
     [archivos],
   );
   const vivo = useRef(true),
@@ -160,7 +167,7 @@ export function InboxPlantillas({
     if (!abierto || !p?.archivo) return;
     const controller = new AbortController();
     setArchivos([]);
-    setArchivosEstado("Buscando archivos del cliente…");
+    setArchivosEstado("Buscando archivos y documentos del cliente…");
     if (!api.archivos) {
       setArchivosEstado("Los archivos todavía no están disponibles.");
       return;
@@ -183,7 +190,7 @@ export function InboxPlantillas({
           r.motivo ||
             (disponibles.length
               ? `Archivos de ${r.cliente?.nombre ?? "tu cliente"}`
-              : "No hay archivos compatibles. Agregalos en la ficha del cliente y volvé a abrir esta ventana."),
+              : "No hay archivos compatibles. Agregá uno en la ficha del cliente o generá el PDF desde Presupuestos o Comprobantes. Luego actualizá esta lista."),
         );
       })
       .catch(() => {
@@ -413,7 +420,11 @@ export function InboxPlantillas({
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               key={draft.archivo.version}
-                              src={api.urlArchivo(draft.archivo)}
+                              src={api.urlArchivo(
+                                draft.archivo,
+                                conversacionId,
+                                canalId,
+                              )}
                               alt={`Vista previa de ${draft.archivo.nombre}`}
                             />
                           ) : p.archivo === "image" ? (
@@ -422,7 +433,8 @@ export function InboxPlantillas({
                             <FileText aria-hidden="true" />
                           )}
                           <strong>
-                            {draft.archivo?.nombre ||
+                            {(draft.archivo &&
+                              etiquetaArchivo(draft.archivo)) ||
                               (p.archivo === "image"
                                 ? "Tu imagen aparecerá acá"
                                 : "PDF adjunto")}
@@ -430,11 +442,18 @@ export function InboxPlantillas({
                           <small>
                             {draft.archivo
                               ? `${formatBytes(draft.archivo.bytes)} · Archivo privado`
-                              : "Elegí un archivo de la ficha del cliente"}
+                              : "Elegí un archivo o documento del cliente"}
                           </small>
+                          {draft.archivo?.referencia && (
+                            <small>{draft.archivo.nombre}</small>
+                          )}
                           {draft.archivo && api.urlArchivo && (
                             <a
-                              href={api.urlArchivo(draft.archivo)}
+                              href={api.urlArchivo(
+                                draft.archivo,
+                                conversacionId,
+                                canalId,
+                              )}
                               target="_blank"
                               rel="noopener noreferrer"
                             >
@@ -495,15 +514,35 @@ export function InboxPlantillas({
                             <SelectValue placeholder="Elegí un archivo del cliente…" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectGroup>
-                              {archivos.map((f) => (
-                                <SelectItem key={f.id} value={f.id}>
-                                  {f.nombre}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
+                            {origenesArchivo.map((origen) => {
+                              const grupo = archivos.filter(
+                                (f) => (f.origen ?? "CLIENTE") === origen.id,
+                              );
+                              return grupo.length > 0 ? (
+                                <SelectGroup key={origen.id}>
+                                  <SelectLabel>{origen.nombre}</SelectLabel>
+                                  {grupo.map((f) => (
+                                    <SelectItem key={f.id} value={f.id}>
+                                      {etiquetaArchivo(f)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              ) : null;
+                            })}
                           </SelectContent>
                         </Select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={enviando || Boolean(draft.clave)}
+                          onClick={() => {
+                            guardar({ ...draft, archivo: undefined });
+                            setRevisionArchivos((n) => n + 1);
+                          }}
+                        >
+                          <RefreshCw data-icon="inline-start" /> Actualizar
+                          archivos
+                        </Button>
                         <p className={s.notice} role="status">
                           {archivosEstado}
                         </p>
@@ -514,6 +553,15 @@ export function InboxPlantillas({
                           . Se comparte con Meta y con el destinatario al
                           enviar.
                         </p>
+                        {p.archivo === "document" && (
+                          <p className={s.notice}>
+                            Incluye PDF listos de presupuestos emitidos y
+                            comprobantes, según tus permisos. Los borradores y
+                            documentos anulados no aparecen. Si falta uno,
+                            generá su PDF desde el módulo correspondiente y
+                            actualizá la lista.
+                          </p>
+                        )}
                       </Field>
                     )}
                     {p.variables.map((v, i) => (

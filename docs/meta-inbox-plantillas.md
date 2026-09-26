@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp en el Inbox
 
-Implementado y comprobado en local el 26/09/2026, rama inicial `codex/inbox-plantillas`, ampliada en `codex/inbox-plantillas-archivos`. Todavía no activado en staging ni probado con un destinatario real.
+Implementado y comprobado en local el 26/09/2026, rama inicial `codex/inbox-plantillas`, ampliada en `codex/inbox-plantillas-archivos` y `codex/inbox-documentos-comerciales`. Todavía no activado en staging ni probado con un destinatario real.
 
 ## Para qué sirve
 
@@ -23,7 +23,7 @@ Videos, ubicaciones, botones con enlaces variables, códigos de autenticación, 
 ## Archivos privados en una plantilla
 
 1. Elegir una plantilla aprobada cuyo encabezado pida **imagen** o **documento**.
-2. Elegir un archivo privado ya subido en la ficha del cliente. Se muestran los últimos 100 compatibles. El teléfono debe corresponder a una única ficha activa; si no hay coincidencia o hay varias, Grafo no adivina de quién es el archivo.
+2. Elegir un archivo privado de la ficha del cliente, un presupuesto emitido o un comprobante emitido con PDF listo. Se muestran los últimos 100 compatibles de cada origen, separados por grupo. El teléfono debe corresponder a una única ficha activa; si no hay coincidencia o hay varias, Grafo no adivina de quién es el archivo.
 3. Revisar nombre, tamaño y contenido (miniatura de imagen o enlace para abrir el PDF). Completar las variables y confirmar que el cliente autorizó ese tipo de contacto.
 4. Al enviar, Grafo valida nuevamente empresa, sesión, permisos, plan, conexión, archivo y versión. Lee bytes con límite, comprueba tamaño, MIME, firma de PDF o metadatos de imagen y hash cuando existe.
 5. Sube los bytes a `/{PHONE_NUMBER_ID}/media` con multipart y token del canal. Usa el ID recibido en el componente `header` del mensaje. No entrega a Meta una URL pública de R2 ni una URL firmada de Grafo.
@@ -32,7 +32,17 @@ Videos, ubicaciones, botones con enlaces variables, códigos de autenticación, 
 
 Límites de este bloque: PDF hasta **20 MB** (límite de Grafo; Meta admite documentos de mayor tamaño), JPG/PNG hasta **5 MB**, imágenes RGB/RGBA de 8 bits. Una preparación de archivo por proceso evita picos de memoria. Si hay otra transferencia en curso, el intento queda rechazado sin mensaje para que el operador decida cuándo volver a intentarlo.
 
-Por ahora no se ofrece subida desde la computadora dentro del modal, ni PDFs automáticos de presupuestos/comprobantes, ni archivos de órdenes. Agregar esos accesos necesita su selección comercial y sus permisos correspondientes. Tampoco se incluyen archivos públicos, eliminados, generados por el sistema o de otras conversaciones. Las lecturas de vista previa usan el acceso privado existente de archivos; la subida a Meta sólo comienza al pulsar Enviar.
+Por ahora no se ofrece subida desde la computadora dentro del modal, ni generación de PDF dentro del Inbox, ni archivos de órdenes. Tampoco se incluyen archivos públicos, eliminados, documentos internos ni adjuntos de otras conversaciones. La subida a Meta sólo comienza al pulsar Enviar.
+
+### Presupuestos y comprobantes de Grafo
+
+- El origen y la referencia comercial ayudan a distinguir el documento: por ejemplo, `PRES-2026-0042` o `Factura C 0001-00000018`. Se conserva también el nombre del PDF.
+- Presupuestos: requieren `comercial.ver`, número, cliente coincidente, fecha de envío y estado `enviado`, `aprobado` o `convertido`. Se usa la revisión 2 emitida y lista de `DocumentoPdf`; nunca la revisión 1 de vista previa. El PDF legado se admite sólo si no existe revisión 2, igual que en Presupuestos. Una revisión emitida pendiente/fallida no se reemplaza por un archivo antiguo.
+- Comprobantes: requieren `administracion.ver`, cliente coincidente, número y estado `emitido`, sin anulación. Admite facturas, notas de crédito y notas de débito con PDF privado ya generado. No se consulta ARCA ni se emiten comprobantes desde este selector.
+- Los permisos se consultan en la sesión actual de la base, además del permiso del Inbox y CRM. No se usa una copia antigua de permisos del navegador. El listado devuelve sólo nombre, referencia, formato, tamaño y huella; sin snapshots fiscales ni claves de almacenamiento.
+- La huella incluye el documento de origen. Si cambian archivo, estado, cliente o versión, hay que volver a elegir. Los controles se repiten al enviar y después de subir a Meta. Una anulación durante la preparación impide el POST de mensajes.
+- **Revisar archivo** usa una ruta del Inbox vinculada a conversación, conexión y versión. Comprueba el acceso antes y después de firmar una descarga de 60 segundos, sin caché. Ya no usa la ruta genérica de archivos para esa revisión. Como toda URL firmada, una vez entregada puede funcionar hasta su vencimiento.
+- **Actualizar archivos** vuelve a consultar y limpia la selección anterior. Si falta un PDF, generarlo desde su módulo y luego actualizar. Consultar el selector no genera documentos ni cambia su estado; tampoco requiere contratar nuevamente la capacidad de generación para leer un archivo ya existente.
 
 Un archivo subido a Meta cuyo mensaje no llegue a enviarse puede quedar allí hasta su vencimiento de 30 días. No se borran automáticamente IDs en un resultado incierto: podría haber un envío en curso. No hay reintentos automáticos del POST de mensajes.
 
@@ -52,11 +62,11 @@ El circuito no intenta solucionar la edición de mensajes ya enviados; esa capac
 
 Abrir `http://localhost:3000/dev/diseno/inbox/conversaciones`. Elegir Clara Paz → **Usar plantilla** → **trabajo listo**. Completar nombre, pedido y dirección, confirmar el contacto y enviar. El mensaje aparece como **Simulado · sin envío real**, mientras el texto libre continúa bloqueado. Los datos de esta ruta viven en memoria; no escriben en PostgreSQL ni llaman a Meta.
 
-Para archivos: Alma o Bruno → **Usar plantilla** → **documento del trabajo** o **catalogo con imagen**. Elegir el archivo de ejemplo. Clara muestra la falta de ficha coincidente. Todo sigue siendo simulado.
+Para archivos: Alma o Bruno → **Usar plantilla** → **documento del trabajo** o **catalogo con imagen**. Elegir un archivo de ejemplo, `PRES-2026-0042` o `Factura C 0001-00000018`; los tres grupos aparecen al elegir una plantilla de PDF. Clara muestra la falta de ficha coincidente. Todo sigue siendo simulado.
 
 Cobertura: catálogo y componentes, variables, cambios de estado/definición, separación de empresas y conexiones, permisos HTTP, valores inválidos, falta de consentimiento, concurrencia, timeout, confirmación por webhook, comprobación sin reenvío, vista previa, borradores separados y recuperación del intento al cerrar/reabrir.
 
-Validación acumulada: 450 pruebas de API/Meta, almacenamiento y aislamiento; 56 pruebas de componentes del Inbox; tipos de la web y de la API con `tsconfig.build.json`, lint del código modificado y guardia CSS correctos. La comprobación global de tipos de tests de la API sigue reportando errores anteriores en otros módulos; no se los dio por aprobados. Revisión visual en Chrome: recorrido de PDF, miniatura de imagen y comprobación móvil; la base visual de plantillas ya había sido revisada en claro y oscuro. Sin desborde horizontal. API local con base disponible y permisos de `grafo_app` sobre la columna nueva comprobados.
+Validación acumulada: 477 pruebas de API/Meta, almacenamiento y aislamiento; 58 pruebas de componentes del Inbox; tipos de la web y de la API con `tsconfig.build.json`, lint del código modificado y guardia CSS correctos. La comprobación global de tipos de tests de la API sigue reportando errores anteriores en otros módulos; no se los dio por aprobados. Revisión visual en Chrome: recorrido de PDF, miniatura de imagen y comprobación móvil; la base visual de plantillas ya había sido revisada en claro y oscuro. Selector comercial comprobado también a 390 px, con envío simulado del presupuesto y selección de factura. Sin desborde horizontal. API local con base disponible y permisos de `grafo_app` sobre la columna nueva comprobados.
 
 ## Preparación para el futuro lote de staging
 
@@ -64,6 +74,7 @@ Validación acumulada: 450 pruebas de API/Meta, almacenamiento y aislamiento; 56
 - Migración adicional `20260927010000_inbox_plantillas_archivos`: agrega `InboxEnvio.adjunto`, sólo metadatos de la copia subida a Meta. Aplicada en desarrollo y tests; **293 migraciones** en total.
 - Regenerar Prisma y desplegar API, web y worker que procesa webhooks en versiones coherentes. Un worker anterior podría proyectar una plantilla con archivo como texto. No activar este bloque con versiones mezcladas.
 - `META_INBOX_PLANTILLAS_ENABLED=false` por defecto; requiere además `META_INBOX_ENVIOS_ENABLED`, lectura, recepción, coexistencia autorizada y configuración vigente. No se modificaron secretos ni flags de los procesos locales.
+- La selección de documentos comerciales no agrega tablas ni migraciones. API y web deben desplegarse juntas para los metadatos de origen y la nueva ruta de revisión.
 - Para archivos también se requiere `META_INBOX_ADJUNTOS_ENABLED=true` y acceso vigente a CRM. La descarga/copia del Inbox usa el worker ya existente.
 - La activación real requiere una cuenta conectada con acceso a sus plantillas y un destinatario de prueba autorizado. Comprobar catálogo real, parámetros, rechazo, aceptación, entrega/lectura y ventana cerrada antes de ofrecerlo a empresas.
 - Registrar versión y resultados en `deploy/staging/VALIDACION.md` cuando se acuerde desplegar el conjunto. Este bloque no publicó ni fusionó ramas.

@@ -35,6 +35,7 @@ vi.mock("@/components/ui/select", () => ({
   ),
   SelectContent: () => null,
   SelectGroup: () => null,
+  SelectLabel: () => null,
   SelectItem: () => null,
   SelectTrigger: () => null,
   SelectValue: () => null,
@@ -328,6 +329,65 @@ it("archivo modificado obliga a elegir nuevamente antes de un nuevo intento", as
   await render();
   await click("Usar plantilla");
   await click("Enviar plantilla");
+  expect(borradores.get("uno")?.archivo).toBeUndefined();
+  expect(btn("Enviar plantilla").disabled).toBe(true);
+});
+
+it("muestra la referencia comercial, abre con el contexto y envía la versión elegida", async () => {
+  const presupuesto = {
+    ...archivoPdf,
+    origen: "PRESUPUESTO" as const,
+    referencia: "PRES-2026-0042",
+  };
+  borradores.set("uno", {
+    plantilla: plantillaPdf,
+    valores: [],
+    consentimiento: true,
+  });
+  api.archivos = vi
+    .fn()
+    .mockResolvedValue({
+      cliente: { id: "cliente", nombre: "Cliente ficticio" },
+      motivo: null,
+      archivos: [presupuesto],
+    });
+  api.urlArchivo = vi.fn().mockReturnValue("/api/backend/archivo-protegido");
+  await render();
+  await click("Usar plantilla");
+  await act(async () => {
+    const select = document.querySelector<HTMLSelectElement>("select")!;
+    select.value = presupuesto.id;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(document.body.textContent).toContain("PRES-2026-0042");
+  expect(api.urlArchivo).toHaveBeenCalledWith(presupuesto, "uno", "canal");
+  expect(
+    document.querySelector('a[href="/api/backend/archivo-protegido"]'),
+  ).not.toBeNull();
+  await click("Enviar plantilla");
+  expect(api.enviar).toHaveBeenCalledWith(
+    "uno",
+    expect.objectContaining({
+      archivoId: presupuesto.id,
+      archivoVersion: presupuesto.version,
+    }),
+    expect.any(AbortSignal),
+  );
+});
+it("actualizar los documentos limpia la selección anterior antes de consultar de nuevo", async () => {
+  borradores.set("uno", {
+    plantilla: plantillaPdf,
+    valores: [],
+    consentimiento: true,
+    archivo: archivoPdf,
+  });
+  api.archivos = vi
+    .fn()
+    .mockResolvedValue({ cliente: null, motivo: null, archivos: [] });
+  await render();
+  await click("Usar plantilla");
+  await click("Actualizar archivos");
+  expect(api.archivos).toHaveBeenCalledTimes(2);
   expect(borradores.get("uno")?.archivo).toBeUndefined();
   expect(btn("Enviar plantilla").disabled).toBe(true);
 });

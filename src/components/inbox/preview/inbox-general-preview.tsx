@@ -244,6 +244,24 @@ const plantillasDemo: PlantillaInbox[] = [
 ];
 const archivosDemo: ArchivoPlantillaInbox[] = [
   {
+    id: "demo-presupuesto",
+    version: "presupuesto-1",
+    origen: "PRESUPUESTO",
+    referencia: "PRES-2026-0042",
+    nombre: "PRES-2026-0042.pdf",
+    mimeType: "application/pdf",
+    bytes: 1400,
+  },
+  {
+    id: "demo-factura",
+    version: "factura-1",
+    origen: "COMPROBANTE",
+    referencia: "Factura C 0001-00000018",
+    nombre: "C-0001-00000018.pdf",
+    mimeType: "application/pdf",
+    bytes: 1400,
+  },
+  {
     id: "demo-pdf",
     version: "pdf-1",
     nombre: "Documento-de-ejemplo.pdf",

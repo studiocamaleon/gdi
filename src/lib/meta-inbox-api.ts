@@ -1,5 +1,4 @@
 import { apiRequest } from "@/lib/api";
-import { urlDeArchivo } from "@/lib/archivos";
 
 export type InboxIdentidad = {
   empresaId: string;
@@ -176,7 +175,11 @@ export type PlantillasInboxApi = {
     cliente: { id: string; nombre: string } | null;
     motivo: string | null;
   }>;
-  urlArchivo?: (archivo: ArchivoPlantillaInbox) => string;
+  urlArchivo?: (
+    archivo: ArchivoPlantillaInbox,
+    conversacionId: string,
+    canalId: string,
+  ) => string;
   listar: (
     canalId: string,
     despues?: string | null,
@@ -198,7 +201,8 @@ export const plantillasInboxApi: PlantillasInboxApi = {
       `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/archivos-plantilla?${new URLSearchParams({ canalId })}`,
       { signal },
     ),
-  urlArchivo: (archivo) => urlDeArchivo(archivo.id),
+  urlArchivo: (archivo, id, canalId) =>
+    `/api/backend/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/archivos-plantilla/${encodeURIComponent(archivo.id)}?${new URLSearchParams({ canalId, version: archivo.version })}`,
   listar: (canalId, despues, signal) => {
     const params = new URLSearchParams({ canalId });
     if (despues) params.set("despues", despues);
