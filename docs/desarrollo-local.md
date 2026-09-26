@@ -10,7 +10,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 - Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
 - API: `http://127.0.0.1:3001/api`.
-- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 282 migraciones aplicadas, sin ejecutar seed.
+- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 284 migraciones aplicadas al 26/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
 - PDF: contenedor existente `gdi-saas-pdf-renderer`, puerto 3002.
 - Workers: procesos locales de cálculos/entregas y documentos PDF.
@@ -50,3 +50,13 @@ La ejecución directa del código fuente evita que varios procesos Nest compitan
 `GRAFO_LOCAL_DISABLE_CRON` sólo tiene efecto con `NODE_ENV=development`. Pausa los barridos automáticos, incluidas notificaciones WhatsApp y reconciliaciones; no desactiva los cálculos que solicita la interfaz. No impide una acción manual contra integraciones externas: no probar envíos, cobros o facturación sin definir antes el destinatario y entorno de prueba. Staging no usa esta opción.
 
 Las variables indicadas en los comandos sólo afectan a esos procesos. No reemplazan los archivos privados `.env`, y no usan secretos de staging.
+
+## Arranque comprobado el 26/09/2026
+
+La app, la API y ambos workers se levantaron desde el worktree de `codex/inbox-lectura`, con la versión `4ef6fe97c`. El checkout principal sigue en `codex/entorno-local`: editar allí no actualiza los procesos de este arranque. Antes de cambiar de rama o levantar otra instancia, comprobar la carpeta y los puertos de los procesos activos.
+
+El worktree usa la configuración **local** existente: `.env.local` es un enlace al archivo local del checkout principal; la API y los workers cargan su `.env` mediante `DOTENV_CONFIG_PATH`. No se copiaron secretos de staging. Se mantuvieron `GRAFO_LOCAL_DISABLE_CRON=true`, `RESEND_API_KEY=` y el piloto de Meta desactivado.
+
+Se aplicaron únicamente `20260925210000_meta_cloud_piloto` y `20260925223000_meta_recepcion_piloto`. Son cambios aditivos, sin seed ni reset. Se comprobaron los permisos del rol de ejecución sobre la tabla nueva.
+
+Comprobaciones: API en `http://127.0.0.1:3001/api` con base disponible, página principal con sesión local, workers de cálculos y PDF iniciados, enlace Inbox visible en el sidebar y bienvenida real de `/inbox` en otra pestaña. La muestra aislada del puerto 3015 se detuvo para liberar recursos; ahora se utiliza la aplicación completa en `http://localhost:3000`.
