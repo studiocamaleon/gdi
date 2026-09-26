@@ -1,5 +1,6 @@
 import {
   enviosInboxHabilitados,
+  plantillasInboxHabilitadas,
   presentarEnvio,
   consultarVentanaRespuesta,
 } from './inbox/meta-envios.config';
@@ -340,6 +341,7 @@ export class MetaInboxGeneralService {
       canalId,
       origen: 'GENERAL' as const,
       respuesta: {
+        plantillasHabilitadas: plantillasInboxHabilitadas(auth.tenantId),
         habilitado: enviosInboxHabilitados(auth.tenantId),
         ...ventana,
       },

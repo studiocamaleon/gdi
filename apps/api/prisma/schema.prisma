@@ -7162,6 +7162,7 @@ model InboxEnvio {
   usuarioId      String @db.Uuid
   clave          String @db.Uuid
   huella         String
+  tipo           String @default("TEXTO")
   texto          String?
   estado         String @default("ENVIANDO")
   codigo         String?

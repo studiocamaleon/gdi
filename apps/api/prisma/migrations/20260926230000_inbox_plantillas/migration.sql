@@ -1,0 +1,2 @@
+ALTER TABLE "InboxEnvio" ADD COLUMN "tipo" TEXT NOT NULL DEFAULT 'TEXTO';
+ALTER TABLE "InboxEnvio" ADD CONSTRAINT "InboxEnvio_tipo_check" CHECK ("tipo" IN ('TEXTO','PLANTILLA'));

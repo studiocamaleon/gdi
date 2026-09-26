@@ -246,7 +246,7 @@ export async function confirmarEnvioInbox(
     direccion: 'SALIENTE',
     fecha: envio.createdAt,
     origen: 'GRAFO',
-    tipo: 'text',
+    tipo: envio.tipo === 'PLANTILLA' ? 'template' : 'text',
     contenido: { texto: envio.texto },
     prioridad: 3,
   });

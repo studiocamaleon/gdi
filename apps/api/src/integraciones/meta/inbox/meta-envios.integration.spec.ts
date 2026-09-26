@@ -1,3 +1,4 @@
+import { normalizarPlantilla } from './meta-plantillas';
 import { randomUUID } from 'node:crypto';
 import {
   ConflictException,
@@ -25,7 +26,11 @@ if (
 )
   throw new Error('Requiere base local de tests');
 const db = new PrismaService();
-const client = { enviarTexto: jest.fn<Promise<ResultadoMeta>, [unknown]>() };
+const client = {
+  enviarTexto: jest.fn<Promise<ResultadoMeta>, [unknown]>(),
+  enviarPlantilla: jest.fn<Promise<ResultadoMeta>, [unknown]>(),
+  listarPlantillas: jest.fn(),
+};
 const secretos = {
   disponible: true,
   descifrar: jest.fn(() => 'token-ficticio'),
@@ -42,6 +47,7 @@ const servicio = () =>
   );
 const keys = [
   'META_INBOX_ENVIOS_ENABLED',
+  'META_INBOX_PLANTILLAS_ENABLED',
   'META_CONEXION_MODO',
   'META_CONEXION_TENANT_IDS',
   'META_INBOX_RECEPCION_ENABLED',
@@ -146,6 +152,7 @@ beforeEach(async () => {
   await preparar();
   Object.assign(process.env, {
     META_INBOX_ENVIOS_ENABLED: 'true',
+    META_INBOX_PLANTILLAS_ENABLED: 'true',
     META_CONEXION_MODO: 'coexistencia',
     META_CONEXION_TENANT_IDS: auth.tenantId,
     META_INBOX_RECEPCION_ENABLED: 'true',
@@ -480,4 +487,157 @@ it('una correlación que parece UUID pero es inválida no bloquea el webhook', a
       aplicarOperacionInbox(tx, canal, normalizado.operaciones[0]),
     ),
   ).resolves.toBe(false);
+});
+
+const plantillaRaw = {
+  id: '123',
+  name: 'pedido_listo',
+  language: 'es_AR',
+  status: 'APPROVED',
+  category: 'UTILITY',
+  parameter_format: 'NAMED',
+  components: [
+    { type: 'BODY', text: 'Hola {{nombre}}, tu trabajo está listo.' },
+  ],
+};
+const plantillaDto = () => ({
+  clave: randomUUID(),
+  canalId: `${canal.id}:${canal.autorizacionId}`,
+  plantillaId: '123',
+  version: normalizarPlantilla(plantillaRaw, null)!.version,
+  pagina: null,
+  valores: ['Alma'],
+  consentimientoConfirmado: true,
+});
+const enviarPlantilla = (d = plantillaDto(), c = conv.id) =>
+  runWithTenant(auth.tenantId, () =>
+    servicio().enviarPlantilla(auth, '127.0.0.1', c, d),
+  );
+function catalogoValido() {
+  client.listarPlantillas.mockResolvedValue({
+    data: [plantillaRaw],
+    siguiente: null,
+  });
+  client.enviarPlantilla.mockResolvedValue({
+    estado: 'aceptada',
+    wamid: 'wamid.plantilla',
+  });
+}
+it('plantilla funciona fuera de 24h, no abre texto libre y recibe estado real por webhook', async () => {
+  catalogoValido();
+  await db.inboxConversacion.update({
+    where: { id: conv.id },
+    data: { ultimoEntranteNuevoEl: null },
+  });
+  const r = await enviarPlantilla();
+  expect(r.estado).toBe('ACEPTADO');
+  expect(client.enviarTexto).not.toHaveBeenCalled();
+  expect(client.enviarPlantilla).toHaveBeenCalledWith(
+    expect.objectContaining({
+      telefono: '+16505550123',
+      plantilla: 'pedido_listo',
+      idioma: 'es_AR',
+      componentes: [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', parameter_name: 'nombre', text: 'Alma' },
+          ],
+        },
+      ],
+    }),
+  );
+  const m = await db.inboxMensaje.findUniqueOrThrow({
+    where: { id: r.mensajeId! },
+  });
+  expect(m.tipo).toBe('template');
+  expect(m.contenido).toEqual({ texto: 'Hola Alma, tu trabajo está listo.' });
+  await webhook(r.id, 'read', '16505550123', 'wamid.plantilla');
+  expect(
+    (await db.inboxMensaje.findUniqueOrThrow({ where: { id: m.id } }))
+      .estadoEntrega,
+  ).toBe('READ');
+  await expect(enviar()).rejects.toThrow('ventana de atención');
+});
+it('concurrencia hace un único POST y comprobar no necesita el catálogo posteriormente', async () => {
+  catalogoValido();
+  const d = plantillaDto();
+  await Promise.all([enviarPlantilla(d), enviarPlantilla(d)]);
+  expect(client.enviarPlantilla).toHaveBeenCalledTimes(1);
+  client.listarPlantillas.mockRejectedValue(new Error('Fuera de servicio'));
+  expect((await enviarPlantilla(d)).estado).toBe('ACEPTADO');
+  expect(client.enviarPlantilla).toHaveBeenCalledTimes(1);
+  await expect(enviarPlantilla({ ...d, valores: ['Bruno'] })).rejects.toThrow(
+    'otro mensaje',
+  );
+});
+it.each(['PAUSED', 'REJECTED'])(
+  'rechaza una plantilla que ahora figura %s antes de reservar un intento',
+  async (status) => {
+    catalogoValido();
+    client.listarPlantillas.mockResolvedValue({
+      data: [{ ...plantillaRaw, status }],
+      siguiente: null,
+    });
+    await expect(enviarPlantilla()).rejects.toThrow('plantilla cambió');
+    expect(client.enviarPlantilla).not.toHaveBeenCalled();
+    expect(
+      await db.inboxEnvio.count({ where: { tenantId: auth.tenantId } }),
+    ).toBe(0);
+  },
+);
+it('rechaza plantilla ajena, valores incompletos y falta de consentimiento', async () => {
+  catalogoValido();
+  await expect(
+    enviarPlantilla({ ...plantillaDto(), plantillaId: '999' }),
+  ).rejects.toThrow('plantilla cambió');
+  await expect(
+    enviarPlantilla({ ...plantillaDto(), valores: [] }),
+  ).rejects.toThrow('Completá');
+  await expect(
+    enviarPlantilla({ ...plantillaDto(), consentimientoConfirmado: false }),
+  ).rejects.toThrow('autorizó');
+  expect(client.enviarPlantilla).not.toHaveBeenCalled();
+  expect(client.listarPlantillas).toHaveBeenCalledWith(
+    expect.objectContaining({ wabaId: canal.wabaId }),
+  );
+});
+it('respeta flags y reconexiones ocurridas mientras se consultaban plantillas', async () => {
+  catalogoValido();
+  process.env.META_INBOX_PLANTILLAS_ENABLED = 'false';
+  await expect(enviarPlantilla()).rejects.toThrow(ForbiddenException);
+  expect(client.listarPlantillas).not.toHaveBeenCalled();
+  process.env.META_INBOX_PLANTILLAS_ENABLED = 'true';
+  client.listarPlantillas.mockImplementation(async () => {
+    await db.metaVinculo.update({
+      where: { id: canal.id },
+      data: { autorizacionId: randomUUID() },
+    });
+    return { data: [plantillaRaw], siguiente: null };
+  });
+  await expect(enviarPlantilla()).rejects.toThrow(ForbiddenException);
+  expect(client.enviarPlantilla).not.toHaveBeenCalled();
+});
+it('timeout conserva el intento y un webhook posterior confirma sin repetir', async () => {
+  catalogoValido();
+  client.enviarPlantilla.mockResolvedValue({ estado: 'incierta' });
+  const d = plantillaDto(),
+    r = await enviarPlantilla(d);
+  expect(r.estado).toBe('INCIERTO');
+  expect((await enviarPlantilla(d)).estado).toBe('INCIERTO');
+  await webhook(r.id, 'delivered', '16505550123', 'wamid.plantilla');
+  expect((await enviarPlantilla(d)).estado).toBe('ACEPTADO');
+  expect(client.enviarPlantilla).toHaveBeenCalledTimes(1);
+});
+it('rechaza conversaciones ajenas y sesiones revocadas', async () => {
+  catalogoValido();
+  await expect(enviarPlantilla(plantillaDto(), randomUUID())).rejects.toThrow(
+    NotFoundException,
+  );
+  await db.authSession.update({
+    where: { id: auth.sessionId },
+    data: { revokedAt: new Date() },
+  });
+  await expect(enviarPlantilla()).rejects.toThrow();
+  expect(client.enviarPlantilla).not.toHaveBeenCalled();
 });

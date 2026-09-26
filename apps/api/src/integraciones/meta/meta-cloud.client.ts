@@ -1,3 +1,4 @@
+import type { ComponenteEnvioPlantilla } from '../../common/inbox/plantillas';
 import { Injectable } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 
@@ -16,6 +17,7 @@ export class MetaCloudClient {
     plantilla: string;
     idioma: string;
     parametros: string[];
+    componentes?: ComponenteEnvioPlantilla[];
     correlacion: string;
   }): Promise<ResultadoMeta> {
     return this.enviar(args, {
@@ -27,21 +29,79 @@ export class MetaCloudClient {
       template: {
         name: args.plantilla,
         language: { code: args.idioma },
-        ...(args.parametros.length
-          ? {
-              components: [
-                {
-                  type: 'body',
-                  parameters: args.parametros.map((text) => ({
-                    type: 'text',
-                    text,
-                  })),
-                },
-              ],
-            }
-          : {}),
+        ...(args.componentes?.length
+          ? { components: args.componentes }
+          : args.parametros.length
+            ? {
+                components: [
+                  {
+                    type: 'body',
+                    parameters: args.parametros.map((text) => ({
+                      type: 'text',
+                      text,
+                    })),
+                  },
+                ],
+              }
+            : {}),
       },
     });
+  }
+
+  /** Siempre consulta la WABA del canal; sólo usa el cursor, nunca paging.next. */
+  async listarPlantillas(args: {
+    accessToken: string;
+    wabaId: string;
+    despues?: string | null;
+  }) {
+    const version = process.env.META_GRAPH_API_VERSION ?? 'v26.0';
+    const secret = process.env.META_APP_SECRET;
+    if (
+      !/^v\d+\.0$/.test(version) ||
+      !/^\d+$/.test(args.wabaId) ||
+      !secret ||
+      !args.accessToken ||
+      (args.despues?.length ?? 0) > 2048
+    )
+      throw new Error('No se pudo consultar el catálogo de Meta.');
+    const url = new URL(
+      `https://graph.facebook.com/${version}/${args.wabaId}/message_templates`,
+    );
+    url.searchParams.set(
+      'fields',
+      'id,name,language,category,status,parameter_format,components',
+    );
+    url.searchParams.set('limit', '100');
+    if (args.despues) url.searchParams.set('after', args.despues);
+    url.searchParams.set(
+      'appsecret_proof',
+      createHmac('sha256', secret).update(args.accessToken).digest('hex'),
+    );
+    try {
+      const response = await fetch(url, {
+        redirect: 'error',
+        signal: AbortSignal.timeout(12000),
+        headers: { Authorization: `Bearer ${args.accessToken}` },
+      });
+      const body = (await response.json()) as {
+        data?: unknown[];
+        paging?: { next?: unknown; cursors?: { after?: unknown } };
+      };
+      if (!response.ok || !Array.isArray(body.data) || body.data.length > 100)
+        throw new Error();
+      const after = body.paging?.cursors?.after;
+      if (
+        body.paging?.next &&
+        (typeof after !== 'string' || !after || after.length > 2048)
+      )
+        throw new Error();
+      return {
+        data: body.data,
+        siguiente: body.paging?.next ? (after as string) : null,
+      };
+    } catch {
+      throw new Error('No se pudo consultar el catálogo de Meta.');
+    }
   }
 
   async enviarTexto(args: {

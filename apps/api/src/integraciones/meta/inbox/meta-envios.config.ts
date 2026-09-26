@@ -78,3 +78,7 @@ export async function consultarVentanaRespuesta(
   });
   return { ...ventana, abierta: !rechazo };
 }
+
+export const plantillasInboxHabilitadas = (tenantId: string) =>
+  process.env.META_INBOX_PLANTILLAS_ENABLED === 'true' &&
+  enviosInboxHabilitados(tenantId);

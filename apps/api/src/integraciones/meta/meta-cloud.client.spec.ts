@@ -90,13 +90,11 @@ it('rechaza IDs/rutas o destinatarios inválidos antes de usar la red', async ()
   expect(mock).not.toHaveBeenCalled();
 });
 it('texto libre preserva saltos y caracteres, con vista previa desactivada y correlación', async () => {
-  const mock = jest
-    .fn()
-    .mockResolvedValue(
-      new Response(JSON.stringify({ messages: [{ id: 'wamid.texto' }] }), {
-        status: 200,
-      }),
-    );
+  const mock = jest.fn().mockResolvedValue(
+    new Response(JSON.stringify({ messages: [{ id: 'wamid.texto' }] }), {
+      status: 200,
+    }),
+  );
   global.fetch = mock;
   const texto = '¡Hola!\nTu pedido está listo 🖨️';
   expect(await new MetaCloudClient().enviarTexto({ ...args, texto })).toEqual({
@@ -115,13 +113,11 @@ it('texto libre preserva saltos y caracteres, con vista previa desactivada y cor
   expect(mock).toHaveBeenCalledTimes(1);
 });
 it('texto admite el límite y rechaza vacío o exceso antes de usar la red', async () => {
-  const mock = jest
-    .fn()
-    .mockResolvedValue(
-      new Response(JSON.stringify({ messages: [{ id: 'wamid.limite' }] }), {
-        status: 200,
-      }),
-    );
+  const mock = jest.fn().mockResolvedValue(
+    new Response(JSON.stringify({ messages: [{ id: 'wamid.limite' }] }), {
+      status: 200,
+    }),
+  );
   global.fetch = mock;
   await expect(
     new MetaCloudClient().enviarTexto({ ...args, texto: 'a'.repeat(4096) }),
@@ -138,4 +134,65 @@ it('texto no repite un POST que agota el tiempo de espera', async () => {
     new MetaCloudClient().enviarTexto({ ...args, texto: 'Hola' }),
   ).resolves.toEqual({ estado: 'incierta' });
   expect(global.fetch).toHaveBeenCalledTimes(1);
+});
+it('consulta la WABA actual sin seguir paging.next ni exponer el token en URL', async () => {
+  const mock = jest
+    .fn()
+    .mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [],
+          paging: {
+            next: 'https://externo.example.invalid',
+            cursors: { after: 'cursor-2' },
+          },
+        }),
+      ),
+    );
+  global.fetch = mock;
+  expect(
+    await new MetaCloudClient().listarPlantillas({
+      accessToken: 'ficticio',
+      wabaId: '123',
+      despues: 'cursor-1',
+    }),
+  ).toEqual({ data: [], siguiente: 'cursor-2' });
+  expect(mock).toHaveBeenCalledTimes(1);
+  const [url, init] = mock.mock.calls[0];
+  expect(url.origin).toBe('https://graph.facebook.com');
+  expect(url.pathname).toBe('/v26.0/123/message_templates');
+  expect(url.searchParams.get('after')).toBe('cursor-1');
+  expect(url.href).not.toContain('ficticio');
+  expect(init.redirect).toBe('error');
+});
+it('conserva parámetros named y de encabezado en el POST', async () => {
+  const mock = jest
+    .fn()
+    .mockResolvedValue(
+      new Response(JSON.stringify({ messages: [{ id: 'wamid.plantilla' }] })),
+    );
+  global.fetch = mock;
+  const componentes = [
+    {
+      type: 'header' as const,
+      parameters: [
+        { type: 'text' as const, parameter_name: 'pedido', text: '42' },
+      ],
+    },
+  ];
+  await new MetaCloudClient().enviarPlantilla({ ...args, componentes });
+  expect(JSON.parse(mock.mock.calls[0][1].body).template.components).toEqual(
+    componentes,
+  );
+});
+it('sanitiza errores de catálogo y no repite solicitudes', async () => {
+  const mock = jest.fn().mockRejectedValue(new Error('token-privado'));
+  global.fetch = mock;
+  await expect(
+    new MetaCloudClient().listarPlantillas({
+      accessToken: 'ficticio',
+      wabaId: '123',
+    }),
+  ).rejects.toThrow('No se pudo consultar el catálogo de Meta.');
+  expect(mock).toHaveBeenCalledTimes(1);
 });

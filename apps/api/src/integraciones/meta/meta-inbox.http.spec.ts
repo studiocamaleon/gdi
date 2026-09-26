@@ -17,6 +17,8 @@ let app: INestApplication<Server>;
 const abrirAdjunto = jest
   .fn()
   .mockResolvedValue({ url: 'https://files.example.invalid/privado' });
+const catalogo = jest.fn().mockResolvedValue({ plantillas: [] });
+const enviarPlantilla = jest.fn().mockResolvedValue({ estado: 'ACEPTADO' });
 const enviar = jest.fn().mockResolvedValue({ estado: 'ACEPTADO' });
 const consultar = jest.fn().mockResolvedValue({ mensajes: [] });
 const disponibilidad = jest.fn().mockResolvedValue({ disponible: false });
@@ -26,7 +28,10 @@ beforeAll(async () => {
   const module = await Test.createTestingModule({
     controllers: [MetaInboxController],
     providers: [
-      { provide: MetaEnviosService, useValue: { enviar } },
+      {
+        provide: MetaEnviosService,
+        useValue: { enviar, catalogo, enviarPlantilla },
+      },
       { provide: MetaAdjuntosService, useValue: { abrir: abrirAdjunto } },
       { provide: MetaInboxService, useValue: { consultar, disponibilidad } },
       { provide: MetaInboxStreamService, useValue: { abrir } },
@@ -308,4 +313,57 @@ it.each([
     .send(body)
     .expect(400);
   expect(enviar).not.toHaveBeenCalled();
+});
+
+const rutaPlantilla =
+  '/api/integraciones/meta/inbox/conversaciones/11111111-1111-4111-8111-111111111111/plantilla';
+const pedidoPlantilla = {
+  clave: '22222222-2222-4222-8222-222222222222',
+  canalId:
+    '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222',
+  plantillaId: '123',
+  version: 'a'.repeat(64),
+  valores: ['Alma'],
+  consentimientoConfirmado: true,
+};
+it('valida POST de plantilla y lo entrega sin caché', async () => {
+  await request(app.getHttpServer())
+    .post(rutaPlantilla)
+    .set('x-actor', 'ADMINISTRADOR')
+    .send(pedidoPlantilla)
+    .expect(200)
+    .expect('Cache-Control', 'private, no-store');
+  expect(enviarPlantilla).toHaveBeenCalled();
+});
+it.each([
+  { telefono: '+16505550123' },
+  { tenantId: 'ajeno' },
+  { valores: [{}] },
+  { consentimientoConfirmado: false },
+  { version: 'alterado' },
+  { pagina: 'x'.repeat(2049) },
+])('rechaza payload de plantilla inválido: %j', async (cambio) => {
+  const prev = enviarPlantilla.mock.calls.length;
+  await request(app.getHttpServer())
+    .post(rutaPlantilla)
+    .set('x-actor', 'ADMINISTRADOR')
+    .send({ ...pedidoPlantilla, ...cambio })
+    .expect(400);
+  expect(enviarPlantilla.mock.calls.length).toBe(prev);
+});
+it.each([
+  { 'x-actor': 'VENDEDOR' },
+  { 'x-actor': 'ADMINISTRADOR', 'x-sin-permiso': '1' },
+  { 'x-actor': 'ADMINISTRADOR', 'x-impersonacion': '1' },
+])('catálogo y envío conservan los permisos del Inbox: %j', async (headers) => {
+  await request(app.getHttpServer())
+    .get('/api/integraciones/meta/inbox/plantillas')
+    .set(headers)
+    .query({ canalId: pedidoPlantilla.canalId })
+    .expect(403);
+  await request(app.getHttpServer())
+    .post(rutaPlantilla)
+    .set(headers)
+    .send(pedidoPlantilla)
+    .expect(403);
 });

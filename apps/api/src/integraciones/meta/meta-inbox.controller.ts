@@ -1,5 +1,9 @@
 import { MetaEnviosService } from './inbox/meta-envios.service';
-import { EnviarTextoInboxDto } from './inbox/meta-envios.dto';
+import {
+  CatalogoPlantillasInboxDto,
+  EnviarPlantillaInboxDto,
+  EnviarTextoInboxDto,
+} from './inbox/meta-envios.dto';
 import { MetaAdjuntosService } from './inbox/meta-adjuntos.service';
 import {
   Controller,
@@ -76,6 +80,27 @@ export class MetaInboxController {
     @Body() dto: EnviarTextoInboxDto,
   ) {
     return this.envios.enviar(auth, ipDeRequest(req), id, dto);
+  }
+
+  @Get('plantillas')
+  @Header('Cache-Control', 'private, no-store')
+  plantillas(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Query() dto: CatalogoPlantillasInboxDto,
+  ) {
+    return this.envios.catalogo(auth, ipDeRequest(req), dto);
+  }
+  @Post('conversaciones/:id/plantilla')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  enviarPlantilla(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EnviarPlantillaInboxDto,
+  ) {
+    return this.envios.enviarPlantilla(auth, ipDeRequest(req), id, dto);
   }
 
   @Get('disponibilidad')
