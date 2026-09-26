@@ -71,7 +71,7 @@ La pantalla muestra preparación, solicitudes aceptadas, progreso informado por 
 ## Qué falta, en orden
 
 1. Completado en local: [lectura general, lista de conversaciones, paginación y SSE por empresa](meta-inbox-lectura-general.md). Continúa apagado mediante `META_INBOX_LECTURA_ENABLED=false`; no se validó todavía con datos reales de coexistencia.
-2. Reconciliar bloques de historial y eventos tardíos, resolver resultados inciertos y ofrecer desconexión/reconexión coordinada. No hay aún un botón que repita una importación.
+2. Implementado en local: [estado del historial y reconexión coordinada](meta-importacion-reconexion.md). Diferencia lo recibido de lo esperado, contempla entregas tardías y pausa/restauración por cambio de celular. Sigue pendiente validar el recorrido real y resolver operativamente solicitudes inciertas; no hay un botón que repita una importación.
 3. Medir recepción y procesamiento con carga representativa, revisar el límite HTTP de 3 MB y la capacidad compartida del worker; añadir métricas y reglas de conservación de crudos.
 4. Desplegar el lote revisado a staging con flags apagados, registrar dominios HTTPS y configurar Facebook Login for Business. Activar primero el sandbox para una empresa de ensayo; probar allí el SDK real y documentar su resultado.
 5. Ensayar coexistencia con un número propio elegible y los permisos disponibles. Confirmar suscripciones de la app, recepción firmada, solicitudes, revocación desde WhatsApp Business y reconexión. Las pruebas simuladas no sustituyen ese recorrido.

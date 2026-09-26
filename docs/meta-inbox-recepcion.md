@@ -4,7 +4,7 @@
 
 ## Qué quedó preparado
 
-Grafo puede conservar y procesar los eventos documentados de coexistencia: historial, contactos, mensajes enviados desde el celular, entradas nuevas, estados, ediciones, eliminaciones y desconexiones. Este bloque prepara almacenamiento y procesamiento; todavía no conecta la bandeja general ni inicia solicitudes de historial.
+Grafo puede conservar y procesar los eventos documentados de coexistencia: historial, contactos, mensajes enviados desde el celular, entradas nuevas, estados, ediciones, eliminaciones y desconexiones. Este documento registra el bloque inicial de almacenamiento y procesamiento. Los bloques siguientes ya incorporan [alta](meta-conexion-empresas.md), [lectura general](meta-inbox-lectura-general.md) y [estado del historial y reconexión](meta-importacion-reconexion.md), todavía deshabilitados para uso real.
 
 ```text
 Meta entrega un evento
@@ -31,11 +31,11 @@ PostgreSQL conserva la cola y el cursor para retomar después de un reinicio. Lo
 - **Ediciones y eliminaciones:** conserva cambios que llegan antes del original. Un historial atrasado no recupera el contenido de un mensaje eliminado. El original crudo permanece según la política de conservación todavía pendiente.
 - **Contactos:** mantiene nombres y eliminaciones con su fecha. No crea ni elimina clientes fiscales en Grafo.
 - **Recuperación:** un fallo revierte todo el lote, incluido el avance. Reintenta con espera creciente; al sexto fallo o ante una identidad contradictoria requiere revisión. Los errores almacenan códigos internos, no contenido ni credenciales.
-- **Desconexión:** da prioridad a los avisos de cuenta, retira el token y pausa los trabajos. Un evento anterior al alta actual no la cancela. Un aviso de reconexión no reactiva permisos automáticamente.
+- **Desconexión:** da prioridad a los avisos de cuenta, retira el token y pausa los trabajos. Un evento anterior al alta actual no la cancela. Actualizado en el bloque de [reconexión](meta-importacion-reconexion.md): una pausa temporal conserva el acceso y puede restaurarlo con un evento posterior, sin repetir el historial. Una revocación definitiva exige una nueva autorización.
 
 ## Avance y límites
 
-`InboxImportacion` registra el progreso informado por Meta, rechazo explícito y necesidad de revisión. `InboxBloqueHistorial` conserva fase y orden de cada bloque aplicado. **Progreso 100 significa que Meta informó el final; todavía no equivale a una importación reconciliada y completa.** Falta resolver huecos, espera de eventos tardíos y presentación del resultado.
+`InboxImportacion` registra el progreso informado por Meta, rechazo explícito y necesidad de revisión. `InboxBloqueHistorial` conserva fase y orden de cada bloque aplicado. **Progreso 100 significa que Meta informó el final; todavía no equivale a una importación reconciliada y completa.** La [ampliación de estado](meta-importacion-reconexion.md) ya coteja la cola recibida, contempla eventos tardíos y presenta el resultado sin inventar un total de bloques ni garantizar datos que Meta no entregó.
 
 Hay una distinción entre el evento crudo y su trabajo: la proyección anterior del piloto puede marcar un crudo como procesado; la recepción general usa su propio estado y cursor. No toma aquel indicador como prueba de que ya incorporó el evento.
 

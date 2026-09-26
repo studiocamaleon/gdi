@@ -50,3 +50,5 @@ Pruebas de este bloque: varias conversaciones, búsqueda y cursores, aislamiento
 Resultado: **297 pruebas de API y 57 de web aprobadas**; TypeScript de API y web, ESLint de la implementación modificada y comprobación de diff sin errores. Revisión en Chrome de los tres contactos, cambio de contexto, búsqueda y presentación de mensajes. API y web respondieron 200 al terminar; ambos workers siguen activos. No se compiló un contenedor de producción ni se realizó una prueba de carga.
 
 Siguientes bloques: reconciliar importaciones y eventos tardíos; desconexión/reconexión coordinada; adjuntos privados; envíos, plantillas y ventana de atención; roles del equipo; carga, conservación y métricas. Después corresponde validar el lote en staging y ensayar el alta real con los mecanismos de Meta disponibles. La aprobación de la app no convierte las pruebas sintéticas en validación de coexistencia real.
+
+Ampliación del 26/09: [estado de importación y reconexión](meta-importacion-reconexion.md) incorpora el panel Conexión, el resumen de lo recibido y el ciclo de pausa/restauración. No habilita todavía archivos ni envíos.
