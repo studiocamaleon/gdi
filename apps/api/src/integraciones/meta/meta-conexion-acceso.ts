@@ -58,4 +58,7 @@ export async function exigirAccesoConexionMeta(
     ).has('configuracion.gestionar')
   )
     throw new ForbiddenException();
+  return expandir(
+    miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
+  );
 }

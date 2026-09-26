@@ -23,8 +23,13 @@ jest.mock('./meta-recepcion', () => ({
   configuracionMetaRecepcion: () => config,
 }));
 let revision: (revision: string | null) => void;
+const lecturaAnterior = process.env.META_INBOX_LECTURA_ENABLED;
+let escuchar: jest.Mock;
 let dejar: jest.Mock,
-  prisma: { authSession: { findUnique: jest.Mock } },
+  prisma: {
+    authSession: { findUnique: jest.Mock };
+    metaVinculo: { findFirst: jest.Mock };
+  },
   capacidades: { exigirIncluida: jest.Mock },
   service: MetaInboxStreamService;
 function sesion() {
@@ -48,28 +53,42 @@ function sesion() {
   };
 }
 beforeEach(() => {
+  process.env.META_INBOX_LECTURA_ENABLED = 'false';
   jest.useFakeTimers();
   dejar = jest.fn();
   prisma = {
+    metaVinculo: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({
+          id: 'vinculo',
+          autorizacionId: 'alta-1',
+          ...config,
+        }),
+    },
     authSession: {
       findUnique: jest.fn().mockImplementation(() => Promise.resolve(sesion())),
     },
   };
   capacidades = { exigirIncluida: jest.fn().mockResolvedValue(undefined) };
+  escuchar = jest.fn(
+    (_canal: unknown, cb: (revision: string | null) => void) => {
+      revision = cb;
+      return dejar;
+    },
+  );
   service = new MetaInboxStreamService(
     prisma as never,
     capacidades as never,
-    {
-      escuchar: jest.fn(
-        (_canal: unknown, cb: (revision: string | null) => void) => {
-          revision = cb;
-          return dejar;
-        },
-      ),
-    } as never,
+    { escuchar } as never,
   );
 });
-afterEach(() => jest.useRealTimers());
+afterEach(() => {
+  jest.useRealTimers();
+  if (lecturaAnterior === undefined)
+    delete process.env.META_INBOX_LECTURA_ENABLED;
+  else process.env.META_INBOX_LECTURA_ENABLED = lecturaAnterior;
+});
 it('ready reconcilia siempre, agrupa ráfagas y sólo publica identidad y revisión', async () => {
   const events: unknown[] = [];
   const stream = await service.abrir(auth, '127.0.0.1', Date.now() + 600000);
@@ -174,3 +193,45 @@ it('no prolonga un token sin expiración', () => {
   );
   expect(vencimientoStream(`Bearer header.${body}.firma`)).toBe(123456000);
 });
+it.each(['desconectado', 'reconectado', 'crm', 'password', 'bandera'])(
+  'el stream general usa el canal propio y cierra por %s sin mensajes nuevos',
+  async (caso) => {
+    process.env.META_INBOX_LECTURA_ENABLED = 'true';
+    const eventos: { type?: string }[] = [];
+    const sub = (
+      await service.abrir(auth, '127.0.0.1', Date.now() + 60000)
+    ).subscribe((e) => eventos.push(e));
+    // El bus recibe sólo las tres columnas de la identidad, sin metadatos de autorización.
+    expect(escuchar.mock.calls[0][0]).toEqual(config);
+    revision('1');
+    await jest.advanceTimersByTimeAsync(250);
+    expect(eventos.at(-1)?.type).toBe('ready');
+    if (caso === 'desconectado')
+      prisma.metaVinculo.findFirst.mockResolvedValue(null);
+    if (caso === 'reconectado')
+      prisma.metaVinculo.findFirst.mockResolvedValue({
+        id: 'vinculo',
+        autorizacionId: 'alta-2',
+        ...config,
+      });
+    if (caso === 'crm') {
+      const s = sesion();
+      s.currentMembership.rolDelTenant = {
+        permisos: ['configuracion.gestionar'],
+      } as never;
+      prisma.authSession.findUnique.mockResolvedValue(s);
+    }
+    if (caso === 'password') {
+      const s = sesion();
+      prisma.authSession.findUnique.mockResolvedValue({
+        ...s,
+        user: { activo: true, debeCambiarPassword: true },
+      });
+    }
+    if (caso === 'bandera') process.env.META_INBOX_LECTURA_ENABLED = 'false';
+    await jest.advanceTimersByTimeAsync(15000);
+    expect(eventos.at(-1)?.type).toBe('acceso_cerrado');
+    expect(sub.closed).toBe(true);
+    expect(dejar).toHaveBeenCalledTimes(1);
+  },
+);

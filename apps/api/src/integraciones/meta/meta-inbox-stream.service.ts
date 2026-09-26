@@ -1,3 +1,7 @@
+import {
+  canalGeneralInbox,
+  lecturaGeneralHabilitada,
+} from './meta-inbox-canal';
 import { ForbiddenException, Injectable, MessageEvent } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 import { Observable } from 'rxjs';
@@ -33,6 +37,13 @@ export function vencimientoStream(authorization: string): number {
   }
 }
 
+type CanalLectura = CanalInbox & {
+  origen: 'GENERAL' | 'PILOTO';
+  vinculoId?: string;
+  autorizacionId?: string;
+  permisos?: string;
+};
+
 @Injectable()
 export class MetaInboxStreamService {
   constructor(
@@ -41,17 +52,30 @@ export class MetaInboxStreamService {
     private readonly bus: InboxTiempoRealBus,
   ) {}
 
-  private async autorizar(auth: CurrentAuth, canal: CanalInbox, ip: string) {
+  private async autorizar(auth: CurrentAuth, canal: CanalLectura, ip: string) {
     if (auth.mcp || auth.impersonacion || auth.esPlataforma)
       throw new ForbiddenException();
-    const config = configuracionMetaRecepcion();
-    if (
-      !config ||
-      config.tenantId !== canal.tenantId ||
-      config.wabaId !== canal.wabaId ||
-      config.phoneNumberId !== canal.phoneNumberId
-    )
-      throw new ForbiddenException();
+    if (canal.origen === 'GENERAL') {
+      const actual = await canalGeneralInbox(this.prisma, auth.tenantId);
+      if (
+        !actual ||
+        actual.id !== canal.vinculoId ||
+        actual.autorizacionId !== canal.autorizacionId ||
+        actual.wabaId !== canal.wabaId ||
+        actual.phoneNumberId !== canal.phoneNumberId
+      )
+        throw new ForbiddenException();
+    } else {
+      const config = configuracionMetaRecepcion();
+      if (
+        lecturaGeneralHabilitada() ||
+        !config ||
+        config.tenantId !== canal.tenantId ||
+        config.wabaId !== canal.wabaId ||
+        config.phoneNumberId !== canal.phoneNumberId
+      )
+        throw new ForbiddenException();
+    }
     const sesion = await this.prisma.authSession.findUnique({
       where: { id: auth.sessionId },
       select: {
@@ -61,7 +85,7 @@ export class MetaInboxStreamService {
         revokedAt: true,
         expiresAt: true,
         impersonacionId: true,
-        user: { select: { activo: true } },
+        user: { select: { activo: true, debeCambiarPassword: true } },
         currentTenant: { select: { activo: true } },
         currentMembership: {
           select: {
@@ -82,6 +106,7 @@ export class MetaInboxStreamService {
       sesion.expiresAt.getTime() <= Date.now() ||
       sesion.impersonacionId ||
       !sesion.user.activo ||
+      sesion.user.debeCambiarPassword ||
       !sesion.currentTenant?.activo ||
       sesion.userId !== auth.userId ||
       sesion.currentTenantId !== auth.tenantId ||
@@ -96,18 +121,46 @@ export class MetaInboxStreamService {
       ).has('configuracion.gestionar')
     )
       throw new ForbiddenException();
+    const permisos = [
+      ...expandir(
+        miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
+      ),
+    ]
+      .sort()
+      .join('|');
+    if (canal.permisos !== undefined && canal.permisos !== permisos)
+      throw new ForbiddenException();
+    canal.permisos = permisos;
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
   }
 
   async abrir(auth: CurrentAuth, ip: string, venceEl: number) {
-    const config = configuracionMetaRecepcion();
-    if (!config || config.tenantId !== auth.tenantId || venceEl <= Date.now())
-      throw new ForbiddenException();
-    const canal: CanalInbox = {
-      tenantId: auth.tenantId,
-      wabaId: config.wabaId,
-      phoneNumberId: config.phoneNumberId,
-    };
+    if (venceEl <= Date.now()) throw new ForbiddenException();
+    let canal: CanalLectura;
+    if (lecturaGeneralHabilitada()) {
+      const actual = await runWithTenant(auth.tenantId, () =>
+        canalGeneralInbox(this.prisma, auth.tenantId),
+      );
+      if (!actual) throw new ForbiddenException();
+      canal = {
+        tenantId: auth.tenantId,
+        wabaId: actual.wabaId,
+        phoneNumberId: actual.phoneNumberId,
+        vinculoId: actual.id,
+        autorizacionId: actual.autorizacionId,
+        origen: 'GENERAL',
+      };
+    } else {
+      const config = configuracionMetaRecepcion();
+      if (!config || config.tenantId !== auth.tenantId)
+        throw new ForbiddenException();
+      canal = {
+        tenantId: auth.tenantId,
+        wabaId: config.wabaId,
+        phoneNumberId: config.phoneNumberId,
+        origen: 'PILOTO',
+      };
+    }
     await runWithTenant(auth.tenantId, () => this.autorizar(auth, canal, ip));
     return new Observable<MessageEvent>((subscriber) => {
       let revision: string | undefined, enviada: string | undefined;
@@ -169,16 +222,23 @@ export class MetaInboxStreamService {
         () => subscriber.complete(),
         Math.min(300000, Math.max(1, venceEl - Date.now())),
       );
-      const dejar = this.bus.escuchar(canal, (actual) => {
-        if (subscriber.closed) return;
-        if (actual === null) {
-          emitir('reintentar');
-          subscriber.complete();
-          return;
-        }
-        revision = actual;
-        pendiente = true;
-      });
+      const dejar = this.bus.escuchar(
+        {
+          tenantId: canal.tenantId,
+          wabaId: canal.wabaId,
+          phoneNumberId: canal.phoneNumberId,
+        },
+        (actual) => {
+          if (subscriber.closed) return;
+          if (actual === null) {
+            emitir('reintentar');
+            subscriber.complete();
+            return;
+          }
+          revision = actual;
+          pendiente = true;
+        },
+      );
       return () => {
         cerrado = true;
         clearInterval(cambios);

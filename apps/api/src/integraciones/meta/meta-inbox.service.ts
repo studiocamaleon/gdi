@@ -1,4 +1,7 @@
+import { MetaInboxGeneralService } from './meta-inbox-general.service';
+import { lecturaGeneralHabilitada } from './meta-inbox-canal';
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -16,12 +19,15 @@ export class MetaInboxService {
     private readonly prisma: PrismaService,
     private readonly capacidades: CapacidadesEmpresaService,
     private readonly clientes: WhatsappContextoService,
+    private readonly general: MetaInboxGeneralService,
   ) {}
 
   /** Disponibilidad de lectura del piloto, no un chequeo de salud de Meta.
    * Exige una recepción validada en el canal actual; no basta con cargar claves.
    * El menú sólo necesita esta señal, nunca el contenido de los mensajes. */
-  async disponibilidad(auth: CurrentAuth) {
+  async disponibilidad(auth: CurrentAuth, ip = '') {
+    if (lecturaGeneralHabilitada())
+      return this.general.disponibilidad(auth, ip);
     const identidad = { empresaId: auth.tenantId, usuarioId: auth.userId };
     const config = configuracionMetaRecepcion();
     if (!auth.tenantId || config?.tenantId !== auth.tenantId)
@@ -39,7 +45,18 @@ export class MetaInboxService {
     return { ...identidad, disponible: Boolean(comprobante) };
   }
 
-  async consultar(auth: CurrentAuth, query: MetaInboxQueryDto) {
+  async consultar(auth: CurrentAuth, query: MetaInboxQueryDto, ip = '') {
+    if (lecturaGeneralHabilitada())
+      return this.general.consultar(auth, query, ip);
+    if (
+      query.conversacionId ||
+      query.desdeId ||
+      query.busqueda ||
+      query.listaAntesDe
+    )
+      throw new BadRequestException(
+        'Esta consulta no está disponible en el piloto.',
+      );
     const config = configuracionMetaRecepcion();
     if (!auth.tenantId || config?.tenantId !== auth.tenantId) return null;
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');

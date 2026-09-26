@@ -54,6 +54,7 @@ function setup() {
       prisma as unknown as PrismaService,
       capacidades as unknown as CapacidadesEmpresaService,
       clientes as unknown as WhatsappContextoService,
+      {} as never,
     ),
   };
 }

@@ -78,6 +78,7 @@ it('el estado del menú sólo consulta disponibilidad y no se almacena en caché
     .expect(200, { disponible: false });
   expect(disponibilidad).toHaveBeenCalledWith(
     expect.objectContaining({ tenantId: 'propia' }),
+    expect.any(String),
   );
   expect(consultar).not.toHaveBeenCalled();
 });
@@ -102,6 +103,7 @@ it('admin autorizado recibe no-store y sólo identidad de sesión', async () => 
   expect(consultar).toHaveBeenCalledWith(
     expect.objectContaining({ tenantId: 'propia' }),
     {},
+    expect.any(String),
   );
 });
 it.each([
@@ -121,8 +123,12 @@ it.each([
   'telefono=%2B16505550199',
   'antesDe=no-uuid',
   'clienteId=no-uuid',
+  'conversacionId=no-uuid',
+  'desdeId=no-uuid',
+  'listaAntesDe=%7B%7D',
+  `busqueda=${'x'.repeat(121)}`,
 ])(
-  'rechaza parámetro inválido o selector fuera del piloto: %s',
+  'rechaza parámetro inválido o selector de otro ámbito: %s',
   async (query) => {
     await request(app.getHttpServer())
       .get(`/api/integraciones/meta/inbox?${query}`)
@@ -131,6 +137,24 @@ it.each([
     expect(consultar).not.toHaveBeenCalled();
   },
 );
+it('acepta los selectores de lectura general sin permitir elegir empresa ni teléfono', async () => {
+  const query = {
+    conversacionId: '11111111-1111-4111-8111-111111111111',
+    desdeId: '22222222-2222-4222-8222-222222222222',
+    busqueda: 'Alma',
+  };
+  await request(app.getHttpServer())
+    .get('/api/integraciones/meta/inbox')
+    .query(query)
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect('Cache-Control', 'no-store')
+    .expect(200);
+  expect(consultar).toHaveBeenCalledWith(
+    expect.objectContaining({ tenantId: 'propia' }),
+    query,
+    expect.any(String),
+  );
+});
 it('no ofrece acciones de envío', async () => {
   await request(app.getHttpServer())
     .post('/api/integraciones/meta/inbox')

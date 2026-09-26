@@ -48,8 +48,8 @@ export class MetaInboxController {
 
   @Get('disponibilidad')
   @Header('Cache-Control', 'no-store')
-  disponibilidad(@CurrentSession() auth: CurrentAuth) {
-    return this.service.disponibilidad(auth);
+  disponibilidad(@CurrentSession() auth: CurrentAuth, @Req() req: Request) {
+    return this.service.disponibilidad(auth, ipDeRequest(req));
   }
 
   @Get()
@@ -57,7 +57,8 @@ export class MetaInboxController {
   consultar(
     @CurrentSession() auth: CurrentAuth,
     @Query() query: MetaInboxQueryDto,
+    @Req() req: Request,
   ) {
-    return this.service.consultar(auth, query);
+    return this.service.consultar(auth, query, ipDeRequest(req));
   }
 }

@@ -115,11 +115,13 @@ export class InboxTiempoRealBus implements OnModuleDestroy {
     activo.consultando = true;
     try {
       // La conexión compartida no puede heredar el tenant del primer cliente.
-      const fila = await runWithTenant(activo.canal.tenantId, () =>
-        this.prisma.inboxCanalRevision.findUnique({
-          where: { tenantId_wabaId_phoneNumberId: activo.canal },
-          select: { revision: true },
-        }),
+      const fila = await runWithTenant(
+        activo.canal.tenantId,
+        async () =>
+          await this.prisma.inboxCanalRevision.findUnique({
+            where: { tenantId_wabaId_phoneNumberId: activo.canal },
+            select: { revision: true },
+          }),
       );
       const revision = (fila?.revision ?? 0n).toString();
       if (this.cerrado) return;

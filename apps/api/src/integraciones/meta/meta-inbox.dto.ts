@@ -1,7 +1,18 @@
-import { IsOptional, IsUUID } from 'class-validator';
+import {
+  IsOptional,
+  IsUUID,
+  IsString,
+  MaxLength,
+  Matches,
+} from 'class-validator';
 
-/** El teléfono y la empresa salen del piloto y de la sesión, nunca del navegador. */
+/** La empresa y el número propio se resuelven en el servidor. */
 export class MetaInboxQueryDto {
+  @IsOptional() @IsUUID('4') conversacionId?: string;
+  @IsOptional() @IsUUID('4') desdeId?: string;
+  @IsOptional() @IsString() @MaxLength(120) busqueda?: string;
+  @IsOptional() @Matches(/^[A-Za-z0-9_-]{1,800}$/) listaAntesDe?: string;
+
   @IsOptional()
   @IsUUID()
   antesDe?: string;
