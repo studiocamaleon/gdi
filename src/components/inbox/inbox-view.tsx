@@ -57,6 +57,8 @@ import {
 import { cn } from "@/lib/utils";
 import s from "./inbox-workspace.module.css";
 import live from "./inbox-view.module.css";
+import type { MetaConexionApi } from "@/lib/meta-conexion-api";
+import { InboxConexion } from "./inbox-conexion";
 import { InboxBienvenida } from "./inbox-bienvenida";
 import { ApiError } from "@/lib/api";
 import { combinarInbox } from "@/lib/inbox-combinar";
@@ -92,10 +94,12 @@ export function InboxView({
   identidad,
   cargar = getMetaInbox,
   tiempoReal = escucharInbox,
+  conexionApi,
 }: {
   identidad: InboxIdentidad;
   cargar?: CargarInbox;
   tiempoReal?: EscucharInbox | null;
+  conexionApi?: MetaConexionApi;
 }) {
   const [datos, setDatos] = useState<MetaInbox | null>(null);
   const [estado, setEstado] = useState<
@@ -108,6 +112,7 @@ export function InboxView({
   const [oscuro, setOscuro] = useState(false);
   const [movilChat, setMovilChat] = useState(false);
   const [contextoAbierto, setContextoAbierto] = useState(false);
+  const [conexionAbierta, setConexionAbierta] = useState(false);
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const elegido = useRef<string | undefined>(undefined);
@@ -583,6 +588,13 @@ export function InboxView({
               </div>
             </div>
             <div className={live.headerActions}>
+              <Button
+                variant="outline"
+                onClick={() => setConexionAbierta(true)}
+              >
+                <MessageCircle data-icon="inline-start" />
+                Conexión
+              </Button>
               <Link href="/" className={buttonVariants({ variant: "outline" })}>
                 Volver a Grafo
               </Link>
@@ -970,6 +982,28 @@ export function InboxView({
               "Conexión privada de Grafo"
             )}
           </div>
+          <Sheet open={conexionAbierta} onOpenChange={setConexionAbierta}>
+            <SheetContent
+              className={cn(tema, "overflow-y-auto sm:max-w-xl")}
+              data-appearance={apariencia}
+            >
+              <SheetHeader>
+                <SheetTitle>Conexión de WhatsApp</SheetTitle>
+                <SheetDescription>
+                  Estado del número y de la importación de {identidad.empresa}.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="px-4 pb-6">
+                {conexionAbierta && (
+                  <InboxConexion
+                    key={`${identidad.empresaId}:${identidad.usuarioId}`}
+                    identidad={identidad}
+                    api={conexionApi}
+                  />
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
           <Sheet
             open={contextoAbierto && estado === "listo" && Boolean(datos)}
             onOpenChange={setContextoAbierto}

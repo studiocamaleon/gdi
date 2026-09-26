@@ -104,6 +104,77 @@ it("100% informado por Meta no afirma importación completa", async () => {
   expect(container.textContent).toContain("3 eventos");
   expect(container.textContent).not.toContain("Importación completa");
 });
+const canalDePrueba: NonNullable<EstadoConexionMeta["canal"]> = {
+  numero: "+16505550123",
+  estado: "VERIFICADO",
+  credencialVencida: false,
+  recepcionPreparada: true,
+  alta: {
+    estado: "SOLICITUDES_COMPLETADAS",
+    falloCodigo: null,
+    updatedAt: "2026-09-26",
+  },
+  pendientes: 0,
+  revisiones: 0,
+  importacion: {
+    progresoInformado: 100,
+    finInformadoEl: "2026-09-26",
+    historialRechazado: false,
+    necesitaRevision: false,
+  },
+  resumen: {
+    estado: "RECIBIDO_PROCESADO",
+    pendientes: 0,
+    revisiones: 0,
+    bloquesProcesados: 3,
+    ultimoRecibidoEl: "2026-09-26",
+  },
+};
+it("distingue los datos recibidos procesados de garantizar todo el historial", async () => {
+  await render({ ...base, canal: canalDePrueba });
+  expect(container.textContent).toContain("Datos recibidos procesados");
+  expect(container.textContent).toContain("3 bloques");
+  expect(container.textContent).toContain("no certifica seis meses completos");
+});
+it("una pausa temporal explica la reconexión desde el celular y no ofrece otra alta", async () => {
+  await render({ ...base, canal: { ...canalDePrueba, estado: "SUSPENDIDO" } });
+  expect(container.textContent).toContain("Esperando reconexión");
+  expect(container.textContent).toContain(
+    "no se vuelve a solicitar el historial",
+  );
+  expect(container.textContent).not.toContain("Volver a conectar WhatsApp");
+});
+it("una desvinculación confirmada permite iniciar de nuevo sólo con disponibilidad del servidor", async () => {
+  await render({
+    ...base,
+    modo: "COEXISTENCIA",
+    disponible: true,
+    canal: {
+      ...canalDePrueba,
+      estado: "DESCONECTADO",
+      reconexionPermitida: true,
+    },
+  });
+  const conectar = [...container.querySelectorAll("button")].find((b) =>
+    b.textContent?.includes("Volver a conectar WhatsApp"),
+  );
+  expect(conectar?.disabled).toBe(false);
+  expect(api.preparar).not.toHaveBeenCalled();
+});
+it("un descarte local no ofrece reconectar como si Meta hubiera confirmado la desvinculación", async () => {
+  await render({
+    ...base,
+    canal: {
+      ...canalDePrueba,
+      estado: "DESCONECTADO",
+      reconexionPermitida: false,
+    },
+  });
+  expect(container.textContent).toContain(
+    "confirmar la desvinculación en Meta",
+  );
+  expect(container.textContent).not.toContain("Volver a conectar WhatsApp");
+});
 it("un resultado incierto pide revisión y no ofrece reconectar automáticamente", async () => {
   await render({
     ...base,

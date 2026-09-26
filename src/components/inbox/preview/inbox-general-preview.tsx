@@ -1,4 +1,5 @@
 "use client";
+import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxView } from "../inbox-view";
 import type { CargarInbox, MetaInbox } from "@/lib/meta-inbox-api";
 
@@ -188,6 +189,56 @@ const cargar: CargarInbox = async (query) => {
       : null,
   } satisfies MetaInbox;
 };
+const noConectar = async (): Promise<never> => {
+  throw new Error("Vista local sin conexión a Meta");
+};
+const conexionApi: MetaConexionApi = {
+  estado: async () => ({
+    empresaId: identidad.empresaId,
+    usuarioId: identidad.usuarioId,
+    disponible: false,
+    modo: null,
+    sandboxVerificadoEl: null,
+    canal: {
+      numero: "+16505550100",
+      estado: "VERIFICADO",
+      credencialVencida: false,
+      recepcionPreparada: true,
+      alta: {
+        estado: "SOLICITUDES_COMPLETADAS",
+        falloCodigo: null,
+        updatedAt: "2026-09-26",
+      },
+      importacion: {
+        progresoInformado: 100,
+        finInformadoEl: "2026-09-26",
+        historialRechazado: false,
+        necesitaRevision: false,
+      },
+      pendientes: 0,
+      revisiones: 0,
+      resumen: {
+        estado: "RECIBIDO_PROCESADO",
+        pendientes: 0,
+        revisiones: 0,
+        bloquesProcesados: 3,
+        ultimoRecibidoEl: "2026-09-26",
+      },
+    },
+  }),
+  preparar: noConectar,
+  consultar: noConectar,
+  canjear: noConectar,
+  verificar: noConectar,
+  cancelar: noConectar,
+};
 export function InboxGeneralPreview() {
-  return <InboxView identidad={identidad} cargar={cargar} tiempoReal={null} />;
+  return (
+    <InboxView
+      identidad={identidad}
+      cargar={cargar}
+      tiempoReal={null}
+      conexionApi={conexionApi}
+    />
+  );
 }

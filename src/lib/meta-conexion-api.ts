@@ -29,6 +29,21 @@ export type EstadoConexionMeta = {
   sandboxVerificadoEl: string | null;
   canal: null | {
     numero: string;
+    reconexionPermitida?: boolean;
+    resumen?: {
+      estado:
+        | "PREPARANDO"
+        | "ESPERANDO_META"
+        | "RECIBIENDO"
+        | "PROCESANDO"
+        | "RECIBIDO_PROCESADO"
+        | "NO_COMPARTIDO"
+        | "REVISION";
+      pendientes: number;
+      revisiones: number;
+      bloquesProcesados: number;
+      ultimoRecibidoEl: string | null;
+    } | null;
     estado: string;
     credencialVencida: boolean;
     recepcionPreparada: boolean;

@@ -38,66 +38,122 @@ export function EstadoImportacion({
   canal: NonNullable<EstadoConexionMeta["canal"]>;
 }) {
   const imp = canal.importacion;
+  const resumen = canal.resumen;
+  const suspendido = canal.estado === "SUSPENDIDO";
+  const desconectado = canal.estado === "DESCONECTADO";
   const detenido =
-    canal.estado !== "VERIFICADO" ||
     canal.credencialVencida ||
     ["REVISION", "PAUSADA"].includes(canal.alta?.estado ?? "") ||
     canal.revisiones > 0 ||
     imp?.necesitaRevision;
-  const aceptadas = canal.alta?.estado === "SOLICITUDES_COMPLETADAS";
+  const etiquetas = {
+    PREPARANDO: "Preparando conexión",
+    ESPERANDO_META: "Esperando a Meta",
+    RECIBIENDO: "Recibiendo historial",
+    PROCESANDO: "Procesando historial",
+    RECIBIDO_PROCESADO: "Datos recibidos procesados",
+    NO_COMPARTIDO: "Historial no compartido",
+    REVISION: "Requiere revisión",
+  };
+  const explicaciones = {
+    PREPARANDO:
+      "Grafo está preparando la recepción y solicitando los datos que autorizaste compartir.",
+    ESPERANDO_META:
+      "Meta aceptó las solicitudes. Esperamos el historial; podés cerrar esta pestaña.",
+    RECIBIENDO:
+      "Las conversaciones llegan por partes. Todavía no recibimos la confirmación de fin de Meta.",
+    PROCESANDO:
+      "Grafo todavía debe comprobar y procesar los datos recibidos. Podés seguir usando la aplicación.",
+    RECIBIDO_PROCESADO:
+      "Meta informó el fin del envío y Grafo procesó todo el historial recibido hasta esta consulta. Si llega otra parte, el estado se actualizará.",
+    NO_COMPARTIDO:
+      "No se importarán las conversaciones anteriores que no autorizaste compartir.",
+    REVISION:
+      "El proceso necesita una revisión. No vuelvas a dar de alta el número para intentar recuperar el historial.",
+  };
+  const fase =
+    resumen?.estado ??
+    (detenido
+      ? "REVISION"
+      : canal.pendientes > 0
+        ? "PROCESANDO"
+        : "ESPERANDO_META");
   return (
     <div className="grid w-full gap-4 text-left">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-medium">{canal.numero}</p>
         <Badge variant="secondary">
-          {detenido
-            ? "Requiere revisión"
-            : aceptadas
-              ? "Esperando datos de Meta"
-              : "Preparando conexión"}
+          {desconectado
+            ? "Desconectado"
+            : suspendido
+              ? "Esperando reconexión"
+              : detenido
+                ? "Requiere revisión"
+                : etiquetas[fase]}
         </Badge>
       </div>
-      {detenido ? (
+      {(suspendido || desconectado || canal.credencialVencida) && (
         <Alert>
           <ShieldCheck />
-          <AlertTitle>Revisemos la conexión</AlertTitle>
+          <AlertTitle>
+            {desconectado
+              ? "WhatsApp está desconectado"
+              : suspendido
+                ? "Conexión pausada en WhatsApp"
+                : "El acceso necesita renovarse"}
+          </AlertTitle>
           <AlertDescription>
-            El proceso se detuvo y necesita una revisión. No vuelvas a dar de
-            alta el número para intentar recuperar el historial.
+            {suspendido
+              ? "Esto puede ocurrir al cambiar de celular o reinstalar WhatsApp Business. Completá el registro en el celular y conservá la conexión con Grafo. Esperaremos la confirmación de Meta; no se vuelve a solicitar el historial."
+              : desconectado
+                ? canal.reconexionPermitida
+                  ? "Meta confirmó la desvinculación. Podés iniciar una nueva autorización cuando la conexión esté habilitada. Las conversaciones guardadas se conservan."
+                  : "Grafo dejó de usar este acceso. Antes de iniciar otra alta necesitamos confirmar la desvinculación en Meta."
+                : "No se reactivará automáticamente una credencial vencida. El acceso debe revisarse antes de continuar."}
           </AlertDescription>
         </Alert>
-      ) : (
+      )}
+      <p className="text-sm text-muted-foreground">
+        {desconectado
+          ? "No se reciben mensajes con esta conexión. El historial guardado se conserva."
+          : suspendido
+            ? "Esperamos la reconexión. El progreso que ves corresponde a los datos recibidos antes de la pausa."
+            : explicaciones[detenido ? "REVISION" : fase]}
+      </p>
+      {imp && !imp.historialRechazado && (
+        <Progress value={imp.progresoInformado}>
+          <ProgressLabel>Progreso informado por Meta</ProgressLabel>
+          <ProgressValue />
+        </Progress>
+      )}
+      {(resumen?.pendientes ?? canal.pendientes) > 0 && (
         <p className="text-sm text-muted-foreground">
-          {aceptadas
-            ? "Meta aceptó las solicitudes de contactos e historial. Los datos llegan por partes; podés cerrar esta pestaña."
-            : "Grafo está preparando la recepción de mensajes y solicitando los datos que autorizaste compartir."}
+          Quedan {resumen?.pendientes ?? canal.pendientes} eventos de historial
+          por procesar.
         </p>
       )}
-      {imp?.historialRechazado ? (
+      {resumen && (
+        <p className="text-sm text-muted-foreground">
+          {resumen.bloquesProcesados} bloques de historial procesados.
+        </p>
+      )}
+      {imp?.historialRechazado && (
         <Alert>
           <AlertTitle>Historial no compartido</AlertTitle>
-          <AlertDescription>
-            No se importarán las conversaciones anteriores que no autorizaste
-            compartir.
-          </AlertDescription>
+          <AlertDescription>{explicaciones.NO_COMPARTIDO}</AlertDescription>
         </Alert>
-      ) : (
-        imp && (
-          <>
-            <Progress value={imp.progresoInformado}>
-              <ProgressLabel>Progreso informado por Meta</ProgressLabel>
-              <ProgressValue />
-            </Progress>
-            <p className="text-sm text-muted-foreground">
-              {imp.finInformadoEl
-                ? "Meta informó el fin del envío. Grafo todavía debe comprobar que todos los bloques estén procesados."
-                : "Recibiendo las conversaciones que Meta tenga disponibles."}
-              {canal.pendientes > 0
-                ? ` Quedan ${canal.pendientes} eventos por procesar.`
-                : ""}
-            </p>
-          </>
-        )
+      )}
+      <p className="text-xs text-muted-foreground">
+        El historial depende de lo que Meta pueda compartir. Los períodos sin
+        conversaciones no envían bloques; este estado no certifica seis meses
+        completos ni la descarga de todos los archivos.
+      </p>
+      {!desconectado && (
+        <p className="text-xs text-muted-foreground">
+          Para desvincular el número, abrí WhatsApp Business en el celular:
+          Configuración → Cuenta → Plataforma empresarial → Desconectar cuenta.
+          Grafo reflejará la confirmación de Meta.
+        </p>
       )}
       <p className="text-xs text-muted-foreground">
         La importación inicial y la disponibilidad para enviar mensajes se
@@ -249,9 +305,9 @@ export function InboxConexion({
   return (
     <Card className="w-full max-w-2xl">
       <CardContent className="grid gap-5 pt-6">
-        {estado?.canal ? (
-          <EstadoImportacion canal={estado.canal} />
-        ) : (
+        {estado?.canal && <EstadoImportacion canal={estado.canal} />}
+        {(!estado?.canal ||
+          (estado.canal.reconexionPermitida && estado.disponible)) && (
           <>
             <ol
               className="grid gap-4 text-left sm:grid-cols-3"
@@ -312,7 +368,9 @@ export function InboxConexion({
                         ? "Comprobando autorización…"
                         : sandbox
                           ? "Probar autorización"
-                          : "Conectar WhatsApp"}
+                          : estado?.canal
+                            ? "Volver a conectar WhatsApp"
+                            : "Conectar WhatsApp"}
                 </Button>
               )}
               {(trabajando || paso === "listo") && (
