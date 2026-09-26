@@ -9,5 +9,6 @@ import { WhatsappContextoService } from './whatsapp-contexto.service';
   imports: [CapacidadesEmpresaModule],
   controllers: [ClientesController, WhatsappContextoController],
   providers: [ClientesService, WhatsappContextoService],
+  exports: [WhatsappContextoService],
 })
 export class ClientesModule {}

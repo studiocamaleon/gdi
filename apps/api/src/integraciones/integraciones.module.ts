@@ -23,6 +23,9 @@ import { MetaPilotoService } from './meta/meta-piloto.service';
 import { MetaPilotoController } from './meta/meta-piloto.controller';
 import { MetaRecepcionController } from './meta/meta-recepcion.controller';
 import { MetaRecepcionService } from './meta/meta-recepcion.service';
+import { ClientesModule } from '../clientes/clientes.module';
+import { MetaInboxController } from './meta/meta-inbox.controller';
+import { MetaInboxService } from './meta/meta-inbox.service';
 
 /**
  * Cimientos compartidos por todas las integraciones con terceros.
@@ -36,7 +39,7 @@ import { MetaRecepcionService } from './meta/meta-recepcion.service';
  */
 @Global()
 @Module({
-  imports: [CapacidadesEmpresaModule, DatosEmpresaModule],
+  imports: [CapacidadesEmpresaModule, DatosEmpresaModule, ClientesModule],
   // El ORDEN importa y no es cosmético: IntegracionesController tiene
   // `@Get(':proveedor')`, que matchea cualquier segmento — incluido
   // `/integraciones/notificaciones`. Registrado primero, se comía la ruta y el
@@ -44,6 +47,7 @@ import { MetaRecepcionService } from './meta/meta-recepcion.service';
   // Nest resuelve por orden de registro, así que las rutas concretas van antes
   // que las que tienen comodín.
   controllers: [
+    MetaInboxController,
     MetaRecepcionController,
     MetaPilotoController,
     AutomaticosWebController,
@@ -51,6 +55,7 @@ import { MetaRecepcionService } from './meta/meta-recepcion.service';
     IntegracionesController,
   ],
   providers: [
+    MetaInboxService,
     MetaRecepcionService,
     MetaCloudClient,
     MetaPilotoService,

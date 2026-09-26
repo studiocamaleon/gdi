@@ -154,6 +154,13 @@ export function MetaRecepcionCard({ inicial }: { inicial: RecepcionMeta }) {
       </CardContent>
       <CardFooter>
         <Button
+          nativeButton={false}
+          render={<a href="/inbox" target="_blank" rel="noopener noreferrer" />}
+        >
+          <MessageCircle data-icon="inline-start" />
+          Abrir inbox
+        </Button>
+        <Button
           variant="outline"
           disabled={ocupado}
           onClick={() => void actualizar()}

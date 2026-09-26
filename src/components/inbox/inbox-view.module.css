@@ -1,0 +1,31 @@
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.loading,
+.fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 700px;
+  width: 100%;
+  margin: 30px auto;
+  padding: 20px;
+}
+.loading {
+  color: var(--muted-text);
+}
+.older {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+@media (max-width: 700px) {
+  .headerActions {
+    gap: 4px;
+  }
+  .headerActions a {
+    display: none;
+  }
+}

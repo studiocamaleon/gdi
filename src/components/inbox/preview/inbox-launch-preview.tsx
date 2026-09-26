@@ -6,7 +6,7 @@ import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import brand from "@/components/design-system/brand-workspace-theme.module.css";
-import s from "./inbox-preview.module.css";
+import s from "../inbox-workspace.module.css";
 
 /** Ensaya la apertura desde Grafo sin modificar la navegación operativa. */
 export function InboxLaunchPreview({ href }: { href: string }) {
@@ -24,6 +24,7 @@ export function InboxLaunchPreview({ href }: { href: string }) {
             mientras seguís trabajando en Grafo.
           </p>
           <Button
+            nativeButton={false}
             render={<a href={href} target="_blank" rel="noopener noreferrer" />}
           >
             Abrir inbox en otra pestaña

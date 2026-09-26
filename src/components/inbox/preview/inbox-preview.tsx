@@ -73,7 +73,7 @@ import {
   type ConversacionDemo,
   type MensajeDemo,
 } from "./inbox-fixtures";
-import s from "./inbox-preview.module.css";
+import s from "../inbox-workspace.module.css";
 
 type Filtro = "abiertas" | "mias" | "sin-leer" | "resueltas";
 type Panel =

@@ -2,6 +2,8 @@
 
 Esta versión permite recorrer el diseño antes de conectar el inbox con datos reales. Usa la identidad compartida de Grafo: grafito, fondo cálido, naranja y tipografía Geist. Se desarrolló en la rama `codex/diseno-inbox`, a partir del piloto de recepción; no lo reemplaza ni lo activa.
 
+La primera implementación de lectura del piloto ya está desarrollada en local, en `codex/inbox-lectura`. Su alcance y validaciones están en [Inbox: primera lectura conectada](inbox-lectura-piloto.md). El prototipo de esta página sigue siendo una muestra independiente.
+
 ## Abrirlo en local
 
 Desde la raíz de esta rama, con Node 24 y las dependencias instaladas:
