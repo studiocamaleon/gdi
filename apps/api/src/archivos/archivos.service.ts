@@ -54,6 +54,7 @@ const DIAS_DE_PAPELERA = 30;
 
 /** Campo FK de `Archivo` que corresponde a cada scope. */
 const CAMPO_POR_SCOPE: Record<ArchivoScope, keyof Archivo | null> = {
+  INBOX: null,
   TENANT_BRANDING: null,
   CAMPANA: 'proyectoCampanaId',
   CLIENTE: 'clienteId',
@@ -882,7 +883,8 @@ export class ArchivosService {
       const archivo = await tx.archivo.findFirst({
         where: { id, tenantId: auth.tenantId },
       });
-      if (!archivo) throw new NotFoundException('Archivo no encontrado.');
+      if (!archivo || archivo.scope === ArchivoScope.INBOX)
+        throw new NotFoundException('Archivo no encontrado.');
       if (
         archivo.estado === ArchivoEstado.ELIMINADO ||
         archivo.estado === ArchivoEstado.PURGANDO
@@ -1253,7 +1255,8 @@ export class ArchivosService {
     const archivo = await this.prisma.archivo.findFirst({
       where: { id, ...(tenantId ? { tenantId } : {}) },
     });
-    if (!archivo) throw new NotFoundException('Archivo no encontrado.');
+    if (!archivo || archivo.scope === ArchivoScope.INBOX)
+      throw new NotFoundException('Archivo no encontrado.');
     return archivo;
   }
 
@@ -1274,6 +1277,10 @@ export class ArchivosService {
     scope: ArchivoScope,
     entidadId: string | null,
   ): Promise<void> {
+    if (scope === ArchivoScope.INBOX)
+      throw new BadRequestException(
+        'Los adjuntos del Inbox se administran desde la conversación.',
+      );
     if (scope === ArchivoScope.TENANT_BRANDING) return;
     if (!entidadId) {
       throw new BadRequestException('Falta la entidad a la que se adjunta.');

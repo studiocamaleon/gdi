@@ -1,3 +1,5 @@
+import { MetaAdjuntosWorker } from '../integraciones/meta/inbox/meta-adjuntos.worker';
+import { MetaAdjuntosModule } from '../integraciones/meta/inbox/meta-adjuntos.module';
 import { MetaAltaModule } from '../integraciones/meta/meta-alta.module';
 import { MetaAltaWorker } from '../integraciones/meta/meta-alta.worker';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
@@ -23,6 +25,7 @@ import { MetaInboxWorker } from '../integraciones/meta/inbox/meta-inbox.worker';
  */
 @Module({
   imports: [
+    MetaAdjuntosModule,
     MetaAltaModule,
     MetaInboxProcesamientoModule,
     CapacidadesEmpresaModule,
@@ -36,6 +39,7 @@ import { MetaInboxWorker } from '../integraciones/meta/inbox/meta-inbox.worker';
   providers: [
     MetaAltaWorker,
     MetaInboxWorker,
+    MetaAdjuntosWorker,
     GeometriaWorker,
     OpenNestService,
     ControlTrabajosGeometriaService,

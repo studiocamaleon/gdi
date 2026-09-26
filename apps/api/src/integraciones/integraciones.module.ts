@@ -1,3 +1,4 @@
+import { MetaAdjuntosModule } from './meta/inbox/meta-adjuntos.module';
 import { MetaInboxGeneralService } from './meta/meta-inbox-general.service';
 import { MetaAltaModule } from './meta/meta-alta.module';
 import { MetaConexionController } from './meta/meta-conexion.controller';
@@ -45,6 +46,7 @@ import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.mo
 @Global()
 @Module({
   imports: [
+    MetaAdjuntosModule,
     MetaAltaModule,
     CapacidadesEmpresaModule,
     DatosEmpresaModule,

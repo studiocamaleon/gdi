@@ -598,6 +598,12 @@ it('retirar el socio durante la pausa revoca el token; ninguna reconexión lo re
 });
 it('puede confirmar la revocación después del descarte local sin recibir mensajes ni restaurar acceso', async () => {
   const t = segundos();
+  // El alta precede al evento explícitamente: evitar una carrera entre los
+  // relojes de Node y PostgreSQL en el mismo milisegundo.
+  await db.metaVinculo.update({
+    where: { id: canal.id },
+    data: { verificadoEl: new Date((t - 1) * 1000) },
+  });
   await db.metaVinculo.update({
     where: { id: canal.id },
     data: {

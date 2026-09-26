@@ -392,8 +392,10 @@ enum OrigenMovimientoStockMateriaPrima {
 
 /// A qué entidad se adjunta el archivo. Cada valor se corresponde con
 /// exactamente una FK del modelo Archivo (salvo TENANT_BRANDING, que no
-/// cuelga de nada: es del tenant). Ver docs/archivos-r2-diseno.md §D3.
+/// cuelga de nada: es del tenant; INBOX se vincula mediante InboxAdjunto).
+/// Ver docs/archivos-r2-diseno.md §D3 y docs/meta-inbox-adjuntos.md.
 enum ArchivoScope {
+  INBOX
   TENANT_BRANDING
   CAMPANA
   CLIENTE
@@ -5536,6 +5538,7 @@ model PagoContador {
 /// seteada, según `scope` (ninguna para TENANT_BRANDING).
 /// Ver docs/archivos-r2-diseno.md
 model Archivo {
+  adjuntoInbox InboxAdjunto?
   documentoPdfId String? @unique @db.Uuid
   documentoPdf DocumentoPdf? @relation(fields: [documentoPdfId], references: [id], onDelete: Restrict)
   geometriasProducto GeometriaProducto[]
@@ -6660,6 +6663,7 @@ model InboxBloqueHistorial {
 /// También conserva complementos que llegaron antes del mensaje original.
 /// Sin conversación/fecha/dirección todavía, no se muestran en la bandeja.
 model InboxMensaje {
+  adjunto InboxAdjunto?
   id                 String @id @default(uuid()) @db.Uuid
   tenantId           String @db.Uuid
   vinculoId          String @db.Uuid
@@ -6682,6 +6686,7 @@ model InboxMensaje {
   updatedAt          DateTime @updatedAt
   vinculo            MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
   conversacion       InboxConversacion? @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  @@unique([id, vinculoId, tenantId])
   @@unique([vinculoId, wamid])
   @@index([tenantId, conversacionId, enviadoEl, id])
 }
@@ -7119,4 +7124,28 @@ model OperacionCompra {
   tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Cascade)
   @@unique([tenantId,clave])
   @@index([tenantId,ordenId,createdAt])
+}
+
+/// Copia privada y trabajo duradero de un adjunto de WhatsApp. Sin URLs de Meta.
+model InboxAdjunto {
+  id               String @id @default(uuid()) @db.Uuid
+  tenantId         String @db.Uuid
+  vinculoId        String @db.Uuid
+  mensajeId        String @unique @db.Uuid
+  autorizacionId   String @db.Uuid
+  mediaId          String
+  estado           String @default("PENDIENTE")
+  intentos         Int @default(0)
+  proximoIntentoEl DateTime @default(now())
+  bloqueoId        String? @db.Uuid
+  bloqueoHasta     DateTime?
+  falloCodigo      String?
+  archivoId        String? @unique @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  mensaje          InboxMensaje @relation(fields: [mensajeId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  archivo          Archivo? @relation(fields: [archivoId], references: [id], onDelete: SetNull)
+  @@unique([mensajeId, vinculoId, tenantId])
+  @@index([estado, proximoIntentoEl])
+  @@index([tenantId, vinculoId])
 }

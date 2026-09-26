@@ -1,3 +1,4 @@
+import { adjuntosHabilitados, encolarAdjunto } from './meta-adjuntos';
 import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { runWithTenant } from '../../../common/tenant-context';
@@ -182,6 +183,11 @@ export class MetaInboxProcesador {
                     (await aplicarOperacionInbox(tx, canal, op)) ||
                     cambioVisible;
               }
+              if (adjuntosHabilitados())
+                for (const op of lote) {
+                  if ('wamid' in op && op.clase !== 'estado')
+                    await encolarAdjunto(tx, canal, op.wamid);
+                }
               const cursor = trabajo.cursor + lote.length;
               const terminado = cursor >= normalizado.operaciones.length;
               const estado = terminado

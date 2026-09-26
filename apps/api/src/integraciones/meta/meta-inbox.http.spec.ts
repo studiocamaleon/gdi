@@ -1,3 +1,4 @@
+import { MetaAdjuntosService } from './inbox/meta-adjuntos.service';
 import { Test } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
@@ -12,6 +13,9 @@ import { Observable } from 'rxjs';
 import compression from 'compression';
 import type { Server } from 'node:http';
 let app: INestApplication<Server>;
+const abrirAdjunto = jest
+  .fn()
+  .mockResolvedValue({ url: 'https://files.example.invalid/privado' });
 const consultar = jest.fn().mockResolvedValue({ mensajes: [] });
 const disponibilidad = jest.fn().mockResolvedValue({ disponible: false });
 const abrir = jest.fn();
@@ -20,6 +24,7 @@ beforeAll(async () => {
   const module = await Test.createTestingModule({
     controllers: [MetaInboxController],
     providers: [
+      { provide: MetaAdjuntosService, useValue: { abrir: abrirAdjunto } },
       { provide: MetaInboxService, useValue: { consultar, disponibilidad } },
       { provide: MetaInboxStreamService, useValue: { abrir } },
     ],
@@ -65,6 +70,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   consultar.mockClear();
+  abrirAdjunto.mockClear();
   disponibilidad.mockClear();
   abrir.mockReset();
   desconectado.mockClear();
@@ -224,4 +230,29 @@ it('entrega SSE antes de cerrar, sin compresión ni cache, y libera al desconect
     clearTimeout(timeout);
     ctrl.abort();
   }
+});
+
+it('adjunto exige permisos, valida UUID y usa empresa de sesión', async () => {
+  const ruta =
+    '/api/integraciones/meta/inbox/mensajes/00000000-0000-4000-8000-000000000001/adjunto';
+  await request(app.getHttpServer())
+    .get(ruta)
+    .set('x-actor', 'VENDEDOR')
+    .expect(403);
+  expect(abrirAdjunto).not.toHaveBeenCalled();
+  await request(app.getHttpServer())
+    .get(ruta.replace('00000000-0000-4000-8000-000000000001', 'incorrecto'))
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect(400);
+  expect(abrirAdjunto).not.toHaveBeenCalled();
+  await request(app.getHttpServer())
+    .get(ruta)
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect('Cache-Control', 'private, no-store')
+    .expect(200);
+  expect(abrirAdjunto).toHaveBeenCalledWith(
+    expect.objectContaining({ tenantId: 'propia' }),
+    expect.any(String),
+    '00000000-0000-4000-8000-000000000001',
+  );
 });

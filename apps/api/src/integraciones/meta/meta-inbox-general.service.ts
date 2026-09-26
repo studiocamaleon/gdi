@@ -1,3 +1,4 @@
+import { adjuntosHabilitados, tiposMedia } from './inbox/meta-adjuntos';
 import {
   BadRequestException,
   ForbiddenException,
@@ -16,6 +17,22 @@ import { MetaInboxQueryDto } from './meta-inbox.dto';
 import { objeto } from './inbox/meta-inbox-normalizar';
 
 const selectMensaje = {
+  adjunto: {
+    select: {
+      estado: true,
+      mediaId: true,
+      falloCodigo: true,
+      updatedAt: true,
+      archivo: {
+        select: {
+          nombreOriginal: true,
+          mimeType: true,
+          bytes: true,
+          estado: true,
+        },
+      },
+    },
+  },
   id: true,
   direccion: true,
   enviadoEl: true,
@@ -47,6 +64,34 @@ function presentar(m: Mensaje, nombre: string | null) {
     estadoEntrega: m.estadoEntrega,
     delHistorial: m.delHistorial,
     delCelular: m.delCelular,
+    adjunto:
+      !m.revocadoEl &&
+      (tiposMedia.includes(m.tipo ?? '') || m.tipo === 'media_placeholder')
+        ? {
+            estado: !adjuntosHabilitados()
+              ? 'DESHABILITADO'
+              : !contenido.mediaId
+                ? 'SIN_ARCHIVO'
+                : m.adjunto?.mediaId !== contenido.mediaId
+                  ? 'PENDIENTE'
+                  : m.adjunto.estado === 'LISTO' &&
+                      m.adjunto.archivo?.estado !== 'LISTO'
+                    ? 'NO_DISPONIBLE'
+                    : m.adjunto.estado,
+            nombre:
+              m.adjunto?.archivo?.nombreOriginal ??
+              (typeof contenido.nombreArchivo === 'string'
+                ? contenido.nombreArchivo.slice(0, 160)
+                : null),
+            mimeType: m.adjunto?.archivo?.mimeType ?? null,
+            bytes: m.adjunto?.archivo ? Number(m.adjunto.archivo.bytes) : null,
+            version: m.adjunto?.updatedAt.toISOString() ?? '',
+            motivo:
+              m.adjunto?.falloCodigo === 'CUPO_O_PLAN'
+                ? 'ESPACIO_O_PLAN'
+                : null,
+          }
+        : null,
   };
 }
 type Resumen = {

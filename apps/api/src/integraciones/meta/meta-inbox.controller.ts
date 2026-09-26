@@ -1,9 +1,12 @@
+import { MetaAdjuntosService } from './inbox/meta-adjuntos.service';
 import {
   Controller,
   Get,
   Header,
   Headers,
   Query,
+  Param,
+  ParseUUIDPipe,
   Req,
   Sse,
 } from '@nestjs/common';
@@ -31,6 +34,7 @@ export class MetaInboxController {
   constructor(
     private readonly service: MetaInboxService,
     private readonly tiempoReal: MetaInboxStreamService,
+    private readonly adjuntos: MetaAdjuntosService,
   ) {}
 
   @Sse('stream')
@@ -44,6 +48,16 @@ export class MetaInboxController {
       ipDeRequest(req),
       vencimientoStream(authorization),
     );
+  }
+
+  @Get('mensajes/:id/adjunto')
+  @Header('Cache-Control', 'private, no-store')
+  abrirAdjunto(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.adjuntos.abrir(auth, ipDeRequest(req), id);
   }
 
   @Get('disponibilidad')
