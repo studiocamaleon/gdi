@@ -12,6 +12,8 @@ import { TenantConcurrencyService } from './tenant-concurrency.service';
 import { NestingsGuardadosModule } from './geometria/nestings-guardados.service';
 import { CotizacionJobsModule } from './cotizacion/cotizacion-jobs.module';
 import { CapacidadGeometriaModule } from './geometria/capacidad-geometria.service';
+import { MetaInboxProcesamientoModule } from '../integraciones/meta/inbox/meta-inbox-procesamiento.module';
+import { MetaInboxWorker } from '../integraciones/meta/inbox/meta-inbox.worker';
 
 /**
  * Aplicación Nest independiente del API HTTP. No importa AppModule a
@@ -19,6 +21,7 @@ import { CapacidadGeometriaModule } from './geometria/capacidad-geometria.servic
  */
 @Module({
   imports: [
+    MetaInboxProcesamientoModule,
     CapacidadesEmpresaModule,
     PlanificacionEntregasCoreModule,
     ConfigModule.forRoot({ isGlobal: true }),
@@ -28,6 +31,7 @@ import { CapacidadGeometriaModule } from './geometria/capacidad-geometria.servic
     CapacidadGeometriaModule,
   ],
   providers: [
+    MetaInboxWorker,
     GeometriaWorker,
     OpenNestService,
     ControlTrabajosGeometriaService,
