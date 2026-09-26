@@ -1,7 +1,8 @@
 "use client";
 
 import { MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { InboxConexion } from "./inbox-conexion";
+import type { InboxIdentidad } from "@/lib/meta-inbox-api";
 import {
   Empty,
   EmptyContent,
@@ -11,9 +12,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 
-/** El alta de Meta todavía no está implementada. No simular una conexión
- * ni enviar a la configuración de Wati desde este acceso de Meta directo. */
-export function InboxBienvenida() {
+export function InboxBienvenida({ identidad }: { identidad: InboxIdentidad }) {
   return (
     <Empty>
       <EmptyHeader>
@@ -28,14 +27,11 @@ export function InboxBienvenida() {
           atender a tus clientes desde un solo lugar.
         </EmptyDescription>
       </EmptyHeader>
-      <EmptyContent>
-        <Button size="lg" disabled aria-describedby="inbox-conexion-pendiente">
-          <MessageCircle data-icon="inline-start" />
-          Conectar WhatsApp
-        </Button>
-        <p id="inbox-conexion-pendiente" className="text-muted-foreground">
-          La conexión de números estará disponible próximamente.
-        </p>
+      <EmptyContent className="max-w-2xl">
+        <InboxConexion
+          key={`${identidad.empresaId}:${identidad.usuarioId}`}
+          identidad={identidad}
+        />
       </EmptyContent>
     </Empty>
   );

@@ -6,6 +6,7 @@ import { InboxView } from "./inbox-view";
 import type { CargarInbox, MetaInbox } from "@/lib/meta-inbox-api";
 import type { EscucharInbox } from "@/lib/inbox-tiempo-real";
 
+vi.mock('@/lib/meta-conexion-api',()=>({metaConexionApi:{estado:vi.fn().mockResolvedValue({empresaId:'empresa-1',usuarioId:'user-1',modo:null,disponible:false,sandboxVerificadoEl:null,canal:null})}}));
 const identidad = {
   empresaId: "empresa-1",
   usuarioId: "user-1",

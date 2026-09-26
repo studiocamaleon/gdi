@@ -511,7 +511,7 @@ export function InboxView({
             </div>
           ) : estado === "inactivo" ? (
             <div className={live.welcome}>
-              <InboxBienvenida />
+              <InboxBienvenida identidad={identidad} />
             </div>
           ) : estado !== "listo" || !datos ? (
             <div className={live.fallback}>
