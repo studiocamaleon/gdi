@@ -962,7 +962,7 @@ export function InboxView({
                                 </>
                               )}
                               <div className={s.messageMeta}>
-                                {m.tipo === "template" && (
+                                {(m.tipo === "template" || m.plantilla) && (
                                   <span>Plantilla</span>
                                 )}
                                 {m.editado && !m.eliminado && (
@@ -1008,9 +1008,11 @@ export function InboxView({
                               </div>
                               {e.estado === "RECHAZADO" && (
                                 <p>
-                                  {e.codigo === "131047"
-                                    ? "Meta indicó que la ventana está cerrada. Hace falta una plantilla."
-                                    : "Meta rechazó este envío. Revisá la conexión antes de volver a intentarlo."}
+                                  {e.codigo === "ARCHIVO_NO_PREPARADO"
+                                    ? "No se pudo preparar el archivo. No se envió el mensaje; revisá el archivo y volvé a elegirlo."
+                                    : e.codigo === "131047"
+                                      ? "Meta indicó que la ventana está cerrada. Hace falta una plantilla."
+                                      : "Meta rechazó este envío. Revisá la conexión antes de volver a intentarlo."}
                                 </p>
                               )}
                             </div>

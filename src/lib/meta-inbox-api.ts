@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api";
+import { urlDeArchivo } from "@/lib/archivos";
 
 export type InboxIdentidad = {
   empresaId: string;
@@ -34,6 +35,7 @@ export type MetaInbox = {
     id: string;
     nombreContacto: string | null;
     tipo: string;
+    plantilla?: boolean;
     texto: string | null;
     enviadoEl: string;
     direccion?: string | null;
@@ -145,8 +147,14 @@ export const enviarTextoInbox: EnviarTextoInbox = (id, dto, signal) =>
     },
   );
 
-export type { PlantillaInbox } from "../../apps/api/src/common/inbox/plantillas";
-import type { PlantillaInbox } from "../../apps/api/src/common/inbox/plantillas";
+export type {
+  PlantillaInbox,
+  ArchivoPlantillaInbox,
+} from "../../apps/api/src/common/inbox/plantillas";
+import type {
+  PlantillaInbox,
+  ArchivoPlantillaInbox,
+} from "../../apps/api/src/common/inbox/plantillas";
 export type PedidoPlantillaInbox = {
   clave: string;
   canalId: string;
@@ -155,8 +163,20 @@ export type PedidoPlantillaInbox = {
   pagina: string | null;
   valores: string[];
   consentimientoConfirmado: boolean;
+  archivoId?: string;
+  archivoVersion?: string;
 };
 export type PlantillasInboxApi = {
+  archivos?: (
+    conversacionId: string,
+    canalId: string,
+    signal?: AbortSignal,
+  ) => Promise<{
+    archivos: ArchivoPlantillaInbox[];
+    cliente: { id: string; nombre: string } | null;
+    motivo: string | null;
+  }>;
+  urlArchivo?: (archivo: ArchivoPlantillaInbox) => string;
   listar: (
     canalId: string,
     despues?: string | null,
@@ -173,6 +193,12 @@ export type PlantillasInboxApi = {
   ) => Promise<IntentoInbox>;
 };
 export const plantillasInboxApi: PlantillasInboxApi = {
+  archivos: (id, canalId, signal) =>
+    apiRequest(
+      `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/archivos-plantilla?${new URLSearchParams({ canalId })}`,
+      { signal },
+    ),
+  urlArchivo: (archivo) => urlDeArchivo(archivo.id),
   listar: (canalId, despues, signal) => {
     const params = new URLSearchParams({ canalId });
     if (despues) params.set("despues", despues);

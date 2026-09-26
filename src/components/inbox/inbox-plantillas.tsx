@@ -1,6 +1,22 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
-import { FileText, Send, RefreshCw, ArrowUpRight, Check } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  FileText,
+  Send,
+  RefreshCw,
+  ArrowUpRight,
+  Check,
+  Paperclip,
+  ImageIcon,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -17,10 +33,12 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ApiError } from "@/lib/api";
+import { formatBytes } from "@/lib/archivos";
 import {
   plantillasInboxApi,
   type PlantillasInboxApi,
   type PlantillaInbox,
+  type ArchivoPlantillaInbox,
 } from "@/lib/meta-inbox-api";
 import {
   validarValoresPlantilla,
@@ -32,6 +50,7 @@ export type BorradorPlantilla = {
   valores: string[];
   consentimiento: boolean;
   clave?: string;
+  archivo?: ArchivoPlantillaInbox;
 };
 export type BorradoresPlantilla = Map<string, BorradorPlantilla>;
 
@@ -65,6 +84,13 @@ export function InboxPlantillas({
     [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [archivos, setArchivos] = useState<ArchivoPlantillaInbox[]>([]);
+  const [archivosEstado, setArchivosEstado] = useState("");
+  const [revisionArchivos, setRevisionArchivos] = useState(0);
+  const opcionesArchivo = useMemo(
+    () => archivos.map((f) => ({ value: f.id, label: f.nombre })),
+    [archivos],
+  );
   const vivo = useRef(true),
     peticion = useRef<AbortController | null>(null),
     envio = useRef<AbortController | null>(null);
@@ -130,9 +156,58 @@ export function InboxPlantillas({
     }
   };
   const p = draft?.plantilla;
+  useEffect(() => {
+    if (!abierto || !p?.archivo) return;
+    const controller = new AbortController();
+    setArchivos([]);
+    setArchivosEstado("Buscando archivos del cliente…");
+    if (!api.archivos) {
+      setArchivosEstado("Los archivos todavía no están disponibles.");
+      return;
+    }
+    void api
+      .archivos(
+        conversacionId,
+        canalId,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
+      )
+      .then((r) => {
+        if (controller.signal.aborted) return;
+        const disponibles = r.archivos.filter((f) =>
+          p.archivo === "document"
+            ? f.mimeType === "application/pdf"
+            : ["image/png", "image/jpeg"].includes(f.mimeType),
+        );
+        setArchivos(disponibles);
+        setArchivosEstado(
+          r.motivo ||
+            (disponibles.length
+              ? `Archivos de ${r.cliente?.nombre ?? "tu cliente"}`
+              : "No hay archivos compatibles. Agregalos en la ficha del cliente y volvé a abrir esta ventana."),
+        );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setArchivosEstado(
+            "No pudimos consultar los archivos. Revisá tus permisos y volvé a abrir esta ventana.",
+          );
+      });
+    return () => controller.abort();
+  }, [
+    abierto,
+    p?.id,
+    p?.archivo,
+    api,
+    canalId,
+    conversacionId,
+    revisionArchivos,
+  ]);
   const vista = p ? vistaPlantilla(p, draft.valores) : null;
   const validacion = p
-    ? validarValoresPlantilla(p, draft.valores)
+    ? validarValoresPlantilla(p, draft.valores) ||
+      (p.archivo && !draft.archivo
+        ? "Elegí el archivo que llevará esta plantilla."
+        : null)
     : "Elegí una plantilla.";
   async function enviar() {
     if (
@@ -159,8 +234,11 @@ export function InboxPlantillas({
           pagina: d.plantilla.pagina,
           valores: d.valores,
           consentimientoConfirmado: d.consentimiento,
+          ...(d.archivo
+            ? { archivoId: d.archivo.id, archivoVersion: d.archivo.version }
+            : {}),
         },
-        AbortSignal.any([controller.signal, AbortSignal.timeout(25000)]),
+        AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]),
       );
       if (!vivo.current || controller.signal.aborted) return;
       if (!["ACEPTADO", "ENVIANDO", "INCIERTO", "RECHAZADO"].includes(r.estado))
@@ -169,7 +247,9 @@ export function InboxPlantillas({
       setAbierto(false);
       setAviso(
         r.estado === "RECHAZADO"
-          ? "Meta rechazó el envío. Podés ver el detalle en la conversación."
+          ? r.codigo === "ARCHIVO_NO_PREPARADO"
+            ? "No se pudo preparar el archivo. El mensaje no se envió."
+            : "Meta rechazó el envío. Podés ver el detalle en la conversación."
           : r.estado === "ACEPTADO"
             ? "Plantilla registrada. El estado de entrega aparece en la conversación."
             : "El envío quedó pendiente de confirmación. No se repetirá automáticamente.",
@@ -178,9 +258,10 @@ export function InboxPlantillas({
     } catch (e) {
       if (!vivo.current || controller.signal.aborted) return;
       if (e instanceof ApiError && [400, 409].includes(e.status)) {
-        guardar({ ...d, clave: undefined });
+        guardar({ ...d, clave: undefined, archivo: undefined });
+        setRevisionArchivos((n) => n + 1);
         setError(
-          "Revisá los datos o actualizá el catálogo: la plantilla pudo cambiar. No se inició un nuevo envío.",
+          "Revisá los datos, volvé a elegir el archivo o actualizá el catálogo: algo pudo cambiar. No se inició un nuevo envío.",
         );
       } else
         setError(
@@ -268,6 +349,11 @@ export function InboxPlantillas({
                               : "Autenticación"}
                         </Badge>
                         <span>{t.idioma}</span>
+                        {t.archivo && (
+                          <span>
+                            {t.archivo === "image" ? "Imagen" : "PDF"}
+                          </span>
+                        )}
                         <span>
                           {t.estado === "APPROVED" ? "Aprobada" : t.estado}
                         </span>
@@ -318,6 +404,46 @@ export function InboxPlantillas({
                   </div>
                   <div className={s.preview}>
                     <div className={s.bubble}>
+                      {p.archivo && (
+                        <div className={s.mediaPreview}>
+                          {draft.archivo &&
+                          p.archivo === "image" &&
+                          api.urlArchivo ? (
+                            // Archivo privado servido por el proxy autenticado; sin optimización ni caché compartida.
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              key={draft.archivo.version}
+                              src={api.urlArchivo(draft.archivo)}
+                              alt={`Vista previa de ${draft.archivo.nombre}`}
+                            />
+                          ) : p.archivo === "image" ? (
+                            <ImageIcon aria-hidden="true" />
+                          ) : (
+                            <FileText aria-hidden="true" />
+                          )}
+                          <strong>
+                            {draft.archivo?.nombre ||
+                              (p.archivo === "image"
+                                ? "Tu imagen aparecerá acá"
+                                : "PDF adjunto")}
+                          </strong>
+                          <small>
+                            {draft.archivo
+                              ? `${formatBytes(draft.archivo.bytes)} · Archivo privado`
+                              : "Elegí un archivo de la ficha del cliente"}
+                          </small>
+                          {draft.archivo && api.urlArchivo && (
+                            <a
+                              href={api.urlArchivo(draft.archivo)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Revisar archivo{" "}
+                              <ArrowUpRight aria-hidden="true" />
+                            </a>
+                          )}
+                        </div>
+                      )}
                       {vista.encabezado && <strong>{vista.encabezado}</strong>}
                       <p>{vista.cuerpo}</p>
                       {vista.pie && <small>{vista.pie}</small>}
@@ -335,6 +461,61 @@ export function InboxPlantillas({
                     </span>
                   </div>
                   <FieldGroup className={s.fields}>
+                    {p.archivo && (
+                      <Field>
+                        <FieldLabel htmlFor={`${id}-archivo`}>
+                          <Paperclip aria-hidden="true" />{" "}
+                          {p.archivo === "image"
+                            ? "Imagen de la plantilla"
+                            : "PDF de la plantilla"}
+                        </FieldLabel>
+                        <Select
+                          value={draft.archivo?.id ?? null}
+                          disabled={
+                            enviando || Boolean(draft.clave) || !archivos.length
+                          }
+                          items={opcionesArchivo}
+                          onValueChange={(value) => {
+                            if (
+                              value === (draft.archivo?.id ?? null) ||
+                              draft.clave ||
+                              enviandoRef.current
+                            )
+                              return;
+                            guardar({
+                              ...draft,
+                              archivo: archivos.find((f) => f.id === value),
+                            });
+                          }}
+                        >
+                          <SelectTrigger
+                            id={`${id}-archivo`}
+                            className="w-full"
+                          >
+                            <SelectValue placeholder="Elegí un archivo del cliente…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {archivos.map((f) => (
+                                <SelectItem key={f.id} value={f.id}>
+                                  {f.nombre}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <p className={s.notice} role="status">
+                          {archivosEstado}
+                        </p>
+                        <p className={s.notice}>
+                          {p.archivo === "image"
+                            ? "JPG o PNG · hasta 5 MB"
+                            : "PDF · hasta 20 MB en Grafo"}
+                          . Se comparte con Meta y con el destinatario al
+                          enviar.
+                        </p>
+                      </Field>
+                    )}
                     {p.variables.map((v, i) => (
                       <Field key={`${p.id}-${v.componente}-${v.nombre}`}>
                         <FieldLabel htmlFor={`${id}-${i}`}>
@@ -361,7 +542,7 @@ export function InboxPlantillas({
                         />
                       </Field>
                     ))}
-                    {!p.variables.length && (
+                    {!p.variables.length && !p.archivo && (
                       <p>
                         Esta plantilla está lista: no necesita datos
                         adicionales.

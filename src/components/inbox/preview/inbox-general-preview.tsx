@@ -1,6 +1,10 @@
 "use client";
 import { textoPlantilla } from "../../../../apps/api/src/common/inbox/plantillas";
-import type { PlantillaInbox, PlantillasInboxApi } from "@/lib/meta-inbox-api";
+import type {
+  PlantillaInbox,
+  PlantillasInboxApi,
+  ArchivoPlantillaInbox,
+} from "@/lib/meta-inbox-api";
 import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxView } from "../inbox-view";
 import type {
@@ -214,13 +218,64 @@ const plantillasDemo: PlantillaInbox[] = [
     pie: "",
     botones: [],
     variables: [],
-    motivo:
-      "El envío de plantillas con archivos estará disponible en otra etapa.",
+    motivo: null,
+    archivo: "image",
     version: "demo-imagen",
     pagina: null,
   },
+  {
+    id: "104",
+    nombre: "documento_del_trabajo",
+    idioma: "es_AR",
+    categoria: "UTILITY",
+    estado: "APPROVED",
+    formato: "NAMED",
+    encabezado: "",
+    archivo: "document",
+    cuerpo:
+      "Hola, {{nombre}}. Te compartimos el documento de tu trabajo para que puedas revisarlo.",
+    pie: "Equipo Grafo",
+    botones: [],
+    variables: [{ componente: "body", nombre: "nombre" }],
+    motivo: null,
+    version: "demo-pdf",
+    pagina: null,
+  },
 ];
+const archivosDemo: ArchivoPlantillaInbox[] = [
+  {
+    id: "demo-pdf",
+    version: "pdf-1",
+    nombre: "Documento-de-ejemplo.pdf",
+    mimeType: "application/pdf",
+    bytes: 1400,
+  },
+  {
+    id: "demo-imagen",
+    version: "imagen-1",
+    nombre: "Ejemplo-carteleria.jpg",
+    mimeType: "image/jpeg",
+    bytes: 180000,
+  },
+];
+const urlArchivoDemo = (f: ArchivoPlantillaInbox) =>
+  f.mimeType === "application/pdf"
+    ? "/dev/diseno/inbox/archivo"
+    : "/catalogo/categorias/carteleria-montaje.jpg";
 const plantillasApi: PlantillasInboxApi = {
+  archivos: async (id) => {
+    const contacto = contactos.find((c) => c.id === id);
+    return {
+      cliente: contacto?.empresa
+        ? { id: `cliente-${id}`, nombre: contacto.empresa }
+        : null,
+      archivos: contacto?.empresa ? archivosDemo : [],
+      motivo: contacto?.empresa
+        ? null
+        : "Este teléfono no coincide con una ficha de cliente. Probá con Alma o Bruno en esta demo.",
+    };
+  },
+  urlArchivo: urlArchivoDemo,
   listar: async (canalId) => ({
     canalId,
     plantillas: plantillasDemo,
@@ -231,6 +286,10 @@ const plantillasApi: PlantillasInboxApi = {
     const p = plantillasDemo.find((p) => p.id === dto.plantillaId);
     if (!p || p.motivo || !conversaciones[id])
       throw new Error("Plantilla ficticia no disponible");
+    const archivo = p.archivo
+      ? archivosDemo.find((f) => f.id === dto.archivoId)
+      : null;
+    if (p.archivo && !archivo) throw new Error("Elegí el archivo de ejemplo");
     const r = {
       id: crypto.randomUUID(),
       clave: dto.clave,
@@ -243,7 +302,19 @@ const plantillasApi: PlantillasInboxApi = {
     conversaciones[id].push({
       id: r.mensajeId,
       nombreContacto: null,
-      tipo: "template",
+      tipo: p.archivo || "template",
+      plantilla: true,
+      ...(archivo
+        ? {
+            adjunto: {
+              estado: "LISTO",
+              nombre: archivo.nombre,
+              mimeType: archivo.mimeType,
+              bytes: archivo.bytes,
+              version: archivo.version,
+            },
+          }
+        : {}),
       texto: textoPlantilla(p, dto.valores),
       enviadoEl: r.creadoEl,
       direccion: "SALIENTE",
@@ -384,13 +455,21 @@ export function InboxGeneralPreview() {
       conexionApi={conexionApi}
       enviarTexto={enviar}
       plantillasApi={plantillasApi}
-      abrirAdjunto={async () => ({
-        url: "/dev/diseno/inbox/archivo",
-        nombre: "Ejemplo-inbox.pdf",
-        mimeType: "application/pdf",
-        bytes: 1400,
-        expiraEn: 60,
-      })}
+      abrirAdjunto={async (id) => {
+        const mensaje = Object.values(conversaciones)
+          .flat()
+          .find((m) => m.id === id);
+        const archivo =
+          archivosDemo.find((f) => f.mimeType === mensaje?.adjunto?.mimeType) ??
+          archivosDemo[0];
+        return {
+          url: urlArchivoDemo(archivo),
+          nombre: archivo.nombre,
+          mimeType: archivo.mimeType,
+          bytes: archivo.bytes,
+          expiraEn: 60,
+        };
+      }}
     />
   );
 }
