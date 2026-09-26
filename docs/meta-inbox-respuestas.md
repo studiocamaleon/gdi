@@ -6,6 +6,8 @@ Bloque local del 26/09/2026, rama `codex/inbox-respuestas`, desde `03c1117fb`. C
 
 - El editor permite escribir, conservar un borrador por conversación y enviar explícitamente. Enter agrega una línea; Ctrl/⌘ + Enter envía. Límite conservador de 4.096 unidades de texto; algunos emojis ocupan más de una.
 - Muestra el tiempo disponible para responder. Si la ventana está cerrada, bloquea texto libre y explica que hace falta una plantilla aprobada o un nuevo mensaje del cliente. El selector de plantillas es el siguiente bloque.
+- Los estados tienen indicadores visibles: check en círculo y «Aceptado» para el acuse del POST, un check para enviado, doble check para entregado y doble check naranja para leído/reproducido. Cada icono tiene nombre accesible y explicación al posar el cursor. La simulación conserva su etiqueta propia, sin presentarse como entrega real.
+- La lista de conversaciones muestra nombre, último mensaje y fecha, sin repetir el teléfono debajo del nombre. Si todavía no hay nombre, el teléfono identifica el contacto.
 - «Aceptado por Meta» significa que Meta aceptó la solicitud. «Enviado», «Entregado» y «Leído» dependen de sus confirmaciones posteriores.
 - Si la conexión falla, «Comprobar envío» conserva el identificador del intento original. No genera otro envío automáticamente. Un resultado incierto se informa en el hilo y requiere revisión antes de repetir el mensaje.
 - Los borradores viven sólo en memoria de esa pantalla, separados por cuenta, canal y conversación. Se pierden al recargar/cerrar la página o cerrar el acceso; los intentos ya registrados permanecen en el servidor.
@@ -49,3 +51,9 @@ El acceso mantiene el alcance actual: administradores con `configuracion.gestion
 6. Ante problemas, apagar `META_INBOX_ENVIOS_ENABLED`. Esto bloquea nuevos intentos; un POST ya enviado puede terminar y su resultado debe conservarse.
 
 Pendientes: selector y envío de plantillas aprobadas, prueba real integral Meta/archivos/tiempo real, envío de adjuntos, permisos de agentes y operación de incidencias. No se promete entrega exactamente una vez ni recuperar un intento incierto si Meta no devuelve una confirmación.
+
+## Aclaración: escribir una respuesta no es editar un mensaje enviado
+
+El editor implementado permite redactar mensajes nuevos. No modifica mensajes ya enviados. Revisión del 26/09/2026: la [guía de coexistencia](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users) documenta eventos de edición recibidos por webhook; el procesador de Grafo ya los refleja. Esto no acredita una operación saliente de edición. En la [referencia de solicitudes de mensajes](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/message-api) consultada no se encontró una operación documentada para editar desde Cloud API. Por ello no se agregó una acción que sólo altere la copia local del mensaje. La edición saliente queda pendiente de confirmar soporte oficial; por ahora una corrección se envía como mensaje nuevo.
+
+Ajuste visual comprobado en Chrome: lista sin teléfonos repetidos y doble check naranja de lectura. Pasan las 27 pruebas del hilo/editor, TypeScript, ESLint de los componentes y guard de CSS. No requiere migraciones ni cambios de flags; permanece local.

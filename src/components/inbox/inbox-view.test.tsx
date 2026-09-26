@@ -422,11 +422,11 @@ it("la actualización viva pide toda la ventana visible y reemplaza ediciones y 
     "Mensaje eliminado",
     "Texto corregido",
     "Editado",
-    "Leído",
     "Historial",
     "Desde WhatsApp Business",
   ])
     expect(log.textContent).toContain(texto);
+  expect(log.querySelector('[role="img"][aria-label="Leído"]')).not.toBeNull();
   expect(log.textContent).not.toContain("Texto antiguo visible");
   expect(log.querySelector("[data-kind=salida]")).not.toBeNull();
 });

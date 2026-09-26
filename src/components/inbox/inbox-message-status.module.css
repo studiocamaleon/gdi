@@ -1,0 +1,20 @@
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 18px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.status > svg {
+  flex-shrink: 0;
+}
+.status[data-state="READ"],
+.status[data-state="PLAYED"] {
+  color: var(--accent);
+}
+.status[data-state="ERROR"],
+.status[data-state="RECHAZADO"],
+.status[data-state="INCIERTO"] {
+  color: var(--accent);
+}

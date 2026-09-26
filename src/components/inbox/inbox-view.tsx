@@ -62,6 +62,7 @@ import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxConexion } from "./inbox-conexion";
 import { InboxComposer, type BorradoresInbox } from "./inbox-composer";
 import { InboxAdjunto } from "./inbox-adjunto";
+import { InboxMessageStatus } from "./inbox-message-status";
 import { InboxBienvenida } from "./inbox-bienvenida";
 import { ApiError } from "@/lib/api";
 import { combinarInbox } from "@/lib/inbox-combinar";
@@ -731,7 +732,6 @@ export function InboxView({
                           <span className={s.nameLine}>
                             <strong>{titulo}</strong>
                           </span>
-                          <span className={s.company}>{c.telefono}</span>
                           <span className={s.snippet}>
                             {c.ultimoMensaje?.eliminado
                               ? "Mensaje eliminado"
@@ -956,26 +956,15 @@ export function InboxView({
                                 {m.delCelular && (
                                   <span>Desde WhatsApp Business</span>
                                 )}
-                                {m.direccion === "SALIENTE" &&
-                                  m.estadoEntrega && (
-                                    <span>
-                                      {(
-                                        {
-                                          DEMO: "Simulado · sin envío real",
-                                          ACEPTADO: "Aceptado por Meta",
-                                          PENDING: "Pendiente",
-                                          ERROR: "No entregado",
-                                          SENT: "Enviado",
-                                          DELIVERED: "Entregado",
-                                          READ: "Leído",
-                                          PLAYED: "Reproducido",
-                                        } as Record<string, string>
-                                      )[m.estadoEntrega] ?? "Estado recibido"}
-                                    </span>
-                                  )}
                                 <time dateTime={m.enviadoEl}>
                                   {fechaHora(m.enviadoEl)}
                                 </time>
+                                {m.direccion === "SALIENTE" &&
+                                  m.estadoEntrega && (
+                                    <InboxMessageStatus
+                                      estado={m.estadoEntrega}
+                                    />
+                                  )}
                               </div>
                             </div>
                           </div>
@@ -996,22 +985,10 @@ export function InboxView({
                             >
                               <p>{e.texto}</p>
                               <div className={s.messageMeta}>
-                                <span>
-                                  {
-                                    (
-                                      {
-                                        ENVIANDO: "Esperando confirmación",
-                                        INCIERTO:
-                                          "Sin confirmación · no reenviar todavía",
-                                        RECHAZADO: "No enviado",
-                                        ACEPTADO: "Aceptado por Meta",
-                                      } as Record<string, string>
-                                    )[e.estado]
-                                  }
-                                </span>
                                 <time dateTime={e.creadoEl}>
                                   {fechaHora(e.creadoEl)}
                                 </time>
+                                <InboxMessageStatus estado={e.estado} />
                               </div>
                               {e.estado === "RECHAZADO" && (
                                 <p>
