@@ -1,3 +1,4 @@
+import { MetaEnviosService } from './inbox/meta-envios.service';
 import { MetaAdjuntosService } from './inbox/meta-adjuntos.service';
 import { Test } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
@@ -16,6 +17,7 @@ let app: INestApplication<Server>;
 const abrirAdjunto = jest
   .fn()
   .mockResolvedValue({ url: 'https://files.example.invalid/privado' });
+const enviar = jest.fn().mockResolvedValue({ estado: 'ACEPTADO' });
 const consultar = jest.fn().mockResolvedValue({ mensajes: [] });
 const disponibilidad = jest.fn().mockResolvedValue({ disponible: false });
 const abrir = jest.fn();
@@ -24,6 +26,7 @@ beforeAll(async () => {
   const module = await Test.createTestingModule({
     controllers: [MetaInboxController],
     providers: [
+      { provide: MetaEnviosService, useValue: { enviar } },
       { provide: MetaAdjuntosService, useValue: { abrir: abrirAdjunto } },
       { provide: MetaInboxService, useValue: { consultar, disponibilidad } },
       { provide: MetaInboxStreamService, useValue: { abrir } },
@@ -70,6 +73,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   consultar.mockClear();
+  enviar.mockClear();
   abrirAdjunto.mockClear();
   disponibilidad.mockClear();
   abrir.mockReset();
@@ -255,4 +259,53 @@ it('adjunto exige permisos, valida UUID y usa empresa de sesión', async () => {
     expect.any(String),
     '00000000-0000-4000-8000-000000000001',
   );
+});
+const textoUrl =
+  '/api/integraciones/meta/inbox/conversaciones/11111111-1111-4111-8111-111111111111/texto';
+const textoDto = {
+  clave: '22222222-2222-4222-8222-222222222222',
+  canalId:
+    '33333333-3333-4333-8333-333333333333:44444444-4444-4444-8444-444444444444',
+  texto: 'Hola',
+};
+it('POST de texto valida identidad, delega sólo el DTO y prohíbe caché', async () => {
+  await request(app.getHttpServer())
+    .post(textoUrl)
+    .set('x-actor', 'ADMINISTRADOR')
+    .send(textoDto)
+    .expect('Cache-Control', 'private, no-store')
+    .expect(200);
+  expect(enviar).toHaveBeenCalledWith(
+    expect.objectContaining({ tenantId: 'propia' }),
+    expect.any(String),
+    '11111111-1111-4111-8111-111111111111',
+    textoDto,
+  );
+});
+it.each([
+  {},
+  { 'x-actor': 'VENDEDOR' },
+  { 'x-actor': 'ADMINISTRADOR', 'x-sin-permiso': '1' },
+  { 'x-actor': 'ADMINISTRADOR', 'x-impersonacion': '1' },
+])('POST impide acceso sin privilegios: %j', async (headers) => {
+  await request(app.getHttpServer())
+    .post(textoUrl)
+    .set(headers)
+    .send(textoDto)
+    .expect(403);
+  expect(enviar).not.toHaveBeenCalled();
+});
+it.each([
+  { ...textoDto, telefono: '+16505550999' },
+  { ...textoDto, texto: ' ' },
+  { ...textoDto, texto: 'a'.repeat(4097) },
+  { ...textoDto, clave: 'invalida' },
+  { ...textoDto, canalId: 'invalido' },
+])('POST rechaza datos inválidos o destinatario impuesto: %j', async (body) => {
+  await request(app.getHttpServer())
+    .post(textoUrl)
+    .set('x-actor', 'ADMINISTRADOR')
+    .send(body)
+    .expect(400);
+  expect(enviar).not.toHaveBeenCalled();
 });

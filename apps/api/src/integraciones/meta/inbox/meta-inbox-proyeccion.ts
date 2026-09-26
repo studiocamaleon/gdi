@@ -1,4 +1,4 @@
-import { Prisma, type MetaVinculo } from '@prisma/client';
+import { Prisma, type InboxEnvio, type MetaVinculo } from '@prisma/client';
 import type { OperacionInbox } from './meta-inbox-normalizar';
 
 type Contexto = Pick<
@@ -93,6 +93,30 @@ export async function aplicarOperacionInbox(
     return creado.count + aumentado.count > 0;
   }
   if (op.clase === 'cuenta') return false; // Ciclo de vida coordinado por el procesador.
+
+  let envioConfirmado = false;
+  if (op.clase === 'estado' && op.destinatario) {
+    const envio = await tx.inboxEnvio.findFirst({
+      where: {
+        ...scope,
+        autorizacionId: canal.autorizacionId,
+        OR: [
+          ...(op.correlacion ? [{ id: op.correlacion }] : []),
+          { wamid: op.wamid },
+        ],
+      },
+      include: { conversacion: true },
+    });
+    if (
+      envio &&
+      envio.conversacion.contactoWaId === op.destinatario &&
+      op.fecha.getTime() >=
+        Math.floor(envio.createdAt.getTime() / 1000) * 1000 &&
+      (!envio.wamid || envio.wamid === op.wamid)
+    ) {
+      envioConfirmado = await confirmarEnvioInbox(tx, canal, envio, op.wamid);
+    }
+  }
 
   const anterior = await tx.inboxMensaje.findFirst({
     where: { ...scope, wamid: op.wamid },
@@ -191,10 +215,57 @@ export async function aplicarOperacionInbox(
     });
     return Boolean(conversacionId);
   }
-  if (!Object.keys(data).length) return false;
+  if (!Object.keys(data).length) return envioConfirmado;
   await tx.inboxMensaje.update({
     where: { id: anterior.id, tenantId: canal.tenantId },
     data,
   });
   return Boolean(conversacionId);
+}
+
+/** Se usa tanto para la aceptación del POST como para un webhook adelantado.
+ * El WAMID canónico evita duplicar un eco que haya llegado primero. */
+export async function confirmarEnvioInbox(
+  tx: Prisma.TransactionClient,
+  canal: Contexto,
+  envio: InboxEnvio,
+  wamid: string,
+) {
+  if (envio.mensajeId || !envio.texto) return false;
+  const c = await tx.inboxConversacion.findFirstOrThrow({
+    where: {
+      id: envio.conversacionId,
+      tenantId: canal.tenantId,
+      vinculoId: canal.id,
+    },
+  });
+  await aplicarOperacionInbox(tx, canal, {
+    clase: 'mensaje',
+    wamid,
+    contacto: c.contactoWaId,
+    direccion: 'SALIENTE',
+    fecha: envio.createdAt,
+    origen: 'GRAFO',
+    tipo: 'text',
+    contenido: { texto: envio.texto },
+    prioridad: 3,
+  });
+  const m = await tx.inboxMensaje.findFirstOrThrow({
+    where: { tenantId: canal.tenantId, vinculoId: canal.id, wamid },
+  });
+  await tx.inboxMensaje.updateMany({
+    where: { id: m.id, tenantId: canal.tenantId, estadoEntrega: null },
+    data: { estadoEntrega: 'ACEPTADO' },
+  });
+  await tx.inboxEnvio.update({
+    where: { id: envio.id, tenantId: canal.tenantId },
+    data: {
+      estado: 'ACEPTADO',
+      wamid,
+      mensajeId: m.id,
+      texto: null,
+      codigo: null,
+    },
+  });
+  return true;
 }

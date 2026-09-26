@@ -6641,6 +6641,7 @@ model InboxConversacion {
   updatedAt                DateTime @updatedAt
   vinculo                  MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
   mensajes                 InboxMensaje[]
+  envios                   InboxEnvio[]
   @@unique([vinculoId, contactoWaId])
   @@unique([id, vinculoId, tenantId])
   @@index([tenantId, ultimoMensajeEl, id])
@@ -6664,6 +6665,7 @@ model InboxBloqueHistorial {
 /// Sin conversación/fecha/dirección todavía, no se muestran en la bandeja.
 model InboxMensaje {
   adjunto InboxAdjunto?
+  envio InboxEnvio?
   id                 String @id @default(uuid()) @db.Uuid
   tenantId           String @db.Uuid
   vinculoId          String @db.Uuid
@@ -7148,4 +7150,29 @@ model InboxAdjunto {
   @@unique([mensajeId, vinculoId, tenantId])
   @@index([estado, proximoIntentoEl])
   @@index([tenantId, vinculoId])
+}
+
+/// Un intento de texto explícito. No se reenvía automáticamente tras incertidumbre.
+model InboxEnvio {
+  id             String @id @default(uuid()) @db.Uuid
+  tenantId       String @db.Uuid
+  vinculoId      String @db.Uuid
+  autorizacionId String @db.Uuid
+  conversacionId String @db.Uuid
+  usuarioId      String @db.Uuid
+  clave          String @db.Uuid
+  huella         String
+  texto          String?
+  estado         String @default("ENVIANDO")
+  codigo         String?
+  wamid          String?
+  mensajeId      String? @unique @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  conversacion   InboxConversacion @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  mensaje        InboxMensaje? @relation(fields: [mensajeId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  @@unique([mensajeId, vinculoId, tenantId])
+  @@unique([tenantId, clave])
+  @@unique([vinculoId, wamid])
+  @@index([tenantId, conversacionId, createdAt])
 }

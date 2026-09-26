@@ -32,6 +32,7 @@ export async function canalGeneralInbox(
       phoneNumberId: true,
       autorizacionId: true,
       numero: true,
+      recepcionDesdeEl: true,
     },
   });
 }

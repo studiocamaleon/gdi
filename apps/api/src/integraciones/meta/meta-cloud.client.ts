@@ -18,6 +18,54 @@ export class MetaCloudClient {
     parametros: string[];
     correlacion: string;
   }): Promise<ResultadoMeta> {
+    return this.enviar(args, {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: args.telefono,
+      type: 'template',
+      biz_opaque_callback_data: args.correlacion,
+      template: {
+        name: args.plantilla,
+        language: { code: args.idioma },
+        ...(args.parametros.length
+          ? {
+              components: [
+                {
+                  type: 'body',
+                  parameters: args.parametros.map((text) => ({
+                    type: 'text',
+                    text,
+                  })),
+                },
+              ],
+            }
+          : {}),
+      },
+    });
+  }
+
+  async enviarTexto(args: {
+    accessToken: string;
+    phoneNumberId: string;
+    telefono: string;
+    texto: string;
+    correlacion: string;
+  }): Promise<ResultadoMeta> {
+    if (!args.texto.trim() || args.texto.length > 4096)
+      throw new Error('Texto inválido.');
+    return this.enviar(args, {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: args.telefono,
+      type: 'text',
+      biz_opaque_callback_data: args.correlacion,
+      text: { body: args.texto, preview_url: false },
+    });
+  }
+  private async enviar(
+    args: { accessToken: string; phoneNumberId: string; telefono: string },
+    payload: Record<string, unknown>,
+  ): Promise<ResultadoMeta> {
     const version = process.env.META_GRAPH_API_VERSION ?? 'v26.0';
     const secret = process.env.META_APP_SECRET;
     if (
@@ -46,30 +94,7 @@ export class MetaCloudClient {
           Authorization: `Bearer ${args.accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: args.telefono,
-          type: 'template',
-          biz_opaque_callback_data: args.correlacion,
-          template: {
-            name: args.plantilla,
-            language: { code: args.idioma },
-            ...(args.parametros.length
-              ? {
-                  components: [
-                    {
-                      type: 'body',
-                      parameters: args.parametros.map((text) => ({
-                        type: 'text',
-                        text,
-                      })),
-                    },
-                  ],
-                }
-              : {}),
-          },
-        }),
+        body: JSON.stringify(payload),
       });
       const body = (await response.json()) as {
         messages?: { id?: string }[];

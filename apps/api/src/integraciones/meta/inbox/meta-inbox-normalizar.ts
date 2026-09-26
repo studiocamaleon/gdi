@@ -30,13 +30,15 @@ export type OperacionInbox =
       contacto: string;
       direccion: 'ENTRANTE' | 'SALIENTE';
       fecha: Date;
-      origen: 'HISTORIAL' | 'CELULAR' | 'NUEVO';
+      origen: 'HISTORIAL' | 'CELULAR' | 'NUEVO' | 'GRAFO';
     } & Contenido)
   | ({ clase: 'complemento'; wamid: string } & Contenido)
   | ({ clase: 'edicion'; wamid: string; fecha: Date } & Contenido)
   | { clase: 'revocacion'; wamid: string; fecha: Date }
   | {
       clase: 'estado';
+      correlacion?: string;
+      destinatario?: string;
       wamid: string;
       estado: string;
       orden: number;
@@ -132,11 +134,17 @@ export function normalizarEventoInbox(
     avisos++;
   };
   if (!propio) return { operaciones, avisos: 1 };
-  const estado = (id: string, raw: unknown, fecha: Date) => {
+  const estado = (
+    id: string,
+    raw: unknown,
+    fecha: Date,
+    extra: { correlacion?: string; destinatario?: string } = {},
+  ) => {
     const s = texto(raw, 30)?.toUpperCase();
     if (s && estados[s])
       operaciones.push({
         clase: 'estado',
+        ...extra,
         wamid: id,
         estado: s === 'FAILED' ? 'ERROR' : s,
         orden: estados[s],
@@ -290,7 +298,18 @@ export function normalizarEventoInbox(
         id = wamid(s.id),
         fecha = fechaMeta(s.timestamp);
       if (!id || !fecha) avisar();
-      else estado(id, s.status, fecha);
+      else
+        estado(id, s.status, fecha, {
+          ...(typeof s.biz_opaque_callback_data === 'string' &&
+          /^grafo-inbox:[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(
+            s.biz_opaque_callback_data,
+          )
+            ? { correlacion: s.biz_opaque_callback_data.slice(12) }
+            : {}),
+          ...(telefono(s.recipient_id)
+            ? { destinatario: telefono(s.recipient_id)! }
+            : {}),
+        });
     }
   } else if (evento.tipo === 'smb_app_state_sync') {
     if (!Array.isArray(value.state_sync)) avisar();

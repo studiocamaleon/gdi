@@ -89,3 +89,53 @@ it('rechaza IDs/rutas o destinatarios inválidos antes de usar la red', async ()
   ).rejects.toThrow();
   expect(mock).not.toHaveBeenCalled();
 });
+it('texto libre preserva saltos y caracteres, con vista previa desactivada y correlación', async () => {
+  const mock = jest
+    .fn()
+    .mockResolvedValue(
+      new Response(JSON.stringify({ messages: [{ id: 'wamid.texto' }] }), {
+        status: 200,
+      }),
+    );
+  global.fetch = mock;
+  const texto = '¡Hola!\nTu pedido está listo 🖨️';
+  expect(await new MetaCloudClient().enviarTexto({ ...args, texto })).toEqual({
+    estado: 'aceptada',
+    wamid: 'wamid.texto',
+  });
+  const payload = JSON.parse(mock.mock.calls[0][1].body);
+  expect(payload).toEqual({
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: args.telefono,
+    type: 'text',
+    biz_opaque_callback_data: args.correlacion,
+    text: { body: texto, preview_url: false },
+  });
+  expect(mock).toHaveBeenCalledTimes(1);
+});
+it('texto admite el límite y rechaza vacío o exceso antes de usar la red', async () => {
+  const mock = jest
+    .fn()
+    .mockResolvedValue(
+      new Response(JSON.stringify({ messages: [{ id: 'wamid.limite' }] }), {
+        status: 200,
+      }),
+    );
+  global.fetch = mock;
+  await expect(
+    new MetaCloudClient().enviarTexto({ ...args, texto: 'a'.repeat(4096) }),
+  ).resolves.toMatchObject({ estado: 'aceptada' });
+  for (const texto of [' \n ', 'a'.repeat(4097)])
+    await expect(
+      new MetaCloudClient().enviarTexto({ ...args, texto }),
+    ).rejects.toThrow('Texto inválido');
+  expect(mock).toHaveBeenCalledTimes(1);
+});
+it('texto no repite un POST que agota el tiempo de espera', async () => {
+  global.fetch = jest.fn().mockRejectedValue(new Error('timeout'));
+  await expect(
+    new MetaCloudClient().enviarTexto({ ...args, texto: 'Hola' }),
+  ).resolves.toEqual({ estado: 'incierta' });
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+});

@@ -1,7 +1,12 @@
+import { MetaEnviosService } from './inbox/meta-envios.service';
+import { EnviarTextoInboxDto } from './inbox/meta-envios.dto';
 import { MetaAdjuntosService } from './inbox/meta-adjuntos.service';
 import {
   Controller,
   Get,
+  Post,
+  Body,
+  HttpCode,
   Header,
   Headers,
   Query,
@@ -35,6 +40,7 @@ export class MetaInboxController {
     private readonly service: MetaInboxService,
     private readonly tiempoReal: MetaInboxStreamService,
     private readonly adjuntos: MetaAdjuntosService,
+    private readonly envios: MetaEnviosService,
   ) {}
 
   @Sse('stream')
@@ -58,6 +64,18 @@ export class MetaInboxController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.adjuntos.abrir(auth, ipDeRequest(req), id);
+  }
+
+  @Post('conversaciones/:id/texto')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  enviarTexto(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EnviarTextoInboxDto,
+  ) {
+    return this.envios.enviar(auth, ipDeRequest(req), id, dto);
   }
 
   @Get('disponibilidad')

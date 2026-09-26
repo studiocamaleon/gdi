@@ -1,3 +1,8 @@
+import {
+  enviosInboxHabilitados,
+  presentarEnvio,
+  consultarVentanaRespuesta,
+} from './inbox/meta-envios.config';
 import { adjuntosHabilitados, tiposMedia } from './inbox/meta-adjuntos';
 import {
   BadRequestException,
@@ -214,7 +219,7 @@ export class MetaInboxGeneralService {
     const conversacion = seleccion
       ? await this.db.inboxConversacion.findFirst({
           where: { ...scope, id: seleccion },
-          select: { id: true, contactoWaId: true },
+          select: { id: true, contactoWaId: true, ultimoEntranteNuevoEl: true },
         })
       : null;
     if (seleccion && !conversacion)
@@ -301,6 +306,23 @@ export class MetaInboxGeneralService {
             select: { id: true },
           })
         : null;
+    const envios = conversacion
+      ? await this.db.inboxEnvio.findMany({
+          where: {
+            ...scope,
+            autorizacionId: canal.autorizacionId,
+            conversacionId: conversacion.id,
+            mensajeId: null,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        })
+      : [];
+    const ventana = await consultarVentanaRespuesta(
+      this.db,
+      canal,
+      conversacion,
+    );
     // Una revocación o reconexión durante la lectura no entrega el resultado anterior.
     const permisosFinales = await exigirAccesoConexionMeta(this.db, auth, ip);
     if (
@@ -317,6 +339,11 @@ export class MetaInboxGeneralService {
       usuarioId: auth.userId,
       canalId,
       origen: 'GENERAL' as const,
+      respuesta: {
+        habilitado: enviosInboxHabilitados(auth.tenantId),
+        ...ventana,
+      },
+      envios: envios.reverse().map(presentarEnvio),
       conversacionId: conversacion?.id ?? null,
       contacto: {
         telefono: conversacion ? `+${conversacion.contactoWaId}` : '',
