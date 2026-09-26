@@ -1,6 +1,6 @@
 # Grafo Inbox: historial de WhatsApp en coexistencia
 
-Relevamiento: 25/09/2026. **Estado: diseño para implementar; la importación no está habilitada.** Revisión del código en `codex/inbox-lectura`. No se solicitaron historiales, cambiaron suscripciones de Meta ni desplegaron servicios.
+Relevamiento: 25/09/2026. **Actualización 26/09: base de recepción implementada y probada en local; la importación real sigue deshabilitada.** Revisión del código en `codex/inbox-lectura`. No se solicitaron historiales, cambiaron suscripciones de Meta ni desplegaron servicios.
 
 ## Qué ofreceremos al cliente
 
@@ -83,7 +83,7 @@ No es una consulta paginada para descargar conversaciones cuando Grafo quiera: e
 Estas son propuestas para nuestro sistema, no requisitos textuales de Meta.
 
 - **Seguimiento por empresa, canal e intento de alta.** Registrar comienzo, plazo, solicitudes, avance informado por Meta, bloques recibidos/procesados, errores y actividad reciente. Evitar dos importaciones simultáneas del mismo canal. Una respuesta de red incierta no autoriza repetir a ciegas un `POST` de uso único.
-- **Base duradera más worker.** PostgreSQL conserva los eventos y el trabajo pendiente; Redis distribuye el trabajo. Si Redis se interrumpe, debe ser posible reconstruir las tareas desde la base. Reprocesar eventos guardados por Grafo es distinto de volver a solicitar el historial a Meta.
+- **Base duradera más worker.** La implementación local del 26/09 usa PostgreSQL tanto para conservar los eventos como para coordinar la cola. Redis distribuye avisos de actualización del Inbox. El trabajo puede continuar aunque Redis se interrumpa. Reprocesar eventos guardados por Grafo es distinto de volver a solicitar el historial a Meta.
 - **Modelo de mensajes completo.** Crear una representación que distinga entrantes/salientes, origen histórico/celular/API, fecha original, entrega, contenido y adjuntos. La tabla actual `MensajeWhatsappRecibido` sólo representa entradas del piloto y no alcanza para esto.
 - **Identidad y duplicados.** Usar cuenta + número del canal + identificador `wamid`, dentro de una asociación de empresa verificada. La huella de un bloque no reemplaza la deduplicación individual. Guardar las actualizaciones legítimas: un adjunto, edición, revocación o estado posterior no es otro mensaje ni se debe descartar como duplicado.
 - **Orden y finalización.** Meta entrega fases 0, 1 y 2 y bloques que pueden llegar desordenados. Ordenar la conversación por fecha original; no por llegada. Registrar `phase`, `chunk_order` y `progress`. La guía vincula `progress=100` con el fin de la sincronización; además debemos comprobar el procesamiento local y reconciliar bloques tardíos. No finalizar sólo por recibir fase 2 ni exigir eventos para fases sin mensajes.
@@ -104,11 +104,11 @@ Estas son propuestas para nuestro sistema, no requisitos textuales de Meta.
 | Componente actual | Resultado de la revisión |
 | --- | --- |
 | `MetaConexionService`, `MetaAutorizacion` y `MetaVinculo` | Base del 26/09: autorización, cifrado y reserva de activos comprobados. Sin controlador HTTP ni activación; ver [detalle y validación](meta-conexion-empresas.md). |
-| `WebhooksWhatsappService` | Verifica firma y conserva cambios con datos de cuenta/número. Los eventos de historial, contactos y ecos permanecen crudos: no se incorporan al inbox. |
+| `WebhooksWhatsappService` | Verifica firma y conserva cambios con datos de cuenta/número. Puede encolar los eventos para el procesador general; requiere bandera explícita y vínculo preparado. Ambos siguen deshabilitados en local. |
 | `MetaCloudClient` | Sólo implementa el envío de una plantilla. Faltan las solicitudes `smb_app_data` y su seguimiento. |
-| `MensajeWhatsappRecibido` e inbox | Lectura del piloto de un contacto autorizado. Falta el modelo general de conversaciones y mensajes entrantes/salientes. |
+| `MensajeWhatsappRecibido` e inbox | La interfaz aún lee el piloto. El modelo general y su procesador ya existen; falta conectar lectura y permisos de tiempo real. Ver [recepción local](meta-inbox-recepcion.md). |
 | Límite de entrada | El webhook tiene un límite local de 3 MB. Meta advierte que un evento puede contener miles de mensajes: medir tamaño, memoria, tiempo y límites del proxy antes del alta real; no eliminar límites indiscriminadamente. |
-| Operación | Faltan recuperación asíncrona, métricas por importación, alertas antes del vencimiento, tratamiento de adjuntos y conservación de datos. |
+| Operación | Recepción y recuperación por lotes implementadas en local. Faltan reconciliación final, métricas, alertas, descarga de adjuntos y conservación de datos. |
 
 El número de prueba de Cloud API utilizado en el piloto **no valida** una importación de WhatsApp Business del celular. La aprobación de la app tampoco implementa este proceso automáticamente.
 

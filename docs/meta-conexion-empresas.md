@@ -43,8 +43,8 @@ El plazo del intento de Grafo permite completar el recorrido. **No prolonga el c
 
 ## Qué falta antes de habilitar el botón
 
-1. Modelo general de conversaciones, mensajes entrantes/salientes y seguimiento de importación; procesadores de historial, contactos, ecos y cambios de cuenta. Ver [historial y coexistencia](meta-coexistencia-historial.md).
-2. Recepción duradera vinculada al alta, recuperación del worker, límites y métricas; barrido de autorizaciones vencidas y reglas de conservación. Mantener el aislamiento también durante desconexiones y reconexiones.
+1. Conectar el modelo general y los procesadores de historial, contactos, ecos y cambios de cuenta con la lectura y los permisos del Inbox. La [base de recepción](meta-inbox-recepcion.md) quedó implementada el 26/09 y continúa desactivada.
+2. Completar la activación vinculada al alta, medir límites y agregar métricas sobre la recepción duradera ya preparada; barrido de autorizaciones vencidas y reglas de conservación. Mantener el aislamiento también durante desconexiones y reconexiones.
 3. Orquestación de suscripción, contactos e historial con estados persistidos. No repetir una solicitud de resultado incierto sin reconciliarla.
 4. Controladores protegidos y adaptador del SDK v4: código inmediato, origen exacto de mensajes, intentos cancelables y estados comprensibles. Coordinar la desconexión con la ruta genérica de integraciones. Registrar dominios HTTPS y configuración en Meta.
 5. Prueba integral en staging con una cuenta propia elegible y permisos disponibles. Validar renovación, revocación y desconexión desde WhatsApp Business. El descarte local de credenciales no revoca por sí mismo el permiso otorgado en Meta.
