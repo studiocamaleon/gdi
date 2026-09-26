@@ -8,10 +8,8 @@ import {
   CheckCheck,
   ChevronDown,
   CircleAlert,
-  ClipboardList,
   FileText,
   Inbox,
-  LayoutDashboard,
   LockKeyhole,
   MessageCircle,
   Moon,
@@ -22,11 +20,9 @@ import {
   RotateCcw,
   Search,
   Send,
-  Settings2,
   Sun,
   Truck,
   UserRound,
-  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -73,6 +69,7 @@ import { cn } from "@/lib/utils";
 import brand from "@/components/design-system/brand-workspace-theme.module.css";
 import {
   conversacionesDemo,
+  clientesDemo,
   type ConversacionDemo,
   type MensajeDemo,
 } from "./inbox-fixtures";
@@ -83,7 +80,7 @@ type Panel =
   | "cliente"
   | "presupuesto"
   | "orden"
-  | "vincular"
+  | "crear-cliente"
   | "plantilla"
   | "archivo"
   | null;
@@ -141,6 +138,9 @@ function Identidad({
 
 export function InboxPreview() {
   const [items, setItems] = useState(() => structuredClone(conversacionesDemo));
+  const [clientes, setClientes] = useState(() => structuredClone(clientesDemo));
+  const [elecciones, setElecciones] = useState<Record<string, string>>({});
+  const [nombreCliente, setNombreCliente] = useState("");
   const [seleccion, setSeleccion] = useState("alma");
   const [filtro, setFiltro] = useState<Filtro>("abiertas");
   const [busqueda, setBusqueda] = useState("");
@@ -153,13 +153,22 @@ export function InboxPreview() {
   const [aviso, setAviso] = useState("");
   const scroll = useRef<HTMLDivElement>(null);
   const actual = items.find((c) => c.id === seleccion)!;
+  // Los teléfonos ficticios ya están en formato internacional completo.
+  // La integración real reutilizará la normalización y el filtro por tenant de la API.
+  const coincidencias = clientes.filter((c) =>
+    c.telefonos.includes(actual.telefono),
+  );
+  const cliente =
+    coincidencias.length === 1
+      ? coincidencias[0]
+      : coincidencias.find((c) => c.id === elecciones[actual.id]);
+  const ambiguo = coincidencias.length > 1 && !cliente;
   const claveBorrador = `${seleccion}:${modo}`;
   const borrador = borradores[claveBorrador] ?? "";
   const apariencia = oscuro ? "dark" : "light";
   const tema = cn(brand.theme, brand.legacy);
-  const sinLeer = items.filter((c) => c.sinLeer && !c.resuelta).length;
   const visibles = items.filter((c) => {
-    const coincide = `${c.nombre} ${c.empresa} ${c.preview}`
+    const coincide = `${c.nombre} ${c.empresa} ${c.telefono} ${c.preview}`
       .toLocaleLowerCase()
       .includes(busqueda.toLocaleLowerCase());
     return (
@@ -232,6 +241,9 @@ export function InboxPreview() {
   }
   function reiniciar() {
     setItems(structuredClone(conversacionesDemo));
+    setClientes(structuredClone(clientesDemo));
+    setElecciones({});
+    setNombreCliente("");
     setSeleccion("alma");
     setFiltro("abiertas");
     setBusqueda("");
@@ -256,23 +268,81 @@ export function InboxPreview() {
       <div className={s.contextTitle}>
         <span>EN GRAFO</span>
         <Badge variant="outline">
-          {actual.vinculada ? "Cliente vinculado" : "Sin vincular"}
+          {cliente
+            ? coincidencias.length === 1
+              ? "Por teléfono"
+              : "Confirmado"
+            : ambiguo
+              ? "Revisar coincidencias"
+              : "Número nuevo"}
         </Badge>
       </div>
       <div className={s.clientIdentity}>
         <Identidad iniciales={actual.iniciales} grande />
-        <h3>{actual.empresa}</h3>
+        <h3>
+          {cliente?.nombre ??
+            (ambiguo ? "Número compartido" : "Contacto nuevo")}
+        </h3>
         <p>
-          {actual.vinculada
-            ? "Cliente de la gráfica"
-            : "Vinculá este chat para ver su contexto"}
+          {cliente
+            ? "Identificado entre los clientes de tu gráfica"
+            : ambiguo
+              ? "Este teléfono aparece en más de una ficha"
+              : "Este teléfono todavía no está en tus clientes"}
         </p>
       </div>
-      {!actual.vinculada ? (
-        <Button variant="outline" onClick={() => setPanel("vincular")}>
-          <Plus data-icon="inline-start" />
-          Vincular cliente
-        </Button>
+      <div className={s.phoneMatch}>
+        <span>WhatsApp del contacto</span>
+        <strong>{actual.telefono}</strong>
+        <p>
+          {cliente
+            ? "Coincide con el teléfono de la ficha o de uno de sus contactos."
+            : "La búsqueda incluye las fichas y sus contactos dentro de tu empresa."}
+        </p>
+      </div>
+      {!cliente ? (
+        ambiguo ? (
+          <>
+            <p className={s.matchHelp}>
+              Elegí a qué cliente corresponde esta conversación. No se muestra
+              información comercial hasta confirmarlo.
+            </p>
+            {coincidencias.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={s.workCard}
+                onClick={() => {
+                  setElecciones((prev) => ({ ...prev, [actual.id]: c.id }));
+                  cambiar(actual.id, { empresa: c.nombre });
+                  setAviso(
+                    "Cliente confirmado sólo para esta conversación de muestra.",
+                  );
+                }}
+              >
+                <strong>{c.nombre}</strong>
+                <span>Usar esta ficha para el chat</span>
+              </button>
+            ))}
+          </>
+        ) : (
+          <>
+            <p className={s.matchHelp}>
+              Podés seguir conversando. Al registrar este número en Grafo, su
+              contexto aparecerá automáticamente.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setNombreCliente("");
+                setPanel("crear-cliente");
+              }}
+            >
+              <Plus data-icon="inline-start" />
+              Crear cliente
+            </Button>
+          </>
+        )
       ) : (
         <>
           <dl className={s.clientData}>
@@ -387,59 +457,6 @@ export function InboxPreview() {
   return (
     <DesignSystemProvider appearance={apariencia} theme="brand">
       <div className={cn(tema, s.shell)} data-appearance={apariencia}>
-        <aside className={s.sidebar} aria-label="Navegación de referencia">
-          <GrafoprintBrand />
-          <div className={s.workspace}>
-            <span className={s.workspaceMark}>G</span>
-            <div>
-              <strong>Gráfica Demo</strong>
-              <small>Espacio de trabajo</small>
-            </div>
-          </div>
-          <span className={s.navLabel}>TU GRÁFICA</span>
-          <div className={s.navItem}>
-            <LayoutDashboard size={17} />
-            Panel general
-          </div>
-          <div className={cn(s.navItem, s.navActive)} aria-current="page">
-            <MessageCircle size={17} />
-            Conversaciones<span>{sinLeer}</span>
-          </div>
-          <div className={s.navItem}>
-            <Users size={17} />
-            Clientes
-          </div>
-          <div className={s.navItem}>
-            <FileText size={17} />
-            Presupuestos
-          </div>
-          <div className={s.navItem}>
-            <ClipboardList size={17} />
-            Órdenes de trabajo
-          </div>
-          <span className={s.navLabel}>OPERACIONES</span>
-          <div className={s.navItem}>
-            <Package size={17} />
-            Producción
-          </div>
-          <div className={s.navItem}>
-            <Wallet size={17} />
-            Administración
-          </div>
-          <div className={s.sidebarBottom}>
-            <div className={s.navItem}>
-              <Settings2 size={17} />
-              Configuración
-            </div>
-            <div className={s.profile}>
-              <span className={s.workspaceMark}>CM</span>
-              <div>
-                <strong>Camila Moreno</strong>
-                <small>Atención comercial</small>
-              </div>
-            </div>
-          </div>
-        </aside>
         <main className={s.main}>
           <div className={s.previewBar}>
             <span>
@@ -459,12 +476,14 @@ export function InboxPreview() {
             </div>
           </div>
           <header className={s.pageHeader}>
-            <div>
-              <p className={s.eyebrow}>CLIENTES / ATENCIÓN</p>
-              <h1>
-                Conversaciones<span>.</span>
-              </h1>
-              <p>Todo lo que necesitás saber, donde empieza la conversación.</p>
+            <div className={s.headerIdentity}>
+              <GrafoprintBrand compact />
+              <div>
+                <h1>
+                  Conversaciones<span>.</span>
+                </h1>
+                <p>Gráfica Demo · Camila Moreno</p>
+              </div>
             </div>
             <div className={s.channel}>
               <span className={s.channelIcon}>
@@ -976,8 +995,8 @@ export function InboxPreview() {
               <SheetTitle>
                 {panel === "cliente"
                   ? "Contexto del cliente"
-                  : panel === "vincular"
-                    ? "Vincular con un cliente"
+                  : panel === "crear-cliente"
+                    ? "Crear cliente desde este contacto"
                     : panel === "archivo"
                       ? "Documento de referencia"
                       : panel === "plantilla"
@@ -993,35 +1012,59 @@ export function InboxPreview() {
             <div className={s.sheetBody}>
               {panel === "cliente" ? (
                 contexto
-              ) : panel === "vincular" ? (
-                <>
+              ) : panel === "crear-cliente" ? (
+                <form
+                  className={s.newClientForm}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const nombre = nombreCliente.trim();
+                    if (!nombre) return;
+                    setClientes((prev) => [
+                      ...prev,
+                      {
+                        id: crypto.randomUUID(),
+                        nombre,
+                        telefonos: [actual.telefono],
+                      },
+                    ]);
+                    cambiar(actual.id, { empresa: nombre });
+                    setPanel(null);
+                    setAviso(
+                      "Ficha ficticia creada con este teléfono. El contexto se reconoció automáticamente.",
+                    );
+                  }}
+                >
                   <p>
-                    Este número todavía no tiene un cliente asociado. Elegí una
-                    ficha para reunir su historial y sus trabajos.
+                    El teléfono del chat ya está cargado. Este ejemplo crea una
+                    ficha sólo dentro de la muestra.
                   </p>
-                  <button
-                    className={s.workCard}
-                    onClick={() => {
-                      cambiar(actual.id, {
-                        vinculada: true,
-                        nombre: "Nora Vidal",
-                        empresa: "Nora · Packaging",
-                        iniciales: "NV",
-                      });
-                      setPanel(null);
-                      setAviso(
-                        "Contacto vinculado con el cliente ficticio Nora · Packaging.",
-                      );
-                    }}
-                  >
-                    <span className={s.workHeading}>
-                      <Users size={18} />
-                      <b>Nora · Packaging</b>
-                      <Plus size={16} />
-                    </span>
-                    <span>Cliente ficticio disponible para este ensayo</span>
-                  </button>
-                </>
+                  <label htmlFor="demo-client-name">
+                    Nombre del cliente o empresa
+                  </label>
+                  <InputGroup>
+                    <InputGroupInput
+                      id="demo-client-name"
+                      value={nombreCliente}
+                      maxLength={100}
+                      onChange={(event) => setNombreCliente(event.target.value)}
+                      required
+                      placeholder="Ej.: Nora · Packaging"
+                    />
+                  </InputGroup>
+                  <label htmlFor="demo-client-phone">
+                    Teléfono de WhatsApp
+                  </label>
+                  <InputGroup>
+                    <InputGroupInput
+                      id="demo-client-phone"
+                      value={actual.telefono}
+                      readOnly
+                    />
+                  </InputGroup>
+                  <Button type="submit" disabled={!nombreCliente.trim()}>
+                    Crear cliente de muestra
+                  </Button>
+                </form>
               ) : panel === "archivo" ? (
                 <>
                   <Badge variant="secondary">Archivo de demostración</Badge>

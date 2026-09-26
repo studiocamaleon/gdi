@@ -17,6 +17,7 @@ const port = process.env.INBOX_PREVIEW_PORT || "3015";
 if (!/^\d{4,5}$/.test(port) || Number(port) > 65535)
   throw new Error("Puerto de preview inválido");
 mkdirSync(join(preview, "app"));
+mkdirSync(join(preview, "app/abrir"));
 symlinkSync(
   realpathSync(join(root, "node_modules")),
   join(preview, "node_modules"),
@@ -53,6 +54,10 @@ writeFileSync(
 writeFileSync(
   join(preview, "app/page.tsx"),
   'import {InboxPreview} from "@/components/inbox/preview/inbox-preview"; export default function Page(){return <InboxPreview/>;}',
+);
+writeFileSync(
+  join(preview, "app/abrir/page.tsx"),
+  'import {InboxLaunchPreview} from "@/components/inbox/preview/inbox-launch-preview"; export default function Page(){return <InboxLaunchPreview href="/"/>;}',
 );
 writeFileSync(
   join(preview, "app/layout.tsx"),

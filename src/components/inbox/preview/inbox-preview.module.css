@@ -8,104 +8,12 @@
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
 }
-.sidebar {
-  composes: theme from "../../navigation/navigation-theme.module.css";
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 216px;
-  padding: 24px 16px 16px;
-  background: var(--nav-background);
-  color: var(--nav-foreground);
-}
-.workspace {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 26px 0 19px;
-  padding: 11px 9px;
-  background: var(--nav-surface);
-  border: 1px solid var(--nav-line);
-  border-radius: var(--nav-radius);
-}
-.workspaceMark {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 29px;
-  height: 29px;
-  background: var(--nav-hover);
-  border: 1px solid var(--nav-line);
-  border-radius: 6px;
-  font-size: 11px;
-}
-.workspace strong,
-.profile strong {
-  display: block;
-  font-size: 12px;
-  font-weight: 550;
-}
-.workspace small,
-.profile small {
-  display: block;
-  margin-top: 3px;
-  font-size: 10px;
-  color: var(--nav-muted);
-}
-.navLabel {
-  margin: 16px 9px 9px;
-  font-family: var(--brand-mono);
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  color: var(--nav-muted);
-}
-.navItem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 10px;
-  font-size: 12px;
-  color: var(--nav-secondary);
-  border: 1px solid transparent;
-  border-radius: var(--nav-radius);
-  white-space: nowrap;
-}
-.navActive {
-  position: relative;
-  color: var(--nav-accent);
-  background: var(--nav-accent-soft);
-  border-color: var(--nav-accent-line);
-}
-.navActive::before {
-  content: "";
-  position: absolute;
-  width: 2px;
-  inset-block: 11px;
-  left: -1px;
-  background: var(--nav-accent);
-  border-radius: 2px;
-}
-.navActive > span {
-  margin-left: auto;
-  font-family: var(--brand-mono);
-  font-size: 10px;
-}
-.sidebarBottom {
-  margin-top: auto;
-}
-.profile {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 18px;
-  padding: 17px 3px 0;
-  border-top: 1px solid var(--nav-line);
-}
 .main {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  padding: 0 24px;
+  padding: 0 16px;
 }
 .previewBar {
   min-height: 38px;
@@ -139,7 +47,7 @@
   justify-content: space-between;
   gap: 16px;
   flex: none;
-  padding: 25px 0 26px;
+  padding: 12px 0;
 }
 .eyebrow {
   margin-bottom: 7px;
@@ -149,7 +57,7 @@
   color: var(--muted-text);
 }
 .pageHeader h1 {
-  font-size: 29px;
+  font-size: 23px;
   font-weight: 620;
   letter-spacing: -0.055em;
   line-height: 1.2;
@@ -158,8 +66,8 @@
   color: var(--accent);
 }
 .pageHeader h1 + p {
-  margin-top: 8px;
-  font-size: 12px;
+  margin-top: 3px;
+  font-size: 11px;
   color: var(--muted-text);
 }
 .channel {
@@ -801,15 +709,11 @@
   line-height: 1.7;
 }
 @media (min-width: 1650px) {
-  .sidebar {
-    flex-basis: 232px;
-    padding-inline: 20px;
-  }
   .workspaceGrid {
     grid-template-columns: 330px minmax(380px, 1fr) 310px;
   }
   .main {
-    padding-inline: 30px;
+    padding-inline: 20px;
   }
   .conversation {
     padding: 20px;
@@ -827,11 +731,7 @@
     padding-inline: 23px;
   }
 }
-@media (max-width: 1330px) {
-  .sidebar {
-    flex-basis: 194px;
-    padding-inline: 12px;
-  }
+@media (max-width: 1050px) {
   .workspaceGrid {
     grid-template-columns: 280px minmax(340px, 1fr);
   }
@@ -843,9 +743,6 @@
   }
 }
 @media (max-width: 980px) {
-  .sidebar {
-    display: none;
-  }
   .main {
     padding-inline: 16px;
   }
@@ -946,4 +843,77 @@
   .unavailable {
     flex-wrap: wrap;
   }
+}
+
+.headerIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.phoneMatch {
+  padding: 12px;
+  background: var(--surface-secondary);
+  border-radius: 8px;
+}
+.phoneMatch > span {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.phoneMatch > strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  font-family: var(--brand-mono);
+}
+.phoneMatch p,
+.matchHelp {
+  font-size: 11px;
+  color: var(--muted-text);
+  line-height: 1.6;
+}
+.phoneMatch p {
+  margin-top: 8px;
+}
+.newClientForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+}
+.newClientForm p {
+  color: var(--muted-text);
+  line-height: 1.6;
+}
+.launcher {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--canvas-background);
+}
+.launchCard {
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.launchCard h1 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+.launchCard p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted-text);
+}
+.launchCard small {
+  font-size: 11px;
+  color: var(--muted-text);
 }

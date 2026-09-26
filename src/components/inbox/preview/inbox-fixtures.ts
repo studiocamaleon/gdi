@@ -17,7 +17,7 @@ export type ConversacionDemo = {
   sinLeer: number;
   responsable: "Camila" | "Julián" | "Sin asignar";
   resuelta: boolean;
-  vinculada: boolean;
+  telefono: string;
   ventanaAbierta: boolean;
   presupuesto?: string;
   orden?: string;
@@ -35,7 +35,7 @@ export const conversacionesDemo: ConversacionDemo[] = [
     sinLeer: 0,
     responsable: "Camila",
     resuelta: false,
-    vinculada: true,
+    telefono: "+16505550101",
     ventanaAbierta: true,
     presupuesto: "PRE-0248",
     orden: "OT-0186",
@@ -94,7 +94,7 @@ export const conversacionesDemo: ConversacionDemo[] = [
     sinLeer: 1,
     responsable: "Sin asignar",
     resuelta: false,
-    vinculada: true,
+    telefono: "+16505550102",
     ventanaAbierta: true,
     presupuesto: "PRE-0251",
     mensajes: [
@@ -118,7 +118,7 @@ export const conversacionesDemo: ConversacionDemo[] = [
     sinLeer: 0,
     responsable: "Julián",
     resuelta: false,
-    vinculada: true,
+    telefono: "+16505550103",
     ventanaAbierta: true,
     orden: "OT-0190",
     mensajes: [
@@ -134,7 +134,7 @@ export const conversacionesDemo: ConversacionDemo[] = [
   {
     id: "nuevo",
     nombre: "+1 650 555 0144",
-    empresa: "Contacto sin vincular",
+    empresa: "Número no registrado",
     iniciales: "?",
     etiqueta: "Nueva consulta",
     preview: "Hola, ¿hacen etiquetas para packaging?",
@@ -142,7 +142,7 @@ export const conversacionesDemo: ConversacionDemo[] = [
     sinLeer: 1,
     responsable: "Sin asignar",
     resuelta: false,
-    vinculada: false,
+    telefono: "+16505550144",
     ventanaAbierta: true,
     mensajes: [
       {
@@ -165,7 +165,7 @@ export const conversacionesDemo: ConversacionDemo[] = [
     sinLeer: 0,
     responsable: "Camila",
     resuelta: false,
-    vinculada: true,
+    telefono: "+16505550104",
     ventanaAbierta: false,
     orden: "OT-0179",
     mensajes: [
@@ -195,7 +195,7 @@ export const conversacionesDemo: ConversacionDemo[] = [
     sinLeer: 0,
     responsable: "Camila",
     resuelta: true,
-    vinculada: true,
+    telefono: "+16505550105",
     ventanaAbierta: true,
     orden: "OT-0168",
     mensajes: [
@@ -215,4 +215,38 @@ export const conversacionesDemo: ConversacionDemo[] = [
       },
     ],
   },
+  {
+    id: "compartido",
+    nombre: "Alex Suárez",
+    empresa: "2 clientes con este teléfono",
+    iniciales: "AS",
+    telefono: "+16505550106",
+    etiqueta: "Por identificar",
+    preview: "Hola, quería consultar por el próximo pedido.",
+    hora: "09:40",
+    sinLeer: 0,
+    responsable: "Sin asignar",
+    resuelta: false,
+    ventanaAbierta: true,
+    mensajes: [
+      {
+        id: "c1",
+        tipo: "entrada",
+        texto: "Hola, quería consultar por el próximo pedido.",
+        hora: "09:40",
+      },
+    ],
+  },
+];
+
+/** Directorio ficticio de UNA gráfica. Todos los teléfonos ya están normalizados. */
+export type ClienteDemo = { id: string; nombre: string; telefonos: string[] };
+export const clientesDemo: ClienteDemo[] = [
+  { id: "oliva", nombre: "Estudio Oliva", telefonos: ["+16505550101"] },
+  { id: "nube", nombre: "Café Nube", telefonos: ["+16505550102"] },
+  { id: "ladera", nombre: "Hotel Ladera", telefonos: ["+16505550103"] },
+  { id: "forma", nombre: "Taller Forma", telefonos: ["+16505550104"] },
+  { id: "botanico", nombre: "Mercado Botánico", telefonos: ["+16505550105"] },
+  { id: "sur", nombre: "Librería Sur", telefonos: ["+16505550106"] },
+  { id: "norte", nombre: "Editorial Norte", telefonos: ["+16505550106"] },
 ];
