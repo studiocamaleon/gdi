@@ -11,7 +11,14 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import s from "./inbox-bienvenida.module.css";
 import {
   Progress,
   ProgressLabel,
@@ -303,22 +310,46 @@ export function InboxConexion({
     ? ["Autorizá en Meta", "Elegí la cuenta de prueba", "Revisá el resultado"]
     : ["Autorizá en Meta", "Compartí tu historial", "Continuá en Grafo"];
   return (
-    <Card className="w-full max-w-2xl">
-      <CardContent className="grid gap-5 pt-6">
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>
+          {estado?.canal
+            ? "Tu conexión con WhatsApp"
+            : "Empezá por conectar tu número"}
+        </CardTitle>
+        <CardDescription>
+          {estado?.canal
+            ? "Estado del acceso y de las conversaciones recibidas."
+            : "Tres pasos para traer las conversaciones a tu espacio de trabajo."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-5">
         {estado?.canal && <EstadoImportacion canal={estado.canal} />}
         {(!estado?.canal ||
           (estado.canal.reconexionPermitida && estado.disponible)) && (
           <>
-            <ol
-              className="grid gap-4 text-left sm:grid-cols-3"
-              aria-label="Pasos para conectar WhatsApp"
-            >
+            <ol className={s.steps} aria-label="Pasos para conectar WhatsApp">
               {pasos.map((texto, i) => (
-                <li key={texto} className="grid gap-2 text-sm">
-                  <span className="flex size-7 items-center justify-center rounded-full bg-muted font-medium text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  <span>{texto}</span>
+                <li key={texto} className={s.step}>
+                  <span className={s.number}>0{i + 1}</span>
+                  <div>
+                    <strong>{texto}</strong>
+                    <p>
+                      {
+                        (sandbox
+                          ? [
+                              "Revisá los permisos de acceso.",
+                              "Usá los activos del sandbox de Meta.",
+                              "Comprobá la autorización de ensayo.",
+                            ]
+                          : [
+                              "Elegí tu empresa y revisá los permisos.",
+                              "Decidí si querés traer conversaciones anteriores.",
+                              "Consultá el avance de la conexión.",
+                            ])[i]
+                      }
+                    </p>
+                  </div>
                 </li>
               ))}
             </ol>
@@ -343,57 +374,59 @@ export function InboxConexion({
                 </AlertDescription>
               </Alert>
             )}
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {paso === "listo" ? (
-                <Button size="lg" onClick={abrir}>
-                  Continuar con Meta
-                  <ArrowRight data-icon="inline-end" />
-                </Button>
-              ) : (
-                <Button
-                  size="lg"
-                  disabled={!estado?.disponible || !https || trabajando}
-                  onClick={() => void preparar()}
-                >
-                  {trabajando ? (
-                    <Spinner data-icon="inline-start" />
-                  ) : (
-                    <MessageCircle data-icon="inline-start" />
-                  )}
-                  {paso === "preparando"
-                    ? "Preparando…"
-                    : paso === "esperando_meta"
-                      ? "Completá el paso en Meta"
-                      : paso === "verificando"
-                        ? "Comprobando autorización…"
-                        : sandbox
-                          ? "Probar autorización"
-                          : estado?.canal
-                            ? "Volver a conectar WhatsApp"
-                            : "Conectar WhatsApp"}
-                </Button>
-              )}
-              {(trabajando || paso === "listo") && (
-                <Button variant="ghost" onClick={cancelarPreparacion}>
-                  Cancelar
-                </Button>
-              )}
+            <div className={s.connectAction}>
+              <div className="flex flex-wrap items-center gap-2">
+                {paso === "listo" ? (
+                  <Button size="lg" onClick={abrir}>
+                    Continuar con Meta
+                    <ArrowRight data-icon="inline-end" />
+                  </Button>
+                ) : (
+                  <Button
+                    size="lg"
+                    disabled={!estado?.disponible || !https || trabajando}
+                    onClick={() => void preparar()}
+                  >
+                    {trabajando ? (
+                      <Spinner data-icon="inline-start" />
+                    ) : (
+                      <MessageCircle data-icon="inline-start" />
+                    )}
+                    {paso === "preparando"
+                      ? "Preparando…"
+                      : paso === "esperando_meta"
+                        ? "Completá el paso en Meta"
+                        : paso === "verificando"
+                          ? "Comprobando autorización…"
+                          : sandbox
+                            ? "Probar autorización"
+                            : estado?.canal
+                              ? "Volver a conectar WhatsApp"
+                              : "Conectar WhatsApp"}
+                  </Button>
+                )}
+                {(trabajando || paso === "listo") && (
+                  <Button variant="ghost" onClick={cancelarPreparacion}>
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground" role="status">
+                {paso === "cancelado"
+                  ? "Cancelaste el intento. Podés comenzar otro cuando quieras."
+                  : paso === "error"
+                    ? "No pudimos completar el intento. Actualizá el estado antes de volver a empezar."
+                    : !estado && !error
+                      ? "Comprobando disponibilidad…"
+                      : !estado?.disponible
+                        ? "La conexión de números estará disponible próximamente."
+                        : !https
+                          ? "La prueba de conexión se realiza desde el entorno seguro de staging."
+                          : paso === "listo"
+                            ? "Se abrirá la ventana de Meta para que revises y autorices el acceso."
+                            : "La autorización se completa en Meta. Grafo nunca te pedirá la contraseña de Facebook."}
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground" role="status">
-              {paso === "cancelado"
-                ? "Cancelaste el intento. Podés comenzar otro cuando quieras."
-                : paso === "error"
-                  ? "No pudimos completar el intento. Actualizá el estado antes de volver a empezar."
-                  : !estado && !error
-                    ? "Comprobando disponibilidad…"
-                    : !estado?.disponible
-                      ? "La conexión de números estará disponible próximamente."
-                      : !https
-                        ? "La prueba de conexión se realiza desde el entorno seguro de staging."
-                        : paso === "listo"
-                          ? "Se abrirá la ventana de Meta para que revises y autorices el acceso."
-                          : "La autorización se completa en Meta. Grafo nunca te pedirá la contraseña de Facebook."}
-            </p>
           </>
         )}
         {(error || paso === "error" || estado?.canal) && (

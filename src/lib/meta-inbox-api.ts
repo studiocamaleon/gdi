@@ -40,6 +40,14 @@ export type MetaInbox = {
     estadoEntrega?: string | null;
     delHistorial?: boolean;
     delCelular?: boolean;
+    adjunto?: {
+      estado: string;
+      nombre: string | null;
+      mimeType: string | null;
+      bytes: number | null;
+      version: string;
+      motivo?: string | null;
+    } | null;
   }[];
   anterior: string | null;
   contexto: {
@@ -86,3 +94,20 @@ export const getMetaInbox: CargarInbox = (query, signal) => {
     if (query[key]) params.set(key, query[key]);
   return apiRequest(`/integraciones/meta/inbox?${params}`, { signal });
 };
+
+export type ArchivoInbox = {
+  url: string;
+  nombre: string;
+  mimeType: string;
+  bytes: number;
+  expiraEn: number;
+};
+export type AbrirAdjuntoInbox = (
+  id: string,
+  signal?: AbortSignal,
+) => Promise<ArchivoInbox>;
+export const abrirAdjuntoInbox: AbrirAdjuntoInbox = (id, signal) =>
+  apiRequest(
+    `/integraciones/meta/inbox/mensajes/${encodeURIComponent(id)}/adjunto`,
+    { signal },
+  );

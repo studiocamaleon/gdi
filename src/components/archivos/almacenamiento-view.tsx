@@ -16,6 +16,7 @@ import {
 } from "@/lib/archivos-api";
 
 const ETIQUETA_SCOPE: Record<ArchivoScope, string> = {
+  INBOX: "WhatsApp · Inbox",
   TENANT_BRANDING: "Identidad visual",
   CAMPANA: "Campañas",
   CLIENTE: "Clientes",

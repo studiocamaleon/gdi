@@ -53,12 +53,14 @@ import {
   type InboxIdentidad,
   type InboxConsulta,
   type CargarInbox,
+  type AbrirAdjuntoInbox,
 } from "@/lib/meta-inbox-api";
 import { cn } from "@/lib/utils";
 import s from "./inbox-workspace.module.css";
 import live from "./inbox-view.module.css";
 import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxConexion } from "./inbox-conexion";
+import { InboxAdjunto } from "./inbox-adjunto";
 import { InboxBienvenida } from "./inbox-bienvenida";
 import { ApiError } from "@/lib/api";
 import { combinarInbox } from "@/lib/inbox-combinar";
@@ -95,11 +97,13 @@ export function InboxView({
   cargar = getMetaInbox,
   tiempoReal = escucharInbox,
   conexionApi,
+  abrirAdjunto,
 }: {
   identidad: InboxIdentidad;
   cargar?: CargarInbox;
   tiempoReal?: EscucharInbox | null;
   conexionApi?: MetaConexionApi;
+  abrirAdjunto?: AbrirAdjuntoInbox;
 }) {
   const [datos, setDatos] = useState<MetaInbox | null>(null);
   const [estado, setEstado] = useState<
@@ -616,7 +620,7 @@ export function InboxView({
             </div>
           ) : estado === "inactivo" ? (
             <div className={live.welcome}>
-              <InboxBienvenida identidad={identidad} />
+              <InboxBienvenida identidad={identidad} api={conexionApi} />
             </div>
           ) : estado !== "listo" || !datos ? (
             <div className={live.fallback}>
@@ -903,10 +907,20 @@ export function InboxView({
                                     {tipos[m.tipo] || "Otro contenido"}
                                   </Badge>
                                   {m.texto && <p>{m.texto}</p>}
-                                  <p>
-                                    Este contenido todavía no se puede abrir en
-                                    Grafo.
-                                  </p>
+                                  {m.adjunto ? (
+                                    <InboxAdjunto
+                                      key={`${datos.canalId}:${m.id}:${m.adjunto.version}`}
+                                      mensajeId={m.id}
+                                      tipo={m.tipo}
+                                      adjunto={m.adjunto}
+                                      abrir={abrirAdjunto}
+                                    />
+                                  ) : (
+                                    <p>
+                                      Este contenido todavía no se puede abrir
+                                      en Grafo.
+                                    </p>
+                                  )}
                                 </>
                               )}
                               <div className={s.messageMeta}>

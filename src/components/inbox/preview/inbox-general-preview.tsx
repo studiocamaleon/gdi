@@ -76,6 +76,13 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
     },
     {
       id: "bruno-002",
+      adjunto: {
+        estado: "LISTO",
+        nombre: "Ejemplo-inbox.pdf",
+        mimeType: "application/pdf",
+        bytes: 1400,
+        version: "demo",
+      },
       nombreContacto: "Bruno Lago",
       tipo: "document",
       texto: "Carta de primavera · versión final",
@@ -239,6 +246,13 @@ export function InboxGeneralPreview() {
       cargar={cargar}
       tiempoReal={null}
       conexionApi={conexionApi}
+      abrirAdjunto={async () => ({
+        url: "/dev/diseno/inbox/archivo",
+        nombre: "Ejemplo-inbox.pdf",
+        mimeType: "application/pdf",
+        bytes: 1400,
+        expiraEn: 60,
+      })}
     />
   );
 }

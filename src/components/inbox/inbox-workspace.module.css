@@ -772,6 +772,7 @@
     line-height: 1.6;
   }
   .pageHeader {
+    flex-wrap: wrap;
     padding: 14px 16px;
   }
   .pageHeader h1 {

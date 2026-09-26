@@ -40,6 +40,8 @@
 }
 @media (max-width: 700px) {
   .headerActions {
+    width: 100%;
+    justify-content: space-between;
     gap: 4px;
   }
 }
