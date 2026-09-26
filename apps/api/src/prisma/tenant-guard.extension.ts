@@ -74,82 +74,87 @@ type AnyArgs = Record<string, unknown> & {
  * Solo modifica `args` (no toca conexiones), por lo que es compatible con las
  * transacciones interactivas del motor.
  */
-export const tenantGuardExtension = Prisma.defineExtension((client) =>
-  client.$extends({
-    name: 'tenant-guard',
-    query: {
-      $allModels: {
-        async $allOperations({ model, operation, args, query }) {
-          const tenantId = getCurrentTenantId();
-          if (!tenantId || !model || MODELOS_EXENTOS.has(model)) {
-            return query(args);
+export const tenantGuardExtension = Prisma.defineExtension({
+  name: 'tenant-guard',
+  query: {
+    // El callback global evita una unión de todos los modelos/operaciones.
+    // Las consultas raw no tienen model y conservan el retorno inmediato.
+    async $allOperations({
+      model,
+      operation,
+      args,
+      query,
+    }: {
+      model?: string;
+      operation: string;
+      args: unknown;
+      query: (args: unknown) => Promise<unknown>;
+    }) {
+      const tenantId = getCurrentTenantId();
+      if (!tenantId || !model || MODELOS_EXENTOS.has(model)) {
+        return query(args);
+      }
+
+      const a = (args ?? {}) as AnyArgs;
+
+      if (OPS_CON_WHERE.has(operation)) {
+        a.where = { ...(a.where ?? {}), tenantId };
+        return query(a);
+      }
+
+      if (operation === 'create') {
+        if (
+          a.data &&
+          !Array.isArray(a.data) &&
+          (a.data as Record<string, unknown>).tenantId === undefined
+        ) {
+          a.data = { ...(a.data as Record<string, unknown>), tenantId };
+        }
+        return query(a);
+      }
+
+      if (operation === 'createMany') {
+        if (Array.isArray(a.data)) {
+          a.data = (a.data as Record<string, unknown>[]).map((d) =>
+            d && d.tenantId === undefined ? { ...d, tenantId } : d,
+          );
+        }
+        return query(a);
+      }
+
+      if (operation === 'upsert') {
+        // El `where` de upsert es único-compuesto (la app ya incluye
+        // tenantId ahí); solo reforzamos el tenant en el create.
+        if (a.create && a.create.tenantId === undefined) {
+          a.create = { ...a.create, tenantId };
+        }
+        return query(a);
+      }
+
+      if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
+        // El `where` único no admite tenantId: post-filtramos el resultado.
+        // Si la query trae `select` sin tenantId, se lo inyectamos para
+        // poder verificar — si no, el post-filtro compararía contra
+        // undefined y descartaría filas PROPIAS (bug: configuración
+        // fiscal "inexistente" con select parcial).
+        const sel = (a as { select?: Record<string, unknown> }).select;
+        if (sel && sel.tenantId === undefined) sel.tenantId = true;
+        const result = (await query(a)) as {
+          tenantId?: string;
+        } | null;
+        if (result && result.tenantId !== tenantId) {
+          if (operation === 'findUniqueOrThrow') {
+            throw new Prisma.PrismaClientKnownRequestError(
+              'No record was found for a query.',
+              { code: 'P2025', clientVersion: Prisma.prismaVersion.client },
+            );
           }
+          return null;
+        }
+        return result;
+      }
 
-          const a = (args ?? {}) as AnyArgs;
-
-          if (OPS_CON_WHERE.has(operation)) {
-            a.where = { ...(a.where ?? {}), tenantId };
-            return query(a);
-          }
-
-          if (operation === 'create') {
-            if (
-              a.data &&
-              !Array.isArray(a.data) &&
-              (a.data as Record<string, unknown>).tenantId === undefined
-            ) {
-              a.data = { ...(a.data as Record<string, unknown>), tenantId };
-            }
-            return query(a);
-          }
-
-          if (operation === 'createMany') {
-            if (Array.isArray(a.data)) {
-              a.data = (a.data as Record<string, unknown>[]).map((d) =>
-                d && d.tenantId === undefined ? { ...d, tenantId } : d,
-              );
-            }
-            return query(a);
-          }
-
-          if (operation === 'upsert') {
-            // El `where` de upsert es único-compuesto (la app ya incluye
-            // tenantId ahí); solo reforzamos el tenant en el create.
-            if (
-              a.create &&
-              (a.create as Record<string, unknown>).tenantId === undefined
-            ) {
-              a.create = { ...a.create, tenantId };
-            }
-            return query(a);
-          }
-
-          if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
-            // El `where` único no admite tenantId: post-filtramos el resultado.
-            // Si la query trae `select` sin tenantId, se lo inyectamos para
-            // poder verificar — si no, el post-filtro compararía contra
-            // undefined y descartaría filas PROPIAS (bug: configuración
-            // fiscal "inexistente" con select parcial).
-            const sel = (a as { select?: Record<string, unknown> }).select;
-            if (sel && sel.tenantId === undefined) sel.tenantId = true;
-            const result = (await query(a)) as {
-              tenantId?: string;
-            } | null;
-            if (result && result.tenantId !== tenantId) {
-              if (operation === 'findUniqueOrThrow') {
-                throw new Prisma.PrismaClientKnownRequestError(
-                  'No record was found for a query.',
-                  { code: 'P2025', clientVersion: Prisma.prismaVersion.client },
-                );
-              }
-              return null;
-            }
-            return result;
-          }
-
-          return query(args);
-        },
-      },
+      return query(args);
     },
-  }),
-);
+  },
+});

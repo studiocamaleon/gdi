@@ -6446,6 +6446,9 @@ model WebhookWhatsappCrudo {
   payload       Json
   procesado     Boolean  @default(false)
   recibidoEl    DateTime @default(now())
+  /// Fecha del envelope, indispensable para ordenar cambios de cuenta.
+  metaTimestamp DateTime?
+  trabajoInbox  InboxTrabajoEvento?
 
   @@index([tenantId, tipo])
   @@index([wamid])
@@ -6523,9 +6526,141 @@ model MetaVinculo {
   autorizacionId        String @unique @db.Uuid
   verificadoEl          DateTime
   desconectadoEl        DateTime?
+  /// Se habilita sólo cuando el alta y su receptor estén preparados.
+  recepcionDesdeEl      DateTime?
+  ultimoCambioCuentaEl  DateTime?
+  conversaciones        InboxConversacion[]
+  mensajes              InboxMensaje[]
+  contactos             InboxContacto[]
+  importaciones         InboxImportacion[]
+  bloquesHistorial      InboxBloqueHistorial[]
+  trabajos              InboxTrabajoEvento[]
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   tenant                Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  @@unique([id, tenantId])
+}
+
+enum EstadoTrabajoInbox {
+  PENDIENTE
+  COMPLETADO
+  REVISION
+  PAUSADO
+}
+
+/// Cola duradera por evento, independiente de la proyección del piloto.
+model InboxTrabajoEvento {
+  id               String @id @default(uuid()) @db.Uuid
+  tenantId         String @db.Uuid
+  vinculoId        String @db.Uuid
+  autorizacionId   String @db.Uuid
+  crudoId          String @unique @db.Uuid
+  estado           EstadoTrabajoInbox @default(PENDIENTE)
+  cursor           Int @default(0)
+  total            Int?
+  avisos           Int @default(0)
+  prioridad        Int @default(0)
+  intentos         Int @default(0)
+  proximoIntentoEl  DateTime @default(now())
+  ultimoError      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  crudo            WebhookWhatsappCrudo @relation(fields: [crudoId], references: [id], onDelete: Restrict)
+  vinculo          MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@index([estado, proximoIntentoEl, prioridad, createdAt])
+  @@index([tenantId, vinculoId, autorizacionId])
+}
+
+model InboxImportacion {
+  id                   String @id @default(uuid()) @db.Uuid
+  tenantId             String @db.Uuid
+  vinculoId            String @db.Uuid
+  autorizacionId       String @db.Uuid
+  iniciadaEl           DateTime
+  progresoInformado    Int @default(0)
+  finInformadoEl       DateTime?
+  historialRechazado   Boolean @default(false)
+  necesitaRevision    Boolean @default(false)
+  ultimoEventoEl       DateTime?
+  updatedAt            DateTime @updatedAt
+  vinculo              MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@unique([vinculoId, autorizacionId])
+  @@index([tenantId])
+}
+
+model InboxConversacion {
+  id                       String @id @default(uuid()) @db.Uuid
+  tenantId                 String @db.Uuid
+  vinculoId                String @db.Uuid
+  contactoWaId             String
+  ultimoMensajeEl          DateTime?
+  /// Sólo mensajes entrantes nuevos posteriores al alta; nunca el historial.
+  ultimoEntranteNuevoEl     DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  vinculo                  MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  mensajes                 InboxMensaje[]
+  @@unique([vinculoId, contactoWaId])
+  @@unique([id, vinculoId, tenantId])
+  @@index([tenantId, ultimoMensajeEl, id])
+}
+
+model InboxBloqueHistorial {
+  id              String @id @default(uuid()) @db.Uuid
+  tenantId        String @db.Uuid
+  vinculoId       String @db.Uuid
+  autorizacionId  String @db.Uuid
+  fase            Int
+  orden           Int
+  progreso        Int
+  procesadoEl     DateTime @default(now())
+  vinculo         MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@unique([vinculoId, autorizacionId, fase, orden], map: "InboxBloqueHistorial_canal_bloque_key")
+  @@index([tenantId])
+}
+
+/// También conserva complementos que llegaron antes del mensaje original.
+/// Sin conversación/fecha/dirección todavía, no se muestran en la bandeja.
+model InboxMensaje {
+  id                 String @id @default(uuid()) @db.Uuid
+  tenantId           String @db.Uuid
+  vinculoId          String @db.Uuid
+  wamid              String
+  conversacionId     String? @db.Uuid
+  direccion          String?
+  enviadoEl          DateTime?
+  tipo               String?
+  contenido          Json?
+  prioridadContenido Int @default(0)
+  edicionEl          DateTime?
+  revocadoEl         DateTime?
+  estadoEntrega      String?
+  estadoEntregaOrden Int @default(0)
+  estadoEntregaEl    DateTime?
+  delHistorial       Boolean @default(false)
+  delCelular         Boolean @default(false)
+  entranteNuevo      Boolean @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  vinculo            MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  conversacion       InboxConversacion? @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  @@unique([vinculoId, wamid])
+  @@index([tenantId, conversacionId, enviadoEl, id])
+}
+
+/// Directorio de WhatsApp: nunca crea ni elimina clientes fiscales de Grafo.
+model InboxContacto {
+  id              String @id @default(uuid()) @db.Uuid
+  tenantId        String @db.Uuid
+  vinculoId       String @db.Uuid
+  waId            String
+  nombre          String?
+  eliminado       Boolean @default(false)
+  actualizadoMetaEl DateTime
+  updatedAt       DateTime @updatedAt
+  vinculo         MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@unique([vinculoId, waId])
+  @@index([tenantId])
 }
 
 /// Proyección de mensajes ENTRANTES del piloto, sin descargar adjuntos ni

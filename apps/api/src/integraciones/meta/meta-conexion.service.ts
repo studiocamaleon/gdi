@@ -304,6 +304,8 @@ export class MetaConexionService {
           verificadoEl: new Date(),
           estado: 'VERIFICADO' as const,
           desconectadoEl: null,
+          recepcionDesdeEl: null,
+          ultimoCambioCuentaEl: null,
         };
         // Índices globales de cuenta y número evitan adjudicarlos a dos tenants,
         // aun cuando las consultas de cada uno sólo ven sus propios registros.
@@ -350,6 +352,7 @@ export class MetaConexionService {
           estado: 'DESCONECTADO',
           tokenCifrado: Prisma.DbNull,
           desconectadoEl: new Date(),
+          recepcionDesdeEl: null,
         },
       });
     });
