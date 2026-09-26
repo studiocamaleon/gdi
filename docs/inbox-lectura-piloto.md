@@ -16,6 +16,7 @@ El menú consulta `GET /integraciones/meta/inbox/disponibilidad`, que sólo devu
 
 ## Qué queda pendiente
 
+- Conexión por empresa e importación de coexistencia: ver [diseño del historial de WhatsApp](meta-coexistencia-historial.md). Los seis meses no están importados ni habilitados por esta entrega.
 - Respuestas reales y su historial de envío/entrega.
 - Notas internas, responsables, resolución y contadores de lectura persistentes.
 - Descarga y vista de adjuntos; por ahora se indica solamente su tipo.

@@ -56,6 +56,8 @@ La consulta oficial del 25/09 confirmó que debemos preparar **Embedded Signup v
 
 Para conservar WhatsApp Business en el celular se usa el flujo de coexistencia. Meta indica omitir el registro del número y preparar los eventos de contactos, historial y mensajes enviados desde la app. La sincronización inicial tiene una ventana de 24 horas y no admite repetir libremente la solicitud; por eso no ofreceremos aún el botón a clientes. [Coexistencia](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users).
 
+El [relevamiento específico de historial](meta-coexistencia-historial.md) detalla los 180 días, límites de adjuntos, consentimiento, solicitudes, procesamiento y comprobaciones pendientes. Es un diseño; no activa sincronizaciones reales.
+
 El siguiente grupo debe completar, en este orden:
 
 1. Asociaciones únicas de cuenta/número con empresa y sesiones de autorización vinculadas al usuario, con expiración y protección contra reutilización. Validar los activos con Meta antes de confiar en los IDs del navegador.
