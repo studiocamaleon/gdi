@@ -45,11 +45,13 @@ La prueba del parser cubre 3.000 mensajes; la de PostgreSQL comprueba varios lot
 
 ## Activación y siguientes pasos
 
-La variable nueva `META_INBOX_RECEPCION_ENABLED` queda desactivada por defecto. Tanto API como worker tendrán que usarla. Además, cada vínculo requiere una autorización vigente y `recepcionDesdeEl` establecido por la futura orquestación del alta. Verificar activos, por sí solo, no establece esa fecha. No activarlo manualmente para eludir el alta pendiente.
+La variable nueva `META_INBOX_RECEPCION_ENABLED` queda desactivada por defecto. Tanto API como worker tendrán que usarla. Además, cada vínculo requiere una autorización vigente y `recepcionDesdeEl` establecido por la orquestación del alta. Verificar activos, por sí solo, no establece esa fecha. No establecer esa fecha manualmente para eludir el recorrido de alta.
 
 En desarrollo, `GRAFO_LOCAL_DISABLE_CRON=true` con `NODE_ENV=development` también impide arrancar este bucle automático. Las pruebas invocan el procesador directamente con datos ficticios en la base de tests. No se habilitaron variables reales, solicitudes, suscripciones ni conexiones nuevas a Meta.
 
-El siguiente bloque debe:
+Actualización del mismo día: la [orquestación, el SDK y los estados de alta](meta-conexion-empresas.md) ya están implementados y continúan deshabilitados. Los puntos 1 y la parte de alta de 2/3 quedaron cubiertos; sigue pendiente conectar la bandeja general, reconciliar importaciones y validar el recorrido real.
+
+Plan de integración:
 
 1. Orquestar suscripción y solicitudes de contactos/historial, con resultados persistidos y recuperación de respuestas inciertas; preparar la recepción antes de solicitar datos. La guía de Meta establece una ventana inicial de 24 horas y restricciones de repetición por alta.
 2. Conectar el SDK v4 y los controladores protegidos con Configuración e Inbox. Ampliar lectura, paginación y autorización de tiempo real a las conversaciones generales.

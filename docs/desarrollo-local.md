@@ -10,7 +10,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 - Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
 - API: `http://127.0.0.1:3001/api`.
-- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 287 migraciones aplicadas al 26/09, sin ejecutar seed.
+- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 288 migraciones aplicadas al 26/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
 - PDF: contenedor existente `gdi-saas-pdf-renderer`, puerto 3002.
 - Workers: procesos locales de cálculos/entregas y documentos PDF.
@@ -66,3 +66,5 @@ Ampliación del 26/09: aplicada también `20260926040000_inbox_revision`, con pe
 Segundo bloque del 26/09: mismo worktree, ahora en `codex/meta-conexion-empresas`, partiendo de `9eb99f37a`. Aplicada `20260926100000_meta_conexion_empresas` en desarrollo y tests, con permisos de `grafo_app` comprobados. La [base de autorización por empresa](meta-conexion-empresas.md) se prueba sin exposición HTTP y sin llamadas reales a Meta. Los servicios siguen en sus puertos; cron e integración real siguen apagados. Al regenerar Prisma fue necesario reiniciar únicamente el proceso local de la API, cuyo cierre estaba esperando conexiones persistentes; no se reinició Docker.
 
 Tercer bloque del 26/09: mismo worktree en `codex/meta-historial-recepcion`, desde `29ca9b958`. Aplicada `20260926110000_meta_inbox_recepcion` en desarrollo y tests. La [recepción general](meta-inbox-recepcion.md) conserva trabajos en PostgreSQL y reutiliza el worker existente. `META_INBOX_RECEPCION_ENABLED` permanece apagada; no se solicitaron historiales ni se alteró Meta. Los servicios locales se recargaron con los cambios, sin reiniciar Docker.
+
+Cuarto bloque del 26/09: mismo worktree en `codex/meta-alta-sincronizacion`, desde `ebdd5fcc1`. Aplicada `20260926140000_meta_alta_sincronizacion` en desarrollo y tests. El [recorrido de conexión](meta-conexion-empresas.md) agrega pantalla, endpoints y trabajo persistente de suscripción/contactos/historial. Los modos reales permanecen apagados y no se reclamó ningún sandbox en Meta. La bienvenida de `/inbox` se comprobó en Chrome con su sesión local y botón deshabilitado. La lectura del chat y su stream siguen limitados al piloto hasta el siguiente bloque.

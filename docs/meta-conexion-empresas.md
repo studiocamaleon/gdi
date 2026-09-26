@@ -1,83 +1,114 @@
 # Conexión de WhatsApp por empresa
 
-26/09/2026 · Rama `codex/meta-conexion-empresas` · Desarrollo local.
+26/09/2026 · Rama `codex/meta-alta-sincronizacion` · Desarrollo local.
 
-## Qué resuelve este bloque
+## Estado actual
 
-Prepara la parte del servidor que recibe una autorización de Meta, comprueba a qué cuenta y número permite acceder y guarda la credencial cifrada para una empresa de Grafo. Separa la autorización de la activación del canal.
+El recorrido de autorización ya tiene pantalla, endpoints protegidos y trabajo persistente en el servidor. **Las conexiones reales siguen deshabilitadas.** No se modificaron Meta, staging, producción ni sus secretos.
 
-**Todavía no habilita conexiones reales.** `MetaConexionService` no tiene un controlador HTTP ni está registrado en el módulo. Ninguna variable de entorno activa por sí sola este recorrido. La bienvenida del Inbox conserva el botón deshabilitado. Esta separación evita iniciar un alta y desperdiciar la oportunidad de importar el historial antes de terminar los procesadores.
+Hay dos modos de ensayo, elegidos por el servidor y limitados a empresas específicas:
 
-## Recorrido preparado
+| Modo | Qué comprueba | Qué no hace |
+| --- | --- | --- |
+| Sandbox | Autorización, canje del código y acceso a la WABA de ensayo previamente configurada | No crea un canal, no conserva el token al finalizar, no suscribe ni importa chats |
+| Coexistencia | Autorización de un número que conserva WhatsApp Business, suscripción y solicitudes iniciales de datos | No garantiza que Meta haya entregado todo el historial ni habilita por sí solo envíos |
+
+El modo `sandbox` de Grafo **no crea una cuenta sandbox en Meta**. Hay que reclamarla primero en Meta Developers → WhatsApp → Inicio rápido → Testear integraciones, obtener su WABA y configurar ese ID en el servidor. El alta de prueba rechaza otra cuenta. En el popup hay que seleccionar los activos de sandbox; elegir activos reales puede modificarlos en Meta antes de que Grafo reciba el resultado.
+
+Meta permite a administradores/desarrolladores de la app ensayar con sus propias cuentas. El sandbox de Embedded Signup dura 30 días y no intercambia mensajes; el número de prueba de Cloud API es otro mecanismo. No encontramos un sandbox documentado que entregue seis meses de historial ficticio. El acceso avanzado sigue siendo necesario para incorporar clientes externos. [Sandbox y revisión](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview), [implementación y pruebas](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/implementation).
+
+## Recorrido implementado
 
 ```text
-Administrador de una empresa de Grafo
-             ↓
-Intento privado con vencimiento de 15 minutos
-             ↓
-Código de Meta → canje inmediato en el servidor
-             ↓
-Token cifrado mientras se comprueban los activos
-             ↓
-Meta confirma aplicación, permisos, cuenta y número
-             ↓
-Vínculo VERIFICADO, pendiente de activación
-             ↓
-[pendiente] Suscripción + contactos/historial + canal operativo
+Administrador de la empresa abre Inbox
+               ↓
+Consulta disponibilidad (sin iniciar ninguna autorización)
+               ↓ clic explícito
+Grafo prepara un intento privado de 15 minutos y carga el SDK
+               ↓ segundo clic: Continuar con Meta
+Meta presenta su autorización
+               ↓ código canjeado inmediatamente en el servidor
+Grafo comprueba aplicación, permisos y activos en Graph
+               ├─ Sandbox: acredita el ensayo y retira el token
+               └─ Coexistencia: vínculo verificado + trabajo persistente
+                                      ↓ worker, sin depender del navegador
+                              Preparar recepción de webhooks
+                                      ↓
+                              Suscribir la WABA
+                                      ↓
+                              Solicitar contactos
+                                      ↓
+                              Solicitar historial
+                                      ↓
+                              Recibir y procesar eventos por lotes
 ```
 
-El plazo del intento de Grafo permite completar el recorrido. **No prolonga el código de Meta**, que debe canjearse dentro de 30 segundos. El futuro navegador enviará el código en cuanto lo reciba, sin esperar el evento que contiene los activos. Se implementará Embedded Signup v4 mediante una configuración de Facebook Login for Business; el alta real requiere HTTPS. [Implementación oficial](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/implementation).
+Se utiliza el recorrido documentado de Embedded Signup v4. No se fuerzan parámetros retirados de v2/v3. El segundo clic permite abrir la ventana de Meta directamente desde una interacción del usuario, después de cargar el SDK.
 
-## Protecciones implementadas
+El código se envía al servidor al recibirlo, sin esperar el evento con los activos: Meta le da una vigencia de 30 segundos. Los eventos del popup pueden llegar antes o después; sólo se aceptan orígenes exactos de Facebook y datos con el formato esperado. Los IDs se vuelven a verificar en Graph; no se confía en el navegador. [Implementación oficial](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/implementation).
 
-- El intento pertenece a una empresa, persona, membresía y sesión determinadas. Un secreto aleatorio protege su continuidad; en la base sólo queda su hash. No se guarda el código de Meta.
-- Se vuelven a comprobar sesión, empresa, usuario, rol, permiso e IP después de las llamadas externas. Se exige WhatsApp operativo en el plan para preparar, canjear y verificar. Una sesión de soporte, plataforma o MCP no puede autorizarlo.
-- PostgreSQL decide qué petición puede canjear el código. Dos pestañas o peticiones simultáneas no producen dos canjes. Un resultado incierto exige una nueva autorización explícita.
-- El token sólo se conserva cifrado con AES-256-GCM. No sale en respuestas ni errores. Los vencimientos se obtienen de Meta; no se supone que la credencial dure indefinidamente.
-- El servidor consulta los números de la cuenta usando ese token. No confía en un ID enviado por el navegador ni sigue URLs arbitrarias de paginación. Si falta el ID del número y hay varios, pide resolver la ambigüedad.
-- Para este recorrido se comprueba que el número esté en coexistencia y Cloud API. La primera versión reserva un número y una cuenta por empresa. Cambiar a otros activos exige un traslado explícito que todavía no se implementó.
-- Los índices únicos impiden que una cuenta o número pertenezcan a dos empresas. Se contemplan asociaciones anteriores y el piloto. Descartar el vínculo borra la credencial, conservando la reserva para evitar atribuir eventos tardíos a otra empresa.
-- Cancelar o comenzar otro intento invalida las respuestas que todavía estén en vuelo. Los intentos vencidos no se pueden continuar y su token se retira al acceder. Falta el barrido periódico para retirarlos aun sin nuevas visitas.
+## Protección y recuperación
 
-`VERIFICADO` no significa conectado: todavía no se suscriben webhooks, solicitan datos ni envían mensajes. Tampoco se modifica WATI ni se crea una integración operativa en `IntegracionTenant`.
+- El intento pertenece a empresa, usuario, membresía y sesión. Su secreto aleatorio sólo vive en memoria del navegador y viaja en POST; en la base se guarda su hash. No se conservan códigos ni se imprimen credenciales en logs.
+- El servidor vuelve a comprobar sesión, rol, permiso, IP y capacidad del plan después de las llamadas externas. Soporte impersonando, plataforma y MCP no pueden autorizar el alta.
+- El token se cifra con AES-256-GCM. Sus vencimientos vienen de Meta y se comprueban antes de activar cada paso.
+- PostgreSQL reclama cada operación antes de llamar a Meta. Dos peticiones o workers no repiten el mismo canje ni las solicitudes iniciales. No hay transacciones abiertas durante las llamadas de red.
+- El SDK se carga sólo por una acción explícita sobre HTTPS. Cancelar o desmontar la pantalla invalida el flujo local y pide cancelar el intento pendiente. Si se cierra el navegador sin esa petición, el vencimiento del servidor sigue limitando el intento.
+- El worker retira credenciales de intentos pendientes vencidos. Si el flujo ya fue verificado y se creó el trabajo de alta, cerrar la pestaña no lo pierde.
+- Una caída durante un POST puede dejar una respuesta incierta. Pasados dos minutos, un paso que quedó en vuelo pasa a **Revisión**. No vuelve a solicitar datos automáticamente. Si Meta rechazó la operación, también queda detenido con un código interno.
+- Antes de cada paso se comprueban empresa habilitada, configuración, capacidad, credencial, vigencia y generación del vínculo. Una desconexión durante la red no reactiva el canal al guardar la respuesta. Una llamada ya enviada no se puede retirar.
+- Un vínculo activo con trabajo de alta impide comenzar otra autorización. Hay que resolver su estado antes de intentar una reconexión; no se usa el botón como mecanismo de reimportación.
+- Se reserva un número y una WABA por empresa. Descartar localmente el vínculo retira su token y conserva la reserva para evitar atribuir eventos atrasados a otra empresa. Ese método interno no revoca el permiso en Meta y todavía no se expone como botón de desconexión general.
 
-## Qué falta antes de habilitar el botón
+## Solicitud y recepción son pasos distintos
 
-1. Conectar el modelo general y los procesadores de historial, contactos, ecos y cambios de cuenta con la lectura y los permisos del Inbox. La [base de recepción](meta-inbox-recepcion.md) quedó implementada el 26/09 y continúa desactivada.
-2. Completar la activación vinculada al alta, medir límites y agregar métricas sobre la recepción duradera ya preparada; barrido de autorizaciones vencidas y reglas de conservación. Mantener el aislamiento también durante desconexiones y reconexiones.
-3. Orquestación de suscripción, contactos e historial con estados persistidos. No repetir una solicitud de resultado incierto sin reconciliarla.
-4. Controladores protegidos y adaptador del SDK v4: código inmediato, origen exacto de mensajes, intentos cancelables y estados comprensibles. Coordinar la desconexión con la ruta genérica de integraciones. Registrar dominios HTTPS y configuración en Meta.
-5. Prueba integral en staging con una cuenta propia elegible y permisos disponibles. Validar renovación, revocación y desconexión desde WhatsApp Business. El descarte local de credenciales no revoca por sí mismo el permiso otorgado en Meta.
-6. Envíos, archivos, estados y plantillas: siguen siendo requisitos antes de presentar el Inbox como una integración completa.
+En coexistencia se omite registrar nuevamente el número. Se suscribe la WABA mediante `POST /{WABA_ID}/subscribed_apps`; luego se solicita `smb_app_state_sync` y `history` mediante `POST /{PHONE_NUMBER_ID}/smb_app_data`. Los `request_id` se guardan como constancia de aceptación; no como prueba de importación terminada.
 
-En coexistencia se omite registrar nuevamente el número. La sincronización inicial tiene una ventana de 24 horas y debe comenzar desde el servidor, antes de depender de que el cliente visite su bandeja. [Guía de coexistencia](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users).
+La ventana inicial documentada es de 24 horas. Grafo usa como inicio conservador la preparación del intento, anterior al alta de Meta. No repite automáticamente una solicitud cuyo resultado sea incierto. [Alta para Tech Providers](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-customers-as-a-tech-provider), [coexistencia](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users).
 
-## Configuración y verificación local
+La pantalla muestra preparación, solicitudes aceptadas, progreso informado por Meta, historial no compartido o necesidad de revisión. **100% informado no significa importación reconciliada.** Ver [recepción por lotes](meta-inbox-recepcion.md). El estado del alta se consulta cada cinco segundos mientras hay un vínculo; esto es independiente del transporte en tiempo real del chat.
 
-Variables previstas únicamente en el servidor: `META_APP_ID`, `META_APP_SECRET`, `META_EMBEDDED_SIGNUP_CONFIG_ID`, `META_GRAPH_API_VERSION` y la clave existente `INTEGRACIONES_ENCRYPTION_KEY`. No se agregaron valores reales ni secretos de staging a local.
+## Qué falta, en orden
 
-Migración aditiva `20260926100000_meta_conexion_empresas`: tablas `MetaAutorizacion` y `MetaVinculo`, estados e índices únicos. Aplicada a `gdi_saas` y `gdi_saas_test`, ambas locales: 286 migraciones, sin seed ni reset. Permisos del rol local `grafo_app` comprobados.
+1. Conectar la lectura, lista de conversaciones, paginación y permisos del tiempo real al modelo general. La bandeja y su SSE aún leen el piloto anterior; no muestran todavía todas las tablas de conversaciones recién preparadas.
+2. Reconciliar bloques de historial y eventos tardíos, resolver resultados inciertos y ofrecer desconexión/reconexión coordinada. No hay aún un botón que repita una importación.
+3. Medir recepción y procesamiento con carga representativa, revisar el límite HTTP de 3 MB y la capacidad compartida del worker; añadir métricas y reglas de conservación de crudos.
+4. Desplegar el lote revisado a staging con flags apagados, registrar dominios HTTPS y configurar Facebook Login for Business. Activar primero el sandbox para una empresa de ensayo; probar allí el SDK real y documentar su resultado.
+5. Ensayar coexistencia con un número propio elegible y los permisos disponibles. Confirmar suscripciones de la app, recepción firmada, solicitudes, revocación desde WhatsApp Business y reconexión. Las pruebas simuladas no sustituyen ese recorrido.
+6. Completar envíos, ventanas de atención, plantillas, descarga privada de archivos y tipos de mensaje pendientes antes de presentar la integración como terminada.
 
-Desde `apps/api`, con Node 24:
+La aprobación de Meta no sustituye estas validaciones ni habilita sola los flags de Grafo.
+
+## Configuración del servidor
+
+Valores privados, fuera de Git:
+
+- Existentes: `META_APP_ID`, `META_APP_SECRET`, `META_EMBEDDED_SIGNUP_CONFIG_ID`, `META_GRAPH_API_VERSION`, `INTEGRACIONES_ENCRYPTION_KEY`.
+- `META_CONEXION_MODO`: vacío deshabilita el alta; `sandbox` permite sólo la autorización de ensayo; `coexistencia` permite solicitar datos reales.
+- `META_CONEXION_TENANT_IDS`: UUID de empresas de ensayo, separados por comas. Vacío significa ninguna.
+- `META_SANDBOX_WABA_ID`: WABA de la cuenta sandbox reclamada en Meta. Obligatorio en modo sandbox.
+- `META_INBOX_RECEPCION_ENABLED=true`: además del modo y la lista, necesario para coexistencia. Preparar API y calc-worker juntos.
+
+No copiar credenciales de staging a local. Los valores reales siguen sin habilitarse. `GRAFO_LOCAL_DISABLE_CRON=true` con `NODE_ENV=development` mantiene apagados tanto el alta automática como el procesador de recepción en este recorrido local. Los tests invocan los servicios directamente con cuentas ficticias y Graph simulado.
+
+## Migración y verificación
+
+La migración aditiva `20260926140000_meta_alta_sincronizacion` agrega el modo de autorización y la tabla `MetaAlta`, con estados, vencimiento, referencias de solicitudes y vínculo compuesto por empresa. Aplicada únicamente en `gdi_saas` y `gdi_saas_test` locales: **288 migraciones**, sin seed ni reset. No se alteraron los contenedores ni la memoria de Docker.
+
+**Resultado del bloque:** 270 pruebas de API y regresión, más 45 de frontend, aprobadas. TypeScript de API y web y ESLint de implementación aprobados. Permisos de lectura/escritura de `grafo_app` verificados sobre `MetaAlta`; cero altas reales creadas en local. Revisión visual de la bienvenida en Chrome y API local respondiendo.
+
+Pruebas: contratos Graph, autorizaciones concurrentes, selección de sandbox, orden y exclusión entre workers, reinicio con respuesta incierta, expiración, desconexión durante la red, aislamiento, permisos HTTP, origen de eventos del SDK, código inmediato, cancelación, respuesta tardía y estados de la interfaz. No se conectó una cuenta real para ejecutarlas.
+
+Comandos, Node 24, en serie y con hasta 3 GB para cada comprobación:
 
 ```sh
-npx jest --runInBand --testPathPatterns='meta-conexion' --silent
+# Desde apps/api
+NODE_OPTIONS=--max-old-space-size=3072 npx jest --runInBand --testPathPatterns='integraciones/meta/|webhooks-whatsapp/|inbox-tiempo-real/|prisma/__tests__/tenant-guard|prisma/__tests__/aislamiento-tenants|prisma/snapshots.extension.integration' --silent
 NODE_OPTIONS=--max-old-space-size=3072 npx tsc -p tsconfig.build.json --noEmit --incremental false
+
+# Desde la raíz
+NODE_OPTIONS=--max-old-space-size=3072 npx vitest run src/lib/meta-signup-sdk.test.ts src/components/inbox/inbox-conexion.test.tsx src/components/inbox/inbox-view.test.tsx src/components/app-sidebar-inbox.test.tsx src/app/inbox/page.test.tsx src/lib/inbox-tiempo-real.test.ts --maxWorkers=1
+NODE_OPTIONS=--max-old-space-size=3072 npx tsc --noEmit --incremental false
 ```
 
-Resultado: **52 pruebas nuevas aprobadas; 152 al incluir la regresión de Meta, webhooks e Inbox**. TypeScript del código de la API y ESLint de los archivos de implementación aprobados. El filtro reproducible del conjunto es `integraciones/meta/|webhooks-whatsapp/|inbox-tiempo-real/`; evitar `meta-` porque también coincide con el nombre absoluto de este worktree y seleccionaría pruebas ajenas al bloque.
-
-La suite incluye contratos de Graph simulados y PostgreSQL real dedicado a tests. Sólo crea empresas ficticias y elimina las filas que creó. Rechaza bases remotas o cuyo nombre no termine en `_test`. Las pruebas bloquean llamadas reales a Meta. Se comprobaron canjes concurrentes, colisiones entre empresas, cancelaciones durante la red, permisos retirados, expiración, cifrado, renovación y conservación de propiedad tras desconectar. No reemplazan la prueba real de Embedded Signup.
-
-Staging, producción, DNS y configuración de Meta permanecen sin cambios.
-
-## Referencias de la implementación
-
-Consultadas el 26/09/2026 en Meta Developers:
-
-- [Alta como Tech Provider: canje en el servidor y pasos posteriores](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-customers-as-a-tech-provider).
-- [Debug Token: aplicación, permisos, destinos y vencimientos](https://developers.facebook.com/docs/graph-api/reference/debug_token/).
-- [Números pertenecientes a una cuenta y paginación](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-account/phone-number-management-api).
-- [Credenciales de la aplicación, sólo entre servidores](https://developers.facebook.com/docs/facebook-login/guides/access-tokens/#apptokens).
-
-Las protecciones, estados y decisiones de almacenamiento anteriores son implementación de Grafo, no requisitos textuales de Meta.
+No usar el filtro `meta-`: también coincide con el nombre absoluto de este worktree y seleccionaría pruebas ajenas. Referencias de Meta consultadas el 26/09/2026. Tablas, bloqueos, estados y límites internos son decisiones de implementación de Grafo.
