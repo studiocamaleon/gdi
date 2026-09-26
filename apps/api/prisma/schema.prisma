@@ -6507,6 +6507,7 @@ model MetaAutorizacion {
 
 enum EstadoVinculoMeta {
   VERIFICADO
+  SUSPENDIDO
   DESCONECTADO
 }
 
@@ -6530,6 +6531,7 @@ model MetaVinculo {
   /// Se habilita sólo cuando el alta y su receptor estén preparados.
   recepcionDesdeEl      DateTime?
   ultimoCambioCuentaEl  DateTime?
+  ultimoEventoCuenta    String?
   conversaciones        InboxConversacion[]
   mensajes              InboxMensaje[]
   contactos             InboxContacto[]

@@ -22,6 +22,7 @@ import {
   modoAltaPermitido,
 } from './meta-conexion.config';
 import { configuracionMetaPiloto } from './meta-piloto.config';
+import { resumirImportacion } from './inbox/meta-inbox-importacion';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const pendientes: EstadoAutorizacionMeta[] = [
@@ -94,6 +95,7 @@ export class MetaConexionService {
         'whatsapp_automatico',
       ]);
       await exigirAccesoConexionMeta(tx, auth, ip);
+      await tx.$queryRaw`SELECT id FROM "MetaVinculo" WHERE "tenantId" = ${auth.tenantId}::uuid FOR NO KEY UPDATE`;
       return fn(tx);
     });
   }
@@ -108,11 +110,16 @@ export class MetaConexionService {
       const canal = await tx.metaVinculo.findFirst({
         where: {
           tenantId: auth.tenantId,
-          estado: 'VERIFICADO',
           altas: { some: {} },
         },
       });
-      if (canal)
+      if (
+        canal &&
+        !(
+          canal.estado === 'DESCONECTADO' &&
+          canal.ultimoEventoCuenta === 'PARTNER_REMOVED'
+        )
+      )
         throw new ConflictException(
           'La conexión existente debe revisarse antes de iniciar otra alta.',
         );
@@ -175,101 +182,127 @@ export class MetaConexionService {
     const capacidad = modo
       ? await this.capacidades.puedeOperar(auth.tenantId, 'whatsapp_automatico')
       : false;
-    const vinculo = await this.prisma.metaVinculo.findFirst({
-      where: { tenantId: auth.tenantId },
-      select: {
-        id: true,
-        numero: true,
-        estado: true,
-        autorizacionId: true,
-        tokenVenceEl: true,
-        accesoDatosVenceEl: true,
-        recepcionDesdeEl: true,
-      },
-    });
-    const alta = vinculo
-      ? await this.prisma.metaAlta.findFirst({
-          where: {
-            tenantId: auth.tenantId,
-            vinculoId: vinculo.id,
-            autorizacionId: vinculo.autorizacionId,
-          },
-          select: { estado: true, falloCodigo: true, updatedAt: true },
-        })
-      : null;
-    const importacion = vinculo
-      ? await this.prisma.inboxImportacion.findFirst({
-          where: {
-            tenantId: auth.tenantId,
-            vinculoId: vinculo.id,
-            autorizacionId: vinculo.autorizacionId,
-          },
+    return this.prisma.$transaction(
+      async (tx) => {
+        await exigirAccesoConexionMeta(tx, auth, ip);
+        const vinculo = await tx.metaVinculo.findFirst({
+          where: { tenantId: auth.tenantId },
           select: {
-            progresoInformado: true,
-            finInformadoEl: true,
-            historialRechazado: true,
-            necesitaRevision: true,
+            id: true,
+            numero: true,
+            estado: true,
+            ultimoEventoCuenta: true,
+            autorizacionId: true,
+            tokenVenceEl: true,
+            accesoDatosVenceEl: true,
+            recepcionDesdeEl: true,
           },
-        })
-      : null;
-    const pendientes = vinculo
-      ? await this.prisma.inboxTrabajoEvento.count({
+        });
+        const alta = vinculo
+          ? await tx.metaAlta.findFirst({
+              where: {
+                tenantId: auth.tenantId,
+                vinculoId: vinculo.id,
+                autorizacionId: vinculo.autorizacionId,
+              },
+              select: { estado: true, falloCodigo: true, updatedAt: true },
+            })
+          : null;
+        const importacion = vinculo
+          ? await tx.inboxImportacion.findFirst({
+              where: {
+                tenantId: auth.tenantId,
+                vinculoId: vinculo.id,
+                autorizacionId: vinculo.autorizacionId,
+              },
+              select: {
+                progresoInformado: true,
+                finInformadoEl: true,
+                historialRechazado: true,
+                necesitaRevision: true,
+              },
+            })
+          : null;
+        const pendientes = vinculo
+          ? await tx.inboxTrabajoEvento.count({
+              where: {
+                tenantId: auth.tenantId,
+                vinculoId: vinculo.id,
+                autorizacionId: vinculo.autorizacionId,
+                estado: 'PENDIENTE',
+              },
+            })
+          : 0;
+        const revisiones = vinculo
+          ? await tx.inboxTrabajoEvento.count({
+              where: {
+                tenantId: auth.tenantId,
+                vinculoId: vinculo.id,
+                autorizacionId: vinculo.autorizacionId,
+                estado: { in: ['REVISION', 'PAUSADO'] },
+              },
+            })
+          : 0;
+        const sandbox = await tx.metaAutorizacion.findFirst({
           where: {
             tenantId: auth.tenantId,
-            vinculoId: vinculo.id,
-            autorizacionId: vinculo.autorizacionId,
-            estado: 'PENDIENTE',
+            userId: auth.userId,
+            modo: 'SANDBOX',
+            estado: 'VERIFICADA',
           },
-        })
-      : 0;
-    const revisiones = vinculo
-      ? await this.prisma.inboxTrabajoEvento.count({
-          where: {
-            tenantId: auth.tenantId,
-            vinculoId: vinculo.id,
-            autorizacionId: vinculo.autorizacionId,
-            estado: { in: ['REVISION', 'PAUSADO'] },
-          },
-        })
-      : 0;
-    const sandbox = await this.prisma.metaAutorizacion.findFirst({
-      where: {
-        tenantId: auth.tenantId,
-        userId: auth.userId,
-        modo: 'SANDBOX',
-        estado: 'VERIFICADA',
+          orderBy: { verificadaEl: 'desc' },
+          select: { verificadaEl: true },
+        });
+        const resumen = vinculo
+          ? await resumirImportacion(
+              tx,
+              {
+                tenantId: auth.tenantId,
+                vinculoId: vinculo.id,
+                autorizacionId: vinculo.autorizacionId,
+              },
+              importacion,
+              alta,
+            )
+          : null;
+        return {
+          empresaId: auth.tenantId,
+          usuarioId: auth.userId,
+          modo,
+          disponible: Boolean(
+            modo &&
+            capacidad &&
+            configuracionMetaConexion() &&
+            this.secretos.disponible &&
+            (!vinculo ||
+              !alta ||
+              (vinculo.estado === 'DESCONECTADO' &&
+                vinculo.ultimoEventoCuenta === 'PARTNER_REMOVED')),
+          ),
+          sandboxVerificadoEl: sandbox?.verificadaEl ?? null,
+          canal: vinculo
+            ? {
+                numero: vinculo.numero,
+                estado: vinculo.estado,
+                reconexionPermitida:
+                  vinculo.estado === 'DESCONECTADO' &&
+                  vinculo.ultimoEventoCuenta === 'PARTNER_REMOVED',
+                credencialVencida: [
+                  vinculo.tokenVenceEl,
+                  vinculo.accesoDatosVenceEl,
+                ].some((d) => d && d <= new Date()),
+                recepcionPreparada: Boolean(vinculo.recepcionDesdeEl),
+                alta,
+                importacion,
+                resumen,
+                pendientes,
+                revisiones,
+              }
+            : null,
+        };
       },
-      orderBy: { verificadaEl: 'desc' },
-      select: { verificadaEl: true },
-    });
-    return {
-      empresaId: auth.tenantId,
-      usuarioId: auth.userId,
-      modo,
-      disponible: Boolean(
-        modo &&
-        capacidad &&
-        configuracionMetaConexion() &&
-        this.secretos.disponible &&
-        (!vinculo || vinculo.estado !== 'VERIFICADO' || !alta),
-      ),
-      sandboxVerificadoEl: sandbox?.verificadaEl ?? null,
-      canal: vinculo
-        ? {
-            numero: vinculo.numero,
-            estado: vinculo.estado,
-            credencialVencida: [
-              vinculo.tokenVenceEl,
-              vinculo.accesoDatosVenceEl,
-            ].some((d) => d && d <= new Date()),
-            recepcionPreparada: Boolean(vinculo.recepcionDesdeEl),
-            alta,
-            importacion,
-            pendientes,
-            revisiones,
-          }
-        : null,
-    };
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
   private async reiniciar(
@@ -429,7 +462,18 @@ export class MetaConexionService {
         if (!vigente.count) throw new ConflictException();
         const anterior = await tx.metaVinculo.findFirst({
           where: { tenantId: auth.tenantId },
+          include: { altas: { select: { id: true }, take: 1 } },
         });
+        if (
+          anterior?.altas.length &&
+          !(
+            anterior.estado === 'DESCONECTADO' &&
+            anterior.ultimoEventoCuenta === 'PARTNER_REMOVED'
+          )
+        )
+          throw new ConflictException(
+            'La conexión existente debe revisarse antes de iniciar otra alta.',
+          );
         if (
           anterior &&
           (anterior.wabaId !== activos.wabaId ||
@@ -447,6 +491,7 @@ export class MetaConexionService {
           desconectadoEl: null,
           recepcionDesdeEl: null,
           ultimoCambioCuentaEl: null,
+          ultimoEventoCuenta: null,
         };
         // Índices globales de cuenta y número evitan adjudicarlos a dos tenants,
         // aun cuando las consultas de cada uno sólo ven sus propios registros.
@@ -496,14 +541,24 @@ export class MetaConexionService {
       // de pago para poder dejar de conservar una credencial.
       await bloquearCupoUsuarios(tx, auth.tenantId);
       await exigirAccesoConexionMeta(tx, auth, ip);
+      await tx.$queryRaw`SELECT id FROM "MetaVinculo" WHERE "tenantId" = ${auth.tenantId}::uuid FOR NO KEY UPDATE`;
       await tx.metaAutorizacion.updateMany({
         where: { tenantId: auth.tenantId, estado: { in: pendientes } },
         data: { estado: 'CANCELADA', tokenCifrado: Prisma.DbNull },
+      });
+      await tx.metaAlta.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          estado: { notIn: ['SOLICITUDES_COMPLETADAS', 'REVISION', 'PAUSADA'] },
+        },
+        data: { estado: 'PAUSADA', falloCodigo: 'CANAL_NO_VIGENTE' },
       });
       await tx.metaVinculo.updateMany({
         where: { tenantId: auth.tenantId },
         data: {
           estado: 'DESCONECTADO',
+          ultimoEventoCuenta: 'GRAFO_DESCARTADO',
+          ultimoCambioCuentaEl: new Date(Math.floor(Date.now() / 1000) * 1000),
           tokenCifrado: Prisma.DbNull,
           desconectadoEl: new Date(),
           recepcionDesdeEl: null,

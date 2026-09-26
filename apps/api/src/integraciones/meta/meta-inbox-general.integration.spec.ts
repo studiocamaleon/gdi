@@ -231,6 +231,7 @@ it('una conexión vacía es una bandeja vacía; sin conexión no hay lectura', a
 });
 it.each([
   'revocado',
+  'suspendido',
   'sin_token',
   'json_null',
   'token_vencido',
@@ -242,6 +243,7 @@ it.each([
     where: { id: canal.id },
     data: {
       ...(caso === 'revocado' ? { estado: 'DESCONECTADO' } : {}),
+      ...(caso === 'suspendido' ? { estado: 'SUSPENDIDO' } : {}),
       ...(caso === 'sin_token' ? { tokenCifrado: Prisma.DbNull } : {}),
       ...(caso === 'json_null' ? { tokenCifrado: Prisma.JsonNull } : {}),
       ...(caso === 'token_vencido' ? { tokenVenceEl: new Date(0) } : {}),

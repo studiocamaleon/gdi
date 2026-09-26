@@ -1,4 +1,5 @@
 import { MetaAltaService } from './meta-alta.service';
+import { aplicarCambioCuenta } from './inbox/meta-inbox-cuenta';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { RolSistema } from '@prisma/client';
@@ -574,6 +575,75 @@ async function altaRealPreparada() {
     where: { autorizacionId: intento.id },
   });
 }
+it('una pausa o descarte local no habilitan otra alta; la retirada confirmada por Meta sí', async () => {
+  client.verificar.mockResolvedValue(activos());
+  const alta = await altaRealPreparada();
+  await db.metaVinculo.update({
+    where: { id: alta.vinculoId },
+    data: { estado: 'SUSPENDIDO', ultimoEventoCuenta: 'ACCOUNT_OFFBOARDED' },
+  });
+  expect((await service.estado(auth, ip)).disponible).toBe(false);
+  await expect(preparar()).rejects.toThrow('conexión existente');
+  await service.descartarVinculoPreparado(auth, ip);
+  expect((await service.estado(auth, ip)).disponible).toBe(false);
+  await expect(preparar()).rejects.toThrow('conexión existente');
+  await db.metaVinculo.update({
+    where: { id: alta.vinculoId },
+    data: { ultimoEventoCuenta: 'PARTNER_REMOVED' },
+  });
+  const estado = await service.estado(auth, ip);
+  expect(estado.disponible).toBe(true);
+  expect(estado.canal?.reconexionPermitida).toBe(true);
+  const nuevo = await canjear();
+  await service.verificar(auth, ip, nuevo, { wabaId: '200001' });
+  expect(
+    await db.metaVinculo.findUnique({ where: { id: alta.vinculoId } }),
+  ).toMatchObject({
+    estado: 'VERIFICADO',
+    autorizacionId: nuevo.id,
+    ultimoEventoCuenta: null,
+  });
+  expect(await db.metaAlta.count({ where: { tenantId: auth.tenantId } })).toBe(
+    2,
+  );
+  expect((await service.estado(auth, ip)).canal?.resumen?.estado).toBe(
+    'PREPARANDO',
+  );
+});
+it('pausar y reconectar mientras un POST está en vuelo no repite ni avanza una solicitud incierta', async () => {
+  const alta = await altaRealPreparada();
+  client.suscribir.mockImplementationOnce(async () => {
+    await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "MetaVinculo" WHERE id = ${alta.vinculoId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR NO KEY UPDATE`;
+      const canal = await tx.metaVinculo.findFirstOrThrow({
+        where: { id: alta.vinculoId, tenantId: auth.tenantId },
+      });
+      const t = Math.floor(Date.now() / 1000) * 1000;
+      await aplicarCambioCuenta(tx, canal, {
+        clase: 'cuenta',
+        evento: 'ACCOUNT_OFFBOARDED',
+        fecha: new Date(t),
+        numero: null,
+      });
+      await aplicarCambioCuenta(tx, canal, {
+        clase: 'cuenta',
+        evento: 'ACCOUNT_RECONNECTED',
+        fecha: new Date(t + 1000),
+        numero: null,
+      });
+    });
+  });
+  await altas.procesarSiguiente();
+  expect(
+    await db.metaAlta.findUnique({ where: { id: alta.id } }),
+  ).toMatchObject({
+    estado: 'REVISION',
+    falloCodigo: 'ALTA_INTERRUMPIDA_POR_CUENTA',
+  });
+  expect(await altas.procesarSiguiente()).toBe(false);
+  expect(client.sincronizar).not.toHaveBeenCalled();
+  expect(client.suscribir).toHaveBeenCalledTimes(1);
+});
 it('sandbox verifica autorización sin vínculo, credencial retenida ni trabajo posterior', async () => {
   process.env.META_CONEXION_MODO = 'sandbox';
   process.env.META_CONEXION_TENANT_IDS = auth.tenantId;

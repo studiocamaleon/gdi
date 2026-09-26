@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { type MetaVinculo, type Prisma } from '@prisma/client';
+import { type MetaVinculo, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { runWithTenant } from '../../../common/tenant-context';
 import { WebhooksWhatsappService } from '../../../webhooks-whatsapp/webhooks-whatsapp.service';
 import { MetaInboxProcesador } from './meta-inbox-procesador.service';
+import { resumirImportacion } from './meta-inbox-importacion';
 
 const url = new URL(process.env.DATABASE_URL!);
 if (
@@ -144,6 +145,7 @@ afterEach(async () => {
   await db.webhookWhatsappCrudo.deleteMany({
     where: { wabaId: { in: cuentas } },
   });
+  await db.metaAlta.deleteMany({ where });
   await db.metaVinculo.deleteMany({ where });
   await db.tenant.deleteMany({ where: { id: { in: tenants } } });
   tenants.length = 0;
@@ -494,6 +496,197 @@ it('una desvinculación anterior al alta actual no la cancela', async () => {
     (await db.metaVinculo.findUniqueOrThrow({ where: { id: canal.id } }))
       .estado,
   ).toBe('VERIFICADO');
+});
+const estadoCanal = () =>
+  db.metaVinculo.findUniqueOrThrow({ where: { id: canal.id } });
+const eventoCuenta = (event: string, time: number) =>
+  recibir(
+    'account_update',
+    {
+      event,
+      ...(event === 'PARTNER_REMOVED' ? { phone_number: canal.numero } : {}),
+    },
+    canal,
+    time,
+    true,
+  );
+async function resumenHistorial() {
+  return db.$transaction(async (tx) =>
+    resumirImportacion(
+      tx,
+      {
+        tenantId: canal.tenantId,
+        vinculoId: canal.id,
+        autorizacionId: canal.autorizacionId,
+      },
+      await tx.inboxImportacion.findFirst({ where: scope() }),
+      { estado: 'SOLICITUDES_COMPLETADAS' },
+    ),
+  );
+}
+it('una pausa conserva la credencial y recibe reconexión sin repetir el alta ni perder eventos', async () => {
+  const t = segundos() - 10;
+  await recibir('history', historial([mensaje()], 100));
+  await eventoCuenta('ACCOUNT_OFFBOARDED', t);
+  await vaciar();
+  expect(await estadoCanal()).toMatchObject({
+    estado: 'SUSPENDIDO',
+    tokenCifrado: canal.tokenCifrado,
+    recepcionDesdeEl: canal.recepcionDesdeEl,
+  });
+  expect(await db.inboxMensaje.count({ where: scope() })).toBe(0);
+  expect(
+    await db.inboxTrabajoEvento.findFirst({
+      where: { ...scope(), prioridad: 0 },
+    }),
+  ).toMatchObject({
+    estado: 'PENDIENTE',
+    intentos: 0,
+    ultimoError: 'CUENTA_SUSPENDIDA',
+  });
+  await recibir('messages', { messages: [mensaje('wamid.durante-pausa')] });
+  await eventoCuenta('ACCOUNT_RECONNECTED', t + 1);
+  await vaciar();
+  expect(await estadoCanal()).toMatchObject({
+    estado: 'VERIFICADO',
+    autorizacionId: canal.autorizacionId,
+    recepcionDesdeEl: canal.recepcionDesdeEl,
+  });
+  expect(await db.inboxMensaje.count({ where: scope() })).toBe(2);
+  expect(await db.metaAlta.count({ where: scope() })).toBe(0);
+  expect(await resumenHistorial()).toMatchObject({
+    estado: 'RECIBIDO_PROCESADO',
+    pendientes: 0,
+  });
+});
+it('una reconexión adelantada impide que una pausa antigua llegue a suspender el canal', async () => {
+  const t = segundos() - 10;
+  await eventoCuenta('ACCOUNT_RECONNECTED', t + 2);
+  await vaciar();
+  await eventoCuenta('ACCOUNT_OFFBOARDED', t);
+  await vaciar();
+  expect((await estadoCanal()).estado).toBe('VERIFICADO');
+});
+it('en un empate de fechas gana la suspensión; una credencial vencida no se reactiva', async () => {
+  const t = segundos() - 10;
+  await eventoCuenta('ACCOUNT_OFFBOARDED', t);
+  await vaciar();
+  await eventoCuenta('ACCOUNT_RECONNECTED', t);
+  await vaciar();
+  expect((await estadoCanal()).estado).toBe('SUSPENDIDO');
+  await db.metaVinculo.update({
+    where: { id: canal.id },
+    data: { tokenVenceEl: new Date(Date.now() - 1000) },
+  });
+  await eventoCuenta('ACCOUNT_RECONNECTED', t + 1);
+  await vaciar();
+  expect((await estadoCanal()).estado).toBe('SUSPENDIDO');
+});
+it('retirar el socio durante la pausa revoca el token; ninguna reconexión lo restaura', async () => {
+  const t = segundos() - 10;
+  await eventoCuenta('ACCOUNT_OFFBOARDED', t);
+  await vaciar();
+  await eventoCuenta('PARTNER_REMOVED', t + 1);
+  await vaciar();
+  await eventoCuenta('ACCOUNT_RECONNECTED', t + 2);
+  await vaciar();
+  expect(await estadoCanal()).toMatchObject({
+    estado: 'DESCONECTADO',
+    tokenCifrado: null,
+    ultimoEventoCuenta: 'PARTNER_REMOVED',
+  });
+});
+it('puede confirmar la revocación después del descarte local sin recibir mensajes ni restaurar acceso', async () => {
+  const t = segundos();
+  await db.metaVinculo.update({
+    where: { id: canal.id },
+    data: {
+      estado: 'DESCONECTADO',
+      tokenCifrado: Prisma.DbNull,
+      recepcionDesdeEl: null,
+      ultimoCambioCuentaEl: new Date(t * 1000),
+      ultimoEventoCuenta: 'GRAFO_DESCARTADO',
+    },
+  });
+  await recibir('messages', { messages: [mensaje()] });
+  expect(await db.inboxTrabajoEvento.count({ where: scope() })).toBe(0);
+  await eventoCuenta('PARTNER_REMOVED', t);
+  await vaciar();
+  expect(await estadoCanal()).toMatchObject({
+    estado: 'DESCONECTADO',
+    tokenCifrado: null,
+    ultimoEventoCuenta: 'PARTNER_REMOVED',
+  });
+});
+it('pausar durante el alta inicial la deja en revisión, incluso tras reconectar', async () => {
+  await db.metaAlta.create({
+    data: {
+      ...scope(),
+      vinculoId: canal.id,
+      autorizacionId: canal.autorizacionId,
+      appId: '100001',
+      graphVersion: 'v26.0',
+      estado: 'SOLICITANDO_HISTORIAL',
+      venceEl: new Date(Date.now() + 60000),
+    },
+  });
+  const t = segundos() - 10;
+  await eventoCuenta('ACCOUNT_OFFBOARDED', t);
+  await vaciar();
+  await eventoCuenta('ACCOUNT_RECONNECTED', t + 1);
+  await vaciar();
+  expect(await db.metaAlta.findFirst({ where: scope() })).toMatchObject({
+    estado: 'REVISION',
+    falloCodigo: 'ALTA_INTERRUMPIDA_POR_CUENTA',
+  });
+});
+it('el resumen distingue espera, lotes pendientes, fin recibido y otra entrega tardía', async () => {
+  expect((await resumenHistorial()).estado).toBe('ESPERANDO_META');
+  await recibir(
+    'history',
+    historial(
+      Array.from({ length: 53 }, (_, i) => mensaje(`wamid.resumen-${i}`)),
+      100,
+      2,
+    ),
+  );
+  expect((await resumenHistorial()).estado).toBe('PROCESANDO');
+  await procesador.procesarSiguiente();
+  expect((await resumenHistorial()).estado).toBe('PROCESANDO');
+  await vaciar();
+  // Fases 0 y 1 ausentes: Meta no envía fases vacías.
+  expect(await resumenHistorial()).toMatchObject({
+    estado: 'RECIBIDO_PROCESADO',
+    bloquesProcesados: 1,
+  });
+  await recibir('history', historial([mensaje('wamid.tardio')], 15, 0, 3));
+  expect((await resumenHistorial()).estado).toBe('PROCESANDO');
+  await vaciar();
+  expect(await resumenHistorial()).toMatchObject({
+    estado: 'RECIBIDO_PROCESADO',
+    bloquesProcesados: 2,
+  });
+  // Una conversación actual no se cuenta como historial pendiente.
+  await recibir('messages', { messages: [mensaje('wamid.actual')] });
+  expect((await resumenHistorial()).estado).toBe('RECIBIDO_PROCESADO');
+});
+it('los bloques duplicados se cuentan una vez y un formato incompleto no aparece como finalizado', async () => {
+  const h = historial([mensaje()], 100);
+  await recibir('history', h, canal, segundos() - 1);
+  await recibir('history', h, canal, segundos());
+  await vaciar();
+  expect((await resumenHistorial()).bloquesProcesados).toBe(1);
+  await recibir(
+    'history',
+    historial([mensaje('wamid.sin-fecha', { timestamp: 'invalido' })], 100, 2),
+  );
+  await vaciar();
+  expect((await resumenHistorial()).estado).toBe('REVISION');
+});
+it('rechazar el historial no equivale a recibirlo completo', async () => {
+  await recibir('history', { history: [{ errors: [{ code: 2593109 }] }] });
+  await vaciar();
+  expect((await resumenHistorial()).estado).toBe('NO_COMPARTIDO');
 });
 it('otra generación de autorización no procesa trabajos del alta anterior', async () => {
   await recibir('history', historial([mensaje()]));

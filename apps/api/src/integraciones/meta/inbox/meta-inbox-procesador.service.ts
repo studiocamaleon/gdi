@@ -9,6 +9,7 @@ import {
 } from '../../../inbox-tiempo-real/inbox-revision';
 import { normalizarEventoInbox } from './meta-inbox-normalizar';
 import { aplicarOperacionInbox } from './meta-inbox-proyeccion';
+import { aplicarCambioCuenta } from './meta-inbox-cuenta';
 
 export const recepcionGeneralMetaHabilitada = () =>
   process.env.META_INBOX_RECEPCION_ENABLED === 'true';
@@ -33,7 +34,8 @@ export class MetaInboxProcesador {
     >();
     for (const fila of filas) {
       if (!fila.wabaId) continue;
-      const clave = `${fila.wabaId}:${fila.phoneNumberId ?? ''}`;
+      const control = fila.tipo === 'account_update';
+      const clave = `${fila.wabaId}:${fila.phoneNumberId ?? ''}:${control}`;
       if (!canales.has(clave))
         canales.set(
           clave,
@@ -43,15 +45,22 @@ export class MetaInboxProcesador {
               ...(fila.phoneNumberId
                 ? { phoneNumberId: fila.phoneNumberId }
                 : {}),
-              estado: 'VERIFICADO',
-              recepcionDesdeEl: { not: null },
+              ...(!control
+                ? {
+                    estado: {
+                      in: ['VERIFICADO' as const, 'SUSPENDIDO' as const],
+                    },
+                    recepcionDesdeEl: { not: null },
+                  }
+                : {}),
             },
           }),
         );
       const canal = canales.get(clave);
       if (
-        !canal?.recepcionDesdeEl ||
-        fila.recibidoEl < canal.recepcionDesdeEl ||
+        !canal ||
+        (!control && !canal.recepcionDesdeEl) ||
+        fila.recibidoEl < (canal.recepcionDesdeEl ?? canal.verificadoEl) ||
         (fila.tenantId && fila.tenantId !== canal.tenantId) ||
         (!fila.phoneNumberId && fila.tipo !== 'account_update')
       )
@@ -117,8 +126,9 @@ export class MetaInboxProcesador {
               });
               const raw = trabajo.crudo;
               if (
-                canal.estado !== 'VERIFICADO' ||
-                !canal.recepcionDesdeEl ||
+                (raw.tipo !== 'account_update' &&
+                  (canal.estado === 'DESCONECTADO' ||
+                    !canal.recepcionDesdeEl)) ||
                 canal.autorizacionId !== trabajo.autorizacionId ||
                 raw.tenantId !== canal.tenantId ||
                 raw.wabaId !== canal.wabaId ||
@@ -128,6 +138,19 @@ export class MetaInboxProcesador {
                 await tx.inboxTrabajoEvento.update({
                   where: { id: trabajo.id, tenantId: canal.tenantId },
                   data: { estado: 'PAUSADO', ultimoError: 'CANAL_NO_VIGENTE' },
+                });
+                return true;
+              }
+              if (
+                canal.estado === 'SUSPENDIDO' &&
+                raw.tipo !== 'account_update'
+              ) {
+                await tx.inboxTrabajoEvento.update({
+                  where: { id: trabajo.id, tenantId: canal.tenantId },
+                  data: {
+                    proximoIntentoEl: new Date(Date.now() + 30_000),
+                    ultimoError: 'CUENTA_SUSPENDIDA',
+                  },
                 });
                 return true;
               }
@@ -141,7 +164,7 @@ export class MetaInboxProcesador {
                 create: {
                   ...importacion,
                   tenantId: canal.tenantId,
-                  iniciadaEl: canal.recepcionDesdeEl,
+                  iniciadaEl: canal.recepcionDesdeEl ?? canal.verificadoEl,
                 },
                 update: {},
               });
@@ -152,51 +175,8 @@ export class MetaInboxProcesador {
               );
               for (const op of lote) {
                 if (op.clase === 'cuenta') {
-                  // No aplicar un evento anterior al alta actual; en igualdad
-                  // preferir suspender. Un RECONNECTED no restaura permisos por sí solo.
-                  if (
-                    op.fecha.getTime() >=
-                      Math.floor(canal.recepcionDesdeEl.getTime() / 1000) *
-                        1000 &&
-                    (!canal.ultimoCambioCuentaEl ||
-                      op.fecha >= canal.ultimoCambioCuentaEl)
-                  ) {
-                    if (op.evento === 'ACCOUNT_RECONNECTED') {
-                      await tx.inboxImportacion.updateMany({
-                        where: { ...importacion, tenantId: canal.tenantId },
-                        data: { necesitaRevision: true },
-                      });
-                    } else {
-                      await tx.metaVinculo.update({
-                        where: { id: canal.id, tenantId: canal.tenantId },
-                        data: {
-                          estado: 'DESCONECTADO',
-                          tokenCifrado: Prisma.DbNull,
-                          desconectadoEl: op.fecha,
-                          recepcionDesdeEl: null,
-                          ultimoCambioCuentaEl: op.fecha,
-                        },
-                      });
-                      await tx.metaAutorizacion.updateMany({
-                        where: {
-                          tenantId: canal.tenantId,
-                          estado: {
-                            in: [
-                              'PREPARADA',
-                              'CANJEANDO',
-                              'CANJEADA',
-                              'VERIFICANDO',
-                            ],
-                          },
-                        },
-                        data: {
-                          estado: 'CANCELADA',
-                          tokenCifrado: Prisma.DbNull,
-                        },
-                      });
-                    }
-                    cambioVisible = true;
-                  }
+                  cambioVisible =
+                    (await aplicarCambioCuenta(tx, canal, op)) || cambioVisible;
                 } else
                   cambioVisible =
                     (await aplicarOperacionInbox(tx, canal, op)) ||
