@@ -738,6 +738,7 @@ model Tenant {
   archivos                                         Archivo[]                                         @relation("ArchivosDelTenant")
   integraciones                                    IntegracionTenant[]
   mensajesWhatsappRecibidos                         MensajeWhatsappRecibido[]
+  revisionesInbox                                  InboxCanalRevision[]
   memberships                                      Membership[]
   roles                                            Rol[]
   eventosAcceso                                    EventoAcceso[]
@@ -6447,6 +6448,18 @@ model WebhookWhatsappCrudo {
   @@index([tenantId, tipo])
   @@index([wamid])
   @@index([procesado, recibidoEl])
+}
+
+/// Invalidación duradera por canal: cambia en la misma transacción del mensaje.
+model InboxCanalRevision {
+  tenantId      String @db.Uuid
+  wabaId        String
+  phoneNumberId String
+  revision      BigInt @default(0)
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, wabaId, phoneNumberId])
 }
 
 /// Proyección de mensajes ENTRANTES del piloto, sin descargar adjuntos ni

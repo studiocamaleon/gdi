@@ -26,6 +26,8 @@ import { MetaRecepcionService } from './meta/meta-recepcion.service';
 import { ClientesModule } from '../clientes/clientes.module';
 import { MetaInboxController } from './meta/meta-inbox.controller';
 import { MetaInboxService } from './meta/meta-inbox.service';
+import { MetaInboxStreamService } from './meta/meta-inbox-stream.service';
+import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.module';
 
 /**
  * Cimientos compartidos por todas las integraciones con terceros.
@@ -39,7 +41,12 @@ import { MetaInboxService } from './meta/meta-inbox.service';
  */
 @Global()
 @Module({
-  imports: [CapacidadesEmpresaModule, DatosEmpresaModule, ClientesModule],
+  imports: [
+    CapacidadesEmpresaModule,
+    DatosEmpresaModule,
+    ClientesModule,
+    InboxTiempoRealModule,
+  ],
   // El ORDEN importa y no es cosmético: IntegracionesController tiene
   // `@Get(':proveedor')`, que matchea cualquier segmento — incluido
   // `/integraciones/notificaciones`. Registrado primero, se comía la ruta y el
@@ -55,6 +62,7 @@ import { MetaInboxService } from './meta/meta-inbox.service';
     IntegracionesController,
   ],
   providers: [
+    MetaInboxStreamService,
     MetaInboxService,
     MetaRecepcionService,
     MetaCloudClient,

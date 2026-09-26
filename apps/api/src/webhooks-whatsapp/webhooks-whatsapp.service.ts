@@ -1,4 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { InboxTiempoRealBus } from '../inbox-tiempo-real/inbox-tiempo-real.bus';
+import {
+  registrarCambioInbox,
+  claveCanalInbox,
+  type CanalInbox,
+} from '../inbox-tiempo-real/inbox-revision';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -34,7 +40,10 @@ function canonico(v: unknown): string {
 
 @Injectable()
 export class WebhooksWhatsappService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly inbox?: InboxTiempoRealBus,
+  ) {}
   get puedeVerificarFirma() {
     return Boolean(process.env.META_APP_SECRET);
   }
@@ -125,6 +134,7 @@ export class WebhooksWhatsappService {
     // Si falla el guardado O el procesamiento se devuelve error a Meta para
     // que reintente. Las huellas y las actualizaciones condicionales permiten
     // repetir el lote sin duplicar eventos ni retroceder estados.
+    const canales = new Map<string, CanalInbox>();
     await this.prisma.$transaction(async (tx) => {
       await tx.webhookWhatsappCrudo.createMany({
         data: filas,
@@ -135,10 +145,18 @@ export class WebhooksWhatsappService {
         if (mensaje) {
           // Idempotencia por mensaje, además de por evento crudo. No modificar
           // el texto original si Meta lo reenvía con metadata diferente.
-          await tx.mensajeWhatsappRecibido.createMany({
+          const creado = await tx.mensajeWhatsappRecibido.createMany({
             data: [mensaje],
             skipDuplicates: true,
           });
+          if (creado.count > 0) {
+            const canal = {
+              tenantId: mensaje.tenantId,
+              wabaId: mensaje.wabaId,
+              phoneNumberId: mensaje.phoneNumberId,
+            };
+            canales.set(claveCanalInbox(canal), canal);
+          }
           // Una colisión que perteneciera a otra empresa no se confirma como
           // procesada. La bandeja filtra también cuenta, número y contacto.
           const propio = await tx.mensajeWhatsappRecibido.count({
@@ -172,7 +190,13 @@ export class WebhooksWhatsappService {
             data: { procesado: true },
           });
       }
+      // Orden estable de bloqueos si un futuro lote reúne varios canales.
+      for (const [, canal] of [...canales].sort(([a], [b]) =>
+        a.localeCompare(b),
+      ))
+        await registrarCambioInbox(tx, canal);
     });
+    for (const canal of canales.values()) this.inbox?.avisar(canal);
   }
 
   private async tenantDe(c: CambioWebhook): Promise<string | null> {

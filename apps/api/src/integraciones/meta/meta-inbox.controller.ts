@@ -1,4 +1,18 @@
-import { Controller, Get, Header, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  Headers,
+  Query,
+  Req,
+  Sse,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import { ipDeRequest } from '../../auth/ip';
+import {
+  MetaInboxStreamService,
+  vencimientoStream,
+} from './meta-inbox-stream.service';
 import { RolSistema } from '@prisma/client';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { CurrentSession } from '../../auth/current-auth.decorator';
@@ -14,7 +28,23 @@ import { MetaInboxService } from './meta-inbox.service';
 @Permiso('configuracion.gestionar')
 @ProhibidoImpersonando()
 export class MetaInboxController {
-  constructor(private readonly service: MetaInboxService) {}
+  constructor(
+    private readonly service: MetaInboxService,
+    private readonly tiempoReal: MetaInboxStreamService,
+  ) {}
+
+  @Sse('stream')
+  stream(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Headers('authorization') authorization = '',
+  ) {
+    return this.tiempoReal.abrir(
+      auth,
+      ipDeRequest(req),
+      vencimientoStream(authorization),
+    );
+  }
 
   @Get('disponibilidad')
   @Header('Cache-Control', 'no-store')

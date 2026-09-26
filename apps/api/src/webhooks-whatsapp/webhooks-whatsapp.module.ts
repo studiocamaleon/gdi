@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WebhooksWhatsappController } from './webhooks-whatsapp.controller';
 import { WebhooksWhatsappService } from './webhooks-whatsapp.service';
@@ -8,7 +9,7 @@ import { WebhooksWhatsappService } from './webhooks-whatsapp.service';
  * Provider. Ver docs/whatsapp-tech-provider-diseno.md.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, InboxTiempoRealModule],
   controllers: [WebhooksWhatsappController],
   providers: [WebhooksWhatsappService],
   exports: [WebhooksWhatsappService],
