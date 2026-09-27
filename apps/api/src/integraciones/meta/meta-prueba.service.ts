@@ -92,6 +92,7 @@ export class MetaPruebaService {
           ...activos,
           tipo: 'PRUEBA',
           pruebaDestinatarioWaId: config.destinatario,
+          pruebaDestinoE164: config.destinoE164,
           tokenCifrado: this.secretos.cifrar(
             accessToken,
           ) as Prisma.InputJsonValue,

@@ -15,14 +15,16 @@ export function configuracionCanalPrueba() {
   const wabaId = e.META_INBOX_PRUEBA_WABA_ID ?? '';
   const phoneNumberId = e.META_INBOX_PRUEBA_PHONE_NUMBER_ID ?? '';
   const destinatario = e.META_INBOX_PRUEBA_DESTINATARIO_WA_ID ?? '';
+  const destinoE164 = e.META_INBOX_PRUEBA_DESTINO_E164 ?? '';
   if (
     !isUUID(tenantId, '4') ||
     !/^\d{1,32}$/.test(wabaId) ||
     !/^\d{1,32}$/.test(phoneNumberId) ||
-    !/^[1-9]\d{7,14}$/.test(destinatario)
+    !/^[1-9]\d{7,14}$/.test(destinatario) ||
+    !/^\+[1-9]\d{7,14}$/.test(destinoE164)
   )
     return null;
-  return { tenantId, wabaId, phoneNumberId, destinatario };
+  return { tenantId, wabaId, phoneNumberId, destinatario, destinoE164 };
 }
 
 type Canal = Pick<
@@ -32,6 +34,7 @@ type Canal = Pick<
   | 'wabaId'
   | 'phoneNumberId'
   | 'pruebaDestinatarioWaId'
+  | 'pruebaDestinoE164'
   | 'tokenVenceEl'
 >;
 
@@ -45,6 +48,7 @@ export function canalPruebaPermitido(canal: Canal, ahora = new Date()) {
     canal.wabaId === config.wabaId &&
     canal.phoneNumberId === config.phoneNumberId &&
     canal.pruebaDestinatarioWaId === config.destinatario &&
+    canal.pruebaDestinoE164 === config.destinoE164 &&
     canal.tokenVenceEl &&
     canal.tokenVenceEl > ahora,
   );

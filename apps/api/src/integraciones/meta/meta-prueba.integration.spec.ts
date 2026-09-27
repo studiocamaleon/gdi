@@ -165,6 +165,7 @@ beforeEach(async () => {
     META_INBOX_PRUEBA_WABA_ID: '200001',
     META_INBOX_PRUEBA_PHONE_NUMBER_ID: '300001',
     META_INBOX_PRUEBA_DESTINATARIO_WA_ID: destinatario,
+    META_INBOX_PRUEBA_DESTINO_E164: `+${destinatario}`,
     META_INBOX_LECTURA_ENABLED: 'true',
     META_INBOX_RECEPCION_ENABLED: 'true',
     META_INBOX_ENVIOS_ENABLED: 'true',
@@ -390,6 +391,7 @@ it.each([
   'cuenta',
   'numero',
   'destinatario',
+  'destino',
   'flag',
   'vencimiento',
   'desconexion',
@@ -399,6 +401,7 @@ it.each([
     cuenta: 'META_INBOX_PRUEBA_WABA_ID',
     numero: 'META_INBOX_PRUEBA_PHONE_NUMBER_ID',
     destinatario: 'META_INBOX_PRUEBA_DESTINATARIO_WA_ID',
+    destino: 'META_INBOX_PRUEBA_DESTINO_E164',
     flag: 'META_INBOX_PRUEBA_ENABLED',
   };
   if (vars[caso])
@@ -528,7 +531,11 @@ it('renueva generación conservando mensajes, sin abrir coexistencia', async () 
   expect(r.canal?.reconexionPermitida).toBe(false);
   await db.metaVinculo.update({
     where: { id: canal.id },
-    data: { tipo: 'COEXISTENCIA', pruebaDestinatarioWaId: null },
+    data: {
+      tipo: 'COEXISTENCIA',
+      pruebaDestinatarioWaId: null,
+      pruebaDestinoE164: null,
+    },
   });
   await expect(activacion.activar(token)).rejects.toThrow('otro canal');
 });
@@ -575,3 +582,75 @@ it('revalida el permiso de escritura después de reservar, antes del POST', asyn
     codigo: 'CANAL_NO_VIGENTE',
   });
 });
+
+it('usa el destino de prueba explícito y conserva recepción, estados e identidad canónica', async () => {
+  await recibir(mensaje());
+  await procesar();
+  // Ambos datos son ficticios. El operador acredita la relación; no se deduce
+  // ni se modifica el número de otras conversaciones por reglas de país.
+  const destinoPrueba = '+16505550124';
+  process.env.META_INBOX_PRUEBA_DESTINO_E164 = destinoPrueba;
+  expect(await leer()).toBeNull();
+  const generacion = canal.autorizacionId;
+  await activacion.activar(token);
+  canal = await db.metaVinculo.update({
+    where: { id: canal.id },
+    data: { recepcionDesdeEl: new Date(Date.now() - 2000) },
+  });
+  expect(canal.autorizacionId).not.toBe(generacion);
+  expect(canal.pruebaDestinoE164).toBe(destinoPrueba);
+  expect((await leer())?.mensajes).toHaveLength(1);
+  expect(
+    await db.inboxConversacion.findUnique({ where: { id: convId } }),
+  ).toMatchObject({ contactoWaId: destinatario });
+  await recibir(mensaje(destinatario, 'wamid.nueva'));
+  await procesar();
+  const envio = await enviar();
+  expect(client.enviarTexto).toHaveBeenCalledWith(
+    expect.objectContaining({ telefono: destinoPrueba }),
+  );
+  await recibir(estado('delivered', envio.id));
+  await procesar();
+  expect(
+    (await leer())?.mensajes.find((m) => m.direccion === 'SALIENTE')
+      ?.estadoEntrega,
+  ).toBe('DELIVERED');
+  const p = normalizarPlantilla(plantilla, null)!;
+  await scoped(() =>
+    envios.enviarPlantilla(auth, '127.0.0.1', convId, {
+      clave: randomUUID(),
+      canalId: identidadCanalInbox(canal),
+      plantillaId: p.id,
+      version: p.version,
+      valores: ['Cliente ficticio', 'DEMO-002'],
+      consentimientoConfirmado: true,
+    }),
+  );
+  expect(client.enviarPlantilla).toHaveBeenCalledWith(
+    expect.objectContaining({ telefono: destinoPrueba }),
+  );
+});
+
+it('no redirige el POST si cambia el destino después de reservar', async () => {
+  await recibir(mensaje());
+  await procesar();
+  capacidades.exigirOperacionTx
+    .mockResolvedValueOnce(undefined)
+    .mockImplementationOnce(() => {
+      process.env.META_INBOX_PRUEBA_DESTINO_E164 = '+16505550199';
+    });
+  await expect(enviar()).rejects.toThrow();
+  expect(client.enviarTexto).not.toHaveBeenCalled();
+  expect(
+    await db.inboxEnvio.findFirst({ where: { tenantId: auth.tenantId } }),
+  ).toMatchObject({ estado: 'RECHAZADO', codigo: 'CANAL_NO_VIGENTE' });
+});
+
+it.each(['', '16505550123', '+0123', 'https://example.invalid'])(
+  'rechaza un destino de prueba ausente o inválido (%s)',
+  async (destino) => {
+    process.env.META_INBOX_PRUEBA_DESTINO_E164 = destino;
+    await expect(activacion.activar(token)).rejects.toThrow();
+    expect(await leer()).toBeNull();
+  },
+);

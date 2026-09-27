@@ -196,6 +196,7 @@ export class MetaConexionService {
             wabaId: true,
             phoneNumberId: true,
             pruebaDestinatarioWaId: true,
+            pruebaDestinoE164: true,
             numero: true,
             estado: true,
             ultimoEventoCuenta: true,

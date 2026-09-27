@@ -6527,6 +6527,7 @@ model MetaVinculo {
   /// PRUEBA es un canal de staging; nunca una autorización de coexistencia.
   tipo                  String @default("COEXISTENCIA")
   pruebaDestinatarioWaId String?
+  pruebaDestinoE164     String?
   nombreVerificado      String?
   tokenCifrado          Json?
   tokenVenceEl          DateTime?

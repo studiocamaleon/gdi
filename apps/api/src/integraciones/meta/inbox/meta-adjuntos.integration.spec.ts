@@ -424,6 +424,7 @@ it('copia un adjunto del destinatario de prueba sin coexistencia y bloquea otro 
       wabaId: '200001',
       phoneNumberId: '300001',
       pruebaDestinatarioWaId: '16505550123',
+      pruebaDestinoE164: '+16505550123',
       tokenVenceEl: new Date(Date.now() + 60000),
     },
   });
@@ -434,6 +435,7 @@ it('copia un adjunto del destinatario de prueba sin coexistencia y bloquea otro 
     META_INBOX_PRUEBA_WABA_ID: canal.wabaId,
     META_INBOX_PRUEBA_PHONE_NUMBER_ID: canal.phoneNumberId,
     META_INBOX_PRUEBA_DESTINATARIO_WA_ID: '16505550123',
+    META_INBOX_PRUEBA_DESTINO_E164: '+16505550123',
     META_CONEXION_MODO: '',
     META_CONEXION_TENANT_IDS: '',
     META_EMBEDDED_SIGNUP_CONFIG_ID: '',

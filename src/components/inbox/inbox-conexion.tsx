@@ -70,7 +70,9 @@ export function EstadoImportacion({
         {canal.prueba?.venceEl && (
           <p className="text-sm text-muted-foreground">
             Vencimiento:{" "}
-            {new Date(canal.prueba.venceEl).toLocaleString("es-AR")}
+            {new Date(canal.prueba.venceEl).toLocaleString("es-AR", {
+              hourCycle: "h23",
+            })}
           </p>
         )}
         <p className="text-sm text-muted-foreground">

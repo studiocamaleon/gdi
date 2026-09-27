@@ -36,6 +36,7 @@ export async function canalGeneralInbox(
       recepcionDesdeEl: true,
       tipo: true,
       pruebaDestinatarioWaId: true,
+      pruebaDestinoE164: true,
       tokenVenceEl: true,
     },
   });

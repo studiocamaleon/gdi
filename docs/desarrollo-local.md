@@ -10,7 +10,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 - Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
 - API: `http://127.0.0.1:3001/api`.
-- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 294 migraciones aplicadas al 27/09, sin ejecutar seed.
+- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 295 migraciones aplicadas al 27/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
 - PDF: contenedor existente `gdi-saas-pdf-renderer`, puerto 3002.
 - Workers: procesos locales de cálculos/entregas y documentos PDF.
@@ -87,4 +87,6 @@ Undécimo bloque del 26/09: mismo worktree en `codex/inbox-documentos-comerciale
 
 El mismo worktree está en `codex/inbox-canal-pruebas`, desde `393096f32`. Se agregó `20260927200000_inbox_canal_prueba` en desarrollo y tests: **294 migraciones**, sin seed ni reset. La [guía del canal](meta-inbox-canal-prueba.md) separa lo comprobado en local del ensayo real pendiente.
 
-Después del reinicio del equipo se levantaron nuevamente web y API. Usan las conexiones locales anteriores, `GRAFO_DEPLOY_ENV=local`, `GRAFO_LOCAL_DISABLE_CRON=true`, correo vacío y todos los interruptores `META_INBOX_*`/piloto apagados; `META_CONEXION_MODO` vacío. El canal de prueba real sólo se habilita en staging. La muestra `/dev/diseno/inbox/prueba` usa datos ficticios en memoria y no necesita claves de Meta. No copiar las claves de staging para activarla. Los tests emplean `gdi_saas_test` con Graph simulado y Redis local.
+Después del reinicio del equipo se levantaron nuevamente web, API y ambos workers. Usan las conexiones locales anteriores, `GRAFO_DEPLOY_ENV=local`, `GRAFO_LOCAL_DISABLE_CRON=true`, correo vacío y todos los interruptores `META_INBOX_*`/piloto apagados; `META_CONEXION_MODO` vacío. El canal de prueba real sólo se habilita en staging. La muestra `/dev/diseno/inbox/prueba` usa datos ficticios en memoria y no necesita claves de Meta. No copiar las claves de staging para activarla. Los tests emplean `gdi_saas_test` con Graph simulado y Redis local.
+
+Corrección del ensayo real del 27/09: aplicada `20260927210000_inbox_destino_prueba` sólo por migración aditiva, **295 migraciones** en desarrollo y tests. La identidad del contacto se conserva; el destino explícito sólo existe para el canal de prueba de staging. Los procesos locales conservan Meta y cron desactivados.

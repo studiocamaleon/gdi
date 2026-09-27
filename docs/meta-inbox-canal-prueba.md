@@ -14,7 +14,9 @@ El canal queda identificado como **PRUEBA**, con una única empresa y un único 
 - Ensayo local integrado con PostgreSQL y Redis: firma → webhook persistido → trabajo → conversación → respuesta → estados → dos suscripciones SSE, con instancias separadas del bus. Graph es simulado y se prohíbe toda llamada HTTP externa durante ese test.
 - Comprobados duplicados, aislamiento entre empresas, destinatario ajeno, firma falsa, permisos, plan, token vencido, desconexión, trabajo pendiente al vencer el acceso y renovación fallida. La escritura se revalida antes del POST, después de preparar archivos si corresponde.
 - Interfaz revisada en Chrome con datos ficticios. Muestra local: `/dev/diseno/inbox/prueba`; no existe en producción.
-- **Todavía no activado en staging.** Los ensayos anteriores del piloto acreditan entrega y respuesta real, pero no el recorrido completo desde esta interfaz. Ver [registro del piloto](meta-prueba-plantillas.md).
+- **Activado en staging sobre `ca59f3a242d3`**, con API, web y ambos workers del mismo lote. El primer envío desde el Inbox fue rechazado por Meta con `131030`: el número de la lista de prueba difiere del identificador recibido en los webhooks. El intento quedó registrado y apareció en una segunda pestaña sin recargar; no se entregó. La corrección separa el destino explícito de prueba de la identidad de la conversación y aún requiere repetir el envío real. Ver [validación](../deploy/staging/VALIDACION.md).
+
+La corrección agrega `20260927210000_inbox_destino_prueba`: **295 migraciones** en local/tests. El nuevo campo se inicializa conservando el destino anterior. Cambiar la configuración de destino cierra el canal hasta una nueva activación acreditada; no redirige envíos en curso, no cambia el contacto ni reintenta mensajes rechazados.
 
 ## Cómo se mantiene limitado
 
@@ -26,10 +28,10 @@ Renovar conserva los mensajes, crea una nueva generación del acceso y exige una
 
 ## Preparación de staging, en orden
 
-1. Compilar y verificar el lote completo en remoto. Hay **11 migraciones** desde el piloto desplegado de 283 hasta este lote de 294. Revisarlas junto con [el procedimiento de staging](../deploy/staging/README.md); no copiar sólo el frontend.
+1. Compilar y verificar el lote completo en remoto. Hay **12 migraciones** desde el piloto original de 283 hasta este lote de 295. Staging ya recibió las primeras 11; aplicar sólo las pendientes. Revisarlas junto con [el procedimiento de staging](../deploy/staging/README.md); no copiar sólo el frontend.
 2. Aplicar migraciones con el rol migrador, sin seed/reset, y verificar los permisos del rol de ejecución. Publicar una versión coherente de API, web y workers, conservando los tamaños y recursos autorizados. Mantener inicialmente apagados los interruptores de Meta.
 3. Preparar en **API y worker principal** las variables de la tabla. La clave de cifrado debe ser la misma para ambos; los tokens de cada canal se leen cifrados de PostgreSQL. Next, el worker PDF y Gotenberg no necesitan las credenciales de Meta.
-4. Confirmar en Meta que sigue habilitado el destinatario de prueba. Usar su `wa_id` exacto comprobado en el ensayo, sin transformar números por heurísticas. Comprobar que el token temporal siga vigente y que la app continúe suscripta.
+4. Confirmar en Meta que sigue habilitado el destinatario de prueba. Configurar por separado el `wa_id` exacto recibido en el ensayo y el destino E.164 exacto registrado en la lista de Meta. La relación debe estar acreditada por el operador; no transformar números por heurísticas. Comprobar que el token temporal siga vigente y que la app continúe suscripta.
 5. Ejecutar el operador de activación con secretos privados en el entorno del proceso y `DATABASE_URL` del rol de ejecución. El script sólo admite la base remota `grafoprint_staging`, identificada también con `DEPLOY_DATABASE_NAME`.
 6. Apagar el piloto anterior y habilitar los interruptores del Inbox para este ensayo. Abrir la empresa demo, confirmar el aviso de prueba y el vencimiento, y ejecutar el recorrido real descrito debajo.
 
@@ -40,7 +42,8 @@ Renovar conserva los mensajes, crea una nueva generación del acceso y exige una
 | `META_INBOX_PRUEBA_TENANT_ID` | UUID de la única empresa de ensayo. |
 | `META_INBOX_PRUEBA_WABA_ID` | Cuenta oficial de prueba comprobada en Meta. |
 | `META_INBOX_PRUEBA_PHONE_NUMBER_ID` | Identificador del número de prueba de esa cuenta. |
-| `META_INBOX_PRUEBA_DESTINATARIO_WA_ID` | Destinatario autorizado, sólo dígitos y con código de país. |
+| `META_INBOX_PRUEBA_DESTINATARIO_WA_ID` | Identidad canónica recibida por webhook, sólo dígitos. Se usa para conversación, recepción y estados. |
+| `META_INBOX_PRUEBA_DESTINO_E164` | Número exacto autorizado en la lista de Meta, con `+`. Sólo el canal de prueba lo usa para el POST de envío. |
 | `META_APP_ID`, `META_APP_SECRET`, `META_GRAPH_API_VERSION` | Aplicación propia y versión de Graph, actualmente `v26.0`. |
 | `INTEGRACIONES_ENCRYPTION_KEY` | Cifra el token en la base; no reemplazar una clave existente. |
 | `META_INBOX_PRUEBA_ACCESS_TOKEN` | Sólo para el proceso operador de activación/renovación; nunca para el frontend ni como argumento de consola. |

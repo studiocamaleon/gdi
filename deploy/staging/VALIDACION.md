@@ -1,4 +1,19 @@
-# Validación de staging — 24 y 25 de septiembre de 2026
+# Validación de staging — historial de septiembre de 2026
+
+## Inbox desplegado y primer ensayo — 27/09/2026
+
+Versión `ca59f3a242d32d417cfc122791f4b40744a255b1`, [PR #7 en borrador](https://github.com/studiocamaleon/gdi/pull/7), dependiente del #5. [CI remoto aprobado](https://github.com/studiocamaleon/gdi/actions/runs/36344054206): backend/Next con tipos, migraciones, permisos y login/BFF. No se fusionaron PR ni se cambió producción.
+
+- Neon: de 283 a **294 migraciones**, comprobados los checksums existentes y los permisos del rol de ejecución. Sin seed/reset.
+- API y ambos workers: `registry.fly.io/grafoprint-staging-api@sha256:db1fa0efb94805cdb24e1bf294cba65bede09643837c335901a92df2f7ac26e1`.
+- Web: `registry.fly.io/grafoprint-staging-web@sha256:d359fe6dafbf3f4771b968c3daa43f4cbadca16168ad5642083c91c233ff0977`.
+- Las cinco máquinas conservan identificadores, región y tamaños; Gotenberg no cambió. Builder temporal eliminado. Salud web/API aprobada, Inbox abierto en Chrome con sesión real de la empresa demo.
+- Canal PRUEBA activado tras verificar token, activos y suscripción en Graph; credencial cifrada y clave de cifrado concordante entre API/worker. No se crearon autorizaciones Embedded Signup, altas ni historiales ficticios. Piloto anterior apagado.
+- Envío de plantilla de texto desde el Inbox: **rechazado, código Meta 131030, sin WAMID ni entrega**. El intento aparece en otra pestaña sin recargar. Se conserva el registro y no se reintenta automáticamente.
+- Diagnóstico: Meta recibe en el webhook una identidad distinta del formato que aceptó en el envío anterior desde su lista de destinatarios de prueba. La corrección separa ambos campos sólo en PRUEBA, sin reglas globales por país ni cambios en la identidad de la conversación.
+- **Pendiente:** desplegar la corrección y repetir el ensayo real. El token inicial vence el 27/09 a las 20:00 UTC; renovarlo antes del ensayo. Entrega, lectura y respuesta desde este Inbox todavía no están acreditadas. La plantilla con PDF sigue pendiente de aprobación.
+
+Las secciones anteriores en el tiempo que siguen describen el estado de cada momento, no el despliegue actual.
 
 ## Lote Inbox y canal de prueba — local, 27/09/2026
 

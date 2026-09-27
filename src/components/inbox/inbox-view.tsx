@@ -647,8 +647,10 @@ export function InboxView({
               <AlertDescription>
                 Sólo podés conversar con el destinatario habilitado para este
                 ensayo. El acceso vence el{" "}
-                {new Date(datos.prueba.venceEl).toLocaleString("es-AR")}. No se
-                importa el historial del celular.
+                {new Date(datos.prueba.venceEl).toLocaleString("es-AR", {
+                  hourCycle: "h23",
+                })}
+                . No se importa el historial del celular.
               </AlertDescription>
             </Alert>
           )}

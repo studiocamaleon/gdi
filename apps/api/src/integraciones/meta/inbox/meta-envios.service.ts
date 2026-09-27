@@ -266,7 +266,12 @@ export class MetaEnviosService {
           throw new ConflictException(
             'Ese intento corresponde a otro mensaje.',
           );
-        return { envio: anterior, token: null, telefono: null };
+        return {
+          envio: anterior,
+          token: null,
+          telefono: null,
+          contactoWaId: null,
+        };
       }
       const v = await tx.metaVinculo.findFirstOrThrow({
         where: { id: canal.id, tenantId: auth.tenantId },
@@ -326,7 +331,15 @@ export class MetaEnviosService {
         },
       });
       await registrarCambioInbox(tx, aviso);
-      return { envio, token, telefono: `+${c.contactoWaId}` };
+      return {
+        envio,
+        token,
+        contactoWaId: c.contactoWaId,
+        // Sólo el canal de prueba usa un destino acreditado por el operador.
+        // La identidad de la conversación y los estados conserva el wa_id.
+        telefono:
+          v.tipo === 'PRUEBA' ? v.pruebaDestinoE164 : `+${c.contactoWaId}`,
+      };
     });
     this.bus.avisar(aviso);
     if (reservado.token && reservado.telefono) {
@@ -414,7 +427,10 @@ export class MetaEnviosService {
           habilitado() &&
           vigente &&
           identidadCanalInbox(vigente) === dto.canalId &&
-          destinatarioCanalPermitido(vigente, reservado.telefono.slice(1)),
+          reservado.contactoWaId &&
+          destinatarioCanalPermitido(vigente, reservado.contactoWaId) &&
+          (vigente.tipo !== 'PRUEBA' ||
+            vigente.pruebaDestinoE164 === reservado.telefono),
         );
       } catch {
         accesoVigente = false;
