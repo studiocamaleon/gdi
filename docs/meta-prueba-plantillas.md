@@ -6,7 +6,7 @@ Se avanzó con `grafoprint_pedido_listo_v1`, `es_AR`, aprobada, sin esperar la r
 
 - Meta aceptó la solicitud. El webhook de staging guardó `sent` a las 18:29:42 UTC y `delivered` a las 18:29:43 UTC, sin códigos de error.
 - Los eventos corresponden al mismo WAMID, cuenta, número de prueba, empresa y correlación privada del intento. No hubo reenvío ni eventos simulados.
-- El número de destino se configuró con prefijo argentino `54`; Meta devolvió su identificador de WhatsApp con `549`. Se comprobó esa correspondencia exacta en el registro privado. Para el futuro canal de prueba debe usarse el `wa_id` confirmado por Meta, sin introducir reglas generales que fusionen números por sufijos.
+- El número de destino se configuró con prefijo argentino `54`; Meta devolvió su identificador de WhatsApp con `549`. Se comprobó esa correspondencia exacta en el registro privado. El canal de prueba conserva el `wa_id` confirmado por Meta para la identidad, recepción y estados, y el destino exacto registrado para enviar. No introducir reglas generales que fusionen números por sufijos.
 - Lucas confirmó que abrió el mensaje y respondió `PRUEBA GRAFO DEMO-0002`. El webhook real de esa respuesta quedó guardado en staging a las **18:34:46 UTC**, asociado a la empresa, cuenta y número correctos. No traía `context.id`: es un nuevo mensaje del chat, no una respuesta citada al mensaje saliente. Al cierre de la consulta no había evento `read`; no se infiere lectura a partir de la respuesta.
 - El normalizador actual del Inbox interpretó esos tres eventos reales, en un proceso de sólo lectura: `SENT`, `DELIVERED` y mensaje de texto `ENTRANTE`/`NUEVO`, todos sin avisos. No se ejecutó el procesador ni se escribieron proyecciones nuevas en Neon o en la base local; todavía falta la prueba del Inbox completo.
 - La plantilla `grafoprint_documento_pedido_v1` todavía figuraba `PENDING` al consultar el catálogo para este envío. No se envió PDF.
@@ -21,12 +21,12 @@ Es útil para administración y diagnóstico. Un envío por ese MCP no ejecuta `
 
 ## Preparación del recorrido completo en staging
 
-La prueba de texto elimina la espera por una plantilla como bloqueo del resto del trabajo. El [canal de prueba explícito](meta-inbox-canal-prueba.md) ya está implementado y comprobado en local. La activación y la validación completa en staging siguen pendientes:
+La prueba de texto elimina la espera por una plantilla como bloqueo del resto del trabajo. El [canal de prueba explícito](meta-inbox-canal-prueba.md) ya está implementado y comprobado en local. El lote `ca59f3a242d3` se desplegó y activó en staging. El primer intento desde el Inbox fue rechazado con `131030` por la diferencia entre destino de prueba e identidad recibida. La corrección `246bf36b5203` se desplegó y se renovó la activación. DEMO-0004 completó el recorrido real de texto desde el Inbox: plantilla entregada, entrada, respuesta libre entregada y actualización en dos pestañas. No se recibió `read`. PDF, coexistencia e historial siguen pendientes. Este es el orden del protocolo:
 
 1. **Canal de prueba explícito.** El piloto actual usa configuración del servidor; la lectura general usa `MetaVinculo`, mientras `enviosInboxHabilitados` exige modo `coexistencia`. El modo nuevo representa el canal de prueba con empresa, cuenta, número, destinatario autorizado y vencimiento comprobados. No cargar un vínculo ficticio ni activar `coexistencia` para saltar el alta.
 2. **Límites del ensayo.** Mantener permisos, plan, separación de empresas, ventana de 24 horas, revalidación de conexión y control de duplicados. El modo de prueba debe cerrarse fuera de staging, rechazar destinatarios ajenos y señalar claramente su condición en la pantalla. No debe solicitar contactos ni historial de coexistencia.
 3. **Comprobación local.** Pruebas con credenciales y datos ficticios que recorran recepción → cola → conversación → envío → estados → avisos en vivo. Cubrir además token vencido, desconexión, otra empresa y otro destinatario. Las claves reales continúan fuera de la aplicación local.
-4. **Lote coherente.** Hay once migraciones aditivas entre el piloto desplegado (283) y el desarrollo actual (294), desde `20260925223000_meta_recepcion_piloto` hasta `20260927200000_inbox_canal_prueba`. Compilar y comprobar API/web en remoto; el workflow se amplió para la rama `codex/inbox-canal-pruebas`.
+4. **Lote coherente.** Hay doce migraciones aditivas entre el piloto original (283) y el desarrollo actual (295), desde `20260925223000_meta_recepcion_piloto` hasta `20260927210000_inbox_destino_prueba`. Compilar y comprobar API/web en remoto; el workflow se amplió para la rama `codex/inbox-canal-pruebas`.
 5. **Despliegue y activación.** Aplicar migraciones sin seed/reset, revisar permisos y publicar API, web y workers con una versión coherente. Reutilizar PostgreSQL, Redis, R2 y el worker existente; este diseño no exige contratar otra máquina. Definir la configuración del canal de prueba en el servidor y abrir sólo la empresa de ensayo.
 6. **Prueba desde Grafo.** Abrir dos sesiones del Inbox; recibir un mensaje, contestar, enviar una plantilla y observar entrega/lectura disponibles sin recargar. Comprobar reconexión y ausencia de duplicados. Luego probar archivos e incorporarlos al mismo registro de validación. Coexistencia e importación de historial conservan su ensayo separado con un número elegible.
 
@@ -34,7 +34,7 @@ La prueba de texto elimina la espera por una plantilla como bloqueo del resto de
 
 La conexión con Meta está comprobada y el envío de PDF está preparado. **Todavía no se envió el PDF:** la plantilla `grafoprint_documento_pedido_v1`, idioma `es_AR`, figura `PENDING`. Esta revisión de la plantilla es distinta de la revisión de la aplicación como proveedor de tecnología.
 
-Se trabajó en `codex/meta-prueba-plantillas`, sobre el código `cf725933d`. No se desplegó el Inbox nuevo. Staging conserva el piloto `7efabd87213e`; únicamente se renovó su token temporal. Los cambios de plantillas y documentos siguen en local.
+Registro histórico del 26/09: se trabajó en `codex/meta-prueba-plantillas`, sobre el código `cf725933d`. No se desplegó el Inbox nuevo. Staging conserva el piloto `7efabd87213e`; únicamente se renovó su token temporal. Los cambios de plantillas y documentos siguen en local.
 
 ## Lo que ya se verificó
 

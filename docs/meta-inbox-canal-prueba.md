@@ -14,13 +14,13 @@ El canal queda identificado como **PRUEBA**, con una única empresa y un único 
 - Ensayo local integrado con PostgreSQL y Redis: firma → webhook persistido → trabajo → conversación → respuesta → estados → dos suscripciones SSE, con instancias separadas del bus. Graph es simulado y se prohíbe toda llamada HTTP externa durante ese test.
 - Comprobados duplicados, aislamiento entre empresas, destinatario ajeno, firma falsa, permisos, plan, token vencido, desconexión, trabajo pendiente al vencer el acceso y renovación fallida. La escritura se revalida antes del POST, después de preparar archivos si corresponde.
 - Interfaz revisada en Chrome con datos ficticios. Muestra local: `/dev/diseno/inbox/prueba`; no existe en producción.
-- **Activado en staging sobre `ca59f3a242d3`**, con API, web y ambos workers del mismo lote. El primer envío desde el Inbox fue rechazado por Meta con `131030`: el número de la lista de prueba difiere del identificador recibido en los webhooks. El intento quedó registrado y apareció en una segunda pestaña sin recargar; no se entregó. La corrección separa el destino explícito de prueba de la identidad de la conversación y aún requiere repetir el envío real. Ver [validación](../deploy/staging/VALIDACION.md).
+- **Activado y ensayado en staging sobre `246bf36b5203`**, con API, web y ambos workers del mismo lote. DEMO-0004 comprobó plantilla entregada, recepción real, ventana de respuesta, respuesta libre entregada y actualización en dos pestañas sin recargar. No llegó `read`; no se infiere de la respuesta. El intento previo rechazado con `131030` queda registrado. Ver [validación](../deploy/staging/VALIDACION.md).
 
-La corrección agrega `20260927210000_inbox_destino_prueba`: **295 migraciones** en local/tests. El nuevo campo se inicializa conservando el destino anterior. Cambiar la configuración de destino cierra el canal hasta una nueva activación acreditada; no redirige envíos en curso, no cambia el contacto ni reintenta mensajes rechazados.
+La corrección agrega `20260927210000_inbox_destino_prueba`: **295 migraciones** en local, tests y staging. El nuevo campo se inicializa conservando el destino anterior. Cambiar la configuración de destino cierra el canal hasta una nueva activación acreditada; no redirige envíos en curso, no cambia el contacto ni reintenta mensajes rechazados.
 
 ## Cómo se mantiene limitado
 
-La configuración del servidor determina empresa, cuenta, número y destinatario. El navegador no puede cambiarlos. Si falta un dato, el entorno no es staging, vence el token o cambia la configuración, se cierran lectura, envío, recepción y acceso al stream del canal de prueba. Un mensaje entrante no equivale a un evento de lectura.
+La configuración del servidor determina empresa, cuenta, número y destinatario. El navegador no puede cambiarlos. Si falta un dato, el entorno no es staging, vence el token o cambia la configuración, se cierran lectura, envío, recepción y acceso al stream del canal de prueba. Un mensaje entrante no equivale a un evento de lectura. La privacidad del receptor puede impedir que se comparta esa confirmación; Grafo debe conservar el último estado acreditado. Ver [ayuda de WhatsApp](https://faq.whatsapp.com/665923838265756/) y [referencia de estados](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status) (actualizada el 14/09/2026, consultada el 27/09).
 
 La activación consulta Graph para verificar aplicación, permisos, vencimiento, pertenencia del número a la cuenta y suscripción de la aplicación al webhook. Sólo hace consultas. El comando de activación no registra números, no suscribe aplicaciones, no solicita historial y no envía mensajes. No reemplaza un vínculo de coexistencia existente.
 
@@ -28,7 +28,7 @@ Renovar conserva los mensajes, crea una nueva generación del acceso y exige una
 
 ## Preparación de staging, en orden
 
-1. Compilar y verificar el lote completo en remoto. Hay **12 migraciones** desde el piloto original de 283 hasta este lote de 295. Staging ya recibió las primeras 11; aplicar sólo las pendientes. Revisarlas junto con [el procedimiento de staging](../deploy/staging/README.md); no copiar sólo el frontend.
+1. Compilar y verificar el lote completo en remoto. Hay **12 migraciones** desde el piloto original de 283 hasta este lote de 295. Staging ya recibió las 12; para otra actualización, aplicar sólo las pendientes. Revisarlas junto con [el procedimiento de staging](../deploy/staging/README.md); no copiar sólo el frontend.
 2. Aplicar migraciones con el rol migrador, sin seed/reset, y verificar los permisos del rol de ejecución. Publicar una versión coherente de API, web y workers, conservando los tamaños y recursos autorizados. Mantener inicialmente apagados los interruptores de Meta.
 3. Preparar en **API y worker principal** las variables de la tabla. La clave de cifrado debe ser la misma para ambos; los tokens de cada canal se leen cifrados de PostgreSQL. Next, el worker PDF y Gotenberg no necesitan las credenciales de Meta.
 4. Confirmar en Meta que sigue habilitado el destinatario de prueba. Configurar por separado el `wa_id` exacto recibido en el ensayo y el destino E.164 exacto registrado en la lista de Meta. La relación debe estar acreditada por el operador; no transformar números por heurísticas. Comprobar que el token temporal siga vigente y que la app continúe suscripta.
@@ -58,7 +58,9 @@ node scripts/deploy/activar-meta-prueba.cjs --activar
 
 La salida sólo comunica tipo, vencimiento y resultado. Si falla, no cambia el vínculo anterior. No colocar claves, números privados ni identificadores reales en este documento, el PR o los logs.
 
-## Ensayo real que falta
+## Recorrido real y comprobaciones restantes
+
+Los pasos de texto 1–4 se completaron el 27/09, salvo el evento `read`, no recibido. La credencial de ese ensayo vence a las 19:00 de Argentina. Los archivos y coexistencia conservan ensayos separados.
 
 1. Abrir dos sesiones del Inbox en la empresa de ensayo. La conversación inicial estará vacía; no se inventan mensajes ni una ventana de 24 horas.
 2. Enviar una plantilla aprobada al destinatario ya autorizado, desde Grafo y con un identificador de prueba nuevo. Comprobar un solo intento y registrar su correlación de manera privada.

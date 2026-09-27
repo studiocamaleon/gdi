@@ -1,5 +1,21 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Resultado actual: Inbox real en staging — 27/09/2026
+
+Código desplegado `246bf36b5203de4004ae8b007bfcbff47c649c9a`, [CI aprobado](https://github.com/studiocamaleon/gdi/actions/runs/36346485240), [PR #7 en borrador](https://github.com/studiocamaleon/gdi/pull/7), dependiente del #5. API, web y ambos workers corresponden al mismo lote. No se fusionaron PR ni se modificó producción.
+
+- **Neon:** 295 migraciones; última `20260927210000_inbox_destino_prueba`. Aplicación aditiva, permisos del rol de ejecución comprobados, sin seed/reset. Se conservan conversaciones e intentos anteriores.
+- **Backend:** `registry.fly.io/grafoprint-staging-api@sha256:8e90fad026a371c46fb85acdcd4242a5b54ce88f868c19006b93c5e43dc3826f` (API y ambos workers).
+- **Web:** `registry.fly.io/grafoprint-staging-web@sha256:8cea2d18892299621041c9b9c108249627aa0cfe24aac73be3f7557a7dc002e6`.
+- Las cinco máquinas conservan tamaños/región; Gotenberg sin cambios. Salud HTTPS de web/API aprobada y máquinas actualizadas iniciadas. El builder temporal fue eliminado al terminar. El primer build web en Fly falló en `next/font`; la repetición del mismo código aprobó, al igual que GitHub, sin omitir tipos.
+- Corrección local: **119 pruebas API** entre la corrida y la repetición del spec ajustado; **30 pruebas web**, TypeScript API/web y ESLint aprobados. Comprueba destino explícito distinto del identificador, recepción/estados canónicos, cambios de configuración antes del POST, renovación y datos inválidos. No hace llamadas reales a Meta desde los tests.
+- Token renovado personalmente por Lucas y comprobado con Graph. Canal PRUEBA activado, vencimiento **27/09/2026 22:00 UTC (19:00 Argentina)**. El aviso muestra la hora en formato de 24 horas. La relación exacta entre destino de envío e identidad del contacto queda sólo en configuración privada.
+- **Ensayo real DEMO-0004 desde Chrome:** una plantilla de texto aceptada, `sent` y `delivered` recibidos por webhook. La entrada real del destinatario apareció en las dos pestañas sin recargar y abrió la ventana de 24 horas. Una respuesta libre desde Grafo también fue aceptada y entregada; ambas pestañas actualizaron el contenido y los checks automáticamente. Al recargar una de las pestañas se recuperaron los mensajes y estados conservados, sin reenviar.
+- Los estados se verificaron por el WAMID y correlación del intento, cuenta, número y destinatario exactos; trabajos completados. El intento DEMO-0003 rechazado con 131030 se conserva en el registro: no se borró ni reintentó automáticamente. Al renovar la generación, los intentos de la generación anterior ya no se ofrecen como envíos actuales en la pantalla.
+- **No se recibió `read` al cierre del ensayo:** no se infiere lectura de una respuesta. Los crudos de esta cuenta se revisaron también sin filtrar por empresa: cuatro estados `sent`/`delivered` para los dos envíos del ensayo, sin `read`, sin estados descartados ni errores de procesamiento. El soporte de `READ` está validado en local; para comprobarlo realmente hace falta un receptor que comparta confirmaciones de lectura. Ver [referencia de estados de Meta](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status) y [privacidad de las confirmaciones](https://faq.whatsapp.com/665923838265756/). La plantilla PDF sigue `PENDING`, consultada también mediante el MCP oficial. Quedan aparte el ensayo de archivos, la conexión real por Embedded Signup, coexistencia y sincronización de historial con un número elegible.
+
+Los apartados siguientes son registros históricos y pueden describir versiones o pendientes ya superados por este resultado.
+
 ## Inbox desplegado y primer ensayo — 27/09/2026
 
 Versión `ca59f3a242d32d417cfc122791f4b40744a255b1`, [PR #7 en borrador](https://github.com/studiocamaleon/gdi/pull/7), dependiente del #5. [CI remoto aprobado](https://github.com/studiocamaleon/gdi/actions/runs/36344054206): backend/Next con tipos, migraciones, permisos y login/BFF. No se fusionaron PR ni se cambió producción.
