@@ -1,5 +1,15 @@
 # Validación de staging — 24 y 25 de septiembre de 2026
 
+## Lote Inbox y canal de prueba — local, 27/09/2026
+
+Backend del canal `a248d97c6`, rama `codex/inbox-canal-pruebas`. Implementación y límites en [meta-inbox-canal-prueba.md](../../docs/meta-inbox-canal-prueba.md). **No desplegado ni activado todavía:** Fly conserva el piloto y Neon conserva las 283 migraciones registradas abajo.
+
+- Desarrollo y tests: 294 migraciones, sin seed/reset; comprobados lectura y permisos de escritura de las columnas nuevas con el rol de ejecución local.
+- Meta API: 464 pruebas aprobadas entre la corrida general y la repetición de los archivos ajustados. Incluye 19 pruebas nuevas del canal y un caso nuevo de adjuntos con destinatario permitido/ajeno. Graph simulado, PostgreSQL/Redis locales.
+- Interfaz: 69 pruebas, TypeScript API/web, ESLint de los archivos modificados y control de CSS aprobados. Revisión en Chrome en temas claro y oscuro con datos ficticios; API y web locales saludables.
+- Firma, cola, deduplicación, ventana de 24 horas, plantillas, entrega/lectura, dos suscripciones SSE con buses separados, vencimiento, permisos, aislamiento y renovación comprobados localmente.
+- Falta compilación de contenedores en remoto y recorrido real completo en staging. El workflow se habilitó para esta rama; no recibe secretos cloud ni despliega. No confundir esta evidencia local con la prueba real del piloto documentada en [meta-prueba-plantillas.md](../../docs/meta-prueba-plantillas.md).
+
 ## Lote local posterior: recepción Meta (sin desplegar)
 
 `codex/meta-recepcion-piloto` prepara la bandeja de recepción interna. La migración `20260925223000_meta_recepcion_piloto` se probó sólo en una base local desechable con 284 migraciones. Neon conserva las 283 migraciones y Fly conserva `7efabd87213e`; no se importó el interruptor de recepción. Ver pruebas y procedimiento de activación en [meta-recepcion-piloto.md](../../docs/meta-recepcion-piloto.md). El [CI remoto 36195604016](https://github.com/studiocamaleon/gdi/actions/runs/36195604016) aprobó API/Next con tipos, migraciones y permisos, ensayos Meta y login/BFF sobre `715c7084346cad30addc149fe0856bdb815a1b7d`. También pasaron 60 pruebas API, 4 de interfaz, TypeScript frontend y revisión visual local con datos ficticios. El código está en el [PR #5 en borrador](https://github.com/studiocamaleon/gdi/pull/5), dependiente del #4. Esta nota no acredita recepción real ni coexistencia.

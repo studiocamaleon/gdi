@@ -10,7 +10,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 - Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
 - API: `http://127.0.0.1:3001/api`.
-- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 290 migraciones aplicadas al 26/09, sin ejecutar seed.
+- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 294 migraciones aplicadas al 27/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
 - PDF: contenedor existente `gdi-saas-pdf-renderer`, puerto 3002.
 - Workers: procesos locales de cálculos/entregas y documentos PDF.
@@ -82,3 +82,9 @@ Noveno bloque del 26/09: mismo worktree en `codex/inbox-plantillas`, desde `07af
 Décimo bloque del 26/09: mismo worktree en `codex/inbox-plantillas-archivos`, desde `cf835ff8a`. Aplicada `20260927010000_inbox_plantillas_archivos` sólo en desarrollo y tests: **293 migraciones**, sin seed ni reset; permisos de `grafo_app` comprobados. Agrega [plantillas con PDF e imágenes de la ficha del cliente](meta-inbox-plantillas.md). Reutiliza almacenamiento privado y el worker de adjuntos, con pruebas de Meta y storage simulados. Los envíos reales, sus flags y cron siguen apagados; no se reinició Docker ni se operó staging o producción. La API local respondió con base disponible después de la recarga.
 
 Undécimo bloque del 26/09: mismo worktree en `codex/inbox-documentos-comerciales`, desde `9510b2a04`. Agrega [presupuestos y comprobantes emitidos al selector de plantillas](meta-inbox-plantillas.md), con permisos propios de cada módulo y revisión privada ligada a la conversación. **Sin nuevas migraciones: siguen siendo 293**. La demo incluye documentos ficticios; las pruebas usan únicamente `gdi_saas_test` y clientes de Meta/almacenamiento simulados. El listado no genera PDF, no cambia estados ni consulta ARCA. Se conservaron cron y envíos reales apagados, sin staging, producción ni reinicio de Docker. API local comprobada con base disponible.
+
+## Canal de prueba — 27/09/2026
+
+El mismo worktree está en `codex/inbox-canal-pruebas`, desde `393096f32`. Se agregó `20260927200000_inbox_canal_prueba` en desarrollo y tests: **294 migraciones**, sin seed ni reset. La [guía del canal](meta-inbox-canal-prueba.md) separa lo comprobado en local del ensayo real pendiente.
+
+Después del reinicio del equipo se levantaron nuevamente web y API. Usan las conexiones locales anteriores, `GRAFO_DEPLOY_ENV=local`, `GRAFO_LOCAL_DISABLE_CRON=true`, correo vacío y todos los interruptores `META_INBOX_*`/piloto apagados; `META_CONEXION_MODO` vacío. El canal de prueba real sólo se habilita en staging. La muestra `/dev/diseno/inbox/prueba` usa datos ficticios en memoria y no necesita claves de Meta. No copiar las claves de staging para activarla. Los tests emplean `gdi_saas_test` con Graph simulado y Redis local.

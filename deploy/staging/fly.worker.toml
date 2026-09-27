@@ -11,6 +11,7 @@ kill_timeout = 300
   app = "node dist/src/workers/worker-main.js"
 
 [env]
+  GRAFO_DEPLOY_ENV = "staging"
   FRONTEND_URL = "https://staging.grafoprint.com.ar"
   REGISTRO_PUBLICO_URL = "https://staging.grafoprint.com.ar"
   REGISTRO_PUBLICO_HABILITADO = "false"

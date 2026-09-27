@@ -2,7 +2,7 @@ name: Validar contenedores de staging
 
 on:
   push:
-    branches: [codex/staging-infraestructura, codex/fix-configuracion-staging, codex/meta-cloud-base, codex/meta-recepcion-piloto]
+    branches: [codex/staging-infraestructura, codex/fix-configuracion-staging, codex/meta-cloud-base, codex/meta-recepcion-piloto, codex/inbox-canal-pruebas]
     paths:
       - '.github/workflows/staging-validation.yml'
       - 'deploy/Dockerfile'
