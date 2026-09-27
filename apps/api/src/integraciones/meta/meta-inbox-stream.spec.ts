@@ -24,7 +24,10 @@ jest.mock('./meta-recepcion', () => ({
 }));
 let revision: (revision: string | null) => void;
 const lecturaAnterior = process.env.META_INBOX_LECTURA_ENABLED;
-let escuchar: jest.Mock;
+let escuchar: jest.Mock<
+  () => void,
+  [unknown, (revision: string | null) => void]
+>;
 let dejar: jest.Mock,
   prisma: {
     authSession: { findUnique: jest.Mock };
@@ -58,13 +61,12 @@ beforeEach(() => {
   dejar = jest.fn();
   prisma = {
     metaVinculo: {
-      findFirst: jest
-        .fn()
-        .mockResolvedValue({
-          id: 'vinculo',
-          autorizacionId: 'alta-1',
-          ...config,
-        }),
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'vinculo',
+        autorizacionId: 'alta-1',
+        tipo: 'COEXISTENCIA',
+        ...config,
+      }),
     },
     authSession: {
       findUnique: jest.fn().mockImplementation(() => Promise.resolve(sesion())),
@@ -212,6 +214,7 @@ it.each(['desconectado', 'reconectado', 'crm', 'password', 'bandera'])(
       prisma.metaVinculo.findFirst.mockResolvedValue({
         id: 'vinculo',
         autorizacionId: 'alta-2',
+        tipo: 'COEXISTENCIA',
         ...config,
       });
     if (caso === 'crm') {

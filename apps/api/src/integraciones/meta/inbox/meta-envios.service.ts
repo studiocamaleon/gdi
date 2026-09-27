@@ -27,6 +27,7 @@ import { registrarCambioInbox } from '../../../inbox-tiempo-real/inbox-revision'
 import type { CurrentAuth } from '../../../auth/auth.types';
 import { exigirAccesoConexionMeta } from '../meta-conexion-acceso';
 import { canalGeneralInbox, identidadCanalInbox } from '../meta-inbox-canal';
+import { destinatarioCanalPermitido } from '../meta-prueba.config';
 import { MetaCloudClient, type ResultadoMeta } from '../meta-cloud.client';
 import {
   enviosInboxHabilitados,
@@ -82,14 +83,14 @@ export class MetaEnviosService {
     ip: string,
     dto: CatalogoPlantillasInboxDto,
   ) {
-    if (!plantillasInboxHabilitadas(auth.tenantId))
+    const canal = await canalGeneralInbox(this.db, auth.tenantId);
+    if (!canal || !plantillasInboxHabilitadas(auth.tenantId, canal.tipo))
       throw new ForbiddenException(
         'Las plantillas todavía no están habilitadas.',
       );
     await exigirAccesoConexionMeta(this.db, auth, ip);
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
-    const canal = await canalGeneralInbox(this.db, auth.tenantId);
-    if (!canal || identidadCanalInbox(canal) !== dto.canalId)
+    if (identidadCanalInbox(canal) !== dto.canalId)
       throw new ConflictException('La conexión cambió. Actualizá el Inbox.');
     const v = await this.db.metaVinculo.findFirstOrThrow({
       where: { id: canal.id, tenantId: auth.tenantId },
@@ -114,7 +115,7 @@ export class MetaEnviosService {
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
     const actual = await canalGeneralInbox(this.db, auth.tenantId);
     if (
-      !plantillasInboxHabilitadas(auth.tenantId) ||
+      !plantillasInboxHabilitadas(auth.tenantId, canal.tipo) ||
       !actual ||
       identidadCanalInbox(actual) !== dto.canalId
     )
@@ -153,18 +154,18 @@ export class MetaEnviosService {
     dto: EnviarTextoInboxDto | EnviarPlantillaInboxDto,
   ) {
     const esPlantilla = 'plantillaId' in dto;
-    const habilitado = () =>
-      esPlantilla
-        ? plantillasInboxHabilitadas(auth.tenantId)
-        : enviosInboxHabilitados(auth.tenantId);
-    if (!habilitado())
-      throw new ForbiddenException(
-        'Las respuestas todavía no están habilitadas.',
-      );
     await exigirAccesoConexionMeta(this.db, auth, ip);
     const canal = await canalGeneralInbox(this.db, auth.tenantId);
     if (!canal || identidadCanalInbox(canal) !== dto.canalId)
       throw new ConflictException('La conexión cambió. Actualizá el Inbox.');
+    const habilitado = () =>
+      esPlantilla
+        ? plantillasInboxHabilitadas(auth.tenantId, canal.tipo)
+        : enviosInboxHabilitados(auth.tenantId, canal.tipo);
+    if (!habilitado())
+      throw new ForbiddenException(
+        'Las respuestas todavía no están habilitadas.',
+      );
     if (!esPlantilla && (!dto.texto.trim() || dto.texto.length > 4096))
       throw new BadRequestException('Escribí entre 1 y 4096 caracteres.');
     if (esPlantilla && dto.consentimientoConfirmado !== true)
@@ -279,6 +280,10 @@ export class MetaEnviosService {
       });
       if (!c)
         throw new NotFoundException('La conversación no está disponible.');
+      if (!destinatarioCanalPermitido(v, c.contactoWaId))
+        throw new ForbiddenException(
+          'Ese destinatario no está habilitado para esta prueba.',
+        );
       if (!/^[1-9]\d{7,14}$/.test(c.contactoWaId))
         throw new BadRequestException('El destinatario no es válido.');
       if (!esPlantilla && !(await consultarVentanaRespuesta(tx, v, c)).abierta)
@@ -396,6 +401,24 @@ export class MetaEnviosService {
           preparacionFallida = true;
         }
       }
+      let accesoVigente = true;
+      try {
+        await exigirAccesoConexionMeta(this.db, auth, ip);
+        await this.db.$transaction((tx) =>
+          this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+            'whatsapp_automatico',
+          ]),
+        );
+        const vigente = await canalGeneralInbox(this.db, auth.tenantId);
+        accesoVigente = Boolean(
+          habilitado() &&
+          vigente &&
+          identidadCanalInbox(vigente) === dto.canalId &&
+          destinatarioCanalPermitido(vigente, reservado.telefono.slice(1)),
+        );
+      } catch {
+        accesoVigente = false;
+      }
       try {
         const base = {
           accessToken: reservado.token,
@@ -405,15 +428,17 @@ export class MetaEnviosService {
         };
         resultado = preparacionFallida
           ? { estado: 'fallida', codigo: 'ARCHIVO_NO_PREPARADO' }
-          : esPlantilla && plantilla
-            ? await this.client.enviarPlantilla({
-                ...base,
-                plantilla: plantilla.nombre,
-                idioma: plantilla.idioma,
-                parametros: [],
-                componentes,
-              })
-            : await this.client.enviarTexto({ ...base, texto });
+          : !accesoVigente
+            ? { estado: 'fallida', codigo: 'CANAL_NO_VIGENTE' }
+            : esPlantilla && plantilla
+              ? await this.client.enviarPlantilla({
+                  ...base,
+                  plantilla: plantilla.nombre,
+                  idioma: plantilla.idioma,
+                  parametros: [],
+                  componentes,
+                })
+              : await this.client.enviarTexto({ ...base, texto });
       } catch {
         resultado = { estado: 'incierta' };
       }

@@ -30,6 +30,10 @@ import {
   configuracionMetaConexion,
   modoAltaPermitido,
 } from '../meta-conexion.config';
+import {
+  canalPruebaPermitido,
+  configuracionCanalPrueba,
+} from '../meta-prueba.config';
 import { objeto } from './meta-inbox-normalizar';
 import {
   adjuntosHabilitados,
@@ -103,10 +107,27 @@ export class MetaAdjuntosService {
     const v = await tx.metaVinculo.findFirstOrThrow({
       where: { id: j.vinculoId, tenantId: j.tenantId },
     });
+    if (
+      v.tipo === 'PRUEBA' &&
+      (!m.conversacionId ||
+        !(await tx.inboxConversacion.findFirst({
+          where: {
+            id: m.conversacionId,
+            tenantId: v.tenantId,
+            vinculoId: v.id,
+            contactoWaId: v.pruebaDestinatarioWaId!,
+          },
+          select: { id: true },
+        })))
+    )
+      throw new ErrorMediaMeta('NO_DISPONIBLE');
     const c = objeto(m.contenido);
     if (
       !adjuntosHabilitados() ||
-      modoAltaPermitido(j.tenantId) !== 'COEXISTENCIA' ||
+      (v.tipo === 'PRUEBA'
+        ? !canalPruebaPermitido(v)
+        : v.tipo !== 'COEXISTENCIA' ||
+          modoAltaPermitido(j.tenantId) !== 'COEXISTENCIA') ||
       v.estado !== 'VERIFICADO' ||
       !v.recepcionDesdeEl ||
       !v.tokenCifrado ||
@@ -128,7 +149,15 @@ export class MetaAdjuntosService {
   async procesarSiguiente(): Promise<boolean> {
     if (this.ocupado || !adjuntosHabilitados() || !this.secretos.disponible)
       return false;
-    const config = configuracionMetaConexion();
+    const prueba = configuracionCanalPrueba();
+    const config =
+      configuracionMetaConexion() ??
+      (prueba && process.env.META_APP_SECRET
+        ? {
+            appSecret: process.env.META_APP_SECRET,
+            graphVersion: process.env.META_GRAPH_API_VERSION ?? 'v26.0',
+          }
+        : null);
     if (!config) return false;
     const tenants = (process.env.META_CONEXION_TENANT_IDS ?? '')
       .split(',')
@@ -137,6 +166,7 @@ export class MetaAdjuntosService {
         (s) =>
           /^[a-f\d-]{36}$/i.test(s) && modoAltaPermitido(s) === 'COEXISTENCIA',
       );
+    if (prueba) tenants.push(prueba.tenantId);
     if (!tenants.length) return false;
     this.ocupado = true;
     try {

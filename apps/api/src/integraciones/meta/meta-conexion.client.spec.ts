@@ -36,7 +36,7 @@ const detalle = {
   platform_type: 'CLOUD_API',
 };
 const fetchOriginal = global.fetch;
-let fetchMock: jest.Mock;
+let fetchMock: jest.Mock<Promise<Response>, [URL, RequestInit]>;
 const responder = (...bodies: unknown[]) => {
   for (const body of bodies)
     fetchMock.mockResolvedValueOnce(
@@ -44,8 +44,10 @@ const responder = (...bodies: unknown[]) => {
     );
 };
 beforeEach(() => {
-  fetchMock = jest.fn().mockRejectedValue(new Error('Red no esperada'));
-  global.fetch = fetchMock;
+  fetchMock = jest
+    .fn<Promise<Response>, [URL, RequestInit]>()
+    .mockRejectedValue(new Error('Red no esperada'));
+  global.fetch = fetchMock as typeof fetch;
 });
 afterEach(() => {
   global.fetch = fetchOriginal;
@@ -140,7 +142,7 @@ it.each([
   responder({ data: { ...debug().data, ...(extra as object) } });
   await expect(
     new MetaConexionClient().verificar(config, token, seleccion),
-  ).rejects.toThrow(motivo as string);
+  ).rejects.toThrow(motivo);
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 it('admite un scope general sin target_ids y siempre comprueba el edge de la cuenta', async () => {
@@ -279,10 +281,12 @@ it('contrato de suscripción y sincronización: Bearer, POST y request_id', asyn
       cache: 'no-store',
       headers: { Authorization: `Bearer ${token}` },
     });
-  expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({
+  const body = fetchMock.mock.calls[2][1].body;
+  if (typeof body !== 'string') throw new Error('Falta el cuerpo JSON');
+  expect(JSON.parse(body)).toMatchObject({
     messaging_product: 'whatsapp',
     sync_type: 'history',
-    appsecret_proof: expect.stringMatching(/^[a-f0-9]{64}$/),
+    appsecret_proof: expect.stringMatching(/^[a-f0-9]{64}$/) as unknown,
   });
 });
 it.each([400, 429, 500, 200])(
@@ -313,3 +317,32 @@ it('sandbox rechaza una WABA distinta de la cuenta de ensayo configurada sin lla
   ).rejects.toThrow('ACTIVO_NO_AUTORIZADO');
   expect(fetchMock).not.toHaveBeenCalled();
 });
+
+it('verifica prueba sin coexistencia, con vencimiento y app suscripta, sin POST', async () => {
+  responder(
+    debug(),
+    lista,
+    { ...detalle, is_on_biz_app: false },
+    { data: [{ whatsapp_business_api_data: { id: config.appId } }] },
+  );
+  expect(
+    await new MetaConexionClient().verificarPrueba(config, token, seleccion),
+  ).toMatchObject(seleccion);
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+  expect(
+    fetchMock.mock.calls.every(([, o]) => !o.method || o.method === 'GET'),
+  ).toBe(true);
+});
+it.each(['sin-suscripcion', 'sin-vencimiento'])(
+  'bloquea prueba %s',
+  async (caso) => {
+    const d = debug();
+    if (caso === 'sin-vencimiento') d.data.expires_at = 0;
+    responder(d, lista, { ...detalle, is_on_biz_app: false }, { data: [] });
+    await expect(
+      new MetaConexionClient().verificarPrueba(config, token, seleccion),
+    ).rejects.toThrow(
+      caso === 'sin-vencimiento' ? 'TOKEN_INVALIDO' : 'ACTIVO_NO_AUTORIZADO',
+    );
+  },
+);

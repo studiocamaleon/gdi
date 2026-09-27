@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { canalPruebaPermitido } from './meta-prueba.config';
 export const lecturaGeneralHabilitada = () =>
   process.env.META_INBOX_LECTURA_ENABLED === 'true';
 /** Canal obtenido exclusivamente de la empresa autenticada. La generación evita
@@ -9,7 +10,7 @@ export async function canalGeneralInbox(
   tenantId: string,
 ) {
   if (!tenantId || !lecturaGeneralHabilitada()) return null;
-  return db.metaVinculo.findFirst({
+  const canal = await db.metaVinculo.findFirst({
     where: {
       tenantId,
       estado: 'VERIFICADO',
@@ -33,8 +34,14 @@ export async function canalGeneralInbox(
       autorizacionId: true,
       numero: true,
       recepcionDesdeEl: true,
+      tipo: true,
+      pruebaDestinatarioWaId: true,
+      tokenVenceEl: true,
     },
   });
+  return canal && (canal.tipo === 'COEXISTENCIA' || canalPruebaPermitido(canal))
+    ? canal
+    : null;
 }
 export const identidadCanalInbox = (canal: {
   id: string;

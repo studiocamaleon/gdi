@@ -1,13 +1,20 @@
 import type { Prisma } from '@prisma/client';
+import { configuracionCanalPrueba } from '../meta-prueba.config';
 import {
   modoAltaPermitido,
   configuracionMetaConexion,
 } from '../meta-conexion.config';
-export const enviosInboxHabilitados = (tenantId: string) =>
+export const enviosInboxHabilitados = (
+  tenantId: string,
+  tipo = 'COEXISTENCIA',
+) =>
   process.env.META_INBOX_ENVIOS_ENABLED === 'true' &&
   process.env.META_INBOX_RECEPCION_ENABLED === 'true' &&
-  modoAltaPermitido(tenantId) === 'COEXISTENCIA' &&
-  Boolean(configuracionMetaConexion());
+  (tipo === 'PRUEBA'
+    ? configuracionCanalPrueba()?.tenantId === tenantId
+    : tipo === 'COEXISTENCIA' &&
+      modoAltaPermitido(tenantId) === 'COEXISTENCIA' &&
+      Boolean(configuracionMetaConexion()));
 /** Sólo la evidencia de mensajes nuevos recibidos habilita texto libre.
  * No inferir una ventana abierta a partir del historial, ecos o envíos propios. */
 export function ventanaRespuesta(
@@ -79,6 +86,9 @@ export async function consultarVentanaRespuesta(
   return { ...ventana, abierta: !rechazo };
 }
 
-export const plantillasInboxHabilitadas = (tenantId: string) =>
+export const plantillasInboxHabilitadas = (
+  tenantId: string,
+  tipo = 'COEXISTENCIA',
+) =>
   process.env.META_INBOX_PLANTILLAS_ENABLED === 'true' &&
-  enviosInboxHabilitados(tenantId);
+  enviosInboxHabilitados(tenantId, tipo);

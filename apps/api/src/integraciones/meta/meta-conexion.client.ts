@@ -182,6 +182,45 @@ export class MetaConexionClient {
     token: string,
     seleccion: { wabaId: string; phoneNumberId?: string },
   ): Promise<ActivosMetaVerificados> {
+    return this.verificarActivos(config, token, seleccion, true);
+  }
+
+  /** Sólo lectura: la selección procede de la lista cerrada de staging.
+   * No registra teléfonos, suscribe apps ni solicita datos de coexistencia. */
+  async verificarPrueba(
+    config: MetaConexionConfig,
+    token: string,
+    seleccion: { wabaId: string; phoneNumberId: string },
+  ): Promise<ActivosMetaVerificados> {
+    const activos = await this.verificarActivos(
+      config,
+      token,
+      seleccion,
+      false,
+    );
+    if (!activos.tokenVenceEl) throw new ErrorConexionMeta('TOKEN_INVALIDO');
+    const suscripciones = await this.consultar(
+      config,
+      token,
+      `${seleccion.wabaId}/subscribed_apps`,
+      { fields: 'whatsapp_business_api_data' },
+    );
+    if (
+      !Array.isArray(suscripciones.data) ||
+      !suscripciones.data.some(
+        (s) => objeto(objeto(s).whatsapp_business_api_data).id === config.appId,
+      )
+    )
+      throw new ErrorConexionMeta('ACTIVO_NO_AUTORIZADO');
+    return activos;
+  }
+
+  private async verificarActivos(
+    config: MetaConexionConfig,
+    token: string,
+    seleccion: { wabaId: string; phoneNumberId?: string },
+    coexistencia: boolean,
+  ): Promise<ActivosMetaVerificados> {
     if (
       !token ||
       !idValido(seleccion.wabaId) ||
@@ -245,7 +284,7 @@ export class MetaConexionClient {
     });
     if (
       detalle.id !== phoneNumberId ||
-      detalle.is_on_biz_app !== true ||
+      (coexistencia && detalle.is_on_biz_app !== true) ||
       detalle.platform_type !== 'CLOUD_API'
     )
       throw new ErrorConexionMeta('SIN_COEXISTENCIA');

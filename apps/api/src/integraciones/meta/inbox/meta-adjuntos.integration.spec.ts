@@ -42,6 +42,12 @@ const service = () =>
     storage as never,
   );
 const keys = [
+  'GRAFO_DEPLOY_ENV',
+  'META_INBOX_PRUEBA_ENABLED',
+  'META_INBOX_PRUEBA_TENANT_ID',
+  'META_INBOX_PRUEBA_WABA_ID',
+  'META_INBOX_PRUEBA_PHONE_NUMBER_ID',
+  'META_INBOX_PRUEBA_DESTINATARIO_WA_ID',
   'META_INBOX_ADJUNTOS_ENABLED',
   'META_CONEXION_MODO',
   'META_CONEXION_TENANT_IDS',
@@ -150,6 +156,8 @@ beforeEach(async () => {
   canal = a.v;
   ajena = b.auth;
   Object.assign(process.env, {
+    GRAFO_DEPLOY_ENV: 'local',
+    META_INBOX_PRUEBA_ENABLED: 'false',
     META_INBOX_ADJUNTOS_ENABLED: 'true',
     META_CONEXION_MODO: 'coexistencia',
     META_CONEXION_TENANT_IDS: canal.tenantId,
@@ -176,6 +184,7 @@ afterEach(async () => {
   await db.inboxAdjunto.deleteMany({ where });
   await db.archivo.deleteMany({ where });
   await db.inboxMensaje.deleteMany({ where });
+  await db.inboxConversacion.deleteMany({ where });
   await db.inboxCanalRevision.deleteMany({ where });
   await db.metaVinculo.deleteMany({ where });
   await db.tenant.deleteMany({ where: { id: { in: tenants } } });
@@ -405,4 +414,48 @@ it('la base también impide cruces de empresa', async () => {
   await expect(
     db.inboxAdjunto.update({ where: { id: j.id }, data: { archivoId: f.id } }),
   ).rejects.toThrow();
+});
+
+it('copia un adjunto del destinatario de prueba sin coexistencia y bloquea otro contacto', async () => {
+  canal = await db.metaVinculo.update({
+    where: { id: canal.id },
+    data: {
+      tipo: 'PRUEBA',
+      wabaId: '200001',
+      phoneNumberId: '300001',
+      pruebaDestinatarioWaId: '16505550123',
+      tokenVenceEl: new Date(Date.now() + 60000),
+    },
+  });
+  Object.assign(process.env, {
+    GRAFO_DEPLOY_ENV: 'staging',
+    META_INBOX_PRUEBA_ENABLED: 'true',
+    META_INBOX_PRUEBA_TENANT_ID: canal.tenantId,
+    META_INBOX_PRUEBA_WABA_ID: canal.wabaId,
+    META_INBOX_PRUEBA_PHONE_NUMBER_ID: canal.phoneNumberId,
+    META_INBOX_PRUEBA_DESTINATARIO_WA_ID: '16505550123',
+    META_CONEXION_MODO: '',
+    META_CONEXION_TENANT_IDS: '',
+    META_EMBEDDED_SIGNUP_CONFIG_ID: '',
+  });
+  for (const waId of ['16505550123', '16505550199']) {
+    const conv = await db.inboxConversacion.create({
+      data: {
+        tenantId: canal.tenantId,
+        vinculoId: canal.id,
+        contactoWaId: waId,
+      },
+    });
+    const m = await mensaje();
+    await db.inboxMensaje.update({
+      where: { id: m.id },
+      data: { conversacionId: conv.id },
+    });
+    expect(await api.procesarSiguiente()).toBe(waId === '16505550123');
+    expect((await trabajo(m.id)).estado).toBe(
+      waId === '16505550123' ? 'LISTO' : 'RETIRADO',
+    );
+  }
+  expect(client.descargar).toHaveBeenCalledTimes(1);
+  expect(storage.subir).toHaveBeenCalledTimes(1);
 });

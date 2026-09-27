@@ -11,6 +11,10 @@ import {
 import { normalizarEventoInbox } from './meta-inbox-normalizar';
 import { aplicarOperacionInbox } from './meta-inbox-proyeccion';
 import { aplicarCambioCuenta } from './meta-inbox-cuenta';
+import {
+  canalPruebaPermitido,
+  operacionPruebaPermitida,
+} from '../meta-prueba.config';
 
 export const recepcionGeneralMetaHabilitada = () =>
   process.env.META_INBOX_RECEPCION_ENABLED === 'true';
@@ -60,6 +64,9 @@ export class MetaInboxProcesador {
       const canal = canales.get(clave);
       if (
         !canal ||
+        (canal.tipo === 'PRUEBA' &&
+          (!canalPruebaPermitido(canal) ||
+            !['messages', 'statuses'].includes(fila.tipo))) ||
         (!control && !canal.recepcionDesdeEl) ||
         fila.recibidoEl < (canal.recepcionDesdeEl ?? canal.verificadoEl) ||
         (fila.tenantId && fila.tenantId !== canal.tenantId) ||
@@ -127,6 +134,9 @@ export class MetaInboxProcesador {
               });
               const raw = trabajo.crudo;
               if (
+                (canal.tipo === 'PRUEBA' &&
+                  (!canalPruebaPermitido(canal) ||
+                    !['messages', 'statuses'].includes(raw.tipo))) ||
                 (raw.tipo !== 'account_update' &&
                   (canal.estado === 'DESCONECTADO' ||
                     !canal.recepcionDesdeEl)) ||
@@ -160,21 +170,27 @@ export class MetaInboxProcesador {
                 vinculoId: canal.id,
                 autorizacionId: trabajo.autorizacionId,
               };
-              await tx.inboxImportacion.upsert({
-                where: { vinculoId_autorizacionId: importacion },
-                create: {
-                  ...importacion,
-                  tenantId: canal.tenantId,
-                  iniciadaEl: canal.recepcionDesdeEl ?? canal.verificadoEl,
-                },
-                update: {},
-              });
+              if (canal.tipo !== 'PRUEBA')
+                await tx.inboxImportacion.upsert({
+                  where: { vinculoId_autorizacionId: importacion },
+                  create: {
+                    ...importacion,
+                    tenantId: canal.tenantId,
+                    iniciadaEl: canal.recepcionDesdeEl ?? canal.verificadoEl,
+                  },
+                  update: {},
+                });
               let cambioVisible = false;
               const lote = normalizado.operaciones.slice(
                 trabajo.cursor,
                 trabajo.cursor + 50,
               );
               for (const op of lote) {
+                if (
+                  canal.tipo === 'PRUEBA' &&
+                  !operacionPruebaPermitida(canal, op)
+                )
+                  continue;
                 if (op.clase === 'cuenta') {
                   cambioVisible =
                     (await aplicarCambioCuenta(tx, canal, op)) || cambioVisible;
@@ -185,6 +201,11 @@ export class MetaInboxProcesador {
               }
               if (adjuntosHabilitados())
                 for (const op of lote) {
+                  if (
+                    canal.tipo === 'PRUEBA' &&
+                    !operacionPruebaPermitida(canal, op)
+                  )
+                    continue;
                   if ('wamid' in op && op.clase !== 'estado')
                     await encolarAdjunto(tx, canal, op.wamid);
                 }

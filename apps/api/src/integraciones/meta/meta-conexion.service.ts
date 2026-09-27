@@ -22,6 +22,7 @@ import {
   modoAltaPermitido,
 } from './meta-conexion.config';
 import { configuracionMetaPiloto } from './meta-piloto.config';
+import { canalPruebaPermitido } from './meta-prueba.config';
 import { resumirImportacion } from './inbox/meta-inbox-importacion';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -110,15 +111,16 @@ export class MetaConexionService {
       const canal = await tx.metaVinculo.findFirst({
         where: {
           tenantId: auth.tenantId,
-          altas: { some: {} },
+          OR: [{ altas: { some: {} } }, { tipo: 'PRUEBA' }],
         },
       });
       if (
         canal &&
-        !(
-          canal.estado === 'DESCONECTADO' &&
-          canal.ultimoEventoCuenta === 'PARTNER_REMOVED'
-        )
+        (canal.tipo === 'PRUEBA' ||
+          !(
+            canal.estado === 'DESCONECTADO' &&
+            canal.ultimoEventoCuenta === 'PARTNER_REMOVED'
+          ))
       )
         throw new ConflictException(
           'La conexión existente debe revisarse antes de iniciar otra alta.',
@@ -189,6 +191,11 @@ export class MetaConexionService {
           where: { tenantId: auth.tenantId },
           select: {
             id: true,
+            tipo: true,
+            tenantId: true,
+            wabaId: true,
+            phoneNumberId: true,
+            pruebaDestinatarioWaId: true,
             numero: true,
             estado: true,
             ultimoEventoCuenta: true,
@@ -253,23 +260,25 @@ export class MetaConexionService {
           orderBy: { verificadaEl: 'desc' },
           select: { verificadaEl: true },
         });
-        const resumen = vinculo
-          ? await resumirImportacion(
-              tx,
-              {
-                tenantId: auth.tenantId,
-                vinculoId: vinculo.id,
-                autorizacionId: vinculo.autorizacionId,
-              },
-              importacion,
-              alta,
-            )
-          : null;
+        const resumen =
+          vinculo && vinculo.tipo !== 'PRUEBA'
+            ? await resumirImportacion(
+                tx,
+                {
+                  tenantId: auth.tenantId,
+                  vinculoId: vinculo.id,
+                  autorizacionId: vinculo.autorizacionId,
+                },
+                importacion,
+                alta,
+              )
+            : null;
         return {
           empresaId: auth.tenantId,
           usuarioId: auth.userId,
           modo,
           disponible: Boolean(
+            vinculo?.tipo !== 'PRUEBA' &&
             modo &&
             capacidad &&
             configuracionMetaConexion() &&
@@ -282,9 +291,19 @@ export class MetaConexionService {
           sandboxVerificadoEl: sandbox?.verificadaEl ?? null,
           canal: vinculo
             ? {
+                tipo: vinculo.tipo,
+                prueba:
+                  vinculo.tipo === 'PRUEBA'
+                    ? {
+                        habilitada: canalPruebaPermitido(vinculo),
+                        destinatario: `+${vinculo.pruebaDestinatarioWaId}`,
+                        venceEl: vinculo.tokenVenceEl,
+                      }
+                    : null,
                 numero: vinculo.numero,
                 estado: vinculo.estado,
                 reconexionPermitida:
+                  vinculo.tipo !== 'PRUEBA' &&
                   vinculo.estado === 'DESCONECTADO' &&
                   vinculo.ultimoEventoCuenta === 'PARTNER_REMOVED',
                 credencialVencida: [
@@ -464,6 +483,10 @@ export class MetaConexionService {
           where: { tenantId: auth.tenantId },
           include: { altas: { select: { id: true }, take: 1 } },
         });
+        if (anterior?.tipo === 'PRUEBA')
+          throw new ConflictException(
+            'El canal de prueba se administra desde staging.',
+          );
         if (
           anterior?.altas.length &&
           !(

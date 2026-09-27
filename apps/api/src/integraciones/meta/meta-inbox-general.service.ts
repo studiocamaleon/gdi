@@ -175,12 +175,18 @@ export class MetaInboxGeneralService {
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
     const canalId = identidadCanalInbox(canal);
     const scope = { tenantId: auth.tenantId, vinculoId: canal.id };
+    const destinatarioPrueba =
+      canal.tipo === 'PRUEBA' ? canal.pruebaDestinatarioWaId : null;
+    const scopeConversaciones = {
+      ...scope,
+      ...(destinatarioPrueba ? { contactoWaId: destinatarioPrueba } : {}),
+    };
     const busqueda = (query.busqueda ?? '').trim().toLocaleLowerCase();
     const cursor = leerCursor(query.listaAntesDe, canalId, busqueda);
     if (
       cursor &&
       !(await this.db.inboxConversacion.findFirst({
-        where: { ...scope, id: cursor.id },
+        where: { ...scopeConversaciones, id: cursor.id },
         select: { id: true },
       }))
     )
@@ -193,12 +199,13 @@ export class MetaInboxGeneralService {
     const numeros = busqueda.replace(/[\s()+.-]/g, '');
     const porNumero = /^\d+$/.test(numeros) ? `%${numeros}%` : null;
     const lista = await this.db.$queryRaw<Resumen[]>`
-      SELECT c.id,c."contactoWaId",c."ultimoMensajeEl",CASE WHEN k.eliminado=false THEN k.nombre ELSE NULL END AS nombre
+      SELECT c.id,c."contactoWaId",COALESCE(c."ultimoMensajeEl",c."createdAt") AS "ultimoMensajeEl",CASE WHEN k.eliminado=false THEN k.nombre ELSE NULL END AS nombre
       FROM "InboxConversacion" c LEFT JOIN "InboxContacto" k ON k."tenantId"=c."tenantId" AND k."vinculoId"=c."vinculoId" AND k."waId"=c."contactoWaId"
-      WHERE c."tenantId"=${auth.tenantId}::uuid AND c."vinculoId"=${canal.id}::uuid AND c."ultimoMensajeEl" IS NOT NULL
+      WHERE c."tenantId"=${auth.tenantId}::uuid AND c."vinculoId"=${canal.id}::uuid AND (c."ultimoMensajeEl" IS NOT NULL OR ${destinatarioPrueba}::text IS NOT NULL)
+      AND (${destinatarioPrueba}::text IS NULL OR c."contactoWaId"=${destinatarioPrueba})
       AND (${busqueda}='' OR (k.eliminado=false AND k.nombre ILIKE ${patron}) OR (${porNumero}::text IS NOT NULL AND c."contactoWaId" LIKE ${porNumero}))
-      ${cursor ? Prisma.sql`AND (c."ultimoMensajeEl",c.id)<(${new Date(cursor.fecha)},${cursor.id}::uuid)` : Prisma.empty}
-      ORDER BY c."ultimoMensajeEl" DESC,c.id DESC LIMIT 51`;
+      ${cursor ? Prisma.sql`AND (COALESCE(c."ultimoMensajeEl",c."createdAt"),c.id)<(${new Date(cursor.fecha)},${cursor.id}::uuid)` : Prisma.empty}
+      ORDER BY COALESCE(c."ultimoMensajeEl",c."createdAt") DESC,c.id DESC LIMIT 51`;
     const pagina = lista.slice(0, 50);
     const ids = pagina.map((c) => c.id);
     const recientes = await this.db.inboxConversacion.findMany({
@@ -220,7 +227,7 @@ export class MetaInboxGeneralService {
     const seleccion = query.conversacionId ?? pagina[0]?.id;
     const conversacion = seleccion
       ? await this.db.inboxConversacion.findFirst({
-          where: { ...scope, id: seleccion },
+          where: { ...scopeConversaciones, id: seleccion },
           select: { id: true, contactoWaId: true, ultimoEntranteNuevoEl: true },
         })
       : null;
@@ -341,9 +348,16 @@ export class MetaInboxGeneralService {
       usuarioId: auth.userId,
       canalId,
       origen: 'GENERAL' as const,
+      prueba:
+        canal.tipo === 'PRUEBA'
+          ? { numero: canal.numero, venceEl: canal.tokenVenceEl!.toISOString() }
+          : null,
       respuesta: {
-        plantillasHabilitadas: plantillasInboxHabilitadas(auth.tenantId),
-        habilitado: enviosInboxHabilitados(auth.tenantId),
+        plantillasHabilitadas: plantillasInboxHabilitadas(
+          auth.tenantId,
+          canal.tipo,
+        ),
+        habilitado: enviosInboxHabilitados(auth.tenantId, canal.tipo),
         ...ventana,
       },
       envios: envios.reverse().map(presentarEnvio),

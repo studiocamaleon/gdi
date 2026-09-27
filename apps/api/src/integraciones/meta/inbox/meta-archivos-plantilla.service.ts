@@ -20,6 +20,7 @@ import {
 import { CapacidadesEmpresaService } from '../../../suscripciones/capacidades-empresa.service';
 import { exigirAccesoConexionMeta } from '../meta-conexion-acceso';
 import { canalGeneralInbox, identidadCanalInbox } from '../meta-inbox-canal';
+import { destinatarioCanalPermitido } from '../meta-prueba.config';
 import { plantillasInboxHabilitadas } from './meta-envios.config';
 import { adjuntosHabilitados } from './meta-adjuntos';
 import { nombreMedia } from './meta-media.client';
@@ -117,15 +118,16 @@ export class MetaArchivosPlantillaService {
     canalId: string,
   ) {
     const permisos = await exigirAccesoConexionMeta(this.db, auth, ip);
+    const canal = await canalGeneralInbox(this.db, auth.tenantId);
     if (
-      !plantillasInboxHabilitadas(auth.tenantId) ||
+      !canal ||
+      !plantillasInboxHabilitadas(auth.tenantId, canal.tipo) ||
       !adjuntosHabilitados() ||
       !permisos.has('crm.ver')
     )
       throw new ForbiddenException('No está disponible el envío de archivos.');
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
-    const canal = await canalGeneralInbox(this.db, auth.tenantId);
-    if (!canal || identidadCanalInbox(canal) !== canalId)
+    if (identidadCanalInbox(canal) !== canalId)
       throw new ConflictException('La conexión cambió. Actualizá el Inbox.');
     const c = await this.db.inboxConversacion.findFirst({
       where: {
@@ -134,7 +136,8 @@ export class MetaArchivosPlantillaService {
         vinculoId: canal.id,
       },
     });
-    if (!c) throw new NotFoundException();
+    if (!c || !destinatarioCanalPermitido(canal, c.contactoWaId))
+      throw new NotFoundException();
     const contexto = await this.contexto.contexto(
       { ...auth, permisos },
       { telefono: `+${c.contactoWaId}` },

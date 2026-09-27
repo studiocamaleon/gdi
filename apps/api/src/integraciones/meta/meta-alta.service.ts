@@ -89,6 +89,7 @@ export class MetaAltaService {
           });
           if (
             modoAltaPermitido(alta.tenantId) !== 'COEXISTENCIA' ||
+            v.tipo !== 'COEXISTENCIA' ||
             !autorizar ||
             v.estado !== 'VERIFICADO' ||
             v.autorizacionId !== alta.autorizacionId ||

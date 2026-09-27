@@ -6524,6 +6524,9 @@ model MetaVinculo {
   phoneNumberId         String @unique
   estado                EstadoVinculoMeta @default(VERIFICADO)
   numero                String
+  /// PRUEBA es un canal de staging; nunca una autorización de coexistencia.
+  tipo                  String @default("COEXISTENCIA")
+  pruebaDestinatarioWaId String?
   nombreVerificado      String?
   tokenCifrado          Json?
   tokenVenceEl          DateTime?
