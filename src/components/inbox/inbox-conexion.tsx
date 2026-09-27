@@ -44,6 +44,42 @@ export function EstadoImportacion({
 }: {
   canal: NonNullable<EstadoConexionMeta["canal"]>;
 }) {
+  if (canal.tipo === "PRUEBA")
+    return (
+      <div className="flex flex-col gap-4 text-left">
+        <Badge variant="secondary">Canal de prueba de Meta</Badge>
+        <p className="font-medium">{canal.numero}</p>
+        <Alert>
+          <ShieldCheck />
+          <AlertTitle>
+            {canal.credencialVencida
+              ? "El acceso de prueba venció"
+              : canal.estado !== "VERIFICADO" || !canal.prueba?.habilitada
+                ? "Prueba deshabilitada"
+                : "Prueba habilitada"}
+          </AlertTitle>
+          <AlertDescription>
+            {canal.credencialVencida
+              ? "Renová la credencial de prueba desde la configuración de staging para continuar. Las conversaciones se conservan."
+              : "Los mensajes de este canal son reales y sólo se permiten con el destinatario autorizado para el ensayo."}
+          </AlertDescription>
+        </Alert>
+        <p className="text-sm text-muted-foreground">
+          Destinatario: {canal.prueba?.destinatario}
+        </p>
+        {canal.prueba?.venceEl && (
+          <p className="text-sm text-muted-foreground">
+            Vencimiento:{" "}
+            {new Date(canal.prueba.venceEl).toLocaleString("es-AR")}
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
+          Este ensayo permite probar mensajes y estados. La conexión de tu
+          WhatsApp Business y la importación de conversaciones se comprueban por
+          separado.
+        </p>
+      </div>
+    );
   const imp = canal.importacion;
   const resumen = canal.resumen;
   const suspendido = canal.estado === "SUSPENDIDO";

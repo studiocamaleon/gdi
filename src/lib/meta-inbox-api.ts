@@ -17,6 +17,7 @@ export type MetaInbox = {
   empresaId: string;
   usuarioId: string;
   origen?: "GENERAL";
+  prueba?: { numero: string; venceEl: string } | null;
   canalId?: string;
   conversacionId?: string | null;
   conversaciones?: {

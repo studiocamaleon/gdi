@@ -464,13 +464,54 @@ const conexionApi: MetaConexionApi = {
   verificar: noConectar,
   cancelar: noConectar,
 };
-export function InboxGeneralPreview() {
+const prueba = { numero: "+16505550100", venceEl: "2026-10-01T21:00:00Z" };
+const cargarPrueba: CargarInbox = async (query, signal) => {
+  const datos = await cargar(
+    { ...query, conversacionId: "bruno", busqueda: "" },
+    signal,
+  );
+  return datos
+    ? {
+        ...datos,
+        prueba,
+        conversaciones: datos.conversaciones?.filter((c) => c.id === "bruno"),
+      }
+    : null;
+};
+const conexionPrueba: MetaConexionApi = {
+  ...conexionApi,
+  estado: async () => {
+    const e = await conexionApi.estado();
+    return {
+      ...e,
+      canal: e.canal
+        ? {
+            ...e.canal,
+            tipo: "PRUEBA",
+            alta: null,
+            importacion: null,
+            resumen: null,
+            prueba: {
+              habilitada: true,
+              destinatario: "+16505550124",
+              venceEl: prueba.venceEl,
+            },
+          }
+        : null,
+    };
+  },
+};
+export function InboxGeneralPreview({
+  canalPrueba = false,
+}: {
+  canalPrueba?: boolean;
+}) {
   return (
     <InboxView
       identidad={identidad}
-      cargar={cargar}
+      cargar={canalPrueba ? cargarPrueba : cargar}
       tiempoReal={null}
-      conexionApi={conexionApi}
+      conexionApi={canalPrueba ? conexionPrueba : conexionApi}
       enviarTexto={enviar}
       plantillasApi={plantillasApi}
       abrirAdjunto={async (id) => {

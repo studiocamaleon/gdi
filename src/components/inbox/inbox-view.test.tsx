@@ -8,16 +8,14 @@ import type { EscucharInbox } from "@/lib/inbox-tiempo-real";
 
 vi.mock("@/lib/meta-conexion-api", () => ({
   metaConexionApi: {
-    estado: vi
-      .fn()
-      .mockResolvedValue({
-        empresaId: "empresa-1",
-        usuarioId: "user-1",
-        modo: null,
-        disponible: false,
-        sandboxVerificadoEl: null,
-        canal: null,
-      }),
+    estado: vi.fn().mockResolvedValue({
+      empresaId: "empresa-1",
+      usuarioId: "user-1",
+      modo: null,
+      disponible: false,
+      sandboxVerificadoEl: null,
+      canal: null,
+    }),
   },
 }));
 const identidad = {
@@ -489,4 +487,16 @@ it("una bandeja conectada sin mensajes no inventa un contacto ni vuelve a solici
   expect(container.textContent).toContain("Tu bandeja está preparada");
   expect(container.querySelector("[role=log]")).toBeNull();
   expect(container.textContent).not.toContain("Conectar WhatsApp");
+});
+it("identifica que el canal de prueba envía mensajes reales a un único destinatario", async () => {
+  cargar.mockResolvedValue({
+    ...base,
+    origen: "GENERAL",
+    prueba: { numero: "+16505550100", venceEl: "2026-10-01T21:00:00Z" },
+  });
+  await render();
+  expect(container.textContent).toContain("Canal de prueba · mensajes reales");
+  expect(container.textContent).toContain(
+    "No se importa el historial del celular",
+  );
 });

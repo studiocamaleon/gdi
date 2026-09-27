@@ -259,3 +259,29 @@ it("cancelar durante la preparación invalida la respuesta tardía", async () =>
   expect(api.cancelar).toHaveBeenCalledOnce();
   expect(container.textContent).not.toContain("Continuar con Meta");
 });
+it("el canal de prueba no promete importación ni inicia Embedded Signup", async () => {
+  await render({
+    ...base,
+    canal: {
+      tipo: "PRUEBA",
+      numero: "+16505550100",
+      estado: "VERIFICADO",
+      credencialVencida: false,
+      recepcionPreparada: true,
+      alta: null,
+      importacion: null,
+      pendientes: 0,
+      revisiones: 0,
+      prueba: {
+        habilitada: true,
+        destinatario: "+16505550123",
+        venceEl: "2026-10-01T21:00:00Z",
+      },
+    },
+  });
+  expect(container.textContent).toContain("Canal de prueba de Meta");
+  expect(container.textContent).toContain("Prueba habilitada");
+  expect(container.textContent).not.toContain("Esperando a Meta");
+  expect(container.querySelector("[role=progressbar]")).toBeNull();
+  expect(api.preparar).not.toHaveBeenCalled();
+});

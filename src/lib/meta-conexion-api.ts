@@ -28,6 +28,12 @@ export type EstadoConexionMeta = {
   disponible: boolean;
   sandboxVerificadoEl: string | null;
   canal: null | {
+    tipo?: string;
+    prueba?: {
+      habilitada: boolean;
+      destinatario: string;
+      venceEl: string;
+    } | null;
     numero: string;
     reconexionPermitida?: boolean;
     resumen?: {

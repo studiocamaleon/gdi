@@ -598,7 +598,9 @@ export function InboxView({
               {estado === "listo"
                 ? datos?.origen === "GENERAL"
                   ? datos.respuesta?.habilitado
-                    ? "Grafo Inbox · WhatsApp de tu empresa"
+                    ? datos.prueba
+                      ? "Grafo Inbox · canal de prueba de Meta"
+                      : "Grafo Inbox · WhatsApp de tu empresa"
                     : "Grafo Inbox · conversaciones sincronizadas · sólo lectura"
                   : "Prueba interna · contacto autorizado · sólo lectura"
                 : "Grafo Inbox · WhatsApp"}
@@ -638,6 +640,18 @@ export function InboxView({
               </Button>
             </div>
           </header>
+          {estado === "listo" && datos?.prueba && (
+            <Alert>
+              <MessageCircle />
+              <AlertTitle>Canal de prueba · mensajes reales</AlertTitle>
+              <AlertDescription>
+                Sólo podés conversar con el destinatario habilitado para este
+                ensayo. El acceso vence el{" "}
+                {new Date(datos.prueba.venceEl).toLocaleString("es-AR")}. No se
+                importa el historial del celular.
+              </AlertDescription>
+            </Alert>
+          )}
           {estado === "cargando" ? (
             <div className={live.loading} role="status">
               <p>Cargando conversaciones…</p>
