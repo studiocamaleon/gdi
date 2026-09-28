@@ -16,6 +16,8 @@ El canal queda identificado como **PRUEBA**, con una única empresa y un único 
 - Interfaz revisada en Chrome con datos ficticios. Muestra local: `/dev/diseno/inbox/prueba`; no existe en producción.
 - **Activado y ensayado en staging sobre `246bf36b5203`**, con API, web y ambos workers del mismo lote. DEMO-0004 comprobó plantilla entregada, recepción real, ventana de respuesta, respuesta libre entregada y actualización en dos pestañas sin recargar. No llegó `read`; no se infiere de la respuesta. El intento previo rechazado con `131030` queda registrado. Ver [validación](../deploy/staging/VALIDACION.md).
 
+Se corrigió además la recepción de PNG enviados como documentos y se verificó su copia privada y apertura en staging. La plantilla PDF ya está aprobada y se entregó desde el Inbox; la copia privada y su descarga desde Chrome coinciden con el original. El detalle actualizado del lote de adjuntos está en [VALIDACION.md](../deploy/staging/VALIDACION.md).
+
 La corrección agrega `20260927210000_inbox_destino_prueba`: **295 migraciones** en local, tests y staging. El nuevo campo se inicializa conservando el destino anterior. Cambiar la configuración de destino cierra el canal hasta una nueva activación acreditada; no redirige envíos en curso, no cambia el contacto ni reintenta mensajes rechazados.
 
 ## Cómo se mantiene limitado

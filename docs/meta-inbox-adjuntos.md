@@ -2,6 +2,14 @@
 
 Implementación local del 26/09/2026, rama `codex/inbox-adjuntos-bienvenida`. Continúa el bloque de [importación y reconexión](meta-importacion-reconexion.md). No se desplegó en staging ni se activaron llamadas reales a Meta.
 
+## Actualización de staging — 27/09/2026
+
+El lote ya está habilitado en el **canal oficial de prueba**, limitado a la empresa y destinatario autorizados. Staging tiene 295 migraciones. Se corrigió y recuperó un PNG real recibido con tipo `document`: Meta → worker → R2 privado → vista previa de Chrome, con cuota contabilizada una sola vez y aviso en vivo.
+
+Las tarjetas ahora muestran una fila compacta de 300 px, nombre en hasta dos líneas y botón lateral. La imagen sólo se despliega después de pedir acceso. Los formatos pasivos conocidos enviados como documentos conservan el límite de su MIME real: por ejemplo, un PNG sigue limitado a 5 MB.
+
+La validación vigente está en [VALIDACION.md](../deploy/staging/VALIDACION.md). Las pruebas iniciales y el protocolo de abajo son históricos; el ensayo real no acredita todavía todos los formatos, carga, historial o coexistencia. La reanudación puntual del PNG fue una operación del operador con registro privado, no una interfaz de reintento disponible para usuarios.
+
 ## Qué cambia para quien usa Grafo
 
 - La bienvenida presenta el producto con la tipografía, naranja y superficies de Grafo. El ejemplo de conversación está identificado como ilustrativo. Funciona en escritorio, celular y tema oscuro; mantiene el botón de conexión sujeto a la configuración real.

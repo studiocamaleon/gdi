@@ -1,5 +1,16 @@
 # Ensayo real de plantillas y PDF
 
+## Resultado vigente: PDF entregado desde el Inbox — 27/09/2026
+
+`grafoprint_documento_pedido_v1`, `es_AR`, `UTILITY`, ya está **APPROVED**. Desde el Inbox real de staging se eligió el PDF ficticio `Grafo-prueba-DEMO-0001.pdf` y se envió una sola vez al destinatario autorizado. Meta confirmó `sent` y `delivered` a las 02:22:12/13 UTC del 28/09; Grafo actualizó sus checks sin recargar. Lucas confirmó que abre en el celular. La copia del Inbox y la descarga de Chrome desde su tarjeta son idénticas al original de 1176 bytes.
+
+Se corrigió una falsa detección de cambios: Meta renueva la URL de muestra del encabezado entre consultas. La versión ahora excluye los ejemplos, pero conserva los campos de la definición, estado y acciones. El primer intento se detuvo antes de reservar o enviar; no hubo duplicados.
+
+El archivo del ensayo se preparó con el servicio normal de archivos como operación privada de staging. Eso no prueba la carga desde la ficha del cliente, que todavía no tiene esa interfaz. El ensayo sí recorre selección → validación → subida a Meta → envío → webhooks → copia privada → apertura desde el Inbox. Los PDF se descargan; las imágenes admitidas tienen vista previa en el chat.
+
+Versiones, pruebas, renovación del token y límites en [VALIDACION.md](../deploy/staging/VALIDACION.md). Siguen separados los ensayos de todos los formatos, coexistencia, historial y carga. Los apartados siguientes conservan la preparación histórica y sus pendientes de esa fecha.
+
+
 ## Resultado de texto — 27/09/2026
 
 Se avanzó con `grafoprint_pedido_listo_v1`, `es_AR`, aprobada, sin esperar la revisión del PDF. El cliente real de Grafo consultó la plantilla, validó sus dos variables y realizó **un único POST**, con `Prueba Grafo` y `DEMO-0002`, al destinatario del piloto previamente autorizado.
@@ -21,7 +32,7 @@ Es útil para administración y diagnóstico. Un envío por ese MCP no ejecuta `
 
 ## Preparación del recorrido completo en staging
 
-La prueba de texto elimina la espera por una plantilla como bloqueo del resto del trabajo. El [canal de prueba explícito](meta-inbox-canal-prueba.md) ya está implementado y comprobado en local. El lote `ca59f3a242d3` se desplegó y activó en staging. El primer intento desde el Inbox fue rechazado con `131030` por la diferencia entre destino de prueba e identidad recibida. La corrección `246bf36b5203` se desplegó y se renovó la activación. DEMO-0004 completó el recorrido real de texto desde el Inbox: plantilla entregada, entrada, respuesta libre entregada y actualización en dos pestañas. No se recibió `read`. PDF, coexistencia e historial siguen pendientes. Este es el orden del protocolo:
+La prueba de texto elimina la espera por una plantilla como bloqueo del resto del trabajo. El [canal de prueba explícito](meta-inbox-canal-prueba.md) ya está implementado y comprobado en local. El lote `ca59f3a242d3` se desplegó y activó en staging. El primer intento desde el Inbox fue rechazado con `131030` por la diferencia entre destino de prueba e identidad recibida. La corrección `246bf36b5203` se desplegó y se renovó la activación. DEMO-0004 completó el recorrido real de texto desde el Inbox: plantilla entregada, entrada, respuesta libre entregada y actualización en dos pestañas. No se recibió `read`. El PDF se completó después, como indica el resultado vigente; coexistencia e historial siguen pendientes. Este es el orden del protocolo:
 
 1. **Canal de prueba explícito.** El piloto actual usa configuración del servidor; la lectura general usa `MetaVinculo`, mientras `enviosInboxHabilitados` exige modo `coexistencia`. El modo nuevo representa el canal de prueba con empresa, cuenta, número, destinatario autorizado y vencimiento comprobados. No cargar un vínculo ficticio ni activar `coexistencia` para saltar el alta.
 2. **Límites del ensayo.** Mantener permisos, plan, separación de empresas, ventana de 24 horas, revalidación de conexión y control de duplicados. El modo de prueba debe cerrarse fuera de staging, rechazar destinatarios ajenos y señalar claramente su condición en la pantalla. No debe solicitar contactos ni historial de coexistencia.
@@ -32,7 +43,7 @@ La prueba de texto elimina la espera por una plantilla como bloqueo del resto de
 
 ## Preparación del PDF — 26/09/2026
 
-La conexión con Meta está comprobada y el envío de PDF está preparado. **Todavía no se envió el PDF:** la plantilla `grafoprint_documento_pedido_v1`, idioma `es_AR`, figura `PENDING`. Esta revisión de la plantilla es distinta de la revisión de la aplicación como proveedor de tecnología.
+En esa fecha la conexión con Meta estaba comprobada y el envío de PDF preparado. **Todavía no se había enviado el PDF:** la plantilla `grafoprint_documento_pedido_v1`, idioma `es_AR`, figuraba `PENDING`. Esta revisión de la plantilla es distinta de la revisión de la aplicación como proveedor de tecnología.
 
 Registro histórico del 26/09: se trabajó en `codex/meta-prueba-plantillas`, sobre el código `cf725933d`. No se desplegó el Inbox nuevo. Staging conserva el piloto `7efabd87213e`; únicamente se renovó su token temporal. Los cambios de plantillas y documentos siguen en local.
 
