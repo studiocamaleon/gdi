@@ -1735,3 +1735,186 @@ it('pagina la actividad privada sin duplicados y conserva la ventana en la actua
     leerEquipo(auth, 'TODAS', { eventosAntesDe: randomUUID() }),
   ).rejects.toBeInstanceOf(NotFoundException);
 });
+
+async function entradaEquipo(
+  wamid = `wamid.${randomUUID()}`,
+  fecha = new Date(Date.now() - 1000),
+  origen: 'NUEVO' | 'HISTORIAL' = 'NUEVO',
+) {
+  await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "MetaVinculo" WHERE id=${canal.id}::uuid FOR NO KEY UPDATE`;
+    await aplicarOperacionInbox(tx, canal, {
+      clase: 'mensaje',
+      wamid,
+      contacto: conv.contactoWaId,
+      direccion: 'ENTRANTE',
+      fecha,
+      origen,
+      tipo: 'text',
+      contenido: { texto: 'Consulta ficticia' },
+      prioridad: 3,
+    });
+  });
+}
+const marcarLectura = (revision: number, a = auth) =>
+  runWithTenant(a.tenantId, () =>
+    equipoServicio().guardar(a, '127.0.0.1', conv.id, {
+      canalId: dto().canalId,
+      revision,
+    }),
+  );
+const cambiarEstado = (
+  estado: 'ACTIVA' | 'RESUELTA',
+  version: number,
+  revision: number,
+  clave = randomUUID(),
+) =>
+  runWithTenant(auth.tenantId, () =>
+    equipoServicio().guardar(auth, '127.0.0.1', conv.id, {
+      canalId: dto().canalId,
+      clave,
+      estado,
+      version,
+      revision,
+    }),
+  );
+it('la lectura es compartida entre operadores y no confunde leer con responder', async () => {
+  const b = await operador();
+  await entradaEquipo();
+  expect(
+    (
+      await leerEquipo(b, 'TODAS', {
+        sinLeer: 'true',
+        sinResponder: 'true',
+        estados: 'ACTIVA',
+      })
+    )?.conversaciones,
+  ).toHaveLength(1);
+  await marcarLectura(1, b);
+  expect(
+    (await leerEquipo(auth, 'TODAS', { sinLeer: 'true' }))?.conversaciones,
+  ).toHaveLength(0);
+  expect(
+    (await leerEquipo(auth, 'TODAS', { sinResponder: 'true' }))?.conversaciones,
+  ).toHaveLength(1);
+  expect((await leerEquipo())?.lectura).toEqual({
+    revision: 1,
+    pendiente: false,
+  });
+  expect(client.enviarTexto).not.toHaveBeenCalled();
+  expect(client.enviarPlantilla).not.toHaveBeenCalled();
+});
+it('una lectura atrasada no oculta una entrada nueva ni revierte la lectura del equipo', async () => {
+  const wamid = `wamid.${randomUUID()}`;
+  await entradaEquipo(wamid);
+  await entradaEquipo(wamid);
+  await entradaEquipo();
+  await marcarLectura(1);
+  expect((await leerEquipo())?.lectura).toEqual({
+    revision: 2,
+    pendiente: true,
+  });
+  await marcarLectura(2);
+  await marcarLectura(1);
+  expect((await leerEquipo())?.lectura?.pendiente).toBe(false);
+  await expect(marcarLectura(999)).rejects.toThrow('no corresponde');
+});
+it('combina responsable, estado, lectura y respuesta; una respuesta cambia sólo el criterio correspondiente', async () => {
+  await entradaEquipo();
+  await asignar(auth.userId, 0);
+  expect(
+    (
+      await leerEquipo(auth, 'MIAS', {
+        sinLeer: 'true',
+        sinResponder: 'true',
+        estados: 'ACTIVA',
+      })
+    )?.conversaciones,
+  ).toHaveLength(1);
+  expect(
+    (await leerEquipo(auth, 'SIN_ASIGNAR', { estados: 'ACTIVA' }))
+      ?.conversaciones,
+  ).toHaveLength(0);
+  await cambiarEstado('RESUELTA', 0, 1);
+  expect(
+    (await leerEquipo(auth, 'MIAS', { estados: 'ACTIVA' }))?.conversaciones,
+  ).toHaveLength(0);
+  expect(
+    (
+      await leerEquipo(auth, 'MIAS', {
+        sinLeer: 'true',
+      })
+    )?.conversaciones,
+  ).toHaveLength(1);
+  await enviar();
+  expect(
+    (
+      await leerEquipo(auth, 'MIAS', {
+        estados: 'RESUELTA',
+        sinResponder: 'true',
+      })
+    )?.conversaciones,
+  ).toHaveLength(0);
+  expect((await leerEquipo())?.lectura?.pendiente).toBe(true);
+});
+it('resolver es idempotente y rechaza un cierre si apareció una consulta nueva o cambió el estado', async () => {
+  await entradaEquipo();
+  await expect(cambiarEstado('RESUELTA', 0, 0)).rejects.toBeInstanceOf(
+    ConflictException,
+  );
+  const clave = randomUUID();
+  await cambiarEstado('RESUELTA', 0, 1, clave);
+  await cambiarEstado('RESUELTA', 0, 1, clave);
+  await expect(cambiarEstado('ACTIVA', 0, 1)).rejects.toBeInstanceOf(
+    ConflictException,
+  );
+  expect(
+    (await leerEquipo())?.equipo?.eventos.filter((e) => e.tipo === 'RESUELTA'),
+  ).toHaveLength(1);
+  expect(client.enviarTexto).not.toHaveBeenCalled();
+});
+it('un mensaje nuevo reabre una conversación resuelta conservando el responsable; historial, duplicados y atrasados no lo hacen', async () => {
+  const viejo = `wamid.${randomUUID()}`;
+  await entradaEquipo(viejo, new Date(Date.now() - 30000));
+  await asignar(auth.userId, 0);
+  await cambiarEstado('RESUELTA', 0, 1);
+  await db.inboxConversacion.update({
+    where: { id: conv.id },
+    data: { resueltaEl: new Date(Date.now() - 10000) },
+  });
+  await entradaEquipo(viejo, new Date(Date.now() - 30000));
+  await entradaEquipo(undefined, new Date(Date.now() - 20000));
+  await entradaEquipo(undefined, new Date(Date.now() - 1000), 'HISTORIAL');
+  expect((await leerEquipo())?.equipo?.estado).toBe('RESUELTA');
+  const nuevo = `wamid.${randomUUID()}`;
+  await entradaEquipo(nuevo);
+  await entradaEquipo(nuevo);
+  const equipo = (await leerEquipo())?.equipo;
+  expect(equipo).toMatchObject({
+    estado: 'ACTIVA',
+    estadoVersion: 2,
+    responsable: { id: auth.userId },
+  });
+  expect(
+    equipo?.eventos.filter((e) => e.tipo === 'REABIERTA_CLIENTE'),
+  ).toHaveLength(1);
+  expect(
+    equipo?.eventos.find((e) => e.tipo === 'REABIERTA_CLIENTE')?.actor.id,
+  ).toBeNull();
+});
+it('no deja marcar lectura ni estado con sesión revocada ni canal ajeno', async () => {
+  await expect(
+    equipoServicio().guardar(auth, '127.0.0.1', conv.id, {
+      canalId: randomUUID(),
+      revision: 0,
+    }),
+  ).rejects.toBeInstanceOf(ConflictException);
+  await db.authSession.update({
+    where: { id: auth.sessionId },
+    data: { revokedAt: new Date() },
+  });
+  await expect(marcarLectura(0)).rejects.toBeInstanceOf(ForbiddenException);
+  await expect(cambiarEstado('RESUELTA', 0, 0)).rejects.toBeInstanceOf(
+    ForbiddenException,
+  );
+});

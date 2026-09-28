@@ -169,6 +169,8 @@ function citar(m: Mensaje | undefined, nombre: string | null): CitaInbox {
   };
 }
 type Resumen = {
+  estado: string;
+  sinLeer: boolean;
   id: string;
   contactoWaId: string;
   ultimoMensajeEl: Date;
@@ -256,11 +258,21 @@ export class MetaInboxGeneralService {
     };
     const busqueda = (query.busqueda ?? '').trim().toLocaleLowerCase();
     const filtro = query.filtro ?? 'TODAS';
+    const estados = [
+      ...new Set((query.estados ?? '').split(',').filter(Boolean)),
+    ].sort();
+    const identidadFiltro = JSON.stringify([
+      filtro,
+      estados,
+      query.sinLeer ?? '',
+      query.sinResponder ?? '',
+      query.participe ?? '',
+    ]);
     const cursor = leerCursor(
       query.listaAntesDe,
       canalId,
       busqueda,
-      filtro,
+      identidadFiltro,
       auth.userId,
     );
     if (
@@ -279,12 +291,16 @@ export class MetaInboxGeneralService {
     const numeros = busqueda.replace(/[\s()+.-]/g, '');
     const porNumero = /^\d+$/.test(numeros) ? `%${numeros}%` : null;
     const lista = await this.db.$queryRaw<Resumen[]>`
-      SELECT c.id,c."contactoWaId",COALESCE(c."ultimoMensajeEl",c."createdAt") AS "ultimoMensajeEl",CASE WHEN k.eliminado=false THEN k.nombre ELSE NULL END AS nombre
+      SELECT c.id,c.estado,(c."entrantesRevision">c."leidaRevision") AS "sinLeer",c."contactoWaId",COALESCE(c."ultimoMensajeEl",c."createdAt") AS "ultimoMensajeEl",CASE WHEN k.eliminado=false THEN k.nombre ELSE NULL END AS nombre
       FROM "InboxConversacion" c LEFT JOIN "InboxContacto" k ON k."tenantId"=c."tenantId" AND k."vinculoId"=c."vinculoId" AND k."waId"=c."contactoWaId"
       WHERE c."tenantId"=${auth.tenantId}::uuid AND c."vinculoId"=${canal.id}::uuid AND (c."ultimoMensajeEl" IS NOT NULL OR ${destinatarioPrueba}::text IS NOT NULL)
       AND (${destinatarioPrueba}::text IS NULL OR c."contactoWaId"=${destinatarioPrueba})
       AND (${busqueda}='' OR (k.eliminado=false AND k.nombre ILIKE ${patron}) OR (${porNumero}::text IS NOT NULL AND c."contactoWaId" LIKE ${porNumero}))
-      AND (${filtro}='TODAS' OR (${filtro}='MIAS' AND c."responsableId"=${auth.userId}::uuid) OR (${filtro}='SIN_ASIGNAR' AND c."responsableId" IS NULL) OR (${filtro}='PARTICIPE' AND (
+      AND (${estados.length === 0} OR c.estado IN (${Prisma.join(estados.length ? estados : ['ACTIVA', 'RESUELTA'])}))
+      AND (${query.sinLeer !== 'true'} OR c."entrantesRevision">c."leidaRevision")
+      AND (${query.sinResponder !== 'true'} OR (SELECT m.direccion FROM "InboxMensaje" m WHERE m."tenantId"=c."tenantId" AND m."vinculoId"=c."vinculoId" AND m."conversacionId"=c.id AND m."enviadoEl" IS NOT NULL AND m.direccion IN ('ENTRANTE','SALIENTE') ORDER BY m."enviadoEl" DESC,m.id DESC LIMIT 1)='ENTRANTE')
+      AND (${query.participe !== 'true'} OR EXISTS (SELECT 1 FROM "InboxMensaje" m WHERE m."tenantId"=c."tenantId" AND m."vinculoId"=c."vinculoId" AND m."conversacionId"=c.id AND m."autorId"=${auth.userId}::uuid) OR EXISTS (SELECT 1 FROM "InboxEventoInterno" e WHERE e."tenantId"=c."tenantId" AND e."vinculoId"=c."vinculoId" AND e."conversacionId"=c.id AND e."actorId"=${auth.userId}::uuid AND e.tipo='NOTA'))
+      AND (${filtro}='TODAS'  OR (${filtro}='MIAS' AND c."responsableId"=${auth.userId}::uuid) OR (${filtro}='SIN_ASIGNAR' AND c."responsableId" IS NULL) OR (${filtro}='PARTICIPE' AND (
         EXISTS (SELECT 1 FROM "InboxMensaje" m WHERE m."tenantId"=c."tenantId" AND m."vinculoId"=c."vinculoId" AND m."conversacionId"=c.id AND m."autorId"=${auth.userId}::uuid)
         OR EXISTS (SELECT 1 FROM "InboxEventoInterno" e WHERE e."tenantId"=c."tenantId" AND e."vinculoId"=c."vinculoId" AND e."conversacionId"=c.id AND e."actorId"=${auth.userId}::uuid AND e.tipo='NOTA')
       )))
@@ -319,6 +335,10 @@ export class MetaInboxGeneralService {
             responsableId: true,
             responsableNombre: true,
             asignacionVersion: true,
+            estado: true,
+            estadoVersion: true,
+            entrantesRevision: true,
+            leidaRevision: true,
             contactoWaId: true,
             ultimoEntranteNuevoEl: true,
           },
@@ -465,6 +485,13 @@ export class MetaInboxGeneralService {
       origen: 'GENERAL' as const,
       equipo,
       colaboracionHabilitada: true,
+      lectura: conversacion
+        ? {
+            revision: conversacion.entrantesRevision,
+            pendiente:
+              conversacion.leidaRevision < conversacion.entrantesRevision,
+          }
+        : null,
       prueba:
         canal.tipo === 'PRUEBA'
           ? { numero: canal.numero, venceEl: canal.tokenVenceEl!.toISOString() }
@@ -487,6 +514,8 @@ export class MetaInboxGeneralService {
         id: c.id,
         telefono: `+${c.contactoWaId}`,
         nombre: c.nombre,
+        estado: c.estado,
+        sinLeer: c.sinLeer,
         ultimoMensaje: recientes.find((r) => r.id === c.id)?.mensajes[0]
           ? presentar(
               recientes.find((r) => r.id === c.id)!.mensajes[0],
@@ -501,7 +530,7 @@ export class MetaInboxGeneralService {
                 id: ultima.id,
                 fecha: ultima.ultimoMensajeEl.toISOString(),
                 busqueda,
-                filtro,
+                filtro: identidadFiltro,
                 usuario: auth.userId,
                 canal: canalId,
               } satisfies CursorLista),

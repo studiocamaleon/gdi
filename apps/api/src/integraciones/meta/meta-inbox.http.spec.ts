@@ -492,3 +492,73 @@ it('admite un operador con permiso de atención y valida las notas sin permitir 
     .send({ ...dto, texto: '   ' })
     .expect(400);
 });
+
+it('valida lectura compartida y estados, sin aceptar usuarios ni revisiones arbitrarias', async () => {
+  const lectura = textoUrl.replace('/texto', '/lectura');
+  const estado = textoUrl.replace('/texto', '/estado');
+  const base = { canalId: textoDto.canalId, revision: 3 };
+  await request(app.getHttpServer())
+    .post(lectura)
+    .set('x-actor', 'OPERADOR')
+    .set('x-inbox', '1')
+    .send(base)
+    .expect(200)
+    .expect('Cache-Control', 'private, no-store');
+  for (const cambio of [
+    { revision: -1 },
+    { revision: 1.5 },
+    { revision: '3' },
+    { usuarioId: 'otro' },
+    { tenantId: 'ajeno' },
+  ])
+    await request(app.getHttpServer())
+      .post(lectura)
+      .set('x-actor', 'ADMINISTRADOR')
+      .send({ ...base, ...cambio })
+      .expect(400);
+  const dto = {
+    ...base,
+    clave: textoDto.clave,
+    estado: 'RESUELTA',
+    version: 0,
+  };
+  await request(app.getHttpServer())
+    .post(estado)
+    .set('x-actor', 'OPERADOR')
+    .set('x-inbox', '1')
+    .send(dto)
+    .expect(200);
+  await request(app.getHttpServer())
+    .post(estado)
+    .set('x-actor', 'ADMINISTRADOR')
+    .send({ ...dto, estado: 'BORRADA' })
+    .expect(400);
+  await request(app.getHttpServer()).post(estado).send(dto).expect(403);
+});
+it('valida la combinación de filtros sin aceptar estados o booleanos desconocidos', async () => {
+  const ruta = '/api/integraciones/meta/inbox';
+  await request(app.getHttpServer())
+    .get(ruta)
+    .set('x-actor', 'ADMINISTRADOR')
+    .query({
+      filtro: 'MIAS',
+      estados: 'ACTIVA',
+      sinLeer: 'true',
+      sinResponder: 'true',
+      participe: 'true',
+    })
+    .expect(200);
+  for (const query of [
+    { estados: 'CERRADA' },
+    { estados: 'ACTIVA,RESUELTA' },
+    { filtro: 'MIAS,SIN_ASIGNAR' },
+    { estados: 'ACTIVA,RESUELTA,ACTIVA' },
+    { sinLeer: 'si' },
+    { sinResponder: 'false' },
+  ])
+    await request(app.getHttpServer())
+      .get(ruta)
+      .set('x-actor', 'ADMINISTRADOR')
+      .query(query)
+      .expect(400);
+});

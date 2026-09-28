@@ -1,7 +1,12 @@
 import { RolSistema } from '@prisma/client';
 import { Roles } from '../../auth/roles.decorator';
 import { MetaEquipoService } from './inbox/meta-equipo.service';
-import { AsignarInboxDto, NotaInboxDto } from './inbox/meta-equipo.dto';
+import {
+  AsignarInboxDto,
+  NotaInboxDto,
+  EstadoInboxDto,
+  LecturaInboxDto,
+} from './inbox/meta-equipo.dto';
 import { MetaCargasService } from './inbox/meta-cargas.service';
 import { MetaEnviosService } from './inbox/meta-envios.service';
 import {
@@ -75,6 +80,29 @@ export class MetaInboxController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: NotaInboxDto,
+  ) {
+    return this.equipo.guardar(auth, ipDeRequest(req), id, dto);
+  }
+
+  @Post('conversaciones/:id/estado')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  estado(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EstadoInboxDto,
+  ) {
+    return this.equipo.guardar(auth, ipDeRequest(req), id, dto);
+  }
+  @Post('conversaciones/:id/lectura')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  lectura(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: LecturaInboxDto,
   ) {
     return this.equipo.guardar(auth, ipDeRequest(req), id, dto);
   }

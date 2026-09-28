@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { autoasignarInbox, nombreOperador } from './meta-equipo';
 import { Prisma, type InboxEnvio, type MetaVinculo } from '@prisma/client';
 import type { OperacionInbox } from './meta-inbox-normalizar';
@@ -164,6 +165,44 @@ export async function aplicarOperacionInbox(
       },
       data: { ultimoMensajeEl: op.fecha },
     });
+    // Contar una sola vez cada entrada visible, incluidos importados nuevos.
+    if (!anterior?.conversacionId && op.direccion === 'ENTRANTE') {
+      await tx.inboxConversacion.update({
+        where: { id: conversacionId },
+        data: { entrantesRevision: { increment: 1 } },
+      });
+    }
+    // Un historial tardío o un webhook repetido nunca reabre una conversación.
+    if (
+      op.origen === 'NUEVO' &&
+      !anterior?.entranteNuevo &&
+      op.direccion === 'ENTRANTE' &&
+      op.fecha.getTime() <= Date.now()
+    ) {
+      const reabierta = await tx.inboxConversacion.updateMany({
+        where: {
+          id: conversacionId,
+          ...scope,
+          estado: 'RESUELTA',
+          resueltaEl: { lt: op.fecha },
+        },
+        data: {
+          estado: 'ACTIVA',
+          estadoVersion: { increment: 1 },
+          resueltaEl: null,
+        },
+      });
+      if (reabierta.count)
+        await tx.inboxEventoInterno.create({
+          data: {
+            ...scope,
+            conversacionId,
+            clave: randomUUID(),
+            tipo: 'REABIERTA_CLIENTE',
+            actorNombre: 'Cliente',
+          },
+        });
+    }
     if (
       op.origen === 'NUEVO' &&
       !anterior?.entranteNuevo &&

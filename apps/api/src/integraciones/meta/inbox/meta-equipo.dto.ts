@@ -1,5 +1,7 @@
 import {
   IsInt,
+  IsIn,
+  Max,
   IsOptional,
   IsString,
   IsUUID,
@@ -18,4 +20,14 @@ export class NotaInboxDto extends AccionEquipoInboxDto {
 export class AsignarInboxDto extends AccionEquipoInboxDto {
   @IsOptional() @IsUUID('4') responsableId!: string | null;
   @IsInt() @Min(0) version!: number;
+}
+
+export class EstadoInboxDto extends AccionEquipoInboxDto {
+  @IsIn(['ACTIVA', 'RESUELTA']) estado!: 'ACTIVA' | 'RESUELTA';
+  @IsInt() @Min(0) version!: number;
+  @IsInt() @Min(0) @Max(2147483647) revision!: number;
+}
+export class LecturaInboxDto {
+  @IsString() @MinLength(1) @MaxLength(200) canalId!: string;
+  @IsInt() @Min(0) @Max(2147483647) revision!: number;
 }

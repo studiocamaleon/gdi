@@ -6635,6 +6635,11 @@ model InboxImportacion {
 }
 
 model InboxConversacion {
+  estado                String               @default("ACTIVA")
+  estadoVersion         Int                  @default(0)
+  resueltaEl            DateTime?
+  entrantesRevision     Int                  @default(0)
+  leidaRevision         Int                  @default(0)
   responsableId         String?              @db.Uuid
   responsableNombre     String?
   asignacionVersion     Int                  @default(0)
@@ -7224,7 +7229,7 @@ model InboxEventoInterno {
   conversacionId    String            @db.Uuid
   clave             String            @db.Uuid
   tipo              String
-  actorId           String            @db.Uuid
+  actorId           String?           @db.Uuid
   actorNombre       String
   texto             String?
   anteriorId        String?           @db.Uuid

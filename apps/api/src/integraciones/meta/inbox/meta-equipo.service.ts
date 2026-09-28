@@ -14,7 +14,12 @@ import { exigirAccesoInbox } from '../meta-conexion-acceso';
 import { canalGeneralInbox, identidadCanalInbox } from '../meta-inbox-canal';
 import { destinatarioCanalPermitido } from '../meta-prueba.config';
 import { nombreOperador, operadoresInbox } from './meta-equipo';
-import { AsignarInboxDto, NotaInboxDto } from './meta-equipo.dto';
+import {
+  AsignarInboxDto,
+  NotaInboxDto,
+  EstadoInboxDto,
+  LecturaInboxDto,
+} from './meta-equipo.dto';
 
 @Injectable()
 export class MetaEquipoService {
@@ -27,12 +32,14 @@ export class MetaEquipoService {
     auth: CurrentAuth,
     ip: string,
     conversacionId: string,
-    dto: NotaInboxDto | AsignarInboxDto,
+    dto: NotaInboxDto | AsignarInboxDto | EstadoInboxDto | LecturaInboxDto,
   ) {
     const nota = 'texto' in dto;
+    const estado = 'estado' in dto;
+    const lectura = !('clave' in dto);
     if (nota && (!dto.texto.trim() || dto.texto.length > 4000))
       throw new BadRequestException('Escribí entre 1 y 4000 caracteres.');
-    if (!nota && dto.responsableId === undefined)
+    if (!nota && !estado && !lectura && dto.responsableId === undefined)
       throw new BadRequestException('Elegí el responsable o Sin asignar.');
     await exigirAccesoInbox(this.db, auth, ip);
     const canal = await canalGeneralInbox(this.db, auth.tenantId);
@@ -69,6 +76,23 @@ export class MetaEquipoService {
       });
       if (!c || !destinatarioCanalPermitido(vigente, c.contactoWaId))
         throw new NotFoundException('La conversación no está disponible.');
+      if (lectura) {
+        if (dto.revision > c.entrantesRevision)
+          throw new BadRequestException(
+            'La lectura no corresponde a esta conversación.',
+          );
+        const cambio = await tx.inboxConversacion.updateMany({
+          where: {
+            id: c.id,
+            tenantId: auth.tenantId,
+            vinculoId: canal.id,
+            leidaRevision: { lt: dto.revision },
+          },
+          data: { leidaRevision: dto.revision },
+        });
+        if (cambio.count) await registrarCambioInbox(tx, aviso);
+        return;
+      }
       const anterior = await tx.inboxEventoInterno.findFirst({
         where: { tenantId: auth.tenantId, clave: dto.clave },
       });
@@ -79,9 +103,12 @@ export class MetaEquipoService {
           anterior.actorId !== auth.userId ||
           (nota
             ? anterior.tipo !== 'NOTA' || anterior.texto !== dto.texto.trim()
-            : anterior.tipo === 'NOTA' ||
-              anterior.tipo === 'AUTOASIGNACION' ||
-              anterior.responsableId !== dto.responsableId)
+            : estado
+              ? anterior.tipo !==
+                (dto.estado === 'RESUELTA' ? 'RESUELTA' : 'REABIERTA')
+              : !['ASIGNACION', 'TRANSFERENCIA', 'SIN_ASIGNAR'].includes(
+                  anterior.tipo,
+                ) || anterior.responsableId !== dto.responsableId)
         )
           throw new ConflictException('Esa acción corresponde a otro cambio.');
         return;
@@ -99,6 +126,29 @@ export class MetaEquipoService {
       if (nota) {
         await tx.inboxEventoInterno.create({
           data: { ...base, tipo: 'NOTA', texto: dto.texto.trim() },
+        });
+      } else if (estado) {
+        if (
+          c.estadoVersion !== dto.version ||
+          c.entrantesRevision !== dto.revision
+        )
+          throw new ConflictException(
+            'La conversación cambió. Revisá los mensajes y su estado antes de continuar.',
+          );
+        if (c.estado === dto.estado) return;
+        await tx.inboxConversacion.update({
+          where: { id: c.id, tenantId: auth.tenantId },
+          data: {
+            estado: dto.estado,
+            estadoVersion: { increment: 1 },
+            resueltaEl: dto.estado === 'RESUELTA' ? new Date() : null,
+          },
+        });
+        await tx.inboxEventoInterno.create({
+          data: {
+            ...base,
+            tipo: dto.estado === 'RESUELTA' ? 'RESUELTA' : 'REABIERTA',
+          },
         });
       } else {
         if (c.asignacionVersion !== dto.version)

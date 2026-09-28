@@ -9,6 +9,12 @@ import {
 
 /** La empresa y el número propio se resuelven en el servidor. */
 export class MetaInboxQueryDto {
+  @IsOptional()
+  @IsIn(['ACTIVA', 'RESUELTA'])
+  estados?: string;
+  @IsOptional() @IsIn(['true']) sinLeer?: string;
+  @IsOptional() @IsIn(['true']) sinResponder?: string;
+  @IsOptional() @IsIn(['true']) participe?: string;
   @IsOptional() @IsIn(['TODAS', 'MIAS', 'SIN_ASIGNAR', 'PARTICIPE']) filtro?:
     | 'TODAS'
     | 'MIAS'

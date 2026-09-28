@@ -90,6 +90,9 @@ export async function leerEquipoInbox(
     responsableId: string | null;
     responsableNombre: string | null;
     asignacionVersion: number;
+    estado: string;
+    estadoVersion: number;
+    entrantesRevision: number;
   },
   query: { eventosAntesDe?: string; eventosDesdeId?: string },
 ) {
@@ -148,6 +151,9 @@ export async function leerEquipoInbox(
   const operadores = await operadoresInbox(db, c.tenantId);
   const actual = operadores.find((o) => o.id === c.responsableId);
   return {
+    estado: c.estado,
+    estadoVersion: c.estadoVersion,
+    entrantesRevision: c.entrantesRevision,
     responsable: c.responsableId
       ? {
           id: c.responsableId,
