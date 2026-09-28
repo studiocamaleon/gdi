@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado al integrar la base el 28/09/2026:** esta rama reúne los PR #2–#5, hasta la migración 284. Staging ya ejecuta el Inbox del PR #7 con 298 migraciones. Las notas de preparación siguientes son históricas: no desplegar esta base antigua encima de staging. Ver [estado de integración y verificaciones](../../docs/revision-prs-2026-09-28.md) y el [PR #7](https://github.com/studiocamaleon/gdi/pull/7) para la versión posterior.
+> **Base integrada el 28/09/2026:** los PR #2–#7 ya están en `main`, hasta la migración 298. El PR #7 se integró en `7e58b0735`; staging conserva el lote funcional `d2677ff2a` hasta el siguiente despliegue registrado. Las notas de preparación histórica no sustituyen el estado de [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
@@ -20,7 +20,7 @@ Pasaron las compilaciones con tipos, las pruebas de base/permisos y el login/BFF
 
 Los accesos están fuera de Git, en `~/.config/grafoprint/staging`, con directorio `0700` y archivos privados `0600`. No se reinició Docker ni se compiló la web en esta Mac.
 
-El canal de prueba del Inbox está activado y se comprobó el recorrido real de plantilla, recepción, respuesta libre y entrega en dos pestañas. Tras un rechazo `131005` el 28/09 se renovó la autorización; la repetición del envío todavía está pendiente. El acceso temporal actual vence el 28/09/2026 a las 06:00 de Argentina; una prueba posterior exige renovar el token y activar una nueva generación. Se recuperó y abrió el PNG recibido como documento. La plantilla PDF ya está aprobada; consultar su resultado en VALIDACION.md. Coexistencia/historial todavía requieren ensayo real. Ver [protocolo y resultado](../../docs/meta-inbox-canal-prueba.md).
+El canal de prueba del Inbox se comprobó con texto, PDF, imagen, audio, video y sticker, además de autoría, transferencias, notas y lectura compartida entre dos operadores. El token temporal usado en el último ensayo venció el 28/09/2026 a las 15:00 Argentina; renovar antes de nuevos envíos reales. Coexistencia e importación de historial aún necesitan ensayo real. Ver [resultados y límites](./VALIDACION.md) y [procedimiento](../../docs/meta-inbox-canal-prueba.md).
 
 ## Servicios y orden
 
@@ -45,7 +45,7 @@ Requisitos: Docker con Compose, Node 24. Compilar Linux **amd64**: `compas_nest`
 
 En una Mac ARM hay emulación. Compilar secuencialmente, con los servicios de ensayo detenidos; no lanzar ambos builds juntos en Docker Desktop con sólo 4 GB de RAM. Para el conjunto completo, usar una máquina o runner con memoria suficiente para Docker y el sistema operativo, o ejecutar las pruebas por etapas. No asignar a Docker toda la memoria física de la computadora ni detener contenedores de otros proyectos. En esta Mac de 8 GB, el usuario pidió dejar pendiente la validación completa de la web, sin reiniciar Docker. Ver los resultados y límites en [VALIDACION.md](./VALIDACION.md).
 
-El workflow [staging-validation.yml](../../.github/workflows/staging-validation.yml) ejecuta las dos compilaciones y el ensayo de migraciones/permisos/login en un ejecutor estándar Ubuntu de GitHub. Usa el Compose aislado con PostgreSQL/Redis/S3Mock temporales y claves aleatorias; no recibe credenciales cloud ni despliega. Se activa por cambios relevantes en `codex/staging-infraestructura`, `codex/fix-configuracion-staging`, `codex/meta-cloud-base`, `codex/meta-recepcion-piloto` y `codex/inbox-canal-pruebas`; aún no es un control general de todos los PR. No guarda imágenes ni artefactos externos. Si el repositorio deja de ser público, el trabajo se omite hasta revisar el presupuesto. Consultar [facturación de GitHub Actions](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
+El workflow [staging-validation.yml](../../.github/workflows/staging-validation.yml) ejecuta las dos compilaciones y el ensayo de migraciones/permisos/login en un ejecutor estándar Ubuntu de GitHub. Usa el Compose aislado con PostgreSQL/Redis/S3Mock temporales y claves aleatorias; no recibe credenciales cloud ni despliega. Se activa en PR hacia `main` que cambian código de aplicación o despliegue, y conserva los disparadores de las ramas históricas. No guarda imágenes ni artefactos externos. Si el repositorio deja de ser público, el trabajo se omite hasta revisar el presupuesto. Consultar [facturación de GitHub Actions](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
 
 El build comprueba tipos por defecto. En una máquina con poca memoria se puede ejecutar primero `npm --prefix apps/api run build` y `npx tsc --noEmit --incremental false` en el host (con las dependencias instaladas), y **sólo si ambos pasan** agregar `--build-arg SKIP_TYPECHECK=true` a los dos comandos Docker. Esto omite el chequeo duplicado dentro del contenedor; no cambia la lógica de la aplicación. Los manifiestos Fly no habilitan esa opción.
 
