@@ -161,3 +161,58 @@ it.each(['VIDEO', 'LOCATION', 'NEW'])(
     ).toBeTruthy();
   },
 );
+
+it.each(['IMAGE', 'DOCUMENT'])(
+  'mantiene la versión de %s cuando Meta renueva la URL de muestra',
+  (format) => {
+    const anterior = {
+      ...raw,
+      components: [
+        {
+          type: 'HEADER',
+          format,
+          example: {
+            header_handle: ['https://example.invalid/muestra?firma=1'],
+          },
+        },
+        { type: 'BODY', text: 'Tu archivo' },
+      ],
+    };
+    const vigente = {
+      ...anterior,
+      components: [
+        {
+          ...anterior.components[0],
+          example: {
+            header_handle: ['https://example.invalid/muestra?firma=2'],
+          },
+        },
+        anterior.components[1],
+      ],
+    };
+    const version = normalizarPlantilla(anterior, null)!.version;
+    expect(normalizarPlantilla(vigente, null)!.version).toBe(version);
+    expect(anterior.components[0].example?.header_handle[0]).toContain(
+      'firma=1',
+    );
+    for (const cambio of [
+      { status: 'PAUSED' },
+      { category: 'MARKETING' },
+      {
+        components: [
+          { type: 'HEADER', format: format === 'IMAGE' ? 'DOCUMENT' : 'IMAGE' },
+          anterior.components[1],
+        ],
+      },
+      {
+        components: [
+          anterior.components[0],
+          { type: 'BODY', text: 'Otro texto' },
+        ],
+      },
+    ])
+      expect(
+        normalizarPlantilla({ ...vigente, ...cambio }, null)!.version,
+      ).not.toBe(version);
+  },
+);

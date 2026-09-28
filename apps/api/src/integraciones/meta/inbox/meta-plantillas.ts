@@ -135,7 +135,22 @@ export function normalizarPlantilla(
   if (!p.cuerpo) no('La plantilla necesita un cuerpo de texto.');
   if (p.variables.length > 40)
     no('Esta plantilla contiene demasiados datos variables.');
-  // Incluye componentes completos para detectar cambios incluso en acciones de botones.
+  // Meta renueva la URL del archivo de muestra entre consultas. Esa muestra
+  // no cambia la definición ni es el archivo que se envía al destinatario.
+  // Conservamos los demás campos, incluidas las acciones de los botones.
+  const componentesVersion = Array.isArray(r.components)
+    ? r.components.map((componente) =>
+        componente &&
+        typeof componente === 'object' &&
+        !Array.isArray(componente)
+          ? Object.fromEntries(
+              Object.entries(componente).filter(
+                ([campo]) => campo !== 'example',
+              ),
+            )
+          : componente,
+      )
+    : r.components;
   p.version = createHash('sha256')
     .update(
       JSON.stringify([
@@ -145,7 +160,7 @@ export function normalizarPlantilla(
         r.category,
         r.status,
         r.parameter_format,
-        r.components,
+        componentesVersion,
       ]),
     )
     .digest('hex');
