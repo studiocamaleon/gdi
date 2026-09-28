@@ -1,5 +1,22 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Ensayo real previo al cierre del PR #7 — 28/09/2026
+
+Mismo lote funcional desplegado `d2677ff2a7bafcff648ee70d5258d3fb5c0692e1`, 298 migraciones. No se recompilaron ni desplegaron imágenes, se cambiaron tamaños o se modificó producción durante este ensayo.
+
+- **Acceso:** token temporal renovado personalmente por el titular, verificado con Graph (aplicación, permisos, número, suscripción y perfil HTTP 200), importado únicamente en la API y activado cifrado para la misma empresa/destinatario de prueba. Vence el 28/09 a las 17:00 UTC / 14:00 Argentina. El reinicio de API quedó saludable; se conservó el historial. No se copiaron secretos a la aplicación local ni a Git.
+- **Texto:** entrada real desde WhatsApp de escritorio y respuesta desde el editor del Inbox a las 15:21 UTC. Meta aceptó y confirmó `DELIVERED`. El rechazo anterior `131005` no se reprodujo con esta credencial. La primera respuesta aceptada asignó automáticamente la conversación al autor y dejó el evento interno correspondiente.
+- **Archivos salientes:** PDF, PNG, audio M4A de tres segundos, video MP4 de tres segundos y sticker WebP sintéticos, cargados y enviados desde la interfaz de Grafo. Los cinco llegaron al WhatsApp receptor, con `DELIVERED` acreditado y copias privadas en estado `LISTO`, sin error. Junto al texto hubo seis envíos aceptados, sin duplicados ni reintentos.
+- **Archivos entrantes:** imagen, audio, video y sticker devueltos desde el mismo chat de WhatsApp, más el PDF adjuntado desde el equipo. Los cinco aparecieron sin recargar el Inbox y terminaron `LISTO` con archivo privado. La imagen reenviada llegó como JPEG; se conservó el formato recibido. No se usaron webhooks fabricados.
+- **Visores y reproducción:** imagen saliente de 640 × 360 abierta dentro de Grafo; ambos stickers cargados a 512 × 512; audio entrante reproducido hasta el final (tres segundos, sin error); video entrante cargado y reproducción iniciada. PDF entrante de una página renderizado por el visor incrustado. Su descarga desde Grafo mide 1176 bytes y coincide por SHA-256 con el original. El observador automatizado de descarga venció, pero el archivo efectivamente guardado en Descargas acredita la descarga.
+- **Validación de entrada:** archivo de texto inerte con extensión no admitida rechazado por el selector de documentos antes de abrir la revisión/envío. No se envió ese archivo a WhatsApp.
+- **Notas y estados:** `/nota` guardó una nota privada con autor; no creó un envío a Meta ni cambió el último mensaje de la lista. Cerrar como Resuelta y recibir una nueva entrada real reabrió la conversación automáticamente, conservó al responsable y dejó historial interno. La lectura observada sigue siendo del único usuario existente; no se presenta como prueba entre operadores distintos.
+- **Infraestructura:** salud web/API y base correctas, protección privada requerida, API directa restringida y webhook sin firma rechazado. Se mantuvieron los recursos contratados y las cinco aplicaciones.
+- **Pendiente para cerrar:** ensayo en dos sesiones con usuarios distintos (la empresa sólo tenía un administrador), revisión final del diff y CI con la base actual de `main`. Preparado, aún sin guardar, un rol con sólo `inbox.atender`; el alta del segundo usuario espera confirmación. La grabación con micrófono real y la matriz completa de navegadores/formatos no se acreditan con los archivos sintéticos. No se marcó el PR listo ni se fusionó.
+- **Límites de Meta:** el receptor conserva desactivadas sus confirmaciones de lectura; no se infiere `read` de una respuesta. La aprobación/alta pública, coexistencia e importación real de historial siguen siendo ensayos separados. El aviso de facturación de la cuenta de prueba continúa; no impidió estos mensajes dentro de la ventana de atención y no se cambió facturación.
+
+Evidencia detallada, archivos de prueba, claves y capturas permanecen fuera del repositorio. Se omiten números e identificadores privados.
+
 ## Diagnóstico de rechazo de envío — 28/09/2026
 
 Mismo código desplegado `d2677ff2a7bafcff648ee70d5258d3fb5c0692e1`, sin cambios de imágenes, migraciones, recursos ni producción.
