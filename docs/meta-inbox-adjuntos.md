@@ -111,3 +111,9 @@ Ensayo local: selección y envío simulado de M4A desde Chrome; reproducción co
 Carga de archivos: sigue siendo bajo demanda, cerca de la vista, desde la copia privada de Grafo. Cambiar de conversación libera los blobs; al volver se vuelven a autorizar/cargar los medios visibles, no todo el historial ni otra copia desde Meta. Los PDF se cargan al abrirlos. No se agregó caché persistente de archivos privados.
 
 Validación: **98 pruebas frontend** (incluye tiempos relativos, recuperación inicial y actualización en vivo), TypeScript del Inbox, ESLint y guard de CSS. Chrome: menú de descarga con nombre del original, rechazo de TXT desde Fotos, aceptación desde Documentos sin enviar, alineación medida de controles, audio/video y contexto a 390 px sin desborde. Las pruebas del posicionamiento de menús se realizaron en el navegador; JSDOM no representa esa geometría. Sin cambios de API, migraciones, flags ni despliegues; pendiente agrupar con el lote de staging.
+
+### Revisión previa amplia
+
+La revisión de adjuntos ahora ocupa la pantalla, con cierre arriba, medio centrado, miniatura/papelera y comentario/envío en el borde inferior. Usa los colores de Grafo y se adapta a móvil. Los PDF locales pueden verse antes de enviar en el visor del navegador; otros documentos muestran nombre, formato y tamaño. Sólo usa la copia local seleccionada: no sube bytes hasta confirmar. No cambia la grabación directa de notas de voz ni las protecciones contra envíos duplicados.
+
+Comprobado en Chrome con imagen del catálogo y PDF ficticio, además de imagen a 390 px. Se volvieron a ejecutar las 19 pruebas de editor/envío (incluyen descartar, cancelar grabación y resultado incierto), tipos del Inbox, lint y guard de CSS. Permanece local, junto al lote anterior.

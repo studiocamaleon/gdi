@@ -11,6 +11,7 @@ import {
   Video,
   Music2,
   Sticker,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLegacyDesignScope } from "@/components/design-system/appearance";
@@ -30,7 +31,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
-import { Textarea } from "@/components/ui/textarea";
+import { InputGroup, InputGroupTextarea } from "@/components/ui/input-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
@@ -595,24 +596,50 @@ export function InboxEnviarAdjunto({
           else setAbierto(value);
         }}
       >
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {draft?.voz ? "Nota de voz" : "Enviar un archivo"}
-            </DialogTitle>
-            <DialogDescription>
-              Para {destino}. Revisalo antes de enviarlo.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className={s.review} showCloseButton={false}>
+          <div className={s.reviewTop}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-10 rounded-full"
+              aria-label="Cerrar revisión"
+              title="Cerrar revisión"
+              disabled={ocupado}
+              onClick={() => {
+                if (!bloqueado) cancelar();
+                else setAbierto(false);
+              }}
+            >
+              <X />
+            </Button>
+            <DialogHeader className={s.reviewHeading}>
+              <DialogTitle>Para {destino}</DialogTitle>
+              <DialogDescription>
+                {draft?.file.name ?? "Revisar archivo"}
+              </DialogDescription>
+            </DialogHeader>
+            {draft && (
+              <span className={s.reviewSize}>
+                {formatBytes(draft.file.size)}
+              </span>
+            )}
+          </div>
           {draft && (
             <>
-              <div className={s.preview}>
+              <div className={s.preview} data-type={formato?.tipo}>
                 {url && (draft.voz || formato?.tipo === "audio") ? (
-                  <audio
-                    controls
-                    src={url}
-                    aria-label="Escuchar antes de enviar"
-                  />
+                  <div className={s.reviewDocument}>
+                    <span className={s.reviewFileIcon}>
+                      <Music2 />
+                    </span>
+                    <strong>{draft.file.name}</strong>
+                    <audio
+                      controls
+                      src={url}
+                      aria-label="Escuchar antes de enviar"
+                    />
+                  </div>
                 ) : url && formato?.tipo === "video" ? (
                   <video
                     controls
@@ -625,71 +652,124 @@ export function InboxEnviarAdjunto({
                   // URL local efímera: no debe enviarse al optimizador de imágenes.
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={url} alt="Vista previa del adjunto" />
+                ) : url && formato?.mime === "application/pdf" ? (
+                  <iframe title="Vista previa del PDF" src={url} />
                 ) : (
-                  <FileText size={40} />
+                  <div className={s.reviewDocument}>
+                    <span className={s.reviewFileIcon}>
+                      <FileText />
+                    </span>
+                    <strong>{draft.file.name}</strong>
+                    <span>
+                      {formato?.ext.toUpperCase()} ·{" "}
+                      {formatBytes(draft.file.size)}
+                    </span>
+                  </div>
                 )}
-                <strong>{draft.file.name}</strong>
-                <span>
-                  {formatBytes(draft.file.size)}
-                  {draft.voz ? " · Se enviará como nota de voz" : ""}
-                </span>
               </div>
-              {admiteTexto && (
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor={id}>Comentario (opcional)</FieldLabel>
-                    <Textarea
-                      id={id}
-                      value={draft.texto}
-                      maxLength={1024}
-                      disabled={ocupado || bloqueado}
-                      onChange={(e) =>
-                        guardar({ ...draft, texto: e.target.value })
+              <div className={s.reviewBottom}>
+                {fase === "subiendo" && (
+                  <Progress
+                    value={progreso}
+                    aria-label={`Subiendo archivo: ${progreso}%`}
+                  />
+                )}
+                {fase === "enviando" && (
+                  <p className={s.tip} role="status">
+                    Preparando y comprobando el envío…
+                  </p>
+                )}
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+                <div className={s.reviewActions}>
+                  <div className={s.reviewSelection}>
+                    <div
+                      className={s.reviewThumbnail}
+                      aria-label="Archivo seleccionado"
+                    >
+                      {url &&
+                      ["image", "sticker"].includes(formato?.tipo ?? "") ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={url} alt="" />
+                      ) : formato?.tipo === "video" ? (
+                        <Video />
+                      ) : formato?.tipo === "audio" ? (
+                        <Music2 />
+                      ) : (
+                        <FileText />
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-10 rounded-full"
+                      aria-label={
+                        fase === "subiendo" ? "Cancelar carga" : "Descartar"
                       }
-                    />
-                  </Field>
-                </FieldGroup>
-              )}
-              {fase === "subiendo" && (
-                <Progress
-                  value={progreso}
-                  aria-label={`Subiendo archivo: ${progreso}%`}
-                />
-              )}
-              {fase === "enviando" && (
-                <p className={s.tip} role="status">
-                  Preparando y comprobando el envío…
-                </p>
-              )}
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              <div className={s.buttons}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={bloqueado}
-                  onClick={cancelar}
-                >
-                  {fase === "subiendo" ? "Cancelar carga" : "Descartar"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="brand"
-                  disabled={ocupado || (!habilitado && !bloqueado)}
-                  onClick={() => void enviar()}
-                >
-                  {ocupado ? (
-                    <Spinner data-icon="inline-start" />
-                  ) : bloqueado ? (
-                    <RefreshCw data-icon="inline-start" />
+                      title={
+                        fase === "subiendo"
+                          ? "Cancelar carga"
+                          : "Descartar archivo"
+                      }
+                      disabled={bloqueado}
+                      onClick={cancelar}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                  {admiteTexto ? (
+                    <FieldGroup className={s.reviewCaption}>
+                      <Field>
+                        <FieldLabel htmlFor={id} className="sr-only">
+                          Comentario (opcional)
+                        </FieldLabel>
+                        <InputGroup className={s.captionGroup}>
+                          <InputGroupTextarea
+                            id={id}
+                            value={draft.texto}
+                            maxLength={1024}
+                            placeholder="Añadí un comentario…"
+                            className={s.captionInput}
+                            disabled={ocupado || bloqueado}
+                            onChange={(e) =>
+                              guardar({ ...draft, texto: e.target.value })
+                            }
+                          />
+                        </InputGroup>
+                      </Field>
+                    </FieldGroup>
                   ) : (
-                    <Send data-icon="inline-start" />
+                    <p className={s.reviewCaptionHint}>
+                      {formato?.tipo === "sticker"
+                        ? "Enviar sticker"
+                        : "Enviar audio"}
+                    </p>
                   )}
-                  {bloqueado ? "Comprobar envío" : "Enviar"}
-                </Button>
+                  <Button
+                    type="button"
+                    variant="brand"
+                    size="icon"
+                    className="size-12 shrink-0 rounded-full"
+                    disabled={ocupado || (!habilitado && !bloqueado)}
+                    onClick={() => void enviar()}
+                    aria-label={bloqueado ? "Comprobar envío" : "Enviar"}
+                    title={
+                      bloqueado ? "Comprobar el mismo envío" : "Enviar archivo"
+                    }
+                  >
+                    {ocupado ? (
+                      <Spinner />
+                    ) : bloqueado ? (
+                      <RefreshCw />
+                    ) : (
+                      <Send />
+                    )}
+                  </Button>
+                </div>
               </div>
             </>
           )}
