@@ -459,7 +459,8 @@ export class MetaAdjuntosService {
       f.estado !== 'LISTO'
     )
       throw new NotFoundException('El archivo todavía no está disponible.');
-    // Sólo formatos pasivos pueden verse inline. Documentos siempre attachment.
+    // La descarga se conserva. Sólo el PDF validado recibe además un enlace
+    // inline para el visor del navegador; otros documentos nunca se incrustan.
     const inline = [
       'image/jpeg',
       'image/png',
@@ -477,6 +478,14 @@ export class MetaAdjuntosService {
       contentType: f.mimeType,
       expiraSegundos: 60,
     });
+    const vistaPreviaUrl =
+      f.mimeType === 'application/pdf'
+        ? await this.storage.firmarDescarga(f.key, {
+            disposition: `inline; filename="adjunto"; filename*=UTF-8''${encodeURIComponent(f.nombreOriginal).replace(/'/g, '%27')}`,
+            contentType: 'application/pdf',
+            expiraSegundos: 60,
+          })
+        : undefined;
     await exigirAccesoConexionMeta(this.db, auth, ip);
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
     const actual = await canalGeneralInbox(this.db, auth.tenantId),
@@ -495,6 +504,7 @@ export class MetaAdjuntosService {
       throw new ForbiddenException();
     return {
       url,
+      vistaPreviaUrl,
       nombre: f.nombreOriginal,
       mimeType: f.mimeType,
       bytes: Number(f.bytes),

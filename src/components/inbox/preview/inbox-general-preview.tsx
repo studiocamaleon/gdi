@@ -538,6 +538,10 @@ export function InboxGeneralPreview({
           archivosDemo[0];
         return {
           url: urlArchivoDemo(archivo),
+          vistaPreviaUrl:
+            archivo.mimeType === "application/pdf"
+              ? `${urlArchivoDemo(archivo)}?vista=inline`
+              : undefined,
           nombre: archivo.nombre,
           mimeType: archivo.mimeType,
           bytes: archivo.bytes,

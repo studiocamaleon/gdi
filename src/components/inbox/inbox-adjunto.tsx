@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Download,
+  Eye,
   FileText,
   Image as ImageIcon,
   LockKeyhole,
@@ -14,6 +15,8 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { InboxPdf } from "./inbox-pdf";
 import {
   abrirAdjuntoInbox,
   type AbrirAdjuntoInbox,
@@ -46,6 +49,7 @@ export function InboxAdjunto({
   const [archivo, setArchivo] = useState<ArchivoInbox | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState(false);
+  const [pdfAbierto, setPdfAbierto] = useState(false);
   const pendiente = useRef<AbortController | null>(null);
   const vigente = useRef(true);
   const formato = tipos[tipo as keyof typeof tipos] ?? tipos.document;
@@ -53,6 +57,7 @@ export function InboxAdjunto({
     archivo?.mimeType ?? adjunto.mimeType ?? "",
   );
   const Icono = esImagen ? ImageIcon : formato.icono;
+  const esPdf = adjunto.mimeType === "application/pdf";
   const nombre = adjunto.nombre || `${formato.nombre} de WhatsApp`;
   const accionOriginal =
     tipo === "document" && !esImagen ? "Descargar documento" : "Abrir original";
@@ -118,7 +123,24 @@ export function InboxAdjunto({
         </div>
         {adjunto.estado === "LISTO" && (
           <div className={s.actions}>
-            {!archivo ? (
+            {esPdf ? (
+              <Dialog open={pdfAbierto} onOpenChange={setPdfAbierto}>
+                <DialogTrigger
+                  render={<Button size="icon" variant="brand" />}
+                  aria-label="Ver PDF"
+                  title="Ver PDF"
+                >
+                  <Eye />
+                </DialogTrigger>
+                {pdfAbierto && (
+                  <InboxPdf
+                    mensajeId={mensajeId}
+                    nombre={nombre}
+                    abrir={abrir}
+                  />
+                )}
+              </Dialog>
+            ) : !archivo ? (
               <Button
                 size="icon"
                 variant="brand"

@@ -14,7 +14,7 @@ La validación vigente está en [VALIDACION.md](../deploy/staging/VALIDACION.md)
 
 - La bienvenida presenta el producto con la tipografía, naranja y superficies de Grafo. El ejemplo de conversación está identificado como ilustrativo. Funciona en escritorio, celular y tema oscuro; mantiene el botón de conexión sujeto a la configuración real.
 - Un mensaje con archivo informa si Grafo está preparando la copia, si está disponible o si necesita revisión. Los marcadores del historial sin archivo conservan su explicación; no se presentan como descargas listas.
-- «Abrir archivo» solicita acceso temporal. Imágenes y stickers se muestran en el chat; audio y video tienen controles del navegador, cuando éste admite el formato. Los documentos se descargan. No hay reproducción automática.
+- «Abrir archivo» solicita acceso temporal. Imágenes y stickers se muestran en el chat; audio y video tienen controles del navegador, cuando éste admite el formato. Los PDF ofrecen «Ver PDF» en un modal; los demás documentos se descargan. No hay reproducción automática.
 - Las copias cuentan dentro del almacenamiento de la empresa. El resto de las empresas no puede abrirlas.
 
 ## Cómo funciona
@@ -32,11 +32,23 @@ Meta documenta que los identificadores recibidos en webhooks caducan a los siete
 - Reserva de cuota antes de descargar y verificación al confirmar. Repetir el mismo evento no duplica archivo ni consumo. Un cambio de medio o una revocación retira la copia anterior; el purgador existente se ocupa del objeto físico.
 - Sólo destinos HTTPS de medios de Meta autorizados, sin redirecciones. Tamaño acotado, MIME admitido, firma básica y SHA-256. No es un antivirus ni un validador completo de códecs o documentos.
 - Imágenes hasta 5 MB, audio/video hasta 16 MB, documentos hasta 100 MB y WebP de stickers hasta 500 KB; se usan límites decimales conservadores. La reproducción depende del navegador. El original conserva la opción de descarga.
-- Archivos privados bajo `INBOX`, aislados de las rutas genéricas de archivos. Documentos forzados como descarga. No hay carga manual de archivos con ese scope.
+- Archivos privados bajo `INBOX`, aislados de las rutas genéricas de archivos. La descarga de documentos se conserva; sólo el PDF recibe además un enlace `inline` para el visor. No hay carga manual de archivos con ese scope.
 - Revalidación de permisos antes y después de firmar; los mensajes revocados y las conexiones que dejan de ser válidas no generan enlaces nuevos. Un enlace ya emitido puede seguir vigente durante sus 60 segundos.
 - El acceso mantiene el alcance actual del Inbox: administración/configuración de la empresa. Plataforma, MCP e impersonación no habilitan la apertura. Los permisos de agentes son un bloque posterior.
 
 ## Estado local y validación
+
+### Visor PDF — 27/09/2026, preparado en local
+
+La tarjeta compacta abre un modal con estética Grafo. Usa el visor PDF integrado del navegador, con páginas, zoom y descarga opcional. El PDF llega directamente desde el almacenamiento privado: no se envía a Google, a un visor externo ni a Meta para visualizarlo. No agrega dependencias, tablas ni servicios.
+
+`abrir` mantiene `url` para descargar y devuelve `vistaPreviaUrl` sólo si el MIME del archivo guardado es `application/pdf`. Ambas firmas duran 60 segundos y salen juntas después de revalidar el acceso. Cerrar elimina el iframe y cancela peticiones pendientes; cada reapertura solicita permiso de nuevo. «Renovar acceso» recupera firmas nuevas; la descarga se deshabilita cinco segundos antes del vencimiento, sin interrumpir la lectura ya cargada.
+
+Si el navegador no admite PDF o tiene desactivado su visor, Grafo lo explica y conserva la descarga. También admite una API de versión anterior sin `vistaPreviaUrl`. El visor de otro origen informa sus propios errores; Grafo no puede inspeccionar el documento cargado y ofrece renovar el acceso si no aparece. La experiencia móvil depende del visor del navegador; no se promete el mismo conjunto de controles que Chrome de escritorio.
+
+Verificación: 35 pruebas web (7 del visor, 10 de adjuntos, 18 del Inbox), 17 de integración de adjuntos en la base dedicada de tests, TypeScript acotado al frontend modificado, ESLint y guard de CSS. Comprobado en Chrome con PDF ficticio de dos páginas, zoom y renovación; revisión del modal a 390 px. **Pendiente incluir este cambio de API y web en el próximo lote de staging y probar allí el PDF real del ensayo.** No requiere renovar el token de Meta para leer una copia ya guardada mientras el acceso al canal siga siendo válido.
+
+### Base de adjuntos
 
 Migración aditiva `20260926190000_inbox_adjuntos`: tabla de trabajos y relaciones entre empresa, mensaje y archivo; enum `INBOX`; comprobaciones de archivo privado y propio en la base. Aplicada únicamente a `gdi_saas` y `gdi_saas_test`: **290 migraciones**, sin seed/reset. Permisos de `grafo_app` comprobados.
 

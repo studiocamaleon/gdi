@@ -223,6 +223,12 @@ it('copia privada, contabilizada una vez, lectura sin credenciales', async () =>
     { disposition: string },
   ];
   expect(opciones.disposition.startsWith('attachment;')).toBe(true);
+  expect(r.vistaPreviaUrl).toBeDefined();
+  expect(storage.firmarDescarga).toHaveBeenNthCalledWith(2, j.archivo!.key, {
+    disposition: expect.stringContaining('inline;') as unknown,
+    contentType: 'application/pdf',
+    expiraSegundos: 60,
+  });
   expect(JSON.stringify(r)).not.toMatch(/token|mediaId|lookaside/);
   expect(bus.avisar).toHaveBeenCalled();
 });
@@ -258,9 +264,13 @@ it('bloquea impersonación, MCP, plataforma y sesión revocada', async () => {
     ForbiddenException,
   );
 });
-it('revalida después de firmar', async () => {
+it.each([1, 2])('revalida si se revoca durante la firma %s', async (firma) => {
   const m = await mensaje();
   await api.procesarSiguiente();
+  if (firma === 2)
+    storage.firmarDescarga.mockResolvedValueOnce(
+      'https://files.example.invalid/descarga',
+    );
   storage.firmarDescarga.mockImplementationOnce(async () => {
     await db.authSession.update({
       where: { id: auth.sessionId },
@@ -270,6 +280,29 @@ it('revalida después de firmar', async () => {
   });
   await expect(api.abrir(auth, '127.0.0.1', m.id)).rejects.toBeInstanceOf(
     ForbiddenException,
+  );
+});
+it('no emite vista previa PDF para otros documentos', async () => {
+  const m = await mensaje();
+  await api.procesarSiguiente();
+  const j = await trabajo(m.id);
+  await db.archivo.update({
+    where: { id: j.archivoId! },
+    data: {
+      mimeType: 'application/msword',
+      nombreOriginal: 'Pedido.doc',
+    },
+  });
+  const r = await runWithTenant(auth.tenantId, () =>
+    api.abrir(auth, '127.0.0.1', m.id),
+  );
+  expect(r.vistaPreviaUrl).toBeUndefined();
+  expect(storage.firmarDescarga).toHaveBeenCalledTimes(1);
+  expect(storage.firmarDescarga).toHaveBeenCalledWith(
+    j.archivo!.key,
+    expect.objectContaining({
+      disposition: expect.stringContaining('attachment;') as unknown,
+    }),
   );
 });
 it('no descarga sin espacio ni deja reservas', async () => {

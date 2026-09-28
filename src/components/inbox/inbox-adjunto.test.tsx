@@ -6,15 +6,17 @@ import { InboxAdjunto } from "./inbox-adjunto";
 import type { AbrirAdjuntoInbox } from "@/lib/meta-inbox-api";
 const adjunto = {
   estado: "LISTO",
-  nombre: "Pedido.pdf",
-  mimeType: "application/pdf",
+  nombre: "Pedido.docx",
+  mimeType:
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   bytes: 150,
   version: "1",
 };
 const archivo = {
   url: "https://files.example.invalid/privado",
-  nombre: "Pedido.pdf",
-  mimeType: "application/pdf",
+  nombre: "Pedido.docx",
+  mimeType:
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   bytes: 150,
   expiraEn: 60,
 };

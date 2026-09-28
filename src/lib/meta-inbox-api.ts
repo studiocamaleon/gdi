@@ -101,6 +101,8 @@ export const getMetaInbox: CargarInbox = (query, signal) => {
 
 export type ArchivoInbox = {
   url: string;
+  /** Enlace privado inline, sólo para PDF. Opcional durante despliegues mixtos. */
+  vistaPreviaUrl?: string;
   nombre: string;
   mimeType: string;
   bytes: number;
