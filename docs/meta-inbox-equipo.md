@@ -1,6 +1,6 @@
 # Equipo y responsables en Grafo Inbox
 
-**Actualización del 28/09/2026:** este lote está desplegado en staging con 298 migraciones. Se comprobaron filtros, autores, menú de equipo, `/nota` y cambio de estado en vivo entre dos pestañas de la misma sesión. La presencia real sigue pendiente. Ver el alcance y las imágenes instaladas en [VALIDACION.md](../deploy/staging/VALIDACION.md). Las secciones de preparación local conservadas abajo describen la evidencia previa al despliegue.
+**Actualización del 28/09/2026:** este lote está desplegado en staging con 298 migraciones. El ensayo con **dos usuarios distintos**, en Chrome normal e incógnito, comprobó transferencias en ambos sentidos, respuestas entregadas con autores propios aunque otro sea responsable, notas privadas, Mías/Participé, filtros combinados, lectura compartida, cierre y reapertura automática por una entrada real. El segundo rol sólo puede atender el Inbox y mantiene restringido el contexto comercial. La presencia real sigue pendiente. Ver alcance, incidencias y versiones en [VALIDACION.md](../deploy/staging/VALIDACION.md). Las secciones de preparación local conservadas abajo describen la evidencia previa al despliegue.
 
 ## Qué puede hacer el equipo
 
@@ -74,4 +74,4 @@ El selector muestra iconos verdes para conectados y rojos para desconectados, ad
 
 La implementación real pendiente deberá usar una señal periódica autenticada de Grafo y Redis, por empresa, usuario y pestaña/sesión, con vencimiento corto. Se considerará conectado si queda al menos una sesión autorizada con señal vigente. Cerrar una pestaña no desconectará otras, y perder Internet o cerrar inesperadamente vencerá la señal. Una sesión revocada o sin permisos deberá dejar de contar inmediatamente. Redis caído se mostrará como estado desconocido. No se deducirá presencia del último inicio de sesión, de la asignación ni de los checks de Meta.
 
-Validación de este bloque: integración con dos operadores para lectura compartida, lecturas atrasadas, respuestas, filtros combinados, idempotencia, cierre en conflicto y reapertura; navegador para combinaciones y menú de equipo. Sólo desarrollo local y tests, con Meta y cron reales apagados; pendiente ensayo compartido en staging al desplegar el lote.
+Validación inicial de este bloque: integración local con dos operadores para lectura compartida, lecturas atrasadas, respuestas, filtros combinados, idempotencia, cierre en conflicto y reapertura; navegador para combinaciones y menú de equipo, con Meta y cron reales apagados. El ensayo posterior en staging se describe al inicio de este documento y en VALIDACION; los casos de concurrencia e idempotencia siguen acreditados por los tests, no por el recorrido manual.
