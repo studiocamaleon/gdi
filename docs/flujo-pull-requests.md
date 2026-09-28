@@ -37,6 +37,6 @@ Los PR históricos #2–#5 reúnen infraestructura, correcciones y el piloto ini
 
 Cada persona trabaja en su propia rama o carpeta aislada. Antes de empezar, acuerden objetivo, responsable y archivos compartidos. Nadie debe cambiar la rama de una carpeta que otra persona o un servidor está usando. Otra persona revisa el PR cuando el equipo lo permita; si Lucas trabaja solo con un agente, igual se revisan el diff y las pruebas antes de integrar.
 
-Los checks automáticos de contenedores se ejecutan en los PR hacia `main` que cambian código de la aplicación o del despliegue. Los cambios sólo de documentación no los activan. Estos checks informan el resultado, pero no equivalen a una regla de GitHub que bloquee un merge: la protección obligatoria de `main` es una configuración separada.
+Los checks automáticos de contenedores se ejecutan en los PR hacia `main` que cambian código de la aplicación o del despliegue. Los PR que sólo modifican manuales en `docs/` o `AGENTS.md` no los activan. Estos checks informan el resultado, pero no equivalen a una regla de GitHub que bloquee un merge: la protección obligatoria de `main` es una configuración separada.
 
 Nunca incluir claves ni datos reales de clientes en Git. Nunca actualizar un entorno persistente ejecutando un seed o borrando su base. No eliminar ramas o carpetas sólo porque se integró un PR: antes comprobar que ningún trabajo o proceso las sigue usando.
