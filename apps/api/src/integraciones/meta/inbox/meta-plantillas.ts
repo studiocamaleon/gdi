@@ -139,7 +139,7 @@ export function normalizarPlantilla(
   // no cambia la definición ni es el archivo que se envía al destinatario.
   // Conservamos los demás campos, incluidas las acciones de los botones.
   const componentesVersion = Array.isArray(r.components)
-    ? r.components.map((componente) =>
+    ? r.components.map((componente: unknown) =>
         componente &&
         typeof componente === 'object' &&
         !Array.isArray(componente)
