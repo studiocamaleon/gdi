@@ -1,6 +1,4 @@
 .page {
-  display: grid;
-  place-items: center;
   flex: 1;
   align-self: stretch;
   width: 100%;
@@ -8,4 +6,15 @@
   min-height: min(560px, calc(100dvh - 52px));
   padding: 24px;
   background: var(--canvas-background);
+}
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .placeholder [data-slot="skeleton"] {
+    animation: none;
+  }
 }
