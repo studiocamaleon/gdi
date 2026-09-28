@@ -1,5 +1,27 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Recuperación del Inbox — validación local, 28/09/2026
+
+Rama `codex/inbox-recuperacion`, basada en `main` después de integrar el PR #7 (`7e58b0735`). Este apartado no acredita todavía un despliegue nuevo.
+
+- Una apertura durante una caída de la API muestra una pantalla de reconexión con la estética de Grafo. Espera hasta diez segundos por la sesión y vuelve a consultar automáticamente; conserva el control de acceso normal.
+- Una interrupción con el Inbox abierto conserva en memoria el chat elegido, los filtros y los borradores. No reenvía mensajes automáticamente. Si el usuario reintenta un envío incierto, conserva su clave para evitar duplicados. Una revocación real de sesión/permisos descarta los borradores privados.
+- Al apagar Nest se completan tanto los canales del Inbox como los de notificaciones generales. Se evita que sus conexiones HTTP impidan cerrar el servidor. Esto no convierte una única máquina en alta disponibilidad.
+- Pruebas locales: 83 comprobaciones web (vista, editor, reconexión, ruta y transporte) y 34 de API/notificaciones; incluyen dos streams HTTP reales abiertos durante el cierre de Nest. ESLint de los archivos modificados y control de CSS. En Chrome, con la API local apagada apareció la pantalla de recuperación; al iniciar la API la misma pestaña volvió al Inbox autenticado sin recarga manual. Las integraciones y las tareas programadas locales permanecieron desactivadas.
+- Los borradores sobreviven a la interrupción dentro de la pestaña; no se guardan en almacenamiento persistente del navegador. Cerrar o recargar completamente esa pestaña no está cubierto. No hubo envíos reales a Meta, migraciones ni cambios de recursos.
+
+**Despliegue completado y comprobado a las 19:14 UTC / 16:14 Argentina.** La comprobación remota [CI 36468124321](https://github.com/studiocamaleon/gdi/actions/runs/36468124321) aprobó sobre `c64b203f776868808d2999450cebc77417a06574`: backend/web con tipos, migraciones, permisos y acceso HTTP en servicios desechables. El segundo commit agrega el manejo de un corte durante la lectura de la respuesta HTTP; no cambia el backend.
+
+- Backend, API y ambos workers: código `ce4e06fca19779ae4f7551f35a3e21e27734c523`, imagen `registry.fly.io/grafoprint-staging-api@sha256:ec9736bf77cfda7795832df026cb0ce1731322cdfa2a4259c9e1889f8e6d135c`.
+- Aplicación: código `c64b203f776868808d2999450cebc77417a06574`, imagen `registry.fly.io/grafoprint-staging-web@sha256:246e62ad433f32751838e5d148cec4e67775fd22b5b5ea2f2185731d1e1a132e`.
+- Se publicó primero la aplicación para comprobar la pantalla de recuperación durante el reemplazo de la API anterior. En Chrome apareció el aviso; al terminar el despliegue la misma pestaña volvió a la sesión autenticada sin recarga ni login. La versión anterior aún demoró su cierre durante ese reemplazo.
+- Con la versión corregida instalada, una segunda interrupción controlada envió `SIGTERM` manteniendo el límite de 120 segundos. La orden de detención terminó en **3,53 segundos**; el registro muestra salida por `SIGTERM`, sin `SIGKILL`. Se mantuvo apagada 25 segundos deliberadamente y el comando de arranque terminó en 3,30 segundos. Estas duraciones de comandos no son una garantía de disponibilidad. La pestaña mostró el aviso y volvió automáticamente otra vez.
+- Los cinco servicios quedaron iniciados, con los mismos IDs, región y recursos; controles de salud aprobados e imágenes esperadas. Gotenberg no cambió. Salud web/API/base, protección Basic, restricción de la API directa, página de login y rechazo de webhook sin firma aprobaron.
+- Comparación de base en transacciones de sólo lectura: **298 migraciones** y sus checksums intactos, ninguna pendiente, mismos IDs/cantidades de empresas, usuarios, conversaciones, mensajes, envíos y archivos. No se aplicaron migraciones ni seeds y no se renovaron secretos.
+- El token temporal de Meta ya había vencido a las 15:00 Argentina. La recuperación en staging se acreditó hasta la vista autenticada con el aviso de vencimiento; no se presenta como una nueva prueba de envío ni de chat activo. Borradores y reintento sin duplicados se acreditan con las pruebas locales; los ensayos reales previos del PR #7 siguen documentados abajo.
+- Builder temporal `fly-builder-graceful-haze-5428` retirado después de publicar ambas imágenes. No se aumentaron recursos ni se desplegó producción. El [PR #8](https://github.com/studiocamaleon/gdi/pull/8) conserva el arreglo separado; el [plan de producción](../../docs/preparacion-produccion.md) registra el siguiente orden de trabajo.
+
+
 ## Ensayo con dos operadores distintos — 28/09/2026
 
 Continúa el lote funcional `d2677ff2a7bafcff648ee70d5258d3fb5c0692e1`, con las mismas imágenes, 298 migraciones y tamaños contratados. Se usaron dos sesiones independientes de Chrome (normal e incógnita), no dos pestañas de un único usuario.

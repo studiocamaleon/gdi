@@ -81,6 +81,7 @@ import { InboxCita, InboxUbicacion, InboxContactos } from "./inbox-contenido";
 import { InboxAdjunto } from "./inbox-adjunto";
 import { InboxMessageStatus } from "./inbox-message-status";
 import { InboxBienvenida } from "./inbox-bienvenida";
+import { AvisoRecuperacionInbox } from "./inbox-recuperacion";
 import { ApiError } from "@/lib/api";
 import {
   combinarInbox,
@@ -97,7 +98,7 @@ import type { MediosInboxApi } from "@/lib/inbox-enviar-medios";
 const estadosConexion: Record<EstadoInboxVivo, string> = {
   conectando: "Conectando actualización en vivo",
   en_vivo: "Actualización en vivo",
-  reconectando: "Reconectando · actualización periódica",
+  reconectando: "Reconectando automáticamente…",
   sin_conexion: "Sin conexión a Internet",
   pausado: "Actualización pausada",
 };
@@ -198,6 +199,11 @@ export function InboxView({
         query = {
           busqueda: filtroActual.current || undefined,
           ...consultaFiltrosInbox(filtroEquipoActual.current),
+          // Tras un corte ya no hay snapshot visible. La selección sigue
+          // perteneciendo a esta identidad: pedir el mismo chat, no el primero.
+          ...(conversacionElegida.current
+            ? { conversacionId: conversacionElegida.current }
+            : {}),
           ...query,
         };
       if (datosActuales.current?.origen === "GENERAL") {
@@ -428,8 +434,9 @@ export function InboxView({
           borradoresMedios.current.clear();
           borradoresPlantillas.current.clear();
           setCanalHabilitado(false);
+          conversacionElegida.current = undefined;
+          elegido.current = undefined;
         }
-        elegido.current = undefined;
         return false;
       } finally {
         clearTimeout(limite);
@@ -885,18 +892,25 @@ export function InboxView({
             </div>
           ) : estado !== "listo" || !datos ? (
             <div className={live.fallback}>
-              <Alert variant={estado === "error" ? "destructive" : "default"}>
-                <AlertTitle>
-                  {estado === "sesion"
-                    ? "Cambió tu sesión"
-                    : "No pudimos cargar las conversaciones"}
-                </AlertTitle>
-                <AlertDescription>
-                  {estado === "sesion"
-                    ? "Volvé a Grafo y abrí el inbox desde la cuenta actual."
-                    : "Estamos intentando reconectar automáticamente. Los mensajes se ocultaron hasta recuperar la conexión."}
-                </AlertDescription>
-              </Alert>
+              {estado === "error" ? (
+                <AvisoRecuperacionInbox
+                  sinInternet={conexion === "sin_conexion"}
+                  conservaBorradores
+                />
+              ) : (
+                <Alert>
+                  <AlertTitle>
+                    {estado === "sesion"
+                      ? "Cambió tu sesión"
+                      : "No pudimos cargar las conversaciones"}
+                  </AlertTitle>
+                  <AlertDescription>
+                    {estado === "sesion"
+                      ? "Volvé a Grafo y abrí el inbox desde la cuenta actual."
+                      : "Estamos intentando reconectar automáticamente. Los mensajes se ocultaron hasta recuperar la conexión."}
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           ) : (
             <div className={s.workspaceGrid} data-mobile-chat={movilChat}>

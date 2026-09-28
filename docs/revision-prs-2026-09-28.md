@@ -1,5 +1,8 @@
 # Revisión e integración de PR — 28/09/2026
 
+> Seguimiento: los PR #2–#7 ya se integraron en `main`; el #7 quedó en `7e58b0735`. Este documento conserva el relevamiento anterior. La recuperación del Inbox está en el PR #8 y su verificación actual en [VALIDACION.md](../deploy/staging/VALIDACION.md).
+
+
 Los PR #5, #4 y #3 se reunieron en #2 mediante merges que conservan los commits. La base se actualizó con `main`, incluida la corrección de Grafo3D del #6. No hay diferencias frente a `main` en `apps/marketing` ni en `apps/forma-studio`.
 
 Esta integración reúne infraestructura, correcciones y piloto inicial (284 migraciones). **No representa la versión más reciente desplegada en staging**: staging ya contiene el código del Inbox `d2677ff2a7ba`, con 298 migraciones, documentado en el PR #7 y validado por [CI 36385216857](https://github.com/studiocamaleon/gdi/actions/runs/36385216857). No desplegar esta base más antigua sobre staging ni intentar revertir su base de datos.

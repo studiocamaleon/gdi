@@ -53,7 +53,7 @@ export const escucharInbox: EscucharInbox = ({
         estado(ok && listo ? "en_vivo" : "reconectando");
     } catch {
       lecturaOk = false;
-      if (!cerrado) estado("reconectando");
+      if (!cerrado && visible()) estado("reconectando");
     } finally {
       ocupado = false;
       if (pendiente && !cerrado) {

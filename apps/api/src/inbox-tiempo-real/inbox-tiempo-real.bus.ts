@@ -146,6 +146,15 @@ export class InboxTiempoRealBus implements OnModuleDestroy {
     this.cerrado = true;
     for (const canal of this.canales.values()) {
       clearInterval(canal.timer);
+      // Completar los SSE antes de que Nest cierre el servidor HTTP. Borrar
+      // sólo los listeners dejaba sockets abiertos hasta el timeout de Fly.
+      for (const listener of [...canal.listeners]) {
+        try {
+          listener(null);
+        } catch {
+          // Un consumidor no debe impedir el cierre de los demás.
+        }
+      }
       canal.listeners.clear();
     }
     this.canales.clear();

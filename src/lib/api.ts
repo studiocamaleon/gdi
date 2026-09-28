@@ -107,7 +107,14 @@ export async function apiRequest<T>(
 
   // Algunas acciones exitosas no devuelven cuerpo, incluso con 200/201.
   // Sólo se omite el parseo si está vacío: un JSON truncado sigue siendo error.
-  const body = await response.text();
+  let body: string;
+  try {
+    body = await response.text();
+  } catch {
+    // La conexión también puede cortarse después de recibir las cabeceras.
+    // Mantenerlo como error temporal, sin confundirlo con sesión revocada.
+    throw new ApiError("Se interrumpió la respuesta de Grafo. Volvé a intentar.", 503);
+  }
   if (!body.trim()) return undefined as T;
 
   return restaurarJson<T>(JSON.parse(body));
