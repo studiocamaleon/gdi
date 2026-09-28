@@ -272,3 +272,107 @@ it.each([
 ])('conserva formas desconocidas para revisión: $tipo', (evento) => {
   expect(normalizarEventoInbox(evento, propio).avisos).toBeGreaterThan(0);
 });
+
+it('normaliza ubicación, contactos, citas y reacciones sin conservar URLs remotas', () => {
+  const r = normalizarEventoInbox(
+    {
+      tipo: 'messages',
+      payload: {
+        messages: [
+          {
+            ...base,
+            type: 'location',
+            location: {
+              latitude: -50.3,
+              longitude: -72.2,
+              name: 'Local ficticio',
+              address: 'Dirección de ejemplo',
+              url: 'https://example.invalid/no',
+            },
+          },
+          {
+            ...base,
+            id: 'wamid.contacto',
+            type: 'contacts',
+            contacts: [
+              {
+                name: { formatted_name: 'Alma Ficticia' },
+                phones: [{ phone: '+16505550123' }],
+                emails: [{ email: 'alma@example.invalid' }],
+                org: { company: 'Gráfica Demo' },
+                url: 'https://example.invalid/no',
+              },
+            ],
+          },
+          { ...base, id: 'wamid.cita', context: { id: base.id } },
+          {
+            ...base,
+            id: 'wamid.reaccion',
+            type: 'reaction',
+            reaction: { message_id: base.id, emoji: '👍' },
+          },
+          {
+            ...base,
+            id: 'wamid.quitar',
+            type: 'reaction',
+            reaction: { message_id: base.id, emoji: '' },
+          },
+          {
+            ...base,
+            id: 'wamid.no-soportado',
+            type: 'unsupported',
+            errors: [
+              { code: 131060, message: 'No conservar el texto del proveedor' },
+            ],
+          },
+        ],
+      },
+    },
+    propio,
+  );
+  expect(r.operaciones).toMatchObject([
+    {
+      contenido: {
+        ubicacion: {
+          latitud: -50.3,
+          longitud: -72.2,
+          nombre: 'Local ficticio',
+        },
+      },
+    },
+    {
+      contenido: {
+        contactos: [
+          {
+            nombre: 'Alma Ficticia',
+            telefonos: ['+16505550123'],
+            correos: ['alma@example.invalid'],
+          },
+        ],
+      },
+    },
+    { contenido: { texto: 'Hola ficticio', contextoWamid: base.id } },
+    { contenido: { reaccionWamid: base.id, emoji: '👍' } },
+    { contenido: { reaccionWamid: base.id, emoji: '' } },
+    { contenido: { codigos: [131060] } },
+  ]);
+  expect(JSON.stringify(r)).not.toContain('https://');
+  expect(JSON.stringify(r)).not.toContain('No conservar');
+});
+it.each([
+  { latitude: 91, longitude: 0 },
+  { latitude: 0, longitude: 181 },
+  { latitude: '-50', longitude: -72 },
+  { latitude: NaN, longitude: 0 },
+])('no presenta una ubicación malformada: %j', (location) => {
+  const r = normalizarEventoInbox(
+    {
+      tipo: 'messages',
+      payload: { messages: [{ ...base, type: 'location', location }] },
+    },
+    propio,
+  );
+  expect(r.operaciones[0]).toMatchObject({
+    contenido: { noRepresentado: true },
+  });
+});

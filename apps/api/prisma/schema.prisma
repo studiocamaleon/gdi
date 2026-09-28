@@ -5538,6 +5538,7 @@ model PagoContador {
 /// seteada, según `scope` (ninguna para TENANT_BRANDING).
 /// Ver docs/archivos-r2-diseno.md
 model Archivo {
+  cargaInbox InboxCarga?
   adjuntoInbox InboxAdjunto?
   documentoPdfId String? @unique @db.Uuid
   documentoPdf DocumentoPdf? @relation(fields: [documentoPdfId], references: [id], onDelete: Restrict)
@@ -6634,6 +6635,7 @@ model InboxImportacion {
 }
 
 model InboxConversacion {
+  cargas InboxCarga[]
   id                       String @id @default(uuid()) @db.Uuid
   tenantId                 String @db.Uuid
   vinculoId                String @db.Uuid
@@ -7158,6 +7160,7 @@ model InboxAdjunto {
 
 /// Un intento de texto explícito. No se reenvía automáticamente tras incertidumbre.
 model InboxEnvio {
+  carga InboxCarga?
   id             String @id @default(uuid()) @db.Uuid
   tenantId       String @db.Uuid
   vinculoId      String @db.Uuid
@@ -7180,5 +7183,23 @@ model InboxEnvio {
   @@unique([mensajeId, vinculoId, tenantId])
   @@unique([tenantId, clave])
   @@unique([vinculoId, wamid])
+  @@index([tenantId, conversacionId, createdAt])
+}
+
+/// Subida privada y temporal, ligada al operador y a una conexión concreta.
+/// El original se conserva en InboxAdjunto al recibirse la confirmación de Meta.
+model InboxCarga {
+  archivoId String @id @db.Uuid
+  tenantId String @db.Uuid
+  vinculoId String @db.Uuid
+  autorizacionId String @db.Uuid
+  conversacionId String @db.Uuid
+  usuarioId String @db.Uuid
+  envioId String? @unique @db.Uuid
+  voz Boolean @default(false)
+  createdAt DateTime @default(now())
+  archivo Archivo @relation(fields: [archivoId], references: [id], onDelete: Cascade)
+  conversacion InboxConversacion @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  envio InboxEnvio? @relation(fields: [envioId], references: [id], onDelete: Restrict)
   @@index([tenantId, conversacionId, createdAt])
 }

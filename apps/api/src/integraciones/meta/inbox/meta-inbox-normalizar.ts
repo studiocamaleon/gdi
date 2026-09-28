@@ -1,3 +1,7 @@
+import {
+  ubicacionInbox,
+  contactosInbox,
+} from '../../../common/inbox/contenidos';
 /** Formatos oficiales de coexistencia. Función pura: nunca llama a Meta,
  * interpreta HTML, descarga URLs ni dispara automatizaciones. */
 type Objeto = Record<string, unknown>;
@@ -74,7 +78,7 @@ const estados: Record<string, number> = {
   PLAYED: 6,
 };
 
-function contenidoMensaje(m: Objeto, prioridad: number): Contenido | null {
+function contenidoBase(m: Objeto, prioridad: number): Contenido | null {
   const tipo = texto(m.type, 80);
   if (!tipo) return null;
   const source = objeto(m[tipo]);
@@ -120,6 +124,51 @@ function contenidoMensaje(m: Objeto, prioridad: number): Contenido | null {
   }
   // Los tipos aún sin representación se conservan crudos para ampliar soporte.
   return { tipo, contenido: { noRepresentado: true }, prioridad };
+}
+
+function contenidoMensaje(m: Objeto, prioridad: number): Contenido | null {
+  const tipo = texto(m.type, 80);
+  let resultado: Contenido | null;
+  if (tipo === 'location') {
+    const ubicacion = ubicacionInbox(m.location);
+    resultado = {
+      tipo,
+      prioridad,
+      contenido: ubicacion ? { ubicacion } : { noRepresentado: true },
+    };
+  } else if (tipo === 'contacts') {
+    const contactos = contactosInbox(m.contacts);
+    resultado = {
+      tipo,
+      prioridad,
+      contenido: contactos.length ? { contactos } : { noRepresentado: true },
+    };
+  } else if (tipo === 'reaction') {
+    const r = objeto(m.reaction),
+      original = wamid(r.message_id),
+      emoji = texto(r.emoji, 80);
+    resultado = {
+      tipo,
+      prioridad,
+      contenido:
+        original && emoji !== null
+          ? { reaccionWamid: original, emoji }
+          : { noRepresentado: true },
+    };
+  } else if (tipo === 'unsupported') {
+    const codigos = lista(m.errors)
+      .map((e) => objeto(e).code)
+      .filter((c) => typeof c === 'number')
+      .slice(0, 10);
+    resultado = {
+      tipo,
+      prioridad,
+      contenido: { noRepresentado: true, codigos },
+    };
+  } else resultado = contenidoBase(m, prioridad);
+  const contexto = wamid(objeto(m.context).id);
+  if (resultado && contexto) resultado.contenido.contextoWamid = contexto;
+  return resultado;
 }
 
 export function normalizarEventoInbox(

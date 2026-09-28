@@ -1,4 +1,7 @@
 import {
+  IsInt,
+  Min,
+  Max,
   IsString,
   IsUUID,
   Matches,
@@ -41,4 +44,16 @@ export class EnviarPlantillaInboxDto {
   @MaxLength(1024, { each: true })
   valores!: string[];
   @IsBoolean() @Equals(true) consentimientoConfirmado!: boolean;
+}
+
+export class IniciarCargaInboxDto extends CatalogoPlantillasInboxDto {
+  @IsString() @MaxLength(160) nombre!: string;
+  @IsString() @MaxLength(150) mimeType!: string;
+  @IsInt() @Min(1) @Max(100_000_000) bytes!: number;
+  @IsOptional() @IsBoolean() voz?: boolean;
+}
+export class EnviarMedioInboxDto extends CatalogoPlantillasInboxDto {
+  @IsUUID('4') clave!: string;
+  @IsUUID('4') archivoId!: string;
+  @IsOptional() @IsString() @MaxLength(1024) texto?: string;
 }

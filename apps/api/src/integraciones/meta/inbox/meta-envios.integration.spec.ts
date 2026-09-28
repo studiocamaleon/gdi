@@ -1,3 +1,5 @@
+import type { EnviarPlantillaInboxDto } from './meta-envios.dto';
+import { MetaCargasService } from './meta-cargas.service';
 import sharp from 'sharp';
 import {
   MetaArchivosPlantillaService,
@@ -33,6 +35,7 @@ if (
   throw new Error('Requiere base local de tests');
 const db = new PrismaService();
 const client = {
+  enviarMedio: jest.fn<Promise<ResultadoMeta>, [unknown]>(),
   enviarTexto: jest.fn<Promise<ResultadoMeta>, [unknown]>(),
   enviarPlantilla: jest.fn<Promise<ResultadoMeta>, [unknown]>(),
   listarPlantillas: jest.fn(),
@@ -49,10 +52,16 @@ const storage = {
   cabecera: jest.fn(),
   leerCabecera: jest.fn(),
   firmarDescarga: jest.fn(),
+  firmarSubida: jest.fn(),
 };
 const archivos = new MetaArchivosPlantillaService(
   db,
   new WhatsappContextoService(db),
+  capacidades as never,
+  storage as never,
+);
+const cargas = new MetaCargasService(
+  db,
   capacidades as never,
   storage as never,
 );
@@ -64,6 +73,7 @@ const servicio = () =>
     capacidades as never,
     bus as never,
     archivos,
+    cargas,
   );
 const keys = [
   'META_INBOX_ADJUNTOS_ENABLED',
@@ -187,6 +197,15 @@ beforeEach(async () => {
     estado: 'aceptada',
     wamid: 'wamid.respuesta',
   });
+  client.enviarMedio.mockResolvedValue({
+    estado: 'aceptada',
+    wamid: 'wamid.medio',
+  });
+  storage.firmarSubida.mockResolvedValue({
+    url: 'https://files.example.invalid/subida',
+    headers: { 'Content-Type': 'application/pdf' },
+    expiraEn: 600,
+  });
   storage.cabecera.mockResolvedValue({
     bytes: pdf.length,
     contentType: 'application/pdf',
@@ -202,6 +221,7 @@ afterEach(async () => {
   expect(fetchMock).not.toHaveBeenCalled();
   fetchMock.mockRestore();
   const where = { tenantId: auth.tenantId };
+  await db.inboxCarga.deleteMany({ where });
   await db.inboxEnvio.deleteMany({ where });
   await db.inboxAdjunto.deleteMany({ where });
   await db.inboxMensaje.deleteMany({ where });
@@ -545,7 +565,10 @@ const plantillaDto = () => ({
   valores: ['Alma'],
   consentimientoConfirmado: true,
 });
-const enviarPlantilla = (d = plantillaDto(), c = conv.id) =>
+const enviarPlantilla = (
+  d: EnviarPlantillaInboxDto = plantillaDto(),
+  c = conv.id,
+) =>
   runWithTenant(auth.tenantId, () =>
     servicio().enviarPlantilla(auth, '127.0.0.1', c, d),
   );
@@ -1054,7 +1077,7 @@ async function prepararComercial(
     dto: {
       ...base.dto,
       archivoVersion:
-        listado.archivos.find((f) => f.id === file.id)?.version ??
+        [...listado.archivos].find((f) => f.id === file.id)?.version ??
         'a'.repeat(64),
     },
   };
@@ -1295,4 +1318,144 @@ it('no acepta un archivo unido a la revisión emitida de un presupuesto distinto
   });
   expect((await listarArchivos()).archivos).toEqual([]);
   await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+});
+async function cargarMedio() {
+  return runWithTenant(auth.tenantId, () =>
+    cargas.iniciar(auth, '127.0.0.1', conv.id, {
+      canalId: dto().canalId,
+      nombre: 'Prueba.pdf',
+      mimeType: 'application/pdf',
+      bytes: pdf.length,
+    }),
+  );
+}
+const enviarMedio = (archivoId: string, clave = randomUUID(), extra = {}) =>
+  runWithTenant(auth.tenantId, () =>
+    servicio().enviarMedio(auth, '127.0.0.1', conv.id, {
+      archivoId,
+      clave,
+      canalId: dto().canalId,
+      texto: 'Adjunto de prueba',
+      ...extra,
+    }),
+  );
+it('envía un PDF privado una sola vez, conserva el comentario y libera la reserva temporal', async () => {
+  const { archivoId } = await cargarMedio(),
+    clave = randomUUID();
+  const r = await enviarMedio(archivoId, clave);
+  expect(r.estado).toBe('ACEPTADO');
+  expect(await enviarMedio(archivoId, clave)).toEqual(r);
+  expect(client.enviarMedio).toHaveBeenCalledTimes(1);
+  expect(client.enviarMedio).toHaveBeenCalledWith(
+    expect.objectContaining({
+      tipo: 'document',
+      mediaId: '56789',
+      nombreArchivo: 'Prueba.pdf',
+      texto: 'Adjunto de prueba',
+    }),
+  );
+  expect(
+    await db.inboxMensaje.findFirst({ where: { id: r.mensajeId! } }),
+  ).toMatchObject({
+    tipo: 'document',
+    contenido: {
+      mediaId: '56789',
+      texto: 'Adjunto de prueba',
+    },
+  });
+  expect(
+    await db.archivo.findFirst({ where: { id: archivoId } }),
+  ).toMatchObject({ estado: 'PURGANDO', bytesReservados: 0n });
+  expect(
+    await db.inboxAdjunto.count({ where: { mensajeId: r.mensajeId! } }),
+  ).toBe(1);
+});
+it('no permite reutilizar una carga para otro intento ni cambiar el comentario al comprobar', async () => {
+  const { archivoId } = await cargarMedio(),
+    clave = randomUUID();
+  await enviarMedio(archivoId, clave);
+  await expect(enviarMedio(archivoId)).rejects.toBeInstanceOf(
+    ConflictException,
+  );
+  await expect(
+    enviarMedio(archivoId, clave, { texto: 'Otro' }),
+  ).rejects.toBeInstanceOf(ConflictException);
+  expect(client.enviarMedio).toHaveBeenCalledTimes(1);
+});
+it('cancelar libera espacio y hace imposible enviar esa carga', async () => {
+  const { archivoId } = await cargarMedio();
+  await runWithTenant(auth.tenantId, () =>
+    cargas.cancelar(auth, '127.0.0.1', conv.id, dto().canalId, archivoId),
+  );
+  await expect(enviarMedio(archivoId)).rejects.toBeInstanceOf(
+    ConflictException,
+  );
+  expect(client.enviarMedio).not.toHaveBeenCalled();
+});
+it('rechaza un archivo incompleto sin llamar al envío de Meta', async () => {
+  const { archivoId } = await cargarMedio();
+  storage.leerCabecera.mockResolvedValue(Buffer.from('cortado'));
+  expect(await enviarMedio(archivoId)).toMatchObject({
+    estado: 'RECHAZADO',
+    codigo: 'ARCHIVO_NO_PREPARADO',
+  });
+  expect(client.enviarMedio).not.toHaveBeenCalled();
+  expect(client.subirArchivo).not.toHaveBeenCalled();
+});
+it('no adjudica una carga a otra conversación del mismo tenant', async () => {
+  const { archivoId } = await cargarMedio();
+  const otra = await db.inboxConversacion.create({
+    data: {
+      tenantId: auth.tenantId,
+      vinculoId: canal.id,
+      contactoWaId: '16505550129',
+      ultimoEntranteNuevoEl: new Date(),
+    },
+  });
+  await expect(
+    runWithTenant(auth.tenantId, () =>
+      servicio().enviarMedio(auth, '127.0.0.1', otra.id, {
+        archivoId,
+        clave: randomUUID(),
+        canalId: dto().canalId,
+      }),
+    ),
+  ).rejects.toBeInstanceOf(ConflictException);
+  expect(client.subirArchivo).not.toHaveBeenCalled();
+});
+it('no reenvía un medio después de una respuesta incierta', async () => {
+  const { archivoId } = await cargarMedio(),
+    clave = randomUUID();
+  client.enviarMedio.mockResolvedValue({ estado: 'incierta' });
+  expect(await enviarMedio(archivoId, clave)).toMatchObject({
+    estado: 'INCIERTO',
+  });
+  expect(await enviarMedio(archivoId, clave)).toMatchObject({
+    estado: 'INCIERTO',
+  });
+  expect(client.subirArchivo).toHaveBeenCalledTimes(1);
+  expect(client.enviarMedio).toHaveBeenCalledTimes(1);
+});
+it('respeta la cuota también antes de subir los bytes', async () => {
+  await db.tenant.update({
+    where: { id: auth.tenantId },
+    data: { cuotaBytesArchivos: 1n },
+  });
+  await expect(cargarMedio()).rejects.toBeInstanceOf(ForbiddenException);
+  expect(storage.firmarSubida).not.toHaveBeenCalled();
+});
+it('revalida la ventana cuando la preparación del archivo tardó', async () => {
+  const { archivoId } = await cargarMedio();
+  client.subirArchivo.mockImplementationOnce(async () => {
+    await db.inboxConversacion.update({
+      where: { id: conv.id },
+      data: { ultimoEntranteNuevoEl: new Date(Date.now() - 25 * 3600000) },
+    });
+    return '56789';
+  });
+  expect(await enviarMedio(archivoId)).toMatchObject({
+    estado: 'RECHAZADO',
+    codigo: 'CANAL_NO_VIGENTE',
+  });
+  expect(client.enviarMedio).not.toHaveBeenCalled();
 });

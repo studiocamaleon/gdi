@@ -222,6 +222,7 @@ beforeEach(async () => {
     capacidades as never,
     bus,
     {} as never,
+    {} as never,
   );
   client.enviarTexto.mockResolvedValue({
     estado: 'aceptada',

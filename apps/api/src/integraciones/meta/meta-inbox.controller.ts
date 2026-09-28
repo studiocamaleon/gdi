@@ -1,9 +1,12 @@
+import { MetaCargasService } from './inbox/meta-cargas.service';
 import { MetaEnviosService } from './inbox/meta-envios.service';
 import {
   AbrirArchivoPlantillaDto,
   CatalogoPlantillasInboxDto,
   EnviarPlantillaInboxDto,
   EnviarTextoInboxDto,
+  IniciarCargaInboxDto,
+  EnviarMedioInboxDto,
 } from './inbox/meta-envios.dto';
 import { MetaAdjuntosService } from './inbox/meta-adjuntos.service';
 import {
@@ -47,6 +50,7 @@ export class MetaInboxController {
     private readonly tiempoReal: MetaInboxStreamService,
     private readonly adjuntos: MetaAdjuntosService,
     private readonly envios: MetaEnviosService,
+    private readonly cargas: MetaCargasService,
   ) {}
 
   @Sse('stream')
@@ -82,6 +86,47 @@ export class MetaInboxController {
     @Body() dto: EnviarTextoInboxDto,
   ) {
     return this.envios.enviar(auth, ipDeRequest(req), id, dto);
+  }
+
+  @Post('conversaciones/:id/cargas')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  iniciarCarga(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: IniciarCargaInboxDto,
+  ) {
+    return this.cargas.iniciar(auth, ipDeRequest(req), id, dto);
+  }
+  @Post('conversaciones/:id/cargas/:archivoId/cancelar')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  cancelarCarga(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('archivoId', ParseUUIDPipe) archivoId: string,
+    @Body() dto: CatalogoPlantillasInboxDto,
+  ) {
+    return this.cargas.cancelar(
+      auth,
+      ipDeRequest(req),
+      id,
+      dto.canalId,
+      archivoId,
+    );
+  }
+  @Post('conversaciones/:id/medio')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  enviarMedio(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EnviarMedioInboxDto,
+  ) {
+    return this.envios.enviarMedio(auth, ipDeRequest(req), id, dto);
   }
 
   @Get('plantillas')

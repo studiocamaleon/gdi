@@ -236,8 +236,10 @@ export async function confirmarEnvioInbox(
   if (envio.mensajeId || !envio.texto) return false;
   const adjunto = objeto(envio.adjunto);
   const tieneArchivo =
-    envio.tipo === 'PLANTILLA' &&
-    ['image', 'document'].includes(String(adjunto.tipo)) &&
+    ['PLANTILLA', 'MEDIO'].includes(envio.tipo) &&
+    ['image', 'document', 'audio', 'video', 'sticker'].includes(
+      String(adjunto.tipo),
+    ) &&
     typeof adjunto.mediaId === 'string';
   const c = await tx.inboxConversacion.findFirstOrThrow({
     where: {
@@ -258,7 +260,15 @@ export async function confirmarEnvioInbox(
       : envio.tipo === 'PLANTILLA'
         ? 'template'
         : 'text',
-    contenido: { ...(tieneArchivo ? adjunto : {}), texto: envio.texto },
+    contenido: {
+      ...(tieneArchivo ? adjunto : {}),
+      texto:
+        envio.tipo === 'MEDIO'
+          ? typeof adjunto.texto === 'string'
+            ? adjunto.texto
+            : ''
+          : envio.texto,
+    },
     prioridad: 3,
   });
   const m = await tx.inboxMensaje.findFirstOrThrow({

@@ -15,61 +15,7 @@ export class ErrorMediaMeta extends Error {
     super(codigo);
   }
 }
-const formatos: Record<string, { tipo: string; ext: string; max: number }> = {};
-for (const [tipo, max, lista] of [
-  [
-    'image',
-    5_000_000,
-    [
-      ['image/jpeg', 'jpg'],
-      ['image/png', 'png'],
-    ],
-  ],
-  ['sticker', 500_000, [['image/webp', 'webp']]],
-  [
-    'audio',
-    16_000_000,
-    [
-      ['audio/aac', 'aac'],
-      ['audio/amr', 'amr'],
-      ['audio/mpeg', 'mp3'],
-      ['audio/mp4', 'm4a'],
-      ['audio/ogg', 'ogg'],
-    ],
-  ],
-  [
-    'video',
-    16_000_000,
-    [
-      ['video/mp4', 'mp4'],
-      ['video/3gpp', '3gp'],
-    ],
-  ],
-  [
-    'document',
-    100_000_000,
-    [
-      ['application/pdf', 'pdf'],
-      ['text/plain', 'txt'],
-      ['application/msword', 'doc'],
-      ['application/vnd.ms-excel', 'xls'],
-      ['application/vnd.ms-powerpoint', 'ppt'],
-      [
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'docx',
-      ],
-      [
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'xlsx',
-      ],
-      [
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'pptx',
-      ],
-    ],
-  ],
-] as const)
-  for (const [mime, ext] of lista) formatos[mime] = { tipo, ext, max };
+import { FORMATOS_INBOX as formatos } from '../../../common/inbox/medios';
 export const mimeBase = (s: string) => s.split(';')[0].trim().toLowerCase();
 export function hashMedia(s: unknown): string | null {
   if (typeof s !== 'string') return null;
@@ -103,7 +49,7 @@ function destino(url: string): URL {
     throw new ErrorMediaMeta('DESTINO');
   return u;
 }
-function firmaValida(b: Buffer, mime: string) {
+export function firmaValida(b: Buffer, mime: string) {
   const hex = b.subarray(0, 12).toString('hex');
   const text = b.subarray(0, 12).toString('ascii');
   if (mime === 'image/png') return hex.startsWith('89504e470d0a1a0a');

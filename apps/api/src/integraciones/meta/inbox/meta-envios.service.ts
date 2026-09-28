@@ -1,3 +1,5 @@
+import { MetaCargasService } from './meta-cargas.service';
+import { FORMATOS_INBOX } from '../../../common/inbox/medios';
 import { normalizarPlantilla } from './meta-plantillas';
 import { MetaArchivosPlantillaService } from './meta-archivos-plantilla.service';
 import type { Archivo } from '@prisma/client';
@@ -40,6 +42,7 @@ import {
   EnviarPlantillaInboxDto,
   CatalogoPlantillasInboxDto,
   EnviarTextoInboxDto,
+  EnviarMedioInboxDto,
 } from './meta-envios.dto';
 
 @Injectable()
@@ -51,6 +54,7 @@ export class MetaEnviosService {
     private readonly capacidades: CapacidadesEmpresaService,
     private readonly bus: InboxTiempoRealBus,
     private readonly archivos: MetaArchivosPlantillaService,
+    private readonly cargas: MetaCargasService,
   ) {}
 
   abrirArchivoPlantilla(
@@ -147,13 +151,23 @@ export class MetaEnviosService {
     return this.enviarInterno(auth, ip, conversacionId, dto);
   }
 
+  enviarMedio(
+    auth: CurrentAuth,
+    ip: string,
+    conversacionId: string,
+    dto: EnviarMedioInboxDto,
+  ) {
+    return this.enviarInterno(auth, ip, conversacionId, dto);
+  }
   private async enviarInterno(
     auth: CurrentAuth,
     ip: string,
     conversacionId: string,
-    dto: EnviarTextoInboxDto | EnviarPlantillaInboxDto,
+    dto: EnviarTextoInboxDto | EnviarPlantillaInboxDto | EnviarMedioInboxDto,
   ) {
     const esPlantilla = 'plantillaId' in dto;
+    const esMedio = !esPlantilla && 'archivoId' in dto;
+    const tipoEnvio = esPlantilla ? 'PLANTILLA' : esMedio ? 'MEDIO' : 'TEXTO';
     await exigirAccesoConexionMeta(this.db, auth, ip);
     const canal = await canalGeneralInbox(this.db, auth.tenantId);
     if (!canal || identidadCanalInbox(canal) !== dto.canalId)
@@ -166,7 +180,11 @@ export class MetaEnviosService {
       throw new ForbiddenException(
         'Las respuestas todavía no están habilitadas.',
       );
-    if (!esPlantilla && (!dto.texto.trim() || dto.texto.length > 4096))
+    if (
+      !esPlantilla &&
+      !esMedio &&
+      (!dto.texto?.trim() || (dto.texto?.length ?? 0) > 4096)
+    )
       throw new BadRequestException('Escribí entre 1 y 4096 caracteres.');
     if (esPlantilla && dto.consentimientoConfirmado !== true)
       throw new BadRequestException(
@@ -185,19 +203,22 @@ export class MetaEnviosService {
                 ? [dto.archivoId, dto.archivoVersion]
                 : []),
             ])
-          : dto.texto,
+          : esMedio
+            ? JSON.stringify([dto.archivoId, dto.texto ?? ''])
+            : (dto.texto ?? ''),
       )
       .digest('hex');
     let plantilla: PlantillaInbox | null = null;
     let archivo: Archivo | null = null;
-    // Un intento existente se consulta aunque luego se retire la plantilla; nunca vuelve a enviarse.
-    if (
-      esPlantilla &&
-      !(await this.db.inboxEnvio.findFirst({
-        where: { tenantId: auth.tenantId, clave: dto.clave },
-        select: { id: true },
-      }))
-    ) {
+    const existente =
+      esPlantilla || esMedio
+        ? await this.db.inboxEnvio.findFirst({
+            where: { tenantId: auth.tenantId, clave: dto.clave },
+            select: { id: true },
+          })
+        : null;
+    // Consultar un intento existente nunca vuelve a preparar ni enviar el archivo.
+    if (esPlantilla && !existente) {
       const catalogo = await this.catalogo(auth, ip, {
         canalId: dto.canalId,
         despues: dto.pagina ?? undefined,
@@ -227,11 +248,36 @@ export class MetaEnviosService {
       } else if (dto.archivoId || dto.archivoVersion)
         throw new BadRequestException('Esta plantilla no admite archivos.');
     }
+    const carga =
+      esMedio && !existente
+        ? await this.cargas.validar(
+            auth,
+            ip,
+            conversacionId,
+            dto.canalId,
+            dto.archivoId,
+          )
+        : null;
+    if (
+      esMedio &&
+      carga &&
+      !['image', 'video', 'document'].includes(
+        FORMATOS_INBOX[carga.archivo.mimeType]?.tipo ?? '',
+      ) &&
+      dto.texto?.trim()
+    )
+      throw new BadRequestException(
+        'Este tipo de archivo no admite un comentario.',
+      );
     const texto = esPlantilla
       ? plantilla
         ? textoPlantilla(plantilla, dto.valores)
         : ''
-      : dto.texto;
+      : esMedio
+        ? dto.texto?.trim() ||
+          (carga?.voz ? 'Nota de voz' : carga?.archivo.nombreOriginal) ||
+          'Adjunto'
+        : (dto.texto ?? '');
     const aviso = {
       tenantId: canal.tenantId,
       wabaId: canal.wabaId,
@@ -258,7 +304,7 @@ export class MetaEnviosService {
       if (anterior) {
         if (
           anterior.huella !== huella ||
-          anterior.tipo !== (esPlantilla ? 'PLANTILLA' : 'TEXTO') ||
+          anterior.tipo !== tipoEnvio ||
           anterior.conversacionId !== conversacionId ||
           anterior.autorizacionId !== canal.autorizacionId ||
           anterior.vinculoId !== canal.id
@@ -327,9 +373,34 @@ export class MetaEnviosService {
           clave: dto.clave,
           huella,
           texto,
-          tipo: esPlantilla ? 'PLANTILLA' : 'TEXTO',
+          tipo: tipoEnvio,
         },
       });
+      if (esMedio) {
+        const f = await tx.inboxCarga.findFirst({
+          where: {
+            archivoId: dto.archivoId,
+            tenantId: auth.tenantId,
+            vinculoId: canal.id,
+            autorizacionId: canal.autorizacionId,
+            conversacionId,
+            usuarioId: auth.userId,
+            envioId: null,
+          },
+          include: { archivo: true },
+        });
+        if (
+          !f ||
+          f.archivo.estado !== 'PENDIENTE' ||
+          !f.archivo.reservaHasta ||
+          f.archivo.reservaHasta <= new Date()
+        )
+          throw new ConflictException('El archivo ya no está disponible.');
+        await tx.inboxCarga.update({
+          where: { archivoId: f.archivoId, tenantId: auth.tenantId },
+          data: { envioId: envio.id },
+        });
+      }
       await registrarCambioInbox(tx, aviso);
       return {
         envio,
@@ -349,6 +420,47 @@ export class MetaEnviosService {
           ? componentesPlantilla(plantilla, dto.valores)
           : [];
       let preparacionFallida = false;
+      let medio: {
+        mediaId: string;
+        tipo: string;
+        nombreArchivo: string;
+        voz: boolean;
+      } | null = null;
+      if (esMedio) {
+        try {
+          medio = await this.cargas.conContenido(
+            auth,
+            ip,
+            conversacionId,
+            dto.canalId,
+            dto.archivoId,
+            reservado.envio.id,
+            async ({ bytes, mime, nombre, voz }) => {
+              const mediaId = await this.client.subirArchivo({
+                accessToken: reservado.token,
+                phoneNumberId: canal.phoneNumberId,
+                bytes,
+                mime,
+                nombre,
+              });
+              return {
+                mediaId,
+                tipo: FORMATOS_INBOX[mime].tipo,
+                nombreArchivo: nombre,
+                mime,
+                voz,
+                texto: dto.texto?.trim() || '',
+              };
+            },
+          );
+          await this.db.inboxEnvio.update({
+            where: { id: reservado.envio.id, tenantId: auth.tenantId },
+            data: { adjunto: medio },
+          });
+        } catch {
+          preparacionFallida = true;
+        }
+      }
       if (esPlantilla && plantilla?.archivo && archivo) {
         try {
           const archivoTipo = plantilla.archivo;
@@ -432,6 +544,18 @@ export class MetaEnviosService {
           (vigente.tipo !== 'PRUEBA' ||
             vigente.pruebaDestinoE164 === reservado.telefono),
         );
+        if (accesoVigente && !esPlantilla && vigente) {
+          const conversacion = await this.db.inboxConversacion.findFirst({
+            where: {
+              id: conversacionId,
+              tenantId: auth.tenantId,
+              vinculoId: vigente.id,
+            },
+          });
+          accesoVigente = (
+            await consultarVentanaRespuesta(this.db, vigente, conversacion)
+          ).abierta;
+        }
       } catch {
         accesoVigente = false;
       }
@@ -454,13 +578,34 @@ export class MetaEnviosService {
                   parametros: [],
                   componentes,
                 })
-              : await this.client.enviarTexto({ ...base, texto });
+              : esMedio && medio
+                ? await this.client.enviarMedio({
+                    ...base,
+                    ...medio,
+                    texto: dto.texto?.trim() || '',
+                  })
+                : await this.client.enviarTexto({ ...base, texto });
       } catch {
         resultado = { estado: 'incierta' };
       }
       // Se conserva el resultado incluso si se cerró la sesión durante el POST.
       // Ningún proceso reclama o repite estos envíos al reiniciar.
       await this.db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id=${auth.tenantId}::uuid FOR NO KEY UPDATE`;
+        // El worker recibe la copia de Meta. La carga temporal ya no reserva espacio.
+        if (esMedio)
+          await tx.archivo.updateMany({
+            where: {
+              id: dto.archivoId,
+              tenantId: auth.tenantId,
+              estado: 'PENDIENTE',
+            },
+            data: {
+              estado: 'PURGANDO',
+              bytesReservados: 0n,
+              reservaHasta: new Date(Date.now() + 86400000),
+            },
+          });
         await tx.$queryRaw`SELECT id FROM "MetaVinculo" WHERE id=${canal.id}::uuid AND "tenantId"=${auth.tenantId}::uuid FOR NO KEY UPDATE`;
         const intento = await tx.inboxEnvio.findFirstOrThrow({
           where: { id: reservado.envio.id, tenantId: auth.tenantId },

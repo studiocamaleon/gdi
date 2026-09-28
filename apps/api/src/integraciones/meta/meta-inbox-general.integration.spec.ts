@@ -523,3 +523,44 @@ it('un webhook confirmado recorre PostgreSQL, el bus, SSE y la lectura general s
     bus.onModuleDestroy();
   }
 });
+
+it('resuelve citas sólo dentro de la misma conversación y oculta el contenido revocado', async () => {
+  const propio = await chat(canal, '16505550123', 2, 'Alma');
+  const otro = await chat(canal, '16505550124', 1, 'Bruno');
+  const externo = await chat(ajeno);
+  const [original, respuesta] = propio.mensajes;
+  const modificar = (contenido: Prisma.InputJsonObject) =>
+    db.inboxMensaje.update({
+      where: { id: respuesta.id },
+      data: { contenido },
+    });
+  await modificar({ texto: 'Entendido', contextoWamid: original.wamid });
+  let r = await leer({ conversacionId: propio.c.id });
+  expect(r?.mensajes.find((m) => m.id === respuesta.id)?.cita).toMatchObject({
+    id: original.id,
+    texto: 'Texto ficticio 0',
+  });
+  expect(JSON.stringify(r)).not.toContain(original.wamid);
+  for (const ajenoWamid of [
+    otro.mensajes[0].wamid,
+    externo.mensajes[0].wamid,
+  ]) {
+    await modificar({ texto: 'Entendido', contextoWamid: ajenoWamid });
+    r = await leer({ conversacionId: propio.c.id });
+    expect(r?.mensajes.find((m) => m.id === respuesta.id)?.cita).toMatchObject({
+      id: null,
+      texto: 'Mensaje anterior no disponible',
+    });
+  }
+  await db.inboxMensaje.update({
+    where: { id: original.id },
+    data: { revocadoEl: new Date() },
+  });
+  await modificar({ texto: 'Entendido', contextoWamid: original.wamid });
+  r = await leer({ conversacionId: propio.c.id });
+  expect(r?.mensajes.find((m) => m.id === respuesta.id)?.cita).toMatchObject({
+    eliminado: true,
+    texto: 'Mensaje eliminado',
+  });
+  expect(JSON.stringify(r?.mensajes)).not.toContain('Texto ficticio 0');
+});

@@ -1,3 +1,4 @@
+import { FORMATOS_INBOX } from '../../common/inbox/medios';
 import type { ComponenteEnvioPlantilla } from '../../common/inbox/plantillas';
 import { Injectable } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
@@ -19,12 +20,7 @@ export class MetaCloudClient {
   }): Promise<string> {
     const version = process.env.META_GRAPH_API_VERSION ?? 'v26.0',
       secret = process.env.META_APP_SECRET;
-    const limite =
-      args.mime === 'application/pdf'
-        ? 20_000_000
-        : ['image/png', 'image/jpeg'].includes(args.mime)
-          ? 5_000_000
-          : 0;
+    const limite = FORMATOS_INBOX[args.mime]?.max ?? 0;
     if (
       !/^v\d+\.0$/.test(version) ||
       !/^\d+$/.test(args.phoneNumberId) ||
@@ -46,14 +42,23 @@ export class MetaCloudClient {
     form.set('type', args.mime);
     form.set(
       'file',
-      new Blob([new Uint8Array(args.bytes)], { type: args.mime }),
+      new Blob(
+        [
+          new Uint8Array(
+            args.bytes.buffer as ArrayBuffer,
+            args.bytes.byteOffset,
+            args.bytes.byteLength,
+          ),
+        ],
+        { type: args.mime },
+      ),
       args.nombre,
     );
     try {
       const r = await fetch(url, {
         method: 'POST',
         redirect: 'error',
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(60000),
         headers: { Authorization: `Bearer ${args.accessToken}` },
         body: form,
       });
@@ -176,6 +181,40 @@ export class MetaCloudClient {
       type: 'text',
       biz_opaque_callback_data: args.correlacion,
       text: { body: args.texto, preview_url: false },
+    });
+  }
+  async enviarMedio(args: {
+    accessToken: string;
+    phoneNumberId: string;
+    telefono: string;
+    correlacion: string;
+    mediaId: string;
+    tipo: string;
+    nombreArchivo: string;
+    texto: string;
+    voz: boolean;
+  }): Promise<ResultadoMeta> {
+    if (
+      !['image', 'video', 'audio', 'document', 'sticker'].includes(args.tipo) ||
+      !/^\d{1,80}$/.test(args.mediaId) ||
+      args.texto.length > 1024 ||
+      (args.voz && args.tipo !== 'audio')
+    )
+      throw new Error('Medio inválido.');
+    return this.enviar(args, {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: args.telefono,
+      type: args.tipo,
+      biz_opaque_callback_data: args.correlacion,
+      [args.tipo]: {
+        id: args.mediaId,
+        ...(args.tipo === 'document' ? { filename: args.nombreArchivo } : {}),
+        ...(['image', 'video', 'document'].includes(args.tipo) && args.texto
+          ? { caption: args.texto }
+          : {}),
+        ...(args.tipo === 'audio' && args.voz ? { voice: true } : {}),
+      },
     });
   }
   private async enviar(

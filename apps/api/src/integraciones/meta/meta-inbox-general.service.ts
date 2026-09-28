@@ -1,4 +1,9 @@
 import {
+  contactosInbox,
+  ubicacionInbox,
+  type CitaInbox,
+} from '../../common/inbox/contenidos';
+import {
   enviosInboxHabilitados,
   plantillasInboxHabilitadas,
   presentarEnvio,
@@ -40,6 +45,7 @@ const selectMensaje = {
     },
   },
   id: true,
+  wamid: true,
   direccion: true,
   enviadoEl: true,
   tipo: true,
@@ -52,12 +58,44 @@ const selectMensaje = {
 } satisfies Prisma.InboxMensajeSelect;
 type Mensaje = Prisma.InboxMensajeGetPayload<{ select: typeof selectMensaje }>;
 /** Lista cerrada: jamás URLs remotas, media IDs, crudos ni credenciales. */
-function presentar(m: Mensaje, nombre: string | null) {
+function presentar(
+  m: Mensaje,
+  nombre: string | null,
+  referencias = new Map<string, Mensaje>(),
+) {
   const contenido = objeto(m.contenido);
   return {
     id: m.id,
     nombreContacto: nombre,
     tipo: m.revocadoEl ? 'revocado' : (m.tipo ?? 'desconocido'),
+    voz: !m.revocadoEl && contenido.voz === true,
+    ubicacion:
+      !m.revocadoEl && m.tipo === 'location'
+        ? ubicacionInbox(contenido.ubicacion)
+        : null,
+    contactos:
+      !m.revocadoEl && m.tipo === 'contacts'
+        ? contactosInbox(contenido.contactos)
+        : [],
+    noDisponible:
+      !m.revocadoEl && m.tipo === 'unsupported'
+        ? Array.isArray(contenido.codigos) && contenido.codigos.includes(131060)
+          ? 'Consultá este mensaje en WhatsApp Business del celular. Meta no compartió su contenido con Grafo.'
+          : 'WhatsApp no compartió este tipo de mensaje. Consultalo en el celular.'
+        : null,
+    cita:
+      !m.revocadoEl && typeof contenido.contextoWamid === 'string'
+        ? citar(referencias.get(contenido.contextoWamid), nombre)
+        : null,
+    reaccion:
+      !m.revocadoEl &&
+      typeof contenido.reaccionWamid === 'string' &&
+      typeof contenido.emoji === 'string'
+        ? {
+            ...citar(referencias.get(contenido.reaccionWamid), nombre),
+            emoji: contenido.emoji,
+          }
+        : null,
     plantilla: !m.revocadoEl && contenido.plantilla === true,
     texto: m.revocadoEl
       ? null
@@ -99,6 +137,29 @@ function presentar(m: Mensaje, nombre: string | null) {
                 : null,
           }
         : null,
+  };
+}
+function citar(m: Mensaje | undefined, nombre: string | null): CitaInbox {
+  const c = objeto(m?.contenido);
+  return {
+    id: m?.id ?? null,
+    nombre: m?.direccion === 'SALIENTE' ? 'Tu empresa' : nombre || 'Cliente',
+    eliminado: Boolean(m?.revocadoEl),
+    texto: m?.revocadoEl
+      ? 'Mensaje eliminado'
+      : typeof c.texto === 'string' && c.texto
+        ? c.texto.slice(0, 200)
+        : m?.tipo
+          ? ({
+              image: 'Imagen',
+              audio: 'Audio',
+              video: 'Video',
+              sticker: 'Sticker',
+              document: 'Documento',
+              location: 'Ubicación',
+              contacts: 'Contacto',
+            }[m.tipo] ?? 'Mensaje')
+          : 'Mensaje anterior no disponible',
   };
 }
 type Resumen = {
@@ -332,6 +393,25 @@ export class MetaInboxGeneralService {
       canal,
       conversacion,
     );
+    const idsReferidos = [
+      ...new Set(
+        visibles.flatMap((m) => {
+          const c = objeto(m.contenido);
+          return [c.contextoWamid, c.reaccionWamid].filter(
+            (x): x is string => typeof x === 'string',
+          );
+        }),
+      ),
+    ];
+    const referencias = new Map(
+      (conversacion && idsReferidos.length
+        ? await this.db.inboxMensaje.findMany({
+            where: { ...scopeMensajes, wamid: { in: idsReferidos } },
+            select: selectMensaje,
+          })
+        : []
+      ).map((m) => [m.wamid, m]),
+    );
     // Una revocación o reconexión durante la lectura no entrega el resultado anterior.
     const permisosFinales = await exigirAccesoConexionMeta(this.db, auth, ip);
     if (
@@ -390,7 +470,7 @@ export class MetaInboxGeneralService {
           : null,
       mensajes: visibles
         .reverse()
-        .map((m) => presentar(m, contacto?.nombre ?? null)),
+        .map((m) => presentar(m, contacto?.nombre ?? null, referencias)),
       // DesdeId refresca TODOS los mensajes ya visibles, incluidas ediciones y
       // eliminaciones antiguas. Si la ventana creció demasiado se indica el corte.
       anterior:

@@ -1,3 +1,4 @@
+import { MetaCargasService } from './meta/inbox/meta-cargas.service';
 import { MetaEnviosService } from './meta/inbox/meta-envios.service';
 import { MetaArchivosPlantillaService } from './meta/inbox/meta-archivos-plantilla.service';
 import { MetaAdjuntosModule } from './meta/inbox/meta-adjuntos.module';
@@ -71,6 +72,7 @@ import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.mo
     IntegracionesController,
   ],
   providers: [
+    MetaCargasService,
     MetaArchivosPlantillaService,
     MetaEnviosService,
     MetaInboxGeneralService,
