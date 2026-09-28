@@ -2,7 +2,7 @@ name: Validar contenedores de staging
 
 on:
   push:
-    branches: [codex/staging-infraestructura, codex/fix-configuracion-staging, codex/meta-cloud-base]
+    branches: [codex/staging-infraestructura, codex/fix-configuracion-staging, codex/meta-cloud-base, codex/meta-recepcion-piloto]
     paths:
       - '.github/workflows/staging-validation.yml'
       - 'deploy/Dockerfile'
@@ -78,6 +78,7 @@ jobs:
           docker compose run --rm bootstrap
           docker compose run --rm database-tools node scripts/deploy/verify-database.cjs
           docker compose run --rm bootstrap node scripts/deploy/verify-meta.cjs
+          docker compose run --rm bootstrap node scripts/deploy/verify-meta-recepcion.cjs
 
       - name: Iniciar API y Next y comprobar login directo y por BFF
         run: |

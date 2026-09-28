@@ -737,6 +737,7 @@ model Tenant {
   logoArchivo                                      Archivo?                                          @relation("TenantLogo", fields: [logoArchivoId], references: [id], onDelete: SetNull)
   archivos                                         Archivo[]                                         @relation("ArchivosDelTenant")
   integraciones                                    IntegracionTenant[]
+  mensajesWhatsappRecibidos                         MensajeWhatsappRecibido[]
   memberships                                      Membership[]
   roles                                            Rol[]
   eventosAcceso                                    EventoAcceso[]
@@ -6446,6 +6447,28 @@ model WebhookWhatsappCrudo {
   @@index([tenantId, tipo])
   @@index([wamid])
   @@index([procesado, recibidoEl])
+}
+
+/// Proyección de mensajes ENTRANTES del piloto, sin descargar adjuntos ni
+/// activar respuestas. El crudo queda disponible para procesadores futuros.
+model MensajeWhatsappRecibido {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  wabaId         String
+  phoneNumberId  String
+  wamid          String
+  remitente      String
+  nombreContacto String?
+  tipo           String
+  texto          String?
+  enviadoEl      DateTime
+  recibidoEl     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// El mismo mensaje puede volver en un webhook con metadata diferente.
+  @@unique([wabaId, phoneNumberId, wamid])
+  @@index([tenantId, wabaId, phoneNumberId, remitente, enviadoEl, id], map: "MensajeWhatsappRecibido_bandeja_idx")
 }
 
 /// Eventos de cobro recibidos de una pasarela (webhooks). Existe para dos

@@ -1,5 +1,9 @@
 # Validación de staging — 24 y 25 de septiembre de 2026
 
+## Lote local posterior: recepción Meta (sin desplegar)
+
+`codex/meta-recepcion-piloto` prepara la bandeja de recepción interna. La migración `20260925223000_meta_recepcion_piloto` se probó sólo en una base local desechable con 284 migraciones. Neon conserva las 283 migraciones y Fly conserva `7efabd87213e`; no se importó el interruptor de recepción. Ver pruebas y procedimiento de activación en [meta-recepcion-piloto.md](../../docs/meta-recepcion-piloto.md). El [CI remoto 36195604016](https://github.com/studiocamaleon/gdi/actions/runs/36195604016) aprobó API/Next con tipos, migraciones y permisos, ensayos Meta y login/BFF sobre `715c7084346cad30addc149fe0856bdb815a1b7d`. También pasaron 60 pruebas API, 4 de interfaz, TypeScript frontend y revisión visual local con datos ficticios. El código está en el [PR #5 en borrador](https://github.com/studiocamaleon/gdi/pull/5), dependiente del #4. Esta nota no acredita recepción real ni coexistencia.
+
 Ensayos con el Compose aislado `grafoprint-staging-local`, en la Mac y en un ejecutor temporal de GitHub, y comprobaciones posteriores contra los proveedores de staging. Todos usaron datos sintéticos. Las credenciales cloud se usaron desde la Mac y desde las máquinas Fly a través de su almacén de secretos; no se incorporaron al repositorio ni al workflow.
 
 ## Comprobaciones locales

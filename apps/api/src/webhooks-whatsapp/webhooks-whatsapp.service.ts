@@ -3,6 +3,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { configuracionMetaPiloto } from '../integraciones/meta/meta-piloto.config';
+import { proyectarMensajePiloto } from '../integraciones/meta/meta-recepcion';
 
 export interface CambioWebhook {
   tipo: string;
@@ -130,6 +131,33 @@ export class WebhooksWhatsappService {
         skipDuplicates: true,
       });
       for (const fila of filas) {
+        const mensaje = proyectarMensajePiloto(fila);
+        if (mensaje) {
+          // Idempotencia por mensaje, además de por evento crudo. No modificar
+          // el texto original si Meta lo reenvía con metadata diferente.
+          await tx.mensajeWhatsappRecibido.createMany({
+            data: [mensaje],
+            skipDuplicates: true,
+          });
+          // Una colisión que perteneciera a otra empresa no se confirma como
+          // procesada. La bandeja filtra también cuenta, número y contacto.
+          const propio = await tx.mensajeWhatsappRecibido.count({
+            where: {
+              tenantId: mensaje.tenantId,
+              wabaId: mensaje.wabaId,
+              phoneNumberId: mensaje.phoneNumberId,
+              wamid: mensaje.wamid,
+            },
+          });
+          if (propio)
+            await tx.webhookWhatsappCrudo.updateMany({
+              where: {
+                dedupClave: fila.dedupClave,
+                tenantId: mensaje.tenantId,
+              },
+              data: { procesado: true },
+            });
+        }
         if (fila.tipo !== 'statuses' || !fila.tenantId || !fila.phoneNumberId)
           continue;
         const aplicado = await this.procesarEstado(
