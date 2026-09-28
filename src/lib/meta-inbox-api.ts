@@ -1,3 +1,8 @@
+import type {
+  UbicacionInbox,
+  ContactoCompartidoInbox,
+  CitaInbox,
+} from "../../apps/api/src/common/inbox/contenidos";
 import { apiRequest } from "@/lib/api";
 
 export type InboxIdentidad = {
@@ -41,6 +46,12 @@ export type MetaInbox = {
     direccion?: string | null;
     eliminado?: boolean;
     editado?: boolean;
+    voz?: boolean;
+    ubicacion?: UbicacionInbox | null;
+    contactos?: ContactoCompartidoInbox[];
+    cita?: CitaInbox | null;
+    reaccion?: (CitaInbox & { emoji: string }) | null;
+    noDisponible?: string | null;
     estadoEntrega?: string | null;
     delHistorial?: boolean;
     delCelular?: boolean;

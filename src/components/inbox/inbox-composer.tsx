@@ -1,20 +1,27 @@
 "use client";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  Clock3,
-  LockKeyhole,
-  MessageCircle,
-  Send,
-  RefreshCw,
-} from "lucide-react";
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { LockKeyhole, Smile, Send, RefreshCw } from "lucide-react";
 import {
   InputGroup,
   InputGroupAddon,
-  InputGroupButton,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  PopoverTitle,
+} from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { ApiError } from "@/lib/api";
 import {
@@ -23,6 +30,11 @@ import {
   type RespuestaInbox,
 } from "@/lib/meta-inbox-api";
 import s from "./inbox-composer.module.css";
+import {
+  InboxEnviarAdjunto,
+  type BorradoresMedios,
+} from "./inbox-enviar-adjunto";
+import type { MediosInboxApi } from "@/lib/inbox-enviar-medios";
 export type BorradorInbox = { texto: string; clave?: string };
 export type BorradoresInbox = Map<string, BorradorInbox>;
 
@@ -37,6 +49,9 @@ export function InboxComposer({
   actualizar,
   borradores,
   scope,
+  mediosApi,
+  borradoresMedios,
+  accionesExtras,
 }: {
   canalId: string;
   conversacionId: string;
@@ -46,8 +61,14 @@ export function InboxComposer({
   actualizar: () => Promise<unknown>;
   borradores: BorradoresInbox;
   scope: string;
+  mediosApi?: MediosInboxApi;
+  borradoresMedios?: BorradoresMedios;
+  accionesExtras?: ReactNode;
 }) {
   const id = useId();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [emojis, setEmojis] = useState(false);
+  const borradoresMediosLocales = useRef<BorradoresMedios>(new Map());
   const [draft, setDraft] = useState<BorradorInbox>(
     () => borradores.get(scope) ?? { texto: "" },
   );
@@ -81,7 +102,7 @@ export function InboxComposer({
       (performance.now() - base.local),
   );
   const abierta = respuesta.abierta && restante > 0;
-  const minutos = Math.ceil(restante / 60000);
+
   function guardar(next: BorradorInbox) {
     setDraft(next);
     borradores.set(scope, next);
@@ -147,105 +168,210 @@ export function InboxComposer({
         </div>
       </div>
     );
+  function insertarEmoji(emoji: string) {
+    if (ocupado || draft.clave || !abierta) return;
+    const inicio = inputRef.current?.selectionStart ?? draft.texto.length,
+      fin = inputRef.current?.selectionEnd ?? inicio;
+    const texto = draft.texto.slice(0, inicio) + emoji + draft.texto.slice(fin);
+    if (texto.length > 4096) return;
+    guardar({ texto });
+    setEmojis(false);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(
+        inicio + emoji.length,
+        inicio + emoji.length,
+      );
+    });
+  }
   return (
-    <form
-      className={s.composer}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void enviarTexto();
-      }}
+    <InboxEnviarAdjunto
+      canalId={canalId}
+      conversacionId={conversacionId}
+      destino={destino}
+      habilitado={abierta && respuesta.habilitado}
+      api={mediosApi}
+      borradores={borradoresMedios ?? borradoresMediosLocales.current}
+      actualizar={actualizar}
     >
-      <div className={s.header}>
-        <span className={s.channel}>
-          <MessageCircle size={14} aria-hidden="true" /> RESPONDER POR WHATSAPP
-        </span>
-        <span className={s.window} data-open={abierta}>
-          <Clock3 size={13} aria-hidden="true" />
-          {abierta
-            ? `${Math.floor(minutos / 60)} h ${minutos % 60} min disponibles`
-            : "Ventana de atención cerrada"}
-        </span>
-      </div>
-      {!abierta && (
-        <Alert>
-          <AlertDescription>
-            Para retomar esta conversación hace falta una plantilla aprobada. El
-            texto libre vuelve a habilitarse cuando el cliente escriba.
-          </AlertDescription>
-        </Alert>
-      )}
-      <FieldGroup>
-        <Field data-disabled={!abierta && !draft.clave}>
-          <FieldLabel htmlFor={id} className="sr-only">
-            Mensaje para {destino}
-          </FieldLabel>
-          <InputGroup>
-            <InputGroupTextarea
-              id={id}
-              placeholder={
-                abierta
-                  ? `Escribí un mensaje para ${destino}…`
-                  : "Esperá un nuevo mensaje del cliente para responder."
-              }
-              value={draft.texto}
-              onChange={(e) => guardar({ texto: e.target.value })}
-              rows={2}
-              maxLength={4096}
-              disabled={!abierta && !draft.clave}
-              readOnly={ocupado || Boolean(draft.clave)}
-              aria-describedby={`${id}-hint`}
-              className="min-h-20 max-h-48"
-              onKeyDown={(e) => {
-                if (
-                  (e.ctrlKey || e.metaKey) &&
-                  e.key === "Enter" &&
-                  !e.nativeEvent.isComposing
-                ) {
-                  e.preventDefault();
-                  void enviarTexto();
-                }
-              }}
-            />
-            <InputGroupAddon
-              align="block-end"
-              className="justify-between gap-3"
-            >
-              <span className={s.counter}>
-                {draft.texto.length.toLocaleString("es-AR")} / 4.096
-              </span>
-              <InputGroupButton
-                type="submit"
-                variant="brand"
-                size="sm"
-                disabled={
-                  ocupado || (!abierta && !draft.clave) || !draft.texto.trim()
-                }
-              >
-                {ocupado ? (
-                  <Spinner data-icon="inline-start" />
-                ) : draft.clave ? (
-                  <RefreshCw data-icon="inline-start" />
+      {({ adjuntar, microfono, grabacion, grabando }) => (
+        <form
+          className={s.composer}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void enviarTexto();
+          }}
+        >
+          {!abierta && (
+            <Alert>
+              <AlertDescription>
+                La ventana de atención está cerrada. Usá una plantilla aprobada
+                para retomar la conversación.
+              </AlertDescription>
+            </Alert>
+          )}
+          <div className={s.compactRow}>
+            {adjuntar}
+            {!grabando && accionesExtras}
+            {grabando ? (
+              grabacion
+            ) : (
+              <>
+                <FieldGroup className="min-w-0 flex-1">
+                  <Field data-disabled={!abierta && !draft.clave}>
+                    <FieldLabel htmlFor={id} className="sr-only">
+                      Mensaje para {destino}
+                    </FieldLabel>
+                    <InputGroup className={s.inputGroup}>
+                      <InputGroupTextarea
+                        ref={inputRef}
+                        id={id}
+                        placeholder={
+                          abierta
+                            ? "Escribí un mensaje…"
+                            : "Esperando respuesta del cliente…"
+                        }
+                        value={draft.texto}
+                        onChange={(e) => guardar({ texto: e.target.value })}
+                        rows={1}
+                        maxLength={4096}
+                        disabled={!abierta && !draft.clave}
+                        readOnly={ocupado || Boolean(draft.clave)}
+                        aria-describedby={`${id}-hint`}
+                        className={s.input}
+                        onKeyDown={(e) => {
+                          if (
+                            (e.ctrlKey || e.metaKey) &&
+                            e.key === "Enter" &&
+                            !e.nativeEvent.isComposing
+                          ) {
+                            e.preventDefault();
+                            void enviarTexto();
+                          }
+                        }}
+                      />
+                      <InputGroupAddon align="inline-end">
+                        <Popover open={emojis} onOpenChange={setEmojis}>
+                          <PopoverTrigger
+                            render={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                              />
+                            }
+                            aria-label="Elegir emoji"
+                            title="Emojis"
+                            disabled={
+                              !abierta || ocupado || Boolean(draft.clave)
+                            }
+                          >
+                            <Smile />
+                          </PopoverTrigger>
+                          <PopoverContent side="top" align="end">
+                            <PopoverTitle>Emojis frecuentes</PopoverTitle>
+                            <div className={s.emojiGrid}>
+                              {[
+                                "😀",
+                                "😊",
+                                "😂",
+                                "😍",
+                                "🤔",
+                                "😎",
+                                "👋",
+                                "👍",
+                                "👏",
+                                "🙌",
+                                "🙏",
+                                "💪",
+                                "❤️",
+                                "🔥",
+                                "🎉",
+                                "✨",
+                                "✅",
+                                "📌",
+                                "📍",
+                                "📦",
+                                "🖨️",
+                                "🎨",
+                                "💬",
+                                "☕",
+                              ].map((emoji) => (
+                                <Button
+                                  key={emoji}
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Insertar ${emoji}`}
+                                  onClick={() => insertarEmoji(emoji)}
+                                >
+                                  {emoji}
+                                </Button>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
+                </FieldGroup>
+                {draft.texto.trim() || draft.clave ? (
+                  <Button
+                    type="submit"
+                    className="rounded-full"
+                    variant="brand"
+                    size="icon"
+                    disabled={
+                      ocupado ||
+                      (!abierta && !draft.clave) ||
+                      !draft.texto.trim()
+                    }
+                    title={
+                      draft.clave
+                        ? "Comprobar el mismo envío"
+                        : "Enviar · Ctrl o ⌘ + Enter"
+                    }
+                    aria-label={
+                      ocupado
+                        ? "Comprobando…"
+                        : draft.clave
+                          ? "Comprobar envío"
+                          : "Enviar mensaje"
+                    }
+                  >
+                    {ocupado ? (
+                      <Spinner />
+                    ) : draft.clave ? (
+                      <RefreshCw />
+                    ) : (
+                      <Send />
+                    )}
+                    <span className="sr-only">
+                      {draft.clave ? "Comprobar envío" : "Enviar mensaje"}
+                    </span>
+                  </Button>
                 ) : (
-                  <Send data-icon="inline-start" />
+                  microfono
                 )}
-                {ocupado
-                  ? "Comprobando…"
-                  : draft.clave
-                    ? "Comprobar envío"
-                    : "Enviar mensaje"}
-              </InputGroupButton>
-            </InputGroupAddon>
-          </InputGroup>
-        </Field>
-      </FieldGroup>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+              </>
+            )}
+          </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {draft.texto.length > 3500 && (
+            <span className={s.counter}>
+              {draft.texto.length.toLocaleString("es-AR")} / 4.096
+            </span>
+          )}
+          <span id={`${id}-hint`} className="sr-only">
+            Enter para nueva línea · Ctrl o ⌘ + Enter para enviar. También podés
+            arrastrar archivos o pegar imágenes.
+          </span>
+        </form>
       )}
-      <span id={`${id}-hint`} className={s.hint}>
-        Enter para nueva línea · Ctrl o ⌘ + Enter para enviar
-      </span>
-    </form>
+    </InboxEnviarAdjunto>
   );
 }

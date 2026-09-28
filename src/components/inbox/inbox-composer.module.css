@@ -4,38 +4,9 @@
   gap: 12px;
   width: 100%;
 }
-.header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-}
-.channel {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--accent-soft-foreground);
-  font: 9px var(--brand-mono);
-  letter-spacing: 0.09em;
-}
-.window {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted-text);
-  font-size: 10px;
-}
-.window[data-open="true"] {
-  color: var(--success);
-}
 .counter {
   color: var(--muted-text);
   font: 10px var(--brand-mono);
-}
-.hint {
-  color: var(--muted-text);
-  font-size: 10px;
 }
 .closed {
   display: flex;
@@ -52,8 +23,25 @@
 .closed p {
   margin: 0;
 }
-@media (max-width: 640px) {
-  .hint {
-    display: none;
-  }
+.compactRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.inputGroup {
+  border-radius: 20px;
+}
+.input {
+  field-sizing: content;
+  min-height: 38px;
+  max-height: 140px;
+  padding: 9px 14px;
+  line-height: 20px;
+  resize: none;
+}
+.emojiGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
 }

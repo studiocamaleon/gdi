@@ -70,6 +70,7 @@ export function InboxPlantillas({
   actualizar,
   borradores,
   scope,
+  compacto = false,
 }: {
   canalId: string;
   conversacionId: string;
@@ -78,6 +79,7 @@ export function InboxPlantillas({
   actualizar: () => Promise<unknown>;
   borradores: BorradoresPlantilla;
   scope: string;
+  compacto?: boolean;
 }) {
   const id = useId();
   const [abierto, setAbierto] = useState(false);
@@ -282,14 +284,25 @@ export function InboxPlantillas({
   return (
     <>
       <div className={s.entry}>
-        <Button variant="outline" size="sm" onClick={() => abrir(true)}>
+        <Button
+          type="button"
+          variant={compacto ? "ghost" : "outline"}
+          size={compacto ? "icon" : "sm"}
+          title={draft?.clave ? "Comprobar plantilla" : "Usar plantilla"}
+          aria-label={draft?.clave ? "Comprobar plantilla" : "Usar plantilla"}
+          onClick={() => abrir(true)}
+        >
           <FileText data-icon="inline-start" />
-          {draft?.clave ? "Comprobar plantilla" : "Usar plantilla"}
+          <span className={compacto ? "sr-only" : undefined}>
+            {draft?.clave ? "Comprobar plantilla" : "Usar plantilla"}
+          </span>
         </Button>
-        <span>Mensajes aprobados por Meta, también fuera de las 24 h.</span>
+        {!compacto && (
+          <span>Mensajes aprobados por Meta, también fuera de las 24 h.</span>
+        )}
       </div>
       {aviso && (
-        <p role="status" className={s.notice}>
+        <p role="status" className={compacto ? "sr-only" : s.notice}>
           {aviso}
         </p>
       )}
@@ -543,10 +556,13 @@ export function InboxPlantillas({
                           <RefreshCw data-icon="inline-start" /> Actualizar
                           archivos
                         </Button>
-                        <p className={s.notice} role="status">
+                        <p
+                          className={compacto ? "sr-only" : s.notice}
+                          role="status"
+                        >
                           {archivosEstado}
                         </p>
-                        <p className={s.notice}>
+                        <p className={compacto ? "sr-only" : s.notice}>
                           {p.archivo === "image"
                             ? "JPG o PNG · hasta 5 MB"
                             : "PDF · hasta 20 MB en Grafo"}
@@ -554,7 +570,7 @@ export function InboxPlantillas({
                           enviar.
                         </p>
                         {p.archivo === "document" && (
-                          <p className={s.notice}>
+                          <p className={compacto ? "sr-only" : s.notice}>
                             Incluye PDF listos de presupuestos emitidos y
                             comprobantes, según tus permisos. Los borradores y
                             documentos anulados no aparecen. Si falta uno,
@@ -616,7 +632,9 @@ export function InboxPlantillas({
                     </Field>
                   </FieldGroup>
                   {validacion && draft.valores.some(Boolean) && (
-                    <p className={s.notice}>{validacion}</p>
+                    <p className={compacto ? "sr-only" : s.notice}>
+                      {validacion}
+                    </p>
                   )}
                 </>
               ) : (

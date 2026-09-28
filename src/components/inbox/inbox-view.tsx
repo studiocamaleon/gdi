@@ -63,6 +63,7 @@ import { InboxConexion } from "./inbox-conexion";
 import { InboxPlantillas, type BorradoresPlantilla } from "./inbox-plantillas";
 import type { PlantillasInboxApi } from "@/lib/meta-inbox-api";
 import { InboxComposer, type BorradoresInbox } from "./inbox-composer";
+import { InboxCita, InboxUbicacion, InboxContactos } from "./inbox-contenido";
 import { InboxAdjunto } from "./inbox-adjunto";
 import { InboxMessageStatus } from "./inbox-message-status";
 import { InboxBienvenida } from "./inbox-bienvenida";
@@ -74,6 +75,8 @@ import {
   type EstadoInboxVivo,
 } from "@/lib/inbox-tiempo-real";
 
+import type { BorradoresMedios } from "./inbox-enviar-adjunto";
+import type { MediosInboxApi } from "@/lib/inbox-enviar-medios";
 const estadosConexion: Record<EstadoInboxVivo, string> = {
   conectando: "Conectando actualización en vivo",
   en_vivo: "Actualización en vivo",
@@ -104,6 +107,7 @@ export function InboxView({
   abrirAdjunto,
   enviarTexto,
   plantillasApi,
+  mediosApi,
 }: {
   identidad: InboxIdentidad;
   cargar?: CargarInbox;
@@ -112,6 +116,7 @@ export function InboxView({
   abrirAdjunto?: AbrirAdjuntoInbox;
   enviarTexto?: EnviarTextoInbox;
   plantillasApi?: PlantillasInboxApi;
+  mediosApi?: MediosInboxApi;
 }) {
   const [datos, setDatos] = useState<MetaInbox | null>(null);
   const [estado, setEstado] = useState<
@@ -125,6 +130,7 @@ export function InboxView({
   const [movilChat, setMovilChat] = useState(false);
   const [contextoAbierto, setContextoAbierto] = useState(false);
   const [conexionAbierta, setConexionAbierta] = useState(false);
+  const borradoresMedios = useRef<BorradoresMedios>(new Map());
   const borradores = useRef<BorradoresInbox>(new Map());
   const borradoresPlantillas = useRef<BorradoresPlantilla>(new Map());
   const requestId = useRef(0);
@@ -230,6 +236,7 @@ export function InboxView({
         if (!resultado) {
           datosActuales.current = null;
           borradores.current.clear();
+          borradoresMedios.current.clear();
           borradoresPlantillas.current.clear();
           setDatos(null);
           conversacionElegida.current = undefined;
@@ -244,6 +251,7 @@ export function InboxView({
         ) {
           datosActuales.current = null;
           borradores.current.clear();
+          borradoresMedios.current.clear();
           borradoresPlantillas.current.clear();
           setDatos(null);
           conversacionElegida.current = undefined;
@@ -311,6 +319,7 @@ export function InboxView({
         setEstado(denegado ? "sesion" : "error");
         if (denegado) {
           borradores.current.clear();
+          borradoresMedios.current.clear();
           borradoresPlantillas.current.clear();
           setCanalHabilitado(false);
         }
@@ -332,6 +341,7 @@ export function InboxView({
 
   useEffect(() => {
     borradores.current.clear();
+    borradoresMedios.current.clear();
     borradoresPlantillas.current.clear();
     elegido.current = undefined;
     conversacionElegida.current = undefined;
@@ -365,6 +375,7 @@ export function InboxView({
         controller.current?.abort();
         datosActuales.current = null;
         borradores.current.clear();
+        borradoresMedios.current.clear();
         borradoresPlantillas.current.clear();
         setDatos(null);
         conversacionElegida.current = undefined;
@@ -932,7 +943,14 @@ export function InboxView({
                               className={s.bubble}
                               data-content={
                                 !m.eliminado && m.adjunto
-                                  ? "adjunto"
+                                  ? m.tipo === "audio" ||
+                                    m.adjunto.mimeType?.startsWith("audio/")
+                                    ? "audio"
+                                    : m.tipo === "sticker" &&
+                                        m.adjunto.estado === "LISTO" &&
+                                        m.adjunto.mimeType === "image/webp"
+                                      ? "sticker"
+                                      : "adjunto"
                                   : undefined
                               }
                               data-kind={
@@ -941,8 +959,24 @@ export function InboxView({
                                   : "entrada"
                               }
                             >
+                              {m.cita && !m.eliminado && (
+                                <InboxCita cita={m.cita} />
+                              )}
                               {m.eliminado ? (
                                 <p>Mensaje eliminado</p>
+                              ) : m.ubicacion ? (
+                                <InboxUbicacion ubicacion={m.ubicacion} />
+                              ) : m.contactos?.length ? (
+                                <InboxContactos contactos={m.contactos} />
+                              ) : m.reaccion ? (
+                                <>
+                                  <InboxCita cita={m.reaccion} />
+                                  <p>
+                                    {m.reaccion.emoji
+                                      ? `Reaccionó ${m.reaccion.emoji}`
+                                      : "Quitó su reacción"}
+                                  </p>
+                                </>
                               ) : [
                                   "text",
                                   "button",
@@ -972,8 +1006,8 @@ export function InboxView({
                                   </Badge>
                                   {m.texto && <p>{m.texto}</p>}
                                   <p>
-                                    Este contenido todavía no se puede abrir en
-                                    Grafo.
+                                    {m.noDisponible ||
+                                      "Este contenido todavía no se puede abrir en Grafo."}
                                   </p>
                                 </>
                               )}
@@ -1052,7 +1086,32 @@ export function InboxView({
                               servidorEl: new Date().toISOString(),
                             }
                           }
+                          accionesExtras={
+                            datos.respuesta?.plantillasHabilitadas &&
+                            datos.canalId &&
+                            datos.conversacionId && (
+                              <InboxPlantillas
+                                compacto
+                                key={`plantillas:${identidad.empresaId}:${identidad.usuarioId}:${datos.canalId}:${datos.conversacionId}`}
+                                canalId={datos.canalId}
+                                conversacionId={datos.conversacionId}
+                                destino={nombre}
+                                api={plantillasApi}
+                                borradores={borradoresPlantillas.current}
+                                scope={`${datos.canalId}:${datos.conversacionId}`}
+                                actualizar={() =>
+                                  consultar(
+                                    { clienteId: elegido.current },
+                                    false,
+                                    true,
+                                  )
+                                }
+                              />
+                            )
+                          }
                           enviar={enviarTexto}
+                          mediosApi={mediosApi}
+                          borradoresMedios={borradoresMedios.current}
                           actualizar={() =>
                             consultar(
                               { clienteId: elegido.current },
@@ -1070,26 +1129,6 @@ export function InboxView({
                           </p>
                         </div>
                       )}
-                      {datos.respuesta?.plantillasHabilitadas &&
-                        datos.canalId &&
-                        datos.conversacionId && (
-                          <InboxPlantillas
-                            key={`plantillas:${identidad.empresaId}:${identidad.usuarioId}:${datos.canalId}:${datos.conversacionId}`}
-                            canalId={datos.canalId}
-                            conversacionId={datos.conversacionId}
-                            destino={nombre}
-                            api={plantillasApi}
-                            borradores={borradoresPlantillas.current}
-                            scope={`${datos.canalId}:${datos.conversacionId}`}
-                            actualizar={() =>
-                              consultar(
-                                { clienteId: elegido.current },
-                                false,
-                                true,
-                              )
-                            }
-                          />
-                        )}
                     </div>
                   </>
                 )}

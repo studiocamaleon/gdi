@@ -94,7 +94,11 @@ it.each([
     const element = container.querySelector(tag);
     expect(element?.getAttribute("src")).toBe("blob:medio");
     if (tag !== "img") {
-      expect(element?.hasAttribute("controls")).toBe(true);
+      if (tag === "audio")
+        expect(
+          container.querySelector('[aria-label="Reproducir audio"]'),
+        ).not.toBeNull();
+      else expect(element?.hasAttribute("controls")).toBe(true);
       expect(element?.hasAttribute("autoplay")).toBe(false);
     }
     expect(container.querySelector("a")?.download).toBe("Muestra");
@@ -129,4 +133,40 @@ it("explica códecs incompatibles y conserva la descarga", async () => {
     "Este navegador",
   );
   expect(container.querySelector("a")?.href).toBe("blob:medio");
+});
+it("presenta el sticker suelto, sin tarjeta, nombre ni descarga permanente", async () => {
+  await render("image/webp", "sticker");
+  await act(async () => visible(true));
+  expect(container.querySelector("img")?.alt).toBe("Sticker");
+  expect(container.querySelector("img")?.getAttribute("src")).toBe(
+    "blob:medio",
+  );
+  expect(container.querySelector("a")).toBeNull();
+  expect(container.textContent).not.toContain("Muestra");
+  expect(container.querySelector('[aria-label="Archivo privado"]')).toBeNull();
+});
+
+it("el audio no tiene tarjeta ni nombre visible y permite avanzar y cambiar velocidad", async () => {
+  await render();
+  await act(async () => visible(true));
+  const audio = container.querySelector("audio")!;
+  await act(async () => {
+    Object.defineProperty(audio, "duration", {
+      value: 125,
+      configurable: true,
+    });
+    audio.dispatchEvent(new Event("loadedmetadata"));
+  });
+  expect(container.textContent).not.toContain("Muestra");
+  expect(container.querySelector('[aria-label="Archivo privado"]')).toBeNull();
+  expect(container.textContent).toContain("2:05");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[title="Cambiar velocidad"]')!
+      .click(),
+  );
+  expect(audio.playbackRate).toBe(1.5);
+  expect(
+    container.querySelector("input[type=range]")?.getAttribute("max"),
+  ).toBe("125");
 });

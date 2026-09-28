@@ -78,16 +78,14 @@ async function enviarFormulario() {
 }
 async function tecla(ctrlKey = false) {
   await act(async () => {
-    container
-      .querySelector("textarea")!
-      .dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "Enter",
-          ctrlKey,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
+    container.querySelector("textarea")!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        ctrlKey,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
   });
 }
 it("no envía al abrir ni con Enter simple; Ctrl+Enter envía una vez y limpia el borrador", async () => {
@@ -213,4 +211,14 @@ it("no permite contenido vacío ni un borrador que exceda el límite", async () 
   await enviarFormulario();
   expect(enviar).not.toHaveBeenCalled();
   expect(container.querySelector("textarea")!.maxLength).toBe(4096);
+});
+
+it("muestra micrófono al estar vacío y lo sustituye por enviar cuando hay texto", async () => {
+  await render();
+  expect(container.querySelector('[aria-label="Nota de voz"]')).not.toBeNull();
+  expect(container.querySelector('button[type="submit"]')).toBeNull();
+  await escribir("Hola");
+  expect(container.querySelector('[aria-label="Nota de voz"]')).toBeNull();
+  expect(container.querySelector('button[type="submit"]')).not.toBeNull();
+  expect(enviar).not.toHaveBeenCalled();
 });

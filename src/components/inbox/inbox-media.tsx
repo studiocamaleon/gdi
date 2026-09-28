@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { AbrirAdjuntoInbox } from "@/lib/meta-inbox-api";
+import { InboxAudio } from "./inbox-audio";
 import { useInboxArchivo } from "./use-inbox-archivo";
 import s from "./inbox-adjunto.module.css";
 
@@ -19,6 +20,7 @@ type Props = {
   nombre: string;
   mimeType: string;
   abrir: AbrirAdjuntoInbox;
+  sticker?: boolean;
 };
 
 /** Sólo descarga los medios cercanos a la vista. Conserva el audio en reproducción. */
@@ -45,7 +47,17 @@ export function InboxMedia(props: Props) {
     return () => observer.disconnect();
   }, []);
   return (
-    <div ref={ref} className={s.media} style={{ minHeight: alto }}>
+    <div
+      ref={ref}
+      className={props.sticker ? s.sticker : s.media}
+      style={{
+        minHeight: props.sticker
+          ? 160
+          : props.mimeType.startsWith("audio/")
+            ? Math.min(alto, 54)
+            : alto,
+      }}
+    >
       {visible || ocupado ? (
         <MedioCargado {...props} mantener={setOcupado} />
       ) : (
@@ -64,6 +76,7 @@ function MedioCargado({
   mimeType,
   abrir,
   mantener,
+  sticker,
 }: Props & { mantener: (valor: boolean) => void }) {
   const { url, error, progreso, reintentar } = useInboxArchivo(
     mensajeId,
@@ -103,6 +116,15 @@ function MedioCargado({
             original.
           </AlertDescription>
         </Alert>
+      ) : sticker ? (
+        // Un sticker conserva su transparencia y animación, sin marco de documento.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt="Sticker"
+          className={s.stickerImage}
+          onError={fallo}
+        />
       ) : imagen ? (
         <Dialog onOpenChange={mantener}>
           <DialogTrigger
@@ -132,15 +154,11 @@ function MedioCargado({
           </DialogContent>
         </Dialog>
       ) : audio ? (
-        <audio
-          controls
-          preload="metadata"
-          src={url}
-          aria-label={nombre}
-          onPlay={() => mantener(true)}
-          onPause={() => mantener(false)}
-          onEnded={() => mantener(false)}
-          onError={fallo}
+        <InboxAudio
+          url={url}
+          nombre={nombre}
+          mantener={mantener}
+          fallo={fallo}
         />
       ) : (
         <video
@@ -155,14 +173,16 @@ function MedioCargado({
           onError={fallo}
         />
       )}
-      <a
-        href={url}
-        download={nombre}
-        className={s.download}
-        aria-label={`Descargar ${nombre}`}
-      >
-        <Download size={13} aria-hidden="true" /> Descargar original
-      </a>
+      {!sticker && (!audio || falloFormato) && (
+        <a
+          href={url}
+          download={nombre}
+          className={s.download}
+          aria-label={`Descargar ${nombre}`}
+        >
+          <Download size={13} aria-hidden="true" /> Descargar original
+        </a>
+      )}
     </>
   );
 }

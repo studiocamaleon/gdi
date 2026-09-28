@@ -1,4 +1,7 @@
 "use client";
+import { useEffect, useMemo, useRef } from "react";
+import { formatoArchivoInbox } from "../../../../apps/api/src/common/inbox/medios";
+import type { MediosInboxApi } from "@/lib/inbox-enviar-medios";
 import { textoPlantilla } from "../../../../apps/api/src/common/inbox/plantillas";
 import type {
   PlantillaInbox,
@@ -140,6 +143,12 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
         bytes: 7784,
       },
       {
+        tipo: "audio",
+        nombre: "Nota-de-voz-demo.m4a",
+        mime: "audio/mp4",
+        bytes: 7784,
+      },
+      {
         tipo: "video",
         nombre: "Recorrido-de-ejemplo.mp4",
         mime: "video/mp4",
@@ -163,7 +172,9 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
       tipo: f.tipo,
       texto: null,
       enviadoEl: `2026-09-28T12:0${i}:00Z`,
-      direccion: "ENTRANTE",
+      direccion: i === 1 ? "SALIENTE" : "ENTRANTE",
+      voz: f.tipo === "audio",
+      estadoEntrega: i === 1 ? "DEMO" : null,
       adjunto: {
         estado: "LISTO",
         nombre: f.nombre,
@@ -577,6 +588,87 @@ export function InboxGeneralPreview({
 }: {
   canalPrueba?: boolean;
 }) {
+  const archivosLocales = useRef(
+    new Map<string, { file: File; url: string; voz: boolean }>(),
+  );
+  useEffect(() => {
+    const archivos = archivosLocales.current;
+    return () => {
+      for (const [id, mensajes] of Object.entries(conversaciones)) {
+        conversaciones[id] = mensajes.filter((m) => !archivos.has(m.id));
+      }
+      for (const [clave, intento] of intentos) {
+        if (intento.mensajeId && archivos.has(intento.mensajeId))
+          intentos.delete(clave);
+      }
+      for (const f of archivos.values()) URL.revokeObjectURL(f.url);
+      archivos.clear();
+    };
+  }, []);
+  const mediosApi = useMemo<MediosInboxApi>(
+    () => ({
+      cargar: async (_id, _canal, file, voz, signal, progreso) => {
+        signal.throwIfAborted();
+        const id = crypto.randomUUID();
+        const mimeType = voz
+          ? file.type
+          : (formatoArchivoInbox(file.name, file.type)?.mime ?? file.type);
+        const normalizado =
+          file.type === mimeType
+            ? file
+            : new File([file], file.name, { type: mimeType });
+        archivosLocales.current.set(id, {
+          file: normalizado,
+          voz,
+          url: URL.createObjectURL(normalizado),
+        });
+        progreso(100);
+        return id;
+      },
+      cancelar: async (_id, _canal, id) => {
+        const f = archivosLocales.current.get(id);
+        if (f) URL.revokeObjectURL(f.url);
+        archivosLocales.current.delete(id);
+      },
+      enviar: async (id, dto, signal) => {
+        signal.throwIfAborted();
+        if (intentos.has(dto.clave)) return intentos.get(dto.clave)!;
+        const a = archivosLocales.current.get(dto.archivoId);
+        if (!a) throw new Error("Adjunto local no disponible");
+        const intento = {
+          id: crypto.randomUUID(),
+          clave: dto.clave,
+          estado: "ACEPTADO",
+          codigo: null,
+          texto: null,
+          creadoEl: new Date().toISOString(),
+          mensajeId: dto.archivoId,
+        };
+        conversaciones[id].push({
+          id: dto.archivoId,
+          nombreContacto: null,
+          tipo: a.voz
+            ? "audio"
+            : (formatoArchivoInbox(a.file.name, a.file.type)?.tipo ??
+              "document"),
+          texto: dto.texto ?? null,
+          enviadoEl: intento.creadoEl,
+          direccion: "SALIENTE",
+          estadoEntrega: "DEMO",
+          adjunto: {
+            estado: "LISTO",
+            nombre: a.file.name,
+            mimeType: a.file.type,
+            bytes: a.file.size,
+            version: "local",
+          },
+        });
+        intentos.set(dto.clave, intento);
+        return intento;
+      },
+    }),
+    [archivosLocales],
+  );
   return (
     <InboxView
       identidad={identidad}
@@ -585,7 +677,17 @@ export function InboxGeneralPreview({
       conexionApi={canalPrueba ? conexionPrueba : conexionApi}
       enviarTexto={enviar}
       plantillasApi={plantillasApi}
+      mediosApi={mediosApi}
       abrirAdjunto={async (id, signal) => {
+        const local = archivosLocales.current.get(id);
+        if (local)
+          return {
+            url: local.url,
+            nombre: local.file.name,
+            mimeType: local.file.type,
+            bytes: local.file.size,
+            expiraEn: 60,
+          };
         const mensaje = Object.values(conversaciones)
           .flat()
           .find((m) => m.id === id);

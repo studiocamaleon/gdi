@@ -90,3 +90,10 @@ El mismo worktree está en `codex/inbox-canal-pruebas`, desde `393096f32`. Se ag
 Después del reinicio del equipo se levantaron nuevamente web, API y ambos workers. Usan las conexiones locales anteriores, `GRAFO_DEPLOY_ENV=local`, `GRAFO_LOCAL_DISABLE_CRON=true`, correo vacío y todos los interruptores `META_INBOX_*`/piloto apagados; `META_CONEXION_MODO` vacío. El canal de prueba real sólo se habilita en staging. La muestra `/dev/diseno/inbox/prueba` usa datos ficticios en memoria y no necesita claves de Meta. No copiar las claves de staging para activarla. Los tests emplean `gdi_saas_test` con Graph simulado y Redis local.
 
 Corrección del ensayo real del 27/09: aplicada `20260927210000_inbox_destino_prueba` sólo por migración aditiva, **295 migraciones** en desarrollo y tests. La identidad del contacto se conserva; el destino explícito sólo existe para el canal de prueba de staging. Los procesos locales conservan Meta y cron desactivados.
+
+
+## Archivos y audio del Inbox — 28/09/2026
+
+Mismo worktree y rama `codex/inbox-canal-pruebas`. Aplicada únicamente la migración aditiva `20260928120000_inbox_cargas` a desarrollo/tests: **296 migraciones**, con SELECT/INSERT/UPDATE/DELETE del rol local `grafo_app` comprobados en `InboxCarga`. Sin seed/reset. FFmpeg y FFprobe 9.0.1 están disponibles localmente en `/opt/homebrew/bin`; sirven para validar códecs y convertir las notas de voz a OGG/Opus mono. La imagen de API incorpora el paquete `ffmpeg`; se compila en remoto cuando se despliegue el lote. No se reinició Docker ni se cambiaron tamaños de infraestructura.
+
+La muestra de Diana incluye audio entrante/saliente, video, sticker y texto; los envíos son simulados y los archivos se conservan sólo en memoria de esa vista. El editor permite adjuntar y grabar; enviar una grabación no abre vista previa. Las llamadas reales de Meta y los cron de desarrollo siguen apagados. Las [capacidades y pendientes](meta-inbox-capacidades.md) distinguen la implementación local del ensayo real aún necesario.

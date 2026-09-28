@@ -9,6 +9,7 @@ const limites: Record<string, number> = {
   "audio/mpeg": 16_000_000,
   "audio/mp4": 16_000_000,
   "audio/ogg": 16_000_000,
+  "audio/webm": 16_000_000, // Grabación de la demo; el envío real convierte a OGG/Opus.
   "video/mp4": 16_000_000,
   "video/3gpp": 16_000_000,
   "application/pdf": 100_000_000,

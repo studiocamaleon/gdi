@@ -40,6 +40,7 @@ const medios = new Set([
   "audio/mpeg",
   "audio/mp4",
   "audio/ogg",
+  "audio/webm",
   "video/mp4",
   "video/3gpp",
 ]);
@@ -111,6 +112,32 @@ export function InboxAdjunto({
     DESHABILITADO:
       "La apertura de archivos todavía no está habilitada en esta conexión.",
   };
+  if (tipo === "sticker" && adjunto.estado === "LISTO" && mime === "image/webp")
+    return (
+      <InboxMedia
+        key={`${mensajeId}:${adjunto.version}`}
+        mensajeId={mensajeId}
+        nombre={nombre}
+        mimeType={mime}
+        abrir={abrir}
+        sticker
+      />
+    );
+  if (tipo === "audio" || mime.startsWith("audio/"))
+    return adjunto.estado === "LISTO" && esMedio ? (
+      <InboxMedia
+        key={`${mensajeId}:${adjunto.version}`}
+        mensajeId={mensajeId}
+        nombre={nombre}
+        mimeType={mime}
+        abrir={abrir}
+      />
+    ) : (
+      <p role="status" className={s.audioStatus}>
+        <Music2 size={18} />
+        {mensajes[adjunto.estado] ?? "Audio no disponible."}
+      </p>
+    );
   return (
     <div className={s.attachment}>
       <div className={s.fileHeader}>

@@ -129,3 +129,25 @@
   color: var(--foreground);
   text-decoration: underline;
 }
+
+.sticker {
+  display: grid;
+  place-items: center;
+  width: 160px;
+  min-height: 160px;
+}
+.stickerImage {
+  display: block;
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+}
+
+.audioStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  padding: 10px 0;
+  opacity: 0.75;
+}

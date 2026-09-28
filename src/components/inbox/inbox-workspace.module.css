@@ -936,3 +936,27 @@
   font-size: 11px;
   color: var(--muted-text);
 }
+
+.bubble[data-content="sticker"] {
+  width: 176px;
+  padding: 0 8px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--foreground);
+}
+.bubble[data-content="sticker"] .messageMeta {
+  width: fit-content;
+  margin-left: auto;
+  padding: 3px 7px;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted-text);
+}
+
+.bubble[data-content="audio"] {
+  width: 330px;
+  padding: 4px 10px 6px;
+}
+.bubble[data-content="audio"] .messageMeta {
+  margin-top: 0;
+}
