@@ -9,7 +9,7 @@ const adjunto = {
   nombre: "Pedido.docx",
   mimeType:
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  bytes: 150,
+  bytes: 4,
   version: "1",
 };
 const archivo = {
@@ -17,7 +17,7 @@ const archivo = {
   nombre: "Pedido.docx",
   mimeType:
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  bytes: 150,
+  bytes: 4,
   expiraEn: 60,
 };
 let root: Root,
@@ -25,14 +25,40 @@ let root: Root,
   abrir: ReturnType<typeof vi.fn<AbrirAdjuntoInbox>>;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(private callback: IntersectionObserverCallback) {}
+      observe() {
+        this.callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver,
+        );
+      }
+      disconnect() {}
+    },
+  );
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   abrir = vi.fn<AbrirAdjuntoInbox>().mockResolvedValue(archivo);
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementation(
+        async () =>
+          new Response("data", { headers: { "content-type": "image/png" } }),
+      ),
+  );
+  URL.createObjectURL = vi.fn().mockReturnValue("blob:imagen");
+  URL.revokeObjectURL = vi.fn();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 const render = (estado = "LISTO") =>
@@ -52,15 +78,15 @@ async function click(texto: string) {
   )!;
   await act(async () => button.click());
 }
-it("sólo solicita al abrir y permite renovar", async () => {
+it("descarga con un clic y solicita un acceso nuevo en cada descarga", async () => {
   await render();
   expect(abrir).not.toHaveBeenCalled();
-  expect(container.querySelector("a")).toBeNull();
-  await click("Abrir archivo");
-  expect(container.querySelector("a")?.href).toBe(archivo.url);
+  await click("Descargar archivo");
+  expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
   expect(abrir).toHaveBeenCalledWith("mensaje", expect.any(AbortSignal));
-  await click("Renovar acceso al archivo");
+  await click("Descargar archivo");
   expect(abrir).toHaveBeenCalledTimes(2);
+  expect(container.textContent).not.toMatch(/renovar/i);
 });
 it.each([
   "SIN_ARCHIVO",
@@ -75,13 +101,13 @@ it.each([
   expect(container.querySelector('[role="status"]')).not.toBeNull();
   expect(abrir).not.toHaveBeenCalled();
 });
-it("permite renovar luego de un fallo", async () => {
+it("permite reintentar luego de un fallo", async () => {
   abrir.mockRejectedValueOnce(new Error());
   await render();
-  await click("Abrir archivo");
+  await click("Descargar archivo");
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
-  await click("Abrir archivo");
-  expect(container.querySelector("a")).not.toBeNull();
+  await click("Descargar archivo");
+  expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
 });
 it("cancela al cambiar de conversación y descarta respuesta tardía", async () => {
   let resolver!: (v: typeof archivo) => void;
@@ -92,14 +118,14 @@ it("cancela al cambiar de conversación y descarta respuesta tardía", async () 
       }),
   );
   await render();
-  await click("Abrir archivo");
+  await click("Descargar archivo");
   const signal = abrir.mock.calls[0][1];
   await act(async () => root.render(null));
   expect(signal?.aborted).toBe(true);
   await act(async () => resolver(archivo));
   expect(container.querySelector("a")).toBeNull();
 });
-it("muestra la imagen enviada como documento sólo después de abrirla", async () => {
+it("muestra y permite ampliar una imagen enviada como documento sin paso manual", async () => {
   abrir.mockResolvedValue({
     ...archivo,
     nombre: "Referencia.png",
@@ -108,7 +134,7 @@ it("muestra la imagen enviada como documento sólo después de abrirla", async (
   await act(async () =>
     root.render(
       <InboxAdjunto
-        mensajeId="imagen-documento"
+        mensajeId="imagen"
         tipo="document"
         adjunto={{
           ...adjunto,
@@ -119,11 +145,11 @@ it("muestra la imagen enviada como documento sólo después de abrirla", async (
       />,
     ),
   );
-  expect(container.querySelector("img")).toBeNull();
-  await click("Abrir archivo");
-  expect(container.querySelector("img")?.getAttribute("src")).toBe(archivo.url);
-  expect(container.querySelector("img")?.alt).toBe("Referencia.png");
-  expect(container.querySelector("a")?.getAttribute("aria-label")).toBe(
-    "Abrir original",
-  );
+  expect(container.querySelector("img")?.src).toBe("blob:imagen");
+  expect(
+    container.querySelector('[aria-label="Ampliar Referencia.png"]'),
+  ).not.toBeNull();
+  expect(container.querySelector("a")?.download).toBe("Referencia.png");
+  await act(async () => root.render(null));
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:imagen");
 });

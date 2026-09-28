@@ -9,7 +9,7 @@ const adjunto = {
   estado: "LISTO",
   nombre: "Pedido.pdf",
   mimeType: "application/pdf",
-  bytes: 1400,
+  bytes: 4,
   version: "1",
 };
 const archivo: ArchivoInbox = {
@@ -17,7 +17,7 @@ const archivo: ArchivoInbox = {
   vistaPreviaUrl: "https://files.example.invalid/visor",
   nombre: "Pedido.pdf",
   mimeType: "application/pdf",
-  bytes: 1400,
+  bytes: 4,
   expiraEn: 60,
 };
 let root: Root,
@@ -35,6 +35,17 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   abrir = vi.fn<AbrirAdjuntoInbox>().mockResolvedValue(archivo);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(
+      async () =>
+        new Response("%PDF", {
+          headers: { "content-type": "application/pdf" },
+        }),
+    ),
+  );
+  URL.createObjectURL = vi.fn().mockReturnValue("blob:pdf");
+  URL.revokeObjectURL = vi.fn();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -57,7 +68,9 @@ async function render() {
 }
 async function click(nombre: string) {
   const button = [...document.querySelectorAll("button")].find(
-    (b) => b.getAttribute("aria-label") === nombre || b.textContent === nombre,
+    (b) =>
+      b.getAttribute("aria-label") === nombre ||
+      b.textContent?.trim() === nombre,
   );
   expect(button).toBeDefined();
   await act(async () => {
@@ -72,14 +85,14 @@ it("abre inline sólo al pedirlo y conserva una descarga separada", async () => 
   await click("Ver PDF");
   expect(abrir).toHaveBeenCalledWith("mensaje-pdf", expect.any(AbortSignal));
   expect(document.querySelector("iframe")?.src).toBe(
-    `${archivo.vistaPreviaUrl}#view=FitH&navpanes=0`,
+    "blob:pdf#view=FitH&navpanes=0",
   );
   expect(document.querySelector("iframe")?.title).toBe(
     "Vista previa de Pedido.pdf",
   );
   expect(
     document.querySelector('[role="dialog"] a')?.getAttribute("href"),
-  ).toBe(archivo.url);
+  ).toBe("blob:pdf");
   await click("Cerrar visor PDF");
   expect(document.querySelector("iframe")).toBeNull();
   abrir.mockResolvedValueOnce({
@@ -89,7 +102,7 @@ it("abre inline sólo al pedirlo y conserva una descarga separada", async () => 
   await click("Ver PDF");
   expect(abrir).toHaveBeenCalledTimes(2);
   expect(document.querySelector("iframe")?.src).toBe(
-    `${archivo.vistaPreviaUrl}-nueva#view=FitH&navpanes=0`,
+    "blob:pdf#view=FitH&navpanes=0",
   );
 });
 it("permite reintentar tras un error sin abrir la descarga en el visor", async () => {
@@ -100,9 +113,9 @@ it("permite reintentar tras un error sin abrir la descarga en el visor", async (
     "No pudimos abrir",
   );
   expect(document.querySelector("iframe")).toBeNull();
-  await click("Reintentar");
+  await click("Volver a intentar");
   expect(document.querySelector("iframe")?.src).toBe(
-    `${archivo.vistaPreviaUrl}#view=FitH&navpanes=0`,
+    "blob:pdf#view=FitH&navpanes=0",
   );
 });
 it("cancela al cerrar y descarta una autorización tardía", async () => {
@@ -132,17 +145,16 @@ it("no incrusta otro formato si la API devuelve un documento distinto", async ()
   expect(document.querySelector('[role="dialog"] a')).toBeNull();
   expect(document.querySelector('[role="alert"]')).not.toBeNull();
 });
-it("mantiene la descarga si la API aún no ofrece preview", async () => {
+it("puede mostrar el PDF sin requerir una segunda URL de preview", async () => {
   abrir.mockResolvedValue({ ...archivo, vistaPreviaUrl: undefined });
   await render();
   await click("Ver PDF");
-  expect(document.querySelector("iframe")).toBeNull();
-  expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-    "todavía no está disponible",
+  expect(document.querySelector("iframe")?.src).toBe(
+    "blob:pdf#view=FitH&navpanes=0",
   );
   expect(
     document.querySelector('[role="dialog"] a')?.getAttribute("href"),
-  ).toBe(archivo.url);
+  ).toBe("blob:pdf");
 });
 it("explica la falta de visor del navegador sin disparar una descarga", async () => {
   Object.defineProperty(navigator, "pdfViewerEnabled", {
@@ -156,16 +168,21 @@ it("explica la falta de visor del navegador sin disparar una descarga", async ()
     "Este navegador",
   );
 });
-it("renueva el permiso vencido y no deja descargar con una firma caducada", async () => {
+it("mantiene visor y descarga disponibles después del vencimiento de la firma", async () => {
   vi.useFakeTimers();
   await render();
   await click("Ver PDF");
   await act(async () => {
-    vi.advanceTimersByTime(56000);
+    vi.advanceTimersByTime(120000);
   });
-  expect(document.querySelector('[role="dialog"] a')).toBeNull();
+  expect(
+    document.querySelector('[role="dialog"] a')?.getAttribute("href"),
+  ).toBe("blob:pdf");
   expect(document.querySelector("iframe")).not.toBeNull();
-  await click("Renovar acceso");
-  expect(abrir).toHaveBeenCalledTimes(2);
-  expect(document.querySelector('[role="dialog"] a')).not.toBeNull();
+  expect(abrir).toHaveBeenCalledOnce();
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toMatch(
+    /renovar/i,
+  );
+  await click("Cerrar visor PDF");
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:pdf");
 });

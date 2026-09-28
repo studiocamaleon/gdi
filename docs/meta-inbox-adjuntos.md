@@ -38,6 +38,19 @@ Meta documenta que los identificadores recibidos en webhooks caducan a los siete
 
 ## Estado local y validación
 
+## Apertura automática — 28/09/2026, preparada en local
+
+Esta actualización reemplaza la renovación manual descrita en el visor del 27/09. La API conserva las firmas privadas de 60 segundos; la interfaz ya no muestra «Renovar acceso».
+
+Para PDF, imágenes, stickers, audio y video, el navegador solicita autorización y obtiene los bytes directamente del almacenamiento privado. Crea una URL `blob:` efímera para el visor/reproductor, que permanece usable mientras esté abierto. Comprueba el MIME y el tamaño contra los metadatos autorizados, limita la descarga y reintenta una sola vez si la firma devuelve 401/403. No envía los bytes por Next, a Meta ni a un visor de terceros. R2 debe permitir GET desde el origen exacto de la app (CORS ya previsto en staging); no abrir el bucket al público.
+
+Las miniaturas y reproductores sólo cargan cerca de la vista. Al salir liberan la copia; un audio/video que se reproduce o una imagen ampliada permanece disponible. Se conserva la altura del bloque para evitar saltos de scroll. Cambiar de conversación o cerrar el PDF cancela la descarga y libera su URL. Los archivos ya leídos son copias locales transitorias: una revocación no puede retirar bytes que el navegador ya recibió; el evento de revocación debe desmontar la vista, como sucede con las versiones de mensajes actuales.
+
+Los documentos sin visor obtienen una firma nueva en cada clic de descarga. Audio/video incompatibles con el navegador conservan descarga y explicación. La transcodificación de AMR/otros códecs y el envío libre de archivos siguen pendientes; ver [matriz de capacidades](meta-inbox-capacidades.md).
+
+Validación automatizada: 63 pruebas frontend, TypeScript acotado, ESLint y guard de CSS. Incluye autorización vencida, descarga incompleta/excesiva, MIME inesperado, cancelación, liberación de memoria, 10 MIME de medios y PDF abierto después del vencimiento. Los tests de formatos prueban selección de controles; no certifican los códecs reales. La muestra local de Bruno contiene PDF/imagen; Diana contiene tono M4A sintético, video del sitio, sticker sintético y TXT. Sin llamadas a Meta ni cambios de datos. En Chrome se verificaron PDF de dos páginas con zoom y descarga disponible, imagen automática, reproducción real de M4A y MP4, sticker WebP y descarga de TXT con un clic. El modal PDF se comprobó a 390 px sin desbordes; es una prueba de tamaño de ventana, no una certificación en Safari/iPhone.
+
+
 ### Visor PDF — 27/09/2026, preparado en local
 
 La tarjeta compacta abre un modal con estética Grafo. Usa el visor PDF integrado del navegador, con páginas, zoom y descarga opcional. El PDF llega directamente desde el almacenamiento privado: no se envía a Google, a un visor externo ni a Meta para visualizarlo. No agrega dependencias, tablas ni servicios.

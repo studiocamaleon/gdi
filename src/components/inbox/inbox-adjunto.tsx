@@ -1,30 +1,27 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowUpRight,
   Download,
   Eye,
   FileText,
   Image as ImageIcon,
   LockKeyhole,
   Music2,
-  RefreshCw,
   Sticker,
   Video,
 } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { InboxPdf } from "./inbox-pdf";
+import { InboxMedia } from "./inbox-media";
 import {
   abrirAdjuntoInbox,
   type AbrirAdjuntoInbox,
-  type ArchivoInbox,
   type MetaInbox,
 } from "@/lib/meta-inbox-api";
 import { formatBytes } from "@/lib/archivos";
-import { cn } from "@/lib/utils";
 import s from "./inbox-adjunto.module.css";
 
 const tipos = {
@@ -34,6 +31,18 @@ const tipos = {
   video: { nombre: "Video", icono: Video },
   sticker: { nombre: "Sticker", icono: Sticker },
 };
+const medios = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "audio/aac",
+  "audio/amr",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/ogg",
+  "video/mp4",
+  "video/3gpp",
+]);
 
 export function InboxAdjunto({
   mensajeId,
@@ -46,48 +55,45 @@ export function InboxAdjunto({
   adjunto: NonNullable<MetaInbox["mensajes"][number]["adjunto"]>;
   abrir?: AbrirAdjuntoInbox;
 }) {
-  const [archivo, setArchivo] = useState<ArchivoInbox | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState(false);
   const [pdfAbierto, setPdfAbierto] = useState(false);
   const pendiente = useRef<AbortController | null>(null);
-  const vigente = useRef(true);
   const formato = tipos[tipo as keyof typeof tipos] ?? tipos.document;
-  const esImagen = ["image/jpeg", "image/png", "image/webp"].includes(
-    archivo?.mimeType ?? adjunto.mimeType ?? "",
-  );
-  const Icono = esImagen ? ImageIcon : formato.icono;
-  const esPdf = adjunto.mimeType === "application/pdf";
+  const mime = adjunto.mimeType ?? "";
+  const esMedio = medios.has(mime);
+  const Icono = mime.startsWith("image/") ? ImageIcon : formato.icono;
+  const esPdf = mime === "application/pdf";
   const nombre = adjunto.nombre || `${formato.nombre} de WhatsApp`;
-  const accionOriginal =
-    tipo === "document" && !esImagen ? "Descargar documento" : "Abrir original";
   const extension = adjunto.nombre
     ?.match(/\.([a-z0-9]{1,5})$/i)?.[1]
     ?.toUpperCase();
-  useEffect(() => {
-    vigente.current = true;
-    return () => {
-      vigente.current = false;
-      pendiente.current?.abort();
-    };
-  }, []);
-  async function cargar() {
+  useEffect(() => () => pendiente.current?.abort(), []);
+  async function descargar() {
     if (pendiente.current || adjunto.estado !== "LISTO") return;
     const controller = new AbortController();
     pendiente.current = controller;
     setOcupado(true);
     setError(false);
-    setArchivo(null);
     try {
-      const result = await abrir(
+      // Cada clic obtiene una firma nueva; no se conserva un enlace que pueda vencer.
+      const archivo = await abrir(
         mensajeId,
         AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
       );
-      if (vigente.current && !controller.signal.aborted) setArchivo(result);
+      if (controller.signal.aborted) return;
+      const a = document.createElement("a");
+      a.href = archivo.url;
+      a.download = archivo.nombre;
+      a.rel = "noopener noreferrer";
+      // El servidor firma Content-Disposition: attachment para documentos.
+      document.body.append(a);
+      a.click();
+      a.remove();
     } catch {
-      if (vigente.current && !controller.signal.aborted) setError(true);
+      if (!controller.signal.aborted) setError(true);
     } finally {
-      if (vigente.current && !controller.signal.aborted) setOcupado(false);
+      if (!controller.signal.aborted) setOcupado(false);
       if (pendiente.current === controller) pendiente.current = null;
     }
   }
@@ -121,7 +127,7 @@ export function InboxAdjunto({
             <LockKeyhole size={11} aria-label="Archivo privado" role="img" />
           </div>
         </div>
-        {adjunto.estado === "LISTO" && (
+        {adjunto.estado === "LISTO" && !esMedio && (
           <div className={s.actions}>
             {esPdf ? (
               <Dialog open={pdfAbierto} onOpenChange={setPdfAbierto}>
@@ -140,111 +146,47 @@ export function InboxAdjunto({
                   />
                 )}
               </Dialog>
-            ) : !archivo ? (
+            ) : (
               <Button
                 size="icon"
                 variant="brand"
                 disabled={ocupado}
-                aria-label={ocupado ? "Abriendo archivo" : "Abrir archivo"}
-                title="Abrir archivo"
-                onClick={() => void cargar()}
+                aria-label={
+                  ocupado ? "Preparando descarga" : "Descargar archivo"
+                }
+                title="Descargar archivo"
+                onClick={() => void descargar()}
               >
-                {ocupado ? <Spinner /> : <ArrowUpRight />}
+                {ocupado ? <Spinner /> : <Download />}
               </Button>
-            ) : (
-              <>
-                <a
-                  className={buttonVariants({ variant: "brand", size: "icon" })}
-                  href={archivo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={accionOriginal}
-                  title={accionOriginal}
-                >
-                  <Download />
-                </a>
-                <Button
-                  size="icon-xs"
-                  variant="sidebar"
-                  aria-label="Renovar acceso al archivo"
-                  title="Renovar acceso al archivo"
-                  onClick={() => void cargar()}
-                >
-                  <RefreshCw />
-                </Button>
-              </>
             )}
           </div>
         )}
       </div>
-      <div
-        className={cn(
-          s.fileBody,
-          !archivo && !error && adjunto.estado === "LISTO" && s.collapsed,
-        )}
-      >
-        {adjunto.estado !== "LISTO" ? (
-          <p role="status" className={s.status}>
-            {mensajes[adjunto.estado] ?? "Archivo no disponible."}
-          </p>
-        ) : (
-          <>
-            {error && (
-              <Alert>
-                <AlertDescription>
-                  No pudimos abrir el archivo. Volvé a intentarlo para renovar
-                  el acceso.
-                </AlertDescription>
-              </Alert>
-            )}
-            {archivo && (
-              <>
-                {esImagen && (
-                  // Archivo privado: evitar la caché del optimizador de Next.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={archivo.url}
-                    alt={archivo.nombre}
-                    className={s.image}
-                    referrerPolicy="no-referrer"
-                    onError={() => {
-                      setArchivo(null);
-                      setError(true);
-                    }}
-                  />
-                )}
-                {tipo === "audio" && (
-                  <audio
-                    controls
-                    preload="none"
-                    src={archivo.url}
-                    aria-label={archivo.nombre}
-                    onError={() => {
-                      setArchivo(null);
-                      setError(true);
-                    }}
-                  />
-                )}
-                {tipo === "video" && (
-                  <video
-                    controls
-                    preload="none"
-                    src={archivo.url}
-                    aria-label={archivo.nombre}
-                    onError={() => {
-                      setArchivo(null);
-                      setError(true);
-                    }}
-                  />
-                )}
-                <small className={s.accessHint}>
-                  Acceso temporal · renovalo si vence.
-                </small>
-              </>
-            )}
-          </>
-        )}
-      </div>
+      {(adjunto.estado !== "LISTO" || error || esMedio) && (
+        <div className={s.fileBody}>
+          {adjunto.estado !== "LISTO" ? (
+            <p role="status" className={s.status}>
+              {mensajes[adjunto.estado] ?? "Archivo no disponible."}
+            </p>
+          ) : esMedio ? (
+            <InboxMedia
+              key={`${mensajeId}:${adjunto.version}`}
+              mensajeId={mensajeId}
+              nombre={nombre}
+              mimeType={mime}
+              abrir={abrir}
+            />
+          ) : error ? (
+            <Alert>
+              <AlertDescription>
+                No pudimos preparar la descarga. Volvé a intentarlo desde el
+                botón de descarga.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

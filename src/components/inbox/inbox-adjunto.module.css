@@ -58,22 +58,11 @@
   gap: 8px;
   padding: 8px 12px;
 }
-.collapsed {
-  display: none;
-}
 .actions {
   display: flex;
   flex: none;
   align-items: center;
   gap: 4px;
-}
-.accessHint {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  color: var(--muted-text);
-  font-size: 10px;
-  line-height: 1.6;
 }
 .status {
   color: var(--muted-text);
@@ -89,4 +78,54 @@
 .attachment audio {
   width: 100%;
   max-width: 100%;
+}
+.media {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.mediaPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 72px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.imageButton {
+  position: relative;
+  width: 100%;
+  cursor: zoom-in;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.expand {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 6px;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  border-radius: 6px;
+}
+.expandedImage {
+  width: 100%;
+  min-height: 0;
+  max-height: 75dvh;
+  object-fit: contain;
+}
+.download {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 5px;
+  padding: 3px 0;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.download:hover {
+  color: var(--foreground);
+  text-decoration: underline;
 }

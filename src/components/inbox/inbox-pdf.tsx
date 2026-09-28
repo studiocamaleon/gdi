@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Download, FileText, LockKeyhole, RefreshCw, X } from "lucide-react";
 import {
   DialogClose,
@@ -11,11 +11,12 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import type { AbrirAdjuntoInbox, ArchivoInbox } from "@/lib/meta-inbox-api";
+import type { AbrirAdjuntoInbox } from "@/lib/meta-inbox-api";
 import { formatBytes } from "@/lib/archivos";
 import s from "./inbox-pdf.module.css";
+import { useInboxArchivo } from "./use-inbox-archivo";
 
-/** Se monta al abrir y se destruye al cerrar: nunca reutiliza una firma vencida. */
+/** La copia temporal vive sólo mientras el visor está abierto. */
 export function InboxPdf({
   mensajeId,
   nombre,
@@ -25,51 +26,14 @@ export function InboxPdf({
   nombre: string;
   abrir: AbrirAdjuntoInbox;
 }) {
-  const [archivo, setArchivo] = useState<ArchivoInbox | null>(null);
-  const [error, setError] = useState(false);
-  const [vencido, setVencido] = useState(false);
-  const [intento, setIntento] = useState(0);
+  const { archivo, url, error, progreso, reintentar } = useInboxArchivo(
+    mensajeId,
+    abrir,
+    "application/pdf",
+  );
+  const [falloVisor, setFalloVisor] = useState(false);
   const [soportaVisor] = useState(() => navigator.pdfViewerEnabled !== false);
-  const cargando = !archivo && !error;
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let vencimiento: ReturnType<typeof setTimeout> | undefined;
-    const cargar = async () => {
-      const solicitadoEl = Date.now();
-      try {
-        const resultado = await abrir(
-          mensajeId,
-          AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
-        );
-        if (controller.signal.aborted) return;
-        if (resultado.mimeType !== "application/pdf")
-          throw new Error("Formato");
-        setArchivo(resultado);
-        vencimiento = setTimeout(
-          () => setVencido(true),
-          Math.max(
-            0,
-            (resultado.expiraEn - 5) * 1000 - (Date.now() - solicitadoEl),
-          ),
-        );
-      } catch {
-        if (!controller.signal.aborted) setError(true);
-      }
-    };
-    void cargar();
-    return () => {
-      controller.abort();
-      clearTimeout(vencimiento);
-    };
-  }, [mensajeId, abrir, intento]);
-
-  function renovar() {
-    setArchivo(null);
-    setError(false);
-    setVencido(false);
-    setIntento((valor) => valor + 1);
-  }
+  const cargando = !url && !error;
 
   return (
     <DialogContent
@@ -95,10 +59,10 @@ export function InboxPdf({
           </span>
         </div>
         <div className={s.actions}>
-          {archivo && !vencido ? (
+          {archivo && url ? (
             <a
-              href={archivo.url}
-              target="_blank"
+              href={url}
+              download={archivo.nombre}
               rel="noopener noreferrer"
               className={buttonVariants({ variant: "brand", size: "sm" })}
             >
@@ -121,53 +85,53 @@ export function InboxPdf({
       <div className={s.canvas}>
         {cargando ? (
           <div className={s.loading} role="status">
-            <Spinner /> Abriendo PDF…
+            <Spinner /> Abriendo PDF… {progreso > 0 ? `${progreso}%` : ""}
           </div>
-        ) : error ? (
+        ) : error || falloVisor ? (
           <div className={s.notice}>
             <Alert>
               <AlertDescription>
-                No pudimos abrir el PDF. Volvé a intentar; Grafo comprobará
-                nuevamente tu acceso.
+                No pudimos abrir el PDF. Comprobá tu conexión y volvé a
+                intentarlo.
               </AlertDescription>
             </Alert>
           </div>
-        ) : !soportaVisor || !archivo?.vistaPreviaUrl ? (
+        ) : !soportaVisor ? (
           <div className={s.notice}>
             <Alert>
               <AlertDescription>
-                {!soportaVisor
-                  ? "Este navegador tiene desactivado el visor PDF o no lo admite. Podés descargar el documento o abrir Grafo en un navegador con visor PDF."
-                  : "La vista previa de este PDF todavía no está disponible. Podés descargarlo desde el botón superior."}
+                Este navegador no admite la vista previa de PDF. Podés descargar
+                el documento desde el botón superior.
               </AlertDescription>
             </Alert>
           </div>
         ) : (
           <iframe
-            key={intento}
             title={`Vista previa de ${nombre}`}
-            src={`${archivo.vistaPreviaUrl}#view=FitH&navpanes=0`}
+            src={`${url}#view=FitH&navpanes=0`}
             className={s.viewer}
             referrerPolicy="no-referrer"
-            onError={() => setError(true)}
+            onError={() => setFalloVisor(true)}
           />
         )}
       </div>
       <footer className={s.footer}>
         <p>
-          {vencido
-            ? "Para volver a cargar o descargar el archivo, renová el acceso."
-            : "Páginas y zoom desde el visor. Si no carga, renová el acceso."}
+          Usá los controles del visor para cambiar de página o ampliar el
+          documento.
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={renovar}
-          disabled={cargando}
-        >
-          <RefreshCw data-icon="inline-start" />
-          {error ? "Reintentar" : "Renovar acceso"}
-        </Button>
+        {(error || falloVisor) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setFalloVisor(false);
+              reintentar();
+            }}
+          >
+            <RefreshCw data-icon="inline-start" /> Volver a intentar
+          </Button>
+        )}
       </footer>
     </DialogContent>
   );

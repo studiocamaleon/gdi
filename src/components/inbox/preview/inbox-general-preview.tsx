@@ -34,6 +34,12 @@ const contactos = [
     telefono: "+16505550124",
     empresa: "Café Nube",
   },
+  {
+    id: "diana",
+    nombre: "Diana Robles",
+    telefono: "+16505550126",
+    empresa: "Muestras de archivos",
+  },
   { id: "clara", nombre: "Clara Paz", telefono: "+16505550125", empresa: null },
 ];
 const conversaciones: Record<string, MetaInbox["mensajes"]> = {
@@ -124,6 +130,48 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
       direccion: "SALIENTE",
       estadoEntrega: "DELIVERED",
     },
+  ],
+  diana: [
+    ...[
+      {
+        tipo: "audio",
+        nombre: "Tono-de-prueba.m4a",
+        mime: "audio/mp4",
+        bytes: 7784,
+      },
+      {
+        tipo: "video",
+        nombre: "Recorrido-de-ejemplo.mp4",
+        mime: "video/mp4",
+        bytes: 4607937,
+      },
+      {
+        tipo: "sticker",
+        nombre: "Sticker-de-prueba.webp",
+        mime: "image/webp",
+        bytes: 7300,
+      },
+      {
+        tipo: "document",
+        nombre: "Indicaciones.txt",
+        mime: "text/plain",
+        bytes: 60,
+      },
+    ].map((f, i) => ({
+      id: `diana-${i}`,
+      nombreContacto: "Diana Robles",
+      tipo: f.tipo,
+      texto: null,
+      enviadoEl: `2026-09-28T12:0${i}:00Z`,
+      direccion: "ENTRANTE",
+      adjunto: {
+        estado: "LISTO",
+        nombre: f.nombre,
+        mimeType: f.mime,
+        bytes: f.bytes,
+        version: "demo-medios",
+      },
+    })),
   ],
   clara: [
     {
@@ -294,7 +342,15 @@ const archivosDemo: ArchivoPlantillaInbox[] = [
 const urlArchivoDemo = (f: ArchivoPlantillaInbox) =>
   f.mimeType === "application/pdf"
     ? "/dev/diseno/inbox/archivo"
-    : "/catalogo/categorias/carteleria-montaje.jpg";
+    : f.mimeType === "audio/mp4"
+      ? "/dev/diseno/inbox/archivo?tipo=audio"
+      : f.mimeType === "image/webp"
+        ? "/dev/diseno/inbox/archivo?tipo=sticker"
+        : f.mimeType === "text/plain"
+          ? "/dev/diseno/inbox/archivo?tipo=texto"
+          : f.mimeType === "video/mp4"
+            ? "/registro/media/plant-tour.mp4"
+            : "/catalogo/categorias/carteleria-montaje.jpg";
 const plantillasApi: PlantillasInboxApi = {
   archivos: async (id) => {
     const contacto = contactos.find((c) => c.id === id);
@@ -529,22 +585,32 @@ export function InboxGeneralPreview({
       conexionApi={canalPrueba ? conexionPrueba : conexionApi}
       enviarTexto={enviar}
       plantillasApi={plantillasApi}
-      abrirAdjunto={async (id) => {
+      abrirAdjunto={async (id, signal) => {
         const mensaje = Object.values(conversaciones)
           .flat()
           .find((m) => m.id === id);
-        const archivo =
-          archivosDemo.find((f) => f.mimeType === mensaje?.adjunto?.mimeType) ??
-          archivosDemo[0];
+        const archivo = archivosDemo.find(
+          (f) => f.mimeType === mensaje?.adjunto?.mimeType,
+        ) ?? {
+          id,
+          version: "demo",
+          nombre: mensaje?.adjunto?.nombre ?? "Archivo",
+          mimeType: mensaje?.adjunto?.mimeType ?? "application/pdf",
+          bytes: 0,
+        };
+        const headers = await fetch(urlArchivoDemo(archivo), {
+          method: "HEAD",
+          signal,
+        });
         return {
           url: urlArchivoDemo(archivo),
           vistaPreviaUrl:
             archivo.mimeType === "application/pdf"
               ? `${urlArchivoDemo(archivo)}?vista=inline`
               : undefined,
-          nombre: archivo.nombre,
+          nombre: mensaje?.adjunto?.nombre ?? archivo.nombre,
           mimeType: archivo.mimeType,
-          bytes: archivo.bytes,
+          bytes: Number(headers.headers.get("content-length")),
           expiraEn: 60,
         };
       }}
