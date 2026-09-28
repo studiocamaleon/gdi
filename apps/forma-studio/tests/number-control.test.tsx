@@ -14,6 +14,7 @@ await vi.hoisted(async () => {
     "document",
     "navigator",
     "HTMLElement",
+    "Element",
     "HTMLInputElement",
     "Node",
     "MutationObserver",
@@ -22,15 +23,23 @@ await vi.hoisted(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   // Linkedom no anuncia los eventos disponibles como lo hace un navegador.
   window.document.oninput = null;
+  // Linkedom no calcula layout; estos tests ejercitan la entrada de texto.
+  window.getComputedStyle = element => Object.assign((element as HTMLElement).style, { direction: "ltr" });
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(performance.now()), 16));
+  vi.stubGlobal("cancelAnimationFrame", clearTimeout);
 });
 
 import { act, useState, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NumberControl } from "../src/components/Controls";
+import { ModelParameters } from "../src/components/ModelParameters";
+import { LightboxEditor } from "../src/components/LightboxEditor";
+import { newProject, chooseStyle } from "../src/core/project";
+import type { Project, StyleId } from "../src/core/types";
 
 let root: Root;
 let container: HTMLDivElement;
-beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
+beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "queueMicrotask"] }));
 afterEach(async () => {
   if (root) await act(() => root.unmount());
   container?.remove();
@@ -98,6 +107,67 @@ async function blur(input: HTMLInputElement) {
 async function pause(ms = 400) {
   await act(() => vi.advanceTimersByTime(ms));
 }
+
+describe("Paredes decimales en los editores de modelos", () => {
+  it("banderola: aplica 0,8 al proyecto y explica los refuerzos", async () => {
+    let current = newProject();
+    current.mode = "lightbox";
+    function Form() {
+      const [project, setProject] = useState(current);
+      return <LightboxEditor project={project} component="boxBody" isolated={false} section={false}
+        onComponentChange={() => {}} onIsolatedChange={() => {}} onSectionChange={() => {}}
+        onChange={next => { current = next; setProject(next); }} />;
+    }
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(() => root.render(<Form />));
+    const label = [...container.querySelectorAll("label")].find(node => node.textContent === "Espesor de pared")!;
+    const input = document.getElementById(label.getAttribute("for")!) as HTMLInputElement;
+    await type(input, "0,8");
+    await key(input, "Enter");
+    expect(current.lightbox.wall).toBe(.8);
+    expect(input.getAttribute("aria-invalid")).toBe("false");
+    expect(container.textContent).toContain("refuerzos interiores de 5 mm");
+  });
+  it.each([
+    ["solid-back", "Pared exterior", false],
+    ["open-back", "Pared exterior", false],
+    ["double-led", "Pared exterior", false],
+    ["double-support", "Pared exterior", false],
+    ["single-support", "Pared exterior", false],
+    ["back-fit", "Pared exterior", false],
+    ["halo", "Espesor de la pared exterior", false],
+    ["halo", "Espesor de la pared interior", true],
+    ["acrylic-fit", "Espesor de pared", false],
+    ["printed-fit", "Espesor de pared", false],
+    ["perforated", "Espesor mínimo de pared", false],
+    ["neon", "Espesor de la pared", false],
+    ["organic", "Espesor de la pared", false],
+  ] as const)("%s: %s aplica 0,8 al proyecto", async (style, label, doble) => {
+    let current: Project = chooseStyle(newProject(), style as StyleId);
+    if (doble) current.params.doubleHalo = true;
+    function Form() {
+      const [project, setProject] = useState(current);
+      return <ModelParameters project={project} component="body" isolated={false} onComponentChange={() => {}} onIsolatedChange={() => {}}
+        onChange={(next) => { current = next; setProject(next); }} />;
+    }
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(() => root.render(<Form />));
+    const controlLabel = [...container.querySelectorAll("label")].find(node => node.textContent === label);
+    expect(controlLabel).toBeDefined();
+    const input = document.getElementById(controlLabel!.getAttribute("for")!) as HTMLInputElement;
+    await type(input, "0,8");
+    await key(input, "Enter");
+    expect(input.getAttribute("aria-invalid")).toBe("false");
+    expect(current.params[doble ? "innerWall" : "wall"]).toBe(0.8);
+    await type(input, "1.2");
+    await blur(input);
+    expect(current.params[doble ? "innerWall" : "wall"]).toBe(1.2);
+  });
+});
 
 describe("Edición manual de medidas", () => {
   it("permite vaciar y escribir dígitos menores al mínimo; Enter adelanta la aplicación", async () => {

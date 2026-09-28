@@ -50,6 +50,85 @@ function audit(p:Project,steps=[0]){
     return m;
   }finally{sources.forEach(s=>s.delete());}
 }
+describe("Banderola con pared de 0,8 mm",()=>{
+  it.each([
+    {segments:1 as const,rimClosure:"snap" as const,sideProfile:"smooth" as const,mountStyle:"straight" as const},
+    {segments:4 as const,rimClosure:"snap" as const,sideProfile:"waves" as const,mountStyle:"arch" as const},
+    {segments:12 as const,rimClosure:"snap" as const,sideProfile:"stack" as const,mountStyle:"classic" as const},
+    {segments:1 as const,rimClosure:"screws" as const,sideProfile:"smooth" as const,mountStyle:"straight" as const},
+    {segments:4 as const,rimClosure:"screws" as const,sideProfile:"belly" as const,mountStyle:"arch" as const},
+    {segments:12 as const,rimClosure:"screws" as const,sideProfile:"smooth" as const,mountStyle:"classic" as const},
+  ])("conjunto conectado y desmontable: %j",patch=>{
+    const p=wholeProject();Object.assign(p.lightbox,{wall:.8,...patch});
+    const restored=parseProject(JSON.parse(JSON.stringify(p)));
+    expect(restored.lightbox.wall).toBe(.8);
+    const m=audit(restored,[0,20,35,40,41,50,70,90,100]);
+    expect(m.lightbox!.mount.bodyScrews.gripLength).toBeCloseTo(4.65);
+    expect(m.lightbox!.assembly.join(" ")).toContain("refuerzos interiores de 5 mm");
+  },60000);
+
+  it("conserva 0,8 mm reales en el lateral y material detrás de las ranuras click",()=>{
+    const p=wholeProject();Object.assign(p.lightbox,{wall:.8,mount:false,drainage:false});
+    const owned=new Set<{delete():void}>(),keep=<T extends {delete():void}>(s:T)=>{owned.add(s);return s;};
+    try{
+      const body=createLightbox(w,keep,p).parts.find(s=>s.layer==="boxBody")!.solid;
+      const area=(outer:number,inner:number)=>192/2*Math.sin(2*Math.PI/192)*(outer**2-inner**2);
+      expect(keep(body.slice(p.lightbox.depth/2)).area()).toBeCloseTo(area(200,199.2),3);
+      for(const z of [p.lightbox.rimOverlap-3,p.lightbox.depth-p.lightbox.rimOverlap+3]){
+        const section=keep(body.slice(z));
+        expect(section.toPolygons()).toHaveLength(2);
+        expect(section.area()).toBeCloseTo(area(200-p.lightbox.snapEngagement-.25,195),3);
+      }
+    }finally{owned.forEach(s=>s.delete());}
+  });
+
+  it("pilotos ciegos, cabezas apoyadas en el refuerzo y exportación coherente",()=>{
+    const p=wholeProject();Object.assign(p.lightbox,{wall:.8,rimClosure:"screws"});
+    const m=build(p),v=p.lightbox,R=v.diameter/2;
+    const owned=new Set<{delete():void}>(),keep=<T extends {delete():void}>(s:T)=>{owned.add(s);return s;};
+    try{
+      const body=keep(solid(m.parts.find(s=>s.layer==="boxBody")!));
+      const axis=(radius:number,from:number,length:number,angle:number,z:number)=>keep(keep(keep(keep(w.Manifold.cylinder(length,radius,radius,32)).rotate([0,90,0])).translate([from,0,z])).rotate([0,0,angle]));
+      for(const z of [v.rimOverlap/2,v.depth-v.rimOverlap/2])for(let i=0;i<8;i++){
+        const angle=(i+.5)*45;
+        const bore=axis(v.rimPilotHole/2-.1,R-v.rimScrewDepth+.1,v.rimScrewDepth+.2,angle,z);
+        expect(keep(body.intersect(bore)).volume()).toBeLessThan(.01);
+        const bottom=axis(.3,R-v.rimScrewDepth-.6,.3,angle,z);
+        expect(keep(body.intersect(bottom)).volume()).toBeCloseTo(bottom.volume(),3);
+      }
+      for(const {angle,z} of mountHoles(v)){
+        const degrees=angle*180/Math.PI;
+        const access=axis(4.8,R-5-25,25.59,degrees,z);
+        expect(keep(body.intersect(access)).volume()).toBeLessThan(.01);
+        const bore=axis(2.15,R-6,7,degrees,z);
+        expect(keep(body.intersect(bore)).volume()).toBeLessThan(.01);
+        const outside=keep(axis(4.5,R-4,.5,degrees,z).subtract(axis(2.5,R-4.1,.7,degrees,z)));
+        expect(keep(body.intersect(outside)).volume()).toBeCloseTo(outside.volume(),3);
+      }
+      const files=unzipSync(bundle(p,m));
+      const purchases=JSON.parse(new TextDecoder().decode(files["componentes-comerciales.json"]));
+      expect(purchases.mountScrews.gripLength).toBeCloseTo(4.65);
+      expect(new TextDecoder().decode(files["MONTAJE-BANDEROLA.txt"])).toContain("0,8 mm");
+      const bytes=files["impresion/body-whole.stl"],view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),n=view.getUint32(80,true);
+      const verts=new Float32Array(n*9),ids=new Uint32Array(n*3);
+      for(let i=0;i<n;i++)for(let j=0;j<9;j++)verts[i*9+j]=view.getFloat32(84+i*50+12+j*4,true);
+      for(let i=0;i<ids.length;i++)ids[i]=i;
+      const mesh=new w.Mesh({numProp:3,vertProperties:verts,triVerts:ids});mesh.merge();
+      const exported=keep(new w.Manifold(mesh));
+      expect(exported.status()).toBe("NoError");
+      const islands=exported.decompose().map(keep);expect(islands).toHaveLength(1);
+      expect(Math.abs(exported.volume()-body.volume())/body.volume()).toBeLessThan(1e-6);
+    }finally{owned.forEach(s=>s.delete());}
+  });
+
+  it("evita pilotos sin fondo y refuerzos que alcancen los acrílicos",()=>{
+    const p=wholeProject();Object.assign(p.lightbox,{wall:.8,rimClosure:"screws"});
+    expect(()=>build({...p,lightbox:{...p.lightbox,rimScrewDepth:4.1}})).toThrow(/fondo/);
+    expect(()=>build({...p,lightbox:{...p.lightbox,acrylicA:8,rimOverlap:18}})).toThrow(/detrás de los acrílicos/);
+    Object.assign(p.lightbox,{acrylicA:8,rimOverlap:22});
+    audit(p,[0,50,100]);
+  });
+});
 describe("Banderola: sólidos y montaje",()=>{
   it("400 mm: piezas conectadas, sin interferencias y recorrido completo de mantenimiento",()=>{
     const p=project(),m=audit(p,[0,5,15,20,25,35,40,45,55,60,65,75,80,85,95,100]);
@@ -124,7 +203,7 @@ it("omite soportes opcionales y valida límites antes de construir",()=>{
   const m=build(p);
   expect(m.parts.some(p=>p.layer==="wallMount"||p.layer==="lightRails")).toBe(false);
   expect(m.lightbox!.ledCount).toBe(0);
-  for(const patch of [{wall:2},{diameter:100},{segments:3},{acrylicA:0},{jointClearance:0},{moduleWidth:80},{wallDistance:900}])
+  for(const patch of [{wall:.7},{diameter:100},{segments:3},{acrylicA:0},{jointClearance:0},{moduleWidth:80},{wallDistance:900}])
     expect(()=>build({...p,lightbox:{...p.lightbox,...patch} as Project["lightbox"]})).toThrow();
 });
 

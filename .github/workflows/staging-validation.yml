@@ -1,6 +1,23 @@
 name: Validar contenedores de staging
 
 on:
+  # Las ramas nuevas se validan por su PR, sin agregarlas a una lista manual.
+  # Se comprueba también la combinación con main, usando sólo datos efímeros.
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/staging-validation.yml'
+      - 'deploy/**'
+      - '.dockerignore'
+      - 'apps/api/**'
+      - 'grafo-hotwire-linker-v1/**'
+      - 'src/**'
+      - 'public/**'
+      - 'package*.json'
+      - 'next.config.ts'
+      - 'tsconfig.json'
+      - 'postcss.config.mjs'
+      - 'scripts/postcss-heroui-scope.cjs'
   push:
     branches: [codex/staging-infraestructura, codex/fix-configuracion-staging, codex/meta-cloud-base, codex/meta-recepcion-piloto, codex/inbox-canal-pruebas]
     paths:

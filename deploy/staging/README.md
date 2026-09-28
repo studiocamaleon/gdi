@@ -1,5 +1,9 @@
 # Preparación de staging de Grafoprint
 
+> El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
+
+> **Estado al integrar la base el 28/09/2026:** esta rama reúne los PR #2–#5, hasta la migración 284. Staging ya ejecuta el Inbox del PR #7 con 298 migraciones. Las notas de preparación siguientes son históricas: no desplegar esta base antigua encima de staging. Ver [estado de integración y verificaciones](../../docs/revision-prs-2026-09-28.md) y el [PR #7](https://github.com/studiocamaleon/gdi/pull/7) para la versión posterior.
+
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
 ## Estado — 28 de septiembre de 2026 (Argentina)
