@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Base integrada el 28/09/2026:** los PR #2–#7 ya están en `main`, hasta la migración 298. El PR #7 se integró en `7e58b0735`; staging conserva el lote funcional `d2677ff2a` hasta el siguiente despliegue registrado. Las notas de preparación histórica no sustituyen el estado de [VALIDACION.md](./VALIDACION.md).
+> **Base integrada el 28/09/2026:** los PR #2–#7 ya están en `main`, hasta la migración 298. El PR #7 se integró en `7e58b0735`; staging ejecuta la recuperación del PR #8: backend `ce4e06fca` y aplicación `c64b203f7`, comprobados el 28/09 a las 16:14 Argentina. Las notas de preparación histórica no sustituyen el estado de [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
