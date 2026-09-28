@@ -1,5 +1,7 @@
 # Inbox: bienvenida y adjuntos privados
 
+**Actualización del 28/09/2026:** el lote de visores, apertura automática, medios compactos, cargas y notas de voz está desplegado en staging. Chrome abrió el PDF y amplió el PNG históricos desde R2 privado, sin renovación manual; Fly comprobó conversión sintética a OGG Opus mono. Esto no sustituye los intercambios reales pendientes de audio/video y otros formatos. Ver [VALIDACION.md](../deploy/staging/VALIDACION.md). Los apartados anteriores en el tiempo describen su estado de entonces.
+
 Implementación local del 26/09/2026, rama `codex/inbox-adjuntos-bienvenida`. Continúa el bloque de [importación y reconexión](meta-importacion-reconexion.md). No se desplegó en staging ni se activaron llamadas reales a Meta.
 
 ## Actualización de staging — 27/09/2026

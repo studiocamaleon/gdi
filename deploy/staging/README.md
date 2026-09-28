@@ -2,12 +2,12 @@
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
-## Estado — 27 de septiembre de 2026 (Argentina)
+## Estado — 28 de septiembre de 2026 (Argentina)
 
 Lucas autorizó activar las cinco máquinas y Neon Launch a 0,25 CU, con una previsión total de **USD 150/mes**, incluido Redis, excluidos Vercel e impuestos, y hasta **USD 5** adicionales de preparación inicial. No es un límite automático de facturación. Consultar antes de aumentar tamaños o contratar extras. Ver [PRESUPUESTO.md](./PRESUPUESTO.md).
 
 - **Fly:** cinco máquinas iniciadas, una por app, todas en `gru`, con los tamaños de la tabla. Backend y web del Inbox compilados remotamente; las versiones e imágenes vigentes se registran en [VALIDACION.md](./VALIDACION.md). La misma imagen backend se reutiliza en API y ambos workers. Web/API tienen IPv4 compartida e IPv6; workers y Gotenberg sólo red privada. El canal de Meta se configura en API y worker principal; ambos leen el token cifrado de la base. La API conserva el token temporal para el operador de renovación. Next, worker PDF y Gotenberg no reciben credenciales de Meta. La conexión del migrador nunca se cargó en Fly. El builder temporal fue eliminado al terminar.
-- **Neon:** **Launch activo**, PostgreSQL 16 en AWS São Paulo, base `grafoprint_staging`. Cómputo actual y valor predeterminado del proyecto fijados en **0,25 CU**; suspensión tras cinco minutos, aunque los sondeos de API/workers mantienen la base activa. Ventana de restauración de **un día** y notificación de gasto de **USD 20**. La rama llamada `production` pertenece exclusivamente al proyecto de staging. Se aplicaron **295 migraciones**, incluidas la biblioteca global de 112 materiales y 720 variantes y las 11 categorías/48 subcategorías comerciales, sin seed de desarrollo. Rol de ejecución sin privilegios elevados, DDL ni acceso al historial Prisma. Administrador inicial creado; Lucas eligió su clave, activó MFA y accedió a la consola. Ensayo de restauración pendiente.
+- **Neon:** **Launch activo**, PostgreSQL 16 en AWS São Paulo, base `grafoprint_staging`. Cómputo actual y valor predeterminado del proyecto fijados en **0,25 CU**; suspensión tras cinco minutos, aunque los sondeos de API/workers mantienen la base activa. Ventana de restauración de **un día** y notificación de gasto de **USD 20**. La rama llamada `production` pertenece exclusivamente al proyecto de staging. Se aplicaron **298 migraciones**, incluidas la biblioteca global de 112 materiales y 720 variantes y las 11 categorías/48 subcategorías comerciales, sin seed de desarrollo. Rol de ejecución sin privilegios elevados, DDL ni acceso al historial Prisma. Administrador inicial creado; Lucas eligió su clave, activó MFA y accedió a la consola. Ensayo de restauración pendiente.
 - **R2:** bucket `grafoprint-staging-files`, Standard, jurisdicción US, privado. Token de lectura/escritura limitado a ese bucket; CORS para el origen exacto de staging. Subida/descarga firmadas, multipart y rechazo anónimo comprobados desde Fly; objetos sintéticos eliminados.
 - **Redis:** Essentials, AWS São Paulo, **USD 36/mes**, 512 MB de datos + 512 MB de réplica en la misma zona, AOF cada segundo, TLS y `no eviction`. Alertas de memoria y conexiones al 80 %. BullMQ con reintento y eventos comprobado desde Fly con certificado TLS validado normalmente; cola sintética eliminada. Carga, failover y recuperación pendientes.
 - **DNS/HTTPS:** **`staging.grafoprint.com.ar`** y **`api-staging.grafoprint.com.ar`** tienen certificados Let's Encrypt **activos**, administrados por Fly, emitidos el 25 de septiembre a las 02:55 UTC. Se conservaron las direcciones originales en todos los manifiestos y R2. Durante el diagnóstico se probaron también `pruebas` y `api-pruebas`, que obtuvieron certificados; esos nombres auxiliares no son el acceso de la aplicación. Las discrepancias previas son compatibles con caché negativa; no se demostró qué componente la conservaba. No se importaron certificados ni se cambió la delegación del dominio.
@@ -16,7 +16,7 @@ Pasaron las compilaciones con tipos, las pruebas de base/permisos y el login/BFF
 
 Los accesos están fuera de Git, en `~/.config/grafoprint/staging`, con directorio `0700` y archivos privados `0600`. No se reinició Docker ni se compiló la web en esta Mac.
 
-El canal de prueba del Inbox está activado y se comprobó el recorrido real de plantilla, recepción, respuesta libre y entrega en dos pestañas. El acceso temporal renovado vence el 28/09/2026 a las 00:00 de Argentina; una prueba posterior exige renovar el token y activar una nueva generación. Se recuperó y abrió el PNG recibido como documento. La plantilla PDF ya está aprobada; consultar su resultado en VALIDACION.md. Coexistencia/historial todavía requieren ensayo real. Ver [protocolo y resultado](../../docs/meta-inbox-canal-prueba.md).
+El canal de prueba del Inbox está activado y se comprobó el recorrido real de plantilla, recepción, respuesta libre y entrega en dos pestañas. El acceso temporal renovado vence el 28/09/2026 a las 05:00 de Argentina; una prueba posterior exige renovar el token y activar una nueva generación. Se recuperó y abrió el PNG recibido como documento. La plantilla PDF ya está aprobada; consultar su resultado en VALIDACION.md. Coexistencia/historial todavía requieren ensayo real. Ver [protocolo y resultado](../../docs/meta-inbox-canal-prueba.md).
 
 ## Servicios y orden
 
@@ -27,7 +27,7 @@ El canal de prueba del Inbox está activado y se comprobó el recorrido real de 
 | Worker de cálculos/entregas | Fly `grafoprint-staging-worker`, São Paulo | Redis y red privada | 2 CPU compartidas / 4 GB |
 | Worker de documentos | Fly `grafoprint-staging-worker-pdf`, São Paulo | Redis y red privada | 1 CPU compartida / 1 GB |
 | Gotenberg | Fly `grafoprint-staging-pdf`, São Paulo | Sólo red privada | 1 CPU compartida / 1 GB |
-| PostgreSQL 16 | Neon Launch en São Paulo | TLS, rol de migración separado del rol de ejecución | 0,25 CU fijos; 295 migraciones aplicadas; medición pendiente |
+| PostgreSQL 16 | Neon Launch en São Paulo | TLS, rol de migración separado del rol de ejecución | 0,25 CU fijos; 298 migraciones aplicadas; medición pendiente |
 | Redis | Redis Cloud Essentials, AWS São Paulo | TCP/TLS y ensayo sintético BullMQ comprobados desde Fly | 1 GB RAM total: 512 MB de datos y 512 MB de réplica en la misma zona |
 | Archivos | R2, bucket exclusivo con jurisdicción US | Bucket privado y URLs firmadas | Consumo |
 
@@ -146,15 +146,15 @@ Las plantillas equivalentes de este directorio no contienen valores reales. Los 
 
 Compose reproduce estos controles con claves sintéticas generadas por `init-local-env.mjs`. Un `.env` de ensayo creado antes de incorporar el cierre necesita las tres variables `STAGING_ACCESS_USER`, `STAGING_ACCESS_PASSWORD` y `STAGING_WEB_API_TOKEN`: agregarlas con claves ficticias aleatorias, sin reutilizar las cloud. El verificador HTTP proporciona un `Fly-Client-IP` simulado sólo en ese Compose y comprueba rechazo de accesos, cabeceras falsas, login y cierre de sesión.
 
-Desde Fly ya se comprobaron login HTTP, cookies Secure, IP observada, rechazo de cabeceras falsas y descargas firmadas. Quedan el recorrido en navegador, MFA y SSE. Si se incorpora otro proxy público en el futuro, revisar este contrato antes de cambiar DNS. Referencias: [cabeceras de Fly](https://docs.fly.io/networking/request-headers/), [proxies de Express](https://expressjs.com/en/guide/behind-proxies/) y [Proxy de Next](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
+Desde Fly ya se comprobaron login HTTP, cookies Secure, IP observada, rechazo de cabeceras falsas y descargas firmadas. Los recorridos de navegador, MFA y eventos en vivo se registran por fecha y alcance en VALIDACION.md. Si se incorpora otro proxy público en el futuro, revisar este contrato antes de cambiar DNS. Referencias: [cabeceras de Fly](https://docs.fly.io/networking/request-headers/), [proxies de Express](https://expressjs.com/en/guide/behind-proxies/) y [Proxy de Next](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
 
 ## 4. Git, Vercel y WhatsApp
 
 `main` es la base estable y la rama de producción de la web comercial. El trabajo nuevo se propone en una rama `codex/…` y PR. Las previews de Vercel no equivalen al staging de toda la aplicación. No cambiar el proyecto Vercel para ejecutar API o workers. Definir posteriormente el flujo de promoción de imágenes entre staging y producción y ejecutar migraciones como paso explícito, con una sola ejecución a la vez.
 
-El [piloto interno de WhatsApp](../../docs/meta-cloud-piloto.md) ya tiene código y configuración en staging: envío de una plantilla de prueba, webhooks firmados y estados por empresa. El ensayo real desde Grafo llegó a «Entregado», confirmado por webhook de Meta. Embedded Signup, inbox, coexistencia, administración de plantillas y notificaciones automáticas quedan para los bloques siguientes. Las credenciales de WATI u otros servicios reales no se copian automáticamente. El resultado de la revisión de Meta es una condición externa independiente del despliegue.
+El [piloto interno de WhatsApp](../../docs/meta-cloud-piloto.md) ya tiene código y configuración en staging: envío de una plantilla de prueba, webhooks firmados y estados por empresa. El ensayo real desde Grafo llegó a «Entregado», confirmado por webhook de Meta. El Inbox ya funciona con el canal oficial de prueba y plantillas aprobadas. Embedded Signup con un número de cliente, coexistencia e importación de historial todavía requieren ensayo real; las notificaciones automáticas necesitan su propia validación. Las credenciales de WATI u otros servicios reales no se copian automáticamente. El resultado de la revisión de Meta es una condición externa independiente del despliegue.
 
-La [recepción visible del piloto](../../docs/meta-recepcion-piloto.md) está preparada en el [PR #5](https://github.com/studiocamaleon/gdi/pull/5), dependiente del PR #4. Tiene un interruptor separado y una migración nueva, todavía sin aplicar en staging. Los ensayos locales no acreditan recepción real, inbox completo ni coexistencia.
+La [recepción visible del piloto](../../docs/meta-recepcion-piloto.md) está preparada en el [PR #5](https://github.com/studiocamaleon/gdi/pull/5), dependiente del PR #4. Su migración ya forma parte del historial de staging. El Inbox del PR #7 amplía ese trabajo; consultar VALIDACION.md para distinguir los ensayos reales de los locales y los pendientes de coexistencia.
 
 ## Referencias consultadas
 
@@ -185,6 +185,6 @@ La prueba de interfaz dejó «Taller de prueba — Staging» y «Router de prueb
 
 ## Inbox y canal oficial de prueba
 
-El [procedimiento del canal](../../docs/meta-inbox-canal-prueba.md) ya se ejecutó para la empresa demo y su destinatario autorizado. Staging tiene **295 migraciones**; no volver a aplicar seeds ni activar coexistencia como atajo. Las correcciones de adjuntos no agregan migraciones.
+El [procedimiento del canal](../../docs/meta-inbox-canal-prueba.md) ya se ejecutó para la empresa demo y su destinatario autorizado. Staging tiene **298 migraciones**; no volver a aplicar seeds ni activar coexistencia como atajo. El lote del 28/09 agrega reservas de carga, responsables/autores, eventos internos, estados y lectura compartida.
 
 API y worker principal usan la configuración de Meta y la misma clave de cifrado; el token se guarda cifrado en la base. Next y el worker PDF no lo necesitan. Renovar el acceso conserva los mensajes, pero los trabajos pendientes de otra generación requieren revisión del operador antes de reintentarlos. Las versiones, comprobaciones reales y límites quedan en [VALIDACION.md](./VALIDACION.md).

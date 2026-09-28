@@ -1,5 +1,7 @@
 # Equipo y responsables en Grafo Inbox
 
+**Actualización del 28/09/2026:** este lote está desplegado en staging con 298 migraciones. Se comprobaron filtros, autores, menú de equipo, `/nota` y cambio de estado en vivo entre dos pestañas de la misma sesión. La presencia real sigue pendiente. Ver el alcance y las imágenes instaladas en [VALIDACION.md](../deploy/staging/VALIDACION.md). Las secciones de preparación local conservadas abajo describen la evidencia previa al despliegue.
+
 ## Qué puede hacer el equipo
 
 - **Responsable:** una sola persona a cargo del seguimiento. No tiene exclusividad para responder.
