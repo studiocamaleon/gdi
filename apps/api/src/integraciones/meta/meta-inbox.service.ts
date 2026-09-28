@@ -1,3 +1,4 @@
+import { exigirAccesoConexionMeta } from './meta-conexion-acceso';
 import { MetaInboxGeneralService } from './meta-inbox-general.service';
 import { lecturaGeneralHabilitada } from './meta-inbox-canal';
 import {
@@ -28,6 +29,7 @@ export class MetaInboxService {
   async disponibilidad(auth: CurrentAuth, ip = '') {
     if (lecturaGeneralHabilitada())
       return this.general.disponibilidad(auth, ip);
+    await exigirAccesoConexionMeta(this.prisma, auth, ip);
     const identidad = { empresaId: auth.tenantId, usuarioId: auth.userId };
     const config = configuracionMetaRecepcion();
     if (!auth.tenantId || config?.tenantId !== auth.tenantId)
@@ -48,6 +50,7 @@ export class MetaInboxService {
   async consultar(auth: CurrentAuth, query: MetaInboxQueryDto, ip = '') {
     if (lecturaGeneralHabilitada())
       return this.general.consultar(auth, query, ip);
+    await exigirAccesoConexionMeta(this.prisma, auth, ip);
     if (
       query.conversacionId ||
       query.desdeId ||

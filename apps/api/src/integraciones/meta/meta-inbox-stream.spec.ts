@@ -238,3 +238,25 @@ it.each(['desconectado', 'reconectado', 'crm', 'password', 'bandera'])(
     expect(dejar).toHaveBeenCalledTimes(1);
   },
 );
+it('el canal general mantiene tiempo real para operadores y lo cierra al quitarles el permiso', async () => {
+  process.env.META_INBOX_LECTURA_ENABLED = 'true';
+  const s = sesion();
+  s.currentMembership.rol = RolSistema.OPERADOR;
+  s.currentMembership.rolDelTenant = { permisos: ['inbox.atender'] } as never;
+  prisma.authSession.findUnique.mockResolvedValue(s);
+  const events: { type?: string }[] = [];
+  const stream = await service.abrir(
+    { ...auth, role: RolSistema.OPERADOR },
+    '127.0.0.1',
+    Date.now() + 600000,
+  );
+  const sub = stream.subscribe((e) => events.push(e));
+  revision('1');
+  await jest.advanceTimersByTimeAsync(250);
+  expect(events.at(-1)?.type).toBe('ready');
+  s.currentMembership.rolDelTenant = { permisos: [] } as never;
+  revision('2');
+  await jest.advanceTimersByTimeAsync(250);
+  expect(events.at(-1)?.type).toBe('acceso_cerrado');
+  expect(sub.closed).toBe(true);
+});

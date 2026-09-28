@@ -1,3 +1,5 @@
+import { MetaEquipoService } from './inbox/meta-equipo.service';
+import { MetaCargasService } from './inbox/meta-cargas.service';
 import { MetaEnviosService } from './inbox/meta-envios.service';
 import { MetaAdjuntosService } from './inbox/meta-adjuntos.service';
 import { Test } from '@nestjs/testing';
@@ -33,6 +35,11 @@ beforeAll(async () => {
   const module = await Test.createTestingModule({
     controllers: [MetaInboxController],
     providers: [
+      { provide: MetaCargasService, useValue: {} },
+      {
+        provide: MetaEquipoService,
+        useValue: { guardar: jest.fn().mockResolvedValue({ guardado: true }) },
+      },
       {
         provide: MetaEnviosService,
         useValue: {
@@ -63,7 +70,13 @@ beforeAll(async () => {
           tenantId: 'propia',
           role: req.headers['x-actor'],
           permisos: new Set(
-            req.headers['x-sin-permiso'] ? [] : ['configuracion.gestionar'],
+            req.headers['x-sin-permiso']
+              ? []
+              : req.headers['x-inbox']
+                ? ['inbox.atender']
+                : req.headers['x-actor'] === 'ADMINISTRADOR'
+                  ? ['configuracion.gestionar']
+                  : [],
           ),
           ...(req.headers['x-impersonacion']
             ? { impersonacion: { sesionId: 's' } }
@@ -445,4 +458,37 @@ it('abrir un documento exige identidad, versión y acceso y no permite cambiar d
     '22222222-2222-4222-8222-222222222222',
     query,
   );
+});
+
+it('admite un operador con permiso de atención y valida las notas sin permitir autoría enviada por el cliente', async () => {
+  await request(app.getHttpServer())
+    .get('/api/integraciones/meta/inbox')
+    .set('x-actor', 'OPERADOR')
+    .set('x-inbox', '1')
+    .expect(200);
+  const ruta =
+    '/api/integraciones/meta/inbox/conversaciones/11111111-1111-4111-8111-111111111111/notas';
+  const dto = {
+    clave: '22222222-2222-4222-8222-222222222222',
+    canalId: 'canal',
+    texto: 'Nota interna',
+  };
+  await request(app.getHttpServer())
+    .post(ruta)
+    .set('x-actor', 'OPERADOR')
+    .set('x-inbox', '1')
+    .send(dto)
+    .expect(200);
+  await request(app.getHttpServer())
+    .post(ruta)
+    .set('x-actor', 'OPERADOR')
+    .set('x-inbox', '1')
+    .send({ ...dto, actorId: 'otro' })
+    .expect(400);
+  await request(app.getHttpServer())
+    .post(ruta)
+    .set('x-actor', 'OPERADOR')
+    .set('x-inbox', '1')
+    .send({ ...dto, texto: '   ' })
+    .expect(400);
 });

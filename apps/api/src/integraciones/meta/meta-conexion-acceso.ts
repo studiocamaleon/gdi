@@ -6,10 +6,11 @@ import { expandir, permisosDeRolBase } from '../../auth/permisos';
 
 /** Revalidar también después de la llamada a Meta: durante el popup pueden
  * cerrar la sesión, cambiar de empresa o quitar permisos al administrador. */
-export async function exigirAccesoConexionMeta(
+async function exigirAcceso(
   db: Pick<Prisma.TransactionClient, 'authSession'>,
   auth: CurrentAuth,
   ip: string,
+  inbox = false,
 ) {
   if (auth.mcp || auth.esPlataforma || auth.impersonacion || !auth.tenantId)
     throw new ForbiddenException();
@@ -51,14 +52,40 @@ export async function exigirAccesoConexionMeta(
     !miembro?.activa ||
     miembro.userId !== auth.userId ||
     miembro.tenantId !== auth.tenantId ||
-    miembro.rol !== RolSistema.ADMINISTRADOR ||
     !ipPermitida(ip, miembro.ipsPermitidas) ||
-    !expandir(
-      miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
-    ).has('configuracion.gestionar')
+    !(inbox
+      ? puedeAtenderInbox(miembro)
+      : miembro.rol === RolSistema.ADMINISTRADOR &&
+        expandir(
+          miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
+        ).has('configuracion.gestionar'))
   )
     throw new ForbiddenException();
   return expandir(
     miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
   );
 }
+
+export function puedeAtenderInbox(miembro: {
+  rol: RolSistema;
+  rolDelTenant: { permisos: string[] } | null;
+}) {
+  const permisos = expandir(
+    miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
+  );
+  return (
+    permisos.has('inbox.atender') ||
+    (miembro.rol === RolSistema.ADMINISTRADOR &&
+      permisos.has('configuracion.gestionar'))
+  );
+}
+export const exigirAccesoConexionMeta = (
+  db: Pick<Prisma.TransactionClient, 'authSession'>,
+  auth: CurrentAuth,
+  ip: string,
+) => exigirAcceso(db, auth, ip);
+export const exigirAccesoInbox = (
+  db: Pick<Prisma.TransactionClient, 'authSession'>,
+  auth: CurrentAuth,
+  ip: string,
+) => exigirAcceso(db, auth, ip, true);

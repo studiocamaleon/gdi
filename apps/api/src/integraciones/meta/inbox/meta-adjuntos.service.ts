@@ -24,7 +24,7 @@ import { CapacidadesEmpresaService } from '../../../suscripciones/capacidades-em
 import { InboxTiempoRealBus } from '../../../inbox-tiempo-real/inbox-tiempo-real.bus';
 import { registrarCambioInbox } from '../../../inbox-tiempo-real/inbox-revision';
 import type { CurrentAuth } from '../../../auth/auth.types';
-import { exigirAccesoConexionMeta } from '../meta-conexion-acceso';
+import { exigirAccesoInbox } from '../meta-conexion-acceso';
 import { canalGeneralInbox, identidadCanalInbox } from '../meta-inbox-canal';
 import {
   configuracionMetaConexion,
@@ -429,7 +429,7 @@ export class MetaAdjuntosService {
 
   async abrir(auth: CurrentAuth, ip: string, mensajeId: string) {
     if (!adjuntosHabilitados()) throw new NotFoundException();
-    await exigirAccesoConexionMeta(this.db, auth, ip);
+    await exigirAccesoInbox(this.db, auth, ip);
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
     const canal = await canalGeneralInbox(this.db, auth.tenantId);
     if (!canal) throw new ForbiddenException();
@@ -486,7 +486,7 @@ export class MetaAdjuntosService {
             expiraSegundos: 60,
           })
         : undefined;
-    await exigirAccesoConexionMeta(this.db, auth, ip);
+    await exigirAccesoInbox(this.db, auth, ip);
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
     const actual = await canalGeneralInbox(this.db, auth.tenantId),
       comprobado = await leer();

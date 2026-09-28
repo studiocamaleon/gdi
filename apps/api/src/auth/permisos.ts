@@ -86,6 +86,12 @@ export type ModuloClave = (typeof MODULOS)[number]['clave'];
  */
 export const PERMISOS_TRANSVERSALES = [
   {
+    clave: 'inbox.atender',
+    label: 'Atender Grafo Inbox',
+    descripcion:
+      'Leer y responder conversaciones, asignar responsables y escribir notas internas. No permite administrar la conexión de Meta.',
+  },
+  {
     clave: 'finanzas.ver_margenes',
     label: 'Ver costos y márgenes',
     descripcion:

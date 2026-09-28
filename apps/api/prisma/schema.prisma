@@ -6635,22 +6635,28 @@ model InboxImportacion {
 }
 
 model InboxConversacion {
-  cargas InboxCarga[]
-  id                       String @id @default(uuid()) @db.Uuid
-  tenantId                 String @db.Uuid
-  vinculoId                String @db.Uuid
-  contactoWaId             String
-  ultimoMensajeEl          DateTime?
+  responsableId         String?              @db.Uuid
+  responsableNombre     String?
+  asignacionVersion     Int                  @default(0)
+  eventos               InboxEventoInterno[]
+  cargas                InboxCarga[]
+  id                    String               @id @default(uuid()) @db.Uuid
+  tenantId              String               @db.Uuid
+  vinculoId             String               @db.Uuid
+  contactoWaId          String
+  ultimoMensajeEl       DateTime?
   /// Sólo mensajes entrantes nuevos posteriores al alta; nunca el historial.
-  ultimoEntranteNuevoEl     DateTime?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-  vinculo                  MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  mensajes                 InboxMensaje[]
-  envios                   InboxEnvio[]
+  ultimoEntranteNuevoEl DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  vinculo               MetaVinculo          @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  mensajes              InboxMensaje[]
+  envios                InboxEnvio[]
+
   @@unique([vinculoId, contactoWaId])
   @@unique([id, vinculoId, tenantId])
   @@index([tenantId, ultimoMensajeEl, id])
+  @@index([tenantId, vinculoId, responsableId, ultimoMensajeEl, id], map: "InboxConversacion_tenantId_vinculoId_responsableId_ultimo_idx")
 }
 
 model InboxBloqueHistorial {
@@ -6670,33 +6676,37 @@ model InboxBloqueHistorial {
 /// También conserva complementos que llegaron antes del mensaje original.
 /// Sin conversación/fecha/dirección todavía, no se muestran en la bandeja.
 model InboxMensaje {
-  adjunto InboxAdjunto?
-  envio InboxEnvio?
-  id                 String @id @default(uuid()) @db.Uuid
-  tenantId           String @db.Uuid
-  vinculoId          String @db.Uuid
+  autorId            String?            @db.Uuid
+  autorNombre        String?
+  adjunto            InboxAdjunto?
+  envio              InboxEnvio?
+  id                 String             @id @default(uuid()) @db.Uuid
+  tenantId           String             @db.Uuid
+  vinculoId          String             @db.Uuid
   wamid              String
-  conversacionId     String? @db.Uuid
+  conversacionId     String?            @db.Uuid
   direccion          String?
   enviadoEl          DateTime?
   tipo               String?
   contenido          Json?
-  prioridadContenido Int @default(0)
+  prioridadContenido Int                @default(0)
   edicionEl          DateTime?
   revocadoEl         DateTime?
   estadoEntrega      String?
-  estadoEntregaOrden Int @default(0)
+  estadoEntregaOrden Int                @default(0)
   estadoEntregaEl    DateTime?
-  delHistorial       Boolean @default(false)
-  delCelular         Boolean @default(false)
-  entranteNuevo      Boolean @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  vinculo            MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  delHistorial       Boolean            @default(false)
+  delCelular         Boolean            @default(false)
+  entranteNuevo      Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  vinculo            MetaVinculo        @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
   conversacion       InboxConversacion? @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+
   @@unique([id, vinculoId, tenantId])
   @@unique([vinculoId, wamid])
   @@index([tenantId, conversacionId, enviadoEl, id])
+  @@index([tenantId, vinculoId, conversacionId, autorId])
 }
 
 /// Directorio de WhatsApp: nunca crea ni elimina clientes fiscales de Grafo.
@@ -7160,26 +7170,28 @@ model InboxAdjunto {
 
 /// Un intento de texto explícito. No se reenvía automáticamente tras incertidumbre.
 model InboxEnvio {
-  carga InboxCarga?
-  id             String @id @default(uuid()) @db.Uuid
-  tenantId       String @db.Uuid
-  vinculoId      String @db.Uuid
-  autorizacionId String @db.Uuid
-  conversacionId String @db.Uuid
-  usuarioId      String @db.Uuid
-  clave          String @db.Uuid
+  usuarioNombre  String?
+  carga          InboxCarga?
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @db.Uuid
+  vinculoId      String            @db.Uuid
+  autorizacionId String            @db.Uuid
+  conversacionId String            @db.Uuid
+  usuarioId      String            @db.Uuid
+  clave          String            @db.Uuid
   huella         String
-  tipo           String @default("TEXTO")
+  tipo           String            @default("TEXTO")
   adjunto        Json?
   texto          String?
-  estado         String @default("ENVIANDO")
+  estado         String            @default("ENVIANDO")
   codigo         String?
   wamid          String?
-  mensajeId      String? @unique @db.Uuid
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  mensajeId      String?           @unique @db.Uuid
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
   conversacion   InboxConversacion @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
-  mensaje        InboxMensaje? @relation(fields: [mensajeId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  mensaje        InboxMensaje?     @relation(fields: [mensajeId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+
   @@unique([mensajeId, vinculoId, tenantId])
   @@unique([tenantId, clave])
   @@unique([vinculoId, wamid])
@@ -7202,4 +7214,27 @@ model InboxCarga {
   conversacion InboxConversacion @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
   envio InboxEnvio? @relation(fields: [envioId], references: [id], onDelete: Restrict)
   @@index([tenantId, conversacionId, createdAt])
+}
+
+// Eventos privados del equipo. Nunca se proyectan hacia WhatsApp ni cambian el último mensaje del cliente.
+model InboxEventoInterno {
+  id                String            @id @default(uuid()) @db.Uuid
+  tenantId          String            @db.Uuid
+  vinculoId         String            @db.Uuid
+  conversacionId    String            @db.Uuid
+  clave             String            @db.Uuid
+  tipo              String
+  actorId           String            @db.Uuid
+  actorNombre       String
+  texto             String?
+  anteriorId        String?           @db.Uuid
+  anteriorNombre    String?
+  responsableId     String?           @db.Uuid
+  responsableNombre String?
+  createdAt         DateTime          @default(now())
+  conversacion      InboxConversacion @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Cascade)
+
+  @@unique([tenantId, clave])
+  @@index([tenantId, vinculoId, conversacionId, createdAt, id], map: "InboxEventoInterno_tenantId_vinculoId_conversacionId_creat_idx")
+  @@index([tenantId, vinculoId, conversacionId, actorId, tipo], map: "InboxEventoInterno_tenantId_vinculoId_conversacionId_actor_idx")
 }

@@ -40,6 +40,8 @@ export function presentarEnvio(e: {
   codigo: string | null;
   createdAt: Date;
   mensajeId: string | null;
+  usuarioId?: string;
+  usuarioNombre?: string | null;
 }) {
   return {
     id: e.id,
@@ -52,6 +54,9 @@ export function presentarEnvio(e: {
     codigo: e.codigo,
     creadoEl: e.createdAt.toISOString(),
     mensajeId: e.mensajeId,
+    autor: e.usuarioId
+      ? { id: e.usuarioId, nombre: e.usuarioNombre ?? 'Integrante anterior' }
+      : null,
   };
 }
 

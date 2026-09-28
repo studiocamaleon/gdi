@@ -3,11 +3,12 @@ import {
   lecturaGeneralHabilitada,
 } from './meta-inbox-canal';
 import { ForbiddenException, Injectable, MessageEvent } from '@nestjs/common';
-import { RolSistema } from '@prisma/client';
 import { Observable } from 'rxjs';
 import type { CurrentAuth } from '../../auth/auth.types';
-import { ipPermitida } from '../../auth/ip';
-import { expandir, permisosDeRolBase } from '../../auth/permisos';
+import {
+  exigirAccesoInbox,
+  exigirAccesoConexionMeta,
+} from './meta-conexion-acceso';
 import { runWithTenant } from '../../common/tenant-context';
 import { InboxTiempoRealBus } from '../../inbox-tiempo-real/inbox-tiempo-real.bus';
 import type { CanalInbox } from '../../inbox-tiempo-real/inbox-revision';
@@ -76,55 +77,12 @@ export class MetaInboxStreamService {
       )
         throw new ForbiddenException();
     }
-    const sesion = await this.prisma.authSession.findUnique({
-      where: { id: auth.sessionId },
-      select: {
-        userId: true,
-        currentTenantId: true,
-        currentMembershipId: true,
-        revokedAt: true,
-        expiresAt: true,
-        impersonacionId: true,
-        user: { select: { activo: true, debeCambiarPassword: true } },
-        currentTenant: { select: { activo: true } },
-        currentMembership: {
-          select: {
-            activa: true,
-            userId: true,
-            tenantId: true,
-            rol: true,
-            ipsPermitidas: true,
-            rolDelTenant: { select: { permisos: true } },
-          },
-        },
-      },
-    });
-    const miembro = sesion?.currentMembership;
-    if (
-      !sesion ||
-      sesion.revokedAt ||
-      sesion.expiresAt.getTime() <= Date.now() ||
-      sesion.impersonacionId ||
-      !sesion.user.activo ||
-      sesion.user.debeCambiarPassword ||
-      !sesion.currentTenant?.activo ||
-      sesion.userId !== auth.userId ||
-      sesion.currentTenantId !== auth.tenantId ||
-      sesion.currentMembershipId !== auth.membershipId ||
-      !miembro?.activa ||
-      miembro.userId !== auth.userId ||
-      miembro.tenantId !== auth.tenantId ||
-      miembro.rol !== RolSistema.ADMINISTRADOR ||
-      !ipPermitida(ip, miembro.ipsPermitidas) ||
-      !expandir(
-        miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
-      ).has('configuracion.gestionar')
-    )
-      throw new ForbiddenException();
     const permisos = [
-      ...expandir(
-        miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
-      ),
+      ...(await (
+        canal.origen === 'GENERAL'
+          ? exigirAccesoInbox
+          : exigirAccesoConexionMeta
+      )(this.prisma, auth, ip)),
     ]
       .sort()
       .join('|');

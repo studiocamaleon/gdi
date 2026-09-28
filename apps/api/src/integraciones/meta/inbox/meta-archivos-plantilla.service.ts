@@ -18,7 +18,7 @@ import {
   type StorageDriver,
 } from '../../../archivos/storage/storage.driver';
 import { CapacidadesEmpresaService } from '../../../suscripciones/capacidades-empresa.service';
-import { exigirAccesoConexionMeta } from '../meta-conexion-acceso';
+import { exigirAccesoInbox } from '../meta-conexion-acceso';
 import { canalGeneralInbox, identidadCanalInbox } from '../meta-inbox-canal';
 import { destinatarioCanalPermitido } from '../meta-prueba.config';
 import { plantillasInboxHabilitadas } from './meta-envios.config';
@@ -117,7 +117,7 @@ export class MetaArchivosPlantillaService {
     conversacionId: string,
     canalId: string,
   ) {
-    const permisos = await exigirAccesoConexionMeta(this.db, auth, ip);
+    const permisos = await exigirAccesoInbox(this.db, auth, ip);
     const canal = await canalGeneralInbox(this.db, auth.tenantId);
     if (
       !canal ||

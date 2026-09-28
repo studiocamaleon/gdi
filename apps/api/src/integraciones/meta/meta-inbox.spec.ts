@@ -1,3 +1,8 @@
+jest.mock('./meta-conexion-acceso', () => ({
+  exigirAccesoConexionMeta: jest
+    .fn()
+    .mockResolvedValue(new Set(['configuracion.gestionar'])),
+}));
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { MetaInboxService } from './meta-inbox.service';
 import { configuracionMetaRecepcion } from './meta-recepcion';
@@ -144,8 +149,10 @@ it('consulta el teléfono configurado dentro del canal autorizado y no expone cr
     anterior: null,
   });
   expect(JSON.stringify(result)).not.toContain('no-se-devuelve');
-  const select =
-    prisma.mensajeWhatsappRecibido.findMany.mock.calls[0][0].select;
+  const [consulta] = prisma.mensajeWhatsappRecibido.findMany.mock.calls[0] as [
+    { select: Record<string, boolean> },
+  ];
+  const select = consulta.select;
   expect(Object.keys(select).sort()).toEqual([
     'enviadoEl',
     'id',

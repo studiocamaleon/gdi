@@ -1,3 +1,4 @@
+import { MetaEquipoService } from './meta/inbox/meta-equipo.service';
 import { MetaCargasService } from './meta/inbox/meta-cargas.service';
 import { MetaEnviosService } from './meta/inbox/meta-envios.service';
 import { MetaArchivosPlantillaService } from './meta/inbox/meta-archivos-plantilla.service';
@@ -76,6 +77,7 @@ import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.mo
     MetaArchivosPlantillaService,
     MetaEnviosService,
     MetaInboxGeneralService,
+    MetaEquipoService,
     MetaInboxStreamService,
     MetaInboxService,
     MetaRecepcionService,

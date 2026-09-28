@@ -18,7 +18,7 @@ import {
   STORAGE_DRIVER,
   type StorageDriver,
 } from '../../../archivos/storage/storage.driver';
-import { exigirAccesoConexionMeta } from '../meta-conexion-acceso';
+import { exigirAccesoInbox } from '../meta-conexion-acceso';
 import { canalGeneralInbox, identidadCanalInbox } from '../meta-inbox-canal';
 import { destinatarioCanalPermitido } from '../meta-prueba.config';
 import {
@@ -44,7 +44,7 @@ export class MetaCargasService {
     conversacionId: string,
     canalId: string,
   ) {
-    await exigirAccesoConexionMeta(this.db, auth, ip);
+    await exigirAccesoInbox(this.db, auth, ip);
     const v = await canalGeneralInbox(this.db, auth.tenantId);
     if (
       !v ||
@@ -99,7 +99,7 @@ export class MetaCargasService {
       key = `t/${auth.tenantId}/INBOX/cargas/${id}.${formato.ext}`;
     await this.db.$transaction(async (tx) => {
       await bloquearAlmacenamiento(tx, auth.tenantId);
-      await exigirAccesoConexionMeta(tx, auth, ip);
+      await exigirAccesoInbox(tx, auth, ip);
       await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
         'whatsapp_automatico',
       ]);

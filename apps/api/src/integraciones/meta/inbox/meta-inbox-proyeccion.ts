@@ -1,3 +1,4 @@
+import { autoasignarInbox, nombreOperador } from './meta-equipo';
 import { Prisma, type InboxEnvio, type MetaVinculo } from '@prisma/client';
 import type { OperacionInbox } from './meta-inbox-normalizar';
 import { objeto } from './meta-inbox-normalizar';
@@ -274,6 +275,25 @@ export async function confirmarEnvioInbox(
   const m = await tx.inboxMensaje.findFirstOrThrow({
     where: { tenantId: canal.tenantId, vinculoId: canal.id, wamid },
   });
+  const usuario = envio.usuarioNombre
+    ? null
+    : await tx.user.findUnique({
+        where: { id: envio.usuarioId },
+        select: { nombreCompleto: true, email: true },
+      });
+  const autorNombre =
+    envio.usuarioNombre ??
+    (usuario ? nombreOperador(usuario) : 'Integrante anterior');
+  await tx.inboxMensaje.updateMany({
+    where: {
+      id: m.id,
+      tenantId: canal.tenantId,
+      vinculoId: canal.id,
+      autorId: null,
+    },
+    data: { autorId: envio.usuarioId, autorNombre },
+  });
+  await autoasignarInbox(tx, envio, autorNombre);
   if (tieneArchivo) await encolarAdjunto(tx, canal, wamid);
   await tx.inboxMensaje.updateMany({
     where: { id: m.id, tenantId: canal.tenantId, estadoEntrega: null },

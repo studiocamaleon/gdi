@@ -1,3 +1,4 @@
+import { leerEquipoInbox } from './inbox/meta-equipo';
 import {
   contactosInbox,
   ubicacionInbox,
@@ -22,12 +23,14 @@ import type { CurrentAuth } from '../../auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsappContextoService } from '../../clientes/whatsapp-contexto.service';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
-import { exigirAccesoConexionMeta } from './meta-conexion-acceso';
+import { exigirAccesoInbox } from './meta-conexion-acceso';
 import { canalGeneralInbox, identidadCanalInbox } from './meta-inbox-canal';
 import { MetaInboxQueryDto } from './meta-inbox.dto';
 import { objeto } from './inbox/meta-inbox-normalizar';
 
 const selectMensaje = {
+  autorId: true,
+  autorNombre: true,
   adjunto: {
     select: {
       estado: true,
@@ -66,6 +69,9 @@ function presentar(
   const contenido = objeto(m.contenido);
   return {
     id: m.id,
+    autor: m.autorId
+      ? { id: m.autorId, nombre: m.autorNombre ?? 'Integrante anterior' }
+      : null,
     nombreContacto: nombre,
     tipo: m.revocadoEl ? 'revocado' : (m.tipo ?? 'desconocido'),
     voz: !m.revocadoEl && contenido.voz === true,
@@ -173,11 +179,15 @@ type CursorLista = {
   fecha: string;
   busqueda: string;
   canal: string;
+  filtro: string;
+  usuario: string;
 };
 function leerCursor(
   value: string | undefined,
   canal: string,
   busqueda: string,
+  filtro: string,
+  usuario: string,
 ): CursorLista | null {
   if (!value) return null;
   try {
@@ -192,7 +202,9 @@ function leerCursor(
       !Number.isFinite(Date.parse(c.fecha)) ||
       new Date(c.fecha).toISOString() !== c.fecha ||
       c.canal !== canal ||
-      c.busqueda !== busqueda
+      c.busqueda !== busqueda ||
+      c.filtro !== filtro ||
+      c.usuario !== usuario
     )
       throw new Error();
     return c as CursorLista;
@@ -210,7 +222,7 @@ export class MetaInboxGeneralService {
     private readonly clientes: WhatsappContextoService,
   ) {}
   async disponibilidad(auth: CurrentAuth, ip: string) {
-    await exigirAccesoConexionMeta(this.db, auth, ip);
+    await exigirAccesoInbox(this.db, auth, ip);
     const canal = await canalGeneralInbox(this.db, auth.tenantId);
     if (canal)
       await this.capacidades.exigirIncluida(
@@ -224,7 +236,7 @@ export class MetaInboxGeneralService {
     };
   }
   async consultar(auth: CurrentAuth, query: MetaInboxQueryDto, ip: string) {
-    const permisosIniciales = await exigirAccesoConexionMeta(this.db, auth, ip);
+    const permisosIniciales = await exigirAccesoInbox(this.db, auth, ip);
     auth = {
       ...auth,
       permisos: new Set(
@@ -243,7 +255,14 @@ export class MetaInboxGeneralService {
       ...(destinatarioPrueba ? { contactoWaId: destinatarioPrueba } : {}),
     };
     const busqueda = (query.busqueda ?? '').trim().toLocaleLowerCase();
-    const cursor = leerCursor(query.listaAntesDe, canalId, busqueda);
+    const filtro = query.filtro ?? 'TODAS';
+    const cursor = leerCursor(
+      query.listaAntesDe,
+      canalId,
+      busqueda,
+      filtro,
+      auth.userId,
+    );
     if (
       cursor &&
       !(await this.db.inboxConversacion.findFirst({
@@ -265,6 +284,10 @@ export class MetaInboxGeneralService {
       WHERE c."tenantId"=${auth.tenantId}::uuid AND c."vinculoId"=${canal.id}::uuid AND (c."ultimoMensajeEl" IS NOT NULL OR ${destinatarioPrueba}::text IS NOT NULL)
       AND (${destinatarioPrueba}::text IS NULL OR c."contactoWaId"=${destinatarioPrueba})
       AND (${busqueda}='' OR (k.eliminado=false AND k.nombre ILIKE ${patron}) OR (${porNumero}::text IS NOT NULL AND c."contactoWaId" LIKE ${porNumero}))
+      AND (${filtro}='TODAS' OR (${filtro}='MIAS' AND c."responsableId"=${auth.userId}::uuid) OR (${filtro}='SIN_ASIGNAR' AND c."responsableId" IS NULL) OR (${filtro}='PARTICIPE' AND (
+        EXISTS (SELECT 1 FROM "InboxMensaje" m WHERE m."tenantId"=c."tenantId" AND m."vinculoId"=c."vinculoId" AND m."conversacionId"=c.id AND m."autorId"=${auth.userId}::uuid)
+        OR EXISTS (SELECT 1 FROM "InboxEventoInterno" e WHERE e."tenantId"=c."tenantId" AND e."vinculoId"=c."vinculoId" AND e."conversacionId"=c.id AND e."actorId"=${auth.userId}::uuid AND e.tipo='NOTA')
+      )))
       ${cursor ? Prisma.sql`AND (COALESCE(c."ultimoMensajeEl",c."createdAt"),c.id)<(${new Date(cursor.fecha)},${cursor.id}::uuid)` : Prisma.empty}
       ORDER BY COALESCE(c."ultimoMensajeEl",c."createdAt") DESC,c.id DESC LIMIT 51`;
     const pagina = lista.slice(0, 50);
@@ -289,7 +312,16 @@ export class MetaInboxGeneralService {
     const conversacion = seleccion
       ? await this.db.inboxConversacion.findFirst({
           where: { ...scopeConversaciones, id: seleccion },
-          select: { id: true, contactoWaId: true, ultimoEntranteNuevoEl: true },
+          select: {
+            id: true,
+            tenantId: true,
+            vinculoId: true,
+            responsableId: true,
+            responsableNombre: true,
+            asignacionVersion: true,
+            contactoWaId: true,
+            ultimoEntranteNuevoEl: true,
+          },
         })
       : null;
     if (seleccion && !conversacion)
@@ -412,8 +444,11 @@ export class MetaInboxGeneralService {
         : []
       ).map((m) => [m.wamid, m]),
     );
+    const equipo = conversacion
+      ? await leerEquipoInbox(this.db, conversacion, query)
+      : null;
     // Una revocación o reconexión durante la lectura no entrega el resultado anterior.
-    const permisosFinales = await exigirAccesoConexionMeta(this.db, auth, ip);
+    const permisosFinales = await exigirAccesoInbox(this.db, auth, ip);
     if (
       [...permisosIniciales].sort().join('|') !==
       [...permisosFinales].sort().join('|')
@@ -428,6 +463,8 @@ export class MetaInboxGeneralService {
       usuarioId: auth.userId,
       canalId,
       origen: 'GENERAL' as const,
+      equipo,
+      colaboracionHabilitada: true,
       prueba:
         canal.tipo === 'PRUEBA'
           ? { numero: canal.numero, venceEl: canal.tokenVenceEl!.toISOString() }
@@ -464,6 +501,8 @@ export class MetaInboxGeneralService {
                 id: ultima.id,
                 fecha: ultima.ultimoMensajeEl.toISOString(),
                 busqueda,
+                filtro,
+                usuario: auth.userId,
                 canal: canalId,
               } satisfies CursorLista),
             ).toString('base64url')

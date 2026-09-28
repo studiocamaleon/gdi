@@ -1,3 +1,7 @@
+import { RolSistema } from '@prisma/client';
+import { Roles } from '../../auth/roles.decorator';
+import { MetaEquipoService } from './inbox/meta-equipo.service';
+import { AsignarInboxDto, NotaInboxDto } from './inbox/meta-equipo.dto';
 import { MetaCargasService } from './inbox/meta-cargas.service';
 import { MetaEnviosService } from './inbox/meta-envios.service';
 import {
@@ -30,19 +34,17 @@ import {
   MetaInboxStreamService,
   vencimientoStream,
 } from './meta-inbox-stream.service';
-import { RolSistema } from '@prisma/client';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { CurrentSession } from '../../auth/current-auth.decorator';
 import { Permiso } from '../../auth/permiso.decorator';
 import { ProhibidoImpersonando } from '../../auth/prohibido-impersonando.decorator';
-import { Roles } from '../../auth/roles.decorator';
 import { MetaInboxQueryDto } from './meta-inbox.dto';
 import { MetaInboxService } from './meta-inbox.service';
 
-/** Conserva exactamente el acceso del piloto: no habilita todavía operadores. */
+/** Los operadores atienden; la conexión conserva su autorización de administrador. */
 @Controller('integraciones/meta/inbox')
-@Roles(RolSistema.ADMINISTRADOR)
-@Permiso('configuracion.gestionar')
+@Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR, RolSistema.OPERADOR)
+@Permiso('configuracion.gestionar', 'inbox.atender')
 @ProhibidoImpersonando()
 export class MetaInboxController {
   constructor(
@@ -51,7 +53,31 @@ export class MetaInboxController {
     private readonly adjuntos: MetaAdjuntosService,
     private readonly envios: MetaEnviosService,
     private readonly cargas: MetaCargasService,
+    private readonly equipo: MetaEquipoService,
   ) {}
+
+  @Post('conversaciones/:id/responsable')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  asignar(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AsignarInboxDto,
+  ) {
+    return this.equipo.guardar(auth, ipDeRequest(req), id, dto);
+  }
+  @Post('conversaciones/:id/notas')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  nota(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: NotaInboxDto,
+  ) {
+    return this.equipo.guardar(auth, ipDeRequest(req), id, dto);
+  }
 
   @Sse('stream')
   stream(

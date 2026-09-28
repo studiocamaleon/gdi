@@ -1,3 +1,4 @@
+import { nombreOperador } from './meta-equipo';
 import { MetaCargasService } from './meta-cargas.service';
 import { FORMATOS_INBOX } from '../../../common/inbox/medios';
 import { normalizarPlantilla } from './meta-plantillas';
@@ -27,7 +28,7 @@ import {
 import { InboxTiempoRealBus } from '../../../inbox-tiempo-real/inbox-tiempo-real.bus';
 import { registrarCambioInbox } from '../../../inbox-tiempo-real/inbox-revision';
 import type { CurrentAuth } from '../../../auth/auth.types';
-import { exigirAccesoConexionMeta } from '../meta-conexion-acceso';
+import { exigirAccesoInbox } from '../meta-conexion-acceso';
 import { canalGeneralInbox, identidadCanalInbox } from '../meta-inbox-canal';
 import { destinatarioCanalPermitido } from '../meta-prueba.config';
 import { MetaCloudClient, type ResultadoMeta } from '../meta-cloud.client';
@@ -92,7 +93,7 @@ export class MetaEnviosService {
       throw new ForbiddenException(
         'Las plantillas todavía no están habilitadas.',
       );
-    await exigirAccesoConexionMeta(this.db, auth, ip);
+    await exigirAccesoInbox(this.db, auth, ip);
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
     if (identidadCanalInbox(canal) !== dto.canalId)
       throw new ConflictException('La conexión cambió. Actualizá el Inbox.');
@@ -115,7 +116,7 @@ export class MetaEnviosService {
         'No pudimos consultar las plantillas. Revisá la conexión y volvé a intentar.',
       );
     }
-    await exigirAccesoConexionMeta(this.db, auth, ip);
+    await exigirAccesoInbox(this.db, auth, ip);
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
     const actual = await canalGeneralInbox(this.db, auth.tenantId);
     if (
@@ -168,7 +169,7 @@ export class MetaEnviosService {
     const esPlantilla = 'plantillaId' in dto;
     const esMedio = !esPlantilla && 'archivoId' in dto;
     const tipoEnvio = esPlantilla ? 'PLANTILLA' : esMedio ? 'MEDIO' : 'TEXTO';
-    await exigirAccesoConexionMeta(this.db, auth, ip);
+    await exigirAccesoInbox(this.db, auth, ip);
     const canal = await canalGeneralInbox(this.db, auth.tenantId);
     if (!canal || identidadCanalInbox(canal) !== dto.canalId)
       throw new ConflictException('La conexión cambió. Actualizá el Inbox.');
@@ -287,7 +288,7 @@ export class MetaEnviosService {
       // Mismo orden que almacenamiento y proyección: empresa, vínculo, intento.
       await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id=${auth.tenantId}::uuid FOR NO KEY UPDATE`;
       await tx.$queryRaw`SELECT id FROM "MetaVinculo" WHERE id=${canal.id}::uuid AND "tenantId"=${auth.tenantId}::uuid FOR NO KEY UPDATE`;
-      await exigirAccesoConexionMeta(tx, auth, ip);
+      await exigirAccesoInbox(tx, auth, ip);
       await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
         'whatsapp_automatico',
       ]);
@@ -303,6 +304,7 @@ export class MetaEnviosService {
       });
       if (anterior) {
         if (
+          anterior.usuarioId !== auth.userId ||
           anterior.huella !== huella ||
           anterior.tipo !== tipoEnvio ||
           anterior.conversacionId !== conversacionId ||
@@ -363,6 +365,10 @@ export class MetaEnviosService {
       }
       if (esPlantilla && !plantilla)
         throw new ConflictException('Actualizá el catálogo antes de enviar.');
+      const autor = await tx.user.findUniqueOrThrow({
+        where: { id: auth.userId },
+        select: { nombreCompleto: true, email: true },
+      });
       const envio = await tx.inboxEnvio.create({
         data: {
           tenantId: auth.tenantId,
@@ -370,6 +376,7 @@ export class MetaEnviosService {
           autorizacionId: canal.autorizacionId,
           conversacionId,
           usuarioId: auth.userId,
+          usuarioNombre: nombreOperador(autor),
           clave: dto.clave,
           huella,
           texto,
@@ -528,7 +535,7 @@ export class MetaEnviosService {
       }
       let accesoVigente = true;
       try {
-        await exigirAccesoConexionMeta(this.db, auth, ip);
+        await exigirAccesoInbox(this.db, auth, ip);
         await this.db.$transaction((tx) =>
           this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
             'whatsapp_automatico',
@@ -640,7 +647,7 @@ export class MetaEnviosService {
       });
       this.bus.avisar(aviso);
     }
-    await exigirAccesoConexionMeta(this.db, auth, ip);
+    await exigirAccesoInbox(this.db, auth, ip);
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
     const actual = await canalGeneralInbox(this.db, auth.tenantId);
     if (!habilitado() || !actual || identidadCanalInbox(actual) !== dto.canalId)

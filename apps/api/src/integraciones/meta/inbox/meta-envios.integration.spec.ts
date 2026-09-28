@@ -1,3 +1,6 @@
+import { MetaEquipoService } from './meta-equipo.service';
+import { MetaInboxGeneralService } from '../meta-inbox-general.service';
+import { exigirAccesoConexionMeta } from '../meta-conexion-acceso';
 import type { EnviarPlantillaInboxDto } from './meta-envios.dto';
 import { MetaCargasService } from './meta-cargas.service';
 import sharp from 'sharp';
@@ -92,6 +95,7 @@ let auth: CurrentAuth,
   canal: MetaVinculo,
   conv: InboxConversacion,
   fetchMock: jest.SpyInstance;
+const operadoresPrueba: string[] = [];
 async function preparar() {
   const t = await db.tenant.create({
     data: { nombre: 'Mensajes ficticios', slug: `envios-${randomUUID()}` },
@@ -236,7 +240,10 @@ afterEach(async () => {
   await db.inboxCanalRevision.deleteMany({ where });
   await db.metaVinculo.deleteMany({ where });
   await db.tenant.delete({ where: { id: auth.tenantId } });
-  await db.user.delete({ where: { id: auth.userId } });
+  await db.user.deleteMany({
+    where: { id: { in: [auth.userId, ...operadoresPrueba] } },
+  });
+  operadoresPrueba.length = 0;
 });
 afterAll(async () => {
   await db.$disconnect();
@@ -1458,4 +1465,273 @@ it('revalida la ventana cuando la preparación del archivo tardó', async () => 
     codigo: 'CANAL_NO_VIGENTE',
   });
   expect(client.enviarMedio).not.toHaveBeenCalled();
+});
+
+async function operador(
+  nombre = 'Marina ficticia',
+  permisos = ['inbox.atender'],
+) {
+  const u = await db.user.create({
+    data: { email: `${randomUUID()}@example.invalid`, nombreCompleto: nombre },
+  });
+  operadoresPrueba.push(u.id);
+  const rol = await db.rol.create({
+    data: {
+      tenantId: auth.tenantId,
+      nombre: `Operador ${randomUUID()}`,
+      permisos,
+    },
+  });
+  const m = await db.membership.create({
+    data: {
+      tenantId: auth.tenantId,
+      userId: u.id,
+      rol: RolSistema.OPERADOR,
+      rolId: rol.id,
+    },
+  });
+  const s = await db.authSession.create({
+    data: {
+      userId: u.id,
+      currentTenantId: auth.tenantId,
+      currentMembershipId: m.id,
+      expiresAt: new Date(Date.now() + 3600000),
+    },
+  });
+  return {
+    ...auth,
+    userId: u.id,
+    email: u.email,
+    sessionId: s.id,
+    membershipId: m.id,
+    role: RolSistema.OPERADOR,
+    permisos: expandir(permisos),
+  };
+}
+const equipoServicio = () =>
+  new MetaEquipoService(db, capacidades as never, bus as never);
+const asignar = (
+  responsableId: string | null,
+  version: number,
+  a = auth,
+  clave = randomUUID(),
+) =>
+  runWithTenant(a.tenantId, () =>
+    equipoServicio().guardar(a, '127.0.0.1', conv.id, {
+      canalId: dto().canalId,
+      clave,
+      responsableId,
+      version,
+    }),
+  );
+const leerEquipo = (
+  a = auth,
+  filtro: 'TODAS' | 'MIAS' | 'SIN_ASIGNAR' | 'PARTICIPE' = 'TODAS',
+  extra = {},
+) =>
+  runWithTenant(a.tenantId, () =>
+    new MetaInboxGeneralService(
+      db,
+      capacidades as never,
+      new WhatsappContextoService(db),
+    ).consultar(a, { conversacionId: conv.id, filtro, ...extra }, '127.0.0.1'),
+  );
+it('un operador atiende sin administrar Meta, guarda autor por mensaje y no reemplaza al responsable', async () => {
+  const marina = await operador();
+  await expect(
+    exigirAccesoConexionMeta(db, marina, '127.0.0.1'),
+  ).rejects.toBeInstanceOf(ForbiddenException);
+  const r = await enviar(dto(), conv.id, marina);
+  expect(
+    await db.inboxConversacion.findUnique({ where: { id: conv.id } }),
+  ).toMatchObject({ responsableId: marina.userId, asignacionVersion: 1 });
+  expect(
+    await db.inboxMensaje.findUnique({ where: { id: r.mensajeId! } }),
+  ).toMatchObject({ autorId: marina.userId, autorNombre: 'Marina ficticia' });
+  client.enviarTexto.mockResolvedValueOnce({
+    estado: 'aceptada',
+    wamid: 'wamid.otra-respuesta',
+  });
+  await enviar();
+  expect(
+    await db.inboxConversacion.findUnique({ where: { id: conv.id } }),
+  ).toMatchObject({ responsableId: marina.userId, asignacionVersion: 1 });
+  expect(
+    await db.inboxEventoInterno.count({
+      where: { tenantId: auth.tenantId, tipo: 'AUTOASIGNACION' },
+    }),
+  ).toBe(1);
+  expect((await leerEquipo(marina, 'MIAS'))?.conversaciones).toHaveLength(1);
+  expect((await leerEquipo(auth, 'MIAS'))?.conversaciones).toHaveLength(0);
+  expect((await leerEquipo(auth, 'PARTICIPE'))?.conversaciones).toHaveLength(1);
+  expect((await leerEquipo(marina))?.contexto).toBeNull();
+  await db.user.update({
+    where: { id: marina.userId },
+    data: { nombreCompleto: 'Nombre posterior' },
+  });
+  expect(
+    (await leerEquipo())?.mensajes.find((m) => m.id === r.mensajeId)?.autor
+      ?.nombre,
+  ).toBe('Marina ficticia');
+});
+it('dos operadores que responden a la vez dejan un único responsable y dos autores', async () => {
+  const b = await operador();
+  client.enviarTexto.mockImplementation(() =>
+    Promise.resolve({
+      estado: 'aceptada',
+      wamid: `wamid.${randomUUID()}`,
+    }),
+  );
+  await Promise.all([enviar(), enviar(dto(), conv.id, b)]);
+  const c = await db.inboxConversacion.findUniqueOrThrow({
+    where: { id: conv.id },
+  });
+  expect([auth.userId, b.userId]).toContain(c.responsableId);
+  expect(c.asignacionVersion).toBe(1);
+  expect(
+    await db.inboxEventoInterno.count({ where: { tenantId: auth.tenantId } }),
+  ).toBe(1);
+  expect(
+    new Set((await leerEquipo())?.mensajes.map((m) => m.autor?.id)).size,
+  ).toBe(2);
+});
+it('un envío rechazado o incierto no asigna hasta recibir confirmación; el webhook repetido no duplica eventos', async () => {
+  client.enviarTexto.mockResolvedValueOnce({ estado: 'incierta' });
+  const r = await enviar();
+  expect(
+    (await db.inboxConversacion.findUnique({ where: { id: conv.id } }))
+      ?.responsableId,
+  ).toBeNull();
+  await webhook(r.id);
+  await webhook(r.id);
+  expect(
+    (await db.inboxConversacion.findUnique({ where: { id: conv.id } }))
+      ?.responsableId,
+  ).toBe(auth.userId);
+  expect(
+    await db.inboxEventoInterno.count({ where: { tenantId: auth.tenantId } }),
+  ).toBe(1);
+});
+it('no permite que otro operador reutilice la clave de un envío', async () => {
+  const d = dto();
+  await enviar(d);
+  const b = await operador();
+  await expect(enviar(d, conv.id, b)).rejects.toBeInstanceOf(ConflictException);
+  expect(client.enviarTexto).toHaveBeenCalledTimes(1);
+});
+it('transferir preserva mensajes, evita sobrescribir transferencias simultáneas y no llama a Meta', async () => {
+  const b = await operador();
+  const clave = randomUUID();
+  await asignar(auth.userId, 0);
+  await asignar(b.userId, 1, auth, clave);
+  await asignar(b.userId, 1, auth, clave);
+  await expect(asignar(auth.userId, 1)).rejects.toBeInstanceOf(
+    ConflictException,
+  );
+  const c = await db.inboxConversacion.findUniqueOrThrow({
+    where: { id: conv.id },
+  });
+  expect(c).toMatchObject({
+    responsableId: b.userId,
+    asignacionVersion: 2,
+    ultimoMensajeEl: null,
+  });
+  expect(
+    await db.inboxEventoInterno.count({ where: { tenantId: auth.tenantId } }),
+  ).toBe(2);
+  expect(client.enviarTexto).not.toHaveBeenCalled();
+  expect(client.enviarPlantilla).not.toHaveBeenCalled();
+  expect(bus.avisar).toHaveBeenCalled();
+  await asignar(null, 2);
+  expect((await leerEquipo())?.equipo?.responsable).toBeNull();
+});
+it('rechaza responsables ajenos, inactivos o sin permiso y una sesión revocada', async () => {
+  const b = await operador('Sin permiso', []);
+  await expect(asignar(b.userId, 0)).rejects.toThrow('acceso activo');
+  await expect(asignar(randomUUID(), 0)).rejects.toThrow('acceso activo');
+  const c = await operador();
+  await db.membership.update({
+    where: { id: c.membershipId },
+    data: { activa: false },
+  });
+  await expect(asignar(c.userId, 0)).rejects.toThrow('acceso activo');
+  await db.authSession.update({
+    where: { id: auth.sessionId },
+    data: { revokedAt: new Date() },
+  });
+  await expect(asignar(null, 0)).rejects.toBeInstanceOf(ForbiddenException);
+  expect(
+    await db.inboxEventoInterno.count({ where: { tenantId: auth.tenantId } }),
+  ).toBe(0);
+});
+it('las notas son privadas, idempotentes y no asignan ni cambian la fecha del chat', async () => {
+  const b = await operador();
+  const d = {
+    canalId: dto().canalId,
+    clave: randomUUID(),
+    texto: 'Validar el diseño antes de imprimir.',
+  };
+  await db.inboxConversacion.update({
+    where: { id: conv.id },
+    data: { ultimoMensajeEl: new Date('2026-09-01T12:00:00Z') },
+  });
+  const guardar = () =>
+    runWithTenant(b.tenantId, () =>
+      equipoServicio().guardar(b, '127.0.0.1', conv.id, d),
+    );
+  await Promise.all([guardar(), guardar()]);
+  const lectura = await leerEquipo(b, 'PARTICIPE');
+  expect(lectura?.conversaciones).toHaveLength(1);
+  expect(lectura?.equipo?.responsable).toBeNull();
+  expect(lectura?.equipo?.eventos).toHaveLength(1);
+  expect(lectura?.equipo?.eventos[0]).toMatchObject({
+    texto: d.texto,
+    actor: { id: b.userId, nombre: 'Marina ficticia' },
+    tipo: 'NOTA',
+  });
+  expect(lectura?.mensajes).toHaveLength(0);
+  expect(
+    (
+      await db.inboxConversacion.findUnique({ where: { id: conv.id } })
+    )?.ultimoMensajeEl?.toISOString(),
+  ).toBe('2026-09-01T12:00:00.000Z');
+  expect(client.enviarTexto).not.toHaveBeenCalled();
+  expect(client.enviarPlantilla).not.toHaveBeenCalled();
+  await expect(
+    equipoServicio().guardar(auth, '127.0.0.1', conv.id, d),
+  ).rejects.toBeInstanceOf(ConflictException);
+  await expect(
+    equipoServicio().guardar(auth, '127.0.0.1', randomUUID(), {
+      ...d,
+      clave: randomUUID(),
+    }),
+  ).rejects.toBeInstanceOf(NotFoundException);
+});
+it('pagina la actividad privada sin duplicados y conserva la ventana en la actualización', async () => {
+  const eventos = Array.from({ length: 56 }, (_, i) => ({
+    id: randomUUID(),
+    tenantId: auth.tenantId,
+    vinculoId: canal.id,
+    conversacionId: conv.id,
+    clave: randomUUID(),
+    actorId: auth.userId,
+    actorNombre: 'Alex ficticio',
+    tipo: 'NOTA',
+    texto: `Nota ${i}`,
+    createdAt: new Date(1700000000000 + i * 1000),
+  }));
+  await db.inboxEventoInterno.createMany({ data: eventos });
+  const reciente = await leerEquipo();
+  expect(reciente?.equipo?.eventos).toHaveLength(50);
+  const vieja = await leerEquipo(auth, 'TODAS', {
+    eventosAntesDe: reciente?.equipo?.anterior,
+  });
+  expect(vieja?.equipo?.eventos).toHaveLength(6);
+  const ventana = await leerEquipo(auth, 'TODAS', {
+    eventosDesdeId: vieja?.equipo?.eventos[0].id,
+  });
+  expect(ventana?.equipo?.eventos).toHaveLength(56);
+  await expect(
+    leerEquipo(auth, 'TODAS', { eventosAntesDe: randomUUID() }),
+  ).rejects.toBeInstanceOf(NotFoundException);
 });
