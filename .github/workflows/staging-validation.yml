@@ -2,7 +2,7 @@ name: Validar contenedores de staging
 
 on:
   push:
-    branches: [codex/staging-infraestructura]
+    branches: [codex/staging-infraestructura, codex/fix-configuracion-staging, codex/meta-cloud-base, codex/meta-recepcion-piloto]
     paths:
       - '.github/workflows/staging-validation.yml'
       - 'deploy/Dockerfile'
@@ -63,6 +63,9 @@ jobs:
       - name: Compilar backend Linux amd64 con chequeo de tipos
         run: docker build --platform linux/amd64 --target backend -f deploy/Dockerfile -t grafoprint-staging-api:local .
 
+      - name: Comprobar tipografía de etiquetas en el contenedor final
+        run: docker run --rm grafoprint-staging-api:local node scripts/deploy/verify-label.cjs
+
       - name: Compilar aplicación Next Linux amd64 con chequeo de tipos
         run: docker build --platform linux/amd64 --target web -f deploy/Dockerfile -t grafoprint-staging-web:local .
 
@@ -74,6 +77,8 @@ jobs:
           docker compose run --rm database-tools node scripts/deploy/runtime-role.cjs
           docker compose run --rm bootstrap
           docker compose run --rm database-tools node scripts/deploy/verify-database.cjs
+          docker compose run --rm bootstrap node scripts/deploy/verify-meta.cjs
+          docker compose run --rm bootstrap node scripts/deploy/verify-meta-recepcion.cjs
 
       - name: Iniciar API y Next y comprobar login directo y por BFF
         run: |

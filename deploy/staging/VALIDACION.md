@@ -1,5 +1,9 @@
 # Validación de staging — 24 y 25 de septiembre de 2026
 
+## Lote local posterior: recepción Meta (sin desplegar)
+
+`codex/meta-recepcion-piloto` prepara la bandeja de recepción interna. La migración `20260925223000_meta_recepcion_piloto` se probó sólo en una base local desechable con 284 migraciones. Neon conserva las 283 migraciones y Fly conserva `7efabd87213e`; no se importó el interruptor de recepción. Ver pruebas y procedimiento de activación en [meta-recepcion-piloto.md](../../docs/meta-recepcion-piloto.md). El [CI remoto 36195604016](https://github.com/studiocamaleon/gdi/actions/runs/36195604016) aprobó API/Next con tipos, migraciones y permisos, ensayos Meta y login/BFF sobre `715c7084346cad30addc149fe0856bdb815a1b7d`. También pasaron 60 pruebas API, 4 de interfaz, TypeScript frontend y revisión visual local con datos ficticios. El código está en el [PR #5 en borrador](https://github.com/studiocamaleon/gdi/pull/5), dependiente del #4. Esta nota no acredita recepción real ni coexistencia.
+
 Ensayos con el Compose aislado `grafoprint-staging-local`, en la Mac y en un ejecutor temporal de GitHub, y comprobaciones posteriores contra los proveedores de staging. Todos usaron datos sintéticos. Las credenciales cloud se usaron desde la Mac y desde las máquinas Fly a través de su almacén de secretos; no se incorporaron al repositorio ni al workflow.
 
 ## Comprobaciones locales
@@ -229,3 +233,82 @@ Web desplegada y saludable. Chrome confirmó el alta de `Taller de prueba — St
 Se verificó visualmente Cuentas de cobro en escritorio: texto legible a la izquierda y botón Agregar cuenta a la derecha, sin la columna vacía previa. El botón abrió Nueva cuenta y se canceló sin guardar cuentas ni saldos. No se ensayó el guardado financiero ni un viewport móvil.
 
 API, ambos workers y web conservaron una máquina cada uno, región gru y tamaños acordados. Gotenberg no se modificó. El builder temporal `fly-builder-thrumming-field-7164` se eliminó tras publicar las imágenes. No se fusionó el PR a main ni se cambiaron servicios de producción.
+
+
+## Categorías comerciales, alta de centros y selector de egresos — 25 de septiembre
+
+Corrección `311cbcd274bac7fff819c584eb9a66197ba33f63`, rama `codex/fix-configuracion-staging`, propuesta en [PR #3](https://github.com/studiocamaleon/gdi/pull/3) sobre `codex/staging-infraestructura`. El PR #2 sigue sin integrar a `main`.
+
+- **Catálogo comercial:** la base tenía cero categorías y subcategorías. La migración `20260925190000_completar_catalogo_comercial` agrega las 11 categorías y 48 subcategorías de la fuente existente con sus atributos. Sólo inserta códigos faltantes; conserva IDs, configuraciones e inactivos existentes. No ejecuta seed ni crea productos de empresas.
+- **Centro de costo:** alta y edición comparten Datos generales, Gastos, Ajustes e Historial. Las horas productivas se pueden cargar antes del primer guardado. Se conserva el comportamiento existente de guardar y publicar cuando hay datos válidos; no cambian reglas ni permisos de API.
+- **Egresos:** las 35 categorías ya existían, pero la lista excedía su contenedor y se recortaba. Ahora tiene altura limitada y desplazamiento propio, con el buscador visible.
+
+Validación local: ocho pruebas aprobadas (tres del formulario de centro y cinco de categorías de egresos), TypeScript web, ESLint y sintaxis del verificador. Las pruebas del alta cubren conservación entre pestañas, envío conjunto de gastos/horas, centro no productivo y error de API sin perder el formulario. El snapshot JSON coincide con su fuente.
+
+[GitHub Actions 36166757028](https://github.com/studiocamaleon/gdi/actions/runs/36166757028) aprobó sobre ese commit: backend y web compilados con tipos, 282 migraciones sobre PostgreSQL temporal, permisos y acceso HTTP. El ensayo del catálogo modifica registros dentro de una transacción descartable y reaplica el snapshot, comprobando que conserva sus IDs y configuraciones. Este verificador no se ejecutó contra Neon persistente.
+
+Después se ejecutó `migrate.cjs` con la credencial separada de migración y destino explícito `grafoprint_staging`. Salida cero; consulta posterior confirmó 282 migraciones terminadas, 11 categorías y 48 subcategorías accesibles con el rol de aplicación.
+
+La web se compiló remotamente con tipos y se desplegó en la misma máquina `683d195da310e8`, región `gru`, 1 CPU compartida y 1 GB. Imagen: `registry.fly.io/grafoprint-staging-web@sha256:2aca392f9fcacf23d979c15ece3d43cc5855d3613ca76c1c9dc4166721d4d8b6`. Fly sufrió un timeout transitorio al cerrar el registro de la compilación; la imagen ya estaba subida y el despliegue posterior por digest terminó correctamente. Los controles de Fly y `/api/health` aprobaron. Se retiró el builder temporal `fly-builder-willow-tide-2612`.
+
+API y workers mantienen la imagen `registry.fly.io/grafoprint-staging-api@sha256:8b401da85ba89bbea1caaed14ec70f5258f553aa70a331756cb35e429b75ce19`: no hubo cambios de lógica de backend. Gotenberg, tamaños y secretos no cambiaron. No se reinició Docker ni se compiló la web localmente.
+
+Comprobación en Chrome con Gráfica Demo — Staging:
+
+1. **Nuevo producto:** las 48 opciones comerciales aparecen; se seleccionó Impresión comercial en hoja · Tarjetas. No se guardó ningún producto.
+2. **Nuevo centro:** las cuatro pestañas aparecen desde el alta. Se creó `QA — Alta completa — Staging` (`QA-ALTA-0925`) para `2026-10`, con un gasto sintético de $20.000 y 100 horas. El resumen mostró $200/hora antes de guardar. Un único guardado creó la tarifa; al consultar después el historial figuró `v1`, `publicada`, $20.000, 100 horas y $200/hora. No se necesitó completar datos ni publicar de nuevo. El registro se conserva identificado para pruebas; la planilla de septiembre del centro preexistente mantuvo $1.800.000, 120 horas y $15.000/hora.
+3. **Registrar egreso:** scroll real hasta el final de las 35 categorías, selección de Ajustes de caja y búsqueda de Alquiler comprobados. El buscador permaneció visible. Se descartó el formulario sin crear egresos (registro sigue en cero).
+
+La verificación visual se hizo en escritorio; no se ensayó un viewport móvil. No se fusionaron PR ni se cambió producción.
+
+## Tarifa publicada del centro en maquinaria — 25 de septiembre
+
+Corrección `e209c74d46ff2c38f42856ac962655b1d3785ca3`, incorporada al mismo [PR #3](https://github.com/studiocamaleon/gdi/pull/3). La ficha leía `ultimaTarifaTotal`, que puede pertenecer a un borrador, aunque el campo se describe como la última planilla publicada. Ahora utiliza `ultimaTarifaPublicada` y conserva «Sin tarifa publicada» cuando no existe publicación.
+
+La lectura de staging confirmó que el centro de Impresión gran formato UV tenía una tarifa publicada de septiembre de $15.000/hora y un borrador de octubre de $0/hora. El recálculo del período al crear el centro QA de la prueba anterior había generado ese borrador. La máquina Impresora Hibrida UV conservaba el vínculo correcto con su centro: no guarda una copia de la tarifa y no había sobrescrito la publicación. El problema estaba en el importe mostrado. No se cambiaron datos, reglas de cálculo, API ni migraciones para corregirlo.
+
+Pasaron cuatro pruebas del componente real: publicación de $15.000 frente a borrador posterior en cero, borrador sin publicación, máquina sin centro asignado y publicación válida de cero. También aprobaron TypeScript web y ESLint. [GitHub Actions 36170770793](https://github.com/studiocamaleon/gdi/actions/runs/36170770793) aprobó sobre ese commit las compilaciones con tipos, 282 migraciones, permisos y acceso HTTP en el entorno temporal.
+
+La web se compiló remotamente con tipos y se desplegó por digest en la misma máquina `683d195da310e8`, con los mismos recursos. Imagen: `registry.fly.io/grafoprint-staging-web@sha256:d12ca9fe457c7b1266a952eab0f0ef1ad5b921960e9c1930861956ef285f769b`. Los controles de Fly aprobaron y `/api/health` respondió `200` con `status: ok`. API, workers, Gotenberg, secretos y migraciones permanecieron sin cambios. El builder temporal `fly-builder-russet-star-6762` se eliminó al terminar.
+
+En Chrome se recargó la ficha guardada de Impresora Hibrida UV, sin cambios pendientes. Se confirmó visualmente el centro Impresion gran formato UV y «Tarifa / hora: $15.000,00», manteniendo «Sin cambios pendientes» y Guardar deshabilitado. No se volvió a guardar ni se modificó la configuración de la máquina. No se fusionaron PR ni se publicó el SaaS en producción.
+
+## Nombre del vendedor y tipografía de etiquetas — 25 de septiembre
+
+Correcciones `958e42012` y `0dc67c499`, incorporadas al [PR #3](https://github.com/studiocamaleon/gdi/pull/3).
+
+- La OT de la empresa demo no tiene un empleado vendedor asignado. La ficha usa entonces a quien la emitió, cuya firma histórica era el correo aunque el perfil actual ya tenía nombre. El detalle ahora completa ese correo con el nombre actual del usuario asociado al evento. Conserva la prioridad del vendedor asignado, las firmas de soporte/sistema y el historial original. La primera emisión se lee fuera del límite de 200 eventos; no se asigna al lector actual como vendedor ni se modifican registros.
+- La vista previa de la etiqueta mostraba cuadrados en todos los textos. El contenedor backend no tenía archivos de fuentes ni configuración Fontconfig. Se incluyen `fontconfig` y `fonts-dejavu-core`, y se elige DejaVu Sans en el SVG rasterizado. La vista previa, el PDF descargado y el raster TSPL comparten este generador. El tamaño sigue siendo 100 × 150 mm y no cambia el contenido del QR.
+
+Validación local: 12 pruebas nuevas del detalle de vendedor, 97 pruebas existentes del ciclo de la OT y 20 de impresión aprobadas; compilación backend con tipos y ESLint del nuevo spec aprobados. El ensayo `verify-label.cjs` usa datos sintéticos, sin base ni red, y comprueba texto visible con anchuras de glifos distintas y QR conservado. Ejecutado contra el servidor anterior reproduce el fallo «Falta una fuente proporcional legible en las etiquetas». Se agrega al workflow para ejecutarlo dentro de la imagen Linux final, donde ocurre el problema; en macOS las fuentes instaladas podían ocultarlo.
+
+Referencias de paquetes: [DejaVu en Debian](https://packages.debian.org/bookworm/fonts-dejavu-core) y [Fontconfig](https://packages.debian.org/bookworm/fontconfig).
+
+[GitHub Actions 36180731864](https://github.com/studiocamaleon/gdi/actions/runs/36180731864) aprobó sobre `0dc67c49983574263d063cb0ef0dab9ec2a18233`: compilaciones backend/web con tipos, prueba del raster dentro de Linux, 282 migraciones en la base temporal, permisos y ensayo HTTP completo. La imagen backend se compiló remotamente con tipos y se publicó con digest `sha256:5604c934b96cf09a53613683fae86d2738573a8dbe97e05bdf29769c23ec9f5d`. El builder `fly-builder-sunlit-woodland-5964` se eliminó al finalizar la compilación.
+
+API, worker de cálculos y worker PDF desplegados con esa misma imagen por digest en sus máquinas existentes, sin cambiar tamaños ni regiones. Fly aprobó los controles de los tres procesos. Salud API y web respondió `200`, con base disponible; el ensayo de tipografía también aprobó en la API real de Fly. La web conserva su imagen anterior, ya que ambas correcciones se resuelven en el servidor. No se cambiaron secretos, Gotenberg ni migraciones cloud.
+
+Chrome confirmó en `OT-2026-0001` el vendedor «Lucas German», avatar LG y los cinco eventos originales. La vista previa de etiqueta pasó de cuadrados vacíos a texto legible. Se descargó el PDF desde la aplicación y se renderizó con Poppler: una página de 100 × 150 mm, con nombre de empresa y acento en «Gráfica», identificación interna, número de orden, cliente, fecha, producto, cantidad `4,04 m²` y pie legibles, sin superposiciones ni recortes. La impresión física no se ensayó. La orden siguió pendiente, con su mismo importe y fecha; no se guardó ni reemitió.
+
+Por indicación de Lucas, materiales, reservas y fechas mantienen su comportamiento. No se fusionaron PR ni se cambió producción.
+
+
+## Piloto interno de WhatsApp Cloud API — 25 de septiembre
+
+Despliegue del código `7efabd87213e` del [PR #4](https://github.com/studiocamaleon/gdi/pull/4). Las compilaciones remotas conservaron el chequeo de tipos. Backend compartido por API y ambos workers: `registry.fly.io/grafoprint-staging-api@sha256:ccf65db71c98a649b36793aed49a4a264b39d81bf1902a0ac678f0dc0ccae4e0`. Web: `registry.fly.io/grafoprint-staging-web@sha256:f455af59fea4fa0ae76de41fa4e77b0ce898c4fc42e8cec323e997140c2cf97d`. Se mantuvieron las máquinas y tamaños; Gotenberg no cambió. El builder temporal `fly-builder-humming-bush-589` se eliminó al terminar.
+
+Se aplicó en Neon `20260925210000_meta_cloud_piloto`: total 283 migraciones. Se verificaron las siete columnas nuevas y los permisos del rol de ejecución, sin DDL ni acceso a `_prisma_migrations`. No hubo seed, reset ni cambios en la base local.
+
+El reemplazo de la única máquina API produjo una interrupción temporal del acceso mientras concluía su cierre. Fly terminó correctamente, y salud y las pruebas HTTP posteriores aprobaron. La arquitectura de una sola máquina no garantiza despliegues sin interrupción; no se contrataron réplicas adicionales.
+
+Token, secreto y configuración del piloto se cargaron sólo en los secretos de la API. Meta confirmó el webhook de `api-staging` y la suscripción `messages`; la cuenta de prueba incluye Grafoprint entre sus apps suscriptas. El token temporal y los identificadores privados no se guardan en este documento.
+
+Controles HTTP reales aprobados: salud 200; API general 403 sin credencial interna; backoffice web 401 sin Basic; ruta de webhook con sufijo 403; verificación incorrecta 403; POST sin firma 401; challenge correcto 200 con el texto exacto; POST con firma válida y lote vacío 200. No se crearon mensajes mediante ese lote sintético.
+
+Gráfica Demo quedó en Founder mediante la acción normal de Plataforma, con motivo de auditoría; suscripción manual/activa sin cobros. La plantilla de prueba `hello_world` figura aprobada en Meta.
+
+Lucas completó el ingreso normal a la empresa demo. Desde Configuración → Integraciones se envió una sola prueba a su destinatario previamente autorizado: registro creado a las 21:33:55 UTC, webhook real `delivered` a las 21:33:59 UTC, un intento y ningún error. La interfaz mostró primero «Aceptado por Meta» y, al actualizar, «Entregado · Confirmado por Meta». Se verificaron los datos persistidos y la presentación visual. No hubo reenvío ni se sustituyó la entrega por un webhook simulado.
+
+Chrome repitió el desafío Basic durante el acceso manual. El ensayo HTTP con las credenciales privadas vigentes respondió 200; se recordó que la puerta usa `grafoprint`, distinto de los usuarios de empresa/Plataforma, y se dejó un archivo privado local para copiar la clave. Lucas confirmó después su ingreso. No se rotaron contraseñas ni se desactivó la protección.
+
+La inspección del token informó vencimiento a las 23:00 UTC del 25/09 (20:00 de Argentina). Renovarlo antes de continuar pruebas posteriores. La app sigue sin publicar y no se cambiaron sus solicitudes de revisión. El ensayo verifica el número oficial de prueba, no onboarding de clientes, coexistencia ni inbox.
