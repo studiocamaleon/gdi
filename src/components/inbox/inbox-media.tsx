@@ -178,7 +178,7 @@ function MedioCargado({
       {(audio || mimeType.startsWith("video/")) && (
         <InboxMediaMenu url={url} nombre={nombre} video={!audio} />
       )}
-      {!sticker && imagen && (
+      {falloFormato && !sticker && imagen && (
         <a
           href={url}
           download={nombre}

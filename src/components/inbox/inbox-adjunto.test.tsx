@@ -149,7 +149,12 @@ it("muestra y permite ampliar una imagen enviada como documento sin paso manual"
   expect(
     container.querySelector('[aria-label="Ampliar Referencia.png"]'),
   ).not.toBeNull();
-  expect(container.querySelector("a")?.download).toBe("Referencia.png");
+  expect(container.querySelector("a")).toBeNull();
+  expect(container.querySelector("strong")).toBeNull();
+  await click("Ampliar Referencia.png");
+  const visor = document.querySelector('[role="dialog"]');
+  expect(visor?.querySelector("img")?.src).toBe("blob:imagen");
+  expect(visor?.querySelector("a")?.download).toBe("Referencia.png");
   await act(async () => root.render(null));
   expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:imagen");
 });

@@ -107,7 +107,12 @@ it.each([
         `[aria-label="Opciones del ${tag === "audio" ? "audio" : "video"}"]`,
       )!;
       expect(menu).not.toBeNull();
-    } else expect(container.querySelector("a")?.download).toBe("Muestra");
+    } else {
+      expect(container.querySelector("a")).toBeNull();
+      expect(
+        container.querySelector('[aria-label="Ampliar Muestra"]'),
+      ).not.toBeNull();
+    }
   },
 );
 it("no descarga fuera de la vista y libera la copia al salir", async () => {

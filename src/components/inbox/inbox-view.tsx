@@ -1,13 +1,20 @@
 "use client";
 
 import {
-  InboxFiltros,
   InboxResponsable,
   InboxEventoEquipo,
   InboxNota,
   type BorradoresNotas,
 } from "./inbox-equipo";
-import type { EquipoInboxApi, FiltroInbox } from "@/lib/meta-inbox-api";
+import {
+  equipoInboxApi,
+  consultaFiltrosInbox,
+  filtrosInboxIniciales,
+  type EquipoInboxApi,
+  type FiltrosInbox,
+} from "@/lib/meta-inbox-api";
+import { InboxFiltros } from "./inbox-filtros";
+import { InboxEstado } from "./inbox-estado";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -138,8 +145,10 @@ export function InboxView({
   const [canalHabilitado, setCanalHabilitado] = useState(false);
   const [conexion, setConexion] = useState<EstadoInboxVivo>("conectando");
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEquipo, setFiltroEquipo] = useState<FiltroInbox>("TODAS");
-  const filtroEquipoActual = useRef<FiltroInbox>("TODAS");
+  const [filtroEquipo, setFiltroEquipo] = useState<FiltrosInbox>(
+    filtrosInboxIniciales,
+  );
+  const filtroEquipoActual = useRef<FiltrosInbox>(filtrosInboxIniciales);
   const [modoComposer, setModoComposer] = useState("respuesta");
   const borradoresNotas = useRef<BorradoresNotas>(new Map());
   const [ahora, setAhora] = useState(() => Date.now());
@@ -184,12 +193,19 @@ export function InboxView({
       }
       if (signal?.aborted) return false;
       if (silencioso && signal) query = { clienteId: elegido.current };
+      // Conservar criterios incluso al recuperar un error o recargar el origen.
+      if (!datosActuales.current || datosActuales.current.origen === "GENERAL")
+        query = {
+          busqueda: filtroActual.current || undefined,
+          ...consultaFiltrosInbox(filtroEquipoActual.current),
+          ...query,
+        };
       if (datosActuales.current?.origen === "GENERAL") {
         const conversacionId =
           query.conversacionId ?? conversacionElegida.current;
         query = {
           busqueda: filtroActual.current,
-          filtro: filtroEquipoActual.current,
+          ...consultaFiltrosInbox(filtroEquipoActual.current),
           ...query,
           conversacionId,
           ...(silencioso &&
@@ -240,6 +256,7 @@ export function InboxView({
             },
             mensajes: [],
             equipo: null,
+            lectura: null,
             respuesta: undefined,
             envios: [],
             contexto: null,
@@ -511,13 +528,82 @@ export function InboxView({
     if (datosActuales.current?.origen !== "GENERAL") return;
     const timer = setTimeout(() => {
       void consultar(
-        { clienteId: elegido.current, busqueda, filtro: filtroEquipo },
+        {
+          clienteId: elegido.current,
+          busqueda,
+          ...consultaFiltrosInbox(filtroEquipo),
+        },
         false,
         true,
       );
     }, 300);
     return () => clearTimeout(timer);
   }, [busqueda, filtroEquipo, consultar]);
+  useEffect(() => {
+    const api = equipoApi ?? equipoInboxApi;
+    if (
+      !api.lectura ||
+      !datos?.lectura?.pendiente ||
+      !datos.conversacionId ||
+      !datos.canalId ||
+      ocupado
+    )
+      return;
+    const id = datos.conversacionId,
+      canalId = datos.canalId,
+      revision = datos.lectura.revision;
+    const c = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let enviando = false;
+    const visible = () =>
+      document.visibilityState === "visible" &&
+      document.hasFocus() &&
+      (window.innerWidth > 700 || movilChat) &&
+      thread.current &&
+      thread.current.scrollHeight -
+        thread.current.scrollTop -
+        thread.current.clientHeight <=
+        80;
+    const revisar = () => {
+      clearTimeout(timer);
+      if (enviando || !visible()) return;
+      timer = setTimeout(() => {
+        if (!visible() || c.signal.aborted) return;
+        enviando = true;
+        void api.lectura!(id, { canalId, revision }, c.signal)
+          .then(() => {
+            if (!c.signal.aborted)
+              void consultar({ clienteId: elegido.current }, false, true);
+          })
+          .catch(() => {
+            enviando = false;
+          });
+      }, 600);
+    };
+    const log = thread.current;
+    revisar();
+    log?.addEventListener("scroll", revisar);
+    window.addEventListener("focus", revisar);
+    document.addEventListener("visibilitychange", revisar);
+    const reintento = setInterval(revisar, 10000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(reintento);
+      c.abort();
+      log?.removeEventListener("scroll", revisar);
+      window.removeEventListener("focus", revisar);
+      document.removeEventListener("visibilitychange", revisar);
+    };
+  }, [
+    equipoApi,
+    datos?.conversacionId,
+    datos?.canalId,
+    datos?.lectura?.revision,
+    datos?.lectura?.pendiente,
+    ocupado,
+    movilChat,
+    consultar,
+  ]);
   const actividad = [
     ...(datos?.mensajes ?? []).map((m) => ({
       tipo: "mensaje" as const,
@@ -857,6 +943,8 @@ export function InboxView({
                             nombre,
                             telefono: datos.contacto.telefono,
                             ultimoMensaje: datos.mensajes.at(-1) ?? null,
+                            sinLeer: false,
+                            estado: undefined,
                           },
                         ]
                       : []
@@ -872,6 +960,7 @@ export function InboxView({
                             ? datos.conversacionId === c.id
                             : true
                         }
+                        data-unread={c.sinLeer || undefined}
                         aria-label={`Abrir conversación con ${titulo}`}
                         onClick={() => {
                           setMovilChat(true);
@@ -913,6 +1002,17 @@ export function InboxView({
                             )}
                           </span>
                           <span className={s.snippet}>
+                            {c.sinLeer && (
+                              <span
+                                className={live.unreadDot}
+                                aria-label="Sin leer por el equipo"
+                              />
+                            )}
+                            {c.estado === "RESUELTA" && (
+                              <span className={live.resolvedLabel}>
+                                Resuelta ·
+                              </span>
+                            )}
                             {c.ultimoMensaje?.direccion === "SALIENTE" &&
                               c.ultimoMensaje.estadoEntrega && (
                                 <InboxMessageStatus
@@ -940,15 +1040,17 @@ export function InboxView({
                         <EmptyTitle>
                           {busqueda
                             ? "Sin coincidencias"
-                            : filtroEquipo !== "TODAS"
+                            : JSON.stringify(filtroEquipo) !==
+                                JSON.stringify(filtrosInboxIniciales)
                               ? "Sin conversaciones en este filtro"
                               : "Todavía no hay conversaciones"}
                         </EmptyTitle>
                         <EmptyDescription>
                           {busqueda
                             ? "Probá con otro nombre o teléfono."
-                            : filtroEquipo !== "TODAS"
-                              ? "Podés elegir Todas para ver el resto de la bandeja."
+                            : JSON.stringify(filtroEquipo) !==
+                                JSON.stringify(filtrosInboxIniciales)
+                              ? "Abrí Filtros para cambiar o limpiar la selección."
                               : "Aparecerán aquí a medida que se reciban."}
                         </EmptyDescription>
                       </EmptyHeader>
@@ -1013,25 +1115,45 @@ export function InboxView({
                           <p>{datos.contacto.telefono}</p>
                         </div>
                       </div>
-                      {datos.equipo &&
-                        datos.conversacionId &&
-                        datos.canalId && (
-                          <InboxResponsable
-                            key={`${datos.canalId}:${datos.conversacionId}`}
-                            equipo={datos.equipo}
-                            usuarioId={identidad.usuarioId}
-                            conversacionId={datos.conversacionId}
-                            canalId={datos.canalId}
-                            api={equipoApi}
-                            actualizar={() =>
-                              consultar(
-                                { clienteId: elegido.current },
-                                false,
-                                true,
-                              )
-                            }
-                          />
-                        )}
+                      <div className={live.teamActions}>
+                        {datos.equipo &&
+                          datos.conversacionId &&
+                          datos.canalId && (
+                            <InboxResponsable
+                              key={`${datos.canalId}:${datos.conversacionId}`}
+                              equipo={datos.equipo}
+                              usuarioId={identidad.usuarioId}
+                              conversacionId={datos.conversacionId}
+                              canalId={datos.canalId}
+                              api={equipoApi}
+                              actualizar={() =>
+                                consultar(
+                                  { clienteId: elegido.current },
+                                  false,
+                                  true,
+                                )
+                              }
+                            />
+                          )}
+                        {datos.equipo?.estado &&
+                          datos.conversacionId &&
+                          datos.canalId && (
+                            <InboxEstado
+                              key={`estado:${datos.canalId}:${datos.conversacionId}`}
+                              equipo={datos.equipo}
+                              conversacionId={datos.conversacionId}
+                              canalId={datos.canalId}
+                              api={equipoApi}
+                              actualizar={() =>
+                                consultar(
+                                  { clienteId: elegido.current },
+                                  false,
+                                  true,
+                                )
+                              }
+                            />
+                          )}
+                      </div>
                       <span className={s.contextMobile}>
                         <Button
                           variant="ghost"
@@ -1149,7 +1271,12 @@ export function InboxView({
                                               m.adjunto.mimeType ===
                                                 "image/webp"
                                             ? "sticker"
-                                            : "adjunto"
+                                            : m.tipo === "image" ||
+                                                m.adjunto.mimeType?.startsWith(
+                                                  "image/",
+                                                )
+                                              ? "image"
+                                              : "adjunto"
                                       : undefined
                                   }
                                   data-kind={

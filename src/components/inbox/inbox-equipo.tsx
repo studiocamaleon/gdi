@@ -6,10 +6,11 @@ import {
   Send,
   UserRound,
   Check,
+  ChevronDown,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -33,46 +34,29 @@ import {
   type EquipoInboxApi,
   type EquipoInbox,
   type EventoEquipoInbox,
-  type FiltroInbox,
+  type OperadorInbox,
 } from "@/lib/meta-inbox-api";
 import { ApiError } from "@/lib/api";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import s from "./inbox-equipo.module.css";
-const filtros = [
-  ["TODAS", "Todas"],
-  ["MIAS", "Mías"],
-  ["SIN_ASIGNAR", "Sin asignar"],
-  ["PARTICIPE", "Participé"],
-] as const;
-export function InboxFiltros({
-  value,
-  onChange,
-}: {
-  value: FiltroInbox;
-  onChange: (v: FiltroInbox) => void;
-}) {
+function PresenciaOperador({ operador }: { operador: OperadorInbox | null }) {
+  const presencia = operador?.presencia ?? "DESCONOCIDA";
   return (
-    <div className={s.filters}>
-      <ToggleGroup
-        size="sm"
-        spacing={1}
-        value={[value]}
-        onValueChange={(v) => {
-          if (v[0]) onChange(v[0] as FiltroInbox);
-        }}
-        aria-label="Filtrar conversaciones"
-      >
-        {filtros.map(([id, label]) => (
-          <ToggleGroupItem
-            key={id}
-            value={id}
-            aria-label={id === "PARTICIPE" ? "En las que participé" : label}
-          >
-            {label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-    </div>
+    <span
+      className={s.presence}
+      data-presence={operador ? presencia : "SIN_ASIGNAR"}
+      title={
+        operador
+          ? presencia === "CONECTADO"
+            ? "Conectado"
+            : presencia === "DESCONECTADO"
+              ? "Desconectado"
+              : "Presencia aún no disponible"
+          : "Sin asignar"
+      }
+    >
+      <UserRound />
+    </span>
   );
 }
 export function InboxResponsable({
@@ -152,7 +136,10 @@ export function InboxResponsable({
       }
     }
   };
-  const opciones = [{ id: null, nombre: "Sin asignar" }, ...equipo.operadores];
+  const opciones = equipo.operadores;
+  const actual =
+    equipo.operadores.find((o) => o.id === equipo.responsable?.id) ??
+    equipo.responsable;
   return (
     <DropdownMenu
       open={abierto}
@@ -167,7 +154,7 @@ export function InboxResponsable({
         aria-label={`Responsable: ${equipo.responsable?.nombre ?? "Sin asignar"}`}
         title="Asignar o transferir conversación"
       >
-        <UserRound data-icon="inline-start" />
+        <PresenciaOperador operador={actual} />
         <span>
           {equipo.responsable?.nombre ?? "Sin asignar"}
           {equipo.responsable?.id === usuarioId ? " · Vos" : ""}
@@ -175,17 +162,40 @@ export function InboxResponsable({
             ? " · Sin acceso"
             : ""}
         </span>
-        <ArrowRightLeft data-icon="inline-end" />
+        <ChevronDown data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         {...tema}
         className={cn(tema.className, s.ownerMenu)}
         align="end"
       >
+        <div className={s.ownerHeading}>
+          <span>EQUIPO DE ATENCIÓN</span>
+          <strong>
+            {ocupado ? "Guardando…" : "A cargo de la conversación"}
+          </strong>
+          <small>
+            {equipo.presenciaSimulada
+              ? "Presencia simulada en esta demo"
+              : "Cualquier integrante habilitado puede responder"}
+          </small>
+        </div>
         <DropdownMenuGroup>
-          <DropdownMenuLabel>
-            {ocupado ? "Guardando…" : "Asignar responsable"}
+          <DropdownMenuLabel className="sr-only">
+            Asignar responsable
           </DropdownMenuLabel>
+          <DropdownMenuItem
+            closeOnClick={false}
+            disabled={ocupado || desactualizado || !equipo.responsable}
+            onClick={() => void guardar(null)}
+          >
+            <PresenciaOperador operador={null} />
+            <span className={s.operatorText}>
+              <strong>Sin asignar</strong>
+              <small>Disponible para el equipo</small>
+            </span>
+            {!equipo.responsable && <Check />}
+          </DropdownMenuItem>
           {opciones.map((o) => (
             <DropdownMenuItem
               key={o.id ?? "sin-asignar"}
@@ -197,10 +207,19 @@ export function InboxResponsable({
               }
               onClick={() => void guardar(o.id)}
             >
-              <UserRound />
-              <span className="min-w-0 flex-1 truncate">
-                {o.nombre}
-                {o.id === usuarioId ? " · Vos" : ""}
+              <PresenciaOperador operador={o} />
+              <span className={s.operatorText}>
+                <strong>
+                  {o.nombre}
+                  {o.id === usuarioId ? " · Vos" : ""}
+                </strong>
+                <small>
+                  {o.presencia === "CONECTADO"
+                    ? "Conectado"
+                    : o.presencia === "DESCONECTADO"
+                      ? "Desconectado"
+                      : "Presencia aún no disponible"}
+                </small>
               </span>
               {o.id === (equipo.responsable?.id ?? null) && <Check />}
             </DropdownMenuItem>
@@ -240,11 +259,17 @@ export function InboxEventoEquipo({ evento }: { evento: EventoEquipoInbox }) {
   const texto =
     evento.tipo === "AUTOASIGNACION"
       ? `${evento.actor.nombre} quedó a cargo al responder.`
-      : evento.tipo === "SIN_ASIGNAR"
-        ? `${evento.actor.nombre} dejó la conversación sin asignar.`
-        : evento.tipo === "TRANSFERENCIA"
-          ? `${evento.actor.nombre} transfirió la conversación de ${evento.anterior?.nombre ?? "un integrante anterior"} a ${evento.responsable?.nombre}.`
-          : `${evento.actor.nombre} asignó la conversación a ${evento.responsable?.nombre}.`;
+      : evento.tipo === "RESUELTA"
+        ? `${evento.actor.nombre} resolvió la conversación.`
+        : evento.tipo === "REABIERTA"
+          ? `${evento.actor.nombre} reabrió la conversación.`
+          : evento.tipo === "REABIERTA_CLIENTE"
+            ? "La conversación se reabrió porque el cliente volvió a escribir."
+            : evento.tipo === "SIN_ASIGNAR"
+              ? `${evento.actor.nombre} dejó la conversación sin asignar.`
+              : evento.tipo === "TRANSFERENCIA"
+                ? `${evento.actor.nombre} transfirió la conversación de ${evento.anterior?.nombre ?? "un integrante anterior"} a ${evento.responsable?.nombre}.`
+                : `${evento.actor.nombre} asignó la conversación a ${evento.responsable?.nombre}.`;
   return (
     <div className={s.event} title={fechaHora(evento.creadoEl)}>
       <ArrowRightLeft size={12} />

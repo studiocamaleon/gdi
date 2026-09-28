@@ -172,3 +172,9 @@
   padding: 10px 0;
   opacity: 0.75;
 }
+
+.media[data-media="image"] .image {
+  display: block;
+  max-height: 320px;
+  background: transparent;
+}

@@ -103,3 +103,195 @@
   align-items: center;
   gap: 6px;
 }
+
+/* Superficies propias del Inbox, con los tokens de la marca. */
+.ownerMenu {
+  width: 310px;
+  padding: 6px;
+}
+.ownerHeading {
+  padding: 14px 12px 13px;
+  margin: -6px -6px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2, var(--muted));
+  border-radius: 8px 8px 0 0;
+}
+.ownerHeading > span {
+  display: block;
+  color: var(--accent-soft-foreground);
+  font: 9px var(--brand-mono);
+  letter-spacing: 1.3px;
+  margin-bottom: 5px;
+}
+.ownerHeading strong {
+  display: block;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+}
+.ownerHeading small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-text);
+  font-size: 10px;
+}
+.ownerMenu [data-slot="dropdown-menu-item"] {
+  min-height: 52px;
+  gap: 10px;
+}
+.ownerMenu [data-slot="dropdown-menu-item"][data-disabled] {
+  opacity: 0.75;
+}
+.operatorText {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.operatorText strong {
+  font-size: 12px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.operatorText small {
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.presence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  background: var(--muted);
+  color: var(--muted-text);
+}
+.presence[data-presence="CONECTADO"] {
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
+.presence[data-presence="DESCONECTADO"] {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+.presence svg {
+  width: 15px;
+  height: 15px;
+  color: inherit;
+}
+.owner > .presence {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: visible;
+}
+/* Las tres categorías usan el mismo segmento, ancho y selección de Grafo. */
+.filterRow {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.filterLabel {
+  font: 9px var(--brand-mono);
+  letter-spacing: 1.2px;
+  color: var(--muted-text);
+  padding-left: 2px;
+}
+.filters .filterSegments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2, var(--muted));
+}
+.filters .filterSegments [data-slot="toggle-group-item"] {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0 4px;
+  color: var(--muted-text);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.filters .filterSegments [data-slot="toggle-group-item"][aria-pressed="true"] {
+  color: var(--foreground);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.filters .filterSegments [data-slot="toggle-group-item"]:hover {
+  color: var(--foreground);
+  background: var(--accent-soft);
+}
+.filterFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 25px;
+}
+.filterFooter > span {
+  color: var(--muted-text);
+  font-size: 10px;
+}
+.filterFooter button {
+  height: 24px;
+  font-size: 10px;
+  padding-inline: 5px;
+}
+.filterHelp {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted-text);
+  line-height: 1.55;
+}
+.stateMenu {
+  width: 270px;
+  padding: 8px;
+}
+
+.filterToolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.filterTrigger {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  padding-inline: 4px;
+}
+.filterSummary {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted-text);
+  font-weight: 400;
+}
+.filterChevron {
+  transition: transform 160ms ease;
+}
+.filterTrigger[aria-expanded="true"] .filterChevron {
+  transform: rotate(180deg);
+}
+.filterPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 8px;
+}

@@ -981,11 +981,13 @@
 .snippet > [role="img"] {
   flex: none;
 }
+.bubble[data-content="image"],
 .bubble[data-content="video"] {
   width: 330px;
   padding: 4px;
   overflow: hidden;
 }
+.bubble[data-content="image"] .messageMeta,
 .bubble[data-content="video"] .messageMeta {
   padding: 4px 6px 0;
 }

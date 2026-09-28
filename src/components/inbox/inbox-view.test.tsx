@@ -145,7 +145,8 @@ it("un aviso actualiza sin desmontar el chat, conserva la lectura y elimina dato
 });
 async function click(label: string) {
   const button = [...container.querySelectorAll("button")].find(
-    (b) => b.textContent?.trim() === label,
+    (b) =>
+      b.textContent?.trim() === label || b.getAttribute("aria-label") === label,
   )!;
   expect(button).toBeTruthy();
   await act(async () => button.click());
@@ -690,7 +691,9 @@ it("el filtro elegido se conserva al refrescar y la autoría es independiente de
       '[role=log] [title="Autor visible sólo para el equipo"]',
     )?.textContent,
   ).toBe("Alex");
+  await click("Filtros");
   await click("Mías");
+  await click("Aplicar filtros");
   await act(async () => {
     await vi.advanceTimersByTimeAsync(300);
   });
@@ -860,3 +863,222 @@ async function activarNota() {
     );
   });
 }
+
+it("combina Mías, Sin leer y Sin responder y conserva la combinación al actualizar", async () => {
+  vi.useFakeTimers();
+  cargar.mockResolvedValue({ ...general(), colaboracionHabilitada: true });
+  let eventos!: Parameters<EscucharInbox>[0];
+  await act(async () =>
+    root.render(
+      <InboxView
+        identidad={identidad}
+        cargar={cargar}
+        tiempoReal={(o) => {
+          eventos = o;
+          return () => {};
+        }}
+      />,
+    ),
+  );
+  await click("Filtros");
+  await click("Mías");
+  await click("Sin leer");
+  await click("Sin responder");
+  await click("Aplicar filtros");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0]).toMatchObject({
+    filtro: "MIAS",
+    sinLeer: "true",
+    sinResponder: "true",
+  });
+  await act(async () => {
+    await eventos.actualizar(new AbortController().signal);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0]).toMatchObject({
+    filtro: "MIAS",
+    sinLeer: "true",
+    sinResponder: "true",
+  });
+  await click("Filtros");
+  await click("Sin leer");
+  await click("Aplicar filtros");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0].sinLeer).toBeUndefined();
+  expect(cargar.mock.calls.at(-1)?.[0].sinResponder).toBe("true");
+});
+it("marca lectura compartida sólo en una pestaña visible y enfocada, usando la revisión mostrada", async () => {
+  vi.useFakeTimers();
+  const foco = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+  const lectura = vi.fn().mockResolvedValue({ guardado: true });
+  cargar.mockResolvedValue({
+    ...general(),
+    lectura: { revision: 4, pendiente: true },
+  });
+  await act(async () =>
+    root.render(
+      <InboxView
+        identidad={identidad}
+        cargar={cargar}
+        tiempoReal={null}
+        equipoApi={{ asignar: vi.fn(), nota: vi.fn(), lectura }}
+      />,
+    ),
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(lectura).not.toHaveBeenCalled();
+  foco.mockReturnValue(true);
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(650);
+  });
+  expect(lectura).toHaveBeenCalledWith(
+    "chat-1",
+    { canalId: general().canalId, revision: 4 },
+    expect.any(AbortSignal),
+  );
+  foco.mockRestore();
+});
+it("no marca lo nuevo como leído mientras el operador recorre mensajes anteriores", async () => {
+  vi.useFakeTimers();
+  const foco = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  const lectura = vi.fn().mockResolvedValue({ guardado: true });
+  cargar.mockResolvedValue({
+    ...general(),
+    lectura: { revision: 4, pendiente: true },
+  });
+  await act(async () =>
+    root.render(
+      <InboxView
+        identidad={identidad}
+        cargar={cargar}
+        tiempoReal={null}
+        equipoApi={{ asignar: vi.fn(), nota: vi.fn(), lectura }}
+      />,
+    ),
+  );
+  const log = container.querySelector("[role=log]")!;
+  Object.defineProperty(log, "scrollHeight", {
+    value: 2000,
+    configurable: true,
+  });
+  Object.defineProperty(log, "clientHeight", {
+    value: 500,
+    configurable: true,
+  });
+  log.scrollTop = 100;
+  await act(async () => {
+    log.dispatchEvent(new Event("scroll"));
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(lectura).not.toHaveBeenCalled();
+  foco.mockRestore();
+});
+
+it("comienza colapsado, aplica al confirmar y permite un único responsable y estado", async () => {
+  vi.useFakeTimers();
+  cargar.mockResolvedValue({ ...general(), colaboracionHabilitada: true });
+  await render();
+  expect(
+    container
+      .querySelector('[aria-label="Filtros"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("false");
+  expect(container.querySelector('[aria-label="Responsabilidad"]')).toBeNull();
+  expect(cargar.mock.calls.at(-1)?.[0].filtro).toBe("TODAS");
+  const consultasIniciales = cargar.mock.calls.length;
+  await click("Filtros");
+  await click("Mías");
+  await click("Sin asignar");
+  expect(
+    container.querySelectorAll(
+      '[aria-label="Responsabilidad"] [aria-pressed="true"]',
+    ),
+  ).toHaveLength(1);
+  await click("Activas");
+  await click("Resueltas");
+  expect(
+    container.querySelectorAll(
+      '[aria-label="Estado de la conversación"] [aria-pressed="true"]',
+    ),
+  ).toHaveLength(1);
+  await click("Participé");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(cargar).toHaveBeenCalledTimes(consultasIniciales);
+  await click("Aplicar filtros");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0]).toMatchObject({
+    filtro: "SIN_ASIGNAR",
+    estados: "RESUELTA",
+    participe: "true",
+  });
+  expect(
+    container
+      .querySelector('[aria-label="Filtros"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("false");
+  await click("Filtros");
+  expect(
+    container.querySelector(
+      '[aria-label="Estado de la conversación"] [aria-pressed="true"]',
+    )?.textContent,
+  ).toBe("Resueltas");
+  await click("Activas");
+  await click("Filtros");
+  await click("Filtros");
+  expect(
+    container.querySelector(
+      '[aria-label="Estado de la conversación"] [aria-pressed="true"]',
+    )?.textContent,
+  ).toBe("Resueltas");
+  await click("Filtros");
+  expect(
+    container
+      .querySelector('[aria-label="Filtros"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("false");
+  await click("Limpiar filtros");
+  expect(container.querySelector('[aria-label="Limpiar filtros"]')).toBeNull();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0]).toMatchObject({
+    filtro: "TODAS",
+    estados: undefined,
+    participe: undefined,
+    sinLeer: undefined,
+    sinResponder: undefined,
+  });
+});
+it("recuperar un error no pierde los filtros seleccionados", async () => {
+  vi.useFakeTimers();
+  cargar.mockResolvedValue({ ...general(), colaboracionHabilitada: true });
+  await render();
+  await click("Filtros");
+  await click("Activas");
+  await click("Sin responder");
+  cargar.mockRejectedValueOnce(new Error("Corte de red"));
+  await click("Aplicar filtros");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(container.textContent).toContain("No pudimos cargar");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0]).toMatchObject({
+    estados: "ACTIVA",
+    sinResponder: "true",
+  });
+});

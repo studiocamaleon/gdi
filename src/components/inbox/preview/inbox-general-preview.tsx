@@ -233,11 +233,19 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> =
       })),
     ]),
   );
-const operadorDemo = { id: identidad.usuarioId, nombre: "Alex Demo" };
+const operadorDemo = {
+  id: identidad.usuarioId,
+  nombre: "Alex Demo",
+  presencia: "CONECTADO" as const,
+};
 const operadoresDemo = [
   operadorDemo,
-  { id: "marina-demo", nombre: "Marina Demo" },
-  { id: "tomas-demo", nombre: "Tomás Demo" },
+  { id: "marina-demo", nombre: "Marina Demo", presencia: "CONECTADO" as const },
+  {
+    id: "tomas-demo",
+    nombre: "Tomás Demo",
+    presencia: "DESCONECTADO" as const,
+  },
 ];
 const equipos: Record<string, EquipoInbox> = Object.fromEntries(
   contactos.map((c) => [
@@ -246,6 +254,12 @@ const equipos: Record<string, EquipoInbox> = Object.fromEntries(
       responsable:
         c.id === "bruno" ? { ...operadoresDemo[1], disponible: true } : null,
       version: 0,
+      estado: c.id === "bruno" ? "RESUELTA" : "ACTIVA",
+      estadoVersion: 0,
+      entrantesRevision: conversaciones[c.id].filter(
+        (m) => m.direccion === "ENTRANTE",
+      ).length,
+      presenciaSimulada: true,
       operadores: operadoresDemo,
       eventos: [],
       anterior: null,
@@ -271,8 +285,32 @@ function autoasignarDemo(id: string) {
     creadoEl: new Date().toISOString(),
   });
 }
+const lecturasDemo = new Map<string, number>();
 const accionesEquipo = new Set<string>();
 const equipoApi: EquipoInboxApi = {
+  lectura: async (id, dto) => {
+    lecturasDemo.set(id, Math.max(lecturasDemo.get(id) ?? 0, dto.revision));
+    return { guardado: true };
+  },
+  estado: async (id, dto) => {
+    if (accionesEquipo.has(dto.clave)) return { guardado: true };
+    const equipo = equipos[id];
+    if (equipo.estadoVersion !== dto.version)
+      throw new Error("El estado cambió.");
+    equipo.estado = dto.estado;
+    equipo.estadoVersion++;
+    equipo.eventos.push({
+      id: crypto.randomUUID(),
+      tipo: dto.estado === "RESUELTA" ? "RESUELTA" : "REABIERTA",
+      actor: operadorDemo,
+      anterior: null,
+      responsable: null,
+      texto: null,
+      creadoEl: new Date().toISOString(),
+    });
+    accionesEquipo.add(dto.clave);
+    return { guardado: true };
+  },
   asignar: async (id, dto) => {
     if (accionesEquipo.has(dto.clave)) return { guardado: true };
     const equipo = equipos[id];
@@ -544,6 +582,32 @@ const cargar: CargarInbox = async (query) => {
                 (e) => e.tipo === "NOTA" && e.actor.id === identidad.usuarioId,
               ))),
       )
+      .filter(
+        (c) =>
+          !query.estados ||
+          query.estados.split(",").includes(equipos[c.id].estado ?? "ACTIVA"),
+      )
+      .filter(
+        (c) =>
+          !query.sinLeer ||
+          (lecturasDemo.get(c.id) ?? 0) <
+            (equipos[c.id].entrantesRevision ?? 0),
+      )
+      .filter(
+        (c) =>
+          !query.sinResponder ||
+          conversaciones[c.id].at(-1)?.direccion === "ENTRANTE",
+      )
+      .filter(
+        (c) =>
+          !query.participe ||
+          conversaciones[c.id].some(
+            (m) => m.autor?.id === identidad.usuarioId,
+          ) ||
+          equipos[c.id].eventos.some(
+            (e) => e.tipo === "NOTA" && e.actor.id === identidad.usuarioId,
+          ),
+      )
       .filter((c) =>
         `${c.nombre} ${c.telefono}`
           .toLocaleLowerCase()
@@ -551,6 +615,10 @@ const cargar: CargarInbox = async (query) => {
       )
       .map((c) => ({
         ...c,
+        estado: equipos[c.id].estado,
+        sinLeer:
+          (lecturasDemo.get(c.id) ?? 0) <
+          (equipos[c.id].entrantesRevision ?? 0),
         ultimoMensaje:
           [...conversaciones[c.id]].sort(
             (a, b) =>
@@ -591,6 +659,14 @@ const cargar: CargarInbox = async (query) => {
     usuarioId: identidad.usuarioId,
     origen: "GENERAL",
     colaboracionHabilitada: true,
+    lectura: contacto
+      ? {
+          revision: equipos[contacto.id].entrantesRevision ?? 0,
+          pendiente:
+            (lecturasDemo.get(contacto.id) ?? 0) <
+            (equipos[contacto.id].entrantesRevision ?? 0),
+        }
+      : null,
     equipo: contacto ? structuredClone(equipos[contacto.id]) : null,
     respuesta: {
       plantillasHabilitadas: true,

@@ -101,3 +101,8 @@ La muestra de Diana incluye audio entrante/saliente, video, sticker y texto; los
 ## Equipo del Inbox — 28/09
 
 En el mismo worktree y rama `codex/inbox-canal-pruebas`, se aplicó la migración aditiva `20260928180000_inbox_equipo` sólo a desarrollo/tests: **297 migraciones**. Registra autores, responsables, transferencias y notas privadas; incorpora filtros y el permiso independiente de atención. Se otorgó al rol local `grafo_app` SELECT/INSERT/UPDATE/DELETE sobre la nueva tabla `InboxEventoInterno`. Sin seed/reset, cambios de credenciales, reinicio de Docker ni despliegue a staging/producción. Ver [funcionamiento y alcance](meta-inbox-equipo.md).
+
+
+## Lectura y estados compartidos — 28/09
+
+Aplicada la migración aditiva `20260928200000_inbox_estados_lectura` sólo a desarrollo y tests: **298 migraciones**. Agrega lectura compartida por el equipo y estados Activa/Resuelta, sin tablas nuevas ni cambios de credenciales. Prisma regenerado, con Meta y cron reales apagados. No se ejecutaron seeds/reset ni se desplegó staging/producción. Presencia simulada únicamente en la demo; el indicador real permanece neutral hasta implementar sus señales de conexión.

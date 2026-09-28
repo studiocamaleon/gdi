@@ -19,18 +19,50 @@ type ClienteInbox = {
   activo: boolean;
   contactos: string[];
 };
-export type OperadorInbox = { id: string; nombre: string };
+export type OperadorInbox = {
+  id: string;
+  nombre: string;
+  presencia?: "CONECTADO" | "DESCONECTADO" | "DESCONOCIDA";
+};
+export type EstadoConversacionInbox = "ACTIVA" | "RESUELTA";
+export type FiltrosInbox = {
+  responsable: FiltroInbox;
+  estados: EstadoConversacionInbox[];
+  sinLeer: boolean;
+  sinResponder: boolean;
+  participe: boolean;
+};
+export const filtrosInboxIniciales: FiltrosInbox = {
+  responsable: "TODAS",
+  estados: [],
+  sinLeer: false,
+  sinResponder: false,
+  participe: false,
+};
+export function consultaFiltrosInbox(f: FiltrosInbox): InboxConsulta {
+  return {
+    filtro: f.responsable,
+    estados: f.estados.length === 1 ? f.estados.join(",") : undefined,
+    sinLeer: f.sinLeer ? "true" : undefined,
+    sinResponder: f.sinResponder ? "true" : undefined,
+    participe: f.participe ? "true" : undefined,
+  };
+}
 export type FiltroInbox = "TODAS" | "MIAS" | "SIN_ASIGNAR" | "PARTICIPE";
 export type EventoEquipoInbox = {
   id: string;
   tipo: string;
-  actor: OperadorInbox;
+  actor: { id: string | null; nombre: string };
   texto: string | null;
   anterior: { id: string; nombre: string | null } | null;
   responsable: { id: string; nombre: string | null } | null;
   creadoEl: string;
 };
 export type EquipoInbox = {
+  presenciaSimulada?: boolean;
+  estado?: EstadoConversacionInbox;
+  estadoVersion?: number;
+  entrantesRevision?: number;
   responsable: (OperadorInbox & { disponible: boolean }) | null;
   version: number;
   operadores: OperadorInbox[];
@@ -39,6 +71,7 @@ export type EquipoInbox = {
 };
 export type MetaInbox = {
   colaboracionHabilitada?: boolean;
+  lectura?: { revision: number; pendiente: boolean } | null;
   equipo?: EquipoInbox | null;
   empresaId: string;
   usuarioId: string;
@@ -47,6 +80,8 @@ export type MetaInbox = {
   canalId?: string;
   conversacionId?: string | null;
   conversaciones?: {
+    estado?: EstadoConversacionInbox;
+    sinLeer?: boolean;
     id: string;
     telefono: string;
     nombre: string | null;
@@ -107,6 +142,10 @@ export type MetaInbox = {
   } | null;
 };
 export type InboxConsulta = {
+  estados?: string;
+  sinLeer?: "true";
+  sinResponder?: "true";
+  participe?: "true";
   filtro?: FiltroInbox;
   eventosAntesDe?: string;
   eventosDesdeId?: string;
@@ -127,6 +166,10 @@ export const getMetaInbox: CargarInbox = (query, signal) => {
   if (query.clienteId) params.set("clienteId", query.clienteId);
   for (const key of [
     "filtro",
+    "estados",
+    "sinLeer",
+    "sinResponder",
+    "participe",
     "eventosAntesDe",
     "eventosDesdeId",
     "conversacionId",
@@ -261,6 +304,22 @@ export const plantillasInboxApi: PlantillasInboxApi = {
 };
 
 export type EquipoInboxApi = {
+  estado?: (
+    id: string,
+    dto: {
+      canalId: string;
+      clave: string;
+      estado: EstadoConversacionInbox;
+      version: number;
+      revision: number;
+    },
+    signal?: AbortSignal,
+  ) => Promise<{ guardado: boolean }>;
+  lectura?: (
+    id: string,
+    dto: { canalId: string; revision: number },
+    signal?: AbortSignal,
+  ) => Promise<{ guardado: boolean }>;
   asignar: (
     id: string,
     dto: {
@@ -278,6 +337,16 @@ export type EquipoInboxApi = {
   ) => Promise<{ guardado: boolean }>;
 };
 export const equipoInboxApi: EquipoInboxApi = {
+  estado: (id, dto, signal) =>
+    apiRequest(
+      `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/estado`,
+      { method: "POST", body: JSON.stringify(dto), signal },
+    ),
+  lectura: (id, dto, signal) =>
+    apiRequest(
+      `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/lectura`,
+      { method: "POST", body: JSON.stringify(dto), signal },
+    ),
   asignar: (id, dto, signal) =>
     apiRequest(
       `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/responsable`,

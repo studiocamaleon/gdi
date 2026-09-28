@@ -37,7 +37,7 @@ Los cambios avisan al mismo sistema de actualización en vivo del Inbox. Cada na
 
 Desarrollado y validado en local. Demo interactiva: `http://localhost:3000/dev/diseno/inbox/conversaciones`. Alex es el operador de la demo; Bruno comienza a cargo de Marina. La demo conserva cambios en memoria mientras está abierta, sin WhatsApp ni base real.
 
-Preparación para el próximo despliegue agrupado: aplicar `20260928180000_inbox_equipo` y comprobar permisos del usuario de base sobre `InboxEventoInterno`, además de las tablas existentes. En local y tests son **297 migraciones**, sin seed ni reset. Los flags de Meta y cron reales siguen apagados.
+Preparación para el próximo despliegue agrupado: aplicar `20260928180000_inbox_equipo` y comprobar permisos del usuario de base sobre `InboxEventoInterno`, además de las tablas existentes. En local y tests son **298 migraciones**, sin seed ni reset. Los flags de Meta y cron reales siguen apagados.
 
 Quedan para bloques posteriores: firma del operador visible al cliente y configurable por empresa, reportes de rendimiento y llamadas de WhatsApp. Los registros de autoría y transferencias de este bloque sirven de base para los reportes.
 
@@ -49,3 +49,27 @@ Quedan para bloques posteriores: firma del operador visible al cliente y configu
 - En Chrome: asignación desde la lista sin modal, registro interno del cambio y entrada al editor con `/nota` + Enter. Demo ficticia, sin mensajes reales.
 
 Esta validación no sustituye la prueba compartida en staging cuando se despliegue el conjunto.
+
+
+## Lectura compartida, estados y filtros — 28/09/2026
+
+**La conversación es compartida por todo el equipo.** Cuando un integrante ve los mensajes nuevos, se marca leída para todos. El navegador lo confirma sólo con la pestaña visible, enfocada y al final del chat; no por una consulta de fondo ni mientras está leyendo mensajes antiguos. Una lectura atrasada no tapa un mensaje que llegó después. Esto es un estado interno de Grafo: no envía confirmaciones de lectura a WhatsApp.
+
+- **Activa:** hay una atención en curso.
+- **Resuelta:** un integrante dio por terminada esa atención. Se puede reabrir manualmente. Un mensaje entrante nuevo, posterior al cierre, también la reabre y conserva el responsable. Importaciones de historial, mensajes atrasados y webhooks repetidos no la reabren.
+- **Sin leer:** el equipo todavía no vio todas las entradas recibidas.
+- **Sin responder:** el último mensaje de WhatsApp es del cliente, independientemente de las notas o transferencias. Leer no equivale a responder. Una conversación resuelta puede cumplir este filtro si se cerró sin una respuesta posterior.
+
+Los estados no se mezclan con la asignación o la presencia. Por ahora se usan Activa y Resuelta; un eventual En espera necesitaría definir motivo, fecha de seguimiento y reglas de reapertura, para no transformarse en otro lugar donde olvidar consultas.
+
+Los filtros se combinan entre categorías (AND): responsable + lectura + respuesta + estado + participación + búsqueda. Estado permite una sola opción: Todos, Activas o Resueltas. Responsable también permite una sola opción. La API rechaza múltiples estados en una consulta. Sin leer, Sin responder y Participé son independientes y combinables: leer no implica responder, y participar no implica ser responsable. Ejemplo: **Mías + Activas + Sin responder**. Participé ahora es independiente y se puede combinar también con Mías. El panel comienza colapsado y sin filtros. Al expandirlo, tres filas de segmentos del mismo estilo permiten preparar la combinación; sólo Aplicar filtros actualiza la lista y colapsa el panel. Cerrarlo sin aplicar conserva la consulta anterior. El resumen muestra la cantidad de criterios activos. Una × con etiqueta Limpiar filtros permite volver a toda la bandeja sin abrir el panel; Restablecer dentro del panel sólo prepara un borrador vacío para aplicar. La consulta filtra en la base antes de paginar; sus cursores quedan ligados a la combinación.
+
+La migración aditiva `20260928200000_inbox_estados_lectura` agrega estado, revisión de entradas y lectura compartida a la conversación. El historial existente se considera pendiente hasta que lo vea alguien del equipo. Los cambios de estado tienen autor, fecha e historial privado; la reapertura por mensaje identifica al cliente sin inventar un operador. Las acciones avisan por el sistema de actualización en vivo existente.
+
+## Presencia del equipo
+
+El selector muestra iconos verdes para conectados y rojos para desconectados, además de una etiqueta textual. **Por ahora es una simulación exclusiva de la demo**; la API real no informa presencia y se muestra neutral como “Presencia aún no disponible”, sin inventar conexión o desconexión. No se confunde conectado con tener permiso: un integrante desconectado puede seguir a cargo y recibir una transferencia.
+
+La implementación real pendiente deberá usar una señal periódica autenticada de Grafo y Redis, por empresa, usuario y pestaña/sesión, con vencimiento corto. Se considerará conectado si queda al menos una sesión autorizada con señal vigente. Cerrar una pestaña no desconectará otras, y perder Internet o cerrar inesperadamente vencerá la señal. Una sesión revocada o sin permisos deberá dejar de contar inmediatamente. Redis caído se mostrará como estado desconocido. No se deducirá presencia del último inicio de sesión, de la asignación ni de los checks de Meta.
+
+Validación de este bloque: integración con dos operadores para lectura compartida, lecturas atrasadas, respuestas, filtros combinados, idempotencia, cierre en conflicto y reapertura; navegador para combinaciones y menú de equipo. Sólo desarrollo local y tests, con Meta y cron reales apagados; pendiente ensayo compartido en staging al desplegar el lote.
