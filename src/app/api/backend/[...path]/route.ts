@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { cabecerasBackendStaging, cabecerasPrivadas, controlAccesoStaging, stagingPrivado } from "@/lib/staging-access";
 import {
   MFA_COOKIES,
   MFA_HEADERS,
@@ -26,6 +27,8 @@ async function handler(
   request: Request,
   ctx: { params: Promise<{ path: string[] }> },
 ) {
+  const denied = controlAccesoStaging(request.headers);
+  if (denied) return cabecerasPrivadas(denied);
   const { path } = await ctx.params;
   const { search } = new URL(request.url);
   const target = `${backendBaseUrl()}/${path.join("/")}${search}`;
@@ -66,6 +69,7 @@ async function handler(
 
   let response: Response;
   try {
+    cabecerasBackendStaging(request.headers, headers);
     response = await fetch(target, {
       method,
       headers,
@@ -120,8 +124,12 @@ async function handler(
   }
 
   const responseHeaders = new Headers();
+  if (stagingPrivado()) {
+    responseHeaders.set("x-robots-tag", "noindex, nofollow, noarchive");
+    responseHeaders.set("cache-control", "private, no-store");
+  }
   const cacheControl = response.headers.get("cache-control");
-  if (cacheControl) responseHeaders.set("cache-control", cacheControl);
+  if (cacheControl && !stagingPrivado()) responseHeaders.set("cache-control", cacheControl);
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) responseHeaders.set("retry-after", retryAfter);
   const respContentType = response.headers.get("content-type");

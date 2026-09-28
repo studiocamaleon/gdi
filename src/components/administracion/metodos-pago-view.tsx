@@ -10,6 +10,12 @@ import {
 import { ActionButton } from "@/components/design-system/action-button";
 import { FormSheet } from "@/components/design-system/form-sheet";
 import configStyles from "@/components/configuracion/configuracion-workspace.module.css";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 import * as React from "react";
 import {
@@ -564,22 +570,24 @@ export function MetodosPagoView({
         />
 
         {puedeCrearCuenta && (
-          <div className="apm-concept">
-            <div className="c">
-              <strong>Cuentas de cobro</strong>
-              <p>
-                {cuentas.length
-                  ? cuentas.map((c) => c.nombre).join(" · ")
-                  : "Agregá una caja, banco o billetera para recibir los cobros."}
-              </p>
-            </div>
-            <ActionButton
-              variant="outline"
-              onPress={() => setNuevaCuenta(true)}
-            >
-              <PlusIcon /> Agregar cuenta
-            </ActionButton>
-          </div>
+          <Card className="my-6">
+            <CardHeader className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0 flex-1 basis-64">
+                <CardTitle>Cuentas de cobro</CardTitle>
+                <CardDescription className="mt-1 break-words">
+                  {cuentas.length
+                    ? cuentas.map((c) => c.nombre).join(" · ")
+                    : "Agregá una caja, banco o billetera para recibir los cobros."}
+                </CardDescription>
+              </div>
+              <ActionButton
+                variant="outline"
+                onPress={() => setNuevaCuenta(true)}
+              >
+                <PlusIcon data-icon="inline-start" /> Agregar cuenta
+              </ActionButton>
+            </CardHeader>
+          </Card>
         )}
         {nuevaCuenta && (
           <CuentaDialog

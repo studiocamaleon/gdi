@@ -46,6 +46,7 @@ yarn-error.log*
 .env*
 # …salvo las plantillas, que documentan las claves necesarias sin valores.
 !.env.example
+/deploy/staging/*.env
 
 # vercel
 .vercel

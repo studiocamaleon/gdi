@@ -660,6 +660,13 @@ model NotificacionWhatsapp {
   reservaToken String? @db.Uuid
   mensajeWebId String?
 
+  /// Cloud API: aceptar el POST no significa que el destinatario lo recibió.
+  metaWamid String? @unique
+  metaPhoneNumberId String?
+  estadoEntrega String?
+  estadoEntregaEl DateTime?
+  metaErrorCodigo String?
+
   intentos Int     @default(0)
   /// Por qué se descartó o falló. Es lo que se muestra en el log.
   motivo   String?
@@ -730,6 +737,7 @@ model Tenant {
   logoArchivo                                      Archivo?                                          @relation("TenantLogo", fields: [logoArchivoId], references: [id], onDelete: SetNull)
   archivos                                         Archivo[]                                         @relation("ArchivosDelTenant")
   integraciones                                    IntegracionTenant[]
+  mensajesWhatsappRecibidos                         MensajeWhatsappRecibido[]
   memberships                                      Membership[]
   roles                                            Rol[]
   eventosAcceso                                    EventoAcceso[]
@@ -6427,6 +6435,10 @@ model WebhookWhatsappCrudo {
   wamid         String?
   /// phone_number_id del value.metadata: la clave de ruteo a tenant.
   phoneNumberId String?
+  /// Cuenta del envelope: necesaria para eventos de plantillas sin número.
+  wabaId        String?
+  /// Huella del evento completo, no sólo del mensaje: sent/read son distintos.
+  dedupClave    String? @unique
   /// El `value` crudo del webhook, tal como llegó.
   payload       Json
   procesado     Boolean  @default(false)
@@ -6435,6 +6447,28 @@ model WebhookWhatsappCrudo {
   @@index([tenantId, tipo])
   @@index([wamid])
   @@index([procesado, recibidoEl])
+}
+
+/// Proyección de mensajes ENTRANTES del piloto, sin descargar adjuntos ni
+/// activar respuestas. El crudo queda disponible para procesadores futuros.
+model MensajeWhatsappRecibido {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  wabaId         String
+  phoneNumberId  String
+  wamid          String
+  remitente      String
+  nombreContacto String?
+  tipo           String
+  texto          String?
+  enviadoEl      DateTime
+  recibidoEl     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// El mismo mensaje puede volver en un webhook con metadata diferente.
+  @@unique([wabaId, phoneNumberId, wamid])
+  @@index([tenantId, wabaId, phoneNumberId, remitente, enviadoEl, id], map: "MensajeWhatsappRecibido_bandeja_idx")
 }
 
 /// Eventos de cobro recibidos de una pasarela (webhooks). Existe para dos

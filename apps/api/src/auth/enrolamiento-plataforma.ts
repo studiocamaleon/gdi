@@ -1,7 +1,7 @@
 import { SetMetadata } from '@nestjs/common';
 
 export const ENROLAMIENTO_PLATAFORMA = 'enrolamiento_plataforma';
-/** Excepción acotada: permite preparar MFA o salir, sin abrir el control plane. */
+/** Permite elegir la clave, preparar MFA o salir, sin abrir el control plane. */
 export const PermitirEnrolamientoPlataforma = () =>
   SetMetadata(ENROLAMIENTO_PLATAFORMA, true);
 

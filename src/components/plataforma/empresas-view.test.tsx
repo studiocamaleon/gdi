@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   bloquear: vi.fn(),
   reactivar: vi.fn(),
   plan: vi.fn(),
+  reenviar: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push }),
@@ -22,6 +23,7 @@ vi.mock("@/lib/plataforma-api", () => ({
   suspenderTenant: mocks.bloquear,
   reactivarTenant: mocks.reactivar,
   cambiarPlanTenant: mocks.plan,
+  reenviarInvitacionEmpresa: mocks.reenviar,
 }));
 vi.mock("@/components/design-system/form-dialog", () => ({
   FormDialog: ({
@@ -82,7 +84,21 @@ const empresa: EmpresaPlataforma = {
   funciones: [],
   limites: { usuariosMax: 10, ordenesMesMax: null, storageGb: null },
 };
+const empresaPendiente: EmpresaPlataforma = {
+  ...empresa,
+  activo: true,
+  invitacionAdministrador: {
+    id: "invitacion-1",
+    email: "admin@empresa.example.invalid",
+    venceEl: "2030-10-01T12:00:00Z",
+    aceptadaEl: null,
+    correoEstado: "error",
+    ultimoIntentoEl: "2020-01-01T12:00:00Z",
+    enviadoEl: null,
+  },
+};
 let root: Root, container: HTMLDivElement;
+const clipboardOriginal = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.params = new URLSearchParams("vista=tenants");
@@ -94,7 +110,128 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  if (clipboardOriginal) {
+    Object.defineProperty(navigator, "clipboard", clipboardOriginal);
+  } else {
+    Reflect.deleteProperty(navigator, "clipboard");
+  }
   vi.unstubAllGlobals();
+});
+
+const boton = (texto: string) =>
+  Array.from(container.querySelectorAll("button")).find(
+    (b) => b.textContent === texto,
+  )!;
+
+async function verFicha(id = "empresa-1", esAdmin = true) {
+  mocks.params = new URLSearchParams(`vista=tenants&empresa=${id}`);
+  await act(async () =>
+    root.render(
+      <EmpresasView
+        esAdmin={esAdmin}
+        planes={[]}
+        version={0}
+        onCrear={vi.fn()}
+      />,
+    ),
+  );
+}
+
+it("conserva y permite copiar el enlace después del reenvío y de actualizar la ficha, aunque falle el correo", async () => {
+  const enlace = "https://grafo.test/aceptar-invitacion?token=sintetico";
+  const copiar = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: copiar },
+  });
+  let detalle = empresaPendiente;
+  mocks.api.mockImplementation(async () => detalle);
+  mocks.reenviar.mockImplementation(async () => {
+    detalle = {
+      ...detalle,
+      invitacionAdministrador: {
+        ...detalle.invitacionAdministrador!,
+        ultimoIntentoEl: "2020-01-02T12:00:00Z",
+      },
+    };
+    return {
+      tenantId: detalle.id,
+      invitacion: detalle.invitacionAdministrador,
+      invitacionUrl: enlace,
+    };
+  });
+  await verFicha();
+  expect(container.textContent).not.toContain("Compartir el enlace manualmente");
+  await act(async () => boton("Reenviar invitación").click());
+  expect(mocks.reenviar).toHaveBeenCalledWith("empresa-1");
+  expect(container.textContent).toContain("Empresa creada · correo sin confirmar");
+  expect(container.textContent).toContain(enlace);
+  await act(async () => boton("Actualizar").click());
+  expect(container.textContent).toContain(enlace);
+  await act(async () => boton("Copiar enlace").click());
+  expect(copiar).toHaveBeenCalledWith(enlace);
+
+  // Una renovación desde otra sesión vuelve obsoleto el enlace que conservamos.
+  detalle = {
+    ...detalle,
+    invitacionAdministrador: {
+      ...detalle.invitacionAdministrador!,
+      ultimoIntentoEl: "2020-01-03T12:00:00Z",
+    },
+  };
+  await act(async () => boton("Actualizar").click());
+  expect(container.textContent).not.toContain(enlace);
+  expect(container.textContent).not.toContain("Copiar enlace");
+});
+
+it("reemplaza el enlace al renovar y lo retira si el servidor no devuelve uno vigente", async () => {
+  mocks.api.mockResolvedValue(empresaPendiente);
+  mocks.reenviar
+    .mockResolvedValueOnce({
+      tenantId: empresaPendiente.id,
+      invitacion: empresaPendiente.invitacionAdministrador,
+      invitacionUrl: "https://grafo.test/aceptar-invitacion?token=anterior",
+    })
+    .mockResolvedValueOnce({
+      tenantId: empresaPendiente.id,
+      invitacion: empresaPendiente.invitacionAdministrador,
+      invitacionUrl: "https://grafo.test/aceptar-invitacion?token=nuevo",
+    })
+    .mockResolvedValueOnce({
+      tenantId: empresaPendiente.id,
+      invitacion: empresaPendiente.invitacionAdministrador,
+    });
+  await verFicha();
+  await act(async () => boton("Reenviar invitación").click());
+  expect(container.textContent).toContain("token=anterior");
+  await act(async () => boton("Reenviar invitación").click());
+  expect(container.textContent).toContain("token=nuevo");
+  expect(container.textContent).not.toContain("token=anterior");
+  await act(async () => boton("Reenviar invitación").click());
+  expect(container.textContent).not.toContain("Copiar enlace");
+});
+
+it("no muestra enlaces a soporte ni conserva el de una empresa al cambiar de ficha", async () => {
+  const enlace = "https://grafo.test/aceptar-invitacion?token=empresa-1";
+  mocks.api.mockImplementation(async (url: string) => ({
+    ...empresaPendiente,
+    id: url.endsWith("empresa-2") ? "empresa-2" : "empresa-1",
+  }));
+  mocks.reenviar.mockResolvedValue({
+    tenantId: empresaPendiente.id,
+    invitacion: empresaPendiente.invitacionAdministrador,
+    invitacionUrl: enlace,
+  });
+  await verFicha();
+  await act(async () => boton("Reenviar invitación").click());
+  expect(container.textContent).toContain(enlace);
+  await verFicha("empresa-1", false);
+  expect(container.textContent).not.toContain(enlace);
+  expect(container.textContent).not.toContain("Reenviar invitación");
+  await verFicha("empresa-2");
+  expect(container.textContent).not.toContain(enlace);
+  await verFicha("empresa-1");
+  expect(container.textContent).not.toContain(enlace);
 });
 
 it("solicita sólo la página filtrada del directorio y conserva los filtros al paginar", async () => {

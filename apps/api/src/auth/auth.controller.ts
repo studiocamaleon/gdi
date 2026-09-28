@@ -131,6 +131,8 @@ export class AuthController {
   }
 
   /** El usuario cambia su propia clave. Pide la actual. */
+  @SinTenant()
+  @PermitirEnrolamientoPlataforma()
   @Post('password')
   cambiarPassword(
     @CurrentSession() auth: CurrentAuth,

@@ -31,7 +31,10 @@ export class CostosCatalogoService {
   }
 
   async createPlanta(auth: CurrentAuth, payload: UpsertPlantaDto) {
-    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
+    await this.capacidades.exigirAlguna(auth.tenantId, [
+      'centros_costo',
+      'maquinaria',
+    ]);
     let planta: Planta;
 
     try {
@@ -51,7 +54,10 @@ export class CostosCatalogoService {
   }
 
   async updatePlanta(auth: CurrentAuth, id: string, payload: UpsertPlantaDto) {
-    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
+    await this.capacidades.exigirAlguna(auth.tenantId, [
+      'centros_costo',
+      'maquinaria',
+    ]);
     await this.validaciones.findPlantaOrThrow(auth, id);
 
     let planta: Planta;
@@ -73,7 +79,10 @@ export class CostosCatalogoService {
   }
 
   async togglePlanta(auth: CurrentAuth, id: string) {
-    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
+    await this.capacidades.exigirAlguna(auth.tenantId, [
+      'centros_costo',
+      'maquinaria',
+    ]);
     const planta = await this.validaciones.findPlantaOrThrow(auth, id);
 
     return this.prisma.planta.update({

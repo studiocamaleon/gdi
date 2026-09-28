@@ -16,7 +16,13 @@ import { cambiarPassword } from "@/lib/auth";
  *
  * Ver docs/usuarios-roles-permisos-diseno.md
  */
-export function CambiarPasswordForm({ obligado }: { obligado: boolean }) {
+export function CambiarPasswordForm({
+  obligado,
+  destino = "/",
+}: {
+  obligado: boolean;
+  destino?: "/" | "/backoffice/seguridad";
+}) {
   const router = useRouter();
   const [actual, setActual] = React.useState("");
   const [nueva, setNueva] = React.useState("");
@@ -39,7 +45,7 @@ export function CambiarPasswordForm({ obligado }: { obligado: boolean }) {
       toast.success("Listo, ya tenés tu clave nueva.");
       // Refresca la sesión del servidor: sin esto, el layout sigue viendo el
       // flag y lo devuelve a esta misma pantalla.
-      router.replace("/");
+      router.replace(destino);
       router.refresh();
     } catch (error) {
       toast.error(

@@ -45,6 +45,8 @@ export class R2Driver implements StorageDriver {
     this.bucket = process.env.R2_BUCKET!;
     this.cliente = new S3Client({
       region: 'auto',
+      // Sólo para el emulador S3 local. R2 conserva el direccionamiento habitual.
+      forcePathStyle: process.env.R2_FORCE_PATH_STYLE === 'true',
       endpoint:
         process.env.R2_ENDPOINT ??
         `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,

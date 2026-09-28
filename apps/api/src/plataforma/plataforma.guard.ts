@@ -66,10 +66,11 @@ export class PlataformaGuard implements CanActivate {
     if (
       !permiteEnrolar &&
       (!request.auth.esPlataforma ||
-        request.auth.plataformaMfaPendiente !== false)
+        request.auth.plataformaMfaPendiente !== false ||
+        request.auth.plataformaPasswordPendiente === true)
     ) {
       throw new ForbiddenException(
-        'Ingresá por el backoffice y completá MFA para acceder a Plataforma.',
+        'Ingresá por el backoffice, elegí tu clave personal y completá MFA para acceder a Plataforma.',
       );
     }
     return true;

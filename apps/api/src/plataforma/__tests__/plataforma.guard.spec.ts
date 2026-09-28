@@ -43,6 +43,13 @@ const AUTH = {
 };
 
 describe('PlataformaGuard', () => {
+  it('bloquea el control plane si todavía hay una clave provisoria aunque MFA esté completa', async () => {
+    await expect(
+      guardCon({ activo: true, rolPlataforma: 'ADMIN' }).canActivate(
+        contextoCon({ auth: { ...AUTH, plataformaPasswordPendiente: true } }),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+  });
   it.each([
     { impersonacion: { actorUserId: 'u1' } },
     { mcp: { credencialId: 'credencial' } },

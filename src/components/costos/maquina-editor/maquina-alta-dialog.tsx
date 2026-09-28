@@ -11,12 +11,7 @@ import { toast } from "sonner";
 import { ActionButton as Button } from "@/components/design-system/action-button";
 import { Modal } from "@heroui/react";
 import { MaquinariaDialog } from "./maquinaria-dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@heroui/react";
 import type { Planta } from "@/lib/costos";
 import type { MaquinaPayload, PlantillaMaquinaria } from "@/lib/maquinaria";
@@ -26,6 +21,7 @@ import {
   maquinariaTemplates,
 } from "@/lib/maquinaria-templates";
 import { emptyMaquina } from "./helpers";
+import { PlantaSelector } from "../planta-selector";
 
 type MaquinaAltaDialogProps = {
   open: boolean;
@@ -43,14 +39,18 @@ export function MaquinaAltaDialog({
   const [plantilla, setPlantilla] = React.useState<PlantillaMaquinaria | null>(
     null,
   );
-  const [plantaId, setPlantaId] = React.useState(plantas[0]?.id ?? "");
+  const [plantaId, setPlantaId] = React.useState(
+    plantas.find((p) => p.activa)?.id ?? "",
+  );
+  const [altaPlantaAbierta, setAltaPlantaAbierta] = React.useState(false);
   const [creando, setCreando] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
     setNombre("");
     setPlantilla(null);
-    setPlantaId(plantas[0]?.id ?? "");
+    setPlantaId(plantas.find((p) => p.activa)?.id ?? "");
+    setAltaPlantaAbierta(false);
     setCreando(false);
   }, [open, plantas]);
 
@@ -58,7 +58,15 @@ export function MaquinaAltaDialog({
     nombre.trim().length > 0 &&
     plantilla !== null &&
     Boolean(plantaId) &&
+    !altaPlantaAbierta &&
     !creando;
+
+  const cerrar = () => {
+    onClose();
+    // Una planta guardada permanece aunque se descarte el borrador de máquina.
+    // Actualizamos el listado al cerrar, sin borrar campos durante el alta.
+    router.refresh();
+  };
 
   const handleCrear = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -96,7 +104,7 @@ export function MaquinaAltaDialog({
     <MaquinariaDialog
       isOpen={open}
       onOpenChange={(next) => {
-        if (!next && !creando) onClose();
+        if (!next && !creando) cerrar();
       }}
       isDismissable={!creando}
       title="Nueva máquina"
@@ -139,27 +147,12 @@ export function MaquinaAltaDialog({
               />
             </Field>
 
-            <Field data-disabled={plantas.length === 0}>
-              <FieldLabel>Planta</FieldLabel>
-              <SelectField
-                value={plantaId}
-                disabled={plantas.length === 0}
-                onChange={(value) => setPlantaId(value ?? "")}
-                aria-label="Planta"
-                className="w-full"
-                options={[
-                  ...(plantas.map((planta) => ({
-                    value: planta.id,
-                    label: planta.nombre,
-                  })) ?? []),
-                ]}
-              />
-              {plantas.length === 0 ? (
-                <FieldDescription>
-                  Primero debes crear una planta.
-                </FieldDescription>
-              ) : null}
-            </Field>
+            <PlantaSelector
+              plantas={plantas}
+              value={plantaId}
+              onChange={setPlantaId}
+              onAltaAbiertaChange={setAltaPlantaAbierta}
+            />
           </FieldGroup>
         </Modal.Body>
         <Modal.Footer className={styles.modalFooter}>
@@ -167,7 +160,7 @@ export function MaquinaAltaDialog({
             type="button"
             variant="outline"
             isDisabled={creando}
-            onClick={onClose}
+            onClick={cerrar}
           >
             Cancelar
           </Button>

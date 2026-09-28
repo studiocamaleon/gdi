@@ -19,10 +19,11 @@
   flex-wrap: wrap;
 }
 .personal {
+  /* El panel compartido consume estos tokens sin depender del orden del CSS. */
+  --surface: var(--brand-graphite);
+  --border: var(--brand-graphite-line);
   padding: 20px;
-  background: var(--brand-graphite);
   color: var(--brand-on-graphite);
-  border-color: var(--brand-graphite-line);
 }
 .personalInfo h2 {
   font-size: 15px;
