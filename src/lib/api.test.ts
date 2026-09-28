@@ -44,3 +44,14 @@ it("una respuesta de error vacía sigue rechazando la operación", async () => {
   await expect(resultado).rejects.toBeInstanceOf(ApiError);
   await expect(resultado).rejects.toMatchObject({ status: 401 });
 });
+
+it("un corte después de recibir cabeceras sigue siendo un error temporal", async () => {
+  const response = new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"dato":'));
+      controller.error(new TypeError("Conexión interrumpida"));
+    },
+  }));
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+  await expect(apiRequest("/tenants/current")).rejects.toMatchObject({ status: 503 });
+});
