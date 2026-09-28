@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Download, Mic, Pause, Play } from "lucide-react";
+import { Mic, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import s from "./inbox-audio.module.css";
 const tiempo = (n: number) =>
@@ -124,15 +124,6 @@ export function InboxAudio({
       <span className={s.voice} aria-hidden="true">
         <Mic size={19} />
       </span>
-      <a
-        className={s.download}
-        href={url}
-        download={nombre}
-        aria-label={`Descargar ${nombre}`}
-        title="Descargar audio"
-      >
-        <Download size={14} />
-      </a>
     </div>
   );
 }

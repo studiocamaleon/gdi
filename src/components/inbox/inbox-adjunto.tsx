@@ -123,7 +123,7 @@ export function InboxAdjunto({
         sticker
       />
     );
-  if (tipo === "audio" || mime.startsWith("audio/"))
+  if (["audio", "video"].includes(tipo) || /^(audio|video)\//.test(mime))
     return adjunto.estado === "LISTO" && esMedio ? (
       <InboxMedia
         key={`${mensajeId}:${adjunto.version}`}
@@ -134,8 +134,12 @@ export function InboxAdjunto({
       />
     ) : (
       <p role="status" className={s.audioStatus}>
-        <Music2 size={18} />
-        {mensajes[adjunto.estado] ?? "Audio no disponible."}
+        {mime.startsWith("video/") || tipo === "video" ? (
+          <Video size={18} />
+        ) : (
+          <Music2 size={18} />
+        )}
+        {mensajes[adjunto.estado] ?? "Medio no disponible."}
       </p>
     );
   return (

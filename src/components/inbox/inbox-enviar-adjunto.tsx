@@ -1,7 +1,27 @@
 "use client";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { Mic, Plus, Trash2, Send, RefreshCw, FileText } from "lucide-react";
+import {
+  Mic,
+  Plus,
+  Trash2,
+  Send,
+  RefreshCw,
+  FileText,
+  Image,
+  Video,
+  Music2,
+  Sticker,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLegacyDesignScope } from "@/components/design-system/appearance";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +38,51 @@ import { formatBytes } from "@/lib/archivos";
 import { mediosInboxApi, type MediosInboxApi } from "@/lib/inbox-enviar-medios";
 import {
   ACCEPT_INBOX,
+  FORMATOS_INBOX,
+  type TipoMedioInbox,
   formatoArchivoInbox,
 } from "../../../apps/api/src/common/inbox/medios";
 import s from "./inbox-enviar-adjunto.module.css";
+const categorias = [
+  {
+    tipo: "image",
+    nombre: "Fotos",
+    detalle: "JPG, PNG · hasta 5 MB",
+    Icono: Image,
+  },
+  {
+    tipo: "video",
+    nombre: "Videos",
+    detalle: "MP4, 3GP · hasta 16 MB",
+    Icono: Video,
+  },
+  {
+    tipo: "audio",
+    nombre: "Audios",
+    detalle: "AAC, AMR, MP3, M4A, OGG · 16 MB",
+    Icono: Music2,
+  },
+  {
+    tipo: "document",
+    nombre: "Documentos",
+    detalle: "PDF, TXT, Office · hasta 100 MB",
+    Icono: FileText,
+  },
+  {
+    tipo: "sticker",
+    nombre: "Stickers",
+    detalle: "WebP · 100 KB / animados 500 KB",
+    Icono: Sticker,
+  },
+] as const;
+function filtroArchivos(tipo: TipoMedioInbox) {
+  return [
+    ...Object.entries(FORMATOS_INBOX)
+      .filter(([, f]) => f.tipo === tipo)
+      .flatMap(([mime, f]) => [mime, `.${f.ext}`]),
+    ...(tipo === "image" ? [".jpeg"] : tipo === "audio" ? [".opus"] : []),
+  ].join(",");
+}
 export type BorradorMedio = {
   file: File;
   voz: boolean;
@@ -55,6 +117,8 @@ export function InboxEnviarAdjunto({
   borradores: BorradoresMedios;
   actualizar: () => Promise<unknown>;
 }) {
+  const tema = useLegacyDesignScope();
+  const categoriaElegida = useRef<TipoMedioInbox | null>(null);
   const scope = `${canalId}:${conversacionId}`,
     id = useId();
   const [draft, setDraft] = useState<BorradorMedio | null>(
@@ -311,26 +375,59 @@ export function InboxEnviarAdjunto({
     }
   }
   const adjuntar = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      aria-label="Adjuntar"
-      title="Adjuntar un archivo · también podés arrastrar o pegar"
-      disabled={
-        !habilitado || ocupado || grabando || pidiendoMicrofono || bloqueado
-      }
-      onClick={() => input.current?.click()}
-    >
-      <Plus />
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-10 rounded-full"
+          />
+        }
+        aria-label="Adjuntar"
+        title="Adjuntar · también podés arrastrar o pegar"
+        disabled={
+          !habilitado || ocupado || grabando || pidiendoMicrofono || bloqueado
+        }
+      >
+        <Plus />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        {...tema}
+        side="top"
+        className={`${tema.className ?? ""} w-72`}
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Adjuntar a la conversación</DropdownMenuLabel>
+          {categorias.map(({ tipo, nombre, detalle, Icono }) => (
+            <DropdownMenuItem
+              key={tipo}
+              className="gap-3 p-2.5"
+              onClick={() => {
+                if (!input.current) return;
+                categoriaElegida.current = tipo;
+                input.current.accept = filtroArchivos(tipo);
+                input.current.click();
+              }}
+            >
+              <Icono />
+              <span className="flex flex-col gap-0.5">
+                <span>{nombre}</span>
+                <span className="text-xs text-muted-foreground">{detalle}</span>
+              </span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
   const microfono = (
     <Button
       type="button"
       variant="brand"
       size="icon"
-      className="rounded-full"
+      className="size-10 rounded-full"
       aria-label="Nota de voz"
       title="Grabar una nota de voz"
       disabled={!habilitado || ocupado || bloqueado || pidiendoMicrofono}
@@ -409,7 +506,15 @@ export function InboxEnviarAdjunto({
         accept={ACCEPT_INBOX}
         hidden
         onChange={(e) => {
-          if (e.target.files?.[0]) elegir(e.target.files[0]);
+          const file = e.target.files?.[0];
+          if (file) {
+            const tipo = formatoArchivoInbox(file.name, file.type)?.tipo;
+            if (categoriaElegida.current && tipo !== categoriaElegida.current)
+              setError(
+                "Ese archivo no corresponde a la opción elegida. Elegí un formato de la lista o cambiá el tipo de adjunto.",
+              );
+            else elegir(file);
+          }
           e.target.value = "";
         }}
       />

@@ -283,11 +283,12 @@ export function InboxPlantillas({
   }
   return (
     <>
-      <div className={s.entry}>
+      <div className={s.entry} data-compact={compacto}>
         <Button
           type="button"
           variant={compacto ? "ghost" : "outline"}
           size={compacto ? "icon" : "sm"}
+          className={compacto ? "size-10 rounded-full" : undefined}
           title={draft?.clave ? "Comprobar plantilla" : "Usar plantilla"}
           aria-label={draft?.clave ? "Comprobar plantilla" : "Usar plantilla"}
           onClick={() => abrir(true)}

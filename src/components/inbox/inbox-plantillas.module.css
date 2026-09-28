@@ -4,6 +4,9 @@
   gap: 12px;
   padding-top: 12px;
 }
+.entry[data-compact="true"] {
+  padding-top: 0;
+}
 .entry > span,
 .notice {
   font-size: 11px;

@@ -6,9 +6,10 @@ import {
   ArrowLeft,
   ArrowUpRight,
   MessageCircle,
-  Moon,
-  Sun,
-  RefreshCw,
+  Phone,
+  BriefcaseBusiness,
+  Settings2,
+  CalendarDays,
   UserRound,
   Search,
 } from "lucide-react";
@@ -39,13 +40,12 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip";
 import { fechaConDia } from "@/lib/fecha";
-import { useFecha } from "@/components/navigation/config-regional-provider";
+import { fechaConversacionInbox } from "@/lib/inbox-fecha";
+import {
+  useFecha,
+  useConfigRegional,
+} from "@/components/navigation/config-regional-provider";
 import {
   getMetaInbox,
   type MetaInbox,
@@ -126,7 +126,7 @@ export function InboxView({
   const [canalHabilitado, setCanalHabilitado] = useState(false);
   const [conexion, setConexion] = useState<EstadoInboxVivo>("conectando");
   const [busqueda, setBusqueda] = useState("");
-  const [oscuro, setOscuro] = useState(false);
+  const [ahora, setAhora] = useState(() => Date.now());
   const [movilChat, setMovilChat] = useState(false);
   const [contextoAbierto, setContextoAbierto] = useState(false);
   const [conexionAbierta, setConexionAbierta] = useState(false);
@@ -148,7 +148,11 @@ export function InboxView({
   const finalizacion = useRef<Promise<void> | null>(null);
   const { fechaHora } = useFecha();
   const tema = cn(brand.theme, brand.legacy);
-  const apariencia = oscuro ? "dark" : "light";
+  const { zonaHoraria } = useConfigRegional();
+  useEffect(() => {
+    const timer = setInterval(() => setAhora(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const consultar = useCallback(
     async (
@@ -362,6 +366,18 @@ export function InboxView({
     };
   }, [consultar]);
   useEffect(() => {
+    if (estado !== "error" || (canalHabilitado && tiempoReal)) return;
+    const timer = setInterval(() => {
+      if (
+        !controller.current &&
+        document.visibilityState === "visible" &&
+        navigator.onLine
+      )
+        void consultar({ clienteId: elegido.current }, false, true);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [estado, canalHabilitado, tiempoReal, consultar]);
+  useEffect(() => {
     if (!canalHabilitado || !tiempoReal) return;
     return tiempoReal({
       identidad: {
@@ -429,23 +445,6 @@ export function InboxView({
   const coincide = `${nombre} ${datos?.contacto.telefono ?? ""}`
     .toLocaleLowerCase()
     .includes(busqueda.toLocaleLowerCase());
-  const iconoTema = (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={oscuro ? "Ver tema claro" : "Ver tema oscuro"}
-            onClick={() => setOscuro((v) => !v)}
-          />
-        }
-      >
-        {oscuro ? <Sun /> : <Moon />}
-      </TooltipTrigger>
-      <TooltipContent>Cambiar apariencia</TooltipContent>
-    </Tooltip>
-  );
   const panelContexto =
     datos?.origen === "GENERAL" && !datos.conversacionId ? (
       <Empty>
@@ -458,11 +457,14 @@ export function InboxView({
       </Empty>
     ) : (
       <>
-        <div className={s.contextTitle}>
-          <span>EN GRAFO</span>
-          <Badge variant="outline">
-            {cliente ? "Por teléfono" : "Contexto"}
-          </Badge>
+        <div className={live.contextHeading}>
+          <GrafoprintBrand compact />
+          <div>
+            <span>CONTEXTO</span>
+            <h2>
+              Tu cliente en Grafo<span>.</span>
+            </h2>
+          </div>
         </div>
         {!contexto ? (
           <Empty>
@@ -475,20 +477,22 @@ export function InboxView({
           </Empty>
         ) : (
           <>
-            <div className={s.phoneMatch}>
-              <span>Teléfono del contacto</span>
-              <strong>{datos?.contacto.telefono}</strong>
-              <p>
-                La búsqueda incluye clientes y contactos de {identidad.empresa}.
-              </p>
-            </div>
+            {!cliente && (
+              <div className={live.contactDetail}>
+                <Phone size={15} />
+                <div>
+                  <span>Teléfono del contacto</span>
+                  <strong>{datos?.contacto.telefono}</strong>
+                </div>
+              </div>
+            )}
             {contexto.estado === "sin_coincidencias" ? (
               <Empty>
                 <EmptyHeader>
                   <EmptyTitle>Número no registrado</EmptyTitle>
                   <EmptyDescription>
                     Registrá este teléfono en la ficha del cliente o de su
-                    contacto. Al actualizar aparecerá su información.
+                    contacto. Grafo buscará la coincidencia automáticamente.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -512,22 +516,44 @@ export function InboxView({
               </>
             ) : (
               <>
-                <div className={s.clientIdentity}>
-                  <Avatar size="lg">
-                    <AvatarFallback>{iniciales}</AvatarFallback>
-                  </Avatar>
-                  <h3>{cliente.nombre}</h3>
-                  {cliente.razonSocial && <p>{cliente.razonSocial}</p>}
-                  <Badge variant="outline">
+                <div className={live.clientCard}>
+                  <div className={live.clientCardTop}>
+                    <span>CLIENTE VINCULADO</span>
+                    <BriefcaseBusiness size={16} />
+                  </div>
+                  <div className={live.clientIdentity}>
+                    <Avatar size="lg">
+                      <AvatarFallback>{iniciales}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3>{cliente.nombre}</h3>
+                      {cliente.razonSocial && <p>{cliente.razonSocial}</p>}
+                    </div>
+                  </div>
+                  <div
+                    className={live.clientState}
+                    data-active={cliente.activo}
+                  >
                     {cliente.activo
                       ? "Cliente de la gráfica"
                       : "Cliente inactivo"}
-                  </Badge>
+                  </div>
+                </div>
+                <div className={live.contactDetail}>
+                  <Phone size={15} />
+                  <div>
+                    <span>Vinculado por teléfono</span>
+                    <strong>{datos?.contacto.telefono}</strong>
+                  </div>
                 </div>
                 {cliente.contactos.length > 0 && (
-                  <p className={s.matchHelp}>
-                    Contactos coincidentes: {cliente.contactos.join(", ")}
-                  </p>
+                  <div className={live.contactDetail}>
+                    <UserRound size={15} />
+                    <div>
+                      <span>Contacto</span>
+                      <strong>{cliente.contactos.join(", ")}</strong>
+                    </div>
+                  </div>
                 )}
                 <Button
                   nativeButton={false}
@@ -540,7 +566,7 @@ export function InboxView({
                     />
                   }
                 >
-                  Abrir ficha
+                  Abrir ficha del cliente
                   <ArrowUpRight data-icon="inline-end" />
                 </Button>
                 {contexto.coincidencias.length > 1 && (
@@ -581,10 +607,11 @@ export function InboxView({
                       <strong>
                         {orden.items[0]?.nombre || "Orden de trabajo"}
                       </strong>
-                      <span className={s.workFooter}>
+                      <span className={live.orderState}>
                         {orden.estado.replace(/_/g, " ")}
                       </span>
                       <span className={s.workFooter}>
+                        <CalendarDays size={12} />
                         {orden.fechaEntrega
                           ? `Entrega: ${fechaConDia(orden.fechaEntrega)}`
                           : "Sin fecha de entrega"}
@@ -600,24 +627,9 @@ export function InboxView({
     );
 
   return (
-    <DesignSystemProvider appearance={apariencia} theme="brand">
-      <div className={cn(tema, s.shell)} data-appearance={apariencia}>
+    <DesignSystemProvider theme="brand">
+      <div className={cn(tema, s.shell)}>
         <main className={s.main}>
-          <div className={s.previewBar}>
-            <span>
-              <span className={s.previewDot} />
-              {estado === "listo"
-                ? datos?.origen === "GENERAL"
-                  ? datos.respuesta?.habilitado
-                    ? datos.prueba
-                      ? "Grafo Inbox · canal de prueba de Meta"
-                      : "Grafo Inbox · WhatsApp de tu empresa"
-                    : "Grafo Inbox · conversaciones sincronizadas · sólo lectura"
-                  : "Prueba interna · contacto autorizado · sólo lectura"
-                : "Grafo Inbox · WhatsApp"}
-            </span>
-            <div>{iconoTema}</div>
-          </div>
           <header className={s.pageHeader}>
             <div className={s.headerIdentity}>
               <GrafoprintBrand compact />
@@ -633,22 +645,15 @@ export function InboxView({
             <div className={live.headerActions}>
               <Button
                 variant="outline"
+                aria-label="Conexión de WhatsApp"
                 onClick={() => setConexionAbierta(true)}
               >
-                <MessageCircle data-icon="inline-start" />
-                Conexión
+                <Settings2 data-icon="inline-start" />
+                <span className={live.connectionLabel}>Conexión</span>
               </Button>
               <Link href="/" className={buttonVariants({ variant: "outline" })}>
                 Volver a Grafo
               </Link>
-              <Button
-                variant="outline"
-                disabled={ocupado}
-                onClick={() => void consultar({ clienteId: elegido.current })}
-              >
-                <RefreshCw data-icon="inline-start" />
-                {ocupado ? "Actualizando…" : "Actualizar"}
-              </Button>
             </div>
           </header>
           {estado === "listo" && datos?.prueba && (
@@ -686,7 +691,7 @@ export function InboxView({
                 <AlertDescription>
                   {estado === "sesion"
                     ? "Volvé a Grafo y abrí el inbox desde la cuenta actual."
-                    : "Revisá tu acceso y volvé a actualizar. Los mensajes se ocultaron hasta recuperar la conexión."}
+                    : "Estamos intentando reconectar automáticamente. Los mensajes se ocultaron hasta recuperar la conexión."}
                 </AlertDescription>
               </Alert>
             </div>
@@ -768,18 +773,34 @@ export function InboxView({
                         <span className={s.conversationBody}>
                           <span className={s.nameLine}>
                             <strong>{titulo}</strong>
+                            {c.ultimoMensaje && (
+                              <time
+                                dateTime={c.ultimoMensaje.enviadoEl}
+                                title={fechaHora(c.ultimoMensaje.enviadoEl)}
+                              >
+                                {fechaConversacionInbox(
+                                  c.ultimoMensaje.enviadoEl,
+                                  ahora,
+                                  zonaHoraria,
+                                )}
+                              </time>
+                            )}
                           </span>
                           <span className={s.snippet}>
-                            {c.ultimoMensaje?.eliminado
-                              ? "Mensaje eliminado"
-                              : c.ultimoMensaje?.texto ||
-                                tipos[c.ultimoMensaje?.tipo ?? ""] ||
-                                "Sin texto"}
-                          </span>
-                          <span className={s.conversationFoot}>
-                            {c.ultimoMensaje
-                              ? fechaHora(c.ultimoMensaje.enviadoEl)
-                              : "WhatsApp"}
+                            {c.ultimoMensaje?.direccion === "SALIENTE" &&
+                              c.ultimoMensaje.estadoEntrega && (
+                                <InboxMessageStatus
+                                  estado={c.ultimoMensaje.estadoEntrega}
+                                  compacto
+                                />
+                              )}
+                            <span>
+                              {c.ultimoMensaje?.eliminado
+                                ? "Mensaje eliminado"
+                                : c.ultimoMensaje?.texto ||
+                                  tipos[c.ultimoMensaje?.tipo ?? ""] ||
+                                  "Sin texto"}
+                            </span>
                           </span>
                         </span>
                       </button>
@@ -804,12 +825,8 @@ export function InboxView({
                     </Empty>
                   )}
                 </div>
-                <div className={s.listBottom}>
-                  <MessageCircle size={14} />
-                  {datos.origen === "GENERAL"
-                    ? "WhatsApp de la empresa"
-                    : "Canal de prueba de Meta"}
-                  {datos.listaAnterior && (
+                {datos.listaAnterior && (
+                  <div className={s.listBottom}>
                     <Button
                       size="sm"
                       variant="outline"
@@ -827,8 +844,8 @@ export function InboxView({
                     >
                       Más conversaciones
                     </Button>
-                  )}
-                </div>
+                  </div>
+                )}
               </section>
               <section
                 className={s.chatPane}
@@ -946,11 +963,14 @@ export function InboxView({
                                   ? m.tipo === "audio" ||
                                     m.adjunto.mimeType?.startsWith("audio/")
                                     ? "audio"
-                                    : m.tipo === "sticker" &&
-                                        m.adjunto.estado === "LISTO" &&
-                                        m.adjunto.mimeType === "image/webp"
-                                      ? "sticker"
-                                      : "adjunto"
+                                    : m.tipo === "video" ||
+                                        m.adjunto.mimeType?.startsWith("video/")
+                                      ? "video"
+                                      : m.tipo === "sticker" &&
+                                          m.adjunto.estado === "LISTO" &&
+                                          m.adjunto.mimeType === "image/webp"
+                                        ? "sticker"
+                                        : "adjunto"
                                   : undefined
                               }
                               data-kind={
@@ -1141,25 +1161,15 @@ export function InboxView({
               </aside>
             </div>
           )}
-          <div className={cn(s.statusBar, live.connectionStatus)} role="status">
-            {datos ? (
-              <>
-                <span>{datos.mensajes.length} mensajes cargados</span>
-                {tiempoReal ? (
-                  <Badge variant="outline">{estadosConexion[conexion]}</Badge>
-                ) : (
-                  <span>Vista de prueba</span>
-                )}
-              </>
-            ) : (
-              "Conexión privada de Grafo"
+          {estado === "listo" &&
+            tiempoReal &&
+            ["reconectando", "sin_conexion"].includes(conexion) && (
+              <div className={live.connectionStatus} role="status">
+                {estadosConexion[conexion]}
+              </div>
             )}
-          </div>
           <Sheet open={conexionAbierta} onOpenChange={setConexionAbierta}>
-            <SheetContent
-              className={cn(tema, "overflow-y-auto sm:max-w-xl")}
-              data-appearance={apariencia}
-            >
+            <SheetContent className={cn(tema, "overflow-y-auto sm:max-w-xl")}>
               <SheetHeader>
                 <SheetTitle>Conexión de WhatsApp</SheetTitle>
                 <SheetDescription>
@@ -1181,10 +1191,7 @@ export function InboxView({
             open={contextoAbierto && estado === "listo" && Boolean(datos)}
             onOpenChange={setContextoAbierto}
           >
-            <SheetContent
-              className={cn(tema, s.detailSheet)}
-              data-appearance={apariencia}
-            >
+            <SheetContent className={cn(tema, s.detailSheet)}>
               <SheetHeader>
                 <SheetTitle>Contexto del cliente</SheetTitle>
                 <SheetDescription>

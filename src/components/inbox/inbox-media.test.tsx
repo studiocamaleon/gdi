@@ -101,7 +101,13 @@ it.each([
       else expect(element?.hasAttribute("controls")).toBe(true);
       expect(element?.hasAttribute("autoplay")).toBe(false);
     }
-    expect(container.querySelector("a")?.download).toBe("Muestra");
+    if (tag === "audio" || tag === "video") {
+      expect(container.querySelector("a[download]")).toBeNull();
+      const menu = container.querySelector<HTMLButtonElement>(
+        `[aria-label="Opciones del ${tag === "audio" ? "audio" : "video"}"]`,
+      )!;
+      expect(menu).not.toBeNull();
+    } else expect(container.querySelector("a")?.download).toBe("Muestra");
   },
 );
 it("no descarga fuera de la vista y libera la copia al salir", async () => {
@@ -132,7 +138,9 @@ it("explica códecs incompatibles y conserva la descarga", async () => {
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
     "Este navegador",
   );
-  expect(container.querySelector("a")?.href).toBe("blob:medio");
+  expect(
+    container.querySelector('[aria-label="Opciones del audio"]'),
+  ).not.toBeNull();
 });
 it("presenta el sticker suelto, sin tarjeta, nombre ni descarga permanente", async () => {
   await render("image/webp", "sticker");

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import type { AbrirAdjuntoInbox } from "@/lib/meta-inbox-api";
 import { InboxAudio } from "./inbox-audio";
+import { InboxMediaMenu } from "./inbox-media-menu";
 import { useInboxArchivo } from "./use-inbox-archivo";
 import s from "./inbox-adjunto.module.css";
 
@@ -50,6 +51,7 @@ export function InboxMedia(props: Props) {
     <div
       ref={ref}
       className={props.sticker ? s.sticker : s.media}
+      data-media={props.mimeType.split("/")[0]}
       style={{
         minHeight: props.sticker
           ? 160
@@ -173,7 +175,10 @@ function MedioCargado({
           onError={fallo}
         />
       )}
-      {!sticker && (!audio || falloFormato) && (
+      {(audio || mimeType.startsWith("video/")) && (
+        <InboxMediaMenu url={url} nombre={nombre} video={!audio} />
+      )}
+      {!sticker && imagen && (
         <a
           href={url}
           download={nombre}

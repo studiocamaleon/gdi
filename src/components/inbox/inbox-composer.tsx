@@ -318,7 +318,7 @@ export function InboxComposer({
                 {draft.texto.trim() || draft.clave ? (
                   <Button
                     type="submit"
-                    className="rounded-full"
+                    className="size-10 rounded-full"
                     variant="brand"
                     size="icon"
                     disabled={

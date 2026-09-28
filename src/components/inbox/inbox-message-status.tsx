@@ -49,7 +49,13 @@ const estados = {
 
 /** Un check de entrega/lectura sólo se muestra si el estado lo confirma.
  * El acuse del POST y la demo no se presentan como entrega al destinatario. */
-export function InboxMessageStatus({ estado }: { estado: string }) {
+export function InboxMessageStatus({
+  estado,
+  compacto = false,
+}: {
+  estado: string;
+  compacto?: boolean;
+}) {
   const { Icono, etiqueta, texto } = estados[
     estado as keyof typeof estados
   ] ?? {
@@ -66,7 +72,7 @@ export function InboxMessageStatus({ estado }: { estado: string }) {
       title={etiqueta}
     >
       <Icono size={16} strokeWidth={2} aria-hidden="true" />
-      {texto && <span aria-hidden="true">{texto}</span>}
+      {texto && !compacto && <span aria-hidden="true">{texto}</span>}
     </span>
   );
 }

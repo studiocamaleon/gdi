@@ -13,7 +13,7 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  padding: 0 16px;
+  padding: 0 16px 12px;
 }
 .previewBar {
   min-height: 38px;
@@ -119,8 +119,8 @@
 .listTop {
   display: flex;
   flex-direction: column;
-  gap: 19px;
-  padding: 21px 16px 14px;
+  gap: 12px;
+  padding: 18px 16px 14px;
 }
 .listTitle {
   display: flex;
@@ -143,10 +143,12 @@
 .conversation {
   display: flex;
   gap: 11px;
-  width: 100%;
-  padding: 19px 16px;
+  align-items: center;
+  width: calc(100% - 12px);
+  margin: 3px 6px;
+  padding: 12px 10px;
+  border-radius: 10px;
   text-align: left;
-  border-top: 1px solid var(--border);
   background: transparent;
   cursor: pointer;
   color: var(--foreground);
@@ -169,8 +171,9 @@
 .conversation[data-active="true"]::before {
   content: "";
   position: absolute;
-  inset-block: 0;
+  inset-block: 16px;
   left: 0;
+  border-radius: 3px;
   width: 3px;
   background: var(--accent);
 }
@@ -188,15 +191,16 @@
   justify-content: space-between;
 }
 .nameLine strong {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .nameLine time {
+  flex: none;
   color: var(--muted-text);
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
 }
 .company {
@@ -204,6 +208,9 @@
   font-size: 10px;
 }
 .snippet {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -502,8 +509,8 @@
 .contextPane {
   display: flex;
   flex-direction: column;
-  gap: 19px;
-  padding: 23px 19px;
+  gap: 16px;
+  padding: 20px 16px;
   border-left: 1px solid var(--border);
   overflow-y: auto;
   scrollbar-width: thin;
@@ -734,7 +741,7 @@
     padding-inline: 20px;
   }
   .conversation {
-    padding: 20px;
+    padding: 12px;
   }
   .thread {
     padding-inline: 40px;
@@ -779,7 +786,7 @@
     min-height: 520px;
   }
   .main {
-    padding-inline: 0;
+    padding: 0;
   }
   .previewBar {
     padding-inline: 12px;
@@ -959,4 +966,26 @@
 }
 .bubble[data-content="audio"] .messageMeta {
   margin-top: 0;
+}
+
+.conversation > [data-slot="avatar"] {
+  width: 42px;
+  height: 42px;
+  flex: none;
+}
+.snippet > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.snippet > [role="img"] {
+  flex: none;
+}
+.bubble[data-content="video"] {
+  width: 330px;
+  padding: 4px;
+  overflow: hidden;
+}
+.bubble[data-content="video"] .messageMeta {
+  padding: 4px 6px 0;
 }

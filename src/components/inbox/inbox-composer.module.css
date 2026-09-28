@@ -25,12 +25,15 @@
 }
 .compactRow {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 6px;
   min-width: 0;
 }
 .inputGroup {
   border-radius: 20px;
+}
+.inputGroup > [data-slot="input-group-addon"] {
+  padding-block: 5px;
 }
 .input {
   field-sizing: content;

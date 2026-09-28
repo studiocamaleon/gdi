@@ -68,7 +68,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
-it("una consulta sin respuesta vence y permite reintentar", async () => {
+it("una consulta sin respuesta vence y se recupera automáticamente", async () => {
   vi.useFakeTimers();
   cargar.mockImplementationOnce(
     (_query, signal) =>
@@ -86,7 +86,10 @@ it("una consulta sin respuesta vence y permite reintentar", async () => {
   });
   expect(container.textContent).toContain("No pudimos cargar");
   expect(container.querySelector("[role=log]")).toBeNull();
-  await click("Actualizar");
+  expect(container.textContent).not.toContain("Actualizar");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
   expect(container.textContent).toContain("Estudio Oliva");
 });
 const render = () =>
@@ -193,19 +196,19 @@ it("muestra la bienvenida sin conexión y no confunde un piloto vacío con uno d
   expect(container.textContent).toContain("disponible próximamente");
   expect(container.querySelector("[role=log]")).toBeNull();
   cargar.mockResolvedValue({ ...base, mensajes: [] });
-  await click("Actualizar");
+  await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("Todavía no hay mensajes");
   expect(container.textContent).not.toContain("Conectar WhatsApp");
 });
 it("el error de actualización retira mensajes y contexto, luego permite recuperarlos", async () => {
   await render();
   cargar.mockRejectedValueOnce(new Error("403"));
-  await click("Actualizar");
+  await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("No pudimos cargar");
   expect(container.textContent).not.toContain("Conectar WhatsApp");
   expect(container.textContent).not.toContain("Estudio Oliva");
   expect(container.querySelector("[role=log]")).toBeNull();
-  await click("Actualizar");
+  await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("Estudio Oliva");
 });
 it.each(["empresaId", "usuarioId"] as const)(

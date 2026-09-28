@@ -76,17 +76,3 @@
   color: var(--accent-soft-foreground);
   flex: none;
 }
-.download {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 32px;
-  opacity: 0.6;
-  flex: none;
-  border-radius: 6px;
-}
-.download:hover,
-.download:focus-visible {
-  opacity: 1;
-  outline: 2px solid var(--accent);
-}

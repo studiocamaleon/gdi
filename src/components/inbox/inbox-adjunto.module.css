@@ -68,7 +68,7 @@
   color: var(--muted-text);
 }
 .image,
-.attachment video {
+.media video {
   width: 100%;
   max-height: 200px;
   object-fit: contain;
@@ -80,10 +80,31 @@
   max-width: 100%;
 }
 .media {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+}
+.media[data-media="video"] video {
+  display: block;
+  max-height: 280px;
+  background: var(--brand-graphite);
+}
+.media[data-media="audio"] {
+  padding-right: 22px;
+}
+.mediaMenu {
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+.mediaMenu[data-video="true"] {
+  right: 6px;
+  top: 6px;
+  border-radius: 50%;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
 }
 .mediaPlaceholder {
   display: flex;
