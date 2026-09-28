@@ -4,6 +4,8 @@ import { formatoArchivoInbox } from "../../../../apps/api/src/common/inbox/medio
 import type { MediosInboxApi } from "@/lib/inbox-enviar-medios";
 import { textoPlantilla } from "../../../../apps/api/src/common/inbox/plantillas";
 import type {
+  EquipoInbox,
+  EquipoInboxApi,
   PlantillaInbox,
   PlantillasInboxApi,
   ArchivoPlantillaInbox,
@@ -231,6 +233,83 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> =
       })),
     ]),
   );
+const operadorDemo = { id: identidad.usuarioId, nombre: "Alex Demo" };
+const operadoresDemo = [
+  operadorDemo,
+  { id: "marina-demo", nombre: "Marina Demo" },
+  { id: "tomas-demo", nombre: "Tomás Demo" },
+];
+const equipos: Record<string, EquipoInbox> = Object.fromEntries(
+  contactos.map((c) => [
+    c.id,
+    {
+      responsable:
+        c.id === "bruno" ? { ...operadoresDemo[1], disponible: true } : null,
+      version: 0,
+      operadores: operadoresDemo,
+      eventos: [],
+      anterior: null,
+    },
+  ]),
+);
+for (const mensajes of Object.values(conversaciones))
+  for (const m of mensajes)
+    if (m.direccion === "SALIENTE" && !m.delCelular)
+      m.autor = operadoresDemo[1];
+function autoasignarDemo(id: string) {
+  const equipo = equipos[id];
+  if (equipo.responsable) return;
+  equipo.responsable = { ...operadorDemo, disponible: true };
+  equipo.version++;
+  equipo.eventos.push({
+    id: crypto.randomUUID(),
+    tipo: "AUTOASIGNACION",
+    actor: operadorDemo,
+    responsable: operadorDemo,
+    anterior: null,
+    texto: null,
+    creadoEl: new Date().toISOString(),
+  });
+}
+const accionesEquipo = new Set<string>();
+const equipoApi: EquipoInboxApi = {
+  asignar: async (id, dto) => {
+    if (accionesEquipo.has(dto.clave)) return { guardado: true };
+    const equipo = equipos[id];
+    if (dto.version !== equipo.version)
+      throw new Error("La asignación cambió.");
+    const anterior = equipo.responsable;
+    const nuevo =
+      operadoresDemo.find((o) => o.id === dto.responsableId) ?? null;
+    equipo.responsable = nuevo ? { ...nuevo, disponible: true } : null;
+    equipo.version++;
+    equipo.eventos.push({
+      id: crypto.randomUUID(),
+      tipo: nuevo ? (anterior ? "TRANSFERENCIA" : "ASIGNACION") : "SIN_ASIGNAR",
+      actor: operadorDemo,
+      anterior,
+      responsable: nuevo,
+      texto: null,
+      creadoEl: new Date().toISOString(),
+    });
+    accionesEquipo.add(dto.clave);
+    return { guardado: true };
+  },
+  nota: async (id, dto) => {
+    if (accionesEquipo.has(dto.clave)) return { guardado: true };
+    equipos[id].eventos.push({
+      id: crypto.randomUUID(),
+      tipo: "NOTA",
+      actor: operadorDemo,
+      anterior: null,
+      responsable: null,
+      texto: dto.texto,
+      creadoEl: new Date().toISOString(),
+    });
+    accionesEquipo.add(dto.clave);
+    return { guardado: true };
+  },
+};
 const intentos = new Map<string, IntentoInbox>();
 const enviar: EnviarTextoInbox = async (id, dto) => {
   if (intentos.has(dto.clave)) return intentos.get(dto.clave)!;
@@ -252,8 +331,10 @@ const enviar: EnviarTextoInbox = async (id, dto) => {
     texto: dto.texto,
     enviadoEl: enviado.creadoEl,
     direccion: "SALIENTE",
+    autor: operadorDemo,
     estadoEntrega: "DEMO",
   });
+  autoasignarDemo(id);
   intentos.set(dto.clave, enviado);
   return enviado;
 };
@@ -437,8 +518,10 @@ const plantillasApi: PlantillasInboxApi = {
       texto: textoPlantilla(p, dto.valores),
       enviadoEl: r.creadoEl,
       direccion: "SALIENTE",
+      autor: operadorDemo,
       estadoEntrega: "DEMO",
     });
+    autoasignarDemo(id);
     intentos.set(dto.clave, r);
     return r;
   },
@@ -446,6 +529,21 @@ const plantillasApi: PlantillasInboxApi = {
 const cargar: CargarInbox = async (query) => {
   const lista = ordenarConversacionesInbox(
     contactos
+      .filter(
+        (c) =>
+          !query.filtro ||
+          query.filtro === "TODAS" ||
+          (query.filtro === "MIAS" &&
+            equipos[c.id].responsable?.id === identidad.usuarioId) ||
+          (query.filtro === "SIN_ASIGNAR" && !equipos[c.id].responsable) ||
+          (query.filtro === "PARTICIPE" &&
+            (conversaciones[c.id].some(
+              (m) => m.autor?.id === identidad.usuarioId,
+            ) ||
+              equipos[c.id].eventos.some(
+                (e) => e.tipo === "NOTA" && e.actor.id === identidad.usuarioId,
+              ))),
+      )
       .filter((c) =>
         `${c.nombre} ${c.telefono}`
           .toLocaleLowerCase()
@@ -492,6 +590,8 @@ const cargar: CargarInbox = async (query) => {
     empresaId: identidad.empresaId,
     usuarioId: identidad.usuarioId,
     origen: "GENERAL",
+    colaboracionHabilitada: true,
+    equipo: contacto ? structuredClone(equipos[contacto.id]) : null,
     respuesta: {
       plantillasHabilitadas: true,
       habilitado: true,
@@ -689,6 +789,7 @@ export function InboxGeneralPreview({
           texto: dto.texto ?? null,
           enviadoEl: intento.creadoEl,
           direccion: "SALIENTE",
+          autor: operadorDemo,
           estadoEntrega: "DEMO",
           adjunto: {
             estado: "LISTO",
@@ -698,6 +799,7 @@ export function InboxGeneralPreview({
             version: "local",
           },
         });
+        autoasignarDemo(id);
         intentos.set(dto.clave, intento);
         return intento;
       },
@@ -707,6 +809,7 @@ export function InboxGeneralPreview({
   return (
     <InboxView
       identidad={identidad}
+      equipoApi={equipoApi}
       cargar={canalPrueba ? cargarPrueba : cargar}
       tiempoReal={null}
       conexionApi={canalPrueba ? conexionPrueba : conexionApi}

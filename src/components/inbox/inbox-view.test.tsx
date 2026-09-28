@@ -650,3 +650,213 @@ it("reordena y elimina duplicados al agregar otra página de conversaciones", as
     "Abrir conversación con Clara",
   ]);
 });
+it("el filtro elegido se conserva al refrescar y la autoría es independiente del responsable", async () => {
+  vi.useFakeTimers();
+  const datos = general();
+  datos.colaboracionHabilitada = true;
+  datos.equipo = {
+    responsable: { id: "marina", nombre: "Marina", disponible: true },
+    version: 2,
+    operadores: [],
+    eventos: [],
+    anterior: null,
+  };
+  datos.mensajes = [
+    {
+      ...mensaje,
+      direccion: "SALIENTE",
+      autor: { id: "user-1", nombre: "Alex" },
+    },
+  ];
+  cargar.mockResolvedValue(datos);
+  let eventos!: Parameters<EscucharInbox>[0];
+  await act(async () =>
+    root.render(
+      <InboxView
+        identidad={identidad}
+        cargar={cargar}
+        tiempoReal={(o) => {
+          eventos = o;
+          return () => {};
+        }}
+      />,
+    ),
+  );
+  expect(
+    container.querySelector('[aria-label="Responsable: Marina"]'),
+  ).not.toBeNull();
+  expect(
+    container.querySelector(
+      '[role=log] [title="Autor visible sólo para el equipo"]',
+    )?.textContent,
+  ).toBe("Alex");
+  await click("Mías");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0].filtro).toBe("MIAS");
+  await act(async () => {
+    await eventos.actualizar(new AbortController().signal);
+  });
+  expect(cargar.mock.calls.at(-1)?.[0].filtro).toBe("MIAS");
+});
+it("las notas usan un circuito privado y el borrador queda separado de la respuesta", async () => {
+  const datos = general();
+  datos.colaboracionHabilitada = true;
+  datos.equipo = {
+    responsable: null,
+    version: 0,
+    operadores: [],
+    eventos: [],
+    anterior: null,
+  };
+  cargar.mockResolvedValue(datos);
+  const nota = vi.fn().mockResolvedValue({ guardado: true }),
+    enviar = vi.fn();
+  await act(async () =>
+    root.render(
+      <InboxView
+        identidad={identidad}
+        cargar={cargar}
+        tiempoReal={null}
+        enviarTexto={enviar}
+        equipoApi={{ nota, asignar: vi.fn() }}
+      />,
+    ),
+  );
+  await activarNota();
+  const input = container.querySelector("#inbox-nota") as HTMLTextAreaElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(input, "Consultar stock antes de confirmar.");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    container
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(nota).toHaveBeenCalledWith(
+    "chat-1",
+    expect.objectContaining({
+      texto: "Consultar stock antes de confirmar.",
+      canalId: datos.canalId,
+    }),
+    expect.any(AbortSignal),
+  );
+  expect(enviar).not.toHaveBeenCalled();
+  expect(
+    (container.querySelector("#inbox-nota") as HTMLTextAreaElement).value,
+  ).toBe("");
+});
+it("la actividad interna se intercala por fecha sin convertirse en mensajes al cliente", async () => {
+  const datos = general();
+  datos.equipo = {
+    responsable: null,
+    version: 0,
+    operadores: [],
+    anterior: null,
+    eventos: [
+      {
+        id: "nota-1",
+        tipo: "NOTA",
+        actor: { id: "user-1", nombre: "Alex" },
+        texto: "Sólo equipo",
+        anterior: null,
+        responsable: null,
+        creadoEl: "2026-09-25T11:59:00Z",
+      },
+    ],
+  };
+  cargar.mockResolvedValue(datos);
+  await render();
+  const log = container.querySelector("[role=log]")!;
+  expect(log.firstElementChild?.getAttribute("aria-label")).toBe(
+    "Nota interna de Alex",
+  );
+  expect(log.textContent).toContain("Sólo equipo");
+});
+it("conserva el borrador privado de cada chat y reintenta la misma nota sin duplicarla", async () => {
+  const equipo = {
+    responsable: null,
+    version: 0,
+    operadores: [],
+    eventos: [],
+    anterior: null,
+  };
+  cargar.mockImplementation(async (q) => ({
+    ...general(q.conversacionId),
+    colaboracionHabilitada: true,
+    equipo,
+  }));
+  const nota = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Sin red"))
+    .mockResolvedValue({ guardado: true });
+  await act(async () =>
+    root.render(
+      <InboxView
+        identidad={identidad}
+        cargar={cargar}
+        tiempoReal={null}
+        equipoApi={{ nota, asignar: vi.fn() }}
+      />,
+    ),
+  );
+  await activarNota();
+  const escribir = async (texto: string) =>
+    act(async () => {
+      const input = container.querySelector("#inbox-nota")!;
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!.call(input, texto);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  await escribir("Pendiente de aprobación del diseño.");
+  await abrir("Bruno");
+  expect(
+    (container.querySelector("#inbox-nota") as HTMLTextAreaElement).value,
+  ).toBe("");
+  await abrir("Alma");
+  expect(
+    (container.querySelector("#inbox-nota") as HTMLTextAreaElement).value,
+  ).toBe("Pendiente de aprobación del diseño.");
+  const enviar = async () =>
+    act(async () => {
+      container
+        .querySelector("form")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        );
+    });
+  await enviar();
+  expect(container.textContent).toContain("Tu texto sigue aquí");
+  await enviar();
+  expect(nota.mock.calls[0][1].clave).toBe(nota.mock.calls[1][1].clave);
+  expect(
+    (container.querySelector("#inbox-nota") as HTMLTextAreaElement).value,
+  ).toBe("");
+});
+
+async function activarNota() {
+  const input = container.querySelector("textarea")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(input, "/nota");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+}

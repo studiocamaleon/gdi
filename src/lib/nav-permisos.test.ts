@@ -144,3 +144,7 @@ describe("qué muestra el sidebar", () => {
     });
   });
 });
+it('muestra Inbox a quien tiene permiso de atención sin darle Configuración',()=>{
+ const items=navPara(new Set(['inbox.atender']));
+ expect(items.map(i=>i.key)).toEqual(['inbox']);
+});

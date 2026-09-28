@@ -10,6 +10,7 @@ export type InboxIdentidad = {
   usuarioId: string;
   empresa: string;
   operador: string;
+  puedeConfigurarConexion?: boolean;
 };
 type ClienteInbox = {
   id: string;
@@ -18,7 +19,27 @@ type ClienteInbox = {
   activo: boolean;
   contactos: string[];
 };
+export type OperadorInbox = { id: string; nombre: string };
+export type FiltroInbox = "TODAS" | "MIAS" | "SIN_ASIGNAR" | "PARTICIPE";
+export type EventoEquipoInbox = {
+  id: string;
+  tipo: string;
+  actor: OperadorInbox;
+  texto: string | null;
+  anterior: { id: string; nombre: string | null } | null;
+  responsable: { id: string; nombre: string | null } | null;
+  creadoEl: string;
+};
+export type EquipoInbox = {
+  responsable: (OperadorInbox & { disponible: boolean }) | null;
+  version: number;
+  operadores: OperadorInbox[];
+  eventos: EventoEquipoInbox[];
+  anterior: string | null;
+};
 export type MetaInbox = {
+  colaboracionHabilitada?: boolean;
+  equipo?: EquipoInbox | null;
   empresaId: string;
   usuarioId: string;
   origen?: "GENERAL";
@@ -39,6 +60,7 @@ export type MetaInbox = {
   mensajes: {
     id: string;
     nombreContacto: string | null;
+    autor?: OperadorInbox | null;
     tipo: string;
     plantilla?: boolean;
     texto: string | null;
@@ -85,6 +107,9 @@ export type MetaInbox = {
   } | null;
 };
 export type InboxConsulta = {
+  filtro?: FiltroInbox;
+  eventosAntesDe?: string;
+  eventosDesdeId?: string;
   antesDe?: string;
   clienteId?: string;
   conversacionId?: string;
@@ -101,6 +126,9 @@ export const getMetaInbox: CargarInbox = (query, signal) => {
   if (query.antesDe) params.set("antesDe", query.antesDe);
   if (query.clienteId) params.set("clienteId", query.clienteId);
   for (const key of [
+    "filtro",
+    "eventosAntesDe",
+    "eventosDesdeId",
     "conversacionId",
     "desdeId",
     "listaAntesDe",
@@ -137,6 +165,7 @@ export type RespuestaInbox = {
   servidorEl: string;
 };
 export type IntentoInbox = {
+  autor?: OperadorInbox | null;
   id: string;
   clave: string;
   texto: string | null;
@@ -227,6 +256,36 @@ export const plantillasInboxApi: PlantillasInboxApi = {
   enviar: (id, dto, signal) =>
     apiRequest(
       `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/plantilla`,
+      { method: "POST", body: JSON.stringify(dto), signal },
+    ),
+};
+
+export type EquipoInboxApi = {
+  asignar: (
+    id: string,
+    dto: {
+      canalId: string;
+      clave: string;
+      responsableId: string | null;
+      version: number;
+    },
+    signal?: AbortSignal,
+  ) => Promise<{ guardado: boolean }>;
+  nota: (
+    id: string,
+    dto: { canalId: string; clave: string; texto: string },
+    signal?: AbortSignal,
+  ) => Promise<{ guardado: boolean }>;
+};
+export const equipoInboxApi: EquipoInboxApi = {
+  asignar: (id, dto, signal) =>
+    apiRequest(
+      `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/responsable`,
+      { method: "POST", body: JSON.stringify(dto), signal },
+    ),
+  nota: (id, dto, signal) =>
+    apiRequest(
+      `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/notas`,
       { method: "POST", body: JSON.stringify(dto), signal },
     ),
 };

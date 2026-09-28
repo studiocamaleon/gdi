@@ -52,6 +52,7 @@ export function InboxComposer({
   mediosApi,
   borradoresMedios,
   accionesExtras,
+  onNota,
 }: {
   canalId: string;
   conversacionId: string;
@@ -64,6 +65,7 @@ export function InboxComposer({
   mediosApi?: MediosInboxApi;
   borradoresMedios?: BorradoresMedios;
   accionesExtras?: ReactNode;
+  onNota?: (texto?: string) => void;
 }) {
   const id = useId();
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -107,7 +109,22 @@ export function InboxComposer({
     setDraft(next);
     borradores.set(scope, next);
   }
+  const esComandoNota = /^\/nota(?:\s|$)/i.test(draft.texto.trimStart());
+  function activarNota(texto = draft.texto) {
+    if (
+      !onNota ||
+      ocupado ||
+      draft.clave ||
+      !/^\/nota(?:\s|$)/i.test(texto.trimStart())
+    )
+      return false;
+    const contenido = texto.trimStart().replace(/^\/nota\s*/i, "");
+    guardar({ texto: "" });
+    onNota(contenido);
+    return true;
+  }
   async function enviarTexto() {
+    if (activarNota()) return;
     if (
       peticion.current ||
       !respuesta.habilitado ||
@@ -158,7 +175,7 @@ export function InboxComposer({
       if (peticion.current === control) peticion.current = null;
     }
   }
-  if (!respuesta.habilitado)
+  if (!respuesta.habilitado && !onNota)
     return (
       <div className={s.closed}>
         <LockKeyhole size={18} />
@@ -202,13 +219,28 @@ export function InboxComposer({
             void enviarTexto();
           }}
         >
-          {!abierta && (
+          {(!abierta || !respuesta.habilitado) && (
             <Alert>
               <AlertDescription>
-                La ventana de atención está cerrada. Usá una plantilla aprobada
-                para retomar la conversación.
+                {!respuesta.habilitado
+                  ? "Los envíos a WhatsApp todavía no están habilitados."
+                  : "La ventana de atención está cerrada. Usá una plantilla aprobada para retomar la conversación."}
+                {onNota &&
+                  " Podés escribir /nota para dejar una indicación interna."}
               </AlertDescription>
             </Alert>
+          )}
+          {onNota && esComandoNota && !ocupado && !draft.clave && (
+            <Button
+              className="self-start"
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={() => activarNota()}
+            >
+              <LockKeyhole data-icon="inline-start" />
+              Nota interna <span className={s.counter}>/nota · Enter</span>
+            </Button>
           )}
           <div className={s.compactRow}>
             {adjuntar}
@@ -218,7 +250,7 @@ export function InboxComposer({
             ) : (
               <>
                 <FieldGroup className="min-w-0 flex-1">
-                  <Field data-disabled={!abierta && !draft.clave}>
+                  <Field data-disabled={!abierta && !draft.clave && !onNota}>
                     <FieldLabel htmlFor={id} className="sr-only">
                       Mensaje para {destino}
                     </FieldLabel>
@@ -227,19 +259,40 @@ export function InboxComposer({
                         ref={inputRef}
                         id={id}
                         placeholder={
-                          abierta
-                            ? "Escribí un mensaje…"
-                            : "Esperando respuesta del cliente…"
+                          onNota
+                            ? abierta && respuesta.habilitado
+                              ? "Escribí un mensaje o /nota…"
+                              : "Escribí /nota para una nota interna…"
+                            : abierta
+                              ? "Escribí un mensaje…"
+                              : "Esperando respuesta del cliente…"
                         }
                         value={draft.texto}
-                        onChange={(e) => guardar({ texto: e.target.value })}
+                        onChange={(e) => {
+                          const texto = e.target.value;
+                          if (
+                            onNota &&
+                            /^\/nota\s/i.test(texto.trimStart()) &&
+                            activarNota(texto)
+                          )
+                            return;
+                          guardar({ texto });
+                        }}
                         rows={1}
                         maxLength={4096}
-                        disabled={!abierta && !draft.clave}
+                        disabled={!abierta && !draft.clave && !onNota}
                         readOnly={ocupado || Boolean(draft.clave)}
                         aria-describedby={`${id}-hint`}
                         className={s.input}
                         onKeyDown={(e) => {
+                          if (
+                            e.key === "Enter" &&
+                            !e.nativeEvent.isComposing &&
+                            activarNota()
+                          ) {
+                            e.preventDefault();
+                            return;
+                          }
                           if (
                             (e.ctrlKey || e.metaKey) &&
                             e.key === "Enter" &&
@@ -323,20 +376,26 @@ export function InboxComposer({
                     size="icon"
                     disabled={
                       ocupado ||
-                      (!abierta && !draft.clave) ||
+                      ((!abierta || !respuesta.habilitado) &&
+                        !draft.clave &&
+                        !(onNota && esComandoNota)) ||
                       !draft.texto.trim()
                     }
                     title={
                       draft.clave
                         ? "Comprobar el mismo envío"
-                        : "Enviar · Ctrl o ⌘ + Enter"
+                        : onNota && esComandoNota
+                          ? "Activar nota interna"
+                          : "Enviar · Ctrl o ⌘ + Enter"
                     }
                     aria-label={
                       ocupado
                         ? "Comprobando…"
                         : draft.clave
                           ? "Comprobar envío"
-                          : "Enviar mensaje"
+                          : onNota && esComandoNota
+                            ? "Activar nota interna"
+                            : "Enviar mensaje"
                     }
                   >
                     {ocupado ? (
@@ -368,7 +427,8 @@ export function InboxComposer({
           )}
           <span id={`${id}-hint`} className="sr-only">
             Enter para nueva línea · Ctrl o ⌘ + Enter para enviar. También podés
-            arrastrar archivos o pegar imágenes.
+            arrastrar archivos o pegar imágenes.{" "}
+            {onNota && "/nota y Enter para escribir una nota interna."}
           </span>
         </form>
       )}

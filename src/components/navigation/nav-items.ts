@@ -363,7 +363,7 @@ export function navPara(
   }
   return disponibles.flatMap<NavItem>((item) => {
     if (!hasChildren(item)) {
-      return permisos.has(item.permiso) && porPlan(item.href) ? [item] : [];
+      return (permisos.has(item.permiso) || (item.key === "inbox" && permisos.has("inbox.atender"))) && porPlan(item.href) ? [item] : [];
     }
     // El permiso del hijo REEMPLAZA al del grupo, no se suma: un hijo que
     // declara el suyo se sostiene solo (Datos fiscales con

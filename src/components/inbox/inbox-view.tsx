@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  InboxFiltros,
+  InboxResponsable,
+  InboxEventoEquipo,
+  InboxNota,
+  type BorradoresNotas,
+} from "./inbox-equipo";
+import type { EquipoInboxApi, FiltroInbox } from "@/lib/meta-inbox-api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -110,6 +118,7 @@ export function InboxView({
   enviarTexto,
   plantillasApi,
   mediosApi,
+  equipoApi,
 }: {
   identidad: InboxIdentidad;
   cargar?: CargarInbox;
@@ -119,6 +128,7 @@ export function InboxView({
   enviarTexto?: EnviarTextoInbox;
   plantillasApi?: PlantillasInboxApi;
   mediosApi?: MediosInboxApi;
+  equipoApi?: EquipoInboxApi;
 }) {
   const [datos, setDatos] = useState<MetaInbox | null>(null);
   const [estado, setEstado] = useState<
@@ -128,6 +138,10 @@ export function InboxView({
   const [canalHabilitado, setCanalHabilitado] = useState(false);
   const [conexion, setConexion] = useState<EstadoInboxVivo>("conectando");
   const [busqueda, setBusqueda] = useState("");
+  const [filtroEquipo, setFiltroEquipo] = useState<FiltroInbox>("TODAS");
+  const filtroEquipoActual = useRef<FiltroInbox>("TODAS");
+  const [modoComposer, setModoComposer] = useState("respuesta");
+  const borradoresNotas = useRef<BorradoresNotas>(new Map());
   const [ahora, setAhora] = useState(() => Date.now());
   const [movilChat, setMovilChat] = useState(false);
   const [contextoAbierto, setContextoAbierto] = useState(false);
@@ -175,8 +189,15 @@ export function InboxView({
           query.conversacionId ?? conversacionElegida.current;
         query = {
           busqueda: filtroActual.current,
+          filtro: filtroEquipoActual.current,
           ...query,
           conversacionId,
+          ...(silencioso &&
+          !query.eventosAntesDe &&
+          conversacionId === datosActuales.current.conversacionId &&
+          datosActuales.current.equipo?.eventos[0]
+            ? { eventosDesdeId: datosActuales.current.equipo.eventos[0].id }
+            : {}),
           ...(silencioso &&
           !query.antesDe &&
           conversacionId === datosActuales.current.conversacionId &&
@@ -218,6 +239,7 @@ export function InboxView({
               nombre: contacto?.nombre,
             },
             mensajes: [],
+            equipo: null,
             respuesta: undefined,
             envios: [],
             contexto: null,
@@ -242,6 +264,7 @@ export function InboxView({
         if (!resultado) {
           datosActuales.current = null;
           borradores.current.clear();
+          borradoresNotas.current.clear();
           borradoresMedios.current.clear();
           borradoresPlantillas.current.clear();
           setDatos(null);
@@ -257,6 +280,7 @@ export function InboxView({
         ) {
           datosActuales.current = null;
           borradores.current.clear();
+          borradoresNotas.current.clear();
           borradoresMedios.current.clear();
           borradoresPlantillas.current.clear();
           setDatos(null);
@@ -297,6 +321,56 @@ export function InboxView({
                 anteriores ? "anteriores" : "reciente",
               )
             : resultado;
+        if (
+          query.eventosAntesDe &&
+          previa &&
+          previa.canalId === resultado.canalId &&
+          previa.conversacionId === resultado.conversacionId &&
+          resultado.equipo &&
+          previa.equipo
+        ) {
+          const eventos = new Map(
+            [...previa.equipo.eventos, ...resultado.equipo.eventos].map((e) => [
+              e.id,
+              e,
+            ]),
+          );
+          siguiente = {
+            ...siguiente,
+            equipo: {
+              ...resultado.equipo,
+              eventos: [...eventos.values()].sort(
+                (a, b) =>
+                  a.creadoEl.localeCompare(b.creadoEl) ||
+                  a.id.localeCompare(b.id),
+              ),
+            },
+          };
+        }
+        if (
+          query.antesDe &&
+          !query.eventosAntesDe &&
+          previa?.equipo &&
+          siguiente.equipo
+        )
+          siguiente = {
+            ...siguiente,
+            equipo: {
+              ...siguiente.equipo,
+              anterior: previa.equipo.anterior,
+              eventos: [
+                ...new Map(
+                  [...previa.equipo.eventos, ...siguiente.equipo.eventos].map(
+                    (e) => [e.id, e],
+                  ),
+                ).values(),
+              ].sort(
+                (a, b) =>
+                  a.creadoEl.localeCompare(b.creadoEl) ||
+                  a.id.localeCompare(b.id),
+              ),
+            },
+          };
         if (query.listaAntesDe && previa?.canalId === resultado.canalId) {
           const filas = new Map(
             [
@@ -333,6 +407,7 @@ export function InboxView({
         setEstado(denegado ? "sesion" : "error");
         if (denegado) {
           borradores.current.clear();
+          borradoresNotas.current.clear();
           borradoresMedios.current.clear();
           borradoresPlantillas.current.clear();
           setCanalHabilitado(false);
@@ -355,6 +430,7 @@ export function InboxView({
 
   useEffect(() => {
     borradores.current.clear();
+    borradoresNotas.current.clear();
     borradoresMedios.current.clear();
     borradoresPlantillas.current.clear();
     elegido.current = undefined;
@@ -401,6 +477,7 @@ export function InboxView({
         controller.current?.abort();
         datosActuales.current = null;
         borradores.current.clear();
+        borradoresNotas.current.clear();
         borradoresMedios.current.clear();
         borradoresPlantillas.current.clear();
         setDatos(null);
@@ -430,12 +507,31 @@ export function InboxView({
 
   useEffect(() => {
     filtroActual.current = busqueda;
+    filtroEquipoActual.current = filtroEquipo;
     if (datosActuales.current?.origen !== "GENERAL") return;
     const timer = setTimeout(() => {
-      void consultar({ clienteId: elegido.current, busqueda }, false, true);
+      void consultar(
+        { clienteId: elegido.current, busqueda, filtro: filtroEquipo },
+        false,
+        true,
+      );
     }, 300);
     return () => clearTimeout(timer);
-  }, [busqueda, consultar]);
+  }, [busqueda, filtroEquipo, consultar]);
+  const actividad = [
+    ...(datos?.mensajes ?? []).map((m) => ({
+      tipo: "mensaje" as const,
+      id: m.id,
+      fecha: m.enviadoEl,
+      mensaje: m,
+    })),
+    ...(datos?.equipo?.eventos ?? []).map((e) => ({
+      tipo: "evento" as const,
+      id: e.id,
+      fecha: e.creadoEl,
+      evento: e,
+    })),
+  ].sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id.localeCompare(b.id));
   const nombre =
     datos?.contexto?.cliente?.nombre ||
     datos?.contacto.nombre ||
@@ -652,16 +748,18 @@ export function InboxView({
                 </p>
               </div>
             </div>
-            <div className={live.headerActions}>
-              <Button
-                variant="outline"
-                aria-label="Conexión de WhatsApp"
-                onClick={() => setConexionAbierta(true)}
-              >
-                <Settings2 data-icon="inline-start" />
-                <span className={live.connectionLabel}>Conexión</span>
-              </Button>
-            </div>
+            {identidad.puedeConfigurarConexion !== false && (
+              <div className={live.headerActions}>
+                <Button
+                  variant="outline"
+                  aria-label="Conexión de WhatsApp"
+                  onClick={() => setConexionAbierta(true)}
+                >
+                  <Settings2 data-icon="inline-start" />
+                  <span className={live.connectionLabel}>Conexión</span>
+                </Button>
+              </div>
+            )}
           </header>
           {estado === "listo" && datos?.prueba && (
             <Alert>
@@ -685,7 +783,19 @@ export function InboxView({
             </div>
           ) : estado === "inactivo" ? (
             <div className={live.welcome}>
-              <InboxBienvenida identidad={identidad} api={conexionApi} />
+              {identidad.puedeConfigurarConexion === false ? (
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyTitle>El Inbox está preparado</EmptyTitle>
+                    <EmptyDescription>
+                      Pedile a un administrador que conecte el WhatsApp de la
+                      empresa para empezar a atender.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <InboxBienvenida identidad={identidad} api={conexionApi} />
+              )}
             </div>
           ) : estado !== "listo" || !datos ? (
             <div className={live.fallback}>
@@ -727,6 +837,15 @@ export function InboxView({
                       placeholder="Buscar nombre o teléfono…"
                     />
                   </InputGroup>
+                  {datos.colaboracionHabilitada && (
+                    <InboxFiltros
+                      value={filtroEquipo}
+                      onChange={(v) => {
+                        filtroEquipoActual.current = v;
+                        setFiltroEquipo(v);
+                      }}
+                    />
+                  )}
                 </div>
                 <div className={s.conversations}>
                   {(datos.origen === "GENERAL"
@@ -821,12 +940,16 @@ export function InboxView({
                         <EmptyTitle>
                           {busqueda
                             ? "Sin coincidencias"
-                            : "Todavía no hay conversaciones"}
+                            : filtroEquipo !== "TODAS"
+                              ? "Sin conversaciones en este filtro"
+                              : "Todavía no hay conversaciones"}
                         </EmptyTitle>
                         <EmptyDescription>
                           {busqueda
                             ? "Probá con otro nombre o teléfono."
-                            : "Aparecerán aquí a medida que se reciban."}
+                            : filtroEquipo !== "TODAS"
+                              ? "Podés elegir Todas para ver el resto de la bandeja."
+                              : "Aparecerán aquí a medida que se reciban."}
                         </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
@@ -890,6 +1013,25 @@ export function InboxView({
                           <p>{datos.contacto.telefono}</p>
                         </div>
                       </div>
+                      {datos.equipo &&
+                        datos.conversacionId &&
+                        datos.canalId && (
+                          <InboxResponsable
+                            key={`${datos.canalId}:${datos.conversacionId}`}
+                            equipo={datos.equipo}
+                            usuarioId={identidad.usuarioId}
+                            conversacionId={datos.conversacionId}
+                            canalId={datos.canalId}
+                            api={equipoApi}
+                            actualizar={() =>
+                              consultar(
+                                { clienteId: elegido.current },
+                                false,
+                                true,
+                              )
+                            }
+                          />
+                        )}
                       <span className={s.contextMobile}>
                         <Button
                           variant="ghost"
@@ -940,7 +1082,25 @@ export function InboxView({
                           </Button>
                         </div>
                       )}
-                      {datos.mensajes.length === 0 ? (
+                      {datos.equipo?.anterior && (
+                        <div className={live.older}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={ocupado}
+                            onClick={() =>
+                              void consultar(
+                                { eventosAntesDe: datos.equipo!.anterior! },
+                                false,
+                                true,
+                              )
+                            }
+                          >
+                            Ver actividad interna anterior
+                          </Button>
+                        </div>
+                      )}
+                      {actividad.length === 0 ? (
                         <Empty>
                           <EmptyHeader>
                             <EmptyTitle>
@@ -955,113 +1115,135 @@ export function InboxView({
                           </EmptyHeader>
                         </Empty>
                       ) : (
-                        datos.mensajes.map((m) => (
-                          <div
-                            key={m.id}
-                            className={s.messageRow}
-                            data-kind={
-                              m.direccion === "SALIENTE" ? "salida" : "entrada"
-                            }
-                          >
-                            <div
-                              className={s.bubble}
-                              data-content={
-                                !m.eliminado && m.adjunto
-                                  ? m.tipo === "audio" ||
-                                    m.adjunto.mimeType?.startsWith("audio/")
-                                    ? "audio"
-                                    : m.tipo === "video" ||
-                                        m.adjunto.mimeType?.startsWith("video/")
-                                      ? "video"
-                                      : m.tipo === "sticker" &&
-                                          m.adjunto.estado === "LISTO" &&
-                                          m.adjunto.mimeType === "image/webp"
-                                        ? "sticker"
-                                        : "adjunto"
-                                  : undefined
-                              }
-                              data-kind={
-                                m.direccion === "SALIENTE"
-                                  ? "salida"
-                                  : "entrada"
-                              }
-                            >
-                              {m.cita && !m.eliminado && (
-                                <InboxCita cita={m.cita} />
-                              )}
-                              {m.eliminado ? (
-                                <p>Mensaje eliminado</p>
-                              ) : m.ubicacion ? (
-                                <InboxUbicacion ubicacion={m.ubicacion} />
-                              ) : m.contactos?.length ? (
-                                <InboxContactos contactos={m.contactos} />
-                              ) : m.reaccion ? (
-                                <>
-                                  <InboxCita cita={m.reaccion} />
-                                  <p>
-                                    {m.reaccion.emoji
-                                      ? `Reaccionó ${m.reaccion.emoji}`
-                                      : "Quitó su reacción"}
-                                  </p>
-                                </>
-                              ) : [
-                                  "text",
-                                  "button",
-                                  "interactive",
-                                  "template",
-                                ].includes(m.tipo) ? (
-                                <p>{m.texto}</p>
-                              ) : m.adjunto ? (
-                                <>
-                                  <InboxAdjunto
-                                    key={`${datos.canalId}:${m.id}:${m.adjunto.version}`}
-                                    mensajeId={m.id}
-                                    tipo={m.tipo}
-                                    adjunto={m.adjunto}
-                                    abrir={abrirAdjunto}
-                                  />
-                                  {m.texto && (
-                                    <p className={s.attachmentCaption}>
-                                      {m.texto}
-                                    </p>
+                        actividad.map((item) =>
+                          item.tipo === "evento" ? (
+                            <InboxEventoEquipo
+                              key={`evento:${item.id}`}
+                              evento={item.evento}
+                            />
+                          ) : (
+                            ((m) => (
+                              <div
+                                key={m.id}
+                                className={s.messageRow}
+                                data-kind={
+                                  m.direccion === "SALIENTE"
+                                    ? "salida"
+                                    : "entrada"
+                                }
+                              >
+                                <div
+                                  className={s.bubble}
+                                  data-content={
+                                    !m.eliminado && m.adjunto
+                                      ? m.tipo === "audio" ||
+                                        m.adjunto.mimeType?.startsWith("audio/")
+                                        ? "audio"
+                                        : m.tipo === "video" ||
+                                            m.adjunto.mimeType?.startsWith(
+                                              "video/",
+                                            )
+                                          ? "video"
+                                          : m.tipo === "sticker" &&
+                                              m.adjunto.estado === "LISTO" &&
+                                              m.adjunto.mimeType ===
+                                                "image/webp"
+                                            ? "sticker"
+                                            : "adjunto"
+                                      : undefined
+                                  }
+                                  data-kind={
+                                    m.direccion === "SALIENTE"
+                                      ? "salida"
+                                      : "entrada"
+                                  }
+                                >
+                                  {m.cita && !m.eliminado && (
+                                    <InboxCita cita={m.cita} />
                                   )}
-                                </>
-                              ) : (
-                                <>
-                                  <Badge variant="secondary">
-                                    {tipos[m.tipo] || "Otro contenido"}
-                                  </Badge>
-                                  {m.texto && <p>{m.texto}</p>}
-                                  <p>
-                                    {m.noDisponible ||
-                                      "Este contenido todavía no se puede abrir en Grafo."}
-                                  </p>
-                                </>
-                              )}
-                              <div className={s.messageMeta}>
-                                {(m.tipo === "template" || m.plantilla) && (
-                                  <span>Plantilla</span>
-                                )}
-                                {m.editado && !m.eliminado && (
-                                  <span>Editado</span>
-                                )}
-                                {m.delHistorial && <span>Historial</span>}
-                                {m.delCelular && (
-                                  <span>Desde WhatsApp Business</span>
-                                )}
-                                <time dateTime={m.enviadoEl}>
-                                  {fechaHora(m.enviadoEl)}
-                                </time>
-                                {m.direccion === "SALIENTE" &&
-                                  m.estadoEntrega && (
-                                    <InboxMessageStatus
-                                      estado={m.estadoEntrega}
-                                    />
+                                  {m.eliminado ? (
+                                    <p>Mensaje eliminado</p>
+                                  ) : m.ubicacion ? (
+                                    <InboxUbicacion ubicacion={m.ubicacion} />
+                                  ) : m.contactos?.length ? (
+                                    <InboxContactos contactos={m.contactos} />
+                                  ) : m.reaccion ? (
+                                    <>
+                                      <InboxCita cita={m.reaccion} />
+                                      <p>
+                                        {m.reaccion.emoji
+                                          ? `Reaccionó ${m.reaccion.emoji}`
+                                          : "Quitó su reacción"}
+                                      </p>
+                                    </>
+                                  ) : [
+                                      "text",
+                                      "button",
+                                      "interactive",
+                                      "template",
+                                    ].includes(m.tipo) ? (
+                                    <p>{m.texto}</p>
+                                  ) : m.adjunto ? (
+                                    <>
+                                      <InboxAdjunto
+                                        key={`${datos.canalId}:${m.id}:${m.adjunto.version}`}
+                                        mensajeId={m.id}
+                                        tipo={m.tipo}
+                                        adjunto={m.adjunto}
+                                        abrir={abrirAdjunto}
+                                      />
+                                      {m.texto && (
+                                        <p className={s.attachmentCaption}>
+                                          {m.texto}
+                                        </p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Badge variant="secondary">
+                                        {tipos[m.tipo] || "Otro contenido"}
+                                      </Badge>
+                                      {m.texto && <p>{m.texto}</p>}
+                                      <p>
+                                        {m.noDisponible ||
+                                          "Este contenido todavía no se puede abrir en Grafo."}
+                                      </p>
+                                    </>
                                   )}
+                                  <div className={s.messageMeta}>
+                                    {m.direccion === "SALIENTE" && (
+                                      <span title="Autor visible sólo para el equipo">
+                                        {m.autor?.nombre ||
+                                          (m.delCelular
+                                            ? "WhatsApp Business"
+                                            : "Autor no identificado")}
+                                      </span>
+                                    )}
+                                    {(m.tipo === "template" || m.plantilla) && (
+                                      <span>Plantilla</span>
+                                    )}
+                                    {m.editado && !m.eliminado && (
+                                      <span>Editado</span>
+                                    )}
+                                    {m.delHistorial && <span>Historial</span>}
+                                    {m.delCelular && (
+                                      <span>Desde WhatsApp Business</span>
+                                    )}
+                                    <time dateTime={m.enviadoEl}>
+                                      {fechaHora(m.enviadoEl)}
+                                    </time>
+                                    {m.direccion === "SALIENTE" &&
+                                      m.estadoEntrega && (
+                                        <InboxMessageStatus
+                                          estado={m.estadoEntrega}
+                                        />
+                                      )}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        ))
+                            ))(item.mensaje)
+                          ),
+                        )
                       )}
                       {datos.envios
                         ?.filter((e) => !e.mensajeId)
@@ -1078,6 +1260,11 @@ export function InboxView({
                             >
                               <p>{e.texto}</p>
                               <div className={s.messageMeta}>
+                                {e.autor && (
+                                  <span title="Autor visible sólo para el equipo">
+                                    {e.autor.nombre}
+                                  </span>
+                                )}
                                 <time dateTime={e.creadoEl}>
                                   {fechaHora(e.creadoEl)}
                                 </time>
@@ -1097,8 +1284,46 @@ export function InboxView({
                         ))}
                     </div>
                     <div className={s.composer}>
-                      {datos.conversacionId && datos.canalId ? (
+                      {datos.equipo &&
+                      modoComposer === "nota" &&
+                      datos.conversacionId &&
+                      datos.canalId ? (
+                        <InboxNota
+                          onSalir={() => setModoComposer("respuesta")}
+                          key={`${identidad.empresaId}:${identidad.usuarioId}:${datos.canalId}:${datos.conversacionId}`}
+                          scope={`${datos.canalId}:${datos.conversacionId}`}
+                          borradores={borradoresNotas.current}
+                          conversacionId={datos.conversacionId}
+                          canalId={datos.canalId}
+                          api={equipoApi}
+                          actualizar={() =>
+                            consultar(
+                              { clienteId: elegido.current },
+                              false,
+                              true,
+                            )
+                          }
+                        />
+                      ) : datos.conversacionId && datos.canalId ? (
                         <InboxComposer
+                          onNota={
+                            datos.equipo
+                              ? (texto) => {
+                                  const scope = `${datos.canalId}:${datos.conversacionId}`;
+                                  if (texto?.trim()) {
+                                    const previa =
+                                      borradoresNotas.current.get(scope);
+                                    borradoresNotas.current.set(scope, {
+                                      texto: previa?.texto
+                                        ? `${previa.texto}\n${texto}`
+                                        : texto,
+                                      clave: crypto.randomUUID(),
+                                    });
+                                  }
+                                  setModoComposer("nota");
+                                }
+                              : undefined
+                          }
                           key={`${identidad.empresaId}:${identidad.usuarioId}:${datos.canalId}:${datos.conversacionId}`}
                           scope={`${datos.canalId}:${datos.conversacionId}`}
                           borradores={borradores.current}

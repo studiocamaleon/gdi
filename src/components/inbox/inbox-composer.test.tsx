@@ -222,3 +222,68 @@ it("muestra micrófono al estar vacío y lo sustituye por enviar cuando hay text
   expect(container.querySelector('button[type="submit"]')).not.toBeNull();
   expect(enviar).not.toHaveBeenCalled();
 });
+
+const renderConNotas = (
+  onNota: (texto?: string) => void,
+  respuesta = ventana(),
+) =>
+  act(async () =>
+    root.render(
+      <InboxComposer
+        canalId="canal"
+        conversacionId="uno"
+        destino="uno"
+        respuesta={respuesta}
+        enviar={enviar}
+        actualizar={actualizar}
+        borradores={borradores}
+        scope="uno"
+        onNota={onNota}
+      />,
+    ),
+  );
+it.each(["enter", "espacio", "boton"])(
+  "/nota activa el modo privado con %s sin enviar el comando a WhatsApp",
+  async (caso) => {
+    const onNota = vi.fn();
+    await renderConNotas(onNota);
+    await escribir(caso === "espacio" ? "/nota Pendiente de revisar" : "/nota");
+    if (caso === "enter") await tecla();
+    if (caso === "boton") await enviarFormulario();
+    expect(onNota).toHaveBeenCalledWith(
+      caso === "espacio" ? "Pendiente de revisar" : "",
+    );
+    expect(enviar).not.toHaveBeenCalled();
+    expect(borradores.get("uno")?.texto).toBe("");
+  },
+);
+it("permite notas con ventana cerrada y envíos apagados pero sigue bloqueando respuestas al cliente", async () => {
+  const onNota = vi.fn();
+  await renderConNotas(onNota, {
+    ...ventana(),
+    habilitado: false,
+    abierta: false,
+    hasta: null,
+  });
+  expect(container.querySelector("textarea")?.disabled).toBe(false);
+  await escribir("Hola al cliente");
+  await enviarFormulario();
+  expect(enviar).not.toHaveBeenCalled();
+  await escribir("/nota");
+  await tecla();
+  expect(onNota).toHaveBeenCalledWith("");
+  expect(enviar).not.toHaveBeenCalled();
+});
+it("no interpreta palabras que sólo empiezan igual ni modifica un intento pendiente", async () => {
+  const onNota = vi.fn();
+  await renderConNotas(onNota);
+  await escribir("/notable");
+  await tecla();
+  expect(onNota).not.toHaveBeenCalled();
+  await enviarFormulario();
+  expect(enviar).toHaveBeenCalledWith(
+    "uno",
+    expect.objectContaining({ texto: "/notable" }),
+    expect.any(AbortSignal),
+  );
+});

@@ -70,6 +70,26 @@ it("monta sólo la vista independiente para la identidad autorizada", async () =
     usuarioId: "usuario",
     empresa: "Gráfica ficticia",
     operador: "prueba@example.invalid",
+    puedeConfigurarConexion: true,
   });
   expect(redirect).not.toHaveBeenCalled();
+});
+
+it("un operador puede atender sin recibir controles de conexión", async () => {
+  vi.mocked(getCurrentUserCached).mockResolvedValue({
+    currentUser: {
+      ...user,
+      tenantActual: {
+        ...user.tenantActual!,
+        rol: "operador",
+        permisos: ["inbox.atender"],
+      },
+    },
+    sessionId: "s",
+    accessToken: null,
+  });
+  const result = await InboxPage();
+  expect(result.props.children.props.identidad.puedeConfigurarConexion).toBe(
+    false,
+  );
 });

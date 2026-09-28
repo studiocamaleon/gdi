@@ -21,14 +21,21 @@ export default async function InboxPage() {
   if (user.debeCambiarPassword) redirect("/cambiar-clave");
   if (
     user.impersonacion ||
-    user.tenantActual?.rol !== "administrador" ||
-    !user.tenantActual.permisos?.includes("configuracion.gestionar")
+    !user.tenantActual ||
+    !(
+      user.tenantActual.permisos?.includes("inbox.atender") ||
+      (user.tenantActual.rol === "administrador" &&
+        user.tenantActual.permisos?.includes("configuracion.gestionar"))
+    )
   )
     return <SinPermiso modulo="Conversaciones" />;
   return (
     <ConfigRegionalProvider regional={user.tenantActual.regional}>
       <InboxView
         identidad={{
+          puedeConfigurarConexion:
+            user.tenantActual.rol === "administrador" &&
+            user.tenantActual.permisos?.includes("configuracion.gestionar"),
           empresaId: user.tenantActual.id,
           usuarioId: user.id,
           empresa: user.tenantActual.nombre,

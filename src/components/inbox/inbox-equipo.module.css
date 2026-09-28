@@ -1,0 +1,105 @@
+.filters {
+  margin-top: 12px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.owner {
+  max-width: 250px;
+  flex-shrink: 1;
+}
+.owner span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note {
+  align-self: stretch;
+  margin: 8px 5%;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+.note header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+}
+.note header span {
+  color: var(--muted-text);
+  margin-left: auto;
+}
+.note p {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.note time {
+  display: block;
+  text-align: right;
+  font: 10px var(--brand-mono);
+  color: var(--muted-text);
+}
+.event {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 7px;
+  margin: 14px auto;
+  max-width: 85%;
+  color: var(--muted-text);
+  font-size: 11px;
+  text-align: center;
+}
+.event svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.event small {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  opacity: 0.8;
+}
+.noteComposer {
+  padding: 10px 0 0;
+}
+.noteActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+@media (max-width: 700px) {
+  .owner {
+    max-width: 145px;
+  }
+  .owner > svg:last-child {
+    display: none;
+  }
+  .note {
+    margin-inline: 0;
+  }
+}
+
+.ownerMenu {
+  width: 260px;
+  max-height: min(420px, var(--available-height));
+}
+.noteMode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--accent-soft-foreground);
+  font-size: 11px;
+}
+.noteMode > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
