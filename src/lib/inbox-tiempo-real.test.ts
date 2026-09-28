@@ -143,3 +143,24 @@ it("pausa cuando no hay Internet y vuelve a comprobar al regresar", async () => 
   window.dispatchEvent(new Event("online"));
   expect(Fuente.todas.length).toBe(2);
 });
+
+it("una consulta fallida tardía no oculta el aviso de falta de Internet", async () => {
+  let rechazar!: (error: Error) => void;
+  const estado = vi.fn();
+  cerrar = escucharInbox({
+    identidad,
+    estado,
+    accesoCerrado: vi.fn(),
+    actualizar: () =>
+      new Promise((_resolve, reject) => {
+        rechazar = reject;
+      }),
+  });
+  Fuente.todas[0].emitir("ready");
+  await vi.advanceTimersByTimeAsync(250);
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  window.dispatchEvent(new Event("offline"));
+  rechazar(new Error("red perdida"));
+  await vi.advanceTimersByTimeAsync(1);
+  expect(estado).toHaveBeenLastCalledWith("sin_conexion");
+});

@@ -1,6 +1,11 @@
-import { Injectable, MessageEvent, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  MessageEvent,
+  NotFoundException,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { Prisma, SeveridadNotificacionInterna } from '@prisma/client';
-import { Observable } from 'rxjs';
+import { Observable, ReplaySubject, takeUntil } from 'rxjs';
 import type { CurrentAuth } from '../auth/auth.types';
 import { firmaActor } from '../common/firma-actor';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,8 +32,14 @@ export type PublicarEventoSistema = {
 };
 
 @Injectable()
-export class EventosSistemaService {
+export class EventosSistemaService implements OnModuleDestroy {
+  private readonly cierre = new ReplaySubject<void>(1);
   constructor(private readonly prisma: PrismaService) {}
+
+  onModuleDestroy() {
+    this.cierre.next();
+    this.cierre.complete();
+  }
 
   async publicar(input: PublicarEventoSistema, db: Db = this.prisma) {
     const destinatarios = new Set(input.destinatariosUserId ?? []);
@@ -293,7 +304,7 @@ export class EventosSistemaService {
         clearInterval(polling);
         clearInterval(heartbeat);
       };
-    });
+    }).pipe(takeUntil(this.cierre));
   }
 
   private cursorValido(value?: string) {

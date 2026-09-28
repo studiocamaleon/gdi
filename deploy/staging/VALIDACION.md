@@ -1,5 +1,18 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Recuperación del Inbox — validación local, 28/09/2026
+
+Rama `codex/inbox-recuperacion`, basada en `main` después de integrar el PR #7 (`7e58b0735`). Este apartado no acredita todavía un despliegue nuevo.
+
+- Una apertura durante una caída de la API muestra una pantalla de reconexión con la estética de Grafo. Espera hasta diez segundos por la sesión y vuelve a consultar automáticamente; conserva el control de acceso normal.
+- Una interrupción con el Inbox abierto conserva en memoria el chat elegido, los filtros y los borradores. No reenvía mensajes automáticamente. Si el usuario reintenta un envío incierto, conserva su clave para evitar duplicados. Una revocación real de sesión/permisos descarta los borradores privados.
+- Al apagar Nest se completan tanto los canales del Inbox como los de notificaciones generales. Se evita que sus conexiones HTTP impidan cerrar el servidor. Esto no convierte una única máquina en alta disponibilidad.
+- Pruebas locales: 72 comprobaciones web (vista, editor, reconexión, ruta y transporte) y 34 de API/notificaciones; incluyen dos streams HTTP reales abiertos durante el cierre de Nest. ESLint de los archivos modificados y control de CSS. En Chrome, con la API local apagada apareció la pantalla de recuperación; al iniciar la API la misma pestaña volvió al Inbox autenticado sin recarga manual. Las integraciones y las tareas programadas locales permanecieron desactivadas.
+- Los borradores sobreviven a la interrupción dentro de la pestaña; no se guardan en almacenamiento persistente del navegador. Cerrar o recargar completamente esa pestaña no está cubierto. No hubo envíos reales a Meta, migraciones ni cambios de recursos.
+
+Compilación remota, despliegue y verificación en staging pendientes al registrar este apartado.
+
+
 ## Ensayo con dos operadores distintos — 28/09/2026
 
 Continúa el lote funcional `d2677ff2a7bafcff648ee70d5258d3fb5c0692e1`, con las mismas imágenes, 298 migraciones y tamaños contratados. Se usaron dos sesiones independientes de Chrome (normal e incógnita), no dos pestañas de un único usuario.
