@@ -1,0 +1,90 @@
+# Plantillas de WhatsApp en el Inbox
+
+Implementado y comprobado en local el 26/09/2026, rama inicial `codex/inbox-plantillas`, ampliada en `codex/inbox-plantillas-archivos` y `codex/inbox-documentos-comerciales`. Todavía no activado en staging ni probado desde el Inbox con un destinatario real. El 27/09 el cliente de Grafo envió una plantilla de texto aprobada con dos variables al destinatario autorizado; Meta confirmó entrega por webhook real. La plantilla de PDF sigue pendiente de aprobación. Ver [ensayo real de plantillas y preparación del Inbox en staging](./meta-prueba-plantillas.md).
+
+## Para qué sirve
+
+Una plantilla es un mensaje cuyo texto fijo ya aprobó Meta. La persona que atiende el Inbox elige una, completa sus datos (por ejemplo, nombre y número de pedido), ve el resultado y confirma el envío. Sirve también cuando pasaron las 24 horas para responder con texto libre. Enviar una plantilla no vuelve a abrir esa ventana.
+
+La creación, edición y revisión de las plantillas se hace por ahora en el Administrador de WhatsApp de Meta. Grafo consulta las que pertenecen a la cuenta conectada de cada empresa. La aprobación de una plantilla es independiente de la revisión de nuestra aplicación.
+
+## Alcance de este bloque
+
+- Catálogo paginado y búsqueda entre las plantillas cargadas, con idioma, categoría y estado.
+- Selección únicamente de plantillas `APPROVED`, de utilidad o marketing, compatibles con este bloque.
+- Encabezado de texto, imagen JPG/PNG o PDF, cuerpo, pie y botones estáticos de URL, teléfono o respuesta rápida. Variables con nombre y posicionales en encabezado/cuerpo.
+- Vista previa orientativa y valores validados tanto en la web como en la API. Por ahora se limita el resultado a 60 caracteres de encabezado y 1024 de cuerpo; es un límite conservador de Grafo.
+- Confirmación explícita del operador de que el cliente autorizó ese tipo de contacto. Es una declaración, no una verificación automática ni un registro completo de cómo se obtuvo el consentimiento. La clave del intento vincula su contenido y esa confirmación mediante una huella, junto con operador y fecha.
+- Se muestra que Meta puede cobrar el mensaje. No se inventa una tarifa ni se supone entrega por aceptación del POST.
+- El mensaje queda registrado como plantilla; sus checks se actualizan con los webhooks reales y el circuito Redis/SSE existente.
+
+Videos, ubicaciones, botones con enlaces variables, códigos de autenticación, carruseles, Flows y otros componentes especiales aparecen bloqueados con motivo. No se descartan silenciosamente componentes para enviar una versión incompleta. No hay envíos masivos ni automatizaciones nuevas.
+
+## Archivos privados en una plantilla
+
+1. Elegir una plantilla aprobada cuyo encabezado pida **imagen** o **documento**.
+2. Elegir un archivo privado de la ficha del cliente, un presupuesto emitido o un comprobante emitido con PDF listo. Se muestran los últimos 100 compatibles de cada origen, separados por grupo. El teléfono debe corresponder a una única ficha activa; si no hay coincidencia o hay varias, Grafo no adivina de quién es el archivo.
+3. Revisar nombre, tamaño y contenido (miniatura de imagen o enlace para abrir el PDF). Completar las variables y confirmar que el cliente autorizó ese tipo de contacto.
+4. Al enviar, Grafo valida nuevamente empresa, sesión, permisos, plan, conexión, archivo y versión. Lee bytes con límite, comprueba tamaño, MIME, firma de PDF o metadatos de imagen y hash cuando existe.
+5. Sube los bytes a `/{PHONE_NUMBER_ID}/media` con multipart y token del canal. Usa el ID recibido en el componente `header` del mensaje. No entrega a Meta una URL pública de R2 ni una URL firmada de Grafo.
+6. Tras la subida vuelve a comprobar el acceso antes del único POST de mensajes. El intento durable se reserva antes de subir. Consultar el mismo intento no repite ni la subida ni el mensaje; los fallos de preparación se distinguen de un envío incierto.
+7. La proyección guarda el texto y la referencia de media antes de recibir los checks. El worker de adjuntos conserva una **copia independiente** en el Inbox, sometida a su cuota y permisos; nunca retira el original de la ficha. La copia ocupa espacio adicional. Si falta cuota, el mensaje puede estar entregado aunque Grafo todavía no pueda conservar su archivo.
+
+Límites de este bloque: PDF hasta **20 MB** (límite de Grafo; Meta admite documentos de mayor tamaño), JPG/PNG hasta **5 MB**, imágenes RGB/RGBA de 8 bits. Una preparación de archivo por proceso evita picos de memoria. Si hay otra transferencia en curso, el intento queda rechazado sin mensaje para que el operador decida cuándo volver a intentarlo.
+
+Por ahora no se ofrece subida desde la computadora dentro del modal, ni generación de PDF dentro del Inbox, ni archivos de órdenes. Tampoco se incluyen archivos públicos, eliminados, documentos internos ni adjuntos de otras conversaciones. La subida a Meta sólo comienza al pulsar Enviar.
+
+### Presupuestos y comprobantes de Grafo
+
+- El origen y la referencia comercial ayudan a distinguir el documento: por ejemplo, `PRES-2026-0042` o `Factura C 0001-00000018`. Se conserva también el nombre del PDF.
+- Presupuestos: requieren `comercial.ver`, número, cliente coincidente, fecha de envío y estado `enviado`, `aprobado` o `convertido`. Se usa la revisión 2 emitida y lista de `DocumentoPdf`; nunca la revisión 1 de vista previa. El PDF legado se admite sólo si no existe revisión 2, igual que en Presupuestos. Una revisión emitida pendiente/fallida no se reemplaza por un archivo antiguo.
+- Comprobantes: requieren `administracion.ver`, cliente coincidente, número y estado `emitido`, sin anulación. Admite facturas, notas de crédito y notas de débito con PDF privado ya generado. No se consulta ARCA ni se emiten comprobantes desde este selector.
+- Los permisos se consultan en la sesión actual de la base, además del permiso del Inbox y CRM. No se usa una copia antigua de permisos del navegador. El listado devuelve sólo nombre, referencia, formato, tamaño y huella; sin snapshots fiscales ni claves de almacenamiento.
+- La huella incluye el documento de origen. Si cambian archivo, estado, cliente o versión, hay que volver a elegir. Los controles se repiten al enviar y después de subir a Meta. Una anulación durante la preparación impide el POST de mensajes.
+- **Revisar archivo** usa una ruta del Inbox vinculada a conversación, conexión y versión. Comprueba el acceso antes y después de firmar una descarga de 60 segundos, sin caché. Ya no usa la ruta genérica de archivos para esa revisión. Como toda URL firmada, una vez entregada puede funcionar hasta su vencimiento.
+- **Actualizar archivos** vuelve a consultar y limpia la selección anterior. Si falta un PDF, generarlo desde su módulo y luego actualizar. Consultar el selector no genera documentos ni cambia su estado; tampoco requiere contratar nuevamente la capacidad de generación para leer un archivo ya existente.
+
+Un archivo subido a Meta cuyo mensaje no llegue a enviarse puede quedar allí hasta su vencimiento de 30 días. No se borran automáticamente IDs en un resultado incierto: podría haber un envío en curso. No hay reintentos automáticos del POST de mensajes.
+
+## Cómo funciona por dentro
+
+1. La API vuelve a comprobar sesión, empresa, permisos, plan y generación de la conexión. Conserva el acceso actual del Inbox: administrador con permiso de configuración, sin impersonación.
+2. Consulta `/{WABA-ID}/message_templates` usando la WABA del servidor. Usa `fields`, `limit=100` y el cursor `after`; nunca sigue la URL `paging.next` ni acepta una WABA o destinatario enviados por la web.
+3. Entrega un contrato reducido sin tokens, ejemplos ni respuestas crudas. Cada plantilla incluye una huella de su definición y el cursor de su página.
+4. Antes de un envío nuevo vuelve a consultar esa página de la WABA. Exige que coincidan el ID, la huella y el estado aprobado. Si el catálogo cambió de posición o contenido, pide actualizar y elegir nuevamente. La comprobación usa GET fuera de la transacción; Meta conserva la validación definitiva en el POST.
+5. Reutiliza `InboxEnvio`: reserva un intento durable y limitado a 20 nuevos intentos por minuto por operador/empresa. Un único POST se ejecuta después de confirmar la transacción.
+6. Una misma clave sólo sirve para el mismo tipo, mensaje, conversación y generación. Un intento existente puede consultarse aunque el catálogo deje de estar disponible. Nunca se reenvían automáticamente los intentos inciertos.
+7. La confirmación del POST o un webhook adelantado proyectan un único mensaje canónico por WAMID. La consulta del resultado vuelve a comprobar permisos y conexión. Las plantillas no modifican la última entrada del cliente ni abren texto libre.
+
+El circuito no intenta solucionar la edición de mensajes ya enviados; esa capacidad sigue pendiente de soporte oficial documentado para envíos de Cloud API.
+
+## Comprobación local
+
+Abrir `http://localhost:3000/dev/diseno/inbox/conversaciones`. Elegir Clara Paz → **Usar plantilla** → **trabajo listo**. Completar nombre, pedido y dirección, confirmar el contacto y enviar. El mensaje aparece como **Simulado · sin envío real**, mientras el texto libre continúa bloqueado. Los datos de esta ruta viven en memoria; no escriben en PostgreSQL ni llaman a Meta.
+
+Para archivos: Alma o Bruno → **Usar plantilla** → **documento del trabajo** o **catalogo con imagen**. Elegir un archivo de ejemplo, `PRES-2026-0042` o `Factura C 0001-00000018`; los tres grupos aparecen al elegir una plantilla de PDF. Clara muestra la falta de ficha coincidente. Todo sigue siendo simulado.
+
+Cobertura: catálogo y componentes, variables, cambios de estado/definición, separación de empresas y conexiones, permisos HTTP, valores inválidos, falta de consentimiento, concurrencia, timeout, confirmación por webhook, comprobación sin reenvío, vista previa, borradores separados y recuperación del intento al cerrar/reabrir.
+
+Validación acumulada: 477 pruebas de API/Meta, almacenamiento y aislamiento; 58 pruebas de componentes del Inbox; tipos de la web y de la API con `tsconfig.build.json`, lint del código modificado y guardia CSS correctos. La comprobación global de tipos de tests de la API sigue reportando errores anteriores en otros módulos; no se los dio por aprobados. Revisión visual en Chrome: recorrido de PDF, miniatura de imagen y comprobación móvil; la base visual de plantillas ya había sido revisada en claro y oscuro. Selector comercial comprobado también a 390 px, con envío simulado del presupuesto y selección de factura. Sin desborde horizontal. API local con base disponible y permisos de `grafo_app` sobre la columna nueva comprobados.
+
+## Preparación para el futuro lote de staging
+
+- Migración aditiva `20260926230000_inbox_plantillas`: agrega `InboxEnvio.tipo`, con valor inicial `TEXTO` y comprobación de valores. Aplicada sólo en las bases locales de desarrollo y tests; 292 migraciones.
+- Migración adicional `20260927010000_inbox_plantillas_archivos`: agrega `InboxEnvio.adjunto`, sólo metadatos de la copia subida a Meta. Aplicada en desarrollo y tests; **293 migraciones** en total.
+- Regenerar Prisma y desplegar API, web y worker que procesa webhooks en versiones coherentes. Un worker anterior podría proyectar una plantilla con archivo como texto. No activar este bloque con versiones mezcladas.
+- `META_INBOX_PLANTILLAS_ENABLED=false` por defecto; requiere además `META_INBOX_ENVIOS_ENABLED`, lectura, recepción, coexistencia autorizada y configuración vigente. No se modificaron secretos ni flags de los procesos locales.
+- La selección de documentos comerciales no agrega tablas ni migraciones. API y web deben desplegarse juntas para los metadatos de origen y la nueva ruta de revisión.
+- Para archivos también se requiere `META_INBOX_ADJUNTOS_ENABLED=true` y acceso vigente a CRM. La descarga/copia del Inbox usa el worker ya existente.
+- La activación real requiere una cuenta conectada con acceso a sus plantillas y un destinatario de prueba autorizado. Comprobar catálogo real, parámetros, rechazo, aceptación, entrega/lectura y ventana cerrada antes de ofrecerlo a empresas.
+- Registrar versión y resultados en `deploy/staging/VALIDACION.md` cuando se acuerde desplegar el conjunto. Este bloque no publicó ni fusionó ramas.
+
+## Fuentes oficiales consultadas el 26/09/2026
+
+- [Conceptos básicos de plantillas](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview/): estado aprobado, formatos named/positional y categorías. Actualización mostrada: 21/05/2026.
+- [Administración de plantillas](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-management): catálogo por WABA y paginación. Actualización mostrada: 02/07/2026.
+- [Componentes](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components/): encabezado, cuerpo, pie, variables y botones. Actualización mostrada: 24/06/2026.
+- [Referencia de Message Template API](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-account/message-template-api): campos, paginación y endpoints. La referencia mostraba v25; los ejemplos de componentes ya utilizan v26, versión configurada del cliente actual.
+
+- [Plantillas con contenido multimedia](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-media/): header image/document, envío por ID o link; Meta recomienda subir y usar IDs. Actualización mostrada: 21/05/2026.
+- [Contenido multimedia](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/media/): multipart `file`, `type`, `messaging_product`; límite de 5 MB de imágenes, RGB/RGBA de 8 bits y vencimiento de 30 días para media subida. Actualización mostrada: 16/06/2026.

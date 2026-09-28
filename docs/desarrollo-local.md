@@ -10,7 +10,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 - Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
 - API: `http://127.0.0.1:3001/api`.
-- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 282 migraciones aplicadas, sin ejecutar seed.
+- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 295 migraciones aplicadas al 27/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
 - PDF: contenedor existente `gdi-saas-pdf-renderer`, puerto 3002.
 - Workers: procesos locales de cálculos/entregas y documentos PDF.
@@ -37,12 +37,12 @@ NODE_ENV=development GRAFO_LOCAL_DISABLE_CRON=true RESEND_API_KEY= HOST=127.0.0.
 
 ```sh
 # Worker de cálculos y entregas.
-NODE_ENV=development RESEND_API_KEY= NODE_OPTIONS=--max-old-space-size=1536 GRAFONEST_POOL_ID=local GRAFONEST_POOL_CPU=2 GRAFONEST_POOL_MEMORY_MB=2048 WORKER_GEOMETRY_CONCURRENCY=1 WORKER_GEOMETRY_HEAVY_CONCURRENCY=1 WORKER_QUOTE_CONCURRENCY=1 node --watch --watch-preserve-output -r dotenv/config -r ts-node/register/transpile-only src/workers/worker-main.ts
+NODE_ENV=development GRAFO_LOCAL_DISABLE_CRON=true RESEND_API_KEY= NODE_OPTIONS=--max-old-space-size=1536 GRAFONEST_POOL_ID=local GRAFONEST_POOL_CPU=2 GRAFONEST_POOL_MEMORY_MB=2048 WORKER_GEOMETRY_CONCURRENCY=1 WORKER_GEOMETRY_HEAVY_CONCURRENCY=1 WORKER_QUOTE_CONCURRENCY=1 node --watch --watch-preserve-output -r dotenv/config -r ts-node/register/transpile-only src/workers/worker-main.ts
 ```
 
 ```sh
 # Worker de PDF.
-NODE_ENV=development RESEND_API_KEY= NODE_OPTIONS=--max-old-space-size=1024 WORKER_PDF_CONCURRENCY=1 WORKER_PDF_GLOBAL_CONCURRENCY=1 node --watch --watch-preserve-output -r dotenv/config -r ts-node/register/transpile-only src/documentos-pdf/documentos-worker-main.ts
+NODE_ENV=development GRAFO_LOCAL_DISABLE_CRON=true RESEND_API_KEY= NODE_OPTIONS=--max-old-space-size=1024 WORKER_PDF_CONCURRENCY=1 WORKER_PDF_GLOBAL_CONCURRENCY=1 node --watch --watch-preserve-output -r dotenv/config -r ts-node/register/transpile-only src/documentos-pdf/documentos-worker-main.ts
 ```
 
 La ejecución directa del código fuente evita que varios procesos Nest compitan por la misma carpeta `dist`. Los procesos recargan módulos modificados; las comprobaciones de tipos y pruebas se ejecutan por separado antes de proponer el lote. Si se modifican assets que no forman parte del grafo de módulos, reiniciar el proceso correspondiente.
@@ -50,3 +50,59 @@ La ejecución directa del código fuente evita que varios procesos Nest compitan
 `GRAFO_LOCAL_DISABLE_CRON` sólo tiene efecto con `NODE_ENV=development`. Pausa los barridos automáticos, incluidas notificaciones WhatsApp y reconciliaciones; no desactiva los cálculos que solicita la interfaz. No impide una acción manual contra integraciones externas: no probar envíos, cobros o facturación sin definir antes el destinatario y entorno de prueba. Staging no usa esta opción.
 
 Las variables indicadas en los comandos sólo afectan a esos procesos. No reemplazan los archivos privados `.env`, y no usan secretos de staging.
+
+## Arranque comprobado el 26/09/2026
+
+La app, la API y ambos workers se levantaron desde el worktree de `codex/inbox-lectura`, con la versión `4ef6fe97c`. El checkout principal sigue en `codex/entorno-local`: editar allí no actualiza los procesos de este arranque. Antes de cambiar de rama o levantar otra instancia, comprobar la carpeta y los puertos de los procesos activos.
+
+El worktree usa la configuración **local** existente: `.env.local` es un enlace al archivo local del checkout principal; la API y los workers cargan su `.env` mediante `DOTENV_CONFIG_PATH`. No se copiaron secretos de staging. Se mantuvieron `GRAFO_LOCAL_DISABLE_CRON=true`, `RESEND_API_KEY=` y el piloto de Meta desactivado.
+
+Se aplicaron únicamente `20260925210000_meta_cloud_piloto` y `20260925223000_meta_recepcion_piloto`. Son cambios aditivos, sin seed ni reset. Se comprobaron los permisos del rol de ejecución sobre la tabla nueva.
+
+Comprobaciones: API en `http://127.0.0.1:3001/api` con base disponible, página principal con sesión local, workers de cálculos y PDF iniciados, enlace Inbox visible en el sidebar y bienvenida real de `/inbox` en otra pestaña. La muestra aislada del puerto 3015 se detuvo para liberar recursos; ahora se utiliza la aplicación completa en `http://localhost:3000`.
+
+Ampliación del 26/09: aplicada también `20260926040000_inbox_revision`, con permisos del rol de ejecución comprobados. La [base de tiempo real](inbox-tiempo-real.md) usa Redis local. El piloto real sigue desactivado: las pruebas de mensajes y reconexión utilizan empresas sintéticas en `gdi_saas_test`, no los datos de la empresa local ni Meta.
+
+Segundo bloque del 26/09: mismo worktree, ahora en `codex/meta-conexion-empresas`, partiendo de `9eb99f37a`. Aplicada `20260926100000_meta_conexion_empresas` en desarrollo y tests, con permisos de `grafo_app` comprobados. La [base de autorización por empresa](meta-conexion-empresas.md) se prueba sin exposición HTTP y sin llamadas reales a Meta. Los servicios siguen en sus puertos; cron e integración real siguen apagados. Al regenerar Prisma fue necesario reiniciar únicamente el proceso local de la API, cuyo cierre estaba esperando conexiones persistentes; no se reinició Docker.
+
+Tercer bloque del 26/09: mismo worktree en `codex/meta-historial-recepcion`, desde `29ca9b958`. Aplicada `20260926110000_meta_inbox_recepcion` en desarrollo y tests. La [recepción general](meta-inbox-recepcion.md) conserva trabajos en PostgreSQL y reutiliza el worker existente. `META_INBOX_RECEPCION_ENABLED` permanece apagada; no se solicitaron historiales ni se alteró Meta. Los servicios locales se recargaron con los cambios, sin reiniciar Docker.
+
+Cuarto bloque del 26/09: mismo worktree en `codex/meta-alta-sincronizacion`, desde `ebdd5fcc1`. Aplicada `20260926140000_meta_alta_sincronizacion` en desarrollo y tests. El [recorrido de conexión](meta-conexion-empresas.md) agrega pantalla, endpoints y trabajo persistente de suscripción/contactos/historial. Los modos reales permanecen apagados y no se reclamó ningún sandbox en Meta. La bienvenida de `/inbox` se comprobó en Chrome con su sesión local y botón deshabilitado. La lectura del chat y su stream siguen limitados al piloto hasta el siguiente bloque.
+
+Quinto bloque del 26/09: mismo worktree en `codex/inbox-conversaciones-generales`, desde `562b0d112`. Se inició Docker Desktop, que estaba apagado, y se levantaron API, web y ambos workers; no se reinició Docker ni se modificaron recursos de otros proyectos. Sin nuevas migraciones. La [lectura general y su vista local](meta-inbox-lectura-general.md) están implementadas. La API corre con `META_INBOX_LECTURA_ENABLED=false`, `META_INBOX_RECEPCION_ENABLED=false`, `META_WHATSAPP_PILOT_ENABLED=false`, `META_CONEXION_MODO=` y cron apagado; los workers también conservan Meta y cron apagados. Durante la recarga fue necesario finalizar únicamente el hijo de la API que esperaba una conexión persistente; el supervisor lo recuperó. No se alteraron secretos, staging ni producción.
+
+Sexto bloque del 26/09: mismo worktree en `codex/inbox-importacion-reconexion`, desde `6e6909a4b`. Aplicada `20260926170000_meta_ciclo_cuenta` sólo en desarrollo y tests: **289 migraciones**. Agrega [estado de importación y reconexión](meta-importacion-reconexion.md). Los servicios continúan locales, sin reiniciar Docker, con cron y Meta reales deshabilitados. La demo del Inbox permite abrir el panel Conexión con datos ficticios.
+
+Séptimo bloque del 26/09: mismo worktree en `codex/inbox-adjuntos-bienvenida`, desde `80c1347c8`. Aplicada `20260926190000_inbox_adjuntos` sólo en desarrollo y tests: **290 migraciones**, con permisos del rol local comprobados. Agrega [adjuntos privados y bienvenida de Grafo](meta-inbox-adjuntos.md). No se cambiaron secretos ni flags reales. Durante la recarga se finalizó únicamente el hijo local de la API que esperaba conexiones; su supervisor lo recuperó. No se reinició Docker ni se operó staging.
+
+Octavo bloque del 26/09: mismo worktree en `codex/inbox-respuestas`, desde `03c1117fb`. Aplicada `20260926210000_inbox_envios` sólo en desarrollo y tests: **291 migraciones**, con permisos locales comprobados. Agrega [editor y respuestas de texto](meta-inbox-respuestas.md), protección de duplicados y ventana de atención. La demo simula respuestas sin Meta ni base. `META_INBOX_ENVIOS_ENABLED` queda apagado por defecto; no se cambiaron los flags ni secretos de los procesos reales, y cron sigue desactivado. Sin cambios en staging/producción ni reinicio de Docker.
+
+Noveno bloque del 26/09: mismo worktree en `codex/inbox-plantillas`, desde `07af2d4c3`. Aplicada `20260926230000_inbox_plantillas` sólo en desarrollo y tests: **292 migraciones**, sin seed ni reset. Agrega [selector, vista previa y envío de plantillas](meta-inbox-plantillas.md). La demo permite probarlas incluso con la conversación de Clara fuera de las 24 horas. Los envíos reales y cron siguen apagados; no se alteraron secretos, staging, producción ni Docker.
+
+Décimo bloque del 26/09: mismo worktree en `codex/inbox-plantillas-archivos`, desde `cf835ff8a`. Aplicada `20260927010000_inbox_plantillas_archivos` sólo en desarrollo y tests: **293 migraciones**, sin seed ni reset; permisos de `grafo_app` comprobados. Agrega [plantillas con PDF e imágenes de la ficha del cliente](meta-inbox-plantillas.md). Reutiliza almacenamiento privado y el worker de adjuntos, con pruebas de Meta y storage simulados. Los envíos reales, sus flags y cron siguen apagados; no se reinició Docker ni se operó staging o producción. La API local respondió con base disponible después de la recarga.
+
+Undécimo bloque del 26/09: mismo worktree en `codex/inbox-documentos-comerciales`, desde `9510b2a04`. Agrega [presupuestos y comprobantes emitidos al selector de plantillas](meta-inbox-plantillas.md), con permisos propios de cada módulo y revisión privada ligada a la conversación. **Sin nuevas migraciones: siguen siendo 293**. La demo incluye documentos ficticios; las pruebas usan únicamente `gdi_saas_test` y clientes de Meta/almacenamiento simulados. El listado no genera PDF, no cambia estados ni consulta ARCA. Se conservaron cron y envíos reales apagados, sin staging, producción ni reinicio de Docker. API local comprobada con base disponible.
+
+## Canal de prueba — 27/09/2026
+
+El mismo worktree está en `codex/inbox-canal-pruebas`, desde `393096f32`. Se agregó `20260927200000_inbox_canal_prueba` en desarrollo y tests: **294 migraciones**, sin seed ni reset. La [guía del canal](meta-inbox-canal-prueba.md) separa lo comprobado en local del ensayo real pendiente.
+
+Después del reinicio del equipo se levantaron nuevamente web, API y ambos workers. Usan las conexiones locales anteriores, `GRAFO_DEPLOY_ENV=local`, `GRAFO_LOCAL_DISABLE_CRON=true`, correo vacío y todos los interruptores `META_INBOX_*`/piloto apagados; `META_CONEXION_MODO` vacío. El canal de prueba real sólo se habilita en staging. La muestra `/dev/diseno/inbox/prueba` usa datos ficticios en memoria y no necesita claves de Meta. No copiar las claves de staging para activarla. Los tests emplean `gdi_saas_test` con Graph simulado y Redis local.
+
+Corrección del ensayo real del 27/09: aplicada `20260927210000_inbox_destino_prueba` sólo por migración aditiva, **295 migraciones** en desarrollo y tests. La identidad del contacto se conserva; el destino explícito sólo existe para el canal de prueba de staging. Los procesos locales conservan Meta y cron desactivados.
+
+
+## Archivos y audio del Inbox — 28/09/2026
+
+Mismo worktree y rama `codex/inbox-canal-pruebas`. Aplicada únicamente la migración aditiva `20260928120000_inbox_cargas` a desarrollo/tests: **296 migraciones**, con SELECT/INSERT/UPDATE/DELETE del rol local `grafo_app` comprobados en `InboxCarga`. Sin seed/reset. FFmpeg y FFprobe 9.0.1 están disponibles localmente en `/opt/homebrew/bin`; sirven para validar códecs y convertir las notas de voz a OGG/Opus mono. La imagen de API incorpora el paquete `ffmpeg`; se compila en remoto cuando se despliegue el lote. No se reinició Docker ni se cambiaron tamaños de infraestructura.
+
+La muestra de Diana incluye audio entrante/saliente, video, sticker y texto; los envíos son simulados y los archivos se conservan sólo en memoria de esa vista. El editor permite adjuntar y grabar; enviar una grabación no abre vista previa. Las llamadas reales de Meta y los cron de desarrollo siguen apagados. Las [capacidades y pendientes](meta-inbox-capacidades.md) distinguen la implementación local del ensayo real aún necesario.
+
+## Equipo del Inbox — 28/09
+
+En el mismo worktree y rama `codex/inbox-canal-pruebas`, se aplicó la migración aditiva `20260928180000_inbox_equipo` sólo a desarrollo/tests: **297 migraciones**. Registra autores, responsables, transferencias y notas privadas; incorpora filtros y el permiso independiente de atención. Se otorgó al rol local `grafo_app` SELECT/INSERT/UPDATE/DELETE sobre la nueva tabla `InboxEventoInterno`. Sin seed/reset, cambios de credenciales, reinicio de Docker ni despliegue a staging/producción. Ver [funcionamiento y alcance](meta-inbox-equipo.md).
+
+
+## Lectura y estados compartidos — 28/09
+
+Aplicada la migración aditiva `20260928200000_inbox_estados_lectura` sólo a desarrollo y tests: **298 migraciones**. Agrega lectura compartida por el equipo y estados Activa/Resuelta, sin tablas nuevas ni cambios de credenciales. Prisma regenerado, con Meta y cron reales apagados. No se ejecutaron seeds/reset ni se desplegó staging/producción. Presencia simulada únicamente en la demo; el indicador real permanece neutral hasta implementar sus señales de conexión.

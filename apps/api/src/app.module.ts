@@ -77,7 +77,10 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
     LoggerModule.forRoot({
       pinoHttp: {
         serializers: {
-          req: (req) => ({ ...req, url: rutaLog(String(req.url ?? '')) }),
+          req: (req: Record<string, unknown>) => ({
+            ...req,
+            url: rutaLog(typeof req.url === 'string' ? req.url : ''),
+          }),
         },
         level:
           process.env.LOG_LEVEL ??
@@ -92,6 +95,8 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
         // No filtrar tokens/cookies a los logs.
         redact: [
           'req.headers.authorization',
+          'req.body.codigo',
+          'req.body.estadoSecreto',
           'req.headers.cookie',
           'req.headers["x-hub-signature-256"]',
           'req.query["hub.verify_token"]',

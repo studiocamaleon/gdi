@@ -201,7 +201,10 @@ describe('Aislamiento entre tenants — cobertura del datamodel', () => {
           }
           continue;
         }
-        if (!entrada.name.endsWith('.ts')) continue;
+        // También hay pruebas junto al código, fuera de __tests__. Sus
+        // fixtures crean membresías sintéticas y no son accesos de producción.
+        if (!entrada.name.endsWith('.ts') || entrada.name.endsWith('.spec.ts'))
+          continue;
         const relativo = relative(raiz, ruta);
         if (ARCHIVOS_AUTORIZADOS.has(relativo)) continue;
 

@@ -1,0 +1,50 @@
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+.counter {
+  color: var(--muted-text);
+  font: 10px var(--brand-mono);
+}
+.closed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.closed strong {
+  display: block;
+  color: var(--foreground);
+  margin-bottom: 5px;
+}
+.closed p {
+  margin: 0;
+}
+.compactRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.inputGroup {
+  border-radius: 20px;
+}
+.inputGroup > [data-slot="input-group-addon"] {
+  padding-block: 5px;
+}
+.input {
+  field-sizing: content;
+  min-height: 38px;
+  max-height: 140px;
+  padding: 9px 14px;
+  line-height: 20px;
+  resize: none;
+}
+.emojiGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+}

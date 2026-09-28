@@ -2,6 +2,9 @@
 
 **Fecha:** 2026-08-09 · **Estado:** DISEÑO — proceso Meta iniciado (App + Portfolio creados)
 **Actualización 25/09/2026:** diseño histórico, no inventario de lo implementado. El piloto de envío ya se validó en staging; ver `meta-cloud-piloto.md`. La recepción local y el orden actualizado de conexión/coexistencia están en `meta-recepcion-piloto.md`. No dar por vigentes el token sin vencimiento, la versión de Graph ni los pasos administrativos de este documento sin contrastarlos con esas fuentes.
+
+Para sincronización inicial y sus límites, prevalece [el relevamiento actualizado de historial](meta-coexistencia-historial.md). Una solicitud por alta no equivale a afirmar que Meta nunca reintenta una entrega HTTP fallida.
+
 **Base:** `docs/whatsapp-dualhook-investigacion.md` (investigación 2026-08-04, decisión: Meta directo)
 **Objetivo F1:** cada tenant conecta SU número de WhatsApp Business vía Embedded Signup y las 13 plantillas del catálogo salen por su número (hoy salen por el de Wati). Con statuses reales (sent/delivered/read) y la ingesta cruda lista para el inbox de F2.
 

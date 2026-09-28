@@ -140,7 +140,7 @@ async function handler(
   // SSE no puede pasar por el buffer general del BFF: la conexión debe quedar
   // abierta y cada evento tiene que llegar al navegador apenas lo emite Nest.
   if (respContentType?.includes("text/event-stream")) {
-    responseHeaders.set("cache-control", "no-cache, no-transform");
+    responseHeaders.set("cache-control", "private, no-store, no-transform");
     responseHeaders.set("connection", "keep-alive");
     responseHeaders.set("x-accel-buffering", "no");
     return new Response(response.body, {

@@ -1,0 +1,78 @@
+.player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  padding: 6px 0 0;
+  color: inherit;
+}
+.player audio {
+  display: none;
+}
+.play {
+  flex: none;
+  border-radius: 50%;
+  color: inherit;
+}
+.play svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+.timeline {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-width: 45px;
+  padding-top: 14px;
+}
+.seek {
+  width: 100%;
+  appearance: none;
+  height: 3px;
+  border-radius: 3px;
+  cursor: pointer;
+  color: color-mix(in srgb, currentColor 24%, transparent);
+}
+.seek::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.seek::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border: 0;
+  border-radius: 50%;
+}
+.seek:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+}
+.duration {
+  font: 10px var(--brand-mono);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.speed {
+  font: 10px var(--brand-mono);
+  color: inherit;
+  border-radius: 20px;
+  flex: none;
+}
+.voice {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  flex: none;
+}

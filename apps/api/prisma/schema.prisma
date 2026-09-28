@@ -392,8 +392,10 @@ enum OrigenMovimientoStockMateriaPrima {
 
 /// A qué entidad se adjunta el archivo. Cada valor se corresponde con
 /// exactamente una FK del modelo Archivo (salvo TENANT_BRANDING, que no
-/// cuelga de nada: es del tenant). Ver docs/archivos-r2-diseno.md §D3.
+/// cuelga de nada: es del tenant; INBOX se vincula mediante InboxAdjunto).
+/// Ver docs/archivos-r2-diseno.md §D3 y docs/meta-inbox-adjuntos.md.
 enum ArchivoScope {
+  INBOX
   TENANT_BRANDING
   CAMPANA
   CLIENTE
@@ -738,6 +740,9 @@ model Tenant {
   archivos                                         Archivo[]                                         @relation("ArchivosDelTenant")
   integraciones                                    IntegracionTenant[]
   mensajesWhatsappRecibidos                         MensajeWhatsappRecibido[]
+  revisionesInbox                                  InboxCanalRevision[]
+  autorizacionesMeta                               MetaAutorizacion[]
+  vinculoMeta                                      MetaVinculo?
   memberships                                      Membership[]
   roles                                            Rol[]
   eventosAcceso                                    EventoAcceso[]
@@ -5533,6 +5538,8 @@ model PagoContador {
 /// seteada, según `scope` (ninguna para TENANT_BRANDING).
 /// Ver docs/archivos-r2-diseno.md
 model Archivo {
+  cargaInbox InboxCarga?
+  adjuntoInbox InboxAdjunto?
   documentoPdfId String? @unique @db.Uuid
   documentoPdf DocumentoPdf? @relation(fields: [documentoPdfId], references: [id], onDelete: Restrict)
   geometriasProducto GeometriaProducto[]
@@ -6443,10 +6450,283 @@ model WebhookWhatsappCrudo {
   payload       Json
   procesado     Boolean  @default(false)
   recibidoEl    DateTime @default(now())
+  /// Fecha del envelope, indispensable para ordenar cambios de cuenta.
+  metaTimestamp DateTime?
+  trabajoInbox  InboxTrabajoEvento?
 
   @@index([tenantId, tipo])
   @@index([wamid])
   @@index([procesado, recibidoEl])
+}
+
+/// Invalidación duradera por canal: cambia en la misma transacción del mensaje.
+model InboxCanalRevision {
+  tenantId      String @db.Uuid
+  wabaId        String
+  phoneNumberId String
+  revision      BigInt @default(0)
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, wabaId, phoneNumberId])
+}
+
+enum EstadoAutorizacionMeta {
+  PREPARADA
+  CANJEANDO
+  CANJEADA
+  VERIFICANDO
+  VERIFICADA
+  CANCELADA
+  REINICIAR
+}
+
+/// Intento de Embedded Signup ligado a una sesión humana. El código de Meta
+/// nunca se persiste; el secreto del intento sólo se conserva como hash.
+model MetaAutorizacion {
+  id                  String @id @default(uuid()) @db.Uuid
+  tenantId            String @db.Uuid
+  userId              String @db.Uuid
+  sessionId           String @db.Uuid
+  membershipId        String @db.Uuid
+  estadoHash          String @unique
+  estado              EstadoAutorizacionMeta @default(PREPARADA)
+  falloCodigo         String?
+  appId               String
+  configId            String
+  modo                String @default("COEXISTENCIA")
+  graphVersion        String
+  tokenCifrado        Json?
+  venceEl             DateTime
+  canjeIniciadoEl     DateTime?
+  canjeadoEl          DateTime?
+  verificadaEl        DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  tenant              Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, sessionId, estado])
+  @@index([venceEl, estado])
+}
+
+enum EstadoVinculoMeta {
+  VERIFICADO
+  SUSPENDIDO
+  DESCONECTADO
+}
+
+/// Reserva comprobada en Graph, todavía NO es un canal operativo. Conserva
+/// la propiedad al desconectar: nunca reasignar eventos tardíos a otro tenant.
+/// La primera versión admite un número y una cuenta de mensajes por empresa.
+model MetaVinculo {
+  id                    String @id @default(uuid()) @db.Uuid
+  tenantId              String @unique @db.Uuid
+  wabaId                String @unique
+  phoneNumberId         String @unique
+  estado                EstadoVinculoMeta @default(VERIFICADO)
+  numero                String
+  /// PRUEBA es un canal de staging; nunca una autorización de coexistencia.
+  tipo                  String @default("COEXISTENCIA")
+  pruebaDestinatarioWaId String?
+  pruebaDestinoE164     String?
+  nombreVerificado      String?
+  tokenCifrado          Json?
+  tokenVenceEl          DateTime?
+  accesoDatosVenceEl    DateTime?
+  autorizacionId        String @unique @db.Uuid
+  verificadoEl          DateTime
+  desconectadoEl        DateTime?
+  /// Se habilita sólo cuando el alta y su receptor estén preparados.
+  recepcionDesdeEl      DateTime?
+  ultimoCambioCuentaEl  DateTime?
+  ultimoEventoCuenta    String?
+  conversaciones        InboxConversacion[]
+  mensajes              InboxMensaje[]
+  contactos             InboxContacto[]
+  importaciones         InboxImportacion[]
+  bloquesHistorial      InboxBloqueHistorial[]
+  trabajos              InboxTrabajoEvento[]
+  altas                 MetaAlta[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  tenant                Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  @@unique([id, tenantId])
+}
+
+enum EstadoAltaMeta {
+  PENDIENTE
+  SUSCRIBIENDO
+  CONTACTOS_PENDIENTES
+  SOLICITANDO_CONTACTOS
+  HISTORIAL_PENDIENTE
+  SOLICITANDO_HISTORIAL
+  SOLICITUDES_COMPLETADAS
+  REVISION
+  PAUSADA
+}
+
+/// Cada llamada de uso único se reclama ANTES de salir a la red. No repetir
+/// un paso en vuelo tras una caída: su resultado puede haberse aplicado en Meta.
+model MetaAlta {
+  id                   String @id @default(uuid()) @db.Uuid
+  tenantId             String @db.Uuid
+  vinculoId            String @db.Uuid
+  autorizacionId       String @unique @db.Uuid
+  appId                String
+  graphVersion         String
+  estado               EstadoAltaMeta @default(PENDIENTE)
+  venceEl              DateTime
+  pasoIniciadoEl       DateTime?
+  contactosRequestId   String?
+  historialRequestId   String?
+  falloCodigo          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  vinculo              MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@index([estado, createdAt])
+  @@index([tenantId, vinculoId])
+}
+
+enum EstadoTrabajoInbox {
+  PENDIENTE
+  COMPLETADO
+  REVISION
+  PAUSADO
+}
+
+/// Cola duradera por evento, independiente de la proyección del piloto.
+model InboxTrabajoEvento {
+  id               String @id @default(uuid()) @db.Uuid
+  tenantId         String @db.Uuid
+  vinculoId        String @db.Uuid
+  autorizacionId   String @db.Uuid
+  crudoId          String @unique @db.Uuid
+  estado           EstadoTrabajoInbox @default(PENDIENTE)
+  cursor           Int @default(0)
+  total            Int?
+  avisos           Int @default(0)
+  prioridad        Int @default(0)
+  intentos         Int @default(0)
+  proximoIntentoEl  DateTime @default(now())
+  ultimoError      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  crudo            WebhookWhatsappCrudo @relation(fields: [crudoId], references: [id], onDelete: Restrict)
+  vinculo          MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@index([estado, proximoIntentoEl, prioridad, createdAt])
+  @@index([tenantId, vinculoId, autorizacionId])
+}
+
+model InboxImportacion {
+  id                   String @id @default(uuid()) @db.Uuid
+  tenantId             String @db.Uuid
+  vinculoId            String @db.Uuid
+  autorizacionId       String @db.Uuid
+  iniciadaEl           DateTime
+  progresoInformado    Int @default(0)
+  finInformadoEl       DateTime?
+  historialRechazado   Boolean @default(false)
+  necesitaRevision    Boolean @default(false)
+  ultimoEventoEl       DateTime?
+  updatedAt            DateTime @updatedAt
+  vinculo              MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@unique([vinculoId, autorizacionId])
+  @@index([tenantId])
+}
+
+model InboxConversacion {
+  estado                String               @default("ACTIVA")
+  estadoVersion         Int                  @default(0)
+  resueltaEl            DateTime?
+  entrantesRevision     Int                  @default(0)
+  leidaRevision         Int                  @default(0)
+  responsableId         String?              @db.Uuid
+  responsableNombre     String?
+  asignacionVersion     Int                  @default(0)
+  eventos               InboxEventoInterno[]
+  cargas                InboxCarga[]
+  id                    String               @id @default(uuid()) @db.Uuid
+  tenantId              String               @db.Uuid
+  vinculoId             String               @db.Uuid
+  contactoWaId          String
+  ultimoMensajeEl       DateTime?
+  /// Sólo mensajes entrantes nuevos posteriores al alta; nunca el historial.
+  ultimoEntranteNuevoEl DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  vinculo               MetaVinculo          @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  mensajes              InboxMensaje[]
+  envios                InboxEnvio[]
+
+  @@unique([vinculoId, contactoWaId])
+  @@unique([id, vinculoId, tenantId])
+  @@index([tenantId, ultimoMensajeEl, id])
+  @@index([tenantId, vinculoId, responsableId, ultimoMensajeEl, id], map: "InboxConversacion_tenantId_vinculoId_responsableId_ultimo_idx")
+}
+
+model InboxBloqueHistorial {
+  id              String @id @default(uuid()) @db.Uuid
+  tenantId        String @db.Uuid
+  vinculoId       String @db.Uuid
+  autorizacionId  String @db.Uuid
+  fase            Int
+  orden           Int
+  progreso        Int
+  procesadoEl     DateTime @default(now())
+  vinculo         MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@unique([vinculoId, autorizacionId, fase, orden], map: "InboxBloqueHistorial_canal_bloque_key")
+  @@index([tenantId])
+}
+
+/// También conserva complementos que llegaron antes del mensaje original.
+/// Sin conversación/fecha/dirección todavía, no se muestran en la bandeja.
+model InboxMensaje {
+  autorId            String?            @db.Uuid
+  autorNombre        String?
+  adjunto            InboxAdjunto?
+  envio              InboxEnvio?
+  id                 String             @id @default(uuid()) @db.Uuid
+  tenantId           String             @db.Uuid
+  vinculoId          String             @db.Uuid
+  wamid              String
+  conversacionId     String?            @db.Uuid
+  direccion          String?
+  enviadoEl          DateTime?
+  tipo               String?
+  contenido          Json?
+  prioridadContenido Int                @default(0)
+  edicionEl          DateTime?
+  revocadoEl         DateTime?
+  estadoEntrega      String?
+  estadoEntregaOrden Int                @default(0)
+  estadoEntregaEl    DateTime?
+  delHistorial       Boolean            @default(false)
+  delCelular         Boolean            @default(false)
+  entranteNuevo      Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  vinculo            MetaVinculo        @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  conversacion       InboxConversacion? @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+
+  @@unique([id, vinculoId, tenantId])
+  @@unique([vinculoId, wamid])
+  @@index([tenantId, conversacionId, enviadoEl, id])
+  @@index([tenantId, vinculoId, conversacionId, autorId])
+}
+
+/// Directorio de WhatsApp: nunca crea ni elimina clientes fiscales de Grafo.
+model InboxContacto {
+  id              String @id @default(uuid()) @db.Uuid
+  tenantId        String @db.Uuid
+  vinculoId       String @db.Uuid
+  waId            String
+  nombre          String?
+  eliminado       Boolean @default(false)
+  actualizadoMetaEl DateTime
+  updatedAt       DateTime @updatedAt
+  vinculo         MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@unique([vinculoId, waId])
+  @@index([tenantId])
 }
 
 /// Proyección de mensajes ENTRANTES del piloto, sin descargar adjuntos ni
@@ -6867,4 +7147,99 @@ model OperacionCompra {
   tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Cascade)
   @@unique([tenantId,clave])
   @@index([tenantId,ordenId,createdAt])
+}
+
+/// Copia privada y trabajo duradero de un adjunto de WhatsApp. Sin URLs de Meta.
+model InboxAdjunto {
+  id               String @id @default(uuid()) @db.Uuid
+  tenantId         String @db.Uuid
+  vinculoId        String @db.Uuid
+  mensajeId        String @unique @db.Uuid
+  autorizacionId   String @db.Uuid
+  mediaId          String
+  estado           String @default("PENDIENTE")
+  intentos         Int @default(0)
+  proximoIntentoEl DateTime @default(now())
+  bloqueoId        String? @db.Uuid
+  bloqueoHasta     DateTime?
+  falloCodigo      String?
+  archivoId        String? @unique @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  mensaje          InboxMensaje @relation(fields: [mensajeId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  archivo          Archivo? @relation(fields: [archivoId], references: [id], onDelete: SetNull)
+  @@unique([mensajeId, vinculoId, tenantId])
+  @@index([estado, proximoIntentoEl])
+  @@index([tenantId, vinculoId])
+}
+
+/// Un intento de texto explícito. No se reenvía automáticamente tras incertidumbre.
+model InboxEnvio {
+  usuarioNombre  String?
+  carga          InboxCarga?
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @db.Uuid
+  vinculoId      String            @db.Uuid
+  autorizacionId String            @db.Uuid
+  conversacionId String            @db.Uuid
+  usuarioId      String            @db.Uuid
+  clave          String            @db.Uuid
+  huella         String
+  tipo           String            @default("TEXTO")
+  adjunto        Json?
+  texto          String?
+  estado         String            @default("ENVIANDO")
+  codigo         String?
+  wamid          String?
+  mensajeId      String?           @unique @db.Uuid
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  conversacion   InboxConversacion @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  mensaje        InboxMensaje?     @relation(fields: [mensajeId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+
+  @@unique([mensajeId, vinculoId, tenantId])
+  @@unique([tenantId, clave])
+  @@unique([vinculoId, wamid])
+  @@index([tenantId, conversacionId, createdAt])
+}
+
+/// Subida privada y temporal, ligada al operador y a una conexión concreta.
+/// El original se conserva en InboxAdjunto al recibirse la confirmación de Meta.
+model InboxCarga {
+  archivoId String @id @db.Uuid
+  tenantId String @db.Uuid
+  vinculoId String @db.Uuid
+  autorizacionId String @db.Uuid
+  conversacionId String @db.Uuid
+  usuarioId String @db.Uuid
+  envioId String? @unique @db.Uuid
+  voz Boolean @default(false)
+  createdAt DateTime @default(now())
+  archivo Archivo @relation(fields: [archivoId], references: [id], onDelete: Cascade)
+  conversacion InboxConversacion @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Restrict)
+  envio InboxEnvio? @relation(fields: [envioId], references: [id], onDelete: Restrict)
+  @@index([tenantId, conversacionId, createdAt])
+}
+
+// Eventos privados del equipo. Nunca se proyectan hacia WhatsApp ni cambian el último mensaje del cliente.
+model InboxEventoInterno {
+  id                String            @id @default(uuid()) @db.Uuid
+  tenantId          String            @db.Uuid
+  vinculoId         String            @db.Uuid
+  conversacionId    String            @db.Uuid
+  clave             String            @db.Uuid
+  tipo              String
+  actorId           String?           @db.Uuid
+  actorNombre       String
+  texto             String?
+  anteriorId        String?           @db.Uuid
+  anteriorNombre    String?
+  responsableId     String?           @db.Uuid
+  responsableNombre String?
+  createdAt         DateTime          @default(now())
+  conversacion      InboxConversacion @relation(fields: [conversacionId, vinculoId, tenantId], references: [id, vinculoId, tenantId], onDelete: Cascade)
+
+  @@unique([tenantId, clave])
+  @@index([tenantId, vinculoId, conversacionId, createdAt, id], map: "InboxEventoInterno_tenantId_vinculoId_conversacionId_creat_idx")
+  @@index([tenantId, vinculoId, conversacionId, actorId, tipo], map: "InboxEventoInterno_tenantId_vinculoId_conversacionId_actor_idx")
 }

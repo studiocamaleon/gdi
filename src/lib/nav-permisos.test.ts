@@ -26,6 +26,21 @@ const hijos = (permisos: string[], grupo: string) => {
     : [];
 };
 
+describe("Inbox permanece visible sin consultar la conexión", () => {
+  it.each([undefined, { whatsapp_automatico: false }, { whatsapp_automatico: true }])("aparece con permiso aunque el plan sea %j", (funciones) => {
+    const acceso = new Set(["configuracion.gestionar"]);
+    expect(navPara(acceso, "AR", funciones).some(i => i.key === "inbox")).toBe(true);
+  });
+  it("mantiene los permisos y el fallback de sesiones legacy", () => {
+    expect(navPara(new Set()).some(i => i.key === "inbox")).toBe(false);
+    expect(navPara(null).some(i => i.key === "inbox")).toBe(true);
+  });
+  it("se ofrece en otra pestaña y se puede buscar por WhatsApp", () => {
+    const item = navPara(new Set(["configuracion.gestionar"])).find(i => i.key === "inbox");
+    expect(item).toMatchObject({ href: "/inbox", label: "Inbox", nuevaPestana: true, buscar: expect.arrayContaining(["whatsapp"]) });
+  });
+});
+
 describe("qué muestra el sidebar", () => {
   describe("el hijo con permiso propio se sostiene solo", () => {
     /** El circuito fiscal es del que factura, no del dueño del taller. */
@@ -128,4 +143,8 @@ describe("qué muestra el sidebar", () => {
         .toEqual(["Panel general", "Producción"]);
     });
   });
+});
+it('muestra Inbox a quien tiene permiso de atención sin darle Configuración',()=>{
+ const items=navPara(new Set(['inbox.atender']));
+ expect(items.map(i=>i.key)).toEqual(['inbox']);
 });

@@ -1,9 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { InboxTiempoRealBus } from '../inbox-tiempo-real/inbox-tiempo-real.bus';
+import {
+  registrarCambioInbox,
+  claveCanalInbox,
+  type CanalInbox,
+} from '../inbox-tiempo-real/inbox-revision';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { configuracionMetaPiloto } from '../integraciones/meta/meta-piloto.config';
 import { proyectarMensajePiloto } from '../integraciones/meta/meta-recepcion';
+import { MetaInboxProcesador } from '../integraciones/meta/inbox/meta-inbox-procesador.service';
+import { fechaMeta } from '../integraciones/meta/inbox/meta-inbox-normalizar';
 
 export interface CambioWebhook {
   tipo: string;
@@ -11,6 +19,7 @@ export interface CambioWebhook {
   phoneNumberId: string | null;
   wabaId: string | null;
   payload: Record<string, unknown>;
+  metaTimestamp?: string;
 }
 const objeto = (v: unknown): Record<string, unknown> =>
   v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -34,7 +43,11 @@ function canonico(v: unknown): string {
 
 @Injectable()
 export class WebhooksWhatsappService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly inbox?: InboxTiempoRealBus,
+    @Optional() private readonly recepcion?: MetaInboxProcesador,
+  ) {}
   get puedeVerificarFirma() {
     return Boolean(process.env.META_APP_SECRET);
   }
@@ -54,6 +67,7 @@ export class WebhooksWhatsappService {
     const cambios: CambioWebhook[] = [];
     for (const rawEntry of lista(objeto(body).entry)) {
       const entry = objeto(rawEntry);
+      const metaTimestamp = fechaMeta(entry.time)?.toISOString();
       for (const rawChange of lista(entry.changes)) {
         const change = objeto(rawChange);
         if (
@@ -67,6 +81,7 @@ export class WebhooksWhatsappService {
         const base = {
           wabaId: texto(entry.id),
           phoneNumberId: texto(objeto(value.metadata).phone_number_id),
+          ...(metaTimestamp ? { metaTimestamp } : {}),
         };
         // Separar todos los elementos. Un lote puede contener varios mensajes y
         // estados; deduplicar por el primero perdía el resto del lote.
@@ -76,12 +91,11 @@ export class WebhooksWhatsappService {
             for (const item of lista(value[key])) {
               if (!item || typeof item !== 'object' || Array.isArray(item))
                 continue;
-              const {
-                statuses: _s,
-                messages: _m,
-                errors: _e,
-                ...common
-              } = value;
+              const common = Object.fromEntries(
+                Object.entries(value).filter(
+                  ([key]) => !['statuses', 'messages', 'errors'].includes(key),
+                ),
+              );
               cambios.push({
                 ...base,
                 tipo: key,
@@ -125,20 +139,33 @@ export class WebhooksWhatsappService {
     // Si falla el guardado O el procesamiento se devuelve error a Meta para
     // que reintente. Las huellas y las actualizaciones condicionales permiten
     // repetir el lote sin duplicar eventos ni retroceder estados.
+    const canales = new Map<string, CanalInbox>();
     await this.prisma.$transaction(async (tx) => {
       await tx.webhookWhatsappCrudo.createMany({
         data: filas,
         skipDuplicates: true,
       });
+      await this.recepcion?.encolar(
+        tx,
+        filas.map((fila) => fila.dedupClave),
+      );
       for (const fila of filas) {
         const mensaje = proyectarMensajePiloto(fila);
         if (mensaje) {
           // Idempotencia por mensaje, además de por evento crudo. No modificar
           // el texto original si Meta lo reenvía con metadata diferente.
-          await tx.mensajeWhatsappRecibido.createMany({
+          const creado = await tx.mensajeWhatsappRecibido.createMany({
             data: [mensaje],
             skipDuplicates: true,
           });
+          if (creado.count > 0) {
+            const canal = {
+              tenantId: mensaje.tenantId,
+              wabaId: mensaje.wabaId,
+              phoneNumberId: mensaje.phoneNumberId,
+            };
+            canales.set(claveCanalInbox(canal), canal);
+          }
           // Una colisión que perteneciera a otra empresa no se confirma como
           // procesada. La bandeja filtra también cuenta, número y contacto.
           const propio = await tx.mensajeWhatsappRecibido.count({
@@ -172,7 +199,13 @@ export class WebhooksWhatsappService {
             data: { procesado: true },
           });
       }
+      // Orden estable de bloqueos si un futuro lote reúne varios canales.
+      for (const [, canal] of [...canales].sort(([a], [b]) =>
+        a.localeCompare(b),
+      ))
+        await registrarCambioInbox(tx, canal);
     });
+    for (const canal of canales.values()) this.inbox?.avisar(canal);
   }
 
   private async tenantDe(c: CambioWebhook): Promise<string | null> {
@@ -263,7 +296,7 @@ export class WebhooksWhatsappService {
             : null,
         motivo:
           estado === 'failed'
-            ? `Meta informó que no pudo entregar el mensaje${Number.isInteger(codigo) ? ` (código ${codigo})` : ''}.`
+            ? `Meta informó que no pudo entregar el mensaje${Number.isInteger(codigo) ? ` (código ${String(codigo)})` : ''}.`
             : null,
       },
     });

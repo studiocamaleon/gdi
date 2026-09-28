@@ -1,3 +1,11 @@
+import { MetaEquipoService } from './meta/inbox/meta-equipo.service';
+import { MetaCargasService } from './meta/inbox/meta-cargas.service';
+import { MetaEnviosService } from './meta/inbox/meta-envios.service';
+import { MetaArchivosPlantillaService } from './meta/inbox/meta-archivos-plantilla.service';
+import { MetaAdjuntosModule } from './meta/inbox/meta-adjuntos.module';
+import { MetaInboxGeneralService } from './meta/meta-inbox-general.service';
+import { MetaAltaModule } from './meta/meta-alta.module';
+import { MetaConexionController } from './meta/meta-conexion.controller';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { AutomaticosWebController } from './whatsapp-web/automaticos.controller';
 import { AutomaticosWebService } from './whatsapp-web/automaticos.service';
@@ -23,6 +31,11 @@ import { MetaPilotoService } from './meta/meta-piloto.service';
 import { MetaPilotoController } from './meta/meta-piloto.controller';
 import { MetaRecepcionController } from './meta/meta-recepcion.controller';
 import { MetaRecepcionService } from './meta/meta-recepcion.service';
+import { ClientesModule } from '../clientes/clientes.module';
+import { MetaInboxController } from './meta/meta-inbox.controller';
+import { MetaInboxService } from './meta/meta-inbox.service';
+import { MetaInboxStreamService } from './meta/meta-inbox-stream.service';
+import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.module';
 
 /**
  * Cimientos compartidos por todas las integraciones con terceros.
@@ -36,7 +49,14 @@ import { MetaRecepcionService } from './meta/meta-recepcion.service';
  */
 @Global()
 @Module({
-  imports: [CapacidadesEmpresaModule, DatosEmpresaModule],
+  imports: [
+    MetaAdjuntosModule,
+    MetaAltaModule,
+    CapacidadesEmpresaModule,
+    DatosEmpresaModule,
+    ClientesModule,
+    InboxTiempoRealModule,
+  ],
   // El ORDEN importa y no es cosmético: IntegracionesController tiene
   // `@Get(':proveedor')`, que matchea cualquier segmento — incluido
   // `/integraciones/notificaciones`. Registrado primero, se comía la ruta y el
@@ -44,6 +64,8 @@ import { MetaRecepcionService } from './meta/meta-recepcion.service';
   // Nest resuelve por orden de registro, así que las rutas concretas van antes
   // que las que tienen comodín.
   controllers: [
+    MetaConexionController,
+    MetaInboxController,
     MetaRecepcionController,
     MetaPilotoController,
     AutomaticosWebController,
@@ -51,6 +73,13 @@ import { MetaRecepcionService } from './meta/meta-recepcion.service';
     IntegracionesController,
   ],
   providers: [
+    MetaCargasService,
+    MetaArchivosPlantillaService,
+    MetaEnviosService,
+    MetaInboxGeneralService,
+    MetaEquipoService,
+    MetaInboxStreamService,
+    MetaInboxService,
     MetaRecepcionService,
     MetaCloudClient,
     MetaPilotoService,

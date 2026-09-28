@@ -14,6 +14,7 @@ export type NavIconKey =
   | "Grid"
   | "Briefcase"
   | "Users"
+  | "Chat"
   | "Coin"
   | "Factory"
   | "Wallet"
@@ -48,6 +49,7 @@ export type NavItem =
        * menú ocupa una sola línea: escribir "embudo" sigue llevando a Reportes.
        */
       buscar?: string[];
+      nuevaPestana?: boolean;
     }
   | {
       key: string;
@@ -60,6 +62,15 @@ export type NavItem =
     };
 
 export const NAV: NavItem[] = [
+  {
+    key: "inbox",
+    label: "Inbox",
+    icon: "Chat",
+    permiso: "configuracion.gestionar",
+    href: "/inbox",
+    nuevaPestana: true,
+    buscar: ["grafo inbox", "whatsapp", "mensajes", "conversaciones"],
+  },
   // El home. Vacío por ahora: qué muestra —y para quién— se diseña aparte.
   // Lo tienen todos los roles, incluido el Operario.
   { key: "panel", label: "Panel general", icon: "Grid",
@@ -317,9 +328,13 @@ export function navPara(
   pais: string = "AR",
   funciones?: Record<string, boolean>,
 ): NavItem[] {
+  // Inbox tiene una bienvenida aun sin conexión o mensajes. La visibilidad
+  // conserva permisos; los datos y las acciones siguen protegidos en la API.
+  const disponibles = NAV;
   // El filtro por país corre SIEMPRE, incluso sin permisos: un tenant chileno
   // sin lista de permisos no tiene por qué ver el circuito fiscal argentino.
   const porPlan = (href: string) => {
+    if (href === "/inbox") return true;
     if (href === "/reportes")
       return reportesVisibles(p => !permisos || permisos.has(p), funciones).length > 0;
     const clave = capacidadDeRuta(href);
@@ -340,15 +355,15 @@ export function navPara(
   };
   const porPais = (c: NavChild) => (!c.soloPais || c.soloPais === pais) && porPlan(c.href);
   if (!permisos) {
-    return NAV.flatMap<NavItem>((item) => {
+    return disponibles.flatMap<NavItem>((item) => {
       if (!hasChildren(item)) return porPlan(item.href) ? [item] : [];
       const children = item.children.filter(porPais).map(presentar);
       return children.length ? [{ ...item, children }] : [];
     });
   }
-  return NAV.flatMap<NavItem>((item) => {
+  return disponibles.flatMap<NavItem>((item) => {
     if (!hasChildren(item)) {
-      return permisos.has(item.permiso) && porPlan(item.href) ? [item] : [];
+      return (permisos.has(item.permiso) || (item.key === "inbox" && permisos.has("inbox.atender"))) && porPlan(item.href) ? [item] : [];
     }
     // El permiso del hijo REEMPLAZA al del grupo, no se suma: un hijo que
     // declara el suyo se sostiene solo (Datos fiscales con

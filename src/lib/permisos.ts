@@ -26,6 +26,7 @@ export const MODULOS = [
 export type ModuloClave = (typeof MODULOS)[number];
 
 export type PermisoClave =
+  | "inbox.atender"
   | `${ModuloClave}.ver`
   | `${ModuloClave}.gestionar`
   | "finanzas.ver_margenes"

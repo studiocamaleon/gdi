@@ -56,10 +56,14 @@ it("renderiza el texto como contenido, sin interpretar HTML ni cargar adjuntos",
 it("explica el estado vacío y permite consultar nuevos mensajes", async () => {
   await render({ ...inicial, mensajes: [] });
   expect(container.textContent).toContain("Todavía no hay mensajes recibidos");
+  expect(container.querySelector('a[href="/inbox"]')).toBeNull();
   vi.mocked(getMetaRecepcion).mockResolvedValue(inicial);
   await actualizar();
   expect(container.textContent).toContain("Contacto ficticio");
   expect(getMetaRecepcion).toHaveBeenCalledTimes(1);
+  expect(
+    container.querySelector('a[href="/inbox"]')?.getAttribute("target"),
+  ).toBe("_blank");
 });
 it("retira los mensajes si el acceso dejó de estar habilitado", async () => {
   await render();
@@ -67,6 +71,7 @@ it("retira los mensajes si el acceso dejó de estar habilitado", async () => {
   await actualizar();
   expect(container.textContent).toContain("Recepción no disponible");
   expect(container.textContent).not.toContain("Contacto ficticio");
+  expect(container.querySelector('a[href="/inbox"]')).toBeNull();
 });
 it("no deja conversaciones visibles después de un error de sesión y permite recuperarse", async () => {
   await render();

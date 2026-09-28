@@ -1,0 +1,554 @@
+import { leerEquipoInbox } from './inbox/meta-equipo';
+import {
+  contactosInbox,
+  ubicacionInbox,
+  type CitaInbox,
+} from '../../common/inbox/contenidos';
+import {
+  enviosInboxHabilitados,
+  plantillasInboxHabilitadas,
+  presentarEnvio,
+  consultarVentanaRespuesta,
+} from './inbox/meta-envios.config';
+import { adjuntosHabilitados, tiposMedia } from './inbox/meta-adjuntos';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { isUUID } from 'class-validator';
+import type { CurrentAuth } from '../../auth/auth.types';
+import { PrismaService } from '../../prisma/prisma.service';
+import { WhatsappContextoService } from '../../clientes/whatsapp-contexto.service';
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import { exigirAccesoInbox } from './meta-conexion-acceso';
+import { canalGeneralInbox, identidadCanalInbox } from './meta-inbox-canal';
+import { MetaInboxQueryDto } from './meta-inbox.dto';
+import { objeto } from './inbox/meta-inbox-normalizar';
+
+const selectMensaje = {
+  autorId: true,
+  autorNombre: true,
+  adjunto: {
+    select: {
+      estado: true,
+      mediaId: true,
+      falloCodigo: true,
+      updatedAt: true,
+      archivo: {
+        select: {
+          nombreOriginal: true,
+          mimeType: true,
+          bytes: true,
+          estado: true,
+        },
+      },
+    },
+  },
+  id: true,
+  wamid: true,
+  direccion: true,
+  enviadoEl: true,
+  tipo: true,
+  contenido: true,
+  revocadoEl: true,
+  edicionEl: true,
+  estadoEntrega: true,
+  delHistorial: true,
+  delCelular: true,
+} satisfies Prisma.InboxMensajeSelect;
+type Mensaje = Prisma.InboxMensajeGetPayload<{ select: typeof selectMensaje }>;
+/** Lista cerrada: jamás URLs remotas, media IDs, crudos ni credenciales. */
+function presentar(
+  m: Mensaje,
+  nombre: string | null,
+  referencias = new Map<string, Mensaje>(),
+) {
+  const contenido = objeto(m.contenido);
+  return {
+    id: m.id,
+    autor: m.autorId
+      ? { id: m.autorId, nombre: m.autorNombre ?? 'Integrante anterior' }
+      : null,
+    nombreContacto: nombre,
+    tipo: m.revocadoEl ? 'revocado' : (m.tipo ?? 'desconocido'),
+    voz: !m.revocadoEl && contenido.voz === true,
+    ubicacion:
+      !m.revocadoEl && m.tipo === 'location'
+        ? ubicacionInbox(contenido.ubicacion)
+        : null,
+    contactos:
+      !m.revocadoEl && m.tipo === 'contacts'
+        ? contactosInbox(contenido.contactos)
+        : [],
+    noDisponible:
+      !m.revocadoEl && m.tipo === 'unsupported'
+        ? Array.isArray(contenido.codigos) && contenido.codigos.includes(131060)
+          ? 'Consultá este mensaje en WhatsApp Business del celular. Meta no compartió su contenido con Grafo.'
+          : 'WhatsApp no compartió este tipo de mensaje. Consultalo en el celular.'
+        : null,
+    cita:
+      !m.revocadoEl && typeof contenido.contextoWamid === 'string'
+        ? citar(referencias.get(contenido.contextoWamid), nombre)
+        : null,
+    reaccion:
+      !m.revocadoEl &&
+      typeof contenido.reaccionWamid === 'string' &&
+      typeof contenido.emoji === 'string'
+        ? {
+            ...citar(referencias.get(contenido.reaccionWamid), nombre),
+            emoji: contenido.emoji,
+          }
+        : null,
+    plantilla: !m.revocadoEl && contenido.plantilla === true,
+    texto: m.revocadoEl
+      ? null
+      : typeof contenido.texto === 'string'
+        ? contenido.texto
+        : null,
+    enviadoEl: m.enviadoEl!.toISOString(),
+    direccion: m.direccion,
+    eliminado: Boolean(m.revocadoEl),
+    editado: Boolean(m.edicionEl),
+    estadoEntrega: m.estadoEntrega,
+    delHistorial: m.delHistorial,
+    delCelular: m.delCelular,
+    adjunto:
+      !m.revocadoEl &&
+      (tiposMedia.includes(m.tipo ?? '') || m.tipo === 'media_placeholder')
+        ? {
+            estado: !adjuntosHabilitados()
+              ? 'DESHABILITADO'
+              : !contenido.mediaId
+                ? 'SIN_ARCHIVO'
+                : m.adjunto?.mediaId !== contenido.mediaId
+                  ? 'PENDIENTE'
+                  : m.adjunto.estado === 'LISTO' &&
+                      m.adjunto.archivo?.estado !== 'LISTO'
+                    ? 'NO_DISPONIBLE'
+                    : m.adjunto.estado,
+            nombre:
+              m.adjunto?.archivo?.nombreOriginal ??
+              (typeof contenido.nombreArchivo === 'string'
+                ? contenido.nombreArchivo.slice(0, 160)
+                : null),
+            mimeType: m.adjunto?.archivo?.mimeType ?? null,
+            bytes: m.adjunto?.archivo ? Number(m.adjunto.archivo.bytes) : null,
+            version: m.adjunto?.updatedAt.toISOString() ?? '',
+            motivo:
+              m.adjunto?.falloCodigo === 'CUPO_O_PLAN'
+                ? 'ESPACIO_O_PLAN'
+                : null,
+          }
+        : null,
+  };
+}
+function citar(m: Mensaje | undefined, nombre: string | null): CitaInbox {
+  const c = objeto(m?.contenido);
+  return {
+    id: m?.id ?? null,
+    nombre: m?.direccion === 'SALIENTE' ? 'Tu empresa' : nombre || 'Cliente',
+    eliminado: Boolean(m?.revocadoEl),
+    texto: m?.revocadoEl
+      ? 'Mensaje eliminado'
+      : typeof c.texto === 'string' && c.texto
+        ? c.texto.slice(0, 200)
+        : m?.tipo
+          ? ({
+              image: 'Imagen',
+              audio: 'Audio',
+              video: 'Video',
+              sticker: 'Sticker',
+              document: 'Documento',
+              location: 'Ubicación',
+              contacts: 'Contacto',
+            }[m.tipo] ?? 'Mensaje')
+          : 'Mensaje anterior no disponible',
+  };
+}
+type Resumen = {
+  estado: string;
+  sinLeer: boolean;
+  id: string;
+  contactoWaId: string;
+  ultimoMensajeEl: Date;
+  nombre: string | null;
+};
+type CursorLista = {
+  id: string;
+  fecha: string;
+  busqueda: string;
+  canal: string;
+  filtro: string;
+  usuario: string;
+};
+function leerCursor(
+  value: string | undefined,
+  canal: string,
+  busqueda: string,
+  filtro: string,
+  usuario: string,
+): CursorLista | null {
+  if (!value) return null;
+  try {
+    const data: unknown = JSON.parse(
+      Buffer.from(value, 'base64url').toString(),
+    );
+    const c = objeto(data);
+    if (
+      typeof c.id !== 'string' ||
+      !isUUID(c.id, '4') ||
+      typeof c.fecha !== 'string' ||
+      !Number.isFinite(Date.parse(c.fecha)) ||
+      new Date(c.fecha).toISOString() !== c.fecha ||
+      c.canal !== canal ||
+      c.busqueda !== busqueda ||
+      c.filtro !== filtro ||
+      c.usuario !== usuario
+    )
+      throw new Error();
+    return c as CursorLista;
+  } catch {
+    throw new BadRequestException(
+      'La página de conversaciones ya no es válida. Actualizá la lista.',
+    );
+  }
+}
+@Injectable()
+export class MetaInboxGeneralService {
+  constructor(
+    private readonly db: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService,
+    private readonly clientes: WhatsappContextoService,
+  ) {}
+  async disponibilidad(auth: CurrentAuth, ip: string) {
+    await exigirAccesoInbox(this.db, auth, ip);
+    const canal = await canalGeneralInbox(this.db, auth.tenantId);
+    if (canal)
+      await this.capacidades.exigirIncluida(
+        auth.tenantId,
+        'whatsapp_automatico',
+      );
+    return {
+      empresaId: auth.tenantId,
+      usuarioId: auth.userId,
+      disponible: Boolean(canal),
+    };
+  }
+  async consultar(auth: CurrentAuth, query: MetaInboxQueryDto, ip: string) {
+    const permisosIniciales = await exigirAccesoInbox(this.db, auth, ip);
+    auth = {
+      ...auth,
+      permisos: new Set(
+        [...permisosIniciales].filter((p) => auth.permisos?.has(p)),
+      ),
+    };
+    const canal = await canalGeneralInbox(this.db, auth.tenantId);
+    if (!canal) return null;
+    await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
+    const canalId = identidadCanalInbox(canal);
+    const scope = { tenantId: auth.tenantId, vinculoId: canal.id };
+    const destinatarioPrueba =
+      canal.tipo === 'PRUEBA' ? canal.pruebaDestinatarioWaId : null;
+    const scopeConversaciones = {
+      ...scope,
+      ...(destinatarioPrueba ? { contactoWaId: destinatarioPrueba } : {}),
+    };
+    const busqueda = (query.busqueda ?? '').trim().toLocaleLowerCase();
+    const filtro = query.filtro ?? 'TODAS';
+    const estados = [
+      ...new Set((query.estados ?? '').split(',').filter(Boolean)),
+    ].sort();
+    const identidadFiltro = JSON.stringify([
+      filtro,
+      estados,
+      query.sinLeer ?? '',
+      query.sinResponder ?? '',
+      query.participe ?? '',
+    ]);
+    const cursor = leerCursor(
+      query.listaAntesDe,
+      canalId,
+      busqueda,
+      identidadFiltro,
+      auth.userId,
+    );
+    if (
+      cursor &&
+      !(await this.db.inboxConversacion.findFirst({
+        where: { ...scopeConversaciones, id: cursor.id },
+        select: { id: true },
+      }))
+    )
+      throw new NotFoundException(
+        'La página de conversaciones ya no está disponible.',
+      );
+    // Fecha congelada en el cursor: una conversación puede moverse al recibir
+    // mensajes. Volver a la primera página reconcilia ese movimiento.
+    const patron = `%${busqueda.replace(/[\\%_]/g, '\\$&')}%`;
+    const numeros = busqueda.replace(/[\s()+.-]/g, '');
+    const porNumero = /^\d+$/.test(numeros) ? `%${numeros}%` : null;
+    const lista = await this.db.$queryRaw<Resumen[]>`
+      SELECT c.id,c.estado,(c."entrantesRevision">c."leidaRevision") AS "sinLeer",c."contactoWaId",COALESCE(c."ultimoMensajeEl",c."createdAt") AS "ultimoMensajeEl",CASE WHEN k.eliminado=false THEN k.nombre ELSE NULL END AS nombre
+      FROM "InboxConversacion" c LEFT JOIN "InboxContacto" k ON k."tenantId"=c."tenantId" AND k."vinculoId"=c."vinculoId" AND k."waId"=c."contactoWaId"
+      WHERE c."tenantId"=${auth.tenantId}::uuid AND c."vinculoId"=${canal.id}::uuid AND (c."ultimoMensajeEl" IS NOT NULL OR ${destinatarioPrueba}::text IS NOT NULL)
+      AND (${destinatarioPrueba}::text IS NULL OR c."contactoWaId"=${destinatarioPrueba})
+      AND (${busqueda}='' OR (k.eliminado=false AND k.nombre ILIKE ${patron}) OR (${porNumero}::text IS NOT NULL AND c."contactoWaId" LIKE ${porNumero}))
+      AND (${estados.length === 0} OR c.estado IN (${Prisma.join(estados.length ? estados : ['ACTIVA', 'RESUELTA'])}))
+      AND (${query.sinLeer !== 'true'} OR c."entrantesRevision">c."leidaRevision")
+      AND (${query.sinResponder !== 'true'} OR (SELECT m.direccion FROM "InboxMensaje" m WHERE m."tenantId"=c."tenantId" AND m."vinculoId"=c."vinculoId" AND m."conversacionId"=c.id AND m."enviadoEl" IS NOT NULL AND m.direccion IN ('ENTRANTE','SALIENTE') ORDER BY m."enviadoEl" DESC,m.id DESC LIMIT 1)='ENTRANTE')
+      AND (${query.participe !== 'true'} OR EXISTS (SELECT 1 FROM "InboxMensaje" m WHERE m."tenantId"=c."tenantId" AND m."vinculoId"=c."vinculoId" AND m."conversacionId"=c.id AND m."autorId"=${auth.userId}::uuid) OR EXISTS (SELECT 1 FROM "InboxEventoInterno" e WHERE e."tenantId"=c."tenantId" AND e."vinculoId"=c."vinculoId" AND e."conversacionId"=c.id AND e."actorId"=${auth.userId}::uuid AND e.tipo='NOTA'))
+      AND (${filtro}='TODAS'  OR (${filtro}='MIAS' AND c."responsableId"=${auth.userId}::uuid) OR (${filtro}='SIN_ASIGNAR' AND c."responsableId" IS NULL) OR (${filtro}='PARTICIPE' AND (
+        EXISTS (SELECT 1 FROM "InboxMensaje" m WHERE m."tenantId"=c."tenantId" AND m."vinculoId"=c."vinculoId" AND m."conversacionId"=c.id AND m."autorId"=${auth.userId}::uuid)
+        OR EXISTS (SELECT 1 FROM "InboxEventoInterno" e WHERE e."tenantId"=c."tenantId" AND e."vinculoId"=c."vinculoId" AND e."conversacionId"=c.id AND e."actorId"=${auth.userId}::uuid AND e.tipo='NOTA')
+      )))
+      ${cursor ? Prisma.sql`AND (COALESCE(c."ultimoMensajeEl",c."createdAt"),c.id)<(${new Date(cursor.fecha)},${cursor.id}::uuid)` : Prisma.empty}
+      ORDER BY COALESCE(c."ultimoMensajeEl",c."createdAt") DESC,c.id DESC LIMIT 51`;
+    const pagina = lista.slice(0, 50);
+    const ids = pagina.map((c) => c.id);
+    const recientes = await this.db.inboxConversacion.findMany({
+      where: { ...scope, id: { in: ids } },
+      select: {
+        id: true,
+        mensajes: {
+          where: {
+            ...scope,
+            enviadoEl: { not: null },
+            direccion: { in: ['ENTRANTE', 'SALIENTE'] },
+          },
+          orderBy: [{ enviadoEl: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: selectMensaje,
+        },
+      },
+    });
+    const seleccion = query.conversacionId ?? pagina[0]?.id;
+    const conversacion = seleccion
+      ? await this.db.inboxConversacion.findFirst({
+          where: { ...scopeConversaciones, id: seleccion },
+          select: {
+            id: true,
+            tenantId: true,
+            vinculoId: true,
+            responsableId: true,
+            responsableNombre: true,
+            asignacionVersion: true,
+            estado: true,
+            estadoVersion: true,
+            entrantesRevision: true,
+            leidaRevision: true,
+            contactoWaId: true,
+            ultimoEntranteNuevoEl: true,
+          },
+        })
+      : null;
+    if (seleccion && !conversacion)
+      throw new NotFoundException('La conversación ya no está disponible.');
+    if ((query.antesDe || query.desdeId) && !query.conversacionId)
+      throw new BadRequestException(
+        'Elegí la conversación antes de consultar una página.',
+      );
+    if (query.antesDe && query.desdeId)
+      throw new BadRequestException('Elegí una sola dirección de lectura.');
+    const scopeMensajes = {
+      ...scope,
+      conversacionId:
+        conversacion?.id ?? '00000000-0000-4000-8000-000000000000',
+      enviadoEl: { not: null },
+      direccion: { in: ['ENTRANTE', 'SALIENTE'] },
+    };
+    const anclaId = query.antesDe ?? query.desdeId;
+    const ancla = anclaId
+      ? await this.db.inboxMensaje.findFirst({
+          where: { ...scopeMensajes, id: anclaId },
+          select: { id: true, enviadoEl: true },
+        })
+      : null;
+    if (anclaId && !ancla?.enviadoEl)
+      throw new NotFoundException(
+        'La página de mensajes ya no está disponible.',
+      );
+    const limite = query.desdeId ? 500 : 50;
+    const mensajes = conversacion
+      ? await this.db.inboxMensaje.findMany({
+          where: {
+            ...scopeMensajes,
+            ...(ancla?.enviadoEl
+              ? {
+                  OR: query.antesDe
+                    ? [
+                        { enviadoEl: { lt: ancla.enviadoEl } },
+                        { enviadoEl: ancla.enviadoEl, id: { lt: ancla.id } },
+                      ]
+                    : [
+                        { enviadoEl: { gt: ancla.enviadoEl } },
+                        { enviadoEl: ancla.enviadoEl, id: { gte: ancla.id } },
+                      ],
+                }
+              : {}),
+          },
+          orderBy: [{ enviadoEl: 'desc' }, { id: 'desc' }],
+          take: limite + 1,
+          select: selectMensaje,
+        })
+      : [];
+    const visibles = mensajes.slice(0, limite);
+    const contacto = conversacion
+      ? await this.db.inboxContacto.findFirst({
+          where: {
+            ...scope,
+            waId: conversacion.contactoWaId,
+            eliminado: false,
+          },
+          select: { nombre: true },
+        })
+      : null;
+    if (query.clienteId && !auth.permisos?.has('crm.ver'))
+      throw new ForbiddenException();
+    const contexto =
+      conversacion && auth.permisos?.has('crm.ver')
+        ? await this.clientes.contexto(auth, {
+            telefono: `+${conversacion.contactoWaId}`,
+            clienteId: query.clienteId,
+          })
+        : null;
+    const menor = visibles.at(-1);
+    const anteriores =
+      menor?.enviadoEl && query.desdeId
+        ? await this.db.inboxMensaje.findFirst({
+            where: {
+              ...scopeMensajes,
+              OR: [
+                { enviadoEl: { lt: menor.enviadoEl } },
+                { enviadoEl: menor.enviadoEl, id: { lt: menor.id } },
+              ],
+            },
+            select: { id: true },
+          })
+        : null;
+    const envios = conversacion
+      ? await this.db.inboxEnvio.findMany({
+          where: {
+            ...scope,
+            autorizacionId: canal.autorizacionId,
+            conversacionId: conversacion.id,
+            mensajeId: null,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        })
+      : [];
+    const ventana = await consultarVentanaRespuesta(
+      this.db,
+      canal,
+      conversacion,
+    );
+    const idsReferidos = [
+      ...new Set(
+        visibles.flatMap((m) => {
+          const c = objeto(m.contenido);
+          return [c.contextoWamid, c.reaccionWamid].filter(
+            (x): x is string => typeof x === 'string',
+          );
+        }),
+      ),
+    ];
+    const referencias = new Map(
+      (conversacion && idsReferidos.length
+        ? await this.db.inboxMensaje.findMany({
+            where: { ...scopeMensajes, wamid: { in: idsReferidos } },
+            select: selectMensaje,
+          })
+        : []
+      ).map((m) => [m.wamid, m]),
+    );
+    const equipo = conversacion
+      ? await leerEquipoInbox(this.db, conversacion, query)
+      : null;
+    // Una revocación o reconexión durante la lectura no entrega el resultado anterior.
+    const permisosFinales = await exigirAccesoInbox(this.db, auth, ip);
+    if (
+      [...permisosIniciales].sort().join('|') !==
+      [...permisosFinales].sort().join('|')
+    )
+      throw new ForbiddenException();
+    const actual = await canalGeneralInbox(this.db, auth.tenantId);
+    if (!actual || identidadCanalInbox(actual) !== canalId)
+      throw new ForbiddenException();
+    const ultima = pagina.at(-1);
+    return {
+      empresaId: auth.tenantId,
+      usuarioId: auth.userId,
+      canalId,
+      origen: 'GENERAL' as const,
+      equipo,
+      colaboracionHabilitada: true,
+      lectura: conversacion
+        ? {
+            revision: conversacion.entrantesRevision,
+            pendiente:
+              conversacion.leidaRevision < conversacion.entrantesRevision,
+          }
+        : null,
+      prueba:
+        canal.tipo === 'PRUEBA'
+          ? { numero: canal.numero, venceEl: canal.tokenVenceEl!.toISOString() }
+          : null,
+      respuesta: {
+        plantillasHabilitadas: plantillasInboxHabilitadas(
+          auth.tenantId,
+          canal.tipo,
+        ),
+        habilitado: enviosInboxHabilitados(auth.tenantId, canal.tipo),
+        ...ventana,
+      },
+      envios: envios.reverse().map(presentarEnvio),
+      conversacionId: conversacion?.id ?? null,
+      contacto: {
+        telefono: conversacion ? `+${conversacion.contactoWaId}` : '',
+        nombre: contacto?.nombre ?? null,
+      },
+      conversaciones: pagina.map((c) => ({
+        id: c.id,
+        telefono: `+${c.contactoWaId}`,
+        nombre: c.nombre,
+        estado: c.estado,
+        sinLeer: c.sinLeer,
+        ultimoMensaje: recientes.find((r) => r.id === c.id)?.mensajes[0]
+          ? presentar(
+              recientes.find((r) => r.id === c.id)!.mensajes[0],
+              c.nombre,
+            )
+          : null,
+      })),
+      listaAnterior:
+        lista.length > 50 && ultima
+          ? Buffer.from(
+              JSON.stringify({
+                id: ultima.id,
+                fecha: ultima.ultimoMensajeEl.toISOString(),
+                busqueda,
+                filtro: identidadFiltro,
+                usuario: auth.userId,
+                canal: canalId,
+              } satisfies CursorLista),
+            ).toString('base64url')
+          : null,
+      mensajes: visibles
+        .reverse()
+        .map((m) => presentar(m, contacto?.nombre ?? null, referencias)),
+      // DesdeId refresca TODOS los mensajes ya visibles, incluidas ediciones y
+      // eliminaciones antiguas. Si la ventana creció demasiado se indica el corte.
+      anterior:
+        mensajes.length > limite
+          ? (visibles[0]?.id ?? null)
+          : anteriores
+            ? (visibles[0]?.id ?? null)
+            : null,
+      ventanaAcotada: Boolean(query.desdeId && mensajes.length > limite),
+      contexto,
+    };
+  }
+}

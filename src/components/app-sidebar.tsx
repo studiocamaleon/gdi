@@ -4,7 +4,7 @@ import { useFuncionesPlan } from "@/components/navigation/capacidades-provider";
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, Layers3, X } from "lucide-react";
+import { ArrowUpRight, Layers3, MessageCircle, X } from "lucide-react";
 
 import { type CurrentUser, type TenantSummary } from "@/lib/auth";
 import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
@@ -32,6 +32,7 @@ type IconProps = React.SVGProps<SVGSVGElement>;
 type IconComponent = (props: IconProps) => React.ReactElement;
 
 const Ico = {
+  Chat: (props: IconProps) => <MessageCircle width={16} height={16} {...props} />,
   Chart: (props: IconProps) => (
     <svg
       viewBox="0 0 24 24"
@@ -320,7 +321,7 @@ function getSuscripcionProgress(susc: TenantSummary["suscripcion"]) {
 const SECCIONES: ReadonlyArray<{ label: string; keys: string[] }> = [
   {
     label: "Operación",
-    keys: ["panel", "comercial", "produccion", "inventario"],
+    keys: ["panel", "comercial", "inbox", "produccion", "inventario"],
   },
   {
     label: "Gestión",
@@ -443,6 +444,28 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
     const isDirectActive = !itemHasChildren && activeKey === item.key;
 
     if (!itemHasChildren) {
+      if (item.nuevaPestana) {
+        return (
+          <a
+            key={item.key}
+            href={item.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`${item.label} · Abrir en otra pestaña`}
+            aria-label={`${item.label} · Abrir en otra pestaña`}
+            className={s.it}
+            onClick={() => setOpenMobile(false)}
+          >
+            <span className={s.ic}>
+              <IconCmp />
+            </span>
+            <span className={s.tx}>
+              {filtering ? highlightMatch(item.label, q) : item.label}
+            </span>
+            <ArrowUpRight className={s.cv} size={12} aria-hidden="true" />
+          </a>
+        );
+      }
       return (
         <NavLink
           key={item.key}
