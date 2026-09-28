@@ -16,7 +16,7 @@ Pasaron las compilaciones con tipos, las pruebas de base/permisos y el login/BFF
 
 Los accesos están fuera de Git, en `~/.config/grafoprint/staging`, con directorio `0700` y archivos privados `0600`. No se reinició Docker ni se compiló la web en esta Mac.
 
-El canal de prueba del Inbox está activado y se comprobó el recorrido real de plantilla, recepción, respuesta libre y entrega en dos pestañas. El acceso temporal renovado vence el 28/09/2026 a las 05:00 de Argentina; una prueba posterior exige renovar el token y activar una nueva generación. Se recuperó y abrió el PNG recibido como documento. La plantilla PDF ya está aprobada; consultar su resultado en VALIDACION.md. Coexistencia/historial todavía requieren ensayo real. Ver [protocolo y resultado](../../docs/meta-inbox-canal-prueba.md).
+El canal de prueba del Inbox está activado y se comprobó el recorrido real de plantilla, recepción, respuesta libre y entrega en dos pestañas. Tras un rechazo `131005` el 28/09 se renovó la autorización; la repetición del envío todavía está pendiente. El acceso temporal actual vence el 28/09/2026 a las 06:00 de Argentina; una prueba posterior exige renovar el token y activar una nueva generación. Se recuperó y abrió el PNG recibido como documento. La plantilla PDF ya está aprobada; consultar su resultado en VALIDACION.md. Coexistencia/historial todavía requieren ensayo real. Ver [protocolo y resultado](../../docs/meta-inbox-canal-prueba.md).
 
 ## Servicios y orden
 

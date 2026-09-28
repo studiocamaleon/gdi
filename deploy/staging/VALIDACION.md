@@ -1,5 +1,19 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Diagnóstico de rechazo de envío — 28/09/2026
+
+Mismo código desplegado `d2677ff2a7bafcff648ee70d5258d3fb5c0692e1`, sin cambios de imágenes, migraciones, recursos ni producción.
+
+- **Incidente:** la entrada real de las 07:26:55 UTC se recibió y abrió la ventana de atención. Dos respuestas del usuario fueron rechazadas por Meta con `131005`, sin WAMID. Una única prueba técnica directa expresamente autorizada reprodujo HTTP 403 / `131005`, con detalle de problema de token o permisos. No fue aceptada ni entregada; no se reintentó automáticamente.
+- **Autorización anterior:** Graph declaraba token vigente, aplicación correcta, ambos permisos de WhatsApp concedidos, usuario administrador, número perteneciente a la cuenta y app suscripta. La cuenta tenía revisión `APPROVED` y el panel no exigía acciones por restricciones. Sin embargo, la consulta de perfil del mismo número devolvía código `10` (falta de permiso). No se identificó por qué Meta rechazaba esa credencial pese a declararla válida.
+- **Credencial nueva:** el nuevo token disponible en el panel conserva aplicación y permisos y permite consultar el perfil (HTTP 200). Se activó a las **07:47:20 UTC**, cifrado en la misma base, conservando el historial; vence a las **09:00 UTC / 06:00 Argentina**. Se actualizó sólo el secreto del operador de API. El reinicio temporal de su única máquina interrumpió la conexión del Inbox; Fly confirmó recuperación saludable. No se copiaron secretos a la configuración de la aplicación local.
+- **Pantalla:** después de recargar muestra la nueva vigencia y conserva los mensajes. La renovación abre una generación nueva y exige otra entrada para habilitar respuesta libre; no se modificaron fechas para forzar la ventana. Los intentos rechazados se conservan en la base, sin ofrecerse como envíos de la nueva generación.
+- **Verificación HTTP a las 07:47 UTC:** salud web/API y base disponibles; Basic requerido, API directa restringida, login accesible y webhook sin firma rechazado.
+- **Aviso separado:** `health_status` informa `141006` de facturación para conversaciones iniciadas por la empresa en la WABA de prueba, tanto con el token anterior como con el nuevo. Eso no acredita la causa de `131005`; no se agregó un medio de pago ni se cambió facturación, publicación o revisión de la app.
+- **Pendiente al registrar:** nueva entrada del destinatario y respuesta desde el Inbox, con aceptación y entrega acreditadas por Meta. La consulta de perfil exitosa no demuestra por sí sola que el envío esté resuelto. Resultados crudos y credenciales permanecen fuera de Git; se omiten teléfonos e identificadores privados.
+
+Referencia consultada: [códigos de error y autorización de Meta](https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes).
+
 ## Lote de Inbox, equipo y medios — 28/09/2026
 
 Código `d2677ff2a7bafcff648ee70d5258d3fb5c0692e1`, [CI completo aprobado](https://github.com/studiocamaleon/gdi/actions/runs/36385216857), [PR #7 en borrador](https://github.com/studiocamaleon/gdi/pull/7), sobre el #5. No se fusionaron PR ni se modificó producción.
