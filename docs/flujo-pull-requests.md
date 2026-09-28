@@ -31,7 +31,7 @@ Puede haber varios borradores si son trabajos distintos, cada uno con un objetiv
 
 Si una mejora depende de otra aún sin integrar, su PR puede apuntar temporalmente a esa rama. Declarar la dependencia. Al integrar la base, ajustar el PR dependiente hacia `main` y revisar su diff. En una cadena existente, conservar los commits mediante merges evita duplicar cambios; no hacer squash, rebase ni force-push de la cadena sin revisar el efecto en sus dependientes.
 
-Los PR históricos #2–#5 reúnen infraestructura, correcciones y el piloto inicial. El Inbox se revisa aparte en #7. Llamadas, presencia real de operadores y reportes deben ser trabajos nuevos cuando la base necesaria esté lista.
+Los PR históricos #2–#7 ya se integraron en `main`: reúnen infraestructura, correcciones, piloto e Inbox. La recuperación ante cortes se revisa por separado en #8. Llamadas, presencia real de operadores y reportes deben ser trabajos nuevos cuando la base necesaria esté lista.
 
 ## Cuando se sumen más personas
 
