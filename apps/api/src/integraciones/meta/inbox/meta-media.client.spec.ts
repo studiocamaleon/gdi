@@ -66,12 +66,69 @@ it.each([
   [{ file_size: '-1' }, 'LIMITE'],
   [{ file_size: '1.5' }, 'LIMITE'],
   [{ mime_type: 'text/html' }, 'FORMATO'],
-  [{ mime_type: 'image/png' }, 'FORMATO'],
+  [{ mime_type: 'image/webp' }, 'FORMATO'],
   [{ id: '999' }, 'FORMATO'],
   [{ sha256: 'f'.repeat(64) }, 'INTEGRIDAD'],
 ])('rechaza metadata inconsistente %j', async (mod, codigo) => {
   f.mockResolvedValueOnce(Response.json({ ...metadata, ...mod }));
   await expect(client.metadata(params)).rejects.toMatchObject({ codigo });
+});
+it.each([
+  ['image/png', 'png', Buffer.from('89504e470d0a1a0a00000000', 'hex')],
+  ['image/jpeg', 'jpg', Buffer.from('ffd8ffe00000000000000000', 'hex')],
+  ['audio/ogg', 'ogg', Buffer.from('OggS archivo ficticio')],
+  ['video/mp4', 'mp4', Buffer.from('00000018667479706d703432', 'hex')],
+])(
+  'recibe %s adjunto como documento sin cambiar su formato',
+  async (mime, ext, bytes) => {
+    const sha = createHash('sha256').update(bytes).digest('hex');
+    f.mockResolvedValueOnce(
+      Response.json({
+        ...metadata,
+        mime_type: mime,
+        file_size: bytes.length,
+        sha256: sha,
+      }),
+    ).mockResolvedValueOnce(
+      new Response(bytes, {
+        headers: {
+          'content-type': mime,
+          'content-length': String(bytes.length),
+        },
+      }),
+    );
+    const meta = await client.metadata({ ...params, sha256: sha });
+    expect(meta).toMatchObject({ mime, ext, bytes: bytes.length });
+    expect(await client.descargar(meta, params.token)).toEqual(bytes);
+  },
+);
+it('mantiene el límite de imagen cuando llega como documento', async () => {
+  f.mockResolvedValueOnce(
+    Response.json({
+      ...metadata,
+      mime_type: 'image/png',
+      file_size: 5_000_001,
+    }),
+  );
+  await expect(client.metadata(params)).rejects.toMatchObject({
+    codigo: 'LIMITE',
+  });
+});
+it('no admite un PDF presentado como imagen', async () => {
+  f.mockResolvedValueOnce(Response.json(metadata));
+  await expect(
+    client.metadata({ ...params, tipo: 'image' }),
+  ).rejects.toMatchObject({ codigo: 'FORMATO' });
+});
+it('comprueba la firma de una imagen recibida como documento', async () => {
+  f.mockResolvedValueOnce(
+    Response.json({ ...metadata, mime_type: 'image/png' }),
+  ).mockResolvedValueOnce(
+    new Response(contenido, { headers: { 'content-type': 'image/png' } }),
+  );
+  await expect(
+    client.descargar(await client.metadata(params), params.token),
+  ).rejects.toMatchObject({ codigo: 'INTEGRIDAD' });
 });
 it('no interpreta URLs como media ID', async () => {
   await expect(

@@ -385,21 +385,21 @@
   border-color: var(--danger);
 }
 .bubble[data-content="adjunto"] {
-  width: 340px;
+  width: 300px;
   padding: 0;
   overflow: hidden;
-  border-radius: 14px 14px 14px 4px;
+  border-radius: 9px 9px 9px 3px;
 }
 .bubble[data-content="adjunto"][data-kind="salida"] {
-  border-radius: 14px 14px 4px 14px;
+  border-radius: 9px 9px 3px 9px;
 }
 .attachmentCaption {
-  padding: 0 16px;
+  padding: 6px 12px 0;
 }
 .bubble[data-content="adjunto"] .messageMeta {
   flex-wrap: wrap;
-  padding: 0 16px 10px;
-  margin-top: 10px;
+  padding: 0 12px 6px;
+  margin-top: 5px;
 }
 .retry {
   display: flex;

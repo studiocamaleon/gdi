@@ -49,7 +49,13 @@ export function InboxAdjunto({
   const pendiente = useRef<AbortController | null>(null);
   const vigente = useRef(true);
   const formato = tipos[tipo as keyof typeof tipos] ?? tipos.document;
-  const Icono = formato.icono;
+  const esImagen = ["image/jpeg", "image/png", "image/webp"].includes(
+    archivo?.mimeType ?? adjunto.mimeType ?? "",
+  );
+  const Icono = esImagen ? ImageIcon : formato.icono;
+  const nombre = adjunto.nombre || `${formato.nombre} de WhatsApp`;
+  const accionOriginal =
+    tipo === "document" && !esImagen ? "Descargar documento" : "Abrir original";
   const extension = adjunto.nombre
     ?.match(/\.([a-z0-9]{1,5})$/i)?.[1]
     ?.toUpperCase();
@@ -98,43 +104,69 @@ export function InboxAdjunto({
     <div className={s.attachment}>
       <div className={s.fileHeader}>
         <div className={s.fileIcon} aria-hidden="true">
-          <Icono size={28} strokeWidth={1.4} />
+          <Icono size={20} strokeWidth={1.5} />
         </div>
         <div className={s.identity}>
-          <span className={s.kind}>{formato.nombre}</span>
-          <strong>{adjunto.nombre || `${formato.nombre} de WhatsApp`}</strong>
+          <strong title={nombre}>{nombre}</strong>
           <div className={s.fileDetails}>
-            {extension && <span>{extension}</span>}
+            <span>{extension || formato.nombre}</span>
             {adjunto.bytes !== null && (
               <span>{formatBytes(adjunto.bytes)}</span>
             )}
+            <LockKeyhole size={11} aria-label="Archivo privado" role="img" />
           </div>
         </div>
+        {adjunto.estado === "LISTO" && (
+          <div className={s.actions}>
+            {!archivo ? (
+              <Button
+                size="icon"
+                variant="brand"
+                disabled={ocupado}
+                aria-label={ocupado ? "Abriendo archivo" : "Abrir archivo"}
+                title="Abrir archivo"
+                onClick={() => void cargar()}
+              >
+                {ocupado ? <Spinner /> : <ArrowUpRight />}
+              </Button>
+            ) : (
+              <>
+                <a
+                  className={buttonVariants({ variant: "brand", size: "icon" })}
+                  href={archivo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={accionOriginal}
+                  title={accionOriginal}
+                >
+                  <Download />
+                </a>
+                <Button
+                  size="icon-xs"
+                  variant="sidebar"
+                  aria-label="Renovar acceso al archivo"
+                  title="Renovar acceso al archivo"
+                  onClick={() => void cargar()}
+                >
+                  <RefreshCw />
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
-      <div className={s.fileBody}>
+      <div
+        className={cn(
+          s.fileBody,
+          !archivo && !error && adjunto.estado === "LISTO" && s.collapsed,
+        )}
+      >
         {adjunto.estado !== "LISTO" ? (
           <p role="status" className={s.status}>
             {mensajes[adjunto.estado] ?? "Archivo no disponible."}
           </p>
         ) : (
           <>
-            {!archivo && (
-              <div className={s.actions}>
-                <span className={s.privateLabel}>
-                  <LockKeyhole size={13} aria-hidden="true" />
-                  Archivo privado
-                </span>
-                <Button
-                  variant="brand"
-                  disabled={ocupado}
-                  onClick={() => void cargar()}
-                >
-                  {ocupado ? <Spinner data-icon="inline-start" /> : null}
-                  {ocupado ? "Abriendo…" : "Abrir archivo"}
-                  {!ocupado && <ArrowUpRight data-icon="inline-end" />}
-                </Button>
-              </div>
-            )}
             {error && (
               <Alert>
                 <AlertDescription>
@@ -145,7 +177,7 @@ export function InboxAdjunto({
             )}
             {archivo && (
               <>
-                {["image", "sticker"].includes(tipo) && (
+                {esImagen && (
                   // Archivo privado: evitar la caché del optimizador de Next.
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -183,34 +215,8 @@ export function InboxAdjunto({
                     }}
                   />
                 )}
-                <div className={s.actions}>
-                  <a
-                    className={cn(
-                      buttonVariants({ variant: "brand" }),
-                      s.download,
-                    )}
-                    href={archivo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Download data-icon="inline-start" />
-                    {tipo === "document"
-                      ? "Descargar documento"
-                      : "Abrir original"}
-                  </a>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    aria-label="Renovar acceso al archivo"
-                    title="Renovar acceso al archivo"
-                    onClick={() => void cargar()}
-                  >
-                    <RefreshCw />
-                  </Button>
-                </div>
                 <small className={s.accessHint}>
-                  <LockKeyhole size={12} aria-hidden="true" />
-                  El enlace es temporal. Si vence, renová el acceso.
+                  Acceso temporal · renovalo si vence.
                 </small>
               </>
             )}

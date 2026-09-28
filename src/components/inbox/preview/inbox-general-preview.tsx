@@ -101,6 +101,21 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
       direccion: "ENTRANTE",
     },
     {
+      id: "bruno-imagen-documento",
+      adjunto: {
+        estado: "LISTO",
+        nombre: "Referencia-de-carteleria-adjunta-como-documento.jpg",
+        mimeType: "image/jpeg",
+        bytes: 180000,
+        version: "demo",
+      },
+      nombreContacto: "Bruno Lago",
+      tipo: "document",
+      texto: null,
+      enviadoEl: "2026-09-26T12:02:00Z",
+      direccion: "ENTRANTE",
+    },
+    {
       id: "bruno-003",
       nombreContacto: "Bruno Lago",
       tipo: "text",

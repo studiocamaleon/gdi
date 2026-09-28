@@ -97,3 +97,31 @@ it("cancela al cambiar de conversación y descarta respuesta tardía", async () 
   await act(async () => resolver(archivo));
   expect(container.querySelector("a")).toBeNull();
 });
+it("muestra la imagen enviada como documento sólo después de abrirla", async () => {
+  abrir.mockResolvedValue({
+    ...archivo,
+    nombre: "Referencia.png",
+    mimeType: "image/png",
+  });
+  await act(async () =>
+    root.render(
+      <InboxAdjunto
+        mensajeId="imagen-documento"
+        tipo="document"
+        adjunto={{
+          ...adjunto,
+          nombre: "Referencia.png",
+          mimeType: "image/png",
+        }}
+        abrir={abrir}
+      />,
+    ),
+  );
+  expect(container.querySelector("img")).toBeNull();
+  await click("Abrir archivo");
+  expect(container.querySelector("img")?.getAttribute("src")).toBe(archivo.url);
+  expect(container.querySelector("img")?.alt).toBe("Referencia.png");
+  expect(container.querySelector("a")?.getAttribute("aria-label")).toBe(
+    "Abrir original",
+  );
+});

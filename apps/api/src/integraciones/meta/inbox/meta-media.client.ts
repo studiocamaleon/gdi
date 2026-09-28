@@ -200,10 +200,18 @@ export class MetaMediaClient {
       const f = formatos[mime],
         bytes = Number(data.file_size),
         hash = hashMedia(data.sha256);
+      // WhatsApp puede entregar una imagen, audio o video como documento
+      // cuando el remitente lo adjunta como archivo. El MIME de Graph define
+      // su extensión, límite y firma; la categoría del mensaje no los cambia.
+      const tipoCompatible =
+        f &&
+        (f.tipo === p.tipo ||
+          (p.tipo === 'document' &&
+            ['image', 'audio', 'video'].includes(f.tipo)));
       if (
         data.id !== p.mediaId ||
         !f ||
-        f.tipo !== p.tipo ||
+        !tipoCompatible ||
         !hash ||
         typeof data.url !== 'string'
       )

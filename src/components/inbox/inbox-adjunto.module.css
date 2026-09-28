@@ -6,8 +6,8 @@
 .fileHeader {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px 18px;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--brand-graphite);
   color: var(--brand-on-graphite);
 }
@@ -15,70 +15,57 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 52px;
-  height: 62px;
+  width: 34px;
+  height: 40px;
   border: 1px solid var(--brand-graphite-line);
   border-bottom: 2px solid var(--accent);
-  border-radius: 8px;
+  border-radius: 5px;
   color: var(--accent);
   background: color-mix(in srgb, var(--brand-on-graphite) 4%, transparent);
 }
 .identity {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  flex: 1;
+  gap: 4px;
   min-width: 0;
 }
-.kind {
-  color: var(--brand-muted-on-graphite);
-  font: 9px var(--brand-mono);
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-}
 .identity strong {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.45;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .fileDetails {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--brand-muted-on-graphite);
   font: 10px var(--brand-mono);
 }
 .fileDetails > span + span::before {
   content: "·";
-  margin-right: 8px;
+  margin-right: 6px;
 }
 .fileBody {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.collapsed {
+  display: none;
 }
 .actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.privateLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted-text);
-  font-size: 10px;
-}
-.privateLabel svg,
-.accessHint svg {
   flex: none;
-}
-.download {
-  flex: 1;
+  align-items: center;
+  gap: 4px;
 }
 .accessHint {
   display: flex;
@@ -88,16 +75,13 @@
   font-size: 10px;
   line-height: 1.6;
 }
-.accessHint svg {
-  margin-top: 2px;
-}
 .status {
   color: var(--muted-text);
 }
 .image,
 .attachment video {
   width: 100%;
-  max-height: 320px;
+  max-height: 200px;
   object-fit: contain;
   border-radius: 8px;
   background: var(--canvas-background);
@@ -105,17 +89,4 @@
 .attachment audio {
   width: 100%;
   max-width: 100%;
-}
-@media (max-width: 480px) {
-  .fileHeader {
-    gap: 12px;
-    padding: 16px 14px;
-  }
-  .fileIcon {
-    width: 42px;
-    height: 54px;
-  }
-  .fileBody {
-    padding-inline: 14px;
-  }
 }
