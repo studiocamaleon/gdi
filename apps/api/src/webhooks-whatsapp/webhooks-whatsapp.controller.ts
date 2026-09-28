@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { Public } from '../auth/public.decorator';
 import { SinTenant } from '../common/sin-tenant.decorator';
 import { WebhooksWhatsappService } from './webhooks-whatsapp.service';
@@ -53,7 +54,16 @@ export class WebhooksWhatsappController {
         'WHATSAPP_WEBHOOK_VERIFY_TOKEN no está configurado.',
       );
     }
-    if (mode === 'subscribe' && token === esperado && challenge) {
+    if (
+      mode === 'subscribe' &&
+      typeof token === 'string' &&
+      typeof challenge === 'string' &&
+      challenge &&
+      timingSafeEqual(
+        createHash('sha256').update(token).digest(),
+        createHash('sha256').update(esperado).digest(),
+      )
+    ) {
       res.status(200).type('text/plain').send(challenge);
       return;
     }
@@ -94,8 +104,10 @@ export class WebhooksWhatsappController {
       // Persistir falló: devolver no-2xx para que Meta REINTENTE (history y
       // echoes no tienen replay: perderlos por tragarnos el error sería
       // exactamente el bug que esta tabla existe para evitar).
-      this.logger.error('No se pudo persistir el webhook de WhatsApp', error);
-      throw error;
+      this.logger.error(
+        'No se pudo persistir o procesar el webhook de WhatsApp.',
+      );
+      throw new ServiceUnavailableException('No se pudo procesar el evento.');
     }
     return { ok: true };
   }

@@ -385,7 +385,7 @@ export class NotificacionesService {
         'identidad',
       ]);
       const n = await tx.notificacionWhatsapp.findFirst({
-        where: { id, tenantId: auth.tenantId },
+        where: { id, tenantId: auth.tenantId, canal: { in: ['WATI', 'WHATSAPP_WEB'] } },
       });
       if (!n) throw new NotFoundException('No se encontró el aviso.');
       const incierta = ['wati_incierta', 'web_incierta'].includes(n.estado);

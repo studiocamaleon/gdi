@@ -7,6 +7,8 @@ import {
 } from "@/lib/integraciones-api";
 import { getCredencialesMcp } from "@/lib/credenciales-mcp-api";
 import { getCurrentUserCached } from "@/lib/auth-server";
+import { getMetaPiloto } from '@/lib/meta-piloto-api';
+import { getMetaRecepcion } from '@/lib/meta-recepcion-api';
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,10 @@ export default async function IntegracionesPage() {
   // sólo decide si se RENDERIZA la sección (un supervisor con .ver no la ve).
   const puedeGestionar = await tienePermiso("configuracion.gestionar");
   const usuario = await getCurrentUserCached().catch(() => null);
+  const metaPiloto = puedeGestionar && usuario?.currentUser.tenantActual.rol === 'administrador'
+    ? await getMetaPiloto().catch(() => null) : null;
+  const metaRecepcion = puedeGestionar && usuario?.currentUser.tenantActual.rol === 'administrador'
+    ? await getMetaRecepcion().catch(() => null) : null;
   const credenciales = puedeGestionar
     ? await getCredencialesMcp().catch(() => [])
     : [];
@@ -40,6 +46,8 @@ export default async function IntegracionesPage() {
   return (
     <IntegracionesView
       inicial={inicial}
+      metaPiloto={metaPiloto}
+      metaRecepcion={metaRecepcion}
       puedeResolverAvisos={
         puedeGestionar &&
         usuario?.currentUser.tenantActual.rol === "administrador"
