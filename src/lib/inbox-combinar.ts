@@ -1,5 +1,19 @@
 import type { MetaInbox } from "./meta-inbox-api";
 
+/** Misma clave que la API: último mensaje de cualquier dirección y desempate por id.
+ * Leer, editar o confirmar la entrega no cambia la posición del chat. */
+export function ordenarConversacionesInbox(
+  conversaciones: NonNullable<MetaInbox["conversaciones"]>,
+) {
+  const fecha = (c: (typeof conversaciones)[number]) => {
+    const valor = Date.parse(c.ultimoMensaje?.enviadoEl ?? "");
+    return Number.isFinite(valor) ? valor : -Infinity;
+  };
+  return [...conversaciones].sort(
+    (a, b) => fecha(b) - fecha(a) || b.id.localeCompare(a.id),
+  );
+}
+
 /** Conserva las páginas anteriores sólo cuando se comprueba continuidad.
  * Tras una desconexión larga no se inventa un salto entre dos páginas. */
 export function combinarInbox(

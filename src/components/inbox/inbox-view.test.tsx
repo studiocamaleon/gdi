@@ -503,3 +503,150 @@ it("identifica que el canal de prueba envía mensajes reales a un único destina
     "No se importa el historial del celular",
   );
 });
+
+const ordenConversaciones = () =>
+  [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label^="Abrir conversación con"]',
+    ),
+  ].map((b) => b.getAttribute("aria-label"));
+it.each(["ENTRANTE", "SALIENTE"])(
+  "un mensaje %s mueve el chat al inicio sin cambiar la conversación abierta",
+  async (direccion) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-28T15:00:00Z"));
+    let datos = general();
+    datos.conversaciones = datos.conversaciones!.map((c, i) => ({
+      ...c,
+      ultimoMensaje: {
+        ...mensaje,
+        id: c.id,
+        enviadoEl: i ? "2026-09-26T15:00:00Z" : "2026-09-27T15:00:00Z",
+      },
+    }));
+    cargar.mockResolvedValue(datos);
+    let eventos!: Parameters<EscucharInbox>[0];
+    const tiempoReal: EscucharInbox = (o) => {
+      eventos = o;
+      return () => {};
+    };
+    await act(async () =>
+      root.render(
+        <InboxView
+          identidad={identidad}
+          cargar={cargar}
+          tiempoReal={tiempoReal}
+        />,
+      ),
+    );
+    expect(container.textContent).not.toContain("Volver a Grafo");
+    expect(ordenConversaciones()).toEqual([
+      "Abrir conversación con Alma",
+      "Abrir conversación con Bruno",
+    ]);
+    expect(
+      container.querySelector('[aria-label="Abrir conversación con Alma"] time')
+        ?.textContent,
+    ).toBe("Ayer");
+    datos = {
+      ...datos,
+      conversaciones: datos.conversaciones!.map((c) =>
+        c.id === "chat-2"
+          ? {
+              ...c,
+              ultimoMensaje: {
+                ...mensaje,
+                id: "nuevo-bruno",
+                texto: "Última actividad",
+                direccion,
+                enviadoEl: "2026-09-28T15:00:00Z",
+              },
+            }
+          : c,
+      ),
+    };
+    cargar.mockResolvedValue(datos);
+    await act(async () => {
+      await eventos.actualizar(new AbortController().signal);
+    });
+    expect(ordenConversaciones()).toEqual([
+      "Abrir conversación con Bruno",
+      "Abrir conversación con Alma",
+    ]);
+    expect(
+      container.querySelector(
+        '[aria-label="Abrir conversación con Bruno"] time',
+      )?.textContent,
+    ).toBe("12:00");
+    expect(container.querySelector("[role=log]")?.textContent).toContain(
+      "Consulta de Alma",
+    );
+    expect(cargar.mock.calls.at(-1)?.[0].conversacionId).toBe("chat-1");
+    cargar.mockResolvedValue({
+      ...datos,
+      conversaciones: datos.conversaciones!.map((c) => ({
+        ...c,
+        ultimoMensaje: { ...c.ultimoMensaje!, estadoEntrega: "READ" },
+      })),
+    });
+    await act(async () => {
+      await eventos.actualizar(new AbortController().signal);
+    });
+    expect(ordenConversaciones()).toEqual([
+      "Abrir conversación con Bruno",
+      "Abrir conversación con Alma",
+    ]);
+  },
+);
+it("actualiza la etiqueta al pasar medianoche sin necesitar otro mensaje", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-09-29T02:59:30Z"));
+  const datos = general();
+  datos.conversaciones![0].ultimoMensaje = {
+    ...mensaje,
+    enviadoEl: "2026-09-29T02:59:00Z",
+  };
+  cargar.mockResolvedValue(datos);
+  await render();
+  const etiqueta = () =>
+    container.querySelector('[aria-label="Abrir conversación con Alma"] time')
+      ?.textContent;
+  expect(etiqueta()).toBe("23:59");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_000);
+  });
+  expect(etiqueta()).toBe("Ayer");
+});
+it("reordena y elimina duplicados al agregar otra página de conversaciones", async () => {
+  const datos = general();
+  datos.conversaciones = datos.conversaciones!.map((c, i) => ({
+    ...c,
+    ultimoMensaje: {
+      ...mensaje,
+      enviadoEl: new Date(Date.UTC(2026, 8, 26 - i)).toISOString(),
+    },
+  }));
+  cargar.mockResolvedValue({ ...datos, listaAnterior: "pagina" });
+  await render();
+  cargar.mockResolvedValueOnce({
+    ...datos,
+    conversaciones: [
+      {
+        ...datos.conversaciones[1],
+        ultimoMensaje: { ...mensaje, enviadoEl: "2026-09-28T12:00:00Z" },
+      },
+      {
+        id: "chat-3",
+        nombre: "Clara",
+        telefono: "+16505550125",
+        ultimoMensaje: null,
+      },
+    ],
+  });
+  await click("Más conversaciones");
+  expect(ordenConversaciones()).toEqual([
+    "Abrir conversación con Bruno",
+    "Abrir conversación con Alma",
+    "Abrir conversación con Clara",
+  ]);
+});

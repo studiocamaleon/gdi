@@ -11,6 +11,8 @@ import { runWithTenant } from '../../common/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsappContextoService } from '../../clientes/whatsapp-contexto.service';
 import { MetaInboxGeneralService } from './meta-inbox-general.service';
+import { aplicarOperacionInbox } from './inbox/meta-inbox-proyeccion';
+import type { OperacionInbox } from './inbox/meta-inbox-normalizar';
 import type { MetaInboxQueryDto } from './meta-inbox.dto';
 import { WebhooksWhatsappService } from '../../webhooks-whatsapp/webhooks-whatsapp.service';
 import { MetaInboxProcesador } from './inbox/meta-inbox-procesador.service';
@@ -563,4 +565,64 @@ it('resuelve citas sólo dentro de la misma conversación y oculta el contenido 
     texto: 'Mensaje eliminado',
   });
   expect(JSON.stringify(r?.mensajes)).not.toContain('Texto ficticio 0');
+});
+
+it('ordena por mensaje entrante o saliente; historial, lectura y edición no adelantan chats', async () => {
+  const a = await chat(),
+    b = await chat(canal, '16505550124', 1, 'Bruno Lago');
+  const aplicar = (op: OperacionInbox) =>
+    runWithTenant(auth.tenantId, () =>
+      db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "MetaVinculo" WHERE id=${canal.id}::uuid FOR UPDATE`;
+        return aplicarOperacionInbox(tx, canal, op);
+      }),
+    );
+  const nuevo = (
+    contacto: string,
+    segundos: number,
+    direccion: 'ENTRANTE' | 'SALIENTE',
+    origen: 'NUEVO' | 'GRAFO' | 'HISTORIAL' = 'NUEVO',
+  ): OperacionInbox => ({
+    clase: 'mensaje',
+    wamid: randomUUID(),
+    contacto,
+    direccion,
+    fecha: new Date(fecha.getTime() + segundos * 1000),
+    origen,
+    tipo: 'text',
+    contenido: { texto: `Mensaje ${segundos}` },
+    prioridad: 3,
+  });
+  await aplicar(nuevo('16505550124', 10, 'ENTRANTE'));
+  expect((await leer())?.conversaciones.map((c) => c.id)).toEqual([
+    b.c.id,
+    a.c.id,
+  ]);
+  await aplicar(nuevo(telefono, 20, 'SALIENTE', 'GRAFO'));
+  await aplicar(nuevo('16505550124', -86400, 'ENTRANTE', 'HISTORIAL'));
+  await aplicar({
+    clase: 'estado',
+    wamid: b.mensajes[0].wamid,
+    fecha: new Date(fecha.getTime() + 86400_000),
+    estado: 'READ',
+    orden: 3,
+  });
+  await aplicar({
+    clase: 'edicion',
+    wamid: b.mensajes[0].wamid,
+    fecha: new Date(fecha.getTime() + 86400_000),
+    tipo: 'text',
+    contenido: { texto: 'Texto corregido' },
+    prioridad: 3,
+  });
+  const resultado = await leer({ conversacionId: b.c.id });
+  expect(resultado?.conversacionId).toBe(b.c.id);
+  expect(resultado?.conversaciones.map((c) => c.id)).toEqual([a.c.id, b.c.id]);
+  expect(resultado?.conversaciones.map((c) => c.ultimoMensaje?.texto)).toEqual([
+    'Mensaje 20',
+    'Mensaje 10',
+  ]);
+  expect(resultado?.conversaciones[0].ultimoMensaje?.enviadoEl).toBe(
+    new Date(fecha.getTime() + 20000).toISOString(),
+  );
 });

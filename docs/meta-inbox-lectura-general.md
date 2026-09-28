@@ -52,3 +52,11 @@ Resultado: **297 pruebas de API y 57 de web aprobadas**; TypeScript de API y web
 El ciclo de importación/reconexión y los adjuntos privados ya tienen ampliaciones locales. Siguen pendientes envíos, plantillas y ventana de atención; roles del equipo; carga, conservación y métricas. Corresponde validar el lote en staging y ensayar el alta real con los mecanismos de Meta disponibles. La aprobación de la app no convierte las pruebas sintéticas en validación de coexistencia real.
 
 Ampliación del 26/09: [estado de importación y reconexión](meta-importacion-reconexion.md) incorpora el panel Conexión, el resumen de lo recibido y el ciclo de pausa/restauración. No habilita todavía archivos ni envíos.
+
+## Orden de conversaciones — 28/09/2026, local
+
+La bandeja se ordena por la fecha del último mensaje, recibido o enviado, de más reciente a más antiguo; los empates usan el id descendente, como la API. El frontend vuelve a ordenar los resultados al actualizar y al unir páginas, sin duplicar conversaciones ni cambiar el chat seleccionado. Las confirmaciones de entrega/lectura, las ediciones y el historial anterior no adelantan un chat.
+
+La etiqueta de la fila corresponde a ese mismo mensaje: hoy muestra la hora; ayer, «Ayer»; los otros días de la última semana, el día; y después, la fecha. Usa la zona horaria de la empresa y se recalcula cada minuto y cuando llegan datos, incluido el paso por medianoche. La demo antes conservaba el orden fijo de los contactos y contenía fechas futuras: ahora ordena igual que la vista real y desplaza los ejemplos al pasado respecto de su apertura. Se retiró «Volver a Grafo» para mantener el Inbox independiente.
+
+Verificación: 34 pruebas frontend y 20 de integración con la base local de tests; incluye recepción, envío, lectura/edición, historial atrasado, orden al agregar páginas, conservación del chat abierto y cambio de día. Chrome: responder en el chat ficticio de Bruno lo mueve del tercer al primer lugar sin recargar. TypeScript del Inbox y lint correctos. Sin cambios de esquema ni despliegue de staging/producción; ninguna llamada a Meta.

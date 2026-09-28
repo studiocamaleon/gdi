@@ -10,6 +10,7 @@ import type {
 } from "@/lib/meta-inbox-api";
 import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxView } from "../inbox-view";
+import { ordenarConversacionesInbox } from "@/lib/inbox-combinar";
 import type {
   CargarInbox,
   MetaInbox,
@@ -45,7 +46,7 @@ const contactos = [
   },
   { id: "clara", nombre: "Clara Paz", telefono: "+16505550125", empresa: null },
 ];
-const conversaciones: Record<string, MetaInbox["mensajes"]> = {
+const muestrasConversaciones: Record<string, MetaInbox["mensajes"]> = {
   alma: [
     ...Array.from({ length: 50 }, (_, i) => ({
       id: `alma-${String(i).padStart(3, "0")}`,
@@ -212,6 +213,24 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
     },
   ],
 };
+// Fechas relativas: ninguna muestra queda en el futuro ni por delante de un envío
+// que el usuario acaba de simular. Se preservan los intervalos del historial.
+const ultimaMuestra = Math.max(
+  ...Object.values(muestrasConversaciones)
+    .flat()
+    .map((m) => Date.parse(m.enviadoEl)),
+);
+const desfase = Date.now() - 5 * 60_000 - ultimaMuestra;
+const conversaciones: Record<string, MetaInbox["mensajes"]> =
+  Object.fromEntries(
+    Object.entries(muestrasConversaciones).map(([id, mensajes]) => [
+      id,
+      mensajes.map((m) => ({
+        ...m,
+        enviadoEl: new Date(Date.parse(m.enviadoEl) + desfase).toISOString(),
+      })),
+    ]),
+  );
 const intentos = new Map<string, IntentoInbox>();
 const enviar: EnviarTextoInbox = async (id, dto) => {
   if (intentos.has(dto.clave)) return intentos.get(dto.clave)!;
@@ -425,14 +444,33 @@ const plantillasApi: PlantillasInboxApi = {
   },
 };
 const cargar: CargarInbox = async (query) => {
-  const lista = contactos.filter((c) =>
-    `${c.nombre} ${c.telefono}`
-      .toLocaleLowerCase()
-      .includes((query.busqueda ?? "").toLocaleLowerCase()),
+  const lista = ordenarConversacionesInbox(
+    contactos
+      .filter((c) =>
+        `${c.nombre} ${c.telefono}`
+          .toLocaleLowerCase()
+          .includes((query.busqueda ?? "").toLocaleLowerCase()),
+      )
+      .map((c) => ({
+        ...c,
+        ultimoMensaje:
+          [...conversaciones[c.id]].sort(
+            (a, b) =>
+              Date.parse(b.enviadoEl) - Date.parse(a.enviadoEl) ||
+              b.id.localeCompare(a.id),
+          )[0] ?? null,
+      })),
   );
-  const contacto =
-    contactos.find((c) => c.id === query.conversacionId) ?? lista[0];
-  const todos = contacto ? conversaciones[contacto.id] : [];
+  const contacto = contactos.find(
+    (c) => c.id === (query.conversacionId ?? lista[0]?.id),
+  );
+  const todos = contacto
+    ? [...conversaciones[contacto.id]].sort(
+        (a, b) =>
+          Date.parse(a.enviadoEl) - Date.parse(b.enviadoEl) ||
+          a.id.localeCompare(b.id),
+      )
+    : [];
   const desde = query.desdeId
     ? todos.findIndex((m) => m.id === query.desdeId)
     : -1;
@@ -467,10 +505,7 @@ const cargar: CargarInbox = async (query) => {
     canalId: "canal-ficticio",
     conversacionId: contacto?.id ?? null,
     contacto: { telefono: contacto?.telefono ?? "", nombre: contacto?.nombre },
-    conversaciones: lista.map((c) => ({
-      ...c,
-      ultimoMensaje: conversaciones[c.id].at(-1) ?? null,
-    })),
+    conversaciones: lista,
     listaAnterior: null,
     mensajes: todos.slice(inicio, fin),
     anterior: inicio > 0 ? todos[inicio].id : null,

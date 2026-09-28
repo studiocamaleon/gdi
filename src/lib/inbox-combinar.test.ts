@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { combinarInbox } from "./inbox-combinar";
+import { combinarInbox, ordenarConversacionesInbox } from "./inbox-combinar";
 import type { MetaInbox } from "./meta-inbox-api";
 const pagina = (ids: number[], anterior: string | null = null): MetaInbox => ({
   empresaId: "empresa",
@@ -73,4 +73,28 @@ it("el refresco general reemplaza la ventana completa sin resucitar textos elimi
       "anteriores",
     ),
   ).toEqual({ ...actual, conversacionId: "chat-2" });
+});
+
+it("ordena por último mensaje, con desempate estable, sin mutar ni usar la lectura", () => {
+  const chat = (id: string, fecha: string | null) => ({
+    id,
+    telefono: "+16505550123",
+    nombre: id,
+    ultimoMensaje: fecha
+      ? { ...pagina([1]).mensajes[0], enviadoEl: fecha, estadoEntrega: "READ" }
+      : null,
+  });
+  const filas = [
+    chat("a", "2026-09-27T10:00:00Z"),
+    chat("z", null),
+    chat("c", "2026-09-28T10:00:00Z"),
+    chat("b", "2026-09-28T10:00:00Z"),
+  ];
+  expect(ordenarConversacionesInbox(filas).map((c) => c.id)).toEqual([
+    "c",
+    "b",
+    "a",
+    "z",
+  ]);
+  expect(filas.map((c) => c.id)).toEqual(["a", "z", "c", "b"]);
 });

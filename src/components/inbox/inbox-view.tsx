@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -16,7 +15,7 @@ import {
 import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import brand from "@/components/design-system/brand-workspace-theme.module.css";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -68,7 +67,10 @@ import { InboxAdjunto } from "./inbox-adjunto";
 import { InboxMessageStatus } from "./inbox-message-status";
 import { InboxBienvenida } from "./inbox-bienvenida";
 import { ApiError } from "@/lib/api";
-import { combinarInbox } from "@/lib/inbox-combinar";
+import {
+  combinarInbox,
+  ordenarConversacionesInbox,
+} from "@/lib/inbox-combinar";
 import {
   escucharInbox,
   type EscucharInbox,
@@ -304,6 +306,14 @@ export function InboxView({
           );
           siguiente = { ...siguiente, conversaciones: [...filas.values()] };
         }
+        if (siguiente.conversaciones)
+          siguiente = {
+            ...siguiente,
+            conversaciones: ordenarConversacionesInbox(
+              siguiente.conversaciones,
+            ),
+          };
+        setAhora(Date.now());
         datosActuales.current = siguiente;
         setDatos(siguiente);
         setEstado("listo");
@@ -651,9 +661,6 @@ export function InboxView({
                 <Settings2 data-icon="inline-start" />
                 <span className={live.connectionLabel}>Conexión</span>
               </Button>
-              <Link href="/" className={buttonVariants({ variant: "outline" })}>
-                Volver a Grafo
-              </Link>
             </div>
           </header>
           {estado === "listo" && datos?.prueba && (
