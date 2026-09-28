@@ -1,5 +1,6 @@
 import type { LightboxParameters, Project, Part } from "./types";
 import { LIGHTBOX_MOUNT_STYLES, validateSeparateMount } from "./lightbox-mount";
+import { lightboxFixingWall } from "./lightbox-wall";
 
 export const DEFAULT_LIGHTBOX: LightboxParameters = {
   diameter: 400, depth: 160, wall: 6, segments: 1, jointClearance: 0.25,
@@ -24,10 +25,11 @@ export const LIGHTBOX_LAYERS = {
 };
 export const rimScrewsPerFace = (p: Pick<LightboxParameters,"segments">) => Math.max(4,p.segments)*2;
 export const snapTabsPerFace = (p: Pick<LightboxParameters,"segments">) => p.segments===1?4:p.segments*2;
-export const lightboxAssembly = (p: Pick<LightboxParameters,"segments"|"rimClosure"|"mount"|"mountStyle">) => [
+export const lightboxAssembly = (p: Pick<LightboxParameters,"segments"|"rimClosure"|"mount"|"mountStyle"|"wall">) => [
   p.segments===1
     ? "El cuerpo y cada aro se fabrican como piezas enteras independientes. No hay juntas de sectores ni llaves de unión del cuerpo."
     : "Unir los sectores del cuerpo e introducir las llaves de doble cola de milano desde la cara A.",
+  ...(p.wall < 5 ? [`La pared principal mide ${String(p.wall).replace(".", ",")} mm. Los cierres${p.mount ? " y la fijación del brazo" : ""} tienen refuerzos interiores de 5 mm de espesor total, integrados en el cuerpo. Los asientos de acrílico y las uniones conservan sus propios apoyos.`] : []),
   ...(!p.mount ? [] : [
     `Soporte ${LIGHTBOX_MOUNT_STYLES[p.mountStyle].label.toLowerCase()}: imprimir el cuerpo y el único brazo central por separado. La placa de pared y el apoyo curvo forman parte del mismo brazo.`,
     "Instalar los cuatro insertos roscados M4 por calor en los alojamientos ciegos de la cara del brazo que toca el cuerpo. Ajustar alojamiento, temperatura y procedimiento a la ficha del inserto y al filamento. Dejar enfriar y comprobar la rosca antes de presentar el cuerpo.",
@@ -75,7 +77,7 @@ export function validateLightbox(p: LightboxParameters) {
   require(Number.isInteger(p.sideCount) && p.sideCount >= 1 && p.sideCount <= 12 && p.sideGap >= 0 && p.sideGap <= 10 && p.sideFoot >= 0 && p.sideFoot <= 60, "Revisá la cantidad de frisos, su separación y el tramo recto del perfil.");
   require(p.sideMargin >= 2 && p.sideMargin <= 15, "El margen del relieve junto a los aros debe estar entre 2 y 15 mm.");
   require(p.sideProfile === "smooth" || p.depth-2*(p.rimOverlap+p.sideMargin) >= 8, "No queda espacio para el perfil entre los aros. Reducí su solape o el margen del relieve, o aumentá la profundidad.");
-  require(p.wall >= 5 && p.wall <= 12, "La pared debe tener entre 5 y 12 mm para alojar los cierres.");
+  require(p.wall >= .8 && p.wall <= 12, "La pared debe tener entre 0,8 y 12 mm. Los cierres y el soporte se refuerzan por dentro si la pared tiene menos de 5 mm.");
   require(p.jointClearance >= 0.1 && p.jointClearance <= 0.6, "La holgura de unión debe estar entre 0,1 y 0,6 mm por lado.");
   require(p.acrylicA >= 2 && p.acrylicA <= 8 && p.acrylicB >= 2 && p.acrylicB <= 8, "Los acrílicos deben tener entre 2 y 8 mm.");
   require(p.acrylicClearance >= 0.2 && p.acrylicClearance <= 3, "La holgura radial del acrílico debe estar entre 0,2 y 3 mm.");
@@ -86,7 +88,8 @@ export function validateLightbox(p: LightboxParameters) {
   require(p.rimSkirtThickness >= 2 && p.rimSkirtThickness <= 6 && p.rimClearance >= 0.15 && p.rimClearance <= 1, "Revisá la pestaña lateral: espesor 2–6 mm y holgura radial 0,15–1 mm.");
   if(p.rimClosure==="screws"){
     require(p.rimScrewHole >= 2.5 && p.rimScrewHole <= 5.5 && p.rimOverlap >= p.rimScrewHole+4, "El agujero lateral debe tener entre 2,5 y 5,5 mm y dejar al menos 2 mm hasta el borde de la pestaña.");
-    require(p.rimPilotHole >= 1.5 && p.rimPilotHole < p.rimScrewHole && p.rimScrewDepth >= 2 && p.rimScrewDepth <= p.wall-1, "El piloto debe ser menor que el paso del tornillo y conservar al menos 1 mm de fondo en la pared.");
+    require(p.rimPilotHole >= 1.5 && p.rimPilotHole < p.rimScrewHole && p.rimScrewDepth >= 2 && p.rimScrewDepth <= lightboxFixingWall(p)-1, "El piloto debe ser menor que el paso del tornillo y conservar al menos 1 mm de fondo en la pared o su refuerzo.");
+    require(p.wall >= 5 || p.rimOverlap/2-p.rimPilotHole/2 >= Math.max(p.acrylicA,p.acrylicB)+1, "Aumentá el solape del aro para dejar los pilotos y sus refuerzos detrás de los acrílicos.");
   } else {
     require(p.rimOverlap >= 18, "El cierre click necesita al menos 18 mm de solape para sus pestañas flexibles.");
     require(p.snapThickness>=.8&&p.snapThickness<=2&&p.snapThickness<=p.rimSkirtThickness, "La pestaña flexible debe tener entre 0,8 y 2 mm de espesor.");

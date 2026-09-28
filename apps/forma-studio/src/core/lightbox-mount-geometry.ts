@@ -3,6 +3,7 @@ import type { Keeper } from "./profile-sweep";
 import type { Contours, LightboxParameters, Point } from "./types";
 import type { LightboxSolid } from "./lightbox-geometry";
 import { LIGHTBOX_MOUNT_STYLES, mountFootHeight, mountHoles, mountShoeHeight } from "./lightbox-mount";
+import { lightboxFixingWall } from "./lightbox-wall";
 
 /** Un brazo central. Cabezas dentro del cartel e insertos en alojamientos
  * ciegos del apoyo: no hay pasos ni ventanas de fijación en su cara exterior. */
@@ -22,6 +23,10 @@ export function createSeparateMount(w: ManifoldToplevel, keep: Keeper, p: Lightb
   const outerR = R + c + p.mountShoeThickness;
   const shoeSection = keep(keep(circle(outerR).subtract(circle(R + c))).intersect(rect(-outerR - 1, -shoeHeight / 2, outerR + 1, shoeHeight)));
   const shoe = ex(shoeSection, p.armWidth, mid - p.armWidth / 2);
+  const fixingWall=lightboxFixingWall(p);
+  const reinforcement=p.wall < fixingWall
+    ? ex(keep(keep(circle(R).subtract(circle(R-fixingWall))).intersect(rect(-R-1,-shoeHeight/2,R+1,shoeHeight))),p.armWidth,mid-p.armWidth/2)
+    : null;
   const start = wallX + p.plateThickness - 2, end = -(R + c + 1), length = end - start;
   let beam = rect(start, -p.armHeight / 2, length, p.armHeight);
   if (p.mountStyle === "arch") {
@@ -42,8 +47,8 @@ export function createSeparateMount(w: ManifoldToplevel, keep: Keeper, p: Lightb
   arm = sub(arm, ex(circle(R + c), H + 2, -1));
   for (const { angle, z } of mountHoles(p)) {
     // Pasante únicamente en el cuerpo. La arandela/cabeza se asienta dentro.
-    cuts.push(radial(angle, z, 2.25, R - p.wall - 2, p.wall + 3));
-    cuts.push(radial(angle, z, 5, R - p.wall - 2, 2.6));
+    cuts.push(radial(angle, z, 2.25, R - fixingWall - 2, fixingWall + 3));
+    cuts.push(radial(angle, z, 5, R - fixingWall - 2, 2.6));
     // Se instalan los insertos desde la cara de contacto del brazo, antes de
     // presentar el cuerpo. El fondo se conserva incluso bajo el lateral liso.
     arm = sub(arm, radial(angle, z, p.mountInsertDiameter / 2, R + c - 1, p.mountInsertDepth + 1));
@@ -56,5 +61,5 @@ export function createSeparateMount(w: ManifoldToplevel, keep: Keeper, p: Lightb
   const cable = cylinder(p.cableDiameter / 2, -wallX + 1, [wallX - 1, 0, mid], [0, 90, 0]);
   arm = sub(arm, cable); cuts.push(cable);
   parts.push({ solid: arm, id: "wall-arm-central", name: `Brazo central ${LIGHTBOX_MOUNT_STYLES[p.mountStyle].label.toLowerCase()} · fijación interior`, layer: "wallMount", printRotation: [0, 0, 0], motion: { vector: [-1, 0, 0], start: 80, travel: p.wallDistance + 45 } });
-  return { parts, cuts, template: { name: "banderola-anclajes-pared", contours: footprint.toPolygons() } };
+  return { parts, cuts, reinforcement, template: { name: "banderola-anclajes-pared", contours: footprint.toPolygons() } };
 }

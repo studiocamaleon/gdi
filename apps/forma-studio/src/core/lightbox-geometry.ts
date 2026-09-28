@@ -7,6 +7,7 @@ import { createSnapRim } from "./lightbox-snap";
 import { lightboxSideProfile } from "./lightbox-side";
 import { lightboxSectorPhase, mountMetadata, mountShoeHeight } from "./lightbox-mount";
 import { createSeparateMount } from "./lightbox-mount-geometry";
+import { lightboxFixingWall } from "./lightbox-wall";
 
 export interface LightboxSolid {
   solid: Manifold;
@@ -50,6 +51,12 @@ export function createLightbox(w: ManifoldToplevel, keep: Keeper, project: Proje
   };
   let body=ring(R,R-p.wall,0,H);
   body=union(body,ring(R,R-p.wall-p.seatWidth,p.acrylicB,p.seatThickness),ring(R,R-p.wall-p.seatWidth,H-p.acrylicA-p.seatThickness,p.seatThickness));
+  if(p.wall < 5){
+    // Refuerzos detrás de los acrílicos: la franja central mantiene la pared
+    // elegida y las caras siguen libres para introducir y retirar las placas.
+    const fixingWall=lightboxFixingWall(p),end=p.rimOverlap+1;
+    body=union(body,ring(R,R-fixingWall,p.acrylicB,end-p.acrylicB),ring(R,R-fixingWall,H-end,end-p.acrylicA));
+  }
   const keyR=R-p.wall-6;
   const keySection=cs([[[-3.5,-8],[3.5,-8],[1.8,0],[3.5,8],[-3.5,8],[-1.8,0]]]);
   const keySlot=keep(keySection.offset(c,"Miter"));
@@ -133,6 +140,7 @@ export function createLightbox(w: ManifoldToplevel, keep: Keeper, project: Proje
   const templates:{name:string;contours:Contours}[]=[];
   if(p.mount){
     const supports=createSeparateMount(w,keep,p);
+    if(supports.reinforcement)body=union(body,supports.reinforcement);
     result.push(...supports.parts);finalCuts.push(...supports.cuts);templates.push(supports.template);
   }
   if(p.drainage){

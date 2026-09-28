@@ -9,6 +9,7 @@ import { NumberControl, Choice, Section, SwitchControl } from "./Controls";
 import { DEFAULT_LIGHTBOX, resolveLightbox, LIGHTBOX_LAYERS, rimScrewsPerFace, snapTabsPerFace } from "../core/lightbox";
 import { LIGHTBOX_SIDE_PROFILES, lightboxSideProfile } from "../core/lightbox-side";
 import { LIGHTBOX_MOUNT_STYLES, mountMetadata } from "../core/lightbox-mount";
+import { lightboxFixingWall } from "../core/lightbox-wall";
 import type { LightboxParameters, Project, Layer, Model } from "../core/types";
 
 export function LightboxOverview({project:p,onChange,model}:{project:Project;onChange:(p:Project)=>void;model:Model|null}) {
@@ -68,12 +69,13 @@ export function LightboxEditor({project:p,onChange,component,onComponentChange,i
     <p className="section-caption">El perfil ocupa sólo la franja entre los aros. Agrega material por fuera y conserva el interior y los encastres cilíndricos. La zona de los soportes de pared queda lisa.</p>
     </Section>
     <Section title="Cuerpo y apoyos"><FieldGroup>
-      {n("wall","Espesor de pared",5,12)}
+      {n("wall","Espesor de pared",.8,12)}
       {n("seatWidth","Ancho del asiento",v.acrylicClearance+4,20)}
       {n("seatThickness","Espesor del asiento",2,6)}
       {n("jointClearance","Holgura de ensamble por lado",.1,.6,.05)}
       <SwitchControl label="Drenajes inferiores" value={v.drainage} onChange={drainage=>change({drainage})}/>
     </FieldGroup><p className="section-caption">{v.segments===1?"Cuerpo continuo en una sola pieza, sin juntas de sectores ni llaves de unión. Sólo conserva los asientos del acrílico y las uniones necesarias. El sistema LED queda por definir.":"Sectores unidos con llaves axiales de doble cola de milano. Las llaves se colocan antes de cerrar el acrílico A."}</p></Section></>}
+    {component==="boxBody"&&v.wall<5&&<p className="section-caption">Pared principal de {String(v.wall).replace(".",",")} mm. Los cierres{v.mount?" y la fijación del brazo":""} conservan refuerzos interiores de 5 mm, integrados en el cuerpo.</p>}
     {(component==="faceA"||component==="faceB") && <>
       <Section title={`Acrílico ${face.toUpperCase()}`}><FieldGroup>
         {n(face==="a"?"acrylicA":"acrylicB","Espesor del acrílico",2,8)}
@@ -97,14 +99,14 @@ export function LightboxEditor({project:p,onChange,component,onComponentChange,i
       <Section title="Aro que abraza el cuerpo"><FieldGroup>
         {n("rimWidth","Ancho del frente del aro",v.wall+v.acrylicClearance+4,35)}
         {n("rimThickness","Espesor del frente del aro",3,8)}
-        {n("rimOverlap","Solape sobre el lateral",v.rimClosure==="snap"?18:Math.max(8,v.rimScrewHole+4),Math.min(35,(v.depth-(v.mount?v.armWidth+12:4))/2))}
+        {n("rimOverlap","Solape sobre el lateral",v.rimClosure==="snap"?18:Math.max(8,v.rimScrewHole+4,v.wall<5?2*(Math.max(v.acrylicA,v.acrylicB)+v.rimPilotHole/2+1):0),Math.min(35,(v.depth-(v.mount?v.armWidth+12:4))/2))}
         {n("rimSkirtThickness","Espesor de pestaña lateral",2,6)}
         {n("rimClearance","Holgura radial aro–cuerpo",.15,1,.05)}
       </FieldGroup><p className="section-caption">Perfil en L: el frente retiene el acrílico y la pestaña envuelve el cuerpo. Las medidas se comparten entre A y B. El aro se imprime apoyado sobre su frente.</p></Section>
       {v.rimClosure==="screws"?<Section title="Tornillos por el lateral"><FieldGroup>
         {n("rimScrewHole","Diámetro de paso en el aro",Math.max(2.5,v.rimPilotHole+.1),Math.min(5.5,v.rimOverlap-4))}
         {n("rimPilotHole","Diámetro piloto en el cuerpo",1.5,v.rimScrewHole-.1)}
-        {n("rimScrewDepth","Profundidad del piloto ciego",2,v.wall-1)}
+        {n("rimScrewDepth","Profundidad del piloto ciego",2,lightboxFixingWall(v)-1)}
       </FieldGroup><p className="section-caption">{rimScrewsPerFace(v)} tornillos por aro ({rimScrewsPerFace(v)*2} en total). Tornillos comerciales adecuados para plástico, a probar con el filamento real. El piloto es liso, no una rosca. Límite geométrico de largo bajo cabeza: {(v.rimSkirtThickness+v.rimClearance+v.rimScrewDepth).toFixed(1)} mm; elegir un largo menor que no haga tope.</p><p className="section-caption">Retirá los tornillos laterales antes del despiece. El aro sale hacia su cara y luego se retira el acrílico. La tornillería no se genera como STL.</p></Section>:<Section title="Pestañas click desmontables"><FieldGroup>
         {n("snapThickness","Espesor de la pestaña flexible",.8,Math.min(2,v.rimSkirtThickness),.1)}
         {n("snapWidth","Ancho de la pestaña flexible",8,Math.min(18,Math.PI*v.diameter/snapTabsPerFace(v)-6),.5)}

@@ -171,7 +171,7 @@ function LegacyFitComponentEditor({
                   change({ height: height + v.outerRecess })
                 }
               />
-              {n("wall", "Espesor de pared", 1, 5)}
+              {n("wall", "Espesor de pared", 0.5, 5)}
               {acrylic ? (
                 <>
                   {n("borderWidth", "Ancho del apoyo frontal", 0, 10)}
