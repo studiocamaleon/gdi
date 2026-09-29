@@ -69,7 +69,7 @@ let root: Root,
   container: HTMLDivElement,
   api: PlantillasInboxApi,
   borradores: BorradoresPlantilla,
-  actualizar: ReturnType<typeof vi.fn>;
+  actualizar: ReturnType<typeof vi.fn<() => Promise<unknown>>>;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("PointerEvent", MouseEvent);
@@ -77,7 +77,7 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   borradores = new Map();
-  actualizar = vi.fn().mockResolvedValue(true);
+  actualizar = vi.fn<() => Promise<unknown>>().mockResolvedValue(true);
   api = {
     listar: vi.fn().mockResolvedValue({
       canalId: "canal",
