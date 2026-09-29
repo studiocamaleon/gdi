@@ -731,6 +731,19 @@ export class EgresosService {
           ['cuentas_pagar'],
           ['cuentas_pagar'],
         );
+        // La FK global no impide imputar importes a otra empresa. Validar
+        // antes de numerar o crear cualquier cuota, en la misma transacción.
+        if (dto.gastoFijoEstructuraId) {
+          const gasto = await tx.gastoFijoEstructura.findFirst({
+            where: { id: dto.gastoFijoEstructuraId, tenantId: auth.tenantId },
+            select: { id: true },
+          });
+          if (!gasto) {
+            throw new BadRequestException(
+              'El gasto fijo no está disponible en esta empresa.',
+            );
+          }
+        }
         if (cuotas > 1) {
           // El resto de la división va en la PRIMERA cuota, no en la última:
           // así el total siempre cierra y la diferencia se paga antes, no
