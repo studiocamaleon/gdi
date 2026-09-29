@@ -186,7 +186,7 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
       useClass: MargenesInterceptor,
     },
     {
-      // Tracker por credencial MCP (una cubeta por token) o IP (default).
+      // Límite por IP antes de confiar en cualquier credencial.
       provide: APP_GUARD,
       useClass: AppThrottlerGuard,
     },

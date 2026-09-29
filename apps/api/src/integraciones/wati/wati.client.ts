@@ -339,11 +339,17 @@ export class WatiClient {
     ruta: string,
     cuerpo?: unknown,
   ): Promise<T> {
+    // Se valida también al usar credenciales ya almacenadas, no sólo al alta.
+    const rechazo = exigirHttps(cred.endpoint);
+    if (rechazo) throw new ErrorWati(rechazo, 0);
+    if (!/^\d+$/.test(cred.tenantId.trim()))
+      throw new ErrorWati('El Tenant ID de Wati es numérico.', 0);
     const url = `${baseDe(cred)}${ruta}`;
     let respuesta: Response;
     try {
       respuesta = await fetch(url, {
         method: metodo,
+        redirect: 'error',
         headers: {
           Authorization: `Bearer ${cred.token}`,
           'Content-Type': 'application/json',
@@ -404,16 +410,32 @@ export function baseDe(cred: CredencialesWati): string {
 }
 
 /**
- * El token viaja en un header: por HTTP plano lo lee cualquiera en el camino.
- * Se permite `http` SÓLO contra localhost, que es la única forma de probar el
- * flujo entero contra un Wati simulado sin montar TLS.
+ * Destino oficial documentado por Wati. HTTPS por sí solo no evita SSRF:
+ * tampoco deben admitirse hosts internos, credenciales en URL o redirecciones.
+ * El simulador HTTP local queda limitado a desarrollo/pruebas.
  */
 export function exigirHttps(endpoint: string): string | null {
-  const url = endpoint.trim();
-  if (url.startsWith('https://')) return null;
-  const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(url);
-  if (local && process.env.NODE_ENV !== 'production') return null;
-  return 'El endpoint tiene que ser https: el token viaja en la cabecera y por HTTP plano queda expuesto.';
+  try {
+    const url = new URL(endpoint.trim());
+    if (url.username || url.password || url.search || url.hash)
+      throw new Error();
+    const local = ['localhost', '127.0.0.1'].includes(url.hostname);
+    if (
+      local &&
+      url.protocol === 'http:' &&
+      ['development', 'test'].includes(process.env.NODE_ENV ?? '')
+    )
+      return null;
+    if (
+      url.protocol === 'https:' &&
+      url.hostname === 'live-mt-server.wati.io' &&
+      !url.port
+    )
+      return null;
+  } catch {
+    /* La misma respuesta para destinos inválidos o no autorizados. */
+  }
+  return 'Usá el endpoint HTTPS oficial https://live-mt-server.wati.io de Wati.';
 }
 
 /** Traduce el status a algo que el usuario pueda accionar. */
