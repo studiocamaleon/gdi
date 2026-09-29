@@ -48,11 +48,11 @@ describe('contexto de materiales enviado por la aplicación', () => {
         pipe.transform(solicitud, { type: 'body', metatype }),
       ).rejects.toMatchObject({ status: 400 });
 
-      const transportada = JSON.parse(serializarCotizacion(solicitud));
-      const validada = await pipe.transform(transportada, {
+      const transportada: unknown = JSON.parse(serializarCotizacion(solicitud));
+      const validada = (await pipe.transform(transportada, {
         type: 'body',
         metatype,
-      });
+      })) as CotizarDto | RecotizarItemDto;
       expect(validada.contextoMateriales).toEqual([
         { varianteId: materiales[0].varianteId, cantidad: 5, unidad: 'hoja' },
         { varianteId: materiales[1].varianteId, cantidad: 0.8, unidad: 'ml' },
