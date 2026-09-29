@@ -24,7 +24,6 @@ import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
-import { RolSistema } from '@prisma/client';
 import { EtaService } from '../eta/eta.service';
 
 /**
@@ -369,8 +368,8 @@ export class ReportesController {
     const equipo = await this.equipoSvc.equipo(
       auth.tenantId,
       rango,
-      auth.role === RolSistema.ADMINISTRADOR ||
-        Boolean(auth.permisos?.has('registros.ver_comisiones')),
+      // No usar el rol base para eludir el permiso específico de comisiones.
+      Boolean(auth.permisos?.has('registros.ver_comisiones')),
     );
     return {
       meta: this.service.metaBase(
