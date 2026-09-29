@@ -1,5 +1,16 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Recuperación del acceso tras una sesión inválida — 29/09/2026
+
+Corrección independiente `250b8643ab0ca6269c4d0e58a2d1ef45cf602d8e`, sobre `main`. Para actualizar staging sin retirar la recuperación del Inbox del PR #8, se aplicó el mismo commit sobre el código web ya desplegado `c64b203f776868808d2999450cebc77417a06574`: composición de despliegue `610f51edeae7490c4e632605f7d4bf0f46799b92`, conservada localmente en `codex/staging-despliegue-20260929`. No se fusionaron PR ni se modificó producción.
+
+- **Incidente confirmado:** la protección Basic aceptaba la clave existente. Cuando la API rechazaba una sesión, `/salir?motivo=sesion` devolvía `307` hacia `https://0.0.0.0:3000/login?motivo=sesion`, el origen interno de Next standalone. Chrome mostró el destino incorrecto; volver al login del dominio público permitió al titular ingresar con su clave de empresa.
+- **Corrección:** la salida elimina la cookie y devuelve `Location: /login?motivo=sesion`, relativa al origen del navegador, con `Cache-Control: no-store`. No usa `Host` ni `X-Forwarded-Host` para construir el destino y conserva el motivo como parámetro codificado. No se cambiaron contraseñas ni controles de autenticación.
+- **Validación local:** cinco casos nuevos reprodujeron el fallo antes de corregirlo. Después aprobaron las 46 pruebas de salida, ruteo, protección de staging y BFF, tanto sobre `main` como sobre la composición desplegada. ESLint aprobado para los dos archivos modificados de la ruta.
+- **Compilación y publicación:** build remoto de la imagen web con comprobación de tipos aprobada; Fly actualizó la máquina web existente y confirmó salud y DNS. Imagen instalada: `registry.fly.io/grafoprint-staging-web@sha256:5e2c1bf5640e2fab26cf5e5ff769bacdbb82bc5cb1a3345b6da5ef4460ae3ab6`.
+- **Ensayo HTTP real a las 13:54 UTC:** `/login` y `/salir` sin la clave de staging siguen exigiendo Basic; con ella, el login devuelve `200`. Una cookie ficticia no firmada atraviesa sólo el ruteo visual y es rechazada por la API; el recorrido `/` → `/salir?motivo=sesion` → `/login?motivo=sesion` termina en `200`, elimina esa cookie y conserva siempre el dominio público. El BFF sin sesión devuelve `401` sin iniciar otro desafío Basic.
+- **Alcance:** sólo se desplegó la aplicación web. API, workers, Gotenberg, datos y las 298 migraciones se conservan. El builder temporal `fly-builder-cool-night-8372` se eliminó después de completar la imagen; evidencias y claves permanecen fuera de Git.
+
 ## Ensayo con dos operadores distintos — 28/09/2026
 
 Continúa el lote funcional `d2677ff2a7bafcff648ee70d5258d3fb5c0692e1`, con las mismas imágenes, 298 migraciones y tamaños contratados. Se usaron dos sesiones independientes de Chrome (normal e incógnita), no dos pestañas de un único usuario.
