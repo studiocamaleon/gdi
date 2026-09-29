@@ -2,20 +2,28 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { cabecerasPrivadas, controlAccesoStaging } from "@/lib/staging-access";
 import { comprobarOrigenDeEscritura } from "@/lib/request-origin";
+import { CuerpoDemasiadoGrande, leerCuerpoLimitado } from "@/lib/request-body";
 
-import {
-  SESSION_COOKIE_NAME,
-  SESSION_MAX_AGE_SECONDS,
-} from "@/lib/session";
+import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/lib/session";
 
 export async function POST(request: Request) {
   const denied = controlAccesoStaging(request.headers);
   if (denied) return cabecerasPrivadas(denied);
   const origenDenegado = comprobarOrigenDeEscritura(request);
   if (origenDenegado) return cabecerasPrivadas(origenDenegado);
-  const body = (await request.json().catch(() => null)) as {
-    token?: unknown;
-  } | null;
+  let body: { token?: unknown } | null = null;
+  try {
+    const bytes = await leerCuerpoLimitado(request, 16 * 1024);
+    body = JSON.parse(new TextDecoder().decode(bytes)) as {
+      token?: unknown;
+    } | null;
+  } catch (error) {
+    if (error instanceof CuerpoDemasiadoGrande) {
+      return cabecerasPrivadas(
+        NextResponse.json({ message: error.message }, { status: 413 }),
+      );
+    }
+  }
   const token = body?.token;
 
   if (typeof token !== "string" || token.length === 0) {

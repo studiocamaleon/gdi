@@ -2,7 +2,17 @@ import { cookies } from "next/headers";
 
 import { SESSION_COOKIE_NAME } from "@/lib/session";
 import { comprobarOrigenDeEscritura } from "@/lib/request-origin";
-import { cabecerasBackendStaging, cabecerasPrivadas, controlAccesoStaging, stagingPrivado } from "@/lib/staging-access";
+import {
+  CuerpoDemasiadoGrande,
+  leerCuerpoLimitado,
+  MAX_CUERPO_API,
+} from "@/lib/request-body";
+import {
+  cabecerasBackendStaging,
+  cabecerasPrivadas,
+  controlAccesoStaging,
+  stagingPrivado,
+} from "@/lib/staging-access";
 import {
   MFA_COOKIES,
   MFA_HEADERS,
@@ -70,13 +80,32 @@ async function handler(
   const method = request.method;
   const hasBody = method !== "GET" && method !== "HEAD";
 
+  let body: ArrayBuffer | undefined;
+  try {
+    if (hasBody)
+      body = (await leerCuerpoLimitado(request, MAX_CUERPO_API))
+        .buffer as ArrayBuffer;
+  } catch (error) {
+    return cabecerasPrivadas(
+      Response.json(
+        {
+          message:
+            error instanceof CuerpoDemasiadoGrande
+              ? error.message
+              : "No se pudo leer la solicitud.",
+        },
+        { status: error instanceof CuerpoDemasiadoGrande ? 413 : 400 },
+      ),
+    );
+  }
+
   let response: Response;
   try {
     cabecerasBackendStaging(request.headers, headers);
     response = await fetch(target, {
       method,
       headers,
-      body: hasBody ? await request.arrayBuffer() : undefined,
+      body,
       cache: "no-store",
       // Sin esto, `fetch` sigue el redirect ACÁ DENTRO: la descarga de un
       // archivo se resolvería en el proceso de Next y volveríamos a bufferear
@@ -132,7 +161,8 @@ async function handler(
     responseHeaders.set("cache-control", "private, no-store");
   }
   const cacheControl = response.headers.get("cache-control");
-  if (cacheControl && !stagingPrivado()) responseHeaders.set("cache-control", cacheControl);
+  if (cacheControl && !stagingPrivado())
+    responseHeaders.set("cache-control", cacheControl);
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) responseHeaders.set("retry-after", retryAfter);
   const respContentType = response.headers.get("content-type");
@@ -164,16 +194,16 @@ async function handler(
   // navegador. El body de un 3xx no interesa.
   const location = response.headers.get("location");
   if (status >= 300 && status < 400 && location) {
+    await response.body?.cancel().catch(() => undefined);
     responseHeaders.set("location", location);
     return new Response(null, { status, headers: responseHeaders });
   }
 
   // 204/304 no pueden llevar body: construir Response con body nulo, o el
   // constructor lanza y el proxy devolvería 500 (rompía todos los DELETE).
-  const body =
-    status === 204 || status === 304 ? null : await response.arrayBuffer();
-
-  return new Response(body, {
+  // Transmitir conserva backpressure y cancelación también para PDFs/JSON:
+  // el tamaño de una descarga no determina la memoria consumida por Next.
+  return new Response(status === 204 || status === 304 ? null : response.body, {
     status,
     headers: responseHeaders,
   });
