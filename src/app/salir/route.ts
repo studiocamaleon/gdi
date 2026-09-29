@@ -14,11 +14,21 @@ import { SESSION_COOKIE_NAME } from "@/lib/session";
  * Un Route Handler sí puede escribir cookies, así que la corta acá.
  */
 export async function GET(request: NextRequest) {
-  const destino = new URL("/login", request.url);
+  const parametros = new URLSearchParams();
   const motivo = request.nextUrl.searchParams.get("motivo");
-  if (motivo) destino.searchParams.set("motivo", motivo);
+  if (motivo) parametros.set("motivo", motivo);
 
-  const response = NextResponse.redirect(destino);
+  // En standalone request.url puede contener el host interno del contenedor.
+  // Una ruta relativa conserva el origen del navegador, también detrás de Fly,
+  // sin confiar en Host ni en X-Forwarded-Host aportados por el solicitante.
+  const consulta = parametros.toString();
+  const response = new NextResponse(null, {
+    status: 307,
+    headers: {
+      Location: `/login${consulta ? `?${consulta}` : ""}`,
+      "Cache-Control": "no-store",
+    },
+  });
   response.cookies.delete(SESSION_COOKIE_NAME);
   return response;
 }
