@@ -680,11 +680,16 @@ export class AuthService {
         throw new BadRequestException('La invitacion ya fue utilizada.');
       }
 
-      let user =
-        invitation.user ??
-        (await tx.user.findUnique({
-          where: { email: normalizedEmail },
-        }));
+      let user = await tx.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+      if (user) {
+        await bloquearIdentidad(tx, user.id);
+        // No reutilizar la foto de la invitación: la identidad pudo activar
+        // su contraseña/MFA mientras se aceptaba otra invitación.
+        user = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      }
+      const requiereLogin = Boolean(user?.passwordHash || user?.rolPlataforma);
 
       if (!user) {
         if (!payload.password) {
@@ -701,18 +706,11 @@ export class AuthService {
           },
         });
       } else if (!user.passwordHash) {
-        if (!payload.password) {
-          throw new BadRequestException(
-            'Debes definir una clave para activar el acceso.',
-          );
-        }
-
-        user = await tx.user.update({
-          where: { id: user.id },
-          data: {
-            passwordHash: await bcrypt.hash(payload.password, 10),
-          },
-        });
+        // Un administrador de otra empresa puede generar este enlace. No
+        // puede apropiarse de una identidad pendiente eligiéndole la clave.
+        throw new BadRequestException(
+          'Esta identidad tiene una activación pendiente. Su titular debe completar el acceso original.',
+        );
       }
 
       const membership = await tx.membership.upsert({
@@ -758,7 +756,7 @@ export class AuthService {
         where: { userId: user.id },
         select: { activatedAt: true },
       });
-      if (mfa?.activatedAt)
+      if (requiereLogin || mfa?.activatedAt || !user.activo)
         return { requiereLogin: true as const, accessToken: null };
 
       return this.createSessionResponse(
@@ -1211,7 +1209,9 @@ export class AuthService {
     return {
       planNombre: contratoSuscripcion(suscripcion).nombre,
       capacidades: {
-        impresionDirecta: suscripcion.estado === 'activa' && contratoSuscripcion(suscripcion).funciones.impresion_directa === true,
+        impresionDirecta:
+          suscripcion.estado === 'activa' &&
+          contratoSuscripcion(suscripcion).funciones.impresion_directa === true,
       },
       estado: suscripcion.estado,
       estadoProveedor: suscripcion.estadoProveedor,
