@@ -1,6 +1,23 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  Injectable,
+  Logger,
+  PreconditionFailedException,
+} from '@nestjs/common';
+import {
+  createHash,
+  createHmac,
+  randomUUID,
+  timingSafeEqual,
+} from 'node:crypto';
+import {
+  link,
+  mkdir,
+  open,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
 import { calcularTamanioParte } from './multipart';
@@ -43,7 +60,10 @@ export class LocalDriver implements StorageDriver {
     opciones: { contentType: string; expiraSegundos?: number },
   ): Promise<UrlFirmada> {
     const expiraEn = opciones.expiraSegundos ?? SUBIDA_SEGUNDOS;
-    const url = this.firmar('PUT', key, expiraEn, { ct: opciones.contentType });
+    const url = this.firmar('PUT', key, expiraEn, {
+      ct: opciones.contentType,
+      sc: '1',
+    });
     return Promise.resolve({
       url,
       headers: { 'Content-Type': opciones.contentType },
@@ -110,7 +130,7 @@ export class LocalDriver implements StorageDriver {
       }
       trozos.push(trozo);
     }
-    await this.escribir(key, Buffer.concat(trozos));
+    await this.escribir(key, Buffer.concat(trozos), { soloCrear: true });
     await this.borrarPartes(key, ordenadas.length);
   }
 
@@ -182,10 +202,31 @@ export class LocalDriver implements StorageDriver {
 
   // ── Usado por ArchivosLocalController (no es parte del contrato) ─────
 
-  async escribir(key: string, contenido: Buffer): Promise<void> {
+  async escribir(
+    key: string,
+    contenido: Buffer,
+    opciones: { soloCrear?: boolean } = {},
+  ): Promise<void> {
     const ruta = this.rutaDe(key);
     await mkdir(dirname(ruta), { recursive: true });
-    await writeFile(ruta, contenido);
+    if (opciones.soloCrear) {
+      // Publicar sólo después de escribir todos los bytes. link es atómico y
+      // rechaza EEXIST; dos PUT concurrentes no pueden ganar los dos.
+      const temporal = `${ruta}.carga-${randomUUID()}`;
+      try {
+        await writeFile(temporal, contenido, { flag: 'wx', mode: 0o600 });
+        await link(temporal, ruta);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+          throw new PreconditionFailedException('El archivo ya fue subido.');
+        }
+        throw error;
+      } finally {
+        await rm(temporal, { force: true });
+      }
+    } else {
+      await writeFile(ruta, contenido);
+    }
     this.logger.debug(`Guardado ${key} (${contenido.length} bytes) en disco.`);
   }
 
@@ -198,11 +239,11 @@ export class LocalDriver implements StorageDriver {
     key: string,
     query: Record<string, string | undefined>,
   ): { cd?: string; ct?: string } | null {
-    const { exp, sig, cd, ct } = query;
+    const { exp, sig, cd, ct, sc } = query;
     if (!exp || !sig) return null;
     if (Number(exp) * 1000 < Date.now()) return null;
 
-    const esperada = this.hmac(metodo, key, Number(exp), { cd, ct });
+    const esperada = this.hmac(metodo, key, Number(exp), { cd, ct, sc });
     const a = Buffer.from(sig);
     const b = Buffer.from(esperada);
     if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
@@ -215,13 +256,14 @@ export class LocalDriver implements StorageDriver {
     metodo: 'PUT' | 'GET',
     key: string,
     expiraEn: number,
-    extra: { cd?: string; ct?: string },
+    extra: { cd?: string; ct?: string; sc?: string },
   ): string {
     const exp = Math.floor(Date.now() / 1000) + expiraEn;
     const sig = this.hmac(metodo, key, exp, extra);
     const qs = new URLSearchParams({ exp: String(exp), sig });
     if (extra.cd) qs.set('cd', extra.cd);
     if (extra.ct) qs.set('ct', extra.ct);
+    if (extra.sc) qs.set('sc', extra.sc);
     return `${this.base}/api/archivos/local/${key}?${qs.toString()}`;
   }
 
@@ -229,10 +271,12 @@ export class LocalDriver implements StorageDriver {
     metodo: string,
     key: string,
     exp: number,
-    extra: { cd?: string; ct?: string },
+    extra: { cd?: string; ct?: string; sc?: string },
   ): string {
     return createHmac('sha256', this.secreto)
-      .update(`${metodo}\n${key}\n${exp}\n${extra.cd ?? ''}\n${extra.ct ?? ''}`)
+      .update(
+        `${metodo}\n${key}\n${exp}\n${extra.cd ?? ''}\n${extra.ct ?? ''}\n${extra.sc ?? ''}`,
+      )
       .digest('hex');
   }
 

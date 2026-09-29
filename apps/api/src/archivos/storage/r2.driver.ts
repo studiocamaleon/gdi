@@ -70,12 +70,18 @@ export class R2Driver implements StorageDriver {
       Bucket: this.bucket,
       Key: key,
       ContentType: opciones.contentType,
+      // Una URL vigente nunca debe sustituir bytes ya validados por confirmar.
+      IfNoneMatch: '*',
     });
     const expiraEn = opciones.expiraSegundos ?? SUBIDA_SEGUNDOS;
     const url = await getSignedUrl(this.cliente, comando, {
       expiresIn: expiraEn,
     });
-    return { url, headers: { 'Content-Type': opciones.contentType }, expiraEn };
+    return {
+      url,
+      headers: { 'Content-Type': opciones.contentType, 'If-None-Match': '*' },
+      expiraEn,
+    };
   }
 
   firmarDescarga(

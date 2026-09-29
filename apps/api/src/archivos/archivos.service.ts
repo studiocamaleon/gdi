@@ -313,7 +313,12 @@ export class ArchivosService {
       archivo.key,
       BYTES_DE_FIRMA,
     );
-    if (cabecera && contenidoCoincide(ext, cabecera) === false) {
+    if (!cabecera?.length) {
+      throw new BadRequestException(
+        'No pude verificar el contenido del archivo. Volvé a intentar la confirmación.',
+      );
+    }
+    if (contenidoCoincide(ext, cabecera) === false) {
       await this.cancelarPendiente(auth.tenantId, archivo.id);
       throw new BadRequestException(
         `El archivo no es un .${ext} de verdad: su contenido no corresponde a ese formato.`,

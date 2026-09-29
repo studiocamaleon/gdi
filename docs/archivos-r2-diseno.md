@@ -124,6 +124,14 @@ egress, así que el ahorro de banda del proxy es cero.
 **Consecuencias a asumir:**
 
 - Hay que configurar **CORS en el bucket R2** (`PUT` desde el origen del front).
+- Las subidas simples firman `If-None-Match: *`: el primer PUT crea el objeto
+  y un segundo PUT al mismo enlace devuelve 412. La condición forma parte de
+  la firma y CORS debe permitir `If-None-Match`. Así los bytes que se validan
+  y contabilizan al confirmar no pueden sustituirse con una firma aún vigente.
+  El multipart de R2 queda cerrado por su `uploadId`; el driver local publica
+  el archivo completo de manera atómica y tampoco permite reemplazarlo.
+  Si una subida ya llegó pero se perdió su respuesta, se puede reintentar la
+  confirmación; para sustituir contenido hay que iniciar otro archivo.
 - El objeto puede existir en el bucket sin fila confirmada (el usuario cierra la
   pestaña a mitad de subida). Mitigación: la fila nace en `pendiente` **antes**
   de firmar; un barrido diario borra `pendiente` con más de 24 h (objeto +

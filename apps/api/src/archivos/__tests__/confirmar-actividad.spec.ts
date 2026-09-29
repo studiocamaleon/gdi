@@ -113,4 +113,11 @@ describe('Confirmación de archivos y actividad', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(eventos.publicarDesdeAuth).not.toHaveBeenCalled();
   });
+  it('no publica si desaparece el contenido después de consultar su tamaño', async () => {
+    const { service, auth, storage, eventos, prisma } = setup();
+    storage.leerCabecera.mockResolvedValue(null as never);
+    await expect(service.confirmar(auth, 'archivo-1')).rejects.toThrow();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(eventos.publicarDesdeAuth).not.toHaveBeenCalled();
+  });
 });
