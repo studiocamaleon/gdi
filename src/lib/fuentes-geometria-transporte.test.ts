@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { serializarCotizacion } from "./fuentes-geometria-transporte";
+import { solicitudPrevisionMateriales } from "./prevision-materiales";
 
 describe("transporte de fuentes guardadas", () => {
   const fuente = {
@@ -60,5 +61,57 @@ describe("transporte de fuentes guardadas", () => {
       libre,
       letras,
     });
+  });
+});
+
+describe("transporte del contexto de materiales", () => {
+  it("cotiza con materiales de otros ítems sin enviar el indicador exclusivo de inventario", () => {
+    const material = {
+      materialVarianteId: "22222222-2222-4222-8222-222222222222",
+      materialDisplayName: "Papel de prueba",
+      tipoLineaCosto: "MATERIAL",
+      cantidad: 5,
+      unidad: "hoja",
+      contextoUnidadesSnapshot: { unidadStock: "HOJA", unidadCompra: "HOJA" },
+    };
+    const prevision = solicitudPrevisionMateriales([
+      {
+        id: "item-1",
+        productoNombre: "Trabajo de prueba",
+        cotizacion: {
+          pasos: [{ rutaPasoId: "imprimir", materiales: [material] }],
+        },
+      },
+    ] as never);
+    expect(prevision.materiales[0].consumible).toBe(false);
+    const request = {
+      productoId: "producto",
+      jobContext: { cantidad: 10 },
+      contextoMateriales: prevision.materiales,
+    };
+    const body = JSON.parse(serializarCotizacion(request));
+
+    expect(body.contextoMateriales).toEqual([
+      { varianteId: material.materialVarianteId, cantidad: 5, unidad: "hoja" },
+    ]);
+    expect(body.jobContext).toEqual(request.jobContext);
+    expect(prevision.materiales[0].consumible).toBe(false);
+  });
+
+  it("conserva consumos, cantidades pendientes y ceros sin modificar el objeto del editor", () => {
+    const contextoMateriales = [
+      { varianteId: "tinta", cantidad: 0.8, unidad: "ml", consumible: true },
+      { varianteId: "papel", cantidad: null, unidad: null, consumible: false },
+      { varianteId: "otro", cantidad: 0, unidad: "unidad", consumible: false },
+    ];
+    const antes = structuredClone(contextoMateriales);
+    const body = JSON.parse(serializarCotizacion({ contextoMateriales }));
+
+    expect(body.contextoMateriales).toEqual([
+      { varianteId: "tinta", cantidad: 0.8, unidad: "ml" },
+      { varianteId: "papel", cantidad: null, unidad: null },
+      { varianteId: "otro", cantidad: 0, unidad: "unidad" },
+    ]);
+    expect(contextoMateriales).toEqual(antes);
   });
 });

@@ -38,6 +38,20 @@ export function presentarErrorCotizacion(
     ? `/productos-servicios/${encodeURIComponent(fuente.productoId)}?tab=produccion&vista=operaciones${fuente.rutaAlternativaId ? `&rutaAltId=${encodeURIComponent(fuente.rutaAlternativaId)}` : ""}`
     : undefined;
 
+  // Un rechazo del contrato HTTP es un problema de la aplicación, aunque el
+  // nombre del campo contenga "material" o "consumible". No derivarlo a la receta.
+  if (/\bproperty\s+\S+\s+should not exist\b/i.test(fuente.mensaje)) {
+    return {
+      codigo: "SOLICITUD_INCOMPATIBLE",
+      titulo: "No se pudo enviar la cotización",
+      mensaje: "El motor rechazó un dato enviado por Grafo.",
+      sugerencia:
+        "Reintentá el cálculo. Si vuelve a ocurrir, contactá a soporte. Los datos cargados se conservan.",
+      accion: { tipo: "REINTENTAR", etiqueta: "Reintentar ahora" },
+      referencia: fuente.referencia,
+    };
+  }
+
   if (
     codigo === "RECETA_DESACTUALIZADA" ||
     /cambios productivos sin publicar/i.test(texto)
