@@ -12,6 +12,7 @@ async function main() {
     'x-grafoprint-client-ip': '203.0.113.25',
   };
   const browser = {
+    origin: process.env.STAGING_WEB_ORIGIN,
     authorization: `Basic ${Buffer.from(`${process.env.STAGING_ACCESS_USER}:${process.env.STAGING_ACCESS_PASSWORD}`).toString('base64')}`,
     // Simula el encabezado que Fly agrega. No hay proxy público en Compose.
     'fly-client-ip': '203.0.113.25',

@@ -192,3 +192,9 @@ La prueba de interfaz dejó «Taller de prueba — Staging» y «Router de prueb
 El [procedimiento del canal](../../docs/meta-inbox-canal-prueba.md) ya se ejecutó para la empresa demo y su destinatario autorizado. Staging tiene **298 migraciones**; no volver a aplicar seeds ni activar coexistencia como atajo. El lote del 28/09 agrega reservas de carga, responsables/autores, eventos internos, estados y lectura compartida.
 
 API y worker principal usan la configuración de Meta y la misma clave de cifrado; el token se guarda cifrado en la base. Next y el worker PDF no lo necesitan. Renovar el acceso conserva los mensajes, pero los trabajos pendientes de otra generación requieren revisión del operador antes de reintentarlos. Las versiones, comprobaciones reales y límites quedan en [VALIDACION.md](./VALIDACION.md).
+
+### Origen de los pedidos de la aplicación
+
+La aplicación valida el encabezado `Origin` en las escrituras al BFF y en el alta o cierre de sesión. Staging usa `STAGING_WEB_ORIGIN`, ya declarado en `fly.web.toml`; el ensayo Compose usa `http://localhost:3100`. Los clientes de prueba que llamen a esas rutas deben enviar ese origen explícitamente.
+
+Al preparar producción, definir **`WEB_ORIGIN=https://app.grafoprint.com.ar`** en el servidor Next. Sin un origen configurado, las escrituras se rechazan en modo producción. Esta configuración no es un secreto ni debe llevar el prefijo `NEXT_PUBLIC`. Los webhooks entran directamente por la API y no utilizan este mecanismo.

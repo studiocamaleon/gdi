@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { comprobarOrigenDeEscritura } from "@/lib/request-origin";
 import { cabecerasBackendStaging, cabecerasPrivadas, controlAccesoStaging, stagingPrivado } from "@/lib/staging-access";
 import {
   MFA_COOKIES,
@@ -29,6 +30,8 @@ async function handler(
 ) {
   const denied = controlAccesoStaging(request.headers);
   if (denied) return cabecerasPrivadas(denied);
+  const origenDenegado = comprobarOrigenDeEscritura(request);
+  if (origenDenegado) return cabecerasPrivadas(origenDenegado);
   const { path } = await ctx.params;
   const { search } = new URL(request.url);
   const target = `${backendBaseUrl()}/${path.join("/")}${search}`;
