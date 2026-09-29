@@ -6,7 +6,7 @@ import { getCurrentTenantId } from '../common/tenant-context';
  *  - Sin columna tenantId (nivel plataforma).
  *  - Auth-layer consultado sin contexto de tenant (login/switch/invitación).
  */
-const MODELOS_EXENTOS = new Set<string>([
+export const MODELOS_EXENTOS: ReadonlySet<string> = new Set<string>([
   'Tenant',
   'CronLock',
   // Auditoría del control plane: vive por encima de los tenants.
@@ -56,6 +56,10 @@ const OPS_CON_WHERE = new Set<string>([
   'groupBy',
   'update',
   'updateMany',
+  'updateManyAndReturn',
+  'findUnique',
+  'findUniqueOrThrow',
+  'upsert',
   'delete',
   'deleteMany',
 ]);
@@ -64,15 +68,46 @@ type AnyArgs = Record<string, unknown> & {
   where?: Record<string, unknown>;
   data?: unknown;
   create?: Record<string, unknown>;
+  update?: Record<string, unknown>;
 };
 
+/** Valida el propietario, también en escrituras que usan una relación Prisma. */
+function protegerDatos(
+  data: unknown,
+  tenantId: string,
+  crear: boolean,
+): unknown {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const d = data as Record<string, unknown>;
+  const propietario = d.tenantId;
+  if (propietario !== undefined) {
+    const valor =
+      typeof propietario === 'object' && propietario !== null
+        ? (propietario as Record<string, unknown>).set
+        : propietario;
+    if (valor !== tenantId)
+      throw new Error('La escritura pertenece a otra empresa.');
+  }
+  if (d.tenant !== undefined) {
+    const relacion = d.tenant as { connect?: { id?: string } } | null;
+    if (
+      !relacion ||
+      Object.keys(relacion).length !== 1 ||
+      relacion.connect?.id !== tenantId
+    ) {
+      throw new Error('No se permite cambiar la empresa de un registro.');
+    }
+    return d;
+  }
+  return crear ? { ...d, tenantId } : d;
+}
+
 /**
- * Extensión de Prisma que inyecta `tenantId` (del contexto de request) en cada
- * query de un modelo con tenant. Red de seguridad de aislamiento multi-tenant:
- * aunque un service olvide el filtro, la fila ajena no es visible ni escribible.
- *
- * Solo modifica `args` (no toca conexiones), por lo que es compatible con las
- * transacciones interactivas del motor.
+ * Defensa adicional para operaciones de primer nivel de modelos con tenant.
+ * Mantiene el filtro original y exige además el tenant del contexto. Prisma 6
+ * admite filtros no únicos junto al campo único en findUnique/update/upsert.
+ * Las relaciones anidadas, modelos exentos, SQL y consultas sin contexto
+ * requieren comprobaciones explícitas en sus servicios.
  */
 export const tenantGuardExtension = Prisma.defineExtension({
   name: 'tenant-guard',
@@ -97,61 +132,62 @@ export const tenantGuardExtension = Prisma.defineExtension({
 
       const a = (args ?? {}) as AnyArgs;
 
+      const escritura = [
+        'update',
+        'updateMany',
+        'updateManyAndReturn',
+        'upsert',
+        'delete',
+        'deleteMany',
+      ].includes(operation);
+      if (
+        escritura &&
+        typeof a.where?.tenantId === 'string' &&
+        a.where.tenantId !== tenantId
+      ) {
+        throw new Error('La escritura pertenece a otra empresa.');
+      }
+
       if (OPS_CON_WHERE.has(operation)) {
-        a.where = { ...(a.where ?? {}), tenantId };
-        return query(a);
-      }
-
-      if (operation === 'create') {
-        if (
-          a.data &&
-          !Array.isArray(a.data) &&
-          (a.data as Record<string, unknown>).tenantId === undefined
-        ) {
-          a.data = { ...(a.data as Record<string, unknown>), tenantId };
+        // No sobrescribir el filtro original: un tenantId ajeno debe dar cero
+        // resultados, nunca transformarse en una consulta a la empresa propia.
+        const original = a.where ?? {};
+        a.where = {
+          ...original,
+          AND: [
+            ...(Array.isArray(original.AND)
+              ? (original.AND as unknown[])
+              : original.AND
+                ? [original.AND]
+                : []),
+            { tenantId },
+          ],
+        };
+        if (escritura) a.data = protegerDatos(a.data, tenantId, false);
+        if (operation === 'upsert') {
+          a.create = protegerDatos(
+            a.create,
+            tenantId,
+            true,
+          ) as AnyArgs['create'];
+          a.update = protegerDatos(
+            a.update,
+            tenantId,
+            false,
+          ) as AnyArgs['update'];
         }
         return query(a);
       }
 
-      if (operation === 'createMany') {
-        if (Array.isArray(a.data)) {
-          a.data = (a.data as Record<string, unknown>[]).map((d) =>
-            d && d.tenantId === undefined ? { ...d, tenantId } : d,
-          );
-        }
+      if (
+        operation === 'create' ||
+        operation === 'createMany' ||
+        operation === 'createManyAndReturn'
+      ) {
+        a.data = Array.isArray(a.data)
+          ? a.data.map((d) => protegerDatos(d, tenantId, true))
+          : protegerDatos(a.data, tenantId, true);
         return query(a);
-      }
-
-      if (operation === 'upsert') {
-        // El `where` de upsert es único-compuesto (la app ya incluye
-        // tenantId ahí); solo reforzamos el tenant en el create.
-        if (a.create && a.create.tenantId === undefined) {
-          a.create = { ...a.create, tenantId };
-        }
-        return query(a);
-      }
-
-      if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
-        // El `where` único no admite tenantId: post-filtramos el resultado.
-        // Si la query trae `select` sin tenantId, se lo inyectamos para
-        // poder verificar — si no, el post-filtro compararía contra
-        // undefined y descartaría filas PROPIAS (bug: configuración
-        // fiscal "inexistente" con select parcial).
-        const sel = (a as { select?: Record<string, unknown> }).select;
-        if (sel && sel.tenantId === undefined) sel.tenantId = true;
-        const result = (await query(a)) as {
-          tenantId?: string;
-        } | null;
-        if (result && result.tenantId !== tenantId) {
-          if (operation === 'findUniqueOrThrow') {
-            throw new Prisma.PrismaClientKnownRequestError(
-              'No record was found for a query.',
-              { code: 'P2025', clientVersion: Prisma.prismaVersion.client },
-            );
-          }
-          return null;
-        }
-        return result;
       }
 
       return query(args);
