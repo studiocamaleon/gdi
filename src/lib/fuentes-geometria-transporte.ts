@@ -1,7 +1,9 @@
-/** El editor conserva la geometría completa. Al cotizar sólo viaja la identidad
- * de las interpretaciones guardadas; el servidor recupera sus capas y medidas. */
+/** Adapta el estado del editor al contrato de cotización sin modificarlo.
+ * Las fuentes guardadas viajan por identidad y la demanda de otros ítems sólo
+ * incluye variante, cantidad y unidad; `consumible` pertenece a inventario. */
 export function serializarCotizacion(request: unknown): string {
-  return JSON.stringify(request, (_key, value: unknown) => {
+  const solicitud = prepararContextoMateriales(request);
+  return JSON.stringify(solicitud, (_key, value: unknown) => {
     if (!value || typeof value !== "object" || Array.isArray(value))
       return value;
     const fuente = value as Record<string, unknown>;
@@ -27,4 +29,30 @@ export function serializarCotizacion(request: unknown): string {
       },
     };
   });
+}
+
+function prepararContextoMateriales(request: unknown): unknown {
+  if (!request || typeof request !== "object" || Array.isArray(request))
+    return request;
+  const solicitud = request as Record<string, unknown>;
+  if (!Array.isArray(solicitud.contextoMateriales)) return request;
+  return {
+    ...solicitud,
+    contextoMateriales: solicitud.contextoMateriales.map(
+      (material: unknown) => {
+        // Los datos malformados deben seguir siendo rechazados por la API.
+        if (
+          !material ||
+          typeof material !== "object" ||
+          Array.isArray(material)
+        )
+          return material;
+        const { varianteId, cantidad, unidad } = material as Record<
+          string,
+          unknown
+        >;
+        return { varianteId, cantidad, unidad };
+      },
+    ),
+  };
 }

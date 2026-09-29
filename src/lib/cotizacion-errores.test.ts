@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest";
 import { presentarErrorCotizacion } from "./cotizacion-errores";
 
 describe("presentarErrorCotizacion", () => {
+  it("no atribuye un campo HTTP incompatible a la configuración productiva", () => {
+    const error = presentarErrorCotizacion({
+      codigo: "CALCULO_FALLIDO",
+      mensaje: "contextoMateriales.0.property consumible should not exist, contextoMateriales.1.property consumible should not exist",
+      productoId: "producto-1",
+    });
+
+    expect(error.codigo).toBe("SOLICITUD_INCOMPATIBLE");
+    expect(error.accion.tipo).toBe("REINTENTAR");
+    expect(error.mensaje).not.toContain("should not exist");
+    expect(error.titulo).not.toContain("configuración");
+  });
+
   it("explica una receta desactualizada y enlaza su publicación", () => {
     const error = presentarErrorCotizacion({
       codigo: "RECETA_DESACTUALIZADA",
