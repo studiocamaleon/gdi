@@ -204,6 +204,19 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sesion expirada o revocada.');
     }
 
+    // No basta con que un flujo haya emitido una sesión: si la identidad tiene
+    // MFA, debe constar que esta sesión verificó la versión vigente. Así un
+    // alta secundaria o una sesión histórica no pueden omitir el factor.
+    if (
+      session.user.mfa?.activatedAt &&
+      (!session.mfaVerificadoEl ||
+        session.mfaVerificadoEl < session.user.mfa.activatedAt)
+    ) {
+      throw new UnauthorizedException(
+        'Volvé a iniciar sesión y verificar tu segundo factor.',
+      );
+    }
+
     // La sesión se corre con el uso: muere por inactividad, no a plazo fijo.
     // `vencimientoRenovado` devuelve null casi siempre —sólo escribe cuando ya
     // pasó media ventana—, así que esto no es un UPDATE por request. Además

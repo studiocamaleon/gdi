@@ -225,6 +225,33 @@ describe('Impersonación', () => {
     expect(payload.imp).toBeUndefined();
     expect(payload.sub).toBe(staffId);
     expect(payload.tenantId).toBe(propia.id);
+    const nuevaSesion = await prisma.authSession.findUniqueOrThrow({
+      where: { id: payload.sessionId },
+    });
+    expect(nuevaSesion.mfaVerificadoEl).not.toBeNull();
+    expect((await resolver(r.accessToken!)).impersonacion).toBeUndefined();
+    expect(
+      (
+        await prisma.sesionImpersonacion.findUniqueOrThrow({
+          where: { id: resuelto.impersonacion!.sesionId },
+        })
+      ).cerradaEl,
+    ).not.toBeNull();
+  });
+
+  it('dos salidas simultáneas sólo convierten una vez la sesión de soporte', async () => {
+    const { token } = await impersonacion.iniciar(
+      staffId,
+      tenantId,
+      'Ensayo de salida simultánea',
+    );
+    const actual = await resolver(token);
+    const resultado = await Promise.allSettled([
+      auth.salirDeImpersonacion(actual),
+      auth.salirDeImpersonacion(actual),
+    ]);
+    expect(resultado.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(resultado.filter((r) => r.status === 'rejected')).toHaveLength(1);
   });
 
   it('quedó auditado: iniciar y cerrar dejan su evento', async () => {

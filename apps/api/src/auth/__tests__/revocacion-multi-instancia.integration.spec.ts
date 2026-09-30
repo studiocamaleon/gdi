@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { SinTenant } from '../../common/sin-tenant.decorator';
 import type { Server } from 'node:http';
 import {
@@ -31,6 +31,8 @@ import { Roles } from '../roles.decorator';
 import { todosLosPermisos } from '../permisos';
 import { hashTokenMcp } from '../credencial-mcp.util';
 import type { CurrentAuth } from '../auth.types';
+import { RegistroService } from '../../registro/registro.service';
+import { TenantProvisioningService } from '../../provisionamiento/tenant-provisioning.service';
 
 /** Dos aplicaciones HTTP con servicios separados sobre la misma base real.
  * Las rutas de sonda sólo permiten observar la autorización; las operaciones
@@ -512,6 +514,55 @@ describe('Revocación efectiva entre instancias de la API', () => {
     await acceder(1, siguiente.accessToken!).expect(200);
   });
 
+  it.each(['revocada', 'vencida'] as const)(
+    'cambiar empresa no emite otro token si la sesión quedó %s después de autorizar la solicitud',
+    async (estado) => {
+      await prisma.authSession.update({
+        where: { id: auth.sessionId },
+        data:
+          estado === 'revocada'
+            ? { revokedAt: new Date() }
+            : { expiresAt: new Date(Date.now() - 1000) },
+      });
+      const antes = await prisma.authSession.findUniqueOrThrow({
+        where: { id: auth.sessionId },
+      });
+      await expect(
+        servicios[0].switchTenant(auth, auth.tenantId),
+      ).rejects.toThrow();
+      expect(
+        await prisma.authSession.findUniqueOrThrow({
+          where: { id: auth.sessionId },
+        }),
+      ).toEqual(antes);
+    },
+  );
+
+  it.each(['mcp', 'impersonacion', 'plataforma'] as const)(
+    'el cambio de empresa requiere una sesión personal, no %s',
+    async (origen) => {
+      const contextual: CurrentAuth = {
+        ...auth,
+        ...(origen === 'mcp'
+          ? { mcp: { credencialId: randomUUID(), credencialNombre: 'QA' } }
+          : {}),
+        ...(origen === 'impersonacion'
+          ? {
+              impersonacion: {
+                sesionId: randomUUID(),
+                actorUserId: auth.userId,
+                actorNombre: 'Soporte ficticio',
+              },
+            }
+          : {}),
+        ...(origen === 'plataforma' ? { esPlataforma: true } : {}),
+      };
+      await expect(
+        servicios[0].switchTenant(contextual, auth.tenantId),
+      ).rejects.toThrow();
+    },
+  );
+
   it('una restricción de red nueva no conserva la autorización anterior', async () => {
     await acceder(1, auth).expect(200);
     await prisma.membership.update({
@@ -564,6 +615,107 @@ describe('Revocación efectiva entre instancias de la API', () => {
     await mfas[0].confirmar(auth, alta.setupId, codigo);
     await acceder(1, otra).expect(401);
     await acceder(1, auth).expect(200);
+  });
+
+  it.each(['sin-verificar', 'verificacion-anterior'] as const)(
+    'ninguna instancia acepta una sesión con MFA %s aunque no figure revocada',
+    async (estado) => {
+      const activadoEl = new Date();
+      await prisma.userMfa.create({
+        data: { userId: auth.userId, activatedAt: activadoEl },
+      });
+      await prisma.authSession.update({
+        where: { id: auth.sessionId },
+        data: {
+          mfaVerificadoEl:
+            estado === 'sin-verificar'
+              ? null
+              : new Date(activadoEl.getTime() - 1_000),
+        },
+      });
+      await acceder(0, auth).expect(401);
+      await acceder(1, auth).expect(401);
+    },
+  );
+
+  it('conserva una sesión de empresa que verificó la versión vigente de MFA', async () => {
+    const activadoEl = new Date();
+    await prisma.userMfa.create({
+      data: { userId: auth.userId, activatedAt: activadoEl },
+    });
+    await prisma.authSession.update({
+      where: { id: auth.sessionId },
+      data: { mfaVerificadoEl: activadoEl },
+    });
+    await acceder(0, auth).expect(200);
+    await acceder(1, auth).expect(200);
+  });
+
+  it('agregar una empresa conserva la sesión personal y su verificación MFA', async () => {
+    const factor = new Date();
+    await prisma.userMfa.create({
+      data: { userId: auth.userId, activatedAt: factor },
+    });
+    await prisma.authSession.update({
+      where: { id: auth.sessionId },
+      data: { mfaVerificadoEl: factor },
+    });
+    const plan = await prisma.plan.create({
+      data: {
+        codigo: `qa-mfa-registro-${randomUUID()}`,
+        nombre: 'Plan ficticio',
+        precioMensual: 0,
+        featuresJson: {},
+      },
+    });
+    const token = randomUUID();
+    const registro = await prisma.registroTenant.create({
+      data: {
+        email: auth.email,
+        nombreCompleto: 'Persona ficticia',
+        empresaNombre: 'Segunda empresa ficticia',
+        planId: plan.id,
+        paisCodigo: 'AR',
+        zonaHoraria: 'America/Argentina/Buenos_Aires',
+        tokenHash: createHash('sha256').update(token).digest('hex'),
+        tokenExpiraEl: new Date(Date.now() + 60000),
+        terminosVersion: 'qa',
+        terminosAceptadosEl: new Date(),
+      },
+    });
+    try {
+      const cantidad = await prisma.authSession.count({
+        where: { userId: auth.userId },
+      });
+      const service = new RegistroService(
+        prisma,
+        {} as never,
+        new TenantProvisioningService(),
+        servicios[0],
+      );
+      const resultado = await service.completarExistente(token, auth);
+      expect(resultado.sessionId).toBe(auth.sessionId);
+      expect(
+        await prisma.authSession.count({ where: { userId: auth.userId } }),
+      ).toBe(cantidad);
+      expect(
+        (
+          await prisma.authSession.findUniqueOrThrow({
+            where: { id: resultado.sessionId },
+          })
+        ).mfaVerificadoEl,
+      ).toEqual(factor);
+      await acceder(1, resultado.accessToken!).expect(200);
+      await acceder(1, auth).expect(401);
+    } finally {
+      const creado = await prisma.registroTenant.findUniqueOrThrow({
+        where: { id: registro.id },
+      });
+      await prisma.registroTenant.delete({ where: { id: registro.id } });
+      if (creado.tenantCreadoId)
+        await prisma.tenant.delete({ where: { id: creado.tenantCreadoId } });
+      await prisma.plan.delete({ where: { id: plan.id } });
+    }
   });
 
   it('dos cambios simultáneos con la clave anterior sólo permiten un ganador', async () => {

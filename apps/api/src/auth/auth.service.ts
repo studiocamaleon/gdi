@@ -6,6 +6,7 @@ import {
 } from '../suscripciones/cupos-usuarios';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -33,6 +34,7 @@ import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 import { bloquearIdentidad, MfaService } from './mfa.service';
 import { revocarAccesoEmpresa } from './revocar-acceso-empresa';
+import { mfaPlataformaCompleta } from './enrolamiento-plataforma';
 import type { AlcanceMfa } from './mfa-dispositivo-cookie';
 import { VerificarMfaDto } from './dto/perfil.dto';
 import {
@@ -667,34 +669,81 @@ export class AuthService {
     if (!auth.impersonacion) {
       throw new BadRequestException('No hay una impersonación en curso.');
     }
-    // Revoca la sesión de impersonación actual (defensa; el control plane ya
-    // la cerró al pedir salir, pero el token podría reusarse).
-    await this.prisma.authSession.update({
-      where: { id: auth.sessionId },
-      data: { revokedAt: new Date() },
+    const resultado = await this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, auth.userId);
+      const origen = await tx.authSession.findUnique({
+        where: { id: auth.sessionId },
+        include: { user: { include: { mfa: true } }, impersonacion: true },
+      });
+      const imp = origen?.impersonacion;
+      if (
+        !origen ||
+        origen.userId !== auth.userId ||
+        origen.revokedAt ||
+        origen.expiresAt <= new Date() ||
+        !origen.user.activo ||
+        origen.user.rolPlataforma !== 'ADMIN' ||
+        !mfaPlataformaCompleta(origen.user.mfa, origen.mfaVerificadoEl) ||
+        !imp ||
+        imp.id !== auth.impersonacion!.sesionId ||
+        imp.staffUserId !== auth.userId ||
+        imp.tenantId !== auth.tenantId ||
+        imp.cerradaEl ||
+        imp.expiraEl <= new Date()
+      ) {
+        throw new UnauthorizedException(
+          'La sesión de soporte ya no está disponible.',
+        );
+      }
+      // Consumir también el registro de soporte: dos salidas o un cierre
+      // desde otra réplica no pueden emitir dos sesiones personales.
+      const cierre = await tx.sesionImpersonacion.updateMany({
+        where: { id: imp.id, cerradaEl: null, expiraEl: { gt: new Date() } },
+        data: { cerradaEl: new Date(), motivoCierre: 'salida' },
+      });
+      if (cierre.count !== 1) {
+        throw new UnauthorizedException('La sesión de soporte ya terminó.');
+      }
+      const revocada = await tx.authSession.updateMany({
+        where: {
+          id: origen.id,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { revokedAt: new Date() },
+      });
+      if (revocada.count !== 1) {
+        throw new UnauthorizedException('La sesión de soporte fue revocada.');
+      }
+      await tx.plataformaEvento.create({
+        data: {
+          staffUserId: auth.userId,
+          tipo: 'impersonacion_cerrada',
+          tenantAfectadoId: imp.tenantId,
+          descripcion: 'Salió del tenant.',
+          datosJson: { sesionId: imp.id },
+        },
+      });
+      const membership = await tx.membership.findFirst({
+        where: { userId: auth.userId, activa: true, tenant: { activo: true } },
+        include: { tenant: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (!membership) return { accessToken: null };
+      const resp = await this.createSessionResponse(
+        origen.userId,
+        origen.user.email,
+        membership,
+        tx,
+        origen.user.nombreCompleto,
+        origen.user.rolPlataforma,
+        origen.mfaVerificadoEl!,
+        origen.mfaDispositivoId ?? undefined,
+      );
+      return { accessToken: resp.accessToken };
     });
-
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        userId: auth.impersonacion.actorUserId,
-        activa: true,
-        tenant: { activo: true },
-      },
-      include: { tenant: true },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (!membership) return { accessToken: null };
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: auth.impersonacion.actorUserId },
-      select: { email: true },
-    });
-    const resp = await this.createSessionResponse(
-      membership.userId,
-      user!.email,
-      membership,
-    );
-    return { accessToken: resp.accessToken };
+    this.sessionCache.invalidate(auth.sessionId);
+    return resultado;
   }
 
   async getInvitation(token: string) {
@@ -925,6 +974,11 @@ export class AuthService {
   }
 
   async switchTenant(auth: CurrentAuth, tenantId: string) {
+    if (auth.mcp || auth.impersonacion || auth.esPlataforma) {
+      throw new ForbiddenException(
+        'Esta acción requiere tu sesión personal de empresa.',
+      );
+    }
     const membership = await this.prisma.membership.findUnique({
       where: {
         userId_tenantId: {
@@ -941,13 +995,29 @@ export class AuthService {
       throw new NotFoundException('No tienes acceso a esa empresa.');
     }
 
-    await this.prisma.authSession.update({
-      where: { id: auth.sessionId },
+    const cambio = await this.prisma.authSession.updateMany({
+      where: {
+        id: auth.sessionId,
+        userId: auth.userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+        currentTenantId: auth.tenantId,
+        currentMembershipId: auth.membershipId,
+        impersonacionId: null,
+        user: { activo: true },
+        currentTenant: { activo: true },
+        currentMembership: { activa: true },
+      },
       data: {
         currentTenantId: membership.tenantId,
         currentMembershipId: membership.id,
       },
     });
+    if (cambio.count !== 1) {
+      throw new UnauthorizedException(
+        'La sesión cambió, venció o fue revocada.',
+      );
+    }
     // El token nuevo reusa el sessionId con otro tenant/membership: invalidar
     // el cache para que la próxima request revalide contra la DB.
     this.sessionCache.invalidate(auth.sessionId);

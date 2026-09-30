@@ -77,6 +77,9 @@ describe('Registro público: consumo único y versión exacta del enlace', () =>
     });
     const current = { userId: user?.id, email } as CurrentAuth;
     const auth = {
+      switchTenant: jest.fn(() =>
+        Promise.resolve({ accessToken: 'jwt-ficticio-no-valido' }),
+      ),
       crearSesionParaMembership: jest.fn(() =>
         Promise.resolve({ accessToken: 'jwt-ficticio-no-valido' }),
       ),
@@ -178,7 +181,8 @@ describe('Registro público: consumo único y versión exacta del enlace', () =>
     expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(resultados.filter((r) => r.status === 'rejected')).toHaveLength(1);
     expect(c.provisionar).toHaveBeenCalledTimes(1);
-    expect(c.auth.crearSesionParaMembership).toHaveBeenCalledTimes(1);
+    expect(c.auth.switchTenant).toHaveBeenCalledTimes(1);
+    expect(c.auth.crearSesionParaMembership).not.toHaveBeenCalled();
     expect(
       await prisma.membership.count({ where: { userId: c.user!.id } }),
     ).toBe(1);

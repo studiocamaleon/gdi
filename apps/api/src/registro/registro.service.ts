@@ -9,6 +9,7 @@ import {
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -230,6 +231,11 @@ export class RegistroService {
   }
 
   async completarExistente(token: string, current: CurrentAuth) {
+    if (current.mcp || current.impersonacion || current.esPlataforma) {
+      throw new ForbiddenException(
+        'Esta acción requiere tu sesión personal de empresa.',
+      );
+    }
     const registro = await this.buscarTokenValido(token);
     if (registro.email !== current.email.toLowerCase()) {
       throw new BadRequestException(
@@ -243,7 +249,12 @@ export class RegistroService {
       });
       return this.crearTenant(tx, vigente, user);
     });
-    return this.crearSesion(creado);
+    // Conservar la sesión que ya acreditó la identidad y MFA. Emitir otra
+    // después del alta perdería la prueba del factor y la revocación original.
+    return {
+      requiereLogin: false as const,
+      ...(await this.auth.switchTenant(current, creado.membership.tenantId)),
+    };
   }
 
   async completarOnboarding(auth: CurrentAuth) {
