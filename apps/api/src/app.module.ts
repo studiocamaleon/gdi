@@ -7,6 +7,7 @@ import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppThrottlerGuard } from './common/app-throttler.guard';
+import { LimitesCompartidosService } from './common/limites-compartidos.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
@@ -120,13 +121,7 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
         },
       },
     }),
-    ThrottlerModule.forRoot([
-      {
-        name: 'default',
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    ThrottlerModule.forRootAsync({ useClass: LimitesCompartidosService }),
     PrismaModule,
     ImpresionModule,
     EventosSistemaModule,
