@@ -1,5 +1,15 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Previsiones y controles automáticos de GitHub — 30/09/2026
+
+Sin cambios ejecutables ni despliegue: API/web siguen en `a93268414c03b26013c181fe25e28281fad674b3`. Se añadieron nueve casos HTTP de ETA con sesiones, permisos, servicios y PostgreSQL reales: las cinco rutas exigen sus accesos correspondientes, separan contexto/colas/precisión/salud entre dos empresas y sólo permiten al supervisor publicar registros propios sin duplicarlos. Se usaron datos ficticios; únicamente la lectura del plan está sustituida. No se acredita carga máxima ni todas las entradas de negocio. Regresión dirigida de cuatro suites: 20 casos aprobados; tipos y lint aprobados. El lote de trece suites HTTP aprobó 273 casos localmente.
+
+El check `http` ahora corre en todos los PR hacia `main`, sin filtros por archivos. La versión previa de ese cambio, `ca618cb6f415c79b2e811ae7b04f8144b2d6cfc6`, aprobó [fronteras HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36710587669), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36710587715) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36710587735). El resultado remoto de la incorporación de ETA se registra por separado.
+
+Se activaron en GitHub el grafo de dependencias, las alertas de vulnerabilidades y las alertas de paquetes maliciosos. La protección de secretos y de pushes con claves ya estaba activa. Se solicitó la configuración inicial de CodeQL para JavaScript/TypeScript, Python y GitHub Actions; sus resultados deben comprobarse por rama y revisión. No equivale a una certificación de seguridad.
+
+El incidente de respaldos continúa abierto; estas comprobaciones no normalizan las copias ni habilitan producción.
+
 ## Fronteras de producción y productos — 30/09/2026, 11:35 UTC
 
 Sin cambios de código ejecutable ni nuevo despliegue: API/web conservan la fuente `a93268414c03b26013c181fe25e28281fad674b3`. Se añadieron 26 casos HTTP con PostgreSQL y dos empresas ficticias, usando sesiones, permisos, validación y servicios reales.

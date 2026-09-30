@@ -78,4 +78,5 @@ jobs:
             src/archivos/__tests__/permisos-http.integration.spec.ts \
             src/enlaces-publicos/__tests__/enlaces-publicos.http.integration.spec.ts \
             src/produccion/__tests__/produccion-aislamiento-http.integration.spec.ts \
-            src/productos-servicios/__tests__/productos-aislamiento-http.integration.spec.ts
+            src/productos-servicios/__tests__/productos-aislamiento-http.integration.spec.ts \
+            src/eta/__tests__/eta-aislamiento-http.integration.spec.ts

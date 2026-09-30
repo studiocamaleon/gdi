@@ -1,5 +1,7 @@
 # Recuperación de Grafoprint
 
+**Estado operativo del 30/09, desde las 11:00 UTC: nuevas copias pendientes de normalización.** El monitor detectó un fallo posterior a los ensayos exitosos descritos debajo. La última copia completa verificada es de las 10:42 UTC. Consultar el estado vigente en [VALIDACION.md](../staging/VALIDACION.md); los ensayos anteriores no acreditan que la copia más reciente esté protegida.
+
 **Staging: ejecutor activado y horario comprobado el 30/09/2026.** Copias al arrancar y después en cada cambio de hora UTC, cifradas antes de salir del ejecutor, en una cuenta independiente y protegidas contra borrado durante al menos 30 días. La copia realizada desde Fly se recuperó con las claves de las cuatro notas cortas del titular: base, archivos, fuentes y comprobante firmado; la API recuperada pasó ingreso con MFA, operación y aislamiento entre empresas. Healthchecks recibió las señales reales y avisa por fallo o tras 90 minutos sin confirmación. Se comprobó el reinicio tras una interrupción en plena copia y la reutilización de los archivos sin cambios. Las ejecuciones de las 07:00, 08:00 y 09:00 UTC terminaron automáticamente. Tras el despliegue de seguridad se actualizaron revisiones e imágenes y se comprobó otra copia: 299 migraciones, 13 archivos y cuatro fuentes exactas, con firma y huellas correctas. Ver versión, evidencia y límites en [VALIDACION.md](../staging/VALIDACION.md) y procedimiento en [OPERACION.md](OPERACION.md).
 
 ## Separación de accesos
