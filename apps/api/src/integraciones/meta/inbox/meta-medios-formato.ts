@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { firmaValida } from './meta-media.client';
 import { FORMATOS_INBOX } from '../../../common/inbox/medios';
+import { entornoProcesoNativo } from '../../../common/entorno-proceso-nativo';
 const ejecutar = promisify(execFile);
 const formatos: Record<string, string> = {
   'audio/webm': 'matroska',
@@ -49,7 +50,12 @@ async function sondear(path: string, formato: string): Promise<Sonda> {
       '-of',
       'json',
     ],
-    { timeout: 10000, killSignal: 'SIGKILL', maxBuffer: 65536 },
+    {
+      timeout: 10000,
+      killSignal: 'SIGKILL',
+      maxBuffer: 65536,
+      env: entornoProcesoNativo(),
+    },
   );
   return JSON.parse(stdout) as Sonda;
 }
@@ -148,7 +154,12 @@ export async function prepararMedioInbox(
           'ogg',
           salida,
         ],
-        { timeout: 30000, killSignal: 'SIGKILL', maxBuffer: 65536 },
+        {
+          timeout: 30000,
+          killSignal: 'SIGKILL',
+          maxBuffer: 65536,
+          env: entornoProcesoNativo(),
+        },
       );
       const convertido = await readFile(salida),
         fin = await sondear(salida, 'ogg');
