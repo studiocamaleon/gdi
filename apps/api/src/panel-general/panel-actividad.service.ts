@@ -54,13 +54,16 @@ export class PanelActividadService {
     let cursor: { fecha: string; id: string } | null = null;
     if (cursorRaw) {
       try {
-        if (cursorRaw.length > 512) throw new Error();
+        if (typeof cursorRaw !== 'string' || cursorRaw.length > 512)
+          throw new Error();
         cursor = JSON.parse(Buffer.from(cursorRaw, 'base64url').toString()) as {
           fecha: string;
           id: string;
         };
         if (
           !cursor ||
+          typeof cursor.fecha !== 'string' ||
+          typeof cursor.id !== 'string' ||
           !/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(cursor.fecha) ||
           !Number.isFinite(Date.parse(cursor.fecha)) ||
           !/^(orden|cliente|sistema):[a-f0-9-]{1,40}$/.test(cursor.id)
