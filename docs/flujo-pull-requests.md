@@ -43,6 +43,8 @@ Los checks automáticos de contenedores se ejecutan en los PR hacia `main` que c
 
 La protección de `main` se configura por separado en GitHub: exigir PR, el check `http` de GitHub Actions, la rama actualizada y las conversaciones resueltas; impedir borrado y sobrescritura del historial. Preparar un formulario no activa esa regla: comprobar que GitHub la haya guardado como activa. Si un PR antiguo todavía no contiene el workflow requerido, incorporar la base correspondiente y volver a comprobarlo, sin quitar la protección. Mientras Lucas sea el único revisor humano, no exigir una aprobación externa imposible de obtener; cuando se incorpore otra persona, acordar y activar esa revisión adicional.
 
+**Comprobado el 30/09/2026:** esa protección ya está activa para `main`, sin excepciones de bypass. Una rama antigua que aún no tenga el control `http` debe incorporar el workflow vigente antes de poder integrarse. No desactivar la regla para resolverlo.
+
 Las alertas de Dependabot avisan sobre dependencias vulnerables o maliciosas. CodeQL analiza patrones de riesgo en el código; un análisis que termina correctamente todavía puede tener hallazgos para revisar. Sus alertas sobre `main` pueden corresponder a versiones anteriores a un PR abierto: contrastar siempre la rama y la versión antes de dar algo por corregido. Ninguna de estas herramientas aprueba por sí sola un despliegue a producción.
 
 Nunca incluir claves ni datos reales de clientes en Git. Nunca actualizar un entorno persistente ejecutando un seed o borrando su base. No eliminar ramas o carpetas sólo porque se integró un PR: antes comprobar que ningún trabajo o proceso las sigue usando.

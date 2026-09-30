@@ -1,5 +1,18 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Protección de main y recuperación de respaldos — 30/09/2026, 21:12 UTC
+
+Los dos bloqueos operativos quedaron resueltos. GitHub confirma la regla activa de `main`: PR obligatorio, check `http` de GitHub Actions, rama al día, conversaciones resueltas y prohibición de borrado/force-push, sin bypass. No se fusionaron PR ni se cambió producción. Los cuatro workflows de `eea7e351` aprobaron: [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36715486634), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36715486703), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36715486660) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36715481015). Sus comentarios de análisis requieren revisión independiente del resultado de ejecución.
+
+- Backblaze confirmó agotamiento del límite gratuito de 1 GB diario de descarga. El titular registró su medio de pago y se fijaron topes de USD 0,10/día para almacenamiento y USD 0,10/día para descargas, con alertas de 75 % y 100 %. Son límites por categoría, no un cargo fijo ni el presupuesto total de infraestructura. La retención sigue siendo de al menos 30 días; no se borraron versiones.
+- Se custodió el código exacto de API/workers `119db9792`, web `a93268414`, PDF `28c94c673` y copiador `4d921268`. Se actualizó exclusivamente la configuración del copiador con las cuatro fuentes e imágenes vigentes. Las aplicaciones y tamaños no cambiaron.
+- Nueva copia `77c9a668-cdad-4241-8e10-a4f58e707919`: iniciada a las 21:08:53.849 y completa a las 21:09:46.004 UTC. Trece archivos reutilizados; comprobante remoto firmado, descifrado y huellas de datos y cuatro fuentes verificados con el material de las notas del titular.
+- Restauración en una base aislada: **216 tablas, 299 migraciones/checksums y 1.591 filas**. Se comprobó el descifrado de la clave MFA. La API de la fuente vigente pasó ingreso con MFA, consulta y alta de cliente, 401 sin sesión y denegación entre dos empresas. Un adjunto pasó por su ruta autenticada y los 13 objetos por el almacenamiento recuperado, con huellas correctas. Red externa denegada por el sistema operativo; sin cron, workers ni envíos. Al terminar se sellaron los roles SQL y se detuvieron sólo la API y Redis exclusivos del ensayo.
+- El primer intento funcional encontró Redis de ensayo apagado y devolvió 503. Se corrigió el usuario del contenedor temporal; el recorrido pasó sin modificar la aplicación ni debilitar aserciones. No se reinició Docker ni se afectaron otros proyectos.
+- Healthchecks volvió a **UP** por la señal real del copiador a las 21:09 UTC. Mantiene una hora de período, 30 minutos de gracia y correo activo. Entre copias completas hubo **10 h 27 min 19 s** sin un punto nuevo de recuperación. La nueva copia no reconstruye los puntos horarios que faltaron durante ese intervalo.
+
+El incidente operativo de B2 queda cerrado. El PR #10 conserva su borrador y pendientes de revisión/dependencias; producción continúa pendiente. Este ensayo acredita recuperación aislada de datos y API, no interfaz web, workers, conmutación completa a otra nube ni un RTO garantizado. Los apartados siguientes son el historial y sus bloqueos anteriores no sustituyen este estado.
+
 ## Lote de entradas desplegado y comprobado — 30/09/2026, 12:32 UTC
 
 API y ambos workers ejecutan `119db9792a47cae8d688b8d8ea49fbf6e9fee355`, imagen `registry.fly.io/grafoprint-staging-api@sha256:c93f4535bf689c261950726e3b24414c762ec4889c26a728f5d01e01254d280c`. Compilación remota con tipos aprobada. Web conserva `a93268414`; PDF y ejecutor de respaldos no cambiaron. Se conservaron las seis máquinas y sus tamaños, sin migraciones nuevas ni cambios de producción.
