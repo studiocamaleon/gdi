@@ -1,0 +1,34 @@
+# Sólo propone PR: cada actualización requiere revisión y pruebas, sin auto-merge.
+# Se activa cuando este archivo se integra en la rama predeterminada.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /
+      - /apps/api
+      - /apps/marketing
+      - /apps/forma-studio
+      - /apps/whatsapp-extension
+      - /grafo-hotwire-linker-v1
+      - /deploy/recuperacion
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      parches:
+        update-types: [patch]
+  - package-ecosystem: pip
+    directory: /apps/api
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+  - package-ecosystem: docker
+    directories: [/deploy, /deploy/recuperacion]
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
