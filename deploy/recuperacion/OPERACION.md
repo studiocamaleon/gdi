@@ -53,6 +53,8 @@ Una rotación de la clave interna de Grafo o de la llave del backup exige actual
 
 La disponibilidad de DNS, cuentas y proveedores alternativos forma parte de la operación de recuperación. Los ensayos locales no garantizan que una migración a otra nube tenga el mismo tiempo.
 
+Si hubo exposición de secretos, recuperar la misma clave no elimina el acceso del atacante. Revocar y emitir de nuevo los accesos afectados (proveedores, sesiones, integraciones y firma de comprobantes). Si se expusieron los secretos de MFA, exigir su nueva inscripción; volver a cifrar un secreto ya conocido no lo vuelve seguro. Conservar las claves antiguas necesarias sólo para leer los backups históricos y migrar los datos recuperados a claves nuevas antes de reabrir. Si se expuso la identidad privada del respaldo, las copias antiguas cifradas con ella ya no recuperan confidencialidad mediante una rotación: contener también el acceso a esas copias y crear una nueva generación de respaldos. Definir el alcance según evidencia del incidente, sin reactivar automáticamente las credenciales restauradas.
+
 ## Retención, costos y mantenimiento
 
 Los 30 días son un **mínimo protegido**, no una orden de borrado al día 31. No hay limpieza remota automática: un archivo antiguo puede seguir siendo necesario para copias nuevas. El copiador tampoco tiene permiso para borrarlo.
