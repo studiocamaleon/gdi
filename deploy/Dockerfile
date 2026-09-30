@@ -58,7 +58,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && python3 -m venv /opt/grafoprint-python
 WORKDIR /app
 COPY apps/api/requirements-opennest.txt /tmp/requirements-opennest.txt
-RUN /opt/grafoprint-python/bin/pip install --no-cache-dir --only-binary=:all: -r /tmp/requirements-opennest.txt
+COPY apps/api/requirements-build.txt /tmp/requirements-build.txt
+RUN python3 -m pip install --no-cache-dir --only-binary=:all: --require-hashes -r /tmp/requirements-build.txt \
+    && /opt/grafoprint-python/bin/python -m pip install --no-cache-dir --only-binary=:all: --require-hashes -r /tmp/requirements-build.txt \
+    && /opt/grafoprint-python/bin/pip install --no-cache-dir --only-binary=:all: -r /tmp/requirements-opennest.txt \
+    && /opt/grafoprint-python/bin/pip check \
+    && /opt/grafoprint-python/bin/python -c "import compas_nest, scipy, ezdxf"
 ENV NODE_ENV=production PORT=3001 HOST=:: \
     OPENNEST_PYTHON=/opt/grafoprint-python/bin/python \
     DXF_PYTHON=/opt/grafoprint-python/bin/python \
