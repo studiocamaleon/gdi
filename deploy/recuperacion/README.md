@@ -1,6 +1,6 @@
 # Recuperación de Grafoprint
 
-Diseño elegido: copias cada hora, cifradas antes de salir del ejecutor, en una cuenta independiente. Protección contra borrado por 30 días. **Todavía no hay un servicio de copias automáticas activado.** El control de esta carpeta comprueba el destino; no hace una copia ni demuestra una restauración.
+Diseño elegido: copias cada hora, cifradas antes de salir del ejecutor, en una cuenta independiente. Protección contra borrado por 30 días. **Todavía no hay un servicio de copias automáticas activado.** Hay un ejecutor manual y un preparador de recuperación ensayados con datos ficticios. Falta provisionar y verificar los accesos de lectura del origen, la custodia separada, el ejecutor permanente y las alertas; después realizar la restauración completa de staging antes de programar.
 
 ## Separación de accesos
 
@@ -25,7 +25,42 @@ Propuesta de proveedor: Backblaze B2, con cuenta y recuperación separadas de Fl
    ```
 
    El control rechaza cuenta/bucket/prefijo incorrectos, permisos administrativos, almacenamiento público, retención distinta de la acordada y reglas automáticas de borrado. Hace dos consultas al proveedor; no imprime claves ni respuestas. Un resultado correcto **no acredita independencia de los administradores ni de su custodia**, que se revisan por separado.
-5. Implementar y ensayar el ejecutor antes de programarlo. Cifrado con herramienta mantenida; sólo clave pública de respaldo en el ejecutor. Directorio temporal privado, plazos de red, límites de disco, una ejecución a la vez y limpieza de temporales en caso de fallo. No usar la API ni los workers habituales como ejecutor.
+5. Preparar y ensayar el ejecutor descrito abajo antes de programarlo. Cifrado con herramienta mantenida; sólo clave pública de respaldo en el ejecutor. Directorio temporal privado, plazos de red, límites de disco, una ejecución a la vez y limpieza de temporales en caso de fallo. No usar la API ni los workers habituales como ejecutor.
+
+## Ejecutor manual preparado
+
+`ejecutar.mjs` sólo habilita staging. No crea recursos, no instala un horario y no modifica la base ni los archivos de origen. Sus dependencias están aisladas de las de la aplicación en el `package-lock.json` de esta carpeta. Requiere Node 22+, `age` (ensayado con 1.3.2), `pg_dump` 16 y certificados raíz del sistema. Ambos accesos PostgreSQL validan TLS y nombre de servidor; usar el host directo de Neon, sin `-pooler`.
+
+1. Instalar las dependencias en el ejecutor separado: `npm ci --ignore-scripts --prefix deploy/recuperacion`. Instalar `age` desde su distribución oficial verificada y el cliente PostgreSQL 16 desde una fuente confiable.
+2. Copiar `configuracion.example.json` **fuera de Git**, con permisos 0600 y directorio 0700. Usar rutas absolutas sin enlaces simbólicos. Completar accesos exclusivos de lectura a la base y al bucket R2. El endpoint jurisdiccional US termina en `.us.r2.cloudflarestorage.com`.
+3. Completar revisión Git e imágenes **realmente desplegadas**, con digest `@sha256:…`. En `idsClavesInternas`, registrar sólo nombres de las versiones de claves de integración/MFA que están bajo custodia; nunca los secretos. Actualizar estos datos con cada despliegue o rotación. El script no consulta Fly ni acredita esa custodia por sí mismo.
+4. La identidad privada de `age` se guarda en otro lugar controlado para recuperar. En el ejecutor sólo se carga su destinatario público (`recipient`). Verificar que se pueden recuperar la identidad privada, los recibos y las claves internas aunque Fly, la computadora de trabajo o sus cuentas principales no estén disponibles. **Perder la identidad privada impide descifrar los respaldos.**
+5. Sólo después de comprobarlo, marcar `accesoOrigenSoloLecturaVerificado` y `custodiaVerificada`. Son constancias de revisión, no controles automáticos sobre la custodia o los permisos R2. El programa sí rechaza roles PostgreSQL con permisos de escritura, propiedad, membresías adicionales o funciones privilegiadas accesibles. Verificar concesiones para tablas futuras.
+6. Ejecutar `node deploy/recuperacion/ejecutar.mjs /ruta/privada/configuracion.json`. No pasar claves como argumentos de consola. Guardar el recibo `recibo-<id>.json` fuera del ejecutor junto con el registro de recuperación: fija las versiones y huellas, y permite detectar la sustitución de una copia.
+
+El motor exporta la base con `pg_dump` y una instantánea compartida con la consulta de archivos requeridos. Incluye toda la base y migraciones; inventaría **todo el bucket R2**, incluidos fotos de perfil y QR que no figuran en `Archivo`. Verifica los documentos `LISTO` y `ELIMINADO` y las fotos de perfil referenciadas. Registra los otros estados; las subidas `PENDIENTE` y purgas en curso requieren conciliación al recuperar, sin reactivar automáticamente sus trabajos.
+
+La exportación y cada objeto se cifran por streaming; no se guardan temporales con datos originales al copiar. El índice incremental local tiene permisos 0600 y contiene metadatos privados. Perderlo provoca una copia completa de archivos; cambiar origen o destinatario de cifrado también impide reutilizarlo. Al reutilizar un objeto se verifica su versión y se extiende su protección. Base, manifiesto y cierre se guardan nuevos en cada ejecución. Los objetos de ensayo se separan bajo `staging/ensayos/`; no cuentan como backups operativos.
+
+Límites de esta versión: una ejecución a la vez, máximo 45 minutos, 4 GiB por archivo o exportación, 100.000 objetos y manifiesto de 32 MiB. Superarlos produce fallo, nunca truncamiento. Antes de cifrar se comprueba espacio libre; procesar archivos uno por uno limita el disco temporal. Una interrupción normal limpia temporales y libera el bloqueo. Si el proceso muere abruptamente, el siguiente intento se detiene: comprobar que no siga ejecutándose antes de retirar su bloqueo/temporales. No hay reintento ilimitado ni limpieza remota automática.
+
+Los objetos quedan protegidos hasta 30 días después del límite de ejecución (hasta 45 minutos extra respecto del comienzo). Esto asegura cobertura del cierre aun si la copia tarda. La recuperación valida SHA-256 de cada cifrado y del contenido original, además de la autenticación de `age`. Los nombres públicos en B2 son identificadores aleatorios; nombres, claves R2 y manifiestos están cifrados.
+
+## Preparar una recuperación sin activar servicios
+
+`recuperar.mjs` exige una clave B2 de **sólo lectura**, limitada al mismo bucket/prefijo: `listBuckets`, `readBucketRetentions`, `listFiles`, `readFiles`, `readFileRetentions`. No reutilizar el acceso de escritura del copiador en la configuración permanente de restauración.
+
+Copiar `recuperar.example.json` a un directorio privado separado, completar el recibo conservado bajo custodia, la identidad privada y el acceso lector. Ejecutar `node deploy/recuperacion/recuperar.mjs /ruta/privada/recuperar.json`. Se crea una carpeta nueva con `base.dump`, archivos de nombres locales neutros, manifiesto y `archivos-verificados.json` que vincula cada archivo con su clave R2. No se extraen rutas proporcionadas por el contenido. Ante fallo se elimina esa recuperación parcial. La herramienta **no ejecuta SQL, no sube a R2 y no arranca servicios**.
+
+`VERIFICADO.json` sólo acredita datos descargados y descifrados. Luego restaurar en una base y bucket **nuevos**, aislados, con versiones compatibles. Reconstruir roles/permisos desde infraestructura revisada: el dump excluye ownership y ACL, no contiene roles globales. Los secretos de entorno, DNS, imágenes y claves privadas se recuperan por el procedimiento separado. No conectar la aplicación hasta desactivar sus integraciones externas, invalidar sesiones y conciliar las colas.
+
+## Comprobaciones del programa
+
+`npm test --prefix deploy/recuperacion` comprueba permisos, destinos y controles sin acceder a cuentas reales. Para incluir cifrado real, definir `ENSAYO_AGE_BIN` y `ENSAYO_AGE_KEYGEN` con rutas absolutas a las herramientas verificadas. Sin ellas se muestran como omitidos los ensayos que las requieren.
+
+`ENSAYO_POSTGRES=1` habilita un ensayo adicional contra el contenedor **ya existente** `gdi-saas-postgres`, puerto local 5436. Sólo crea y elimina sus bases y rol aleatorios `qa_backup_…`, con datos completamente ficticios; no reinicia Docker. Prueba una escritura concurrente para comprobar la instantánea, permisos efectivos de sólo lectura, dos empresas, migraciones, cuatro archivos, reutilización y restauración. Usa un esquema pequeño de ensayo y un origen R2 simulado: no acredita la recuperación funcional de la aplicación completa.
+
+Únicamente si se agrega `ENSAYO_B2_CONFIG=/ruta/privada/b2.json`, ese ensayo escribe datos **ficticios** en B2 real, bajo `staging/ensayos/`, con el acceso limitado ya verificado. Esos objetos cifrados quedan retenidos; no se intentan borrar. El ensayo no usa datos de Neon/R2 de staging ni activa un horario. Resultado del 30/09/2026: dos copias, cuatro archivos reutilizados en la segunda, recuperación de la primera desde versiones exactas y base consistente pese a la escritura concurrente; recorrido completo de ensayo en aproximadamente 25 segundos. **No es una medición de RTO/RPO de staging.**
 
 ## Qué debe contener cada copia completa
 
@@ -36,7 +71,7 @@ Propuesta de proveedor: Backblaze B2, con cuenta y recuperación separadas de Fl
 
 Los archivos se copian de forma incremental. Si un archivo antiguo sigue referenciado por una copia nueva, hay que extender primero su protección hasta cubrir los 30 días de esa copia y comprobarlo. No aplicar una regla que elimine todos los objetos después de 30 días: rompería las copias nuevas que usan archivos antiguos. La limpieza requiere revisar referencias; mantenerla desactivada hasta ensayarla, medir crecimiento y definir alertas de costo.
 
-La base y R2 no comparten una transacción. El ejecutor debe verificar que todos los archivos del estado exportado existen con el contenido esperado. Si falta alguno o cambió durante la copia, no publicar éxito: reintentar de forma acotada y alertar. Las restauraciones deben fijar los identificadores de las versiones protegidas; una versión posterior maliciosa no debe reemplazarlas.
+La base y R2 no comparten una transacción. El ejecutor comprueba presencia y tamaño de referencias, y exige el mismo ETag/fecha al descargar y al verificar el objeto. Si falta alguno o cambia, no publica éxito. Esto detecta cambios durante la copia, pero **no demuestra por sí solo que un objeto mutable tuviera esos bytes al instante exacto de la base**. Antes de activar, verificar las rutas de escritura del código desplegado y mantener claves inmutables/versionadas para los documentos requeridos. Los QR regenerables se inventarían aparte. Las restauraciones fijan los identificadores de las versiones protegidas; una versión posterior no las sustituye.
 
 ## Ensayo y puesta en marcha
 
@@ -48,4 +83,4 @@ La base y R2 no comparten una transacción. El ejecutor debe verificar que todos
 
 El objetivo inicial es perder como máximo alrededor de una hora más la duración del respaldo y recuperar el servicio en 4–8 horas con un volumen pequeño y operador disponible. **Son objetivos pendientes de medición, no garantías.** La estimación de USD 15–25/mes sólo corresponde al ejemplo pequeño de la comparación privada; el tamaño real, versiones retenidas, transferencia y cómputo cambian el costo.
 
-Referencias: [Object Lock](https://www.backblaze.com/docs/cloud-storage-object-lock), [permisos de las claves](https://www.backblaze.com/docs/cloud-storage-application-key-capabilities), [autorización API v4](https://www.backblaze.com/apidocs/b2-authorize-account), [consulta de buckets](https://www.backblaze.com/apidocs/b2-list-buckets).
+Referencias: [Object Lock](https://www.backblaze.com/docs/cloud-storage-object-lock), [permisos de las claves](https://www.backblaze.com/docs/cloud-storage-application-key-capabilities), [autorización API v4](https://www.backblaze.com/apidocs/b2-authorize-account), [subida y retención de versiones](https://www.backblaze.com/apidocs/b2-upload-file), [age](https://github.com/FiloSottile/age), [pg_dump](https://www.postgresql.org/docs/16/app-pgdump.html), [validación TLS de PostgreSQL](https://www.postgresql.org/docs/16/libpq-connect.html).

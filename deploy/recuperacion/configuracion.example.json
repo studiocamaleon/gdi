@@ -1,0 +1,29 @@
+{
+  "accesoOrigenSoloLecturaVerificado": false,
+  "custodiaVerificada": false,
+  "carpeta": "/ruta/privada/estado-respaldo",
+  "ageBin": "/usr/local/bin/age",
+  "recipient": "",
+  "b2": {
+    "RESPALDO_ENTORNO": "staging",
+    "RESPALDO_B2_ACCOUNT_ID": "",
+    "RESPALDO_B2_BUCKET_ID": "",
+    "RESPALDO_B2_KEY_ID": "",
+    "RESPALDO_B2_KEY": ""
+  },
+  "origen": {
+    "pgHost": "",
+    "pgPort": 5432,
+    "pgDatabase": "",
+    "pgUser": "",
+    "pgPassword": "",
+    "pgDumpBin": "/usr/bin/pg_dump",
+    "r2Endpoint": "",
+    "r2Bucket": "",
+    "r2KeyId": "",
+    "r2Key": "",
+    "revision": "",
+    "imagenes": [],
+    "idsClavesInternas": []
+  }
+}
