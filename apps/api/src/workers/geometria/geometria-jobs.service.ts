@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { esPreparacionNesting, timeoutOpenNestMs } from './politica-busqueda';
 import {
@@ -159,7 +160,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
           await this.biblioteca?.aprender(data, guardado);
         } catch (error) {
           this.logger.warn(
-            `No se pudo enriquecer la biblioteca: ${error instanceof Error ? error.message : String(error)}`,
+            `No se pudo enriquecer la biblioteca: ${textoErrorLog(error)}`,
           );
         }
         return {
@@ -225,9 +226,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
     } catch (error) {
       await this.capacidad.cancelar(jobId).catch(() => undefined);
       if (error instanceof NotFoundException) throw error;
-      this.logger.warn(
-        `No se pudo encolar nesting: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.logger.warn(`No se pudo encolar nesting: ${textoErrorLog(error)}`);
       throw new ServiceUnavailableException(
         'El servicio de cálculos está temporalmente no disponible.',
       );
@@ -268,7 +267,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.warn(
-        `No se pudo consultar job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+        `No se pudo consultar job=${jobId}: ${textoErrorLog(error)}`,
       );
       throw new ServiceUnavailableException(
         'El servicio de cálculos está temporalmente no disponible.',
@@ -379,7 +378,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
       typeof TRABAJO_NESTING_IRREGULAR_OPENNEST
     >(nombre, { connection: conexionRedisApi() });
     queue.on('error', (error) =>
-      this.logger.warn(`Cola de geometría ${nombre}: ${error.message}`),
+      this.logger.warn(`Cola de geometría ${nombre}: ${textoErrorLog(error)}`),
     );
     this.queues.set(nombre, queue);
     return queue;

@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Environment, Paddle } from '@paddle/paddle-node-sdk';
 
@@ -187,9 +188,9 @@ export class PaddleService {
       }
     } catch (error) {
       this.logger.warn(
-        `Evento de Paddle auténtico pero no interpretable por el SDK, se usa el JSON crudo: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `Evento de Paddle auténtico pero no interpretable por el SDK, se usa el JSON crudo: ${textoErrorLog(
+          error,
+        )}`,
       );
     }
 
@@ -223,9 +224,9 @@ export class PaddleService {
       return await this.cliente.subscriptions.get(suscripcionId);
     } catch (error) {
       this.logger.warn(
-        `No se pudo leer la suscripción ${suscripcionId} de Paddle: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `No se pudo leer la suscripción ${suscripcionId} de Paddle: ${textoErrorLog(
+          error,
+        )}`,
       );
       return null;
     }
@@ -259,9 +260,9 @@ export class PaddleService {
       };
     } catch (error) {
       this.logger.warn(
-        `No se pudo leer el precio ${priceId} de Paddle: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `No se pudo leer el precio ${priceId} de Paddle: ${textoErrorLog(
+          error,
+        )}`,
       );
       return null;
     }
@@ -303,9 +304,9 @@ export class PaddleService {
       }));
     } catch (error) {
       this.logger.warn(
-        `No se pudieron listar las facturas de ${clienteId}: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `No se pudieron listar las facturas de ${clienteId}: ${textoErrorLog(
+          error,
+        )}`,
       );
       return [];
     }
@@ -323,9 +324,9 @@ export class PaddleService {
       return r.url ?? null;
     } catch (error) {
       this.logger.warn(
-        `No se pudo obtener el PDF de ${transaccionId}: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `No se pudo obtener el PDF de ${transaccionId}: ${textoErrorLog(
+          error,
+        )}`,
       );
       return null;
     }
@@ -374,9 +375,7 @@ export class PaddleService {
       };
     } catch (error) {
       this.logger.warn(
-        `No se pudo leer la tarjeta de ${clienteId}: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `No se pudo leer la tarjeta de ${clienteId}: ${textoErrorLog(error)}`,
       );
       return null;
     }
@@ -410,9 +409,7 @@ export class PaddleService {
       };
     } catch (error) {
       this.logger.warn(
-        `No se pudo abrir el portal de ${clienteId}: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `No se pudo abrir el portal de ${clienteId}: ${textoErrorLog(error)}`,
       );
       return null;
     }
@@ -551,9 +548,9 @@ export class PaddleService {
       };
     } catch (error) {
       this.logger.warn(
-        `No se pudo previsualizar el cambio de ${suscripcionId}: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `No se pudo previsualizar el cambio de ${suscripcionId}: ${textoErrorLog(
+          error,
+        )}`,
       );
       return null;
     }
@@ -574,9 +571,9 @@ export class PaddleService {
       return await this.cliente.subscriptions.get(t.subscriptionId);
     } catch (error) {
       this.logger.warn(
-        `No se pudo resolver la suscripción de ${transaccionId}: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `No se pudo resolver la suscripción de ${transaccionId}: ${textoErrorLog(
+          error,
+        )}`,
       );
       return null;
     }

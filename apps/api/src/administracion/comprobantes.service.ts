@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { EmisionFiscalService } from './emision-fiscal.service';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
@@ -164,7 +165,7 @@ export class ComprobantesService {
       await this.materializarPdf(tenantId, id);
     } catch (error) {
       this.logger.warn(
-        `No pude congelar el PDF del comprobante ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        `No pude congelar el PDF del comprobante ${id}: ${textoErrorLog(error)}`,
       );
     }
   }
@@ -588,7 +589,7 @@ export class ComprobantesService {
       });
     } catch (error) {
       this.logger.warn(
-        `No pude emitir el link público del comprobante ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        `No pude emitir el link público del comprobante ${id}: ${textoErrorLog(error)}`,
       );
       // Sin link no hay nada que mandar: el aviso no sale y no tiene sentido
       // intentarlo.

@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { ReservasMaterialService } from '../inventario/reservas-material.service';
 import {
@@ -859,7 +860,7 @@ export class OrdenesTrabajoService {
           event: 'preparacion_recorrido_corte_fallida',
           tenantId: auth.tenantId,
           itemId,
-          message: error instanceof Error ? error.message : 'Error desconocido',
+          message: textoErrorLog(error),
         });
       }
       const hijos = await this.prisma.ordenTrabajoItem.findMany({
@@ -992,7 +993,7 @@ export class OrdenesTrabajoService {
     } catch (error) {
       this.logger.error(
         'No se pudo actualizar el reparto de producción; se reintentará automáticamente.',
-        error,
+        textoErrorLog(error),
       );
     }
   }
@@ -1004,7 +1005,7 @@ export class OrdenesTrabajoService {
     } catch (error) {
       this.logger.error(
         `Falló la captura de promesa de ETA (orden ${ordenId}).`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -1015,7 +1016,7 @@ export class OrdenesTrabajoService {
     } catch (error) {
       this.logger.error(
         `Falló la captura de cierre de ETA (orden ${ordenId}).`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -4503,7 +4504,7 @@ export class OrdenesTrabajoService {
     } catch (error) {
       this.logger.error(
         `Falló el descarte de promesas de ETA (orden ${ordenId}).`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }

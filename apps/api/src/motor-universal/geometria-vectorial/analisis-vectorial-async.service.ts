@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   Injectable,
@@ -307,7 +308,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
       ),
     });
     this.redis.on('error', (error) =>
-      this.logger.warn(`Redis del análisis vectorial: ${error.message}`),
+      this.logger.warn(`Redis del análisis vectorial: ${textoErrorLog(error)}`),
     );
     return this.redis;
   }

@@ -1,3 +1,4 @@
+import { textoErrorLog } from './log-seguro';
 import { randomUUID } from 'node:crypto';
 
 import { Logger } from '@nestjs/common';
@@ -90,7 +91,7 @@ async function tomar(
     // que hacer, y un error acá no debe verse como "el cron está roto".
     logger.error(
       `No se pudo tomar el lease de "${nombre}".`,
-      error instanceof Error ? error.stack : String(error),
+      textoErrorLog(error),
     );
     return false;
   }
@@ -115,9 +116,7 @@ async function liberar(prisma: PrismaService, nombre: string): Promise<void> {
   } catch (error) {
     // Si no se pudo liberar, el TTL lo hace igual. No vale propagar.
     logger.warn(
-      `No se pudo liberar el lease de "${nombre}": ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `No se pudo liberar el lease de "${nombre}": ${textoErrorLog(error)}`,
     );
   }
 }

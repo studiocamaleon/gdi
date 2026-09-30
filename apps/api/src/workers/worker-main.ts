@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WorkerModule } from './worker.module';
+import { textoErrorLog } from '../common/log-seguro';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.createApplicationContext(WorkerModule);
@@ -12,7 +13,6 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack : String(error);
-  Logger.error(message, 'WorkerBootstrap');
+  Logger.error(textoErrorLog(error), 'WorkerBootstrap');
   process.exitCode = 1;
 });

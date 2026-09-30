@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { cambioDelSnapshot } from '../cotizaciones/validar-moneda-documento';
 import {
@@ -379,7 +380,7 @@ export class PresupuestosService {
       });
     } catch (error) {
       this.logger.warn(
-        `${numero} quedó en borrador: no pude enviarlo — ${error instanceof Error ? error.message : String(error)}`,
+        `${numero} quedó en borrador: no pude enviarlo — ${textoErrorLog(error)}`,
       );
       return {
         ...(await this.detalle(auth, dto.cotizacionId, { numero })),
@@ -1009,7 +1010,7 @@ export class PresupuestosService {
     if (conPdf && !pdfAsincronoHabilitado())
       await this.materializarPdf(auth, c.id).catch((error: unknown) => {
         this.logger.warn(
-          `No pude materializar el PDF del presupuesto ${c.id}: ${error instanceof Error ? error.message : String(error)}`,
+          `No pude materializar el PDF del presupuesto ${c.id}: ${textoErrorLog(error)}`,
         );
       });
     return this.detalle(auth, c.id);

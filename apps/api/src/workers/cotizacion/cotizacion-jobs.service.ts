@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { capacidadesJobGeometria } from '../../suscripciones/capacidades-geometria';
 import { capacidadesJobCopiado } from '../../suscripciones/capacidades-copiado';
@@ -138,7 +139,7 @@ export class CotizacionJobsService implements OnApplicationShutdown {
       return this.vistaDesdeJob(job);
     } catch (error) {
       this.logger.warn(
-        `No se pudo encolar cotización: ${error instanceof Error ? error.message : String(error)}`,
+        `No se pudo encolar cotización: ${textoErrorLog(error)}`,
       );
       throw new ServiceUnavailableException(
         'El servicio de cálculos está temporalmente no disponible.',
@@ -159,7 +160,7 @@ export class CotizacionJobsService implements OnApplicationShutdown {
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.warn(
-        `No se pudo consultar cotización job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+        `No se pudo consultar cotización job=${jobId}: ${textoErrorLog(error)}`,
       );
       throw new ServiceUnavailableException(
         'El servicio de cálculos está temporalmente no disponible.',
@@ -252,7 +253,7 @@ export class CotizacionJobsService implements OnApplicationShutdown {
       typeof TRABAJO_COTIZAR
     >(COLA_COTIZACIONES, { connection: conexionRedisApi() });
     this.queue.on('error', (error) =>
-      this.logger.warn(`Cola de cotizaciones: ${error.message}`),
+      this.logger.warn(`Cola de cotizaciones: ${textoErrorLog(error)}`),
     );
     return this.queue;
   }

@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { conLockDeCron } from '../common/cron-lock';
@@ -38,7 +39,7 @@ export class EtaSnapshotScheduler {
         } catch (error) {
           this.logger.error(
             `No se pudo actualizar la asignación de producción del tenant ${tenantId}.`,
-            error,
+            textoErrorLog(error),
           );
         }
       }
@@ -68,7 +69,7 @@ export class EtaSnapshotScheduler {
               // Un tenant que falla no debe frenar al resto.
               this.logger.error(
                 `Falló el snapshot de ETA del tenant ${tenantId}.`,
-                error instanceof Error ? error.stack : String(error),
+                textoErrorLog(error),
               );
             }
           }

@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
@@ -46,10 +47,7 @@ export class ArchivosScheduler {
         }
       });
     } catch (error) {
-      this.logger.error(
-        'Falló la higiene de archivos.',
-        error instanceof Error ? error.stack : String(error),
-      );
+      this.logger.error('Falló la higiene de archivos.', textoErrorLog(error));
     } finally {
       this.corriendo = false;
     }

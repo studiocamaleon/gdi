@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import Redis from 'ioredis';
@@ -303,7 +304,7 @@ export class GeometriaVectorialCacheService implements OnApplicationShutdown {
       ),
     });
     this.redis.on('error', (error) =>
-      this.logger.warn(`Redis del cache vectorial: ${error.message}`),
+      this.logger.warn(`Redis del cache vectorial: ${textoErrorLog(error)}`),
     );
     return this.redis;
   }

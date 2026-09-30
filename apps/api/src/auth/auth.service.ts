@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { contratoSuscripcion } from '../suscripciones/contrato-suscripcion';
 import {
   bloquearCupoUsuarios,
@@ -120,7 +121,7 @@ export class AuthService {
         // "credenciales inválidas" mandaría a la persona a probar diez veces
         // la clave correcta.
         this.logger.warn(
-          `Login bloqueado por IP: ${user.email} desde ${ip || 'origen desconocido'}.`,
+          `Login bloqueado por restricción de IP para el usuario ${user.id}.`,
         );
         await this.registrarBloqueoPorIp(user.memberships[0], user.id, ip);
         throw new UnauthorizedException(
@@ -224,7 +225,7 @@ export class AuthService {
     } catch (error) {
       this.logger.error(
         'No pude registrar el bloqueo por IP.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -1093,10 +1094,8 @@ export class AuthService {
     const invitationUrl = `${process.env.FRONTEND_URL?.split(',')[0]?.trim() ?? 'http://localhost:3000'}/aceptar-invitacion?token=${rawToken}`;
 
     // No logueamos la URL/token en claro (cualquiera con acceso a logs podría
-    // aceptar la invitación). Solo id + email; el enlace se entrega por retorno.
-    this.logger.log(
-      `Invitacion creada para ${normalizedEmail} (${invitation.id})`,
-    );
+    // aceptar la invitación). Sólo id; el enlace se entrega por retorno.
+    this.logger.log(`Invitación creada (${invitation.id}).`);
 
     return {
       invitationState: existingUser?.passwordHash

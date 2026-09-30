@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import {
   BadRequestException,
   ConflictException,
@@ -779,7 +780,7 @@ export class UsuariosService {
     } catch (error) {
       this.logger.error(
         `No pude registrar el evento de acceso ${evento.tipo}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }

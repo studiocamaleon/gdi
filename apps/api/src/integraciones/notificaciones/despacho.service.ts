@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -72,7 +73,7 @@ export class DespachoService {
     } catch (error) {
       this.logger.error(
         `Falló el despacho de la notificación ${id}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
       // Antes del POST se puede recuperar. Después de autorizarlo no sabemos
       // si Wati lo recibió: conservar la incertidumbre evita duplicar el aviso.

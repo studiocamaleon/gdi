@@ -27,8 +27,7 @@ describe('Registro de campos permitidos', () => {
   });
   it('conserva la ubicación del fallo sin el mensaje multilineal, datos SQL ni causas', () => {
     const error = new Error('password=secreto-ficticio\nSQL y fila privada');
-    error.stack =
-      'Error: secreto-ficticio\nSQL y fila privada\n    at guardar (/app/auth/service.ts:41:9)';
+    error.stack = `Error: ${error.message}\n    at guardar (/app/auth/service.ts:41:9)`;
     Object.assign(error, {
       code: 'P2002',
       meta: { token: 'secreto-ficticio' },
@@ -44,5 +43,18 @@ describe('Registro de campos permitidos', () => {
     expect(errorParaLog({ token: 'secreto-ficticio' })).toEqual({
       tipo: 'ErrorDesconocido',
     });
+  });
+  it('no confunde una línea del mensaje con una ubicación de código', () => {
+    const error = new Error(
+      'Fallo\n    at clavePrivadaFicticia (/app/interno.ts:1:1)',
+    );
+    expect(JSON.stringify(errorParaLog(error))).not.toContain(
+      'clavePrivadaFicticia',
+    );
+  });
+  it('un nombre de error controlado por el proveedor no se convierte en un campo privado', () => {
+    const error = new Error('rechazado');
+    error.name = 'ClavePrivadaFicticia';
+    expect(errorParaLog(error).tipo).toBe('Error');
   });
 });

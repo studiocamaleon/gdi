@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -64,7 +65,7 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
     };
   } catch (e) {
     log.warn(
-      `No pude cargar Geist para el PDF del presupuesto (${e instanceof Error ? e.message : e}). Sale en Helvetica.`,
+      `No pude cargar Geist para el PDF del presupuesto (${textoErrorLog(e)}). Sale en Helvetica.`,
     );
     geistCache = null;
   }
@@ -248,7 +249,7 @@ export class PresupuestoPdfService {
         pdf.addImage(logo, MARGEN, y, lado, lado, undefined, 'FAST');
       } catch (e) {
         this.log.warn(
-          `No pude dibujar el logo (${e instanceof Error ? e.message : e}); van las iniciales.`,
+          `No pude dibujar el logo (${textoErrorLog(e)}); van las iniciales.`,
         );
         this.cuadradoIniciales(pdf, MARGEN, y, lado, d.negocio);
       }

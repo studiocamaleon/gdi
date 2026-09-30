@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   ConflictException,
@@ -108,7 +109,7 @@ export class NotificacionesService {
       // transición de estado que disparó la notificación.
       this.logger.error(
         `Falló al encolar ${ctx.evento} de ${ctx.entidadId}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
       return { encolada: false, motivo: 'Error interno al encolar.' };
     }

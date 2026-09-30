@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -57,7 +58,7 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
     };
   } catch (e) {
     log.warn(
-      `No pude cargar Geist para el PDF (${e instanceof Error ? e.message : e}). ` +
+      `No pude cargar Geist para el PDF (${textoErrorLog(e)}). ` +
         'El comprobante sale en Helvetica.',
     );
     geistCache = null;
@@ -171,7 +172,7 @@ export class FacturaPdfService {
       } catch (error) {
         // Un logo corrupto no puede impedir emitir un comprobante fiscal.
         this.log.warn(
-          `No pude dibujar el logo en la factura: ${error instanceof Error ? error.message : String(error)}`,
+          `No pude dibujar el logo en la factura: ${textoErrorLog(error)}`,
         );
         logo = null;
       }

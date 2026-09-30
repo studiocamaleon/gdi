@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
@@ -145,7 +146,7 @@ export class EnlacesPublicosService {
         })
         .catch((error: unknown) => {
           this.logger.warn(
-            `No se pudo registrar la visita del enlace ${enlace.id}: ${String(error)}`,
+            `No se pudo registrar la visita del enlace ${enlace.id}: ${textoErrorLog(error)}`,
           );
         });
     }

@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import {
   BadRequestException,
   Inject,
@@ -743,7 +744,7 @@ export class ArchivosService {
       return count;
     } catch (error) {
       this.logger.warn(
-        `No pude re-vincular los archivos del presupuesto ${cotizacionId} a la orden ${ordenId}: ${error instanceof Error ? error.message : String(error)}`,
+        `No pude re-vincular los archivos del presupuesto ${cotizacionId} a la orden ${ordenId}: ${textoErrorLog(error)}`,
       );
       return 0;
     }
@@ -1248,7 +1249,7 @@ export class ArchivosService {
         purgados += eliminado.count;
       } catch (error) {
         this.logger.warn(
-          `No pude purgar ${candidato.id}: ${error instanceof Error ? error.message : String(error)}`,
+          `No pude purgar ${candidato.id}: ${textoErrorLog(error)}`,
         );
       }
     }

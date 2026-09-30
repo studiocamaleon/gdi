@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { jsPDF } from 'jspdf';
 import { registrarGeist } from './invoicing/geist';
@@ -208,7 +209,7 @@ export class ReciboPdfService {
       } catch (error) {
         // Un logo corrupto no puede impedir emitir el recibo.
         this.log.warn(
-          `No pude dibujar el logo en el recibo: ${error instanceof Error ? error.message : String(error)}`,
+          `No pude dibujar el logo en el recibo: ${textoErrorLog(error)}`,
         );
       }
     }

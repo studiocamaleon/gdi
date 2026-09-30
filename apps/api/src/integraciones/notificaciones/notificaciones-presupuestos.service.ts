@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { TipoEnlacePublico } from '@prisma/client';
 
@@ -44,7 +45,7 @@ export class NotificacionesPresupuestosService {
     } catch (error) {
       this.logger.error(
         `Falló al sincronizar avisos del presupuesto ${cotizacionId}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }

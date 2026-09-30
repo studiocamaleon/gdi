@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   Injectable,
@@ -155,7 +156,7 @@ export class GeometriaWorker
           .cancelar(job.id)
           .catch((e: unknown) =>
             this.logger.warn(
-              `No se pudo retirar el turno fallido ${job.id}: ${String(e)}`,
+              `No se pudo retirar el turno fallido ${job.id}: ${textoErrorLog(e)}`,
             ),
           );
       const detail = {
@@ -169,7 +170,7 @@ export class GeometriaWorker
             ? job.data.claseComplejidad
             : undefined,
         attemptsStarted: job?.attemptsStarted,
-        message: error.message,
+        message: textoErrorLog(error),
       };
       if (error.message.includes('cancelado')) this.logger.log(detail);
       else this.logger.error(detail);
@@ -178,7 +179,7 @@ export class GeometriaWorker
       this.logger.error({
         event: 'worker_connection_error',
         queue: worker.name,
-        message: error.message,
+        message: textoErrorLog(error),
       });
     });
     worker.on('stalled', (jobId) => {
@@ -318,7 +319,7 @@ export class GeometriaWorker
         permisoPerdido = true;
         controller.abort();
         this.logger.warn(
-          `Se interrumpió la renovación de job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+          `Se interrumpió la renovación de job=${jobId}: ${textoErrorLog(error)}`,
         );
       } finally {
         renovando = false;
@@ -343,7 +344,7 @@ export class GeometriaWorker
         if (await this.control.leerCancelacion(job.id)) controller.abort();
       } catch (error) {
         this.logger.warn(
-          `No se pudo consultar cancelación de job=${job.id}: ${error instanceof Error ? error.message : String(error)}`,
+          `No se pudo consultar cancelación de job=${job.id}: ${textoErrorLog(error)}`,
         );
       } finally {
         consultando = false;
@@ -412,14 +413,14 @@ export class GeometriaWorker
           .liberar(permisoCapacidad, permisoPerdido)
           .catch((error: unknown) =>
             this.logger.warn(
-              `No se pudo liberar capacidad de job=${jobId}: ${String(error)}`,
+              `No se pudo liberar capacidad de job=${jobId}: ${textoErrorLog(error)}`,
             ),
           );
       await this.tenantConcurrency
         .liberar(lease)
         .catch((error: unknown) =>
           this.logger.warn(
-            `No se pudo liberar concurrencia de job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+            `No se pudo liberar concurrencia de job=${jobId}: ${textoErrorLog(error)}`,
           ),
         );
       if (cola)
@@ -451,7 +452,7 @@ export class GeometriaWorker
     } catch (error) {
       // La promoción es una aceleración; el reintento acotado sigue vigente.
       this.logger.warn(
-        `No se pudo despertar el siguiente nesting: ${String(error)}`,
+        `No se pudo despertar el siguiente nesting: ${textoErrorLog(error)}`,
       );
     }
   }
@@ -469,7 +470,7 @@ export class GeometriaWorker
     this.logger.warn({
       event: 'nesting_espera_admision',
       jobId: job.id,
-      message,
+      message: textoErrorLog(error),
     });
     await job.moveToDelayed(
       Date.now() + 1000 + demoraReintentoTenantMs(),

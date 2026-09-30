@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { sincronizarAsignaciones } from './asignacion-automatica';
 import { personalFijoDelPaso } from '../produccion/asignacion-personal';
@@ -389,7 +390,7 @@ export class EtaService {
       if (this.esRetiradaEta(error)) return;
       this.logger.error(
         `No se pudo correr el motor para la promesa de emisión (orden ${ordenId}).`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
 
