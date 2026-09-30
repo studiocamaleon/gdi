@@ -102,7 +102,7 @@ jobs:
 
       - name: Iniciar API y Next y comprobar login directo y por BFF
         run: |
-          docker compose up -d --wait --wait-timeout 180 api web
+          docker compose up -d --wait --wait-timeout 180 api web pdf-renderer
           docker compose run --rm bootstrap node scripts/deploy/verify-http.cjs
           docker compose exec -T api node scripts/deploy/verify-storage-pdf.cjs
 
@@ -110,7 +110,7 @@ jobs:
         if: failure()
         run: |
           docker compose ps -a
-          docker compose logs --no-color --tail=80 api web postgres
+          docker compose logs --no-color --tail=80 api web postgres pdf-renderer
 
       - name: Detener los servicios temporales del ejecutor
         if: always()

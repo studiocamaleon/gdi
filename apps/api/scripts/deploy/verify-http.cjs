@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { databaseUrl, fail } = require('./target.cjs');
+let etapa = 'configuración del ensayo';
 
 async function main() {
   databaseUrl('DATABASE_URL');
@@ -21,9 +22,11 @@ async function main() {
     'x-grafoprint-web-token': 'forged',
   };
   const request = (url, options = {}) => fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
+  etapa = 'salud y perímetro de API';
   assert.equal((await request(api)).status, 200);
   assert.equal((await request(`${api}/auth/me`, { headers: { 'fly-client-ip':'1.1.1.1', 'x-forwarded-for':'1.1.1.1' } })).status, 403);
   if (!apiOnly) {
+    etapa = 'perímetro de la web';
     assert.equal((await request(`${web}/api/health`)).status, 200);
     for (const path of ['/login', '/backoffice', '/api/backend/auth/me', '/api/session', '/brand/logo.svg']) {
       const denied = await request(`${web}${path}`);
@@ -34,6 +37,7 @@ async function main() {
     assert.ok((await (await request(`${web}/robots.txt`)).text()).includes('Disallow: /'));
   }
   for (const base of apiOnly ? [api] : [api, `${web}/api/backend`]) {
+    etapa = base === api ? 'login interno' : 'login por BFF';
     const response = await request(`${base}/auth/login-plataforma`, {
       method: 'POST', headers: { 'content-type': 'application/json', ...(base === api ? internal : browser) },
       body: JSON.stringify({ email: process.env.BOOTSTRAP_ADMIN_EMAIL, password: process.env.BOOTSTRAP_ADMIN_PASSWORD }),
@@ -43,6 +47,7 @@ async function main() {
     assert.equal(typeof body.accessToken, 'string');
     assert.equal(body.staff.rolPlataforma, 'ADMIN');
     if (base !== api) {
+      etapa = 'cookie y pantalla de cambio obligatorio';
       const session = await request(`${web}/api/session`, {
         method: 'POST', headers: { ...browser, 'content-type': 'application/json' },
         body: JSON.stringify({ token: body.accessToken }),
@@ -53,7 +58,7 @@ async function main() {
       for (const attribute of [/; HttpOnly/i, /; Secure/i, /; SameSite=Lax/i]) {
         assert.match(setCookie, attribute);
       }
-      const cookie = setCookie.split(';')[0];
+      let cookie = setCookie.split(';')[0];
       // La pantalla consulta el API desde el servidor de Next. Comprueba que
       // el canal autenticado y la IP también funcionan fuera del BFF.
       const paginaClave = await request(`${web}/backoffice/cambiar-clave`, {
@@ -77,11 +82,26 @@ async function main() {
       assert.equal((await cambiar('clave-incorrecta', nueva)).status, 400);
       assert.equal((await contexto()).debeCambiarPassword, true);
       assert.equal((await cambiar(process.env.BOOTSTRAP_ADMIN_PASSWORD, process.env.BOOTSTRAP_ADMIN_PASSWORD)).status, 400);
-      assert.equal((await cambiar(process.env.BOOTSTRAP_ADMIN_PASSWORD, nueva)).status, 201);
+      etapa = 'rotación de sesión tras cambiar la clave';
+      const cambio = await cambiar(process.env.BOOTSTRAP_ADMIN_PASSWORD, nueva);
+      assert.equal(cambio.status, 201);
+      const cuerpoCambio = await cambio.json();
+      assert.equal(cuerpoCambio.accessToken, undefined);
+      const renovada = cambio.headers.getSetCookie().find(c => c.startsWith('gdi_access_token='));
+      assert.ok(renovada, 'El cambio debe renovar la cookie.');
+      for (const attribute of [/; HttpOnly/i, /; Secure/i, /; SameSite=Lax/i]) {
+        assert.match(renovada, attribute);
+      }
+      const cookieAnterior = cookie;
+      cookie = renovada.split(';')[0];
+      assert.notEqual(cookie, cookieAnterior);
+      assert.equal((await request(`${base}/plataforma/contexto`, { headers: authHeaders })).status, 401);
+      authHeaders.cookie = cookie;
       const actualizado = await contexto();
       assert.equal(actualizado.debeCambiarPassword, false);
       assert.equal(actualizado.requiereSeguridad, true);
       assert.equal((await request(`${base}/plataforma/empresas`, { headers: authHeaders })).status, 403);
+      etapa = 'seguridad obligatoria y reingreso';
       const security = await request(`${web}/backoffice/seguridad`, {
         headers: { ...browser, cookie }, redirect: 'manual',
       });
@@ -98,6 +118,7 @@ async function main() {
       assert.equal(reingreso.status, 201);
       const otra = await reingreso.json();
       assert.ok((await request(`${api}/auth/logout`, { method: 'POST', headers: { ...internal, authorization: `Bearer ${otra.accessToken}` } })).ok);
+      assert.ok((await request(`${base}/auth/logout`, { method: 'POST', headers: authHeaders })).ok);
       const clearSession = await request(`${web}/api/session`, {
         method: 'DELETE', headers: { ...browser, cookie },
       });
@@ -107,8 +128,11 @@ async function main() {
     const logout = await request(`${api}/auth/logout`, {
       method: 'POST', headers: { ...internal, authorization: `Bearer ${body.accessToken}` },
     });
-    assert.ok(logout.ok);
+    // El token inicial del BFF ya fue revocado al cambiar la contraseña.
+    if (base === api) assert.ok(logout.ok);
+    else assert.equal(logout.status, 401);
   }
+  etapa = 'registro público cerrado';
   const signup = await request(`${api}/registro`, {
     method: 'POST', headers: { ...internal, 'content-type': 'application/json' },
     body: JSON.stringify({ nombreCompleto: 'Ensayo de despliegue', empresaNombre: 'Empresa ficticia',
@@ -120,4 +144,8 @@ async function main() {
     'OK: staging restringido, salud, autenticación interna/BFF, cookie segura, cambio de clave de staff sin empresa, MFA obligatorio, SSR, logout y registro público cerrado.');
 }
 
-main().catch(fail);
+main().catch(error => {
+  // Sólo etiquetas fijas: no imprimir cuerpos, cookies ni valores de asserts.
+  console.error(`Falló el ensayo en: ${etapa}.`);
+  fail(error);
+});
