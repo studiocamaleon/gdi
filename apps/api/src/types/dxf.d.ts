@@ -1,4 +1,17 @@
 declare module 'dxf' {
+  export type DxfEntidad = {
+    type: string;
+    block?: string;
+    rowCount?: number;
+    columnCount?: number;
+    startAngle?: number;
+    endAngle?: number;
+    degree?: number;
+    knots?: number[];
+    controlPoints?: Array<{ x: number; y: number }>;
+    vertices?: Array<{ x: number; y: number; bulge?: number }>;
+    polyfaceMesh?: boolean;
+  };
   export type DxfBox = {
     min: { x: number; y: number };
     max: { x: number; y: number };
@@ -14,6 +27,8 @@ declare module 'dxf' {
     constructor(contents: string);
     readonly parsed: {
       header?: { insUnits?: number };
+      entities: DxfEntidad[];
+      blocks: Array<{ name: string; entities: DxfEntidad[] }>;
     };
     readonly denormalised: Array<{
       type?: string;
