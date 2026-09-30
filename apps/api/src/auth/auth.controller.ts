@@ -13,6 +13,7 @@ import type { Request, Response } from 'express';
 import { MFA_HEADERS, MFA_RECORDADO_HEADER } from './mfa-dispositivo-cookie';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentSession } from './current-auth.decorator';
+import { PermitirClaveProvisoria } from './clave-provisoria.decorator';
 import { AuthService } from './auth.service';
 import { PermitirEnrolamientoPlataforma } from './enrolamiento-plataforma';
 import {
@@ -94,6 +95,7 @@ export class AuthController {
   @SinTenant()
   @PermitirEnrolamientoPlataforma()
   @Post('logout')
+  @PermitirClaveProvisoria()
   @HttpCode(204)
   logout(@CurrentSession() auth: CurrentAuth) {
     return this.authService.logout(auth);
@@ -134,6 +136,7 @@ export class AuthController {
   @SinTenant()
   @PermitirEnrolamientoPlataforma()
   @Post('password')
+  @PermitirClaveProvisoria()
   cambiarPassword(
     @CurrentSession() auth: CurrentAuth,
     @Body() payload: CambiarPasswordDto,
@@ -142,6 +145,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @PermitirClaveProvisoria()
   getCurrentContext(@CurrentSession() auth: CurrentAuth) {
     return this.authService.getCurrentContext(auth);
   }

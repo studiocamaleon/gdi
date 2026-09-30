@@ -573,4 +573,109 @@ describe('Revocación efectiva entre instancias de la API', () => {
       await acceder(1, auth).expect(200);
     },
   );
+
+  it('una clave provisoria permite elegir la propia, pero no operar en la empresa', async () => {
+    await acceder(1, auth).expect(200);
+    await prisma.user.update({
+      where: { id: auth.userId },
+      data: { debeCambiarPassword: true },
+    });
+    await acceder(1, auth).expect(403);
+    const contexto = await acceder(1, auth, '/auth/me').expect(200);
+    expect(
+      (contexto.body as { currentUser: { debeCambiarPassword: boolean } })
+        .currentUser.debeCambiarPassword,
+    ).toBe(true);
+    await request(apps[0].getHttpServer())
+      .post('/auth/password')
+      .set('Authorization', `Bearer ${bearer(auth)}`)
+      .send({ actual: password, nueva: 'Clave personal ficticia 456' })
+      .expect(201);
+    await acceder(1, auth).expect(200);
+  });
+
+  it('se puede cerrar una sesión pendiente de elegir clave personal', async () => {
+    await prisma.user.update({
+      where: { id: auth.userId },
+      data: { debeCambiarPassword: true },
+    });
+    await request(apps[0].getHttpServer())
+      .post('/auth/logout')
+      .set('Authorization', `Bearer ${bearer(auth)}`)
+      .expect(204);
+    await acceder(1, auth).expect(401);
+  });
+
+  it('una credencial MCP no elude el cambio obligatorio de contraseña', async () => {
+    const mcp = await credencial();
+    await acceder(1, mcp.token).expect(200);
+    await prisma.user.update({
+      where: { id: auth.userId },
+      data: { debeCambiarPassword: true },
+    });
+    await acceder(1, mcp.token).expect(401);
+  });
+
+  it('un código de recuperación sólo sirve una vez con desafíos distintos en dos servidores', async () => {
+    const alta = await mfas[0].iniciar(auth, password);
+    const codigo = new TOTP({
+      secret: alta.secret,
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+    }).generate();
+    const recovery = await mfas[0].confirmar(auth, alta.setupId, codigo);
+    const desafios = await Promise.all(
+      apps.map((app) =>
+        request(app.getHttpServer())
+          .post('/auth/login')
+          .send({ email: auth.email, password })
+          .expect(201),
+      ),
+    );
+    const resultados = await Promise.all(
+      apps.map((app, i) =>
+        request(app.getHttpServer())
+          .post('/auth/mfa/verificar')
+          .send({
+            challengeToken: (desafios[i].body as { challengeToken: string })
+              .challengeToken,
+            codigo: recovery.codigosRecuperacion[0],
+          }),
+      ),
+    );
+    expect(resultados.map((r) => r.status).sort()).toEqual([201, 401]);
+    const ganador = resultados.find((r) => r.status === 201)!;
+    await acceder(
+      1,
+      (ganador.body as { accessToken: string }).accessToken,
+    ).expect(200);
+  });
+
+  it('cambiar la clave invalida un desafío MFA que ya estaba abierto en otro servidor', async () => {
+    const alta = await mfas[0].iniciar(auth, password);
+    const codigo = new TOTP({
+      secret: alta.secret,
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+    }).generate();
+    const recovery = await mfas[0].confirmar(auth, alta.setupId, codigo);
+    const desafio = await request(apps[1].getHttpServer())
+      .post('/auth/login')
+      .send({ email: auth.email, password })
+      .expect(201);
+    await servicios[0].cambiarPassword(auth, {
+      actual: password,
+      nueva: 'Clave personal ficticia 789',
+    });
+    await request(apps[1].getHttpServer())
+      .post('/auth/mfa/verificar')
+      .send({
+        challengeToken: (desafio.body as { challengeToken: string })
+          .challengeToken,
+        codigo: recovery.codigosRecuperacion[0],
+      })
+      .expect(401);
+  });
 });

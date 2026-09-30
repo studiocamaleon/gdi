@@ -15,6 +15,7 @@ import { SIN_TENANT_KEY } from '../common/sin-tenant.decorator';
 import { CurrentAuth, JwtPayload } from './auth.types';
 import { ipDeRequest, ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
+import { CLAVE_PROVISORIA } from './clave-provisoria.decorator';
 import {
   ENROLAMIENTO_PLATAFORMA,
   mfaPlataformaCompleta,
@@ -258,6 +259,16 @@ export class AuthGuard implements CanActivate {
       );
     }
 
+    if (
+      session.user.debeCambiarPassword &&
+      !this.reflector.getAllAndOverride<boolean>(CLAVE_PROVISORIA, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+    ) {
+      throw new ForbiddenException('Elegí tu clave personal para continuar.');
+    }
+
     const rol = session.currentMembership.rolDelTenant;
     const auth: CurrentAuth = {
       userId: payload.sub,
@@ -325,7 +336,9 @@ export class AuthGuard implements CanActivate {
         membership: {
           include: {
             rolDelTenant: true,
-            user: { select: { activo: true, email: true } },
+            user: {
+              select: { activo: true, email: true, debeCambiarPassword: true },
+            },
             tenant: { select: { activo: true } },
           },
         },
@@ -338,6 +351,7 @@ export class AuthGuard implements CanActivate {
       (credencial.expiraEl && credencial.expiraEl <= new Date()) ||
       !credencial.membership.activa ||
       !credencial.membership.user.activo ||
+      credencial.membership.user.debeCambiarPassword ||
       !credencial.membership.tenant.activo ||
       // Cinturón: la credencial y su membership tienen que ser del mismo
       // tenant. No debería poder divergir, pero si diverge es fuga, no bug.
