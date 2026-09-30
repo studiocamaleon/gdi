@@ -1,5 +1,15 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Lote de entradas desplegado y comprobado — 30/09/2026, 12:32 UTC
+
+API y ambos workers ejecutan `119db9792a47cae8d688b8d8ea49fbf6e9fee355`, imagen `registry.fly.io/grafoprint-staging-api@sha256:c93f4535bf689c261950726e3b24414c762ec4889c26a728f5d01e01254d280c`. Compilación remota con tipos aprobada. Web conserva `a93268414`; PDF y ejecutor de respaldos no cambiaron. Se conservaron las seis máquinas y sus tamaños, sin migraciones nuevas ni cambios de producción.
+
+- Pasaron los 312 casos de las 16 suites del control local y remoto; los 12 casos del motor vectorial también aprobaron. Los cuatro controles de esta revisión terminaron correctamente: [HTTP y parsers](https://github.com/studiocamaleon/gdi/actions/runs/36714403949), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36714403873), [contenedores/login/BFF](https://github.com/studiocamaleon/gdi/actions/runs/36714403980) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36714397780).
+- El código compilado de la API en Fly rechazó claves reservadas, consultas con tipos incorrectos y atributos SVG inválidos; los controles positivos de cotización, filtros y escala decimal pasaron. Se ejecutaron en un proceso separado, con consultas sustituidas: no se usó la base real ni se llamaron proveedores externos en ese ensayo. No equivale a probar esos casos por HTTP en cloud.
+- API y web responden 200 a salud; controles disponibles aprobados y workers iniciados. El control de sólo lectura de PostgreSQL conservó los mismos IDs/recuentos originales: una empresa, tres usuarios, una conversación, 31 mensajes, 16 envíos y 13 archivos. Las 299 migraciones coinciden; 270 relaciones con empresa en ambos extremos no tienen cruces. El usuario de ejecución continúa sin privilegios de superusuario, creación de roles/bases ni bypass de RLS.
+
+**Pendientes:** guardar la protección de main después del segundo factor de GitHub y normalizar el límite de Backblaze para comprobar una copia nueva y la custodia de las fuentes vigentes. La última copia completa verificada sigue siendo la de las 10:42 UTC; no se declara protegido este lote en B2. El PR #10 continúa en borrador, con descripción actualizada. No se considera habilitado el despliegue a producción.
+
 ## Validaciones de entradas y motor vectorial — 30/09/2026
 
 Lote preparado localmente, todavía sin nuevo despliegue al escribir esta entrada. Se rechazan claves reservadas en respuestas de cotización, tipos inesperados y fechas inexistentes en filtros, y cursores con campos que no sean texto. El parser del motor vectorial evita repetir búsquedas costosas ante atributos y longitudes malformados. Las pruebas de cada corrección reprodujeron antes el problema y comprobaron después su resolución.
