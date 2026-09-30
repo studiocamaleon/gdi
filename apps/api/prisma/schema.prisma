@@ -1039,6 +1039,10 @@ model CentroCopiadoOperacion {
 model User {
   id                       String                                @id @default(uuid()) @db.Uuid
   email                    String                                @unique
+  emailVerificado          String?
+  emailVerificadoEl        DateTime?
+  tokensAcceso             AccesoToken[]
+  correosAcceso            AccesoCorreo[]
   passwordHash             String?
   /// La clave que tiene es provisoria: la puso un administrador al
   /// restablecerla y el sistema obliga a cambiarla antes de dejar entrar a
@@ -1080,6 +1084,48 @@ model User {
   liberacionesDocumentales ArchivoRevision[]                     @relation("ArchivoRevisionLiberadaPor")
   eventosSistemaActuados   EventoSistema[]                       @relation("EventoSistemaActor")
   notificacionesInternas   NotificacionInterna[]
+}
+
+/// Tokens de identidad global, nunca de una empresa. Sólo su huella autoriza.
+model AccesoToken {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tipo String
+  email String
+  passwordStamp String
+  tokenHash String @unique
+  venceEl DateTime
+  usadoEl DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([venceEl])
+}
+
+/// Outbox cifrado: solicitudes, enlaces y avisos. No devuelve datos al navegador.
+model AccesoCorreo {
+  id String @id @default(uuid()) @db.Uuid
+  userId String? @db.Uuid
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tipo String
+  sobre Json?
+  estado String @default("pendiente")
+  intentos Int @default(0)
+  proximoEl DateTime @default(now())
+  lease String? @db.Uuid
+  leaseHasta DateTime?
+  venceEl DateTime
+  createdAt DateTime @default(now())
+  @@index([estado, proximoEl])
+  @@index([venceEl])
+}
+
+/// Cuotas globales compartidas por las réplicas; clave HMAC, sin IP/correo crudos.
+model AccesoLimite {
+  clave String @id
+  cantidad Int
+  venceEl DateTime
+  @@index([venceEl])
 }
 
 /// Identidad global: nunca se expone desde consultas generales de User.

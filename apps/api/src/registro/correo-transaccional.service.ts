@@ -1,3 +1,4 @@
+import { crearCorreoAcceso, type DatosCorreoAcceso } from './plantillas/acceso';
 import {
   Injectable,
   Logger,
@@ -31,6 +32,44 @@ export class CorreoTransaccionalService {
         'REGISTRO_PUBLICO_HABILITADO requiere RESEND_API_KEY en producción.',
       );
     }
+  }
+
+  get accesoDisponible() {
+    return !!this.resend;
+  }
+
+  async enviarAcceso(datos: DatosCorreoAcceso, idempotencyKey: string) {
+    if (!this.resend)
+      throw new ServiceUnavailableException('Correo no configurado.');
+    // Tiempo acotado y sin redirecciones. El outbox reintenta con la misma clave.
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
+      headers: {
+        authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'content-type': 'application/json',
+        'idempotency-key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        from:
+          process.env.RESEND_FROM ?? 'Grafoprint <registro@grafoprint.com.ar>',
+        to: [datos.para],
+        reply_to: process.env.RESEND_REPLY_TO,
+        ...crearCorreoAcceso(datos),
+        attachments: adjuntosMarcaCorreo().map((a) => ({
+          filename: a.filename,
+          content: a.content.toString('base64'),
+          content_type: a.contentType,
+          content_id: a.contentId,
+        })),
+      }),
+    });
+    await response.body?.cancel();
+    if (!response.ok)
+      throw new ServiceUnavailableException(
+        'El correo de acceso no pudo enviarse.',
+      );
   }
 
   async enviarInvitacionEmpresa(

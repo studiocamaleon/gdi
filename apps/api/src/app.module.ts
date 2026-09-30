@@ -96,6 +96,11 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
         redact: [
           'req.headers.authorization',
           'req.body.codigo',
+          'req.body.token',
+          'req.body.password',
+          'req.body.actual',
+          'req.body.nueva',
+          'res.headers["x-grafoprint-sesion-renovada"]',
           'req.body.estadoSecreto',
           'req.headers.cookie',
           'req.headers["x-hub-signature-256"]',

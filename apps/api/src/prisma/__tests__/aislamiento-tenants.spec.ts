@@ -61,6 +61,10 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   'User',
   'AuthSession',
   'UserMfa',
+  // Recuperación de identidad global y cuotas compartidas: sin acceso por tenant.
+  'AccesoToken',
+  'AccesoCorreo',
+  'AccesoLimite',
   // El navegador recordado pertenece a la identidad, no a una empresa.
   'MfaDispositivo',
   'MfaChallenge',
@@ -118,6 +122,8 @@ const EXENTOS_CON_TENANT_ID = new Set([
  */
 const ARCHIVOS_AUTORIZADOS = new Set([
   'auth/auth.service.ts',
+  // Recuperación global: revoca sesiones únicamente de la identidad del token.
+  'auth/recuperacion.service.ts',
   // Baja transaccional: membership y credencialMcp llevan tenantId explícito;
   // sólo revoca al userId indicado, conservando sus otras empresas.
   'auth/revocar-acceso-empresa.ts',

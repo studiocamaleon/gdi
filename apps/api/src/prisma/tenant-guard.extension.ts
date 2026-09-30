@@ -19,6 +19,10 @@ export const MODELOS_EXENTOS: ReadonlySet<string> = new Set<string>([
   'User',
   'AuthSession',
   'UserMfa',
+  // Recuperación de identidad global y cuotas compartidas: sin acceso por tenant.
+  'AccesoToken',
+  'AccesoCorreo',
+  'AccesoLimite',
   // Navegadores recordados por identidad, compartidos entre sus empresas.
   'MfaDispositivo',
   'MfaChallenge',

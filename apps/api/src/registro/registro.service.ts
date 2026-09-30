@@ -227,6 +227,8 @@ export class RegistroService {
       const user = await tx.user.create({
         data: {
           email: vigente.email,
+          emailVerificado: vigente.email,
+          emailVerificadoEl: new Date(),
           nombreCompleto: vigente.nombreCompleto,
           passwordHash: vigente.passwordHash,
           activo: true,
