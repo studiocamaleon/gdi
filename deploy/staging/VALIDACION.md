@@ -1,5 +1,11 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Archivos locales y tipos de cambio — 30/09/2026
+
+Sin nuevo despliegue: API/workers siguen en `119db9792`, web en `a93268414`, PDF y copiador conservan sus versiones custodiadas. El cambio `af2b1ca9c` afecta al almacenamiento de desarrollo: exige un objeto relativo dentro de su raíz, sin aceptar la propia carpeta ni reinterpretar rutas absolutas. Cuatro casos fallaron antes; las 14 pruebas de archivos, tipos y lint pasaron después. GitHub marcó como **Fixed** las cinco alertas del PR y su control de resultados CodeQL pasó, sin descartarlas ni desactivar reglas. Esto no elimina automáticamente las alertas históricas de `main` ni certifica todo el sistema.
+
+Se agregan siete casos HTTP de tipos de cambio con sesiones, permisos, servicios y PostgreSQL reales: acceso en las cinco rutas, lecturas simultáneas aisladas, identificador ajeno denegado, configuración sólo para gestores, autor y empresa fijados por el servidor, entradas inválidas sin persistencia y destino externo fijo. Pasaron 67 casos de tres suites, tipos y lint. Sólo la lectura de suscripción y la respuesta de DolarAPI son fixtures; no hubo llamadas a proveedores ni cambios en staging. El control obligatorio del PR incorpora estas pruebas y las de archivos. Su resultado remoto debe comprobarse sobre la nueva revisión.
+
 ## Protección de main y recuperación de respaldos — 30/09/2026, 21:12 UTC
 
 Los dos bloqueos operativos quedaron resueltos. GitHub confirma la regla activa de `main`: PR obligatorio, check `http` de GitHub Actions, rama al día, conversaciones resueltas y prohibición de borrado/force-push, sin bypass. No se fusionaron PR ni se cambió producción. Los cuatro workflows de `eea7e351` aprobaron: [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36715486634), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36715486703), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36715486660) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36715481015). Sus comentarios de análisis requieren revisión independiente del resultado de ejecución.
