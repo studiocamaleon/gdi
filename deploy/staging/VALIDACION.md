@@ -1,5 +1,15 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Procesamiento de archivos y tesorería — 30/09/2026, 10:23 UTC
+
+API y ambos workers ejecutan la fuente `45bf112cc9254403fc20ad2142715e92d525c547`, imagen `registry.fly.io/grafoprint-staging-api@sha256:1a51bda900534d3c6e6fcb77a0a07b2a6c9ada8da0809a0f3b840b408e4735aa`. Web, PDF y ejecutor de copias conservan sus versiones. Se verificaron las seis máquinas iniciadas, mismos tamaños y controles de salud disponibles aprobados. Sin migraciones nuevas ni cambios de producción. Los apartados inferiores conservan el estado histórico de cada ensayo.
+
+- OpenNest, lector DXF y herramientas de audio reciben únicamente variables necesarias para su trabajo. Tres pruebas con secretos ficticios fallaron antes de la corrección; después pasaron 23 casos en cinco suites, incluidos procesos reales, cancelación, conversión AAC/Opus y DXF. Tipos y lint dirigidos aprobados. La compilación remota pasó con tipos y comprobación de audio como usuario sin privilegios.
+- En la imagen desplegada se comprobó la lista permitida y un hijo real sin la variable secreta ficticia; también pasó conversión multimedia real y rechazo de archivos no válidos. Esto reduce la exposición por herencia de configuración, pero **no constituye un aislamiento del sistema operativo**: los hijos conservan UID y permisos de archivos del proceso padre.
+- Copia posterior completa a las 10:16:01 UTC: cuatro fuentes exactas, 299 migraciones y 13 archivos. Descarga, firma, descifrado y huellas aprobados. Se conserva como ensayo SQL/funcional completo el de las 09:17 UTC detallado debajo; no se presenta esta descarga posterior como una nueva restauración SQL.
+- Tesorería: diez casos nuevos y 37 solicitudes HTTP con PostgreSQL, sesiones y servicios reales. Se probaron permisos, cuentas/métodos/puntos de venta ajenos, transferencias entre empresas en ambos sentidos, imputaciones cruzadas y rechazo sin modificaciones parciales. La transferencia propia repetida conserva exactamente dos movimientos; la imputación propia y su reversión funcionan. Se sustituye la lectura del plan y las dependencias externas no utilizadas; no hubo emisión fiscal, correo ni llamadas a proveedores. Lint y tipos dirigidos aprobados.
+- El commit anterior `ca8f45e1178e4ef6e3ddc6f1d32d1370b40b95e3` aprobó [contenedores y recorrido HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36699649192) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36699649179). La ejecución de GitHub sobre este lote nuevo se registra al finalizar; no se infiere de esos resultados anteriores.
+
 ## Permisos de Centro de Copiado y comprobaciones adicionales — 30/09/2026, 09:44 UTC
 
 API y ambos workers ejecutan ahora la fuente `a949ba30571a7532c83c1f4a9087f6d3c3df79c7`, imagen `registry.fly.io/grafoprint-staging-api@sha256:4b4883f533a94cb8a3204f8420ce4d68b141bf19b255423361a65781831997d6`. Web y PDF mantienen las versiones de la tabla del apartado anterior. Mismos recursos y máquinas; builder temporal retirado al terminar. Sin nuevas migraciones, cambios de producción ni fusiones.
