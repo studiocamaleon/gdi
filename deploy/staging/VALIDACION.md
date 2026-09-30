@@ -1,5 +1,28 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Lote de seguridad y recuperación — 30/09/2026
+
+**Estado actual:** API, web, ambos workers y generador PDF desplegados y saludables, en las mismas cinco máquinas y con los mismos recursos. No se modificó producción ni se fusionaron PR. Se conservan las mejoras del Inbox del PR #8 y la redirección del PR #9.
+
+| Componente | Fuente | Imagen exacta |
+| --- | --- | --- |
+| API y ambos workers | `f78273ffa66fdb9d1216bf37bfe8309964b69a78` | `registry.fly.io/grafoprint-staging-api@sha256:4ff66704884319007798bb58a7140d75b72cb604f7cbed946ac8bde36cec8859` |
+| Web | `6552177322633140bf5e5b53cc026f697b2d965b` | `registry.fly.io/grafoprint-staging-web@sha256:e29ab48c5e856e2056203714b9df34a67fa37ef75731463a464779133689a93d` |
+| Generador PDF | `28c94c67381a69de85c94dfa12c176c67941004c` | `registry.fly.io/grafoprint-staging-pdf@sha256:db32ce06062ac320ce2b11b15e5b5b8ad2382455ec2462987a75e2d82cb87d75` |
+
+- **Base:** migración aditiva `20260930020000_recuperacion_identidad`, total 299. Historial anterior y checksums conservados, cero migraciones pendientes. Se reaplicaron las concesiones del rol de ejecución y se verificó que el lector de respaldos puede leer las tres tablas nuevas sin escribir. No hubo seeds ni reinicio de datos. IDs y cantidades originales de empresas, usuarios, conversaciones, mensajes, envíos y archivos conservados después de limpiar los ensayos. Se verificaron 270 relaciones con empresa en ambos extremos, sin referencias cruzadas en los datos existentes.
+- **Prueba HTTP real:** con dos empresas/usuarios ficticios temporales pasaron login, cookie Secure/HttpOnly/SameSite, rechazo de origen ajeno, perímetro de API, otra empresa rechazada, cabecera de empresa falsificada ignorada y permisos quitados efectivos de inmediato. Pasaron activación de MFA, revocación de sesiones anteriores, rotación al cambiar contraseña, nuevo login con segundo factor/código de recuperación y cierre del canal SSE al revocar su sesión. Datos temporales eliminados al finalizar.
+- **Archivos reales:** después de vencer las firmas anteriores, la API emitió una subida de PDF con condición de creación única. Carga y confirmación 201 aprobadas, segundo confirmar sin duplicar cuota, reemplazo de bytes 412 y escritura con rol de sólo lectura 403. El driver también pasó multipart, hash de descarga, CORS exacto y rechazo sin firma. Se eliminaron únicamente los objetos y filas del ensayo.
+- **Componentes:** FFmpeg 9.0.2 construido desde fuente verificada, con protocolos y formatos limitados; conversión AAC → Opus y rechazos de formatos no permitidos aprobados como usuario sin privilegios. pip 26.2.1 e importaciones de los motores verificadas. Etiqueta con texto/QR comprobada en la imagen final. PDF con Gotenberg 8.37.0 y Chromium 154.0.8037.57, actualizaciones de Debian aplicadas; documento real generado por red privada y solicitudes a URLs públicas/privadas rechazadas con 403. No tiene servicio público.
+- **Dependencias:** auditorías de dependencias npm de producción sin avisos en los siete proyectos revisados. Se prepararon revisiones de Dependabot y un check de PR sin secretos, sin instalación de paquetes del PR ni fusión automática. Se activarán al integrar los archivos a `main`; todavía no acreditan una ejecución de GitHub. Esto no significa que todo aviso del sistema operativo haya desaparecido.
+- **Interfaz:** sesión existente conservada y panel de la empresa demo cargado en Chrome tras recargar. Inbox muestra correctamente el vencimiento del acceso de prueba de Meta; no se enviaron mensajes ni se afirma haber repetido un intercambio real con ese token vencido.
+- **Compilación:** tipos y builds remotos aprobados. Un primer push de la web falló en el registro después de compilar; el reintento final terminó correctamente. No se compilaron contenedores en la Mac ni se reinició Docker.
+
+El ejecutor de copias se actualizó con las tres imágenes desplegadas y cuatro fuentes exactas (API, web, PDF y ejecutor). La copia posterior al cambio terminó; se descargó y descifró con firma válida, 299 migraciones, 13 archivos y cuatro archivos de fuentes con huellas correctas. Restauración SQL en base nueva aislada: 216 tablas y 1.591 filas, con dueño sin superusuario y sin login al terminar. La API del lote nuevo arrancó con esa base restaurada: login con MFA recuperada, lectura/alta de cliente, rechazo de otra empresa y de acceso sin sesión, y apertura de los 13 objetos con hash correcto. La red externa se bloqueó desde el sistema operativo; no se habilitaron cron, workers ni envíos. El rol del ensayo se dejó sin login. Healthchecks confirmó el cierre real. El builder temporal se retiró tras terminar las compilaciones.
+
+**Límites:** estas verificaciones son evidencia de los recorridos indicados, no una certificación de los 670 endpoints ni garantía frente a cualquier ataque. Recuperación de cuenta por correo permanece deshabilitada hasta configurar y ensayar un transporte real. Coexistencia de Meta, carga sostenida, cambio completo a infraestructura de reemplazo y recuperación ante pérdida del teléfono requieren sus ensayos específicos. Los hallazgos y la cobertura detallada permanecen en el informe privado.
+
+
 ## Activación del respaldo y recuperación de la copia operativa — 30/09/2026
 
 - El titular detectó que la nota larga de recuperación había sido recortada. Se invalidó aquella confirmación y se prepararon cuatro notas de 144–233 caracteres, con marcas de final. El titular confirmó las cuatro completas después de guardarlas. La llave privada de descifrado y la clave interna de Grafo permanecen fuera del ejecutor.
