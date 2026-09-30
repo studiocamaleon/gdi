@@ -47,12 +47,36 @@ COPY apps/api/prisma/schema.prisma ./prisma/schema.prisma
 COPY --from=api-build /app/apps/api/dist ./dist
 RUN npm ci --omit=dev --no-audit --no-fund && npm run prisma:generate
 
+# Sólo los contenedores/codecs que admite Inbox. Sin red, listas remotas,
+# subtítulos, filtros de video, dispositivos ni bibliotecas gráficas de escritorio.
+# Compilar en TARGETPLATFORM: los binarios se copian al runtime de esa arquitectura.
+FROM base AS inbox-ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config nasm libopus-dev curl xz-utils gnupg \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /tmp/ffmpeg
+RUN curl --fail --location --proto '=https' https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o source.tar.xz \
+    && echo '8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e  source.tar.xz' | sha256sum --check --strict \
+    && curl --fail --location --proto '=https' https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz.asc -o source.asc \
+    && curl --fail --location --proto '=https' https://ffmpeg.org/ffmpeg-devel.asc -o release-key.asc \
+    && gpg --batch --import release-key.asc \
+    && gpg --batch --status-fd=1 --verify source.asc source.tar.xz > verified.txt \
+    && grep -q '^\[GNUPG:\] VALIDSIG FCF986EA15E6E293A5644F10B4322F04D67658D8 ' verified.txt \
+    && tar -xJf source.tar.xz --strip-components=1 \
+    && ./configure --prefix=/opt/inbox-ffmpeg --disable-autodetect --disable-network --disable-doc --disable-debug \
+       --disable-shared --enable-static --disable-everything --disable-avdevice --disable-swscale --disable-ffplay \
+       --enable-ffmpeg --enable-ffprobe --enable-libopus --enable-swresample \
+       --enable-protocol=file,pipe --enable-demuxer=matroska,mov,ogg,mp3,aac,amr --enable-muxer=ogg \
+       --enable-decoder=aac,opus,vorbis,mp3,mp3float,amrnb,amrwb,h264 \
+       --enable-encoder=libopus --enable-parser=aac,aac_latm,opus,vorbis,mpegaudio,h264 \
+       --enable-filter=abuffer,abuffersink,aformat,anull,aresample,atrim,asetpts \
+    && make -j2 && make install
+
 FROM python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS backend
 # compas_nest publica su wheel Linux para Python >= 3.12 (x86_64).
 COPY --from=base /usr/local/bin/node /usr/local/bin/node
 # Sharp rasteriza los textos de las etiquetas mediante las fuentes del sistema.
 # Las imágenes slim no incluyen ninguna: sin ésta se imprimen cuadros vacíos.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl libgomp1 fontconfig fonts-dejavu-core ffmpeg \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl libgomp1 fontconfig fonts-dejavu-core libopus0 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 node && useradd --uid 1000 --gid node --create-home node \
     && python3 -m venv /opt/grafoprint-python
@@ -64,6 +88,8 @@ RUN python3 -m pip install --no-cache-dir --only-binary=:all: --require-hashes -
     && /opt/grafoprint-python/bin/pip install --no-cache-dir --only-binary=:all: -r /tmp/requirements-opennest.txt \
     && /opt/grafoprint-python/bin/pip check \
     && /opt/grafoprint-python/bin/python -c "import compas_nest, scipy, ezdxf"
+COPY --from=inbox-ffmpeg /opt/inbox-ffmpeg/bin/ffmpeg /opt/inbox-ffmpeg/bin/ffprobe /usr/local/bin/
+COPY --from=inbox-ffmpeg /tmp/ffmpeg/COPYING.LGPLv2.1 /tmp/ffmpeg/LICENSE.md /usr/local/share/licenses/ffmpeg/
 ENV NODE_ENV=production PORT=3001 HOST=:: \
     OPENNEST_PYTHON=/opt/grafoprint-python/bin/python \
     DXF_PYTHON=/opt/grafoprint-python/bin/python \
@@ -80,6 +106,9 @@ COPY --chown=node:node apps/api/scripts/deploy ./scripts/deploy
 # LocalDriver crea su directorio al inicializarse, incluso cuando se usa R2.
 RUN mkdir -p .storage && chown node:node .storage
 USER node
+# Ensayo sobre los binarios finales, con el mismo usuario de la aplicación.
+COPY --chown=node:node src/app/dev/diseno/inbox/archivo/fixtures/tono.m4a /tmp/inbox-verificacion/tono.m4a
+RUN node scripts/deploy/verify-media.cjs /tmp/inbox-verificacion/tono.m4a
 EXPOSE 3001
 CMD ["node", "dist/src/main.js"]
 
