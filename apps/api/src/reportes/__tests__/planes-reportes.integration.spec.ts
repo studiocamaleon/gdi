@@ -137,7 +137,7 @@ async function preparar(c: Contexto) {
   const completa: CurrentAuth = {
     ...c.auth,
     tenantId,
-    role: 'OPERARIO',
+    role: 'OPERADOR',
     permisos: new Set([
       'reportes.ver',
       'reportes.ver_resumen',
