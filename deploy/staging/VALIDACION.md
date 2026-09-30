@@ -1,5 +1,23 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Copiador seguro, versiones custodiadas y copia comprobada — 30/09/2026, 23:14 UTC
+
+El refuerzo del arranque `6d2c51a15f58e42743af38d056642df28efe1636` está desplegado en el copiador. API, dos workers, web y PDF mantienen `5cb1a52488d8a8918c70ebb2182a44cdc7f3292b`. Se conservaron las seis máquinas y sus tamaños; el servidor temporal de compilación fue retirado. No hubo migraciones ni cambios en producción.
+
+- La imagen real del copiador pasó el arranque con UID 10001, carpetas privadas, bloqueo exclusivo, siete rechazos de rutas manipuladas y conservación del estado/inode entre reinicios. En Fly se comprobaron padre root sin escritura para el usuario, estado/configuración privados y bloqueo retenido. Los seis servicios pasaron el control de utilidades sin elevación; un PDF real y salud de API/web también aprobaron.
+- El postflight de sólo lectura conserva las 299 migraciones y los mismos IDs/recuentos de empresa, usuarios, conversación, mensajes, envíos y archivos. No hay cruces entre empresas en las 270 relaciones comprobadas.
+- CI de `6d2c51a15` aprobó [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36789058688), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36789058722), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36789058806) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36789058658), incluido el check de resultados. Vercel Preview también aprobó. Esto corresponde a esa revisión ejecutable, no a futuros commits documentales.
+- Copia `2ff47abd-0019-402a-86f1-6efeee0593aa`: inició 23:11:50 y terminó 23:12:42 UTC. El copiador notificó éxito real al monitor. Con el material de custodia del titular se verificaron firma, descifrado e integridad de la base, los 13 archivos y las dos fuentes exactas que contienen los cuatro componentes. El manifiesto coincide con las cuatro imágenes desplegadas; verificación terminada a las 23:14:08 UTC. La retención sigue siendo de al menos 30 días.
+
+| Componente | Imagen fijada |
+| --- | --- |
+| API y workers | `registry.fly.io/grafoprint-staging-api@sha256:5cf57fa2289707cecb8ce7bf5eca6c28df832a0535a8a9337ad61593c9e79118` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:df56b9ba00fc70b7b3a0af725bb774945d3446834cf852c6d3f55a3092a8213e` |
+| PDF | `registry.fly.io/grafoprint-staging-pdf@sha256:c04d34a4ee5612eb085dde7183d683248f08eaeced025b70b16fe5a2c9aca4c8` |
+| Copiador | `registry.fly.io/grafoprint-staging-respaldo@sha256:766e1ba841ffc48c6ca2425ae02c385a2fbded3942083aed3abcf1a30107b2b4` |
+
+La descarga de esta nueva copia no repite su importación SQL ni el recorrido funcional completo. La última restauración SQL/API comprobada sigue siendo la de las 21:12 UTC descrita debajo. Continúan la revisión restante de seguridad, el correo de recuperación deshabilitado, la resolución de dependencias entre PR y los ensayos del futuro entorno de producción. El PR #10 permanece en borrador.
+
 ## Imágenes reforzadas y preparación segura del copiador — 30/09/2026
 
 Las seis máquinas ejecutan `5cb1a52488d8a8918c70ebb2182a44cdc7f3292b`. Se comprobaron sus usuarios sin root y la ausencia de setuid/setgid en las utilidades de consola revisadas. API/web responden 200; la API generó un PDF ficticio válido por la red privada. Se conservan máquinas, regiones, tamaños y las 299 migraciones. El postflight de sólo lectura conserva IDs y cantidades de seis tablas y no encuentra cruces en las 270 relaciones con empresa en ambos extremos. Todos los controles de CI de esta revisión aprobaron.
