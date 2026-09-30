@@ -1,0 +1,83 @@
+name: Comprobar permisos y separación de empresas
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/security-boundaries.yml'
+      - 'apps/api/**'
+      - 'grafo-hotwire-linker-v1/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-boundaries-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  http:
+    # Ejecutor efímero gratuito para este repositorio público; revisar
+    # presupuesto antes de habilitarlo si se cambia su visibilidad.
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gdi_saas_test
+        ports:
+          - 5436:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gdi_saas_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      # Son únicamente accesos desechables del contenedor de este job.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5436/gdi_saas_test?schema=public
+      MIGRATE_DATABASE_URL: postgresql://postgres:postgres@localhost:5436/gdi_saas_test?schema=public
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5436/gdi_saas_test?schema=public
+      GRAFO_LOCAL_DISABLE_CRON: 'true'
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.21.0'
+      - name: Preparar la dependencia local del motor
+        working-directory: grafo-hotwire-linker-v1
+        run: |
+          npm ci --include=dev --no-audit --no-fund
+          npm run build
+      - name: Preparar API y base vacía de pruebas
+        working-directory: apps/api
+        run: |
+          npm ci --include=dev --no-audit --no-fund
+          npm run test:dependencias
+          npm run prisma:generate
+          npm run prisma:migrate:deploy
+      - name: Comprobar permisos, referencias ajenas y enlaces públicos por HTTP
+        working-directory: apps/api
+        # Lista explícita: estas suites crean y retiran sus propios fixtures.
+        # No requieren seed, cuentas reales ni acceso a proveedores externos.
+        run: |
+          node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/auth/__tests__/modulos-aislamiento-http.integration.spec.ts \
+            src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
+            src/auth/__tests__/comercial-relaciones-http.integration.spec.ts \
+            src/auth/__tests__/registros-compras-aislamiento-http.integration.spec.ts \
+            src/auth/__tests__/egresos-aislamiento-http.integration.spec.ts \
+            src/auth/__tests__/inventario-aislamiento-http.integration.spec.ts \
+            src/auth/__tests__/costos-maquinaria-http.integration.spec.ts \
+            src/centro-copiado/__tests__/permisos-http.integration.spec.ts \
+            src/archivos/__tests__/permisos-http.integration.spec.ts \
+            src/enlaces-publicos/__tests__/enlaces-publicos.http.integration.spec.ts \
+            src/produccion/__tests__/produccion-aislamiento-http.integration.spec.ts \
+            src/productos-servicios/__tests__/productos-aislamiento-http.integration.spec.ts

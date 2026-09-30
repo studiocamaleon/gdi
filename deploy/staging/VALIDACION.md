@@ -1,5 +1,17 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Fronteras de producción y productos — 30/09/2026, 11:35 UTC
+
+Sin cambios de código ejecutable ni nuevo despliegue: API/web conservan la fuente `a93268414c03b26013c181fe25e28281fad674b3`. Se añadieron 26 casos HTTP con PostgreSQL y dos empresas ficticias, usando sesiones, permisos, validación y servicios reales.
+
+- Producción: listados aislados, recursos, familias, días y configuración; rechazo de edición/borrado ajeno y referencias a equipos, empleados, horarios, máquinas y pasos ajenos. Se comprobaron datos sin cambios después del rechazo, altas propias y concurrencia al asignar un paso a estaciones. Trece casos nuevos aprobados; tipos y lint aprobados.
+- Productos: lectura, edición, duplicación y borrado; referencias cruzadas entre producto/ruta/alternativa/paso, migración mixta y campos internos rechazados sin escrituras parciales. Trece casos nuevos aprobados, con el interceptor real de publicación. Regresión dirigida: 33 casos en seis suites aprobados; tipos y lint aprobados. El plan y la entrega externa de eventos se sustituyen; no se ensayaron proveedores ni todos los tipos de configuración productiva.
+- Planificación y producción: otras cuatro suites existentes, 42 casos aprobados. No equivalen a un ensayo completo de todo el taller.
+- Se preparó un control de PR con PostgreSQL efímero, migraciones y doce suites HTTP explícitas, sin seeds ni accesos cloud. Su lote local aprobó 264 casos. El primer resultado de este workflow nuevo en GitHub se registrará al terminar; no se deduce del resultado local.
+- Sobre el commit anterior `a1380019facc9c037a3d48af8ebcffbdf6f472dc` aprobaron [contenedores y HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36707647368) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36707647337).
+
+El incidente de respaldos descrito debajo sigue abierto. Estas pruebas no normalizan las copias ni habilitan producción.
+
 ## Contratación vinculada y estado de respaldos — 30/09/2026, 11:08 UTC
 
 API, ambos workers y web ejecutan la fuente `a93268414c03b26013c181fe25e28281fad674b3`. Backend: `registry.fly.io/grafoprint-staging-api@sha256:27859e1f7345e7232cb37fd2b61a07293af08cb6f9707420b9cd5a73b02c4fa6`; web: `registry.fly.io/grafoprint-staging-web@sha256:e974960a90585f7e4b6083143cee28b2d92c3778f6fb7c6b64aac4a3897e3026`. PDF y copiador conservan sus imágenes. Seis máquinas iniciadas y controles de salud disponibles aprobados. Sin nuevas migraciones, tamaños, fusiones ni cambios de producción.
