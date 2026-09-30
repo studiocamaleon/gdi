@@ -1,5 +1,15 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Validaciones de entradas y motor vectorial — 30/09/2026
+
+Lote preparado localmente, todavía sin nuevo despliegue al escribir esta entrada. Se rechazan claves reservadas en respuestas de cotización, tipos inesperados y fechas inexistentes en filtros, y cursores con campos que no sean texto. El parser del motor vectorial evita repetir búsquedas costosas ante atributos y longitudes malformados. Las pruebas de cada corrección reprodujeron antes el problema y comprobaron después su resolución.
+
+Resultados locales: MCP 24 casos; consultas y regresión de egresos/panel 79; motor vectorial 12; controles existentes de Meta/archivos/recorridos/órdenes 50. Tipos dirigidos aprobados. El lint de las pruebas nuevas aprueba; el módulo MCP conserva doce avisos de tipos preexistentes fuera del cambio. CI incorpora los nuevos casos y el ensayo del motor. Se retira el lockfile de pnpm obsoleto; las instalaciones y despliegues siguen usando npm y sus package-lock.
+
+La revisión previa `e156b208fd310ef62237702a3cfea22a20f9906c` aprobó los cuatro controles remotos: [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36712110378), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36712110327), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36712110360) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36712106451). CodeQL quedó activo para JavaScript/TypeScript, Python y GitHub Actions; un análisis completado no significa ausencia de alertas.
+
+La protección de `main` continúa pendiente de guardar por la verificación personal de GitHub. Los respaldos conservan el incidente operativo descrito debajo. No se modifica producción ni se considera habilitada.
+
 ## Previsiones y controles automáticos de GitHub — 30/09/2026
 
 Sin cambios ejecutables ni despliegue: API/web siguen en `a93268414c03b26013c181fe25e28281fad674b3`. Se añadieron nueve casos HTTP de ETA con sesiones, permisos, servicios y PostgreSQL reales: las cinco rutas exigen sus accesos correspondientes, separan contexto/colas/precisión/salud entre dos empresas y sólo permiten al supervisor publicar registros propios sin duplicarlos. Se usaron datos ficticios; únicamente la lectura del plan está sustituida. No se acredita carga máxima ni todas las entradas de negocio. Regresión dirigida de cuatro suites: 20 casos aprobados; tipos y lint aprobados. El lote de trece suites HTTP aprobó 273 casos localmente.

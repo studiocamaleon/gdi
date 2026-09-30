@@ -53,7 +53,7 @@ jobs:
         working-directory: grafo-hotwire-linker-v1
         run: |
           npm ci --include=dev --no-audit --no-fund
-          npm run build
+          npm test
       - name: Preparar API y base vacía de pruebas
         working-directory: apps/api
         run: |
@@ -79,4 +79,7 @@ jobs:
             src/enlaces-publicos/__tests__/enlaces-publicos.http.integration.spec.ts \
             src/produccion/__tests__/produccion-aislamiento-http.integration.spec.ts \
             src/productos-servicios/__tests__/productos-aislamiento-http.integration.spec.ts \
-            src/eta/__tests__/eta-aislamiento-http.integration.spec.ts
+            src/eta/__tests__/eta-aislamiento-http.integration.spec.ts \
+            src/mcp/__tests__/armar-jobcontext.spec.ts \
+            src/panel-general/__tests__/panel-actividad-entradas.spec.ts \
+            src/egresos/__tests__/egresos-entradas.spec.ts
