@@ -20,5 +20,9 @@ kill_timeout = "60s"
   cpus = 1
   memory = "512mb"
 
+[[restart]]
+  policy = "always"
+  processes = ["app"]
+
 # Una máquina, sin http_service/services ni IP pública. Nunca escalar a dos.
 # El volumen conserva índice incremental; sus secretos no sustituyen el kit de recuperación.

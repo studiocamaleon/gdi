@@ -16,6 +16,14 @@ El proceso copia al arrancar y luego en cada cambio de hora UTC. No acumula tare
 
 El comprobante firmado se guarda en B2 y se descarga para verificarlo antes de avisar éxito. No depende de conservar un recibo en la Mac. En el arranque se usa un bloqueo del sistema operativo sobre el volumen; sólo bajo ese bloqueo se limpian restos temporales de un proceso interrumpido. No escalar el ejecutor a más de una máquina.
 
+La política de reinicio de Fly es `always`: vuelve a arrancar si termina el proceso principal, incluso con salida normal. Esto no sustituye la alerta externa ni garantiza recuperación automática ante pérdida del volumen o de la cuenta. Referencia: [política de reinicio de Fly](https://fly.io/docs/machines/guides-examples/machine-restart-policy/).
+
+## Custodia en el teléfono
+
+El titular conserva cuatro notas cortas, numeradas y con una marca `FIN GRAFO N/4`: llave del respaldo, clave interna de Grafo, lector B2 y firma pública. Se deben guardar y volver a abrir las cuatro para comprobar que no fueron recortadas. La nota larga anterior resultó incompleta y no es una custodia válida. No copiar claves a chats, tickets ni Git.
+
+Las cuatro notas permiten leer los comprobantes remotos y descifrar los respaldos sin la configuración del ejecutor. También hay una copia auxiliar cifrada del kit y un índice firmado bajo `staging/custodia/`; elegir versiones anteriores al incidente y validar con la firma pública conservada por el titular. El kit auxiliar no reemplaza esas notas ni es una llave de recuperación alternativa si se pierde la identidad privada. Al rotar accesos o claves, actualizar la custodia y repetir la comprobación.
+
 ## Si llega una alerta
 
 1. Revisar si dice fallo o ausencia de señal. Una alerta no significa que se hayan perdido las copias anteriores.
