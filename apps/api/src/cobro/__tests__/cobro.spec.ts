@@ -111,6 +111,15 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       select: { id: true },
     });
     planId = p.id;
+    // Vínculo histórico conocido: no se permite crearlo desde custom_data.
+    await prisma.suscripcion.create({
+      data: {
+        tenantId,
+        planId,
+        proveedor: 'paddle',
+        referenciaExterna: 'sub_alta',
+      },
+    });
   });
 
   afterAll(async () => {
@@ -150,9 +159,7 @@ describe('Cobro · normalización a nuestra suscripción', () => {
         ends_at: '2026-08-24T22:36:57.567517Z',
       },
     });
-    expect(crudo?.periodoDesde?.toISOString()).toBe(
-      '2026-07-24T22:36:57.567Z',
-    );
+    expect(crudo?.periodoDesde?.toISOString()).toBe('2026-07-24T22:36:57.567Z');
 
     const camel = sync.extraer({
       id: 'sub_1',
@@ -167,12 +174,13 @@ describe('Cobro · normalización a nuestra suscripción', () => {
     );
   });
 
-  it('da de alta la suscripción resolviendo tenant y plan', async () => {
+  it('actualiza la suscripción histórica por su referencia vinculada', async () => {
     const r = await sync.aplicar({
       referencia: 'sub_alta',
       estadoProveedor: 'active',
       clienteExterno: 'ctm_1',
       proximoCobro: null,
+      periodoDesde: null,
       precios: [priceId],
       tenantId,
       cambioProgramado: null,
@@ -187,16 +195,20 @@ describe('Cobro · normalización a nuestra suscripción', () => {
 
   it('past_due da siete días, no reinicia la gracia y después deja solo lectura', async () => {
     const inicio = new Date('2026-08-25T12:00:00Z');
-    await sync.aplicar({
-      referencia: 'sub_alta',
-      estadoProveedor: 'past_due',
-      clienteExterno: 'ctm_1',
-      proximoCobro: null,
-      precios: [priceId],
-      tenantId: null, // resuelve por la referencia ya vinculada
-      cambioProgramado: null,
-      cambioProgramadoEl: null,
-    }, { ocurridoEl: inicio, origen: 'webhook', ahora: inicio });
+    await sync.aplicar(
+      {
+        referencia: 'sub_alta',
+        estadoProveedor: 'past_due',
+        clienteExterno: 'ctm_1',
+        proximoCobro: null,
+        periodoDesde: null,
+        precios: [priceId],
+        tenantId: null, // resuelve por la referencia ya vinculada
+        cambioProgramado: null,
+        cambioProgramadoEl: null,
+      },
+      { ocurridoEl: inicio, origen: 'webhook', ahora: inicio },
+    );
     let s = await prisma.suscripcion.findFirst({ where: { tenantId } });
     expect(s?.estado).toBe('activa');
     expect(s?.estadoProveedor).toBe('past_due');
@@ -210,6 +222,7 @@ describe('Cobro · normalización a nuestra suscripción', () => {
         estadoProveedor: 'past_due',
         clienteExterno: 'ctm_1',
         proximoCobro: null,
+        periodoDesde: null,
         precios: [priceId],
         tenantId: null,
         cambioProgramado: null,
@@ -230,6 +243,7 @@ describe('Cobro · normalización a nuestra suscripción', () => {
         estadoProveedor: 'active',
         clienteExterno: 'ctm_1',
         proximoCobro: null,
+        periodoDesde: null,
         precios: [priceId],
         tenantId: null,
         cambioProgramado: null,
@@ -243,6 +257,7 @@ describe('Cobro · normalización a nuestra suscripción', () => {
         estadoProveedor: 'canceled',
         clienteExterno: 'ctm_1',
         proximoCobro: null,
+        periodoDesde: null,
         precios: [priceId],
         tenantId: null,
         cambioProgramado: null,
@@ -267,6 +282,7 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       estadoProveedor: 'canceled',
       clienteExterno: 'ctm_1',
       proximoCobro: null,
+      periodoDesde: null,
       precios: [priceId],
       tenantId: null,
       cambioProgramado: null,
@@ -283,6 +299,7 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       estadoProveedor: 'active',
       clienteExterno: null,
       proximoCobro: null,
+      periodoDesde: null,
       precios: [priceId],
       tenantId: null,
       cambioProgramado: null,
@@ -297,6 +314,7 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       estadoProveedor: 'algo_nuevo',
       clienteExterno: null,
       proximoCobro: null,
+      periodoDesde: null,
       precios: [priceId],
       tenantId,
       cambioProgramado: null,
