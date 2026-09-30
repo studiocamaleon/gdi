@@ -14,6 +14,7 @@ import { MFA_HEADERS, MFA_RECORDADO_HEADER } from './mfa-dispositivo-cookie';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentSession } from './current-auth.decorator';
 import { PermitirClaveProvisoria } from './clave-provisoria.decorator';
+import { SESION_RENOVADA_HEADER } from './sesion-renovada';
 import { AuthService } from './auth.service';
 import { PermitirEnrolamientoPlataforma } from './enrolamiento-plataforma';
 import {
@@ -137,11 +138,18 @@ export class AuthController {
   @PermitirEnrolamientoPlataforma()
   @Post('password')
   @PermitirClaveProvisoria()
-  cambiarPassword(
+  async cambiarPassword(
     @CurrentSession() auth: CurrentAuth,
     @Body() payload: CambiarPasswordDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.cambiarPassword(auth, payload);
+    const { accessToken } = await this.authService.cambiarPassword(
+      auth,
+      payload,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader(SESION_RENOVADA_HEADER, accessToken);
+    return { ok: true as const };
   }
 
   @Get('me')

@@ -529,7 +529,7 @@ export class AuthService {
     // la identidad: otro cambio/restablecimiento no puede usar la misma clave
     // antigua ni dejar una contraseña nueva con sesiones anteriores vivas.
     const passwordHash = await bcrypt.hash(dto.nueva, 10);
-    await this.prisma.$transaction(async (tx) => {
+    const accessToken = await this.prisma.$transaction(async (tx) => {
       await bloquearIdentidad(tx, user.id);
       const vigente = await tx.user.findUnique({ where: { id: user.id } });
       const sesion = await tx.authSession.findFirst({
@@ -540,9 +540,21 @@ export class AuthService {
           expiresAt: { gt: new Date() },
           impersonacionId: null,
         },
-        select: { id: true },
+        include: { currentMembership: true },
       });
       if (!vigente?.activo || !sesion)
+        throw new UnauthorizedException('Volvé a iniciar sesión.');
+      const plataforma = auth.esPlataforma === true;
+      if (
+        (plataforma &&
+          (!vigente.rolPlataforma ||
+            sesion.currentTenantId ||
+            sesion.currentMembershipId)) ||
+        (!plataforma &&
+          (sesion.currentTenantId !== auth.tenantId ||
+            sesion.currentMembershipId !== auth.membershipId ||
+            !sesion.currentMembership?.activa))
+      )
         throw new UnauthorizedException('Volvé a iniciar sesión.');
       if (vigente.passwordHash !== user.passwordHash)
         throw new BadRequestException(
@@ -552,12 +564,23 @@ export class AuthService {
         where: { id: user.id },
         data: { passwordHash, debeCambiarPassword: false },
       });
-      // Se conserva sólo la sesión personal que hizo el cambio.
+      // Cambiar también el identificador corta una copia del token del mismo
+      // navegador. Conservar la edad/plazo evita extender su vida máxima.
+      const nuevaSesion = await tx.authSession.create({
+        data: {
+          userId: user.id,
+          currentTenantId: sesion.currentTenantId,
+          currentMembershipId: sesion.currentMembershipId,
+          mfaVerificadoEl: sesion.mfaVerificadoEl,
+          createdAt: sesion.createdAt,
+          expiresAt: sesion.expiresAt,
+        },
+      });
       await tx.authSession.updateMany({
         where: {
           userId: user.id,
           revokedAt: null,
-          id: { not: auth.sessionId },
+          id: { not: nuevaSesion.id },
         },
         data: { revokedAt: new Date() },
       });
@@ -566,10 +589,19 @@ export class AuthService {
         where: { userId: user.id, revocadoEl: null },
         data: { revocadoEl: new Date() },
       });
+      return this.issueToken({
+        sub: user.id,
+        sessionId: nuevaSesion.id,
+        tenantId: sesion.currentTenantId ?? '',
+        membershipId: sesion.currentMembershipId ?? '',
+        role: sesion.currentMembership?.rol ?? RolSistema.ADMINISTRADOR,
+        email: vigente.email,
+        ...(plataforma ? { plat: true } : {}),
+      });
     });
     this.sessionCache.invalidarUsuario(user.id);
 
-    return { ok: true as const };
+    return { ok: true as const, accessToken };
   }
 
   async logout(auth: CurrentAuth) {

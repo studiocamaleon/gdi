@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/lib/session";
+import { SESION_RENOVADA_HEADER } from "../../../../../apps/api/src/auth/sesion-renovada";
 import { comprobarOrigenDeEscritura } from "@/lib/request-origin";
 import {
   CuerpoDemasiadoGrande,
@@ -146,6 +147,27 @@ async function handler(
         });
       }
     }
+  }
+  if (response.ok && method === "POST" && ruta === "auth/password") {
+    const renovada = response.headers.get(SESION_RENOVADA_HEADER);
+    // Sólo una respuesta del API a esta operación puede renovar la cookie.
+    // No admitir un valor aportado por el navegador ni filtrar el token.
+    if (!renovada || renovada.length > 16384 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(renovada)) {
+      await response.body?.cancel();
+      cookieStore.delete(SESSION_COOKIE_NAME);
+      for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
+      return cabecerasPrivadas(Response.json({
+        message: "La contraseña se actualizó. Volvé a ingresar con tu nueva clave.",
+      }, { status: 401, headers: { "cache-control": "private, no-store" } }));
+    }
+    cookieStore.set(SESSION_COOKIE_NAME, renovada, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    });
+    for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
   }
   if (
     response.ok &&

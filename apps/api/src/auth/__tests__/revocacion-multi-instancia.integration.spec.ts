@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { SinTenant } from '../../common/sin-tenant.decorator';
 import type { Server } from 'node:http';
 import {
   Controller,
@@ -36,6 +37,12 @@ import type { CurrentAuth } from '../auth.types';
  * de logout, clave y MFA usan los servicios de la aplicación. Sin red externa. */
 @Controller('sonda')
 class SondaController {
+  @Get('plataforma')
+  @SinTenant()
+  plataforma() {
+    return { ok: true };
+  }
+
   @Get()
   @SoloAutenticado()
   acceso(@CurrentSession() auth: CurrentAuth) {
@@ -295,17 +302,137 @@ describe('Revocación efectiva entre instancias de la API', () => {
     await acceder(1, otra).expect(200);
   });
 
-  it('cambiar la clave cierra las otras sesiones y conserva la que la cambió', async () => {
+  it('cambiar la clave cierra los accesos anteriores y entrega una sesión renovada', async () => {
     await acceder(0, otra).expect(200);
     await acceder(1, otra).expect(200);
-    await request(apps[0].getHttpServer())
+    const cambio = await request(apps[0].getHttpServer())
       .post('/auth/password')
       .set('Authorization', `Bearer ${bearer(auth)}`)
       .send({ actual: password, nueva: 'Otra clave ficticia 456' })
       .expect(201);
     await acceder(0, otra).expect(401);
     await acceder(1, otra).expect(401);
+    await acceder(1, auth).expect(401);
+    await acceder(1, cambio.headers['x-grafoprint-sesion-renovada']).expect(
+      200,
+    );
+  });
+
+  it('una copia del token de la sesión que cambió la clave deja de servir', async () => {
+    const tokenAnterior = bearer(auth);
+    const original = await prisma.authSession.findUniqueOrThrow({
+      where: { id: auth.sessionId },
+    });
+    const respuesta = await request(apps[0].getHttpServer())
+      .post('/auth/password')
+      .set('Authorization', `Bearer ${tokenAnterior}`)
+      .send({ actual: password, nueva: 'Cambio seguro ficticio 987' })
+      .expect(201);
+    await acceder(1, tokenAnterior).expect(401);
+    const nuevo = respuesta.headers['x-grafoprint-sesion-renovada'];
+    expect(nuevo).toEqual(expect.any(String));
+    expect(nuevo).not.toBe(tokenAnterior);
+    expect(respuesta.body).toEqual({ ok: true });
+    await acceder(1, nuevo).expect(200);
+    const payload = jwt.verify<{ sessionId: string }>(nuevo, {
+      secret: secreto,
+    });
+    const renovada = await prisma.authSession.findUniqueOrThrow({
+      where: { id: payload.sessionId },
+    });
+    expect(renovada.createdAt).toEqual(original.createdAt);
+    expect(renovada.expiresAt).toEqual(original.expiresAt);
+  });
+
+  it.each([true, false])(
+    'rotar una sesión de plataforma conserva MFA verificada=%s, sin concederla',
+    async (verificada) => {
+      const activada = new Date(Date.now() - 60000);
+      const factor = verificada ? new Date() : null;
+      await prisma.user.update({
+        where: { id: auth.userId },
+        data: { rolPlataforma: 'ADMIN' },
+      });
+      await prisma.userMfa.create({
+        data: {
+          userId: auth.userId,
+          activatedAt: activada,
+          recuperacionConfirmadaEl: activada,
+        },
+      });
+      const plataforma = await prisma.authSession.create({
+        data: {
+          userId: auth.userId,
+          mfaVerificadoEl: factor,
+          expiresAt: new Date(Date.now() + 3600000),
+        },
+      });
+      const anterior = jwt.sign(
+        {
+          sub: auth.userId,
+          sessionId: plataforma.id,
+          plat: true,
+          email: auth.email,
+          role: 'ADMINISTRADOR',
+        },
+        { secret: secreto },
+      );
+      const cambio = await request(apps[0].getHttpServer())
+        .post('/auth/password')
+        .set('Authorization', `Bearer ${anterior}`)
+        .send({ actual: password, nueva: 'Nueva clave staff ficticia 789' })
+        .expect(201);
+      const nuevo = cambio.headers['x-grafoprint-sesion-renovada'];
+      await acceder(1, anterior, '/sonda/plataforma').expect(401);
+      await acceder(1, nuevo, '/sonda/plataforma').expect(
+        verificada ? 200 : 403,
+      );
+      await acceder(1, nuevo, '/sonda').expect(401);
+      const payload = jwt.verify<{ sessionId: string; plat: boolean }>(nuevo, {
+        secret: secreto,
+      });
+      expect(payload.plat).toBe(true);
+      const nueva = await prisma.authSession.findUniqueOrThrow({
+        where: { id: payload.sessionId },
+      });
+      expect(nueva.mfaVerificadoEl).toEqual(factor);
+      expect(nueva.currentTenantId).toBeNull();
+      expect(nueva.currentMembershipId).toBeNull();
+    },
+  );
+
+  it('si no se puede firmar el nuevo acceso, revierte también la clave y las sesiones', async () => {
+    const anterior = await prisma.user.findUniqueOrThrow({
+      where: { id: auth.userId },
+    });
+    const sesiones = await prisma.authSession.findMany({
+      where: { userId: auth.userId },
+      orderBy: { id: 'asc' },
+    });
+    const falla = jest
+      .spyOn(jwt, 'signAsync')
+      .mockRejectedValueOnce(new Error('Firma no disponible en ensayo'));
+    try {
+      await expect(
+        servicios[0].cambiarPassword(auth, {
+          actual: password,
+          nueva: 'No persistir esta clave 123',
+        }),
+      ).rejects.toThrow('Firma no disponible en ensayo');
+    } finally {
+      falla.mockRestore();
+    }
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: auth.userId } }),
+    ).toEqual(anterior);
+    expect(
+      await prisma.authSession.findMany({
+        where: { userId: auth.userId },
+        orderBy: { id: 'asc' },
+      }),
+    ).toEqual(sesiones);
     await acceder(1, auth).expect(200);
+    await acceder(1, otra).expect(200);
   });
 
   it.each([
@@ -452,7 +579,11 @@ describe('Revocación efectiva entre instancias de la API', () => {
     ]);
     expect(cambios.filter((c) => c.status === 'fulfilled')).toHaveLength(1);
     expect(cambios.filter((c) => c.status === 'rejected')).toHaveLength(1);
-    await acceder(1, auth).expect(200);
+    await acceder(1, auth).expect(401);
+    const ganador = cambios.find((c) => c.status === 'fulfilled');
+    if (ganador?.status !== 'fulfilled')
+      throw new Error('Falta cambio exitoso');
+    await acceder(1, ganador.value.accessToken).expect(200);
     await acceder(1, otra).expect(401);
   });
 
@@ -586,12 +717,14 @@ describe('Revocación efectiva entre instancias de la API', () => {
       (contexto.body as { currentUser: { debeCambiarPassword: boolean } })
         .currentUser.debeCambiarPassword,
     ).toBe(true);
-    await request(apps[0].getHttpServer())
+    const cambio = await request(apps[0].getHttpServer())
       .post('/auth/password')
       .set('Authorization', `Bearer ${bearer(auth)}`)
       .send({ actual: password, nueva: 'Clave personal ficticia 456' })
       .expect(201);
-    await acceder(1, auth).expect(200);
+    await acceder(1, cambio.headers['x-grafoprint-sesion-renovada']).expect(
+      200,
+    );
   });
 
   it('se puede cerrar una sesión pendiente de elegir clave personal', async () => {
