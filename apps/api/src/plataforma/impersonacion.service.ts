@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
+import type { CurrentAuth } from '../auth/auth.types';
+import { exigirSesionPlataformaParaSoporte } from '../auth/sesion-plataforma-soporte';
 
 /**
  * Impersonación auditada (etapa C): el staff del control plane entra a un
@@ -41,7 +43,7 @@ export class ImpersonacionService {
    * suspendido ni al propio tenant plataforma.
    */
   async iniciar(
-    staffUserId: string,
+    auth: CurrentAuth,
     tenantId: string,
     motivo: string,
   ): Promise<{ token: string; tenantNombre: string; expiraEl: string }> {
@@ -51,63 +53,92 @@ export class ImpersonacionService {
         'El motivo es obligatorio (mínimo 5 caracteres): queda en la auditoría y el cliente puede verlo.',
       );
     }
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, nombre: true, activo: true, esPlataforma: true },
-    });
-    if (!tenant) throw new NotFoundException('El tenant no existe.');
-    if (!tenant.activo) {
-      throw new BadRequestException(
-        'No se puede entrar a un tenant suspendido: reactivalo primero.',
+    return this.prisma.$transaction(async (tx) => {
+      const origen = await exigirSesionPlataformaParaSoporte(tx, auth);
+      const tenant = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { id: true, nombre: true, activo: true, esPlataforma: true },
+      });
+      if (!tenant) throw new NotFoundException('El tenant no existe.');
+      if (!tenant.activo) {
+        throw new BadRequestException(
+          'No se puede entrar a un tenant suspendido: reactivalo primero.',
+        );
+      }
+      if (tenant.esPlataforma) {
+        throw new BadRequestException(
+          'El tenant plataforma no se impersona: entrá con tu propia cuenta.',
+        );
+      }
+      const staffUserId = origen.userId;
+      // El lock de identidad serializa entradas del mismo administrador. El
+      // reemplazo, la auditoría y el token nuevo se confirman juntos.
+      const anteriores = await tx.sesionImpersonacion.findMany({
+        where: {
+          staffUserId,
+          cerradaEl: null,
+          OR: [{ tenantId }, { expiraEl: { lte: new Date() } }],
+        },
+        select: { id: true, tenantId: true },
+      });
+      if (anteriores.length) {
+        const ids = anteriores.map((item) => item.id);
+        await tx.sesionImpersonacion.updateMany({
+          where: { id: { in: ids }, cerradaEl: null },
+          data: { cerradaEl: new Date(), motivoCierre: 'reemplazada' },
+        });
+        await tx.authSession.updateMany({
+          where: { impersonacionId: { in: ids }, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        await tx.plataformaEvento.createMany({
+          data: anteriores.map((item) => ({
+            staffUserId,
+            tipo: 'impersonacion_cerrada',
+            tenantAfectadoId: item.tenantId,
+            descripcion: 'Sesión de soporte cerrada al iniciar otra.',
+            datosJson: { sesionId: item.id },
+          })),
+        });
+      }
+      const actorNombre = `Soporte Grafo (${origen.user.nombreCompleto ?? origen.user.email})`;
+      const expiraEl = new Date(
+        Math.min(
+          origen.expiresAt.getTime(),
+          Date.now() + DURACION_MIN * 60 * 1000,
+        ),
       );
-    }
-    if (tenant.esPlataforma) {
-      throw new BadRequestException(
-        'El tenant plataforma no se impersona: entrá con tu propia cuenta.',
+      const sesion = await tx.sesionImpersonacion.create({
+        data: { staffUserId, tenantId, motivo: limpio, expiraEl },
+        select: { id: true },
+      });
+      await tx.plataformaEvento.create({
+        data: {
+          staffUserId,
+          tipo: 'impersonacion_iniciada',
+          tenantAfectadoId: tenantId,
+          descripcion: `Entró a ${tenant.nombre} como soporte: ${limpio}`,
+          datosJson: { sesionId: sesion.id, expiraEl: expiraEl.toISOString() },
+        },
+      });
+      const token = await this.auth.emitirTokenImpersonacion(
+        {
+          tenantId,
+          sesionImpersonacionId: sesion.id,
+          expiraEl,
+          actorUserId: staffUserId,
+          actorNombre,
+          mfaVerificadoEl: origen.mfaVerificadoEl!,
+          mfaDispositivoId: origen.mfaDispositivoId,
+        },
+        tx,
       );
-    }
-
-    // Una sesión activa por (staff, tenant): re-entrar cierra la anterior en
-    // vez de acumular. Barre también las vencidas del staff, de paso.
-    await this.cerrarVencidas();
-    await this.prisma.sesionImpersonacion.updateMany({
-      where: { staffUserId, tenantId, cerradaEl: null },
-      data: { cerradaEl: new Date(), motivoCierre: 'reemplazada' },
+      return {
+        token,
+        tenantNombre: tenant.nombre,
+        expiraEl: expiraEl.toISOString(),
+      };
     });
-
-    const staff = await this.prisma.user.findUnique({
-      where: { id: staffUserId },
-      select: { nombreCompleto: true, email: true },
-    });
-    const actorNombre = `Soporte Grafo (${staff?.nombreCompleto ?? staff?.email ?? 'staff'})`;
-    const expiraEl = new Date(Date.now() + DURACION_MIN * 60 * 1000);
-
-    const sesion = await this.prisma.sesionImpersonacion.create({
-      data: { staffUserId, tenantId, motivo: limpio, expiraEl },
-      select: { id: true },
-    });
-    await this.prisma.plataformaEvento.create({
-      data: {
-        staffUserId,
-        tipo: 'impersonacion_iniciada',
-        tenantAfectadoId: tenantId,
-        descripcion: `Entró a ${tenant.nombre} como soporte: ${limpio}`,
-        datosJson: { sesionId: sesion.id, expiraEl: expiraEl.toISOString() },
-      },
-    });
-
-    const token = await this.auth.emitirTokenImpersonacion({
-      tenantId,
-      sesionImpersonacionId: sesion.id,
-      expiraEl,
-      actorUserId: staffUserId,
-      actorNombre,
-    });
-    return {
-      token,
-      tenantNombre: tenant.nombre,
-      expiraEl: expiraEl.toISOString(),
-    };
   }
 
   /** Cierra una sesión (el staff sale). Idempotente. */

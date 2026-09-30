@@ -623,23 +623,31 @@ export class AuthService {
    * La AuthSession lleva `impersonacionId` (sin membership) y expira JUNTO con
    * la impersonación, no a los 7 días: el token no puede sobrevivir a la
    * sesión que lo justifica. El staff opera con rol ADMINISTRADOR del tenant.
+   * El caller conserva bloqueado el origen validado, aporta su factor real
+   * y confirma la sesión de soporte/auditoría en esta misma transacción.
    * Ver docs/control-plane-diseno.md
    */
-  async emitirTokenImpersonacion(params: {
-    tenantId: string;
-    sesionImpersonacionId: string;
-    expiraEl: Date;
-    actorUserId: string;
-    actorNombre: string;
-  }): Promise<string> {
-    const session = await this.prisma.authSession.create({
+  async emitirTokenImpersonacion(
+    params: {
+      tenantId: string;
+      sesionImpersonacionId: string;
+      expiraEl: Date;
+      actorUserId: string;
+      actorNombre: string;
+      mfaVerificadoEl: Date;
+      mfaDispositivoId: string | null;
+    },
+    db: Prisma.TransactionClient,
+  ): Promise<string> {
+    const session = await db.authSession.create({
       data: {
         userId: params.actorUserId,
         currentTenantId: params.tenantId,
         currentMembershipId: null,
         impersonacionId: params.sesionImpersonacionId,
         expiresAt: params.expiraEl,
-        mfaVerificadoEl: new Date(),
+        mfaVerificadoEl: params.mfaVerificadoEl,
+        mfaDispositivoId: params.mfaDispositivoId,
       },
     });
     return this.issueToken({
