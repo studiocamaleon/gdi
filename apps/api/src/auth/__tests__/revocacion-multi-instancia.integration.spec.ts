@@ -16,6 +16,7 @@ import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SecretosService } from '../../integraciones/cripto/secretos.service';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import { UsuariosService } from '../../usuarios/usuarios.service';
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
 import { AuthGuard } from '../auth.guard';
@@ -121,6 +122,51 @@ describe('Revocación efectiva entre instancias de la API', () => {
       },
     });
     return { token, id: row.id };
+  }
+
+  async function baja(origen: 'empleado' | 'usuario', db = prisma) {
+    const user = await prisma.user.create({
+      data: { email: `qa-admin-${randomUUID()}@example.invalid` },
+    });
+    userIds.push(user.id);
+    const miembro = await prisma.membership.create({
+      data: {
+        userId: user.id,
+        tenantId: auth.tenantId,
+        rol: 'ADMINISTRADOR',
+      },
+    });
+    const administrador = await sesion({
+      ...auth,
+      userId: user.id,
+      email: user.email,
+      membershipId: miembro.id,
+    });
+    if (origen === 'usuario') {
+      return new UsuariosService(
+        db,
+        new SessionCacheService(),
+        {} as never,
+      ).editar(administrador, auth.userId, { activa: false });
+    }
+    const empleado = await prisma.empleado.create({
+      data: {
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        nombreCompleto: 'Empleado ficticio',
+        emailPrincipal: auth.email,
+        telefonoCodigo: '+54',
+        telefonoNumero: '0000000000',
+        sector: 'Pruebas',
+        fechaIngreso: new Date('2026-01-01'),
+      },
+    });
+    return new AuthService(
+      db,
+      jwt,
+      new SessionCacheService(),
+      mfas[0],
+    ).revokeEmployeeAccess(administrador, empleado.id);
   }
 
   beforeAll(async () => {
@@ -457,4 +503,74 @@ describe('Revocación efectiva entre instancias de la API', () => {
     });
     expect(await bcrypt.compare(password, user.passwordHash!)).toBe(true);
   });
+
+  it.each(['empleado', 'usuario'] as const)(
+    'rehabilitar un %s no resucita ninguna de sus sesiones anteriores',
+    async (origen) => {
+      await acceder(1, auth).expect(200);
+      // La misma identidad conserva su sesión legítima en otra empresa.
+      const tenant = await prisma.tenant.create({
+        data: {
+          nombre: 'Empresa ajena a la baja',
+          slug: `qa-otra-${randomUUID()}`,
+        },
+      });
+      tenantIds.push(tenant.id);
+      const miembro = await prisma.membership.create({
+        data: { userId: auth.userId, tenantId: tenant.id, rol: 'OPERADOR' },
+      });
+      const ajena = await sesion({
+        ...auth,
+        tenantId: tenant.id,
+        membershipId: miembro.id,
+        role: 'OPERADOR',
+      });
+      await baja(origen);
+      await acceder(1, auth).expect(401);
+      await prisma.membership.update({
+        where: { id: auth.membershipId },
+        data: { activa: true },
+      });
+      await acceder(1, auth).expect(401);
+      await acceder(1, otra).expect(401);
+      await acceder(1, ajena).expect(200);
+      // Puede obtener un acceso nuevo; los anteriores siguen revocados.
+      await acceder(1, await sesion(auth)).expect(200);
+    },
+  );
+
+  it.each(['empleado', 'usuario'] as const)(
+    'rehabilitar un %s tampoco resucita sus credenciales MCP',
+    async (origen) => {
+      const mcp = await credencial();
+      await acceder(1, mcp.token).expect(200);
+      await baja(origen);
+      await prisma.membership.update({
+        where: { id: auth.membershipId },
+        data: { activa: true },
+      });
+      await acceder(1, mcp.token).expect(401);
+    },
+  );
+
+  it.each(['empleado', 'usuario'] as const)(
+    'un fallo revocando MCP revierte la baja completa de %s',
+    async (origen) => {
+      const db = prisma.$extends({
+        query: {
+          credencialMcp: {
+            updateMany() {
+              throw new Error('Fallo MCP simulado');
+            },
+          },
+        },
+      }) as unknown as PrismaService;
+      await expect(baja(origen, db)).rejects.toThrow('Fallo MCP simulado');
+      const miembro = await prisma.membership.findUniqueOrThrow({
+        where: { id: auth.membershipId },
+      });
+      expect(miembro.activa).toBe(true);
+      await acceder(1, auth).expect(200);
+    },
+  );
 });

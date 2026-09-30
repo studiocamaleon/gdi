@@ -118,6 +118,9 @@ const EXENTOS_CON_TENANT_ID = new Set([
  */
 const ARCHIVOS_AUTORIZADOS = new Set([
   'auth/auth.service.ts',
+  // Baja transaccional: membership y credencialMcp llevan tenantId explícito;
+  // sólo revoca al userId indicado, conservando sus otras empresas.
+  'auth/revocar-acceso-empresa.ts',
   'plataforma/plataforma.service.ts',
   // Envío/reenvío del primer administrador: sólo staff ADMIN, tenantId
   // explícito, token hasheado y resultado auditado. No lista invitaciones globales.

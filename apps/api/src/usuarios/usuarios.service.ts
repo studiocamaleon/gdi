@@ -19,6 +19,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionCacheService } from '../auth/session-cache.service';
 import { bloquearIdentidad } from '../auth/mfa.service';
+import { revocarAccesoEmpresa } from '../auth/revocar-acceso-empresa';
 import { SuscripcionesService } from '../suscripciones/suscripciones.service';
 import { esIpOrangoValido, ipPermitida } from '../auth/ip';
 import {
@@ -274,6 +275,7 @@ export class UsuariosService {
 
   async editar(auth: CurrentAuth, userId: string, dto: EditarUsuarioDto) {
     const { membership, rol } = await this.prisma.$transaction(async (tx) => {
+      if (dto.activa === false) await bloquearIdentidad(tx, userId);
       await bloquearCupoUsuarios(tx, auth.tenantId);
       const membership = await tx.membership.findUnique({
         where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
@@ -317,6 +319,7 @@ export class UsuariosService {
       }
 
       if (dto.activa === false) {
+        await revocarAccesoEmpresa(tx, auth.tenantId, userId);
         await tx.invitation.updateMany({
           where: {
             tenantId: auth.tenantId,
@@ -337,14 +340,6 @@ export class UsuariosService {
     // hasta el TTL del cache de sesión, que es justo cuando el admin está
     // mirando si funcionó.
     this.sessionCache.invalidarTenant(auth.tenantId);
-
-    // Desactivar tiene que cortar de verdad: las sesiones abiertas se revocan.
-    if (dto.activa === false) {
-      await this.prisma.authSession.updateMany({
-        where: { userId, currentTenantId: auth.tenantId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    }
 
     const quien = membership.user.nombreCompleto || membership.user.email;
     if (rol) {

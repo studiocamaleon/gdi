@@ -31,6 +31,7 @@ import { ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 import { bloquearIdentidad, MfaService } from './mfa.service';
+import { revocarAccesoEmpresa } from './revocar-acceso-empresa';
 import type { AlcanceMfa } from './mfa-dispositivo-cookie';
 import { VerificarMfaDto } from './dto/perfil.dto';
 import {
@@ -1106,11 +1107,13 @@ export class AuthService {
     empleadoId: string,
     userId: string,
   ) {
+    await bloquearIdentidad(tx, userId);
     await bloquearCupoUsuarios(tx, tenantId);
     await tx.membership.updateMany({
       where: { userId, tenantId },
       data: { activa: false },
     });
+    await revocarAccesoEmpresa(tx, tenantId, userId);
     await tx.empleado.update({
       where: { id: empleadoId },
       data: { userId: null },
