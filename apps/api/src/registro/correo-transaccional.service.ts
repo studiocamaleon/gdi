@@ -110,7 +110,9 @@ export class CorreoTransaccionalService {
           'El correo de verificación no está configurado.',
         );
       }
-      this.logger.warn(`[DEV] Verificación de ${args.para}: ${args.url}`);
+      this.logger.warn(
+        '[DEV] Correo de verificación simulado; el enlace no se registra.',
+      );
       return { id: 'dev-local' };
     }
 
@@ -127,9 +129,7 @@ export class CorreoTransaccionalService {
       { idempotencyKey: opciones.idempotencyKey },
     );
     if (error || !data) {
-      this.logger.error(
-        `Resend rechazó el envío a ${args.para}: ${error?.message}`,
-      );
+      this.logger.error('El proveedor rechazó el correo de verificación.');
       throw new ServiceUnavailableException(
         'No pudimos enviar el correo de verificación. Intentá nuevamente.',
       );
