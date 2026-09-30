@@ -19,6 +19,24 @@ test('registra versión real de age y rechaza una herramienta incompatible', { s
   await assert.rejects(versionHerramienta(ageBin, /^herramienta-incompatible$/), /no admitida/);
 });
 
+test('fallar la custodia externa impide actualizar índice y recibo local', { skip: !conAge }, async t => {
+  const c=await contexto(t);let llamado=false;
+  await assert.rejects(respaldar({...c.opciones,custodiarComprobante:async({recibo})=>{llamado=true;assert.ok(recibo.cierre.fileId);throw new Error('custodia no disponible');}}),/custodia/);
+  assert.equal(llamado,true);
+  assert.ok(!(await readdir(c.carpeta)).some(n=>n==='indice.json'||n.startsWith('recibo-')));
+});
+
+test('conserva código cifrado, extiende su protección y verifica su recuperación', { skip: !conAge }, async t => {
+  const c=await contexto(t);await respaldar(c.opciones);
+  const a=(await leerPrivado(join(c.carpeta,'indice.json'))).archivos[0];
+  const artefacto={tipo:'fuente',revision:'a'.repeat(40),recipient:c.recipient,original:a.original,cifrado:a.cifrado};
+  const copia=await respaldar({...c.opciones,artefactos:[artefacto],ahora:()=>Date.now()+86400000});
+  assert.ok(c.destino.objetos.get(a.cifrado.fileId).hasta>=copia.recibo.protegidoHasta);
+  const out=await prepararRecuperacion({destino:c.destino,recibo:copia.recibo,carpeta:c.carpeta,ageBin,identidad:c.identidad});
+  assert.deepEqual(await readFile(join(out.carpeta,'fuente-1.tar.gz')),c.data);
+  await assert.rejects(respaldar({...c.opciones,artefactos:[{...artefacto,recipient:'otro'}]}),/otra llave/);
+});
+
 class Memoria {
   objetos = new Map(); llamadas = []; falla;
   async iniciar() {}

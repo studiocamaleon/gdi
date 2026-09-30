@@ -1,0 +1,24 @@
+app = "grafoprint-staging-respaldo"
+primary_region = "iad"
+kill_signal = "SIGTERM"
+kill_timeout = "60s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+
+[[mounts]]
+  source = "estado_respaldo"
+  destination = "/data"
+  initial_size = "10gb"
+  snapshot_retention = 1
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"
+
+# Una máquina, sin http_service/services ni IP pública. Nunca escalar a dos.
+# El volumen conserva índice incremental; sus secretos no sustituyen el kit de recuperación.

@@ -9,7 +9,7 @@ export const LIMITE_ARCHIVO = 4 * 1024 ** 3;
 const LIMITE_MANIFIESTO = 32 * 1024 ** 2;
 const MAX_ARCHIVOS = 100_000;
 
-function validarRef(ref, entorno, max = LIMITE_ARCHIVO + 2 * 1024 ** 2) {
+export function validarRef(ref, entorno, max = LIMITE_ARCHIVO + 2 * 1024 ** 2) {
   exigir(ref && typeof ref.fileId === 'string' && /^[a-zA-Z0-9_-]{1,256}$/.test(ref.fileId) &&
     typeof ref.fileName === 'string' && ref.fileName.startsWith(`${entorno}/`) && /^[a-z0-9/._-]+$/.test(ref.fileName) &&
     Number.isSafeInteger(ref.bytes) && ref.bytes > 0 && ref.bytes <= max && /^[a-f0-9]{64}$/.test(ref.sha256) &&
@@ -35,12 +35,19 @@ export function validarManifiesto(m, entorno) {
     const a = claves.get(r.key);
     exigir(a && (r.bytes === null || r.bytes === a.original.bytes), 'Falta un archivo requerido por la base.');
   }
+  exigir(Array.isArray(m.artefactos ?? []) && (m.artefactos ?? []).length <= 10, 'Artefactos de recuperación inválidos.');
+  for(const a of m.artefactos ?? []) {
+    exigir(a.tipo === 'fuente' && /^[a-f0-9]{40}$/.test(a.revision) &&
+      typeof a.recipient === 'string' && a.original && /^[a-f0-9]{64}$/.test(a.original.sha256) &&
+      Number.isSafeInteger(a.original.bytes) && a.original.bytes > 0 && a.original.bytes <= LIMITE_ARCHIVO, 'Código recuperable inválido.');
+    validarRef(a.cifrado, entorno);
+  }
 }
 
 // Todos los datos privados (incluidos nombres y huellas originales) van cifrados.
 // El recibo local fija la raíz de confianza por fileId + SHA-256, nunca por "último nombre".
 export async function respaldar({ origen, destino, carpeta, ageBin, recipient, entorno, identidadOrigen, signal, ensayo = false, herramientas = {},
-  maxBytes = LIMITE_ARCHIVO, duracionMaxMs = 45 * 60_000, ahora = Date.now }) {
+  maxBytes = LIMITE_ARCHIVO, duracionMaxMs = 45 * 60_000, ahora = Date.now, custodiarComprobante, artefactos = [] }) {
   exigir(['staging', 'produccion'].includes(entorno) && typeof identidadOrigen === 'string' && identidadOrigen.length > 0, 'Identificar origen y entorno.');
   exigir(maxBytes > 0 && maxBytes <= LIMITE_ARCHIVO && duracionMaxMs > 0 && duracionMaxMs <= 45 * 60_000, 'Límites de respaldo inválidos.');
   await directorioPrivado(carpeta);
@@ -60,6 +67,12 @@ export async function respaldar({ origen, destino, carpeta, ageBin, recipient, e
   try {
     temporal = await mkdtemp(join(carpeta, 'temporal-'));
     await destino.iniciar(); comprobarPlazo();
+    exigir(Array.isArray(artefactos) && artefactos.length <= 10, 'Demasiados artefactos de código.');
+    for(const a of artefactos) {
+      validarRef(a?.cifrado, entorno);
+      exigir(a.recipient === recipient, 'El código requiere otra llave de recuperación.');
+      await destino.proteger(a.cifrado, protegidoHasta);
+    }
     let anterior;
     try { anterior = await leerPrivado(join(carpeta, 'indice.json')); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -117,7 +130,7 @@ export async function respaldar({ origen, destino, carpeta, ageBin, recipient, e
     }
     comprobarPlazo();
     const manifiesto = { version: 1, id, entorno, proposito, iniciado: new Date(inicio).toISOString(),
-      metadata: snapshot.metadata, herramientas, requeridos: snapshot.requeridos, base, archivos: nuevos,
+      metadata: snapshot.metadata, herramientas, requeridos: snapshot.requeridos, base, archivos: nuevos, artefactos,
       operacionExternaDeshabilitada: true };
     validarManifiesto(manifiesto, entorno);
     const bytes = Buffer.from(JSON.stringify(manifiesto));
@@ -130,6 +143,10 @@ export async function respaldar({ origen, destino, carpeta, ageBin, recipient, e
     const cierre = await copiar(Readable.from([Buffer.from(JSON.stringify(resumen))]), 'completa');
     comprobarPlazo();
     const recibo = { ...resumen, cierre: cierre.cifrado };
+    // La ejecución automática exige esta custodia antes de emitir su señal de éxito.
+    // Perder el disco del ejecutor no debe perder las referencias de recuperación.
+    if (custodiarComprobante) await custodiarComprobante({ recibo, destino, temporal, control });
+    comprobarPlazo();
     await guardarPrivado(join(carpeta, `recibo-${id}.json`), recibo);
     await guardarPrivado(join(carpeta, 'indice.json'), { version: 1, recipient, entorno, proposito, identidadOrigen, archivos: nuevos });
     return { recibo, cantidadArchivos: nuevos.length, reutilizados: nuevos.filter(a => cache.get(a.key)?.cifrado.fileId === a.cifrado.fileId).length };
@@ -177,6 +194,16 @@ export async function prepararRecuperacion({ destino, recibo, carpeta, ageBin, i
       if (i) mapa.push({ archivo: nombre, key: a.key, bytes: a.original.bytes, sha256: a.original.sha256 });
     }
     await guardarPrivado(join(run, 'archivos-verificados.json'), mapa);
+    const fuentes=[];
+    for(const [i,a] of (m.artefactos ?? []).entries()) {
+      const nombre=`fuente-${i+1}.tar.gz`;
+      const espacio=await statfs(run);
+      exigir(espacio.bavail * espacio.bsize >= a.cifrado.bytes + a.original.bytes + 256 * 1024 ** 2,'No hay espacio para recuperar el código.');
+      const resultado=await descifrar(a.cifrado,nombre,a.original.bytes);
+      exigir(resultado.resultado.bytes === a.original.bytes && resultado.resultado.sha256 === a.original.sha256,'Código recuperado alterado.');
+      fuentes.push({archivo:nombre,revision:a.revision,sha256:a.original.sha256});
+    }
+    await guardarPrivado(join(run,'fuentes-verificadas.json'),fuentes);
     await guardarPrivado(join(run, 'VERIFICADO.json'), { id: m.id, archivos: mapa.length, datosPreparados: true,
       sistemaRestaurado: false, enviosHabilitados: false });
     return { carpeta: run, archivos: mapa.length, sistemaRestaurado: false };

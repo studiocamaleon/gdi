@@ -1,5 +1,15 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Preparación del ejecutor y ensayo funcional de recuperación — 30/09/2026
+
+- API ensayada: `ce4e06fca19779ae4f7551f35a3e21e27734c523`, contra la copia restaurada de 213 tablas y 298 migraciones. Ingreso con MFA, consulta/alta de cliente y denegación entre dos empresas correctos. Identidades QA creadas únicamente en la recuperación; no se cambiaron claves de staging. Sandbox sin salida externa, cron y workers desactivados.
+- Trece objetos recuperados abiertos y verificados por hash en el almacenamiento aislado; un adjunto de cliente comprobado además por su endpoint autenticado. Sin ensayo de interfaz web ni reconexión de Meta. Runtime SQL del ensayo sellado sin login al terminar.
+- Código de backend y de web (`250b8643ab0ca6269c4d0e58a2d1ef45cf602d8e`) archivado, cifrado, protegido en B2 y recuperado con hashes correctos.
+- Comprobante de ensayo firmado y protegido en B2; recuperación con lector separado y firma pública verificada. No se depende del recibo local para futuras copias.
+- Aviso externo de ausencia ensayado: Healthchecks informó correo entregado. Umbral normal restituido a 90 minutos. La cuenta es gratuita; no recibe datos de clientes ni logs.
+- Se crearon la app exclusiva de backups y su volumen de 10 GB dentro del presupuesto de backups acordado. Red privada separada, sin servicio HTTP público. Imagen construida en remoto; todavía **sin máquina operativa ni horario activado**. Falta confirmar la actualización de la firma pública en la custodia del titular y verificar arranque/ejecución programada.
+- 117 pruebas del paquete de recuperación aprobadas, sin omisiones. Sin cambios al código, imágenes o tamaños de los cinco servicios habituales de staging ni a producción. Evidencia sensible y configuraciones fuera de Git.
+
 ## Ensayo con dos operadores distintos — 28/09/2026
 
 Continúa el lote funcional `d2677ff2a7bafcff648ee70d5258d3fb5c0692e1`, con las mismas imágenes, 298 migraciones y tamaños contratados. Se usaron dos sesiones independientes de Chrome (normal e incógnita), no dos pestañas de un único usuario.

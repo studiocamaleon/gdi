@@ -1,6 +1,6 @@
 # Recuperación de Grafoprint
 
-Diseño elegido: copias cada hora, cifradas antes de salir del ejecutor, en una cuenta independiente. Protección contra borrado por 30 días. **Todavía no hay un servicio de copias automáticas activado.** El 30/09/2026 se verificaron los lectores de Neon/R2 y el lector separado de B2. Se recuperaron desde una copia real de staging la base, los archivos y los secretos internos cifrados. El titular confirmó el kit completo en una nota segura de su teléfono. Falta el ensayo funcional de la aplicación, el ejecutor permanente, las alertas y la custodia automática de los futuros comprobantes antes de programar.
+Diseño elegido: copias cada hora, cifradas antes de salir del ejecutor, en una cuenta independiente. Protección contra borrado por 30 días. **Todavía no hay un servicio de copias automáticas activado.** El 30/09/2026 se recuperaron datos, archivos y secretos internos desde B2; el ensayo funcional de la API comprobó MFA, operación y aislamiento. También se ensayaron comprobantes firmados remotos, recuperación del código desplegado y entrega de una alerta externa por ausencia. El ejecutor está construido en remoto y su app/volumen preparados. Falta confirmar la adición de la firma pública al kit del titular, activar la máquina y comprobar una ejecución programada. Procedimiento de uso e incidentes: [OPERACION.md](OPERACION.md).
 
 ## Separación de accesos
 
@@ -68,11 +68,25 @@ Copiar `recuperar.example.json` a un directorio privado separado, completar el r
 
 Ensayo manual separado bajo `staging/ensayos/`: exportación consistente de PostgreSQL, cifrado local y copia protegida de los 13 objetos de R2. Se recuperaron desde B2 con el lector exclusivo, comprobando hashes de cifrado/contenido y la identidad `age`. PostgreSQL se restauró en una base nueva con un dueño sin privilegios elevados: 213 tablas, 298 migraciones con sus checksums y 1.588 filas. Se comprobó el descifrado de los dos valores internos presentes en las cinco columnas cifradas revisadas. No se iniciaron API, workers ni integraciones; el rol de restauración quedó sin login al terminar.
 
-La copia tomó unos 70 segundos; descarga, descifrado y restauración inicial de datos, unos 13 segundos. Son medidas de este conjunto pequeño y de este ensayo local; **no equivalen a tiempo de recuperación del servicio completo ni garantizan RTO/RPO**. La base recuperada contiene una sola empresa; aislamiento entre dos empresas e ingreso/MFA/operación desde la aplicación siguen pendientes. Las evidencias y el kit con secretos/comprobante permanecen fuera de Git. No se modificó el entorno local de desarrollo ni se activó programación.
+La copia tomó unos 70 segundos; descarga, descifrado y restauración inicial de datos, unos 13 segundos. Son medidas de este conjunto pequeño y de este ensayo local; **no equivalen a tiempo de recuperación del servicio completo ni garantizan RTO/RPO**. La base recuperada contiene una sola empresa. En el ensayo funcional posterior se agregó una segunda empresa exclusivamente dentro de la recuperación aislada y se comprobó la denegación de acceso a datos ajenos. Las evidencias y el kit con secretos/comprobante permanecen fuera de Git. No se modificó el entorno local de desarrollo ni se activó programación.
 
 La primera tentativa detectó una diferencia de precisión de fechas en R2 y no publicó cierre de copia. Los objetos ya cifrados de esa tentativa permanecen retenidos. El caso se reprodujo en un test: el listado incluye milisegundos, mientras `Last-Modified` de GET/HEAD utiliza segundos. La comparación ahora usa esa precisión HTTP, manteniendo ETag y tamaño exactos y la fecha completa del inventario para decidir reutilización. Fechas ausentes/inválidas, otro segundo o ETag distinto siguen rechazándose. Referencias: [compatibilidad S3 de R2](https://developers.cloudflare.com/r2/api/s3/api/) y [HeadObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html).
 
 Regresión posterior: 106 pruebas aprobadas, con `age` y PostgreSQL locales reales; sin omisiones ni nuevo ensayo cloud sintético.
+
+### Ensayo funcional, código y avisos — 30/09/2026
+
+La API de la revisión realmente desplegada se inició contra la base recuperada y un almacenamiento de disco separado. El sandbox del sistema operativo negó conexiones externas: se permitió exclusivamente acceder a sus servicios locales. Cron y workers desactivados; sesiones anteriores revocadas sólo en la copia. No se cambiaron contraseñas de los usuarios de staging: el ensayo creó identidades QA en la copia y utilizó allí el secreto MFA restaurado.
+
+Se comprobó ingreso con MFA, lectura de un cliente recuperado, creación/lectura de un cliente nuevo, 401 sin sesión y 404 desde una segunda empresa. Un adjunto de cliente pasó por la ruta autenticada de archivos; los 13 objetos recuperados se abrieron mediante URLs firmadas del almacenamiento aislado y coincidieron sus huellas. Los adjuntos de Inbox usan una ruta propia: no se ensayó su pantalla ni se renovó Meta. Al terminar, el usuario SQL de ese ensayo quedó sin login y se detuvo únicamente el Redis temporal creado para esta prueba.
+
+Se guardaron en B2 dos archivos cifrados con el código exacto de backend y web; se descargaron con el lector, descifraron y verificaron sus hashes y contenido necesario para reconstruir. `artefactos` fija esas versiones en cada manifiesto y prolonga su retención junto con los datos.
+
+La custodia de recibos usa Ed25519 mediante `node:crypto`. La clave pública se conserva en el kit; la privada de firma vive en el ejecutor y no permite descifrar. `comprobantes.mjs` lista versiones y recupera una raíz firmada por `fileId`. Rechaza cambios, otro firmante, entorno o propósito. Antes de avisar éxito, el copiador vuelve a descargar y verificar el comprobante que acaba de guardar en B2.
+
+Healthchecks gratuito quedó conectado al correo del titular. Se ensayó ausencia con período y tolerancia de un minuto, observando estado caído y entrega de correo informada por el proveedor; también aceptó la señal explícita de fallo. Después se restablecieron una hora y 30 minutos. No se atribuye lectura humana del correo. El monitor permanece identificado como ensayo hasta activar el copiador.
+
+Regresión de este lote: 117 pruebas aprobadas, sin omisiones, incluyendo PostgreSQL y `age` reales. Imágenes de Node/PostgreSQL fijadas por digest y archivo oficial de `age` verificado por SHA-256. El contenedor se construye en remoto; su arranque operativo todavía debe verificarse.
 
 ## Qué debe contener cada copia completa
 
