@@ -26,6 +26,9 @@ apps/api/**
 !apps/api/tsconfig*.json
 !apps/api/nest-cli.json
 !apps/api/requirements-opennest.txt
+!apps/api/test
+apps/api/test/**
+!apps/api/test/dependencias-prisma.test.cjs
 !apps/api/src
 !apps/api/src/**
 !apps/api/prisma

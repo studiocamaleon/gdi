@@ -26,7 +26,8 @@ COPY --from=hotwire /app/grafo-hotwire-linker-v1/dist ./grafo-hotwire-linker-v1/
 WORKDIR /app/apps/api
 COPY apps/api/package*.json ./
 COPY apps/api/prisma/schema.prisma ./prisma/schema.prisma
-RUN npm ci --include=dev --no-audit --no-fund && npm run prisma:generate
+COPY apps/api/test/dependencias-prisma.test.cjs ./test/dependencias-prisma.test.cjs
+RUN npm ci --include=dev --no-audit --no-fund && npm run test:dependencias && npm run prisma:generate
 
 FROM api-deps AS api-build
 COPY apps/api/tsconfig*.json apps/api/nest-cli.json ./
