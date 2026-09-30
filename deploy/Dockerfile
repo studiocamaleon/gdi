@@ -93,6 +93,8 @@ COPY src ./src
 COPY public ./public
 # Módulos puros compartidos y tipos Prisma importados por el frontend.
 COPY apps/api/src ./apps/api/src
+# Fixture sintético importado por los tests que también comprueba TypeScript.
+COPY apps/api/test/fixtures/f6-planificacion/exhibidor-controlado.ts ./apps/api/test/fixtures/f6-planificacion/exhibidor-controlado.ts
 # Webpack evita el pico de memoria de Turbopack durante el empaquetado.
 ARG SKIP_TYPECHECK=false
 RUN GRAFOPRINT_BUILD_SKIP_TYPECHECK=$SKIP_TYPECHECK NODE_OPTIONS=--max-old-space-size=4096 npm run build -- --webpack

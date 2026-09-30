@@ -30,6 +30,11 @@ apps/api/**
 !apps/api/test
 apps/api/test/**
 !apps/api/test/dependencias-prisma.test.cjs
+!apps/api/test/fixtures
+apps/api/test/fixtures/**
+!apps/api/test/fixtures/f6-planificacion
+apps/api/test/fixtures/f6-planificacion/**
+!apps/api/test/fixtures/f6-planificacion/exhibidor-controlado.ts
 !apps/api/src
 !apps/api/src/**
 !apps/api/prisma
