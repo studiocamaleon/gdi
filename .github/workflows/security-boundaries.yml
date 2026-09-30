@@ -3,10 +3,8 @@ name: Comprobar permisos y separación de empresas
 on:
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/security-boundaries.yml'
-      - 'apps/api/**'
-      - 'grafo-hotwire-linker-v1/**'
+    # Este control será obligatorio para main: no filtrar por paths, porque
+    # GitHub dejaría el requisito pendiente en PR de documentación o frontend.
   workflow_dispatch:
 
 permissions:
