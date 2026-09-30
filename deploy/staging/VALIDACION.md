@@ -1,5 +1,11 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Permisos de utilidades en las imágenes — 30/09/2026
+
+Preparado un refuerzo de las cuatro imágenes: retirar setuid/setgid de utilidades de consola en `/usr/bin`, `/usr/sbin` y `/usr/local/bin`. Se conservan los permisos ordinarios, el usuario de cada servicio y el helper de aislamiento de Chromium. El respaldo sigue preparando su volumen como root y baja a `respaldo` antes de ejecutar el servicio; `gosu` no depende del bit setuid de un archivo.
+
+El verificador nuevo rechazó las cuatro imágenes vigentes por esos atributos; no se ejecutó un ataque ni se demostró escalada de privilegios. Sintaxis de los dos ensayos y diff local comprobados. CI ahora compila también el copiador y exige usuario sin root, ausencia de esos atributos y arranque del respaldo con directorios privados y bloqueo exclusivo, sin red. Todavía pendiente comprobar las imágenes nuevas y desplegar; la instalación vigente no cambia por este registro.
+
 ## Archivos locales y tipos de cambio — 30/09/2026
 
 Sin nuevo despliegue: API/workers siguen en `119db9792`, web en `a93268414`, PDF y copiador conservan sus versiones custodiadas. El cambio `af2b1ca9c` afecta al almacenamiento de desarrollo: exige un objeto relativo dentro de su raíz, sin aceptar la propia carpeta ni reinterpretar rutas absolutas. Cuatro casos fallaron antes; las 14 pruebas de archivos, tipos y lint pasaron después. GitHub marcó como **Fixed** las cinco alertas del PR y su control de resultados CodeQL pasó, sin descartarlas ni desactivar reglas. Esto no elimina automáticamente las alertas históricas de `main` ni certifica todo el sistema.

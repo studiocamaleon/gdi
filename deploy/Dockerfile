@@ -105,6 +105,9 @@ COPY --chown=node:node apps/api/prisma/migrations ./prisma/migrations
 COPY --chown=node:node apps/api/scripts/deploy ./scripts/deploy
 # LocalDriver crea su directorio al inicializarse, incluso cuando se usa R2.
 RUN mkdir -p .storage && chown node:node .storage
+# Ningún servicio necesita elevarse mediante utilidades de administración.
+# Conservar los permisos ordinarios y las herramientas de procesamiento.
+RUN find /usr/bin /usr/sbin /usr/local/bin -type f -perm /6000 -exec chmod a-s {} +
 USER node
 # Ensayo sobre los binarios finales, con el mismo usuario de la aplicación.
 COPY --chown=node:node src/app/dev/diseno/inbox/archivo/fixtures/tono.m4a /tmp/inbox-verificacion/tono.m4a
@@ -142,6 +145,7 @@ COPY --from=hotwire --chown=node:node /app/grafo-hotwire-linker-v1/package.json 
 COPY --from=hotwire --chown=node:node /app/grafo-hotwire-linker-v1/dist ./grafo-hotwire-linker-v1/dist
 COPY --from=web-build --chown=node:node /app/.next/static ./.next/static
 COPY --from=web-build --chown=node:node /app/public ./public
+RUN find /usr/bin /usr/sbin /usr/local/bin -type f -perm /6000 -exec chmod a-s {} +
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]

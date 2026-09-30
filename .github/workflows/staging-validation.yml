@@ -89,6 +89,17 @@ jobs:
       - name: Compilar generador de PDF con Chromium actualizado
         run: docker build --platform linux/amd64 -f deploy/pdf/Dockerfile -t grafoprint-staging-pdf:local .
 
+      - name: Compilar ejecutor independiente de respaldos
+        run: docker build --platform linux/amd64 -f deploy/recuperacion/Dockerfile -t grafoprint-staging-respaldo:local deploy/recuperacion
+
+      - name: Comprobar privilegios en imágenes finales y arranque privado del respaldo
+        run: |
+          for image in grafoprint-staging-api:local grafoprint-staging-web:local grafoprint-staging-pdf:local; do
+            docker run --rm -i --entrypoint /bin/sh "$image" -s < deploy/staging/verify-runtime-privileges.sh
+          done
+          docker run --rm -i --entrypoint gosu grafoprint-staging-respaldo:local respaldo /bin/sh -s < deploy/staging/verify-runtime-privileges.sh
+          docker run --rm -i --network none --entrypoint /bin/sh grafoprint-staging-respaldo:local -s < deploy/staging/verify-backup-entrypoint.sh
+
       - name: Crear base temporal y aplicar migraciones sin superusuario
         run: |
           docker compose up -d --wait --wait-timeout 120 postgres redis

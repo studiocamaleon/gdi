@@ -9,4 +9,6 @@ RUN apt-get update \
        chromium-common=154.0.8037.57-1~deb13u1 \
     && rm -rf /var/lib/apt/lists/* \
     && chromium --version | grep -F 'Chromium 154.0.8037.57 '
+# Sólo utilidades de consola: no modificar el helper de aislamiento de Chromium.
+RUN find /usr/bin /usr/sbin /usr/local/bin -type f -perm /6000 -exec chmod a-s {} +
 USER gotenberg

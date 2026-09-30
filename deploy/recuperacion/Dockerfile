@@ -19,5 +19,7 @@ WORKDIR /app
 COPY lib ./lib
 COPY ejecutar.mjs servicio.mjs validar-destino.mjs entrypoint.sh ./
 RUN chmod 0555 /app/entrypoint.sh && age --version && pg_dump --version && node --version
+# gosu baja desde root mediante setuid(2); no necesita el bit setuid en su archivo.
+RUN find /usr/bin /usr/sbin /usr/local/bin -type f -perm /6000 -exec chmod a-s {} +
 ENV NODE_ENV=production
 ENTRYPOINT ["/app/entrypoint.sh"]
