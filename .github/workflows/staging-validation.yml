@@ -99,6 +99,7 @@ jobs:
           done
           docker run --rm -i --entrypoint gosu grafoprint-staging-respaldo:local respaldo /bin/sh -s < deploy/staging/verify-runtime-privileges.sh
           docker run --rm -i --network none --entrypoint /bin/sh grafoprint-staging-respaldo:local -s < deploy/staging/verify-backup-entrypoint.sh
+          docker run --rm -i --network none -e GRAFO_TEST_DESECHABLE=1 --entrypoint /bin/sh grafoprint-staging-respaldo:local -s < deploy/staging/verify-backup-paths.sh
 
       - name: Crear base temporal y aplicar migraciones sin superusuario
         run: |

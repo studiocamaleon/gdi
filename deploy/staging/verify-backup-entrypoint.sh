@@ -12,9 +12,11 @@ test "$(id -u)" = 10001
 test "$(id -g)" = 10001
 test "$RESPALDO_BAJO_FLOCK" = 1
 test "$1" = /app/servicio.mjs
-test "$(stat -c '%a:%u:%g' /data)" = 700:10001:10001
+test "$(stat -c '%a:%u:%g' /data)" = 755:0:0
+test ! -w /data
 test "$(stat -c '%a:%u:%g' /data/estado)" = 700:10001:10001
 test "$(stat -c '%a:%u:%g' /run/respaldo)" = 700:10001:10001
+test "$(stat -c '%a:%u:%g:%h' /data/proceso.lock)" = 600:10001:10001:1
 if flock --nonblock --conflict-exit-code 73 /data/proceso.lock true; then
   echo 'El bloqueo del respaldo no quedó retenido.' >&2
   exit 1

@@ -1,5 +1,12 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Imágenes reforzadas y preparación segura del copiador — 30/09/2026
+
+Las seis máquinas ejecutan `5cb1a52488d8a8918c70ebb2182a44cdc7f3292b`. Se comprobaron sus usuarios sin root y la ausencia de setuid/setgid en las utilidades de consola revisadas. API/web responden 200; la API generó un PDF ficticio válido por la red privada. Se conservan máquinas, regiones, tamaños y las 299 migraciones. El postflight de sólo lectura conserva IDs y cantidades de seis tablas y no encuentra cruces en las 270 relaciones con empresa en ambos extremos. Todos los controles de CI de esta revisión aprobaron.
+
+Se añade una protección de arranque del copiador: la raíz del volumen queda controlada por root, las carpetas de trabajo siguen privadas para UID 10001 y el bloqueo conserva su inode. Un ensayo aislado reprodujo antes el seguimiento de un enlace; después se rechazan siete variantes de rutas manipuladas y pasan dos arranques con estado existente. El ensayo se incorpora a CI; esta protección adicional todavía no está desplegada al escribir esta entrada. La regresión del copiador aprobó 97 pruebas, con 20 pruebas que necesitan herramientas/SQL adicionales omitidas en esa ejecución. No equivale a repetir la restauración integral ya documentada.
+
+
 ## Impresión: accesos y separación entre empresas — 30/09/2026
 
 Sin nuevo despliegue. Se incorporan once casos HTTP con sesiones, permisos, servicios, plan persistido y PostgreSQL reales. Cubren el acceso a las 32 rutas de impresión/perfiles CAD, listados aislados, referencias ajenas, campos internos, documentos/historial, estados de envío, versiones de bandejas, entradas de firma y pérdida de capacidad del plan. Los rechazos conservan los datos originales; las operaciones propias autorizadas funcionan. Storage y motor rechazan llamadas no previstas: no hay certificados QZ, impresoras ni proveedores reales en el ensayo.
