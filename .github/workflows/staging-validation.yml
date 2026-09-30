@@ -51,7 +51,7 @@ jobs:
     # Revisar presupuesto antes de habilitarlo si cambia su visibilidad.
     if: github.event.repository.private == false
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -86,6 +86,9 @@ jobs:
       - name: Compilar aplicación Next Linux amd64 con chequeo de tipos
         run: docker build --platform linux/amd64 --target web -f deploy/Dockerfile -t grafoprint-staging-web:local .
 
+      - name: Compilar generador de PDF con Chromium actualizado
+        run: docker build --platform linux/amd64 -f deploy/pdf/Dockerfile -t grafoprint-staging-pdf:local .
+
       - name: Crear base temporal y aplicar migraciones sin superusuario
         run: |
           docker compose up -d --wait --wait-timeout 120 postgres redis
@@ -101,6 +104,7 @@ jobs:
         run: |
           docker compose up -d --wait --wait-timeout 180 api web
           docker compose run --rm bootstrap node scripts/deploy/verify-http.cjs
+          docker compose exec -T api node scripts/deploy/verify-storage-pdf.cjs
 
       - name: Diagnóstico si falla el ensayo
         if: failure()
