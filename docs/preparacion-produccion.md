@@ -1,10 +1,12 @@
 # De staging a producción de Grafo
 
-Revisión del 28/09/2026. Este documento ordena el próximo trabajo; no significa que producción esté creada ni autorizada para recibir clientes. Llamadas y reportes de operadores quedan para otra etapa.
+Revisión del 30/09/2026. Este documento ordena el próximo trabajo; no significa que producción esté creada ni autorizada para recibir clientes. Llamadas y reportes de operadores quedan para otra etapa.
 
 ## Dónde estamos
 
-La web comercial y Grafo3D ya funcionan en `grafoprint.com.ar`, en Vercel desde `main`, en modo de prelanzamiento. El sistema de trabajo funciona en **staging**, con datos de ensayo, cinco aplicaciones de Fly, Neon, Redis y R2 propios. El PR #7 del Inbox ya está integrado en `main`; el PR #8 corrige recuperación ante cortes. La versión realmente desplegada y las comprobaciones están en [VALIDACION.md](../deploy/staging/VALIDACION.md).
+La web comercial y Grafo3D ya funcionan en `grafoprint.com.ar`, en Vercel desde `main`, en modo de prelanzamiento. El sistema de trabajo funciona en **staging**, con datos de ensayo, cinco aplicaciones de Fly, Neon, Redis y R2 propios. Un sexto servicio, separado, realiza las copias horarias hacia Backblaze B2 y avisa a un monitor externo. El PR #7 del Inbox ya está integrado en `main`. El lote de seguridad del PR #10 incorpora las correcciones de los PR #8/#9, que siguen sin fusionar. La versión realmente desplegada y las comprobaciones están en [VALIDACION.md](../deploy/staging/VALIDACION.md).
+
+Las copias ya se descargaron y restauraron en un entorno aislado, con prueba de ingreso, segundo factor, separación de empresas y archivos. Eso demuestra recuperación de datos y de la API; todavía no mide el tiempo necesario para montar todos los servicios en otra nube. Las instrucciones están en [Operar y recuperar los backups](../deploy/recuperacion/OPERACION.md). El informe privado de seguridad distingue correcciones comprobadas y revisión pendiente; no se publica en este repositorio.
 
 Staging no se convierte en producción cambiándole el nombre. Hay que crear otro entorno para que las pruebas nunca afecten el trabajo real.
 
@@ -12,9 +14,9 @@ Staging no se convierte en producción cambiándole el nombre. Hay que crear otr
 
 | Paso | Qué hacemos | Cuándo está terminado |
 | --- | --- | --- |
-| 1. Cerrar este lote | Revisar el PR #8, sus compilaciones y la recuperación del Inbox en staging. | La versión y los resultados quedan registrados; los pendientes tienen alcance explícito. |
+| 1. Cerrar este lote | Terminar la revisión de seguridad y del PR #10, comprobar sus compilaciones y resolver el orden de integración de #8/#9. | La versión y los resultados quedan registrados; cada pendiente tiene alcance y decisión explícitos. Ningún PR se fusiona automáticamente. |
 | 2. Revisar Grafo completo | Recorrer con una empresa ficticia usuarios/permisos, clientes, presupuesto → OT, materiales/costos, archivos y PDF. Probar colas, recuperación de trabajos y correo de invitación/recuperación. | Un registro breve distingue aprobado, fallo y no probado. Inbox correcto no acredita por sí solo estos recorridos. |
-| 3. Probar recuperación de datos | Restaurar una copia de Neon en un destino aislado y comprobar sus datos, sin sobrescribir staging. Definir recuperación de archivos de R2 y de trabajos en Redis. | Sabemos qué recuperar, cuánto tarda y cuántos datos recientes podrían perderse. |
+| 3. Completar recuperación operativa | Usar el ensayo de base/archivos/API ya realizado para preparar la conmutación completa: infraestructura limpia, web, workers, DNS y reactivación controlada de integraciones. Revisar también cómo acceder al kit si se pierde el teléfono. | Medimos el tiempo completo y la pérdida posible de datos; no confundimos copiar cada hora con garantizar una hora máxima de pérdida. |
 | 4. Acordar el arranque | Presentar nombres, tamaños, costos vigentes, retención y límites del entorno nuevo. Definir si se inicia con empresas invitadas y qué funciones estarán disponibles. | Lucas aprueba una propuesta concreta; el presupuesto de staging no incluye automáticamente producción. |
 | 5. Crear producción privada | Base/proyecto Neon, Redis, bucket R2 y aplicaciones Fly separados, con secretos nuevos y permisos mínimos. | El entorno funciona sin datos ni credenciales de ensayo. Registro público y cobros permanecen cerrados hasta su validación. |
 | 6. Desplegar la versión revisada | Aplicar migraciones una vez, sin seeds ni resets; comprobar el rol de aplicación, crear el administrador inicial y desplegar los servicios. | Salud, sesión/MFA, permisos, colas, archivos y PDF pasan en el entorno nuevo. Lucas elige la clave y el segundo factor. |

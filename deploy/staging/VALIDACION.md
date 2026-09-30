@@ -1,5 +1,16 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Actualización de runtime y reportes — 30/09/2026, 10:44 UTC
+
+API y ambos workers ejecutan la fuente `cf04d5773a52133e8d3479e6d7b4c20f6d8792c4`, imagen `registry.fly.io/grafoprint-staging-api@sha256:aab68158d8e357dc58f39963ef3231c698adfac4cea0f41dc71d4ec7db11f609`. La web usa `7a632da5bfbb83f059128153fd9755d783ee771a`, imagen `registry.fly.io/grafoprint-staging-web@sha256:241257c6d112c44c08fccb92e84b745944a708d5dc346ff4787a77ab96cb4a20`. PDF y copiador conservan sus imágenes. Se comprobaron las seis máquinas iniciadas, sus identidades/tamaños y controles de salud disponibles. Sin cambios de producción ni nuevas migraciones.
+
+- Node 24.21.0 fijado por digest; compilaciones remotas con tipos aprobadas. Es una actualización del runtime, no una declaración de que desaparecieron todos los avisos nativos. Pasaron 73 pruebas locales dirigidas de configuración, accesos, sesiones, archivos y seguridad web. En la API desplegada se comprobó la versión real y conversión de audio con rechazo de formatos inválidos.
+- Ensayo HTTP de staging repetido sobre la pareja nueva API/web: perímetro, origen, login, cookie protegida, aislamiento de empresas, permisos vigentes, MFA, rotación de contraseña y cierre de SSE tras revocación. Se retiraron únicamente los datos temporales del ensayo. Postflight: mismos IDs y cantidades originales, 299 migraciones/checksums y 270 relaciones sin referencias entre empresas.
+- Reportes: 13 casos aprobados de planes/permisos, incluidos doce reportes de una empresa y un control positivo de otra, con nombres y montos distintos. Servicios, planes, permisos y SQL reales; identidad inyectada como fixture, sin acreditar nuevamente AuthGuard/JWT en esta suite. Tipos y lint dirigidos aprobados. Se corrigió el nombre de un rol de prueba sin cambiar código ejecutable.
+- Copia posterior `d298d3c6-18c6-4ab3-8df7-aa5f9e7e2dc2`, completa a las 10:42:27 UTC: cuatro fuentes exactas y 13 archivos. Descarga, firma, descifrado y huellas aprobados. No se volvió a importar esta copia a PostgreSQL; el ensayo SQL/funcional completo sigue siendo el de las 09:17 UTC.
+- El lote anterior `cab2aba197221dbf743d80ec74694b5b7fb22ab5` aprobó [contenedores y HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36702014840) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36702014768). El resultado de GitHub para esta actualización se registra por separado cuando concluya.
+
+
 ## Procesamiento de archivos y tesorería — 30/09/2026, 10:23 UTC
 
 API y ambos workers ejecutan la fuente `45bf112cc9254403fc20ad2142715e92d525c547`, imagen `registry.fly.io/grafoprint-staging-api@sha256:1a51bda900534d3c6e6fcb77a0a07b2a6c9ada8da0809a0f3b840b408e4735aa`. Web, PDF y ejecutor de copias conservan sus versiones. Se verificaron las seis máquinas iniciadas, mismos tamaños y controles de salud disponibles aprobados. Sin migraciones nuevas ni cambios de producción. Los apartados inferiores conservan el estado histórico de cada ensayo.
