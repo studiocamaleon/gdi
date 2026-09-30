@@ -115,6 +115,10 @@ El bootstrap no inventa planes, precios, empresas ni suscripciones. Después del
 9. Verificar el acceso restringido y bloqueo de indexación. Sólo GET/POST exactos de `/api/webhooks/whatsapp` están abiertos para Meta, con verify token y firma HMAC. El cierre general de las demás rutas continúa activo.
 10. Completar pruebas cloud: login/MFA, empresa de ensayo, carga/descarga, PDF desde la aplicación, cola de cálculos, eventos SSE, reinicio con trabajo en curso, salud con base caída y restauración de respaldo. Medir memoria/CPU y ajustar máquinas y concurrencia.
 
+**Límites compartidos de la API:** con `NODE_ENV=production`, `REDIS_URL` es obligatoria. Todas las réplicas del mismo entorno deben usar el mismo contador y `API_LIMITES_PREFIJO`; staging usa por defecto `grafo:staging:limites:v1` con `STAGING_PRIVATE=true`. No compartir ese prefijo con producción ni cambiarlo en cada deploy. El límite previo a autenticar se aplica por ruta/IP; no es una cuota por empresa ni reemplaza la protección del perímetro. Si Redis falla, las rutas protegidas responden 503, incluida la salud de API: comprobar alertas y recuperación antes de actualizar staging. No existe una vuelta automática a contadores aislados. Mantener `noeviction` y observar memoria/latencia; un vaciado de Redis también elimina los contadores.
+
+**Copias independientes:** consultar [recuperación](../recuperacion/README.md). El control del destino es de sólo lectura y no equivale a tener backups activos. Las credenciales de respaldo no van en los secretos de estas cinco apps.
+
 Ejemplos de despliegue para la etapa 6, **sólo con las apps, secretos y presupuesto ya preparados**, desde la raíz:
 
 ```sh
