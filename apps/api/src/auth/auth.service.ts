@@ -524,23 +524,49 @@ export class AuthService {
       throw new BadRequestException('La clave nueva tiene que ser distinta.');
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash: await bcrypt.hash(dto.nueva, 10),
-        debeCambiarPassword: false,
-      },
+    // El hash costoso se prepara antes del lock. Dentro se vuelve a comprobar
+    // la identidad: otro cambio/restablecimiento no puede usar la misma clave
+    // antigua ni dejar una contraseña nueva con sesiones anteriores vivas.
+    const passwordHash = await bcrypt.hash(dto.nueva, 10);
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, user.id);
+      const vigente = await tx.user.findUnique({ where: { id: user.id } });
+      const sesion = await tx.authSession.findFirst({
+        where: {
+          id: auth.sessionId,
+          userId: user.id,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+          impersonacionId: null,
+        },
+        select: { id: true },
+      });
+      if (!vigente?.activo || !sesion)
+        throw new UnauthorizedException('Volvé a iniciar sesión.');
+      if (vigente.passwordHash !== user.passwordHash)
+        throw new BadRequestException(
+          'La contraseña cambió. Volvé a iniciar sesión.',
+        );
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash, debeCambiarPassword: false },
+      });
+      // Se conserva sólo la sesión personal que hizo el cambio.
+      await tx.authSession.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+          id: { not: auth.sessionId },
+        },
+        data: { revokedAt: new Date() },
+      });
+      await tx.mfaChallenge.deleteMany({ where: { userId: user.id } });
+      await tx.mfaDispositivo.updateMany({
+        where: { userId: user.id, revocadoEl: null },
+        data: { revocadoEl: new Date() },
+      });
     });
-
-    // Las demás sesiones se caen: cambiar la clave es lo que hace alguien que
-    // sospecha que se la sabe otro, y dejar vivas las sesiones abiertas lo
-    // dejaría igual que antes. La actual sigue, para no echarlo de la pantalla
-    // en la que está.
-    await this.prisma.authSession.updateMany({
-      where: { userId: user.id, revokedAt: null, id: { not: auth.sessionId } },
-      data: { revokedAt: new Date() },
-    });
-    this.sessionCache.invalidate(auth.sessionId);
+    this.sessionCache.invalidarUsuario(user.id);
 
     return { ok: true as const };
   }

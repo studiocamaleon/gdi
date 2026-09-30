@@ -392,4 +392,69 @@ describe('Revocación efectiva entre instancias de la API', () => {
     await acceder(1, otra).expect(401);
     await acceder(1, auth).expect(200);
   });
+
+  it('dos cambios simultáneos con la clave anterior sólo permiten un ganador', async () => {
+    const cambios = await Promise.allSettled([
+      servicios[0].cambiarPassword(auth, {
+        actual: password,
+        nueva: 'Nueva ficticia A 123',
+      }),
+      servicios[1].cambiarPassword(auth, {
+        actual: password,
+        nueva: 'Nueva ficticia B 456',
+      }),
+    ]);
+    expect(cambios.filter((c) => c.status === 'fulfilled')).toHaveLength(1);
+    expect(cambios.filter((c) => c.status === 'rejected')).toHaveLength(1);
+    await acceder(1, auth).expect(200);
+    await acceder(1, otra).expect(401);
+  });
+
+  it('si falla la revocación, tampoco confirma la nueva contraseña', async () => {
+    // Inyección de un fallo en la consulta de revocación; el resto, incluidos
+    // los commits y el rollback, los resuelve PostgreSQL real.
+    const db = prisma.$extends({
+      query: {
+        authSession: {
+          updateMany() {
+            throw new Error('Fallo de revocación simulado');
+          },
+        },
+      },
+    }) as unknown as PrismaService;
+    const servicio = new AuthService(
+      db,
+      jwt,
+      new SessionCacheService(),
+      mfas[0],
+    );
+    await expect(
+      servicio.cambiarPassword(auth, {
+        actual: password,
+        nueva: 'Clave ficticia que no debe persistir',
+      }),
+    ).rejects.toThrow('Fallo de revocación simulado');
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: auth.userId },
+    });
+    expect(await bcrypt.compare(password, user.passwordHash!)).toBe(true);
+    await acceder(1, otra).expect(200);
+  });
+
+  it('una sesión revocada no cambia la clave aunque su request hubiese pasado el guard antes', async () => {
+    await prisma.authSession.update({
+      where: { id: auth.sessionId },
+      data: { revokedAt: new Date() },
+    });
+    await expect(
+      servicios[0].cambiarPassword(auth, {
+        actual: password,
+        nueva: 'Cambio ficticio tardío 123',
+      }),
+    ).rejects.toThrow();
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: auth.userId },
+    });
+    expect(await bcrypt.compare(password, user.passwordHash!)).toBe(true);
+  });
 });
