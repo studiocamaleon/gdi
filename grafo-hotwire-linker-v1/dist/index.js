@@ -102,18 +102,29 @@ function parseArgs(argv) {
     };
 }
 function parseAttributes(tag) {
-    const attrs = {};
-    const regex = /([:\w-]+)\s*=\s*("([^"]*)"|'([^']*)')/g;
-    let match;
-    while ((match = regex.exec(tag)) !== null) {
+    const attrs = Object.create(null);
+    // Anclar cada atributo evita volver a intentar desde cada carácter cuando
+    // un archivo contiene un nombre muy largo sin "=" o una comilla sin cerrar.
+    const regex = /([:\w-]+)\s*=\s*("([^"]*)"|'([^']*)')/y;
+    let index = /^<[\w:-]+/.exec(tag)?.[0].length ?? 0;
+    while (index < tag.length) {
+        while (index < tag.length && /\s/.test(tag[index]))
+            index++;
+        if (tag[index] === ">" || (tag[index] === "/" && tag[index + 1] === ">"))
+            break;
+        regex.lastIndex = index;
+        const match = regex.exec(tag);
+        if (!match)
+            throw new Error("El SVG contiene un atributo inválido");
         attrs[match[1]] = match[3] ?? match[4] ?? "";
+        index = regex.lastIndex;
     }
     return attrs;
 }
 function parseLengthMm(raw) {
     if (!raw)
         return undefined;
-    const match = raw.trim().match(/^([-+]?\d*\.?\d+(?:e[-+]?\d+)?)\s*(mm|cm|in|px)?$/i);
+    const match = raw.trim().match(/^([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)\s*(mm|cm|in|px)?$/i);
     if (!match)
         return undefined;
     const value = Number(match[1]);
