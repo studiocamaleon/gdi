@@ -8,6 +8,14 @@ afterEach(() => {
 });
 const ctx = { params: Promise.resolve({ path: ["clientes"] }) };
 
+it.each([200,302,401,500])('no permite guardar respuestas de negocio en cachés compartidas: %s',async(status)=>{
+  vi.stubEnv('STAGING_PRIVATE','false');
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('contenido ficticio',{status,headers:{'cache-control':'public, max-age=3600',...(status===302 ? {location:'https://files.example.invalid/?firma=ficticia'} : {})}})));
+  const response=await GET(new Request('http://localhost/api/backend/clientes'),ctx);
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+});
+
 it.each<Record<string, string>>([{}, { "content-length": "1" }])(
   "rechaza un cuerpo grande aunque no declare su tamaño real: %j",
   async (extra) => {

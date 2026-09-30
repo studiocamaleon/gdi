@@ -117,10 +117,10 @@ async function handler(
       signal: request.signal,
     });
   } catch {
-    return new Response(
+    return cabecerasPrivadas(new Response(
       JSON.stringify({ message: "No se pudo conectar con el API." }),
       { status: 503, headers: { "content-type": "application/json" } },
-    );
+    ));
   }
 
   if (response.ok && ruta === "auth/mfa/verificar") {
@@ -181,14 +181,16 @@ async function handler(
     for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
   }
 
-  const responseHeaders = new Headers();
+  // El BFF transmite datos privados y enlaces firmados, también fuera de staging.
+  const responseHeaders = new Headers({
+    "cache-control": "private, no-store",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+  });
   if (stagingPrivado()) {
     responseHeaders.set("x-robots-tag", "noindex, nofollow, noarchive");
     responseHeaders.set("cache-control", "private, no-store");
   }
-  const cacheControl = response.headers.get("cache-control");
-  if (cacheControl && !stagingPrivado())
-    responseHeaders.set("cache-control", cacheControl);
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) responseHeaders.set("retry-after", retryAfter);
   const respContentType = response.headers.get("content-type");

@@ -32,6 +32,8 @@ export function controlAccesoStaging(headers: Headers): Response | null {
 }
 
 export function cabecerasPrivadas(response: Response) {
+  response.headers.set("Referrer-Policy", "no-referrer");
+  response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
   response.headers.set("Cache-Control", "private, no-store");
   return response;
