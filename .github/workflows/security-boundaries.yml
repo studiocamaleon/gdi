@@ -82,6 +82,7 @@ jobs:
             src/eta/__tests__/eta-aislamiento-http.integration.spec.ts \
             src/cotizaciones/cotizaciones-aislamiento-http.integration.spec.ts \
             src/impresion/impresion-aislamiento-http.integration.spec.ts \
+            src/integraciones/integraciones-aislamiento-http.integration.spec.ts \
             src/mcp/__tests__/armar-jobcontext.spec.ts \
             src/panel-general/__tests__/panel-actividad-entradas.spec.ts \
             src/egresos/__tests__/egresos-entradas.spec.ts \
