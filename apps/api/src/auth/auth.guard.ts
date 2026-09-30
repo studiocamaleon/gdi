@@ -17,6 +17,10 @@ import { ipDeRequest, ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { CLAVE_PROVISORIA } from './clave-provisoria.decorator';
 import {
+  REVALIDAR_ACCESO,
+  type RequestConRevalidacion,
+} from './revalidacion-acceso';
+import {
   ENROLAMIENTO_PLATAFORMA,
   mfaPlataformaCompleta,
 } from './enrolamiento-plataforma';
@@ -37,7 +41,7 @@ export class AuthGuard implements CanActivate {
     ),
   ) {}
 
-  async canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext, renovarSesion = true) {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -47,12 +51,22 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<{
-      headers: Record<string, string | undefined>;
-      auth?: CurrentAuth;
-      ip?: string;
-      socket?: { remoteAddress?: string };
-    }>();
+    const request = context.switchToHttp().getRequest<
+      RequestConRevalidacion & {
+        headers: Record<string, string | undefined>;
+        auth?: CurrentAuth;
+        ip?: string;
+        socket?: { remoteAddress?: string };
+      }
+    >();
+
+    if (renovarSesion) {
+      request[REVALIDAR_ACCESO] = async () => {
+        await this.canActivate(context, false);
+        if (!request.auth) throw new UnauthorizedException('Sesion invalida.');
+        return request.auth;
+      };
+    }
 
     const token = this.extractBearerToken(request.headers.authorization);
 
@@ -121,7 +135,8 @@ export class AuthGuard implements CanActivate {
       ) {
         throw new UnauthorizedException('Sesion expirada o revocada.');
       }
-      void this.renovar({ ...session, id: payload.sessionId });
+      if (renovarSesion)
+        void this.renovar({ ...session, id: payload.sessionId });
       const plataformaMfaPendiente = !mfaPlataformaCompleta(
         session.user.mfa,
         session.mfaVerificadoEl,
@@ -193,7 +208,7 @@ export class AuthGuard implements CanActivate {
     // `vencimientoRenovado` devuelve null casi siempre —sólo escribe cuando ya
     // pasó media ventana—, así que esto no es un UPDATE por request. Además
     // la autorización siempre consulta el estado vigente.
-    void this.renovar(session);
+    if (renovarSesion) void this.renovar(session);
 
     // ── Impersonación ──────────────────────────────────────────────────
     if (payload.imp) {
