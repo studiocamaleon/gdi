@@ -5,6 +5,9 @@ export const CAPACIDADES_COPIADOR = Object.freeze([
   "listBuckets", "readBucketRetentions", "listFiles", "readFiles",
   "writeFiles", "readFileRetentions", "writeFileRetentions",
 ]);
+export const CAPACIDADES_LECTOR = Object.freeze([
+  "listBuckets", "readBucketRetentions", "listFiles", "readFiles", "readFileRetentions",
+]);
 const MAX_RESPUESTA = 512 * 1024;
 
 class ConfiguracionInsegura extends Error {}
@@ -26,7 +29,7 @@ export function validarConfiguracion(env) {
   };
 }
 
-export function validarPermisos(auth, config) {
+export function validarPermisos(auth, config, capacidades = CAPACIDADES_COPIADOR) {
   const storage = auth?.apiInfo?.storageApi;
   const allowed = storage?.allowed;
   exigir(auth?.accountId === config.accountId, "La cuenta de respaldo no coincide con la esperada.");
@@ -35,7 +38,7 @@ export function validarPermisos(auth, config) {
   exigir(Array.isArray(allowed?.buckets) && allowed.buckets.length === 1 && allowed.buckets[0]?.id === config.bucketId, "La clave debe estar limitada a un único depósito de respaldo.");
   exigir(allowed?.namePrefix === config.prefijo, "La clave debe estar limitada al prefijo exacto del entorno.");
   const caps = allowed?.capabilities;
-  exigir(Array.isArray(caps) && CAPACIDADES_COPIADOR.every((c) => caps.includes(c)) && caps.every((c) => CAPACIDADES_COPIADOR.includes(c)), "La clave tiene permisos faltantes o excesivos; no debe administrar ni borrar respaldos.");
+  exigir(Array.isArray(caps) && capacidades.every((c) => caps.includes(c)) && caps.every((c) => capacidades.includes(c)), "La clave tiene permisos faltantes o excesivos; no debe administrar ni borrar respaldos.");
   // La URL viene del proveedor: no enviar el token a hosts arbitrarios o redirects.
   let url;
   try { url = new URL(storage.apiUrl); } catch { /* Rechazo genérico abajo. */ }
