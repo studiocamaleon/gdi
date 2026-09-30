@@ -1,5 +1,15 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Permisos de Centro de Copiado y comprobaciones adicionales — 30/09/2026, 09:44 UTC
+
+API y ambos workers ejecutan ahora la fuente `a949ba30571a7532c83c1f4a9087f6d3c3df79c7`, imagen `registry.fly.io/grafoprint-staging-api@sha256:4b4883f533a94cb8a3204f8420ce4d68b141bf19b255423361a65781831997d6`. Web y PDF mantienen las versiones de la tabla del apartado anterior. Mismos recursos y máquinas; builder temporal retirado al terminar. Sin nuevas migraciones, cambios de producción ni fusiones.
+
+- Las dos operaciones de guardado de Centro de Copiado exigen `comercial.gestionar`; las vistas previas siguen disponibles con lectura. Reproducción local antes del cambio: cinco rechazos esperados fallaron. Después: 13 pruebas HTTP aprobadas con sesiones y roles reales. Los servicios de cálculo/guardado se sustituyen en esos tests; no acreditan el cálculo de una cotización completa.
+- En staging, dos usuarios ficticios temporales probaron ambos guardados: lector 403, gestor 400 al alcanzar la validación de un cuerpo deliberadamente incompleto. No se guardaron cotizaciones. Las identidades temporales se eliminaron; postflight aprobó mismos datos históricos, 299 migraciones/checksums y 270 relaciones sin referencias entre empresas.
+- Regresión Centro de Copiado: 73 pruebas aprobadas y una excedió cinco segundos; al repetir sólo su archivo, las cuatro pruebas pasaron sin cambiar código, timeout ni aserciones. Lint dirigido aprobado.
+- Campañas, cupones, fidelización y desarrollo documental: 11 casos nuevos, 36 solicitudes HTTP con base y servicios reales; permisos, lecturas y referencias ajenas, rechazo sin escrituras parciales y altas propias comprobados. La lectura del plan se sustituye por un plan de prueba. Esto no cubre todos los recorridos ni acredita interacciones externas.
+- CI anterior: dependencias aprobadas; contenedores compilaron y pasaron tipos, pero el ensayo HTTP conservaba una cookie anterior al cambio de contraseña. Se corrigió el ensayo para exigir revocación de la anterior y usar la cookie rotada, y se agregó arranque/espera explícitos del PDF. Nueva ejecución remota pendiente; no se omitieron controles.
+
 ## Lote de seguridad y recuperación — 30/09/2026
 
 **Estado actual:** API, web, ambos workers y generador PDF desplegados y saludables, en las mismas cinco máquinas y con los mismos recursos. No se modificó producción ni se fusionaron PR. Se conservan las mejoras del Inbox del PR #8 y la redirección del PR #9.
@@ -20,7 +30,7 @@
 
 El ejecutor de copias se actualizó con las tres imágenes desplegadas y cuatro fuentes exactas (API, web, PDF y ejecutor). La copia posterior al cambio terminó; se descargó y descifró con firma válida, 299 migraciones, 13 archivos y cuatro archivos de fuentes con huellas correctas. Restauración SQL en base nueva aislada: 216 tablas y 1.591 filas, con dueño sin superusuario y sin login al terminar. La API del lote nuevo arrancó con esa base restaurada: login con MFA recuperada, lectura/alta de cliente, rechazo de otra empresa y de acceso sin sesión, y apertura de los 13 objetos con hash correcto. La red externa se bloqueó desde el sistema operativo; no se habilitaron cron, workers ni envíos. El rol del ensayo se dejó sin login. Healthchecks confirmó el cierre real. El builder temporal se retiró tras terminar las compilaciones.
 
-**Límites:** estas verificaciones son evidencia de los recorridos indicados, no una certificación de los 670 endpoints ni garantía frente a cualquier ataque. Recuperación de cuenta por correo permanece deshabilitada hasta configurar y ensayar un transporte real. Coexistencia de Meta, carga sostenida, cambio completo a infraestructura de reemplazo y recuperación ante pérdida del teléfono requieren sus ensayos específicos. Los hallazgos y la cobertura detallada permanecen en el informe privado.
+**Límites:** estas verificaciones son evidencia de los recorridos indicados, no una certificación de las 675 rutas inventariadas ni garantía frente a cualquier ataque. Recuperación de cuenta por correo permanece deshabilitada hasta configurar y ensayar un transporte real. Coexistencia de Meta, carga sostenida, cambio completo a infraestructura de reemplazo y recuperación ante pérdida del teléfono requieren sus ensayos específicos. Los hallazgos y la cobertura detallada permanecen en el informe privado.
 
 
 ## Activación del respaldo y recuperación de la copia operativa — 30/09/2026
