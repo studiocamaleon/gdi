@@ -18,7 +18,7 @@ import {
   stat,
   writeFile,
 } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, resolve, sep } from 'node:path';
 
 import { calcularTamanioParte } from './multipart';
 import type {
@@ -286,8 +286,15 @@ export class LocalDriver implements StorageDriver {
    * `.storage/`.
    */
   private rutaDe(key: string): string {
-    const ruta = resolve(join(this.raiz, key));
-    if (ruta !== this.raiz && !ruta.startsWith(this.raiz + sep)) {
+    const raiz = resolve(this.raiz);
+    // Una clave identifica un objeto relativo, nunca la carpeta ni una ruta
+    // absoluta. Comparar después de normalizar y con separador evita ../ y
+    // carpetas vecinas cuyo nombre sólo comparte el prefijo de la raíz.
+    if (isAbsolute(key)) {
+      throw new Error(`Clave de storage fuera de rango: ${key}`);
+    }
+    const ruta = resolve(raiz, key);
+    if (!ruta.startsWith(raiz + sep)) {
       throw new Error(`Clave de storage fuera de rango: ${key}`);
     }
     return ruta;

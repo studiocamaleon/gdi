@@ -82,4 +82,7 @@ jobs:
             src/eta/__tests__/eta-aislamiento-http.integration.spec.ts \
             src/mcp/__tests__/armar-jobcontext.spec.ts \
             src/panel-general/__tests__/panel-actividad-entradas.spec.ts \
-            src/egresos/__tests__/egresos-entradas.spec.ts
+            src/egresos/__tests__/egresos-entradas.spec.ts \
+            src/archivos/storage/local-confinamiento.spec.ts \
+            src/archivos/storage/local.driver.spec.ts \
+            src/archivos/storage/subida-inmutable.spec.ts
