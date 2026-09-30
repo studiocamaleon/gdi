@@ -148,6 +148,10 @@ async function handler(
       }
     }
   }
+  if (response.ok && method === "POST" && ruta === "auth/recuperacion/restablecer") {
+    cookieStore.delete(SESSION_COOKIE_NAME);
+    for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
+  }
   if (response.ok && method === "POST" && ruta === "auth/password") {
     const renovada = response.headers.get(SESION_RENOVADA_HEADER);
     // Sólo una respuesta del API a esta operación puede renovar la cookie.

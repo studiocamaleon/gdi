@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   ArrowUpRight,
-  ChevronDown,
   Eye,
   EyeOff,
   Info,
@@ -172,15 +171,9 @@ export function LoginForm() {
           </InputGroup>
         </Field>
       </FieldGroup>
-      <details className={s.help}>
-        <summary>
-          ¿Olvidaste tu contraseña? <ChevronDown size={13} aria-hidden="true" />
-        </summary>
-        <p>
-          Si todavía no tenés contraseña o necesitás restablecerla, pedísela a
-          quien administra tu empresa en Grafo.
-        </p>
-      </details>
+      <p className={s.help}>
+        <Link href="/recuperar-acceso">¿Olvidaste tu contraseña?</Link>
+      </p>
       {errorMessage ? (
         <p className={s.error} id="login-error" role="alert">
           {errorMessage}

@@ -69,3 +69,15 @@ it("bloquea la renovación desde otro origen antes de contactar al API", async (
   expect((await llamar("auth/password", { origin: "https://ajeno.example.invalid" })).status).toBe(403);
   expect(mocks.fetch).not.toHaveBeenCalled();
 });
+
+it("recuperar la contraseña borra las cookies antiguas sin crear sesión", async () => {
+  mocks.fetch.mockResolvedValue(new Response('{"ok":true}', {status: 201}));
+  expect((await llamar("auth/recuperacion/restablecer")).status).toBe(201);
+  expect(mocks.set).not.toHaveBeenCalled();
+  expect(mocks.delete.mock.calls).toEqual([[SESSION_COOKIE_NAME], [MFA_COOKIES.tenant], [MFA_COOKIES.plataforma]]);
+});
+it("un enlace rechazado no borra la sesión de quien lo abrió", async () => {
+  mocks.fetch.mockResolvedValue(new Response('{}', {status: 400}));
+  expect((await llamar("auth/recuperacion/restablecer")).status).toBe(400);
+  expect(mocks.delete).not.toHaveBeenCalled();
+});

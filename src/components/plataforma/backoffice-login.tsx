@@ -177,6 +177,7 @@ export function BackofficeLogin() {
                     </div>
                   </Field>
                 </FieldGroup>
+                <Link href="/recuperar-acceso">¿Olvidaste tu contraseña?</Link>
                 {error && (
                   <p className={s.error} role="alert">
                     {error}
