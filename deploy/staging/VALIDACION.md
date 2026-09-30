@@ -1,10 +1,16 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Impresión: accesos y separación entre empresas — 30/09/2026
+
+Sin nuevo despliegue. Se incorporan once casos HTTP con sesiones, permisos, servicios, plan persistido y PostgreSQL reales. Cubren el acceso a las 32 rutas de impresión/perfiles CAD, listados aislados, referencias ajenas, campos internos, documentos/historial, estados de envío, versiones de bandejas, entradas de firma y pérdida de capacidad del plan. Los rechazos conservan los datos originales; las operaciones propias autorizadas funcionan. Storage y motor rechazan llamadas no previstas: no hay certificados QZ, impresoras ni proveedores reales en el ensayo.
+
+Pasaron **131 casos en once suites** de impresión, además de tipos y lint dirigidos del test nuevo. El control HTTP de PR incorpora la nueva suite. Quedan fuera de este ensayo la firma con certificado real, impresión física, carga máxima y los recorridos externos; no se identificó una nueva brecha en los casos comprobados.
+
 ## Permisos de utilidades en las imágenes — 30/09/2026
 
 Preparado un refuerzo de las cuatro imágenes: retirar setuid/setgid de utilidades de consola en `/usr/bin`, `/usr/sbin` y `/usr/local/bin`. Se conservan los permisos ordinarios, el usuario de cada servicio y el helper de aislamiento de Chromium. El respaldo sigue preparando su volumen como root y baja a `respaldo` antes de ejecutar el servicio; `gosu` no depende del bit setuid de un archivo.
 
-El verificador nuevo rechazó las cuatro imágenes vigentes por esos atributos; no se ejecutó un ataque ni se demostró escalada de privilegios. Sintaxis de los dos ensayos y diff local comprobados. CI ahora compila también el copiador y exige usuario sin root, ausencia de esos atributos y arranque del respaldo con directorios privados y bloqueo exclusivo, sin red. Todavía pendiente comprobar las imágenes nuevas y desplegar; la instalación vigente no cambia por este registro.
+El verificador nuevo rechazó las cuatro imágenes vigentes por esos atributos; no se ejecutó un ataque ni se demostró escalada de privilegios. Sintaxis de los dos ensayos y diff local comprobados. CI ahora compila también el copiador y exige usuario sin root, ausencia de esos atributos y arranque del respaldo con directorios privados y bloqueo exclusivo, sin red. En `83160c948`, [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36783340329), [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36783340324) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36783340319) aprobaron. Las cuatro imágenes nuevas y el recorrido funcional remoto pasaron; todavía pendiente desplegar en Fly. La instalación vigente no cambia por este registro.
 
 ## Archivos locales y tipos de cambio — 30/09/2026
 
