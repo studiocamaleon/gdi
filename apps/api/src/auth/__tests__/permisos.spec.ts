@@ -138,6 +138,7 @@ function contexto(auth?: CurrentAuth): ExecutionContext {
 function guardCon(metadatos: Record<string, unknown>) {
   const reflector = {
     getAllAndOverride: (key: string) => metadatos[key],
+    get: (key: string) => metadatos[key],
   } as unknown as Reflector;
   return new PermisosGuard(reflector);
 }

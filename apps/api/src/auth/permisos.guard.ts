@@ -49,17 +49,23 @@ export class PermisosGuard implements CanActivate {
     // evaluar. (Si no fuera pública, AuthGuard ya habría tirado 401.)
     if (!auth) return true;
 
-    const soloAutenticado = this.reflector.getAllAndOverride<boolean>(
-      SOLO_AUTENTICADO_KEY,
-      [context.getHandler(), context.getClass()],
-    );
-    if (soloAutenticado) return true;
+    // Resolver ambas reglas en el mismo nivel antes de heredar. Buscar cada
+    // clave por separado permitía que @SoloAutenticado del controller anulase
+    // un @Permiso más estricto del método. Si coinciden, prevalece el permiso,
+    // incluso vacío (denegación), independientemente del orden de decoradores.
+    let declarado: PermisoClave | PermisoClave[] | undefined;
+    for (const target of [context.getHandler(), context.getClass()]) {
+      declarado = this.reflector.get<PermisoClave | PermisoClave[]>(
+        PERMISO_KEY,
+        target,
+      );
+      if (declarado !== undefined) break;
+      if (this.reflector.get<boolean>(SOLO_AUTENTICADO_KEY, target) === true) {
+        return true;
+      }
+    }
 
-    // Puede venir uno solo (la forma vieja) o varios, y entonces alcanza con
-    // tener cualquiera.
-    const declarado = this.reflector.getAllAndOverride<
-      PermisoClave | PermisoClave[]
-    >(PERMISO_KEY, [context.getHandler(), context.getClass()]);
+    // Puede venir uno solo (la forma vieja) o varios: alcanza con cualquiera.
     const requerido = declarado
       ? Array.isArray(declarado)
         ? declarado
