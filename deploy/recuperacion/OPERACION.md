@@ -28,9 +28,13 @@ Las cuatro notas permiten leer los comprobantes remotos y descifrar los respaldo
 
 1. Revisar si dice fallo o ausencia de señal. Una alerta no significa que se hayan perdido las copias anteriores.
 2. Comprobar el estado de la máquina de respaldo, su disco y los últimos mensajes de ejecución. No pegar configuraciones, URLs de monitor ni claves en tickets públicos.
-3. Revisar disponibilidad de Neon, R2 y B2, vencimientos/permisos de sus lectores y cambios recientes de esquema o despliegue. El control exige un lector sin escritura y una base sin migraciones incompletas.
+3. Revisar disponibilidad de Neon, R2 y B2, límites de consumo, vencimientos/permisos de sus lectores y cambios recientes de esquema o despliegue. El control exige un lector sin escritura y una base sin migraciones incompletas.
 4. Corregir la causa. Ejecutar una copia con el mismo servicio y verificar el comprobante remoto. No silenciar el monitor ni enviar una señal de éxito manual para ocultar el problema.
 5. Si pasó más de una hora sin copia, registrar el intervalo sin protección nueva. Evaluar si conviene detener cambios sensibles hasta recuperar la cobertura.
+
+Si B2 rechaza operaciones por una cuota, revisar **Caps & Alerts** y la situación de facturación de esa cuenta. Registrar qué límite se alcanzó antes de cambiarlo; un código como `download_cap_exceeded` no basta para determinar el consumo concreto. Establecer el margen dentro del presupuesto aprobado y conservar las alertas. No dejar el gasto ilimitado como solución automática ni reducir la retención para liberar espacio.
+
+Una subida puede haber terminado aunque falle la comprobación posterior: no repetir cargas en un bucle ni considerar válido ese respaldo. Después de resolver el límite, comprobar una copia nueva, sus versiones retenidas y su firma, y verificar que el monitor reciba el éxito real. En un ensayo de recuperación, prever también el consumo de **descargar** base, archivos y código. Los contadores diarios de B2 se reinician a las 00:00 GMT; esperar ese reinicio no restablece las copias omitidas. Ver [límites y alertas de B2](https://www.backblaze.com/docs/en/cloud-storage-data-caps-and-alerts).
 
 ## Cuando se despliega una versión de Grafo
 
