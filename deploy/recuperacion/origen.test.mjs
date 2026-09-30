@@ -33,6 +33,32 @@ test('acepta endpoint jurisdiccional US, exige versión/ETag al descargar', asyn
   assert.equal(data, '0123456789'); await source.comprobar(a, signal());
 });
 
+test('R2: listado con milisegundos y GET/HEAD con fecha HTTP en segundos describen el mismo objeto', async () => {
+  const listado = { ...a, modificado: '2026-01-01T00:00:00.713Z' };
+  const source = new OrigenPostgresR2(config(), { s3: { async send(command) {
+    assert.equal(command.input.IfMatch, a.etag);
+    return { ...info(), Body: Readable.from(['0123456789']) };
+  } } });
+  let data = ''; for await (const b of await source.abrir(listado, signal())) data += b;
+  assert.equal(data, '0123456789'); await source.comprobar(listado, signal());
+});
+
+for (const [nombre, cambio] of [
+  ['ETag distinto dentro del mismo segundo', { ETag: 'otro' }],
+  ['fecha del segundo siguiente', { LastModified: new Date('2026-01-01T00:00:01.000Z') }],
+  ['fecha inválida', { LastModified: new Date('invalida') }],
+  ['fecha ausente', { LastModified: undefined }],
+]) {
+  test(`la precisión HTTP no admite ${nombre}`, async () => {
+    const source = new OrigenPostgresR2(config(), { s3: { async send() {
+      return { ...info(), ...cambio, Body: Readable.from(['0123456789']) };
+    } } });
+    const listado = { ...a, modificado: '2026-01-01T00:00:00.713Z' };
+    await assert.rejects(source.abrir(listado, signal()), /cambió/);
+    await assert.rejects(source.comprobar(listado, signal()), /cambió/);
+  });
+}
+
 for (const field of ['ETag', 'ContentLength', 'LastModified']) {
   test(`rechaza cambio concurrente de ${field} y cierra el stream`, async () => {
     const body = Readable.from(['parcial']); const h = info();

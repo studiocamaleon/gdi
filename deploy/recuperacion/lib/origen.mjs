@@ -2,6 +2,15 @@ import pg from 'pg';
 import { S3Client, ListObjectsV2Command, HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { exigir, proceso } from './seguro.mjs';
 
+function fechaHttpCoincide(fecha, inventario) {
+  // ListObjectsV2 de R2 incluye milisegundos; Last-Modified de GET/HEAD es
+  // una fecha HTTP con precisión de segundos. ETag y tamaño siguen siendo exactos.
+  const actual = fecha instanceof Date ? fecha.getTime() : NaN;
+  const esperado = Date.parse(inventario);
+  return Number.isFinite(actual) && Number.isFinite(esperado) &&
+    Math.floor(actual / 1000) === Math.floor(esperado / 1000);
+}
+
 // Sin permisos DML, DDL, ownership ni membresías que permitan asumir roles de escritura.
 export async function validarLector(client) {
   const { rows: [r] } = await client.query(`
@@ -105,14 +114,14 @@ export class OrigenPostgresR2 {
   }
   async abrir(a, signal) {
     const result = await this.send(new GetObjectCommand({ Bucket: this.c.r2Bucket, Key: a.key, IfMatch: a.etag }), signal);
-    if (result.ETag !== a.etag || result.ContentLength !== a.bytes || result.LastModified?.toISOString() !== a.modificado || !result.Body) {
+    if (result.ETag !== a.etag || result.ContentLength !== a.bytes || !fechaHttpCoincide(result.LastModified, a.modificado) || !result.Body) {
       result.Body?.destroy(); throw new Error('R2 cambió el archivo durante el respaldo.');
     }
     return result.Body;
   }
   async comprobar(a, signal) {
     const head = await this.send(new HeadObjectCommand({ Bucket: this.c.r2Bucket, Key: a.key, IfMatch: a.etag }), signal);
-    exigir(head.ETag === a.etag && head.ContentLength === a.bytes && head.LastModified?.toISOString() === a.modificado, 'R2 cambió el archivo durante el respaldo.');
+    exigir(head.ETag === a.etag && head.ContentLength === a.bytes && fechaHttpCoincide(head.LastModified, a.modificado), 'R2 cambió el archivo durante el respaldo.');
   }
   cerrar() { this.s3.destroy(); }
 }
