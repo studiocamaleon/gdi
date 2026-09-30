@@ -1,5 +1,15 @@
 # Validación de staging — historial de septiembre de 2026
 
+## Contratación vinculada y estado de respaldos — 30/09/2026, 11:08 UTC
+
+API, ambos workers y web ejecutan la fuente `a93268414c03b26013c181fe25e28281fad674b3`. Backend: `registry.fly.io/grafoprint-staging-api@sha256:27859e1f7345e7232cb37fd2b61a07293af08cb6f9707420b9cd5a73b02c4fa6`; web: `registry.fly.io/grafoprint-staging-web@sha256:e974960a90585f7e4b6083143cee28b2d92c3778f6fb7c6b64aac4a3897e3026`. PDF y copiador conservan sus imágenes. Seis máquinas iniciadas y controles de salud disponibles aprobados. Sin nuevas migraciones, tamaños, fusiones ni cambios de producción.
+
+- Las nuevas contrataciones usan la transacción preparada por el servidor. Los planes históricos conservan la gestión de suscripciones ya vinculadas y no ofrecen nuevas altas. Una notificación del proveedor no puede crear una suscripción histórica usando sólo los datos personalizados del navegador.
+- Pasaron 62 casos API y ocho web, tipos/lint dirigidos y ambas compilaciones remotas. La API compilada en staging comprobó alta rechazada, renovación vinculada y catálogo limitado dentro de una transacción revertida. No se consultó Paddle ni se efectuaron pagos reales. El webhook firmado se ensayó localmente; no se declara validada una compra real.
+- Postflight: 299 migraciones/checksums, mismos IDs y cantidades originales; 270 relaciones entre tablas de empresa sin cruces. Los datos del ensayo se revirtieron.
+- **Respaldo pendiente de normalización:** la copia horaria de las 11:00 UTC falló y el monitor externo lo detectó. La última copia completa verificada sigue siendo la de las 10:42 UTC, detallada debajo. La custodia y copia posterior de esta nueva fuente aún no están verificadas. No considerar cerrado este control ni habilitar producción; el diagnóstico operativo permanece en el registro privado.
+- El lote anterior `51ae83ba0d79def1a9fc42aa33a37eb9a5509d94` aprobó [contenedores y HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36704410307) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36704410632). Los resultados de este nuevo commit deben registrarse por separado.
+
 ## Actualización de runtime y reportes — 30/09/2026, 10:44 UTC
 
 API y ambos workers ejecutan la fuente `cf04d5773a52133e8d3479e6d7b4c20f6d8792c4`, imagen `registry.fly.io/grafoprint-staging-api@sha256:aab68158d8e357dc58f39963ef3231c698adfac4cea0f41dc71d4ec7db11f609`. La web usa `7a632da5bfbb83f059128153fd9755d783ee771a`, imagen `registry.fly.io/grafoprint-staging-web@sha256:241257c6d112c44c08fccb92e84b745944a708d5dc346ff4787a77ab96cb4a20`. PDF y copiador conservan sus imágenes. Se comprobaron las seis máquinas iniciadas, sus identidades/tamaños y controles de salud disponibles. Sin cambios de producción ni nuevas migraciones.
