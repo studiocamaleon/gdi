@@ -213,17 +213,7 @@ export class RegistroService {
       throw new BadRequestException('El registro no tiene una clave válida.');
 
     const creado = await this.prisma.$transaction(async (tx) => {
-      const vigente = await tx.registroTenant.findFirst({
-        where: {
-          id: registro.id,
-          completadoEl: null,
-          revocadoEl: null,
-          tokenExpiraEl: { gt: new Date() },
-        },
-        include: { plan: true, oferta: { include: incluirOferta } },
-      });
-      if (!vigente)
-        throw new ConflictException('Este registro ya fue utilizado o venció.');
+      const vigente = await this.consumirToken(tx, registro.id, token);
       const user = await tx.user.create({
         data: {
           email: vigente.email,
@@ -247,17 +237,7 @@ export class RegistroService {
       );
     }
     const creado = await this.prisma.$transaction(async (tx) => {
-      const vigente = await tx.registroTenant.findFirst({
-        where: {
-          id: registro.id,
-          completadoEl: null,
-          revocadoEl: null,
-          tokenExpiraEl: { gt: new Date() },
-        },
-        include: { plan: true, oferta: { include: incluirOferta } },
-      });
-      if (!vigente)
-        throw new ConflictException('Este registro ya fue utilizado o venció.');
+      const vigente = await this.consumirToken(tx, registro.id, token);
       const user = await tx.user.findUniqueOrThrow({
         where: { id: current.userId },
       });
@@ -272,6 +252,36 @@ export class RegistroService {
       data: { onboardingCompletadoEl: new Date() },
     });
     return { ok: true };
+  }
+
+  /** Reclama la versión exacta antes de crear usuario, empresa o membresía.
+   * UPDATE toma el lock de la fila: un segundo intento espera y vuelve a
+   * evaluar el hash, que ya fue consumido. Si algo falla, todo se revierte,
+   * incluido el consumo, de modo que se puede reintentar el mismo enlace. */
+  private async consumirToken(
+    tx: Prisma.TransactionClient,
+    id: string,
+    rawToken: string,
+  ) {
+    const reclamado = await tx.registroTenant.updateMany({
+      where: {
+        id,
+        tokenHash: hash(rawToken),
+        completadoEl: null,
+        revocadoEl: null,
+        tokenExpiraEl: { gt: new Date() },
+      },
+      data: { tokenHash: null },
+    });
+    if (reclamado.count !== 1) {
+      throw new ConflictException(
+        'Este enlace fue reemplazado, utilizado o venció.',
+      );
+    }
+    return tx.registroTenant.findUniqueOrThrow({
+      where: { id },
+      include: { plan: true, oferta: { include: incluirOferta } },
+    });
   }
 
   private async crearTenant(
