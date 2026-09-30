@@ -8,7 +8,6 @@ import { ArchivoScope } from '@prisma/client';
 import request from 'supertest';
 import { AuthGuard } from '../../auth/auth.guard';
 import { PermisosGuard } from '../../auth/permisos.guard';
-import { SessionCacheService } from '../../auth/session-cache.service';
 import { todosLosPermisos } from '../../auth/permisos';
 import { TenantContextInterceptor } from '../../common/interceptors/tenant-context.interceptor';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -23,7 +22,6 @@ describe('Archivos: permisos del módulo y aislamiento por HTTP', () => {
   const secretoAnterior = process.env.JWT_SECRET;
   const secretoDePrueba = randomUUID();
   const jwt = new JwtService({ secret: secretoDePrueba });
-  const cache = new SessionCacheService();
   const tenantIds = [randomUUID(), randomUUID()];
   const userIds: string[] = [];
   const tokens: Record<string, string> = {};
@@ -318,7 +316,7 @@ describe('Archivos: permisos del módulo y aislamiento por HTTP', () => {
     app = modulo.createNestApplication<INestApplication<Server>>();
     const reflector = new Reflector();
     app.useGlobalGuards(
-      new AuthGuard(reflector, jwt, prisma, cache),
+      new AuthGuard(reflector, jwt, prisma),
       new PermisosGuard(reflector),
     );
     app.useGlobalInterceptors(new TenantContextInterceptor(reflector));

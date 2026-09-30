@@ -20,7 +20,6 @@ import { AuthGuard } from '../auth.guard';
 import { RolesGuard } from '../roles.guard';
 import { PermisosGuard } from '../permisos.guard';
 import { MargenesInterceptor } from '../margenes.interceptor';
-import { SessionCacheService } from '../session-cache.service';
 import { todosLosPermisos } from '../permisos';
 
 /** HTTP, sesiones, permisos y PostgreSQL reales. Sin scheduler, pagos,
@@ -210,7 +209,7 @@ describe('Egresos y gastos fijos: relaciones privadas entre empresas', () => {
     app.useLogger(false);
     const reflector = new Reflector();
     app.useGlobalGuards(
-      new AuthGuard(reflector, jwt, prisma, new SessionCacheService()),
+      new AuthGuard(reflector, jwt, prisma),
       new RolesGuard(reflector),
       new PermisosGuard(reflector),
     );

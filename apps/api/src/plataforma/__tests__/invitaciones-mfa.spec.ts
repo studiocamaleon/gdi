@@ -156,7 +156,7 @@ const reflector = {
         ? !!targets[0].enrolar
         : false,
 } as unknown as Reflector;
-const guard = new AuthGuard(reflector, jwt, db, cache);
+const guard = new AuthGuard(reflector, jwt, db);
 
 it('guarda sólo el hash, no otorga acceso al invitar y no expone tokens en directorio o auditoría', async () => {
   const email = correo();

@@ -26,7 +26,6 @@ import { AuthGuard } from '../auth.guard';
 import { RolesGuard } from '../roles.guard';
 import { PermisosGuard } from '../permisos.guard';
 import { MargenesInterceptor } from '../margenes.interceptor';
-import { SessionCacheService } from '../session-cache.service';
 import { todosLosPermisos } from '../permisos';
 
 /** Prueba real del límite HTTP de las rutas enumeradas abajo. No levanta la
@@ -38,7 +37,6 @@ describe('Clientes, presupuestos y órdenes: acceso HTTP entre empresas', () => 
   const secretoAnterior = process.env.JWT_SECRET;
   const secretoDePrueba = randomUUID();
   const jwt = new JwtService({ secret: secretoDePrueba });
-  const cache = new SessionCacheService();
   const empresa = new DatosEmpresaService(prisma);
   const avisos = { sincronizar: jest.fn(() => Promise.resolve()) };
   const ordenes = new OrdenesTrabajoService(
@@ -235,7 +233,7 @@ describe('Clientes, presupuestos y órdenes: acceso HTTP entre empresas', () => 
     app.useLogger(false);
     const reflector = new Reflector();
     app.useGlobalGuards(
-      new AuthGuard(reflector, jwt, prisma, cache),
+      new AuthGuard(reflector, jwt, prisma),
       new RolesGuard(reflector),
       new PermisosGuard(reflector),
     );

@@ -59,7 +59,6 @@ describe('Impersonación', () => {
     new Reflector(),
     jwt,
     prisma as unknown as PrismaService,
-    new SessionCacheService(),
   );
 
   let staffId: string;

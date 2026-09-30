@@ -368,7 +368,7 @@ describe('Registros y compras: autorización HTTP y relaciones anidadas', () => 
     app.useLogger(false);
     const reflector = new Reflector();
     app.useGlobalGuards(
-      new AuthGuard(reflector, jwt, prisma, cache),
+      new AuthGuard(reflector, jwt, prisma),
       new RolesGuard(reflector),
       new PermisosGuard(reflector),
     );

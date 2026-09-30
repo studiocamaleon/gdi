@@ -383,7 +383,7 @@ describe('Geometría y fabricación: capacidad resuelta antes de ejecutar', () =
   });
 });
 
-describe('MCP: plan vigente también en credenciales cacheadas', () => {
+describe('MCP: plan vigente en cada autorización', () => {
   const credencial = {
     id: 'credencial',
     tenantId: auth.tenantId,
@@ -402,49 +402,34 @@ describe('MCP: plan vigente también en credenciales cacheadas', () => {
       tenant: { activo: true },
     },
   };
-  it.each([false, true])(
-    'corta una credencial válida con cache=%s cuando se excluye MCP',
-    async (cacheada) => {
-      const request = {
-        headers: {
-          authorization: 'Bearer grafo_mcp_solo_fixture_sin_valor_real',
+  it('corta una credencial válida cuando se excluye MCP', async () => {
+    const request = {
+      headers: {
+        authorization: 'Bearer grafo_mcp_solo_fixture_sin_valor_real',
+      },
+      auth: undefined,
+    };
+    const guard = new AuthGuard(
+      new Reflector(),
+      {} as never,
+      {
+        credencialMcp: {
+          findUnique: jest.fn().mockResolvedValue(credencial),
         },
-        auth: undefined,
-      };
-      const cache = {
-        get: jest
-          .fn()
-          .mockReturnValue(
-            cacheada
-              ? { ...auth, mcp: { credencialId: 'credencial' } }
-              : undefined,
-          ),
-        set: jest.fn(),
-      };
-      const guard = new AuthGuard(
-        new Reflector(),
-        {} as never,
-        {
-          credencialMcp: {
-            findUnique: jest.fn().mockResolvedValue(credencial),
-          },
-        } as never,
-        cache as never,
-        capacidades({ mcp: false }),
-      );
-      const ctx = {
-        getClass: () => class TenantController {},
-        getHandler: () => function ruta() {},
-        switchToHttp: () => ({ getRequest: () => request }),
-      } as unknown as ExecutionContext;
-      await expect(guard.canActivate(ctx)).rejects.toMatchObject({
-        status: 403,
-        response: { capacidad: 'mcp' },
-      });
-      expect(request.auth).toBeUndefined();
-      expect(cache.set).not.toHaveBeenCalled();
-    },
-  );
+      } as never,
+      capacidades({ mcp: false }),
+    );
+    const ctx = {
+      getClass: () => class TenantController {},
+      getHandler: () => function ruta() {},
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      status: 403,
+      response: { capacidad: 'mcp' },
+    });
+    expect(request.auth).toBeUndefined();
+  });
 
   it('habilitar MCP mantiene el filtro de permisos personales y no concede márgenes', async () => {
     const request: { headers: { authorization: string }; auth?: CurrentAuth } =
@@ -459,7 +444,6 @@ describe('MCP: plan vigente también en credenciales cacheadas', () => {
       {
         credencialMcp: { findUnique: jest.fn().mockResolvedValue(credencial) },
       } as never,
-      { get: jest.fn(), set: jest.fn() } as never,
       capacidades({ mcp: true }),
     );
     const ctx = {
