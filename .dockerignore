@@ -49,6 +49,9 @@ apps/api/scripts/**
 !deploy
 deploy/**
 !deploy/Dockerfile
+!deploy/pdf
+deploy/pdf/**
+!deploy/pdf/Dockerfile
 **/node_modules
 **/.env*
 **/*.pem

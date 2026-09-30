@@ -23,7 +23,7 @@ updates:
       interval: weekly
     open-pull-requests-limit: 2
   - package-ecosystem: docker
-    directories: [/deploy, /deploy/recuperacion]
+    directories: [/deploy, /deploy/recuperacion, /deploy/pdf]
     schedule:
       interval: weekly
     open-pull-requests-limit: 2
