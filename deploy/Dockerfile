@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 # Compilar JavaScript en la arquitectura del builder evita emular TypeScript
 # en las Mac ARM. Las dependencias finales se instalan para TARGETPLATFORM.
-FROM --platform=$BUILDPLATFORM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS build-base
+FROM --platform=$BUILDPLATFORM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build-base
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
-FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS base
+FROM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS base
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
