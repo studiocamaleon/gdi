@@ -1,3 +1,5 @@
+import { FiscalPlataformaController } from './fiscal.controller';
+import { FiscalPlataformaModule } from '../fiscal-plataforma/fiscal-plataforma.module';
 import { PlanesPaddleService } from './planes/planes-paddle.service';
 import { PlanesOfertasController } from './planes/planes-ofertas.controller';
 import { PlanesOfertasService } from './planes/planes-ofertas.service';
@@ -37,6 +39,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
  */
 @Module({
   imports: [
+    FiscalPlataformaModule,
     PrismaModule,
     CorreoTransaccionalModule,
     AuthModule,
@@ -45,6 +48,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
     CapacidadesEmpresaModule,
   ],
   controllers: [
+    FiscalPlataformaController,
     ContratacionesPlataformaController,
     PlanesOfertasController,
     PlanesAsignacionController,

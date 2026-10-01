@@ -43,13 +43,15 @@ export function cabecerasPrivadas(response: Response) {
 
 /** Fly es el único proxy público de esta web. No confiar en X-Forwarded-For. */
 export function cabecerasBackendStaging(incoming: Headers, outgoing: Headers) {
-  if (!stagingPrivado()) return;
+  const production = process.env.GRAFO_DEPLOY_ENV === "production";
+  if (production && stagingPrivado()) throw new Error("Producción no puede usar la configuración de staging.");
+  if (!stagingPrivado() && !production) return;
   const denied = controlAccesoStaging(incoming);
   if (denied) throw new Error("Acceso de staging no autorizado.");
-  const token = process.env.STAGING_WEB_API_TOKEN;
+  const token = production ? process.env.WEB_API_TOKEN : process.env.STAGING_WEB_API_TOKEN;
   const ip = incoming.get("fly-client-ip")?.trim() ?? "";
   if (!token || token.length < 32 || !isIP(ip)) {
-    throw new Error("Conexión privada de staging no configurada.");
+    throw new Error("Conexión privada con la API no configurada.");
   }
   // Se construyen en el servidor; nunca copiar las cabeceras homónimas del cliente.
   outgoing.set("x-grafoprint-web-token", token);

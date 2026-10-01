@@ -1,6 +1,11 @@
 import {
+  CredencialesArcaService,
+  type MaterialArca,
+} from '../../fiscal-plataforma/credenciales-arca.service';
+import {
   Injectable,
   Logger,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
@@ -35,10 +40,24 @@ import type {
 const BASE = 'https://app.afipsdk.com/api/v1/afip';
 
 type TicketAcceso = { token: string; sign: string; expira: number };
-type ConexionAfip = { environment: 'dev' | 'prod'; token: string };
+type ConexionAfip = {
+  environment: 'dev' | 'prod';
+  token: string;
+  material: MaterialArca | null;
+};
 
 @Injectable()
 export class AfipSdkProvider implements InvoicingProvider {
+  constructor(
+    @Optional() private readonly credenciales?: CredencialesArcaService,
+  ) {}
+
+  async representanteCuit(): Promise<string | null> {
+    return this.credenciales
+      ? this.credenciales.representanteCuit()
+      : process.env.AFIP_REPRESENTANTE_CUIT?.trim() || null;
+  }
+
   readonly codigo = 'afipsdk';
   private readonly log = new Logger(AfipSdkProvider.name);
 
@@ -81,14 +100,21 @@ export class AfipSdkProvider implements InvoicingProvider {
     return demo;
   }
 
-  private conexion(): ConexionAfip {
+  private async conexion(): Promise<ConexionAfip> {
     const token = process.env.AFIPSDK_ACCESS_TOKEN?.trim();
     if (!token) {
       throw new ServiceUnavailableException(
         'Falta AFIPSDK_ACCESS_TOKEN: no se puede emitir con este proveedor.',
       );
     }
-    return { environment: this.environment, token };
+    const environment = this.environment;
+    const material = (await this.credenciales?.material(environment)) ?? null;
+    if (environment === 'prod' && !material) {
+      throw new ServiceUnavailableException(
+        'Cargá el certificado de producción en Plataforma antes de facturar.',
+      );
+    }
+    return { environment, token, material };
   }
 
   private async post(
@@ -105,17 +131,19 @@ export class AfipSdkProvider implements InvoicingProvider {
       },
       body: JSON.stringify(body),
     });
+    if (!r.ok) {
+      await r.body?.cancel();
+      // El proveedor recibió el par certificado/clave: nunca reflejar su cuerpo.
+      throw new ServiceUnavailableException(
+        `AFIP SDK rechazó la consulta (HTTP ${r.status}). Revisá la credencial y la autorización del webservice.`,
+      );
+    }
     const txt = await r.text();
     let json: unknown;
     try {
       json = JSON.parse(txt);
     } catch {
       json = txt;
-    }
-    if (!r.ok) {
-      throw new ServiceUnavailableException(
-        `AFIP SDK respondió ${r.status}: ${txt.slice(0, 300)}`,
-      );
     }
     return json;
   }
@@ -127,6 +155,8 @@ export class AfipSdkProvider implements InvoicingProvider {
   ): Promise<TicketAcceso> {
     const credencial = createHash('sha256')
       .update(conexion.token)
+      .update(':')
+      .update(conexion.material?.revision ?? 'demo')
       .digest('hex');
     const clave = `${credencial}:${conexion.environment}:${cuitEmisor}:wsfe`;
     const guardado = this.tickets.get(clave);
@@ -161,6 +191,9 @@ export class AfipSdkProvider implements InvoicingProvider {
         environment: conexion.environment,
         tax_id: cuitEmisor,
         wsid: 'wsfe',
+        ...(conexion.material
+          ? { cert: conexion.material.cert, key: conexion.material.key }
+          : {}),
       },
       conexion.token,
     );
@@ -191,7 +224,7 @@ export class AfipSdkProvider implements InvoicingProvider {
     method: string,
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    const conexion = this.conexion();
+    const conexion = await this.conexion();
     const ta = await this.ticket(cuitEmisor, conexion);
     const r = (await this.post(
       '/requests',

@@ -1,3 +1,4 @@
+import { FiscalPlataformaModule } from '../fiscal-plataforma/fiscal-plataforma.module';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
@@ -28,6 +29,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
   imports: [
+    FiscalPlataformaModule,
     CapacidadesEmpresaModule,
     ArchivosModule,
     EnlacesPublicosModule,

@@ -3,6 +3,7 @@ import { tienePermiso } from "@/lib/permisos-server";
 import { ConfiguracionFiscalView } from "@/components/administracion/configuracion-fiscal-view";
 import type { ConfiguracionFiscal } from "@/lib/administracion";
 import { getConfiguracionFiscal } from "@/lib/administracion-api";
+import { getAfip } from "@/lib/integraciones-api";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +12,14 @@ export default async function DatosFiscalesPage() {
     return <SinPermiso modulo="Datos fiscales" />;
   }
 
-  const config = await getConfiguracionFiscal().catch(
-    (): ConfiguracionFiscal | null => null,
+  const [config, afip] = await Promise.all([
+    getConfiguracionFiscal().catch((): ConfiguracionFiscal | null => null),
+    getAfip().catch(() => null),
+  ]);
+  return (
+    <ConfiguracionFiscalView
+      initialConfig={config}
+      ambienteArca={afip?.ambiente ?? null}
+    />
   );
-  return <ConfiguracionFiscalView initialConfig={config} />;
 }

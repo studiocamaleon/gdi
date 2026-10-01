@@ -7289,3 +7289,16 @@ model InboxEventoInterno {
   @@index([tenantId, vinculoId, conversacionId, createdAt, id], map: "InboxEventoInterno_tenantId_vinculoId_conversacionId_creat_idx")
   @@index([tenantId, vinculoId, conversacionId, actorId, tipo], map: "InboxEventoInterno_tenantId_vinculoId_conversacionId_actor_idx")
 }
+
+/// Certificado del representante SaaS por ambiente. Sólo Plataforma administra;
+/// los tenants delegan WSFE y nunca pueden leer o descargar esta credencial.
+model CredencialFiscalPlataforma {
+  ambiente       String   @id
+  cuit           String
+  huella         String
+  validoDesde    DateTime
+  validoHasta    DateTime
+  revision       String   @db.Uuid
+  materialCifrado Json
+  actualizadoEl  DateTime @default(now()) @updatedAt
+}

@@ -2,6 +2,16 @@
 
 Revisión del 30/09/2026. Este documento ordena el próximo trabajo; no significa que producción esté creada ni autorizada para recibir clientes. Llamadas y reportes de operadores quedan para otra etapa.
 
+## Arranque acotado: empresa nueva desde cero
+
+Decisión final del 01/10: preparar el primer entorno para una empresa propia, con todos los módulos salvo Inbox. **No importar datos ni configuración de local.** Crear una empresa nueva para comprobar todo el recorrido de configuración. Inventario, caja e historial de operaciones comienzan vacíos. La base local permanece intacta.
+
+Usar el alta normal de empresas de Plataforma y sus catálogos compartidos, sin seeds de demostración, empresas ficticias ni restauraciones de local. Comprobar que se puedan configurar plantas, materiales, centros de costo, máquinas, productos, métodos de pago y datos fiscales; después recorrer cotización → orden → cobro con datos de ensayo en staging.
+
+Antes del arranque real: comprobar certificado y clave de producción en Plataforma, autorización WSFE, CUIT y punto de venta real de la empresa. Consultar ARCA sin emitir comprobantes ficticios. Los números se consultan por punto de venta y tipo; nunca copiar contadores de homologación.
+
+La rama de preparación depende del lote de seguridad del PR #10. No implica fusionar ese PR ni crear recursos cloud. El costo de producción todavía requiere una propuesta y autorización separadas.
+
 ## Dónde estamos
 
 La web comercial y Grafo3D ya funcionan en `grafoprint.com.ar`, en Vercel desde `main`, en modo de prelanzamiento. El sistema de trabajo funciona en **staging**, con datos de ensayo, cinco aplicaciones de Fly, Neon, Redis y R2 propios. Un sexto servicio, separado, realiza las copias horarias hacia Backblaze B2 y avisa a un monitor externo. El PR #7 del Inbox ya está integrado en `main`. El lote de seguridad del PR #10 incorpora las correcciones de los PR #8/#9, que siguen sin fusionar. La versión realmente desplegada y las comprobaciones están en [VALIDACION.md](../deploy/staging/VALIDACION.md).

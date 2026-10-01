@@ -46,10 +46,16 @@ export async function apiRequest<T>(
     }
   }
 
-  if (typeof window === "undefined" && process.env.STAGING_PRIVATE === "true") {
-    const { headers: requestHeaders } = await import("next/headers");
-    const { cabecerasBackendStaging } = await import("./staging-access");
-    cabecerasBackendStaging(await requestHeaders(), headers);
+  const canalPrivado = typeof window === "undefined" &&
+    (process.env.STAGING_PRIVATE === "true" || process.env.GRAFO_DEPLOY_ENV === "production");
+  // Mantener la condición de servidor explícita: Next elimina este bloque
+  // del bundle del navegador, incluidos los módulos exclusivos de Node.
+  if (typeof window === "undefined") {
+    if (canalPrivado) {
+      const { headers: requestHeaders } = await import("next/headers");
+      const { cabecerasBackendStaging } = await import("./staging-access");
+      cabecerasBackendStaging(await requestHeaders(), headers);
+    }
   }
 
   let response: Response;
@@ -60,7 +66,7 @@ export async function apiRequest<T>(
       ...init,
       headers,
       // Un redirect del API nunca debe llevar la credencial interna a otro host.
-      ...(typeof window === "undefined" && process.env.STAGING_PRIVATE === "true"
+      ...(canalPrivado
         ? { redirect: "manual" as const }
         : {}),
     });

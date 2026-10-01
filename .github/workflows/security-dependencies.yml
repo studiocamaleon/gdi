@@ -2,7 +2,7 @@ name: Revisar dependencias de ejecución
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'codex/**']
     paths:
       - '**/package.json'
       - '**/package-lock.json'

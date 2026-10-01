@@ -19,6 +19,16 @@ test('registra versión real de age y rechaza una herramienta incompatible', { s
   await assert.rejects(versionHerramienta(ageBin, /^herramienta-incompatible$/), /no admitida/);
 });
 
+test('producción cifra y recupera con prefijo propio, sin aceptar recibos de staging', { skip: !conAge }, async t => {
+  const c = await contexto(t);
+  const copia = await respaldar({ ...c.opciones, entorno: 'produccion' });
+  assert.equal(copia.recibo.entorno, 'produccion');
+  assert.ok([...c.destino.objetos.values()].every(o => o.ref.fileName.startsWith('produccion/')));
+  const out = await prepararRecuperacion({ destino: c.destino, recibo: copia.recibo, carpeta: c.carpeta, ageBin, identidad: c.identidad });
+  assert.equal(out.archivos, 2);
+  await assert.rejects(prepararRecuperacion({ destino: c.destino, recibo: { ...copia.recibo, entorno: 'staging' }, carpeta: c.carpeta, ageBin, identidad: c.identidad }));
+});
+
 test('fallar la custodia externa impide actualizar índice y recibo local', { skip: !conAge }, async t => {
   const c=await contexto(t);let llamado=false;
   await assert.rejects(respaldar({...c.opciones,custodiarComprobante:async({recibo})=>{llamado=true;assert.ok(recibo.cierre.fileId);throw new Error('custodia no disponible');}}),/custodia/);

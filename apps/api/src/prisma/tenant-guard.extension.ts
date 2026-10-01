@@ -11,6 +11,8 @@ export const MODELOS_EXENTOS: ReadonlySet<string> = new Set<string>([
   'CronLock',
   // Auditoría del control plane: vive por encima de los tenants.
   'PlataformaEvento',
+  // Credencial del representante SaaS; administración exclusiva del control plane.
+  'CredencialFiscalPlataforma',
   // Webhooks de las pasarelas de cobro: llegan sin contexto de tenant.
   'EventoCobro',
   // Webhooks de WhatsApp (Meta): llegan sin contexto; el tenant se resuelve

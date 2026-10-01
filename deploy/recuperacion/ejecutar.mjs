@@ -4,6 +4,7 @@ import { respaldar } from './lib/motor.mjs';
 import { exigir, leerPrivado, versionHerramienta } from './lib/seguro.mjs';
 import { custodioComprobantes } from './lib/comprobantes.mjs';
 import { cicloSupervisado, notificarMonitor, validarMonitor } from './lib/monitor.mjs';
+import { validarEntornoRespaldo } from './lib/configuracion.mjs';
 
 process.umask(0o077);
 let origen;
@@ -16,8 +17,7 @@ try {
   if (c.automatico) exigir(monitor && c.firmaComprobantes && c.firmaBajoCustodia === true,
     'La ejecución automática requiere monitor y firma bajo custodia.');
   if (c.automatico) exigir(c.artefactos?.some(a=>a.revision === c.origen?.revision), 'Falta custodiar el código desplegado.');
-  // Producción se habilitará sólo tras el ensayo completo de staging y su revisión.
-  exigir(c.b2?.RESPALDO_ENTORNO === 'staging', 'Esta versión del ejecutor sólo habilita staging.');
+  const entorno = validarEntornoRespaldo(c);
   exigir(c.accesoOrigenSoloLecturaVerificado === true && c.custodiaVerificada === true,
     'Falta comprobar accesos de lectura y custodia antes de operar.');
   const signal = AbortSignal.timeout(45 * 60_000);
@@ -30,7 +30,7 @@ try {
   origen = new OrigenPostgresR2(c.origen);
   const destino = new DestinoB2(c.b2, { signal: control });
   const ejecutar = () => respaldar({ origen, destino, carpeta: c.carpeta, ageBin: c.ageBin, recipient: c.recipient,
-    entorno: 'staging', identidadOrigen: `${c.origen.pgHost}/${c.origen.pgDatabase}/${c.origen.r2Bucket}`, signal: control, herramientas,
+    entorno, identidadOrigen: `${c.origen.pgHost}/${c.origen.pgDatabase}/${c.origen.r2Bucket}`, signal: control, herramientas,
     custodiarComprobante: c.firmaComprobantes ? custodioComprobantes(c.firmaComprobantes) : undefined, artefactos: c.artefactos ?? [] });
   cicloIniciado = true;
   const resultado = monitor ? await cicloSupervisado({ ejecutar, url: monitor }) : await ejecutar();

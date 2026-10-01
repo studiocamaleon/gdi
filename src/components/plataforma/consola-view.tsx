@@ -15,6 +15,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { EmpresasView } from "./empresas-view";
 import { CrearEmpresaDialog } from "./crear-empresa-dialog";
 import { EquipoView } from "./equipo-view";
+import { FiscalArcaView } from "./fiscal-arca-view";
 import { SuscripcionesView } from "./suscripciones-view";
 import { PlanesView, type SalidaPlanes } from "./planes-view";
 import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
@@ -82,6 +83,7 @@ type Vista =
   | "planes"
   | "impersonacion"
   | "equipo"
+  | "fiscal"
   | "suscripciones";
 
 const NAV: Array<{
@@ -103,11 +105,13 @@ const NAV: Array<{
     items: [
       { k: "impersonacion", label: "Impersonación", ic: "mask" },
       { k: "equipo", label: "Equipo y acceso", ic: "users" },
+      { k: "fiscal", label: "Facturación ARCA", ic: "check" },
     ],
   },
 ];
 
 const TITULOS: Record<Vista, { crumb: string; title: string }> = {
+  fiscal: { crumb: "Operaciones", title: "Facturación ARCA" },
   suscripciones: { crumb: "Plataforma", title: "Suscripciones y cobros" },
   equipo: { crumb: "Operaciones", title: "Equipo y acceso" },
   observabilidad: { crumb: "Plataforma", title: "Observabilidad" },
@@ -117,6 +121,7 @@ const TITULOS: Record<Vista, { crumb: string; title: string }> = {
   impersonacion: { crumb: "Operaciones", title: "Impersonación y auditoría" },
 };
 const DESCRIPCIONES: Record<Vista, string> = {
+  fiscal: "Certificado y acceso fiscal de la plataforma.",
   suscripciones:
     "Estado comercial, acceso y diagnóstico de la sincronización con Paddle.",
   equipo: "Personas, permisos y protección del backoffice de Grafo.",
@@ -334,6 +339,7 @@ export function ConsolaPlataformaView({
             </div>
           ) : null}
           {vista === "negocio" ? <Negocio /> : null}
+          {vista === "fiscal" ? <FiscalArcaView esAdmin={esAdmin} /> : null}
           {vista === "tenants" ? <Tenants esAdmin={esAdmin} /> : null}
           {vista === "planes" ? (
             <PlanesView

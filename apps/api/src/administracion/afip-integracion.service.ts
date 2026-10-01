@@ -84,8 +84,8 @@ export class AfipIntegracionService {
     private readonly capacidades: CapacidadesEmpresaService,
   ) {}
 
-  private get representanteCuit(): string | null {
-    return process.env.AFIP_REPRESENTANTE_CUIT?.trim() || null;
+  private async representanteCuit(): Promise<string | null> {
+    return this.afip.representanteCuit();
   }
 
   /** Compara CUITs por sus dígitos: uno puede venir con guiones y el otro no. */
@@ -118,10 +118,10 @@ export class AfipIntegracionService {
     return {
       estado: fila?.estado ?? EstadoIntegracion.DESCONECTADA,
       ambiente: this.afip.environment,
-      representanteCuit: this.representanteCuit,
+      representanteCuit: await this.representanteCuit(),
       esCuitPropio: this.mismoCuit(
         config?.cuit ?? null,
-        this.representanteCuit,
+        await this.representanteCuit(),
       ),
       planPermiteAfip: decision.incluida,
       puedeOperarAfip: decision.puedeOperar && argentina,
@@ -218,7 +218,7 @@ export class AfipIntegracionService {
       }
       const metadata: AfipMetadata = {
         ambiente: this.afip.environment,
-        representanteCuit: this.representanteCuit,
+        representanteCuit: await this.representanteCuit(),
         cuitVerificado: res.ok ? res.cuit : null,
         puntoVentaProbado: res.puntoVenta,
         ultimoNumeroVisto: res.ultimoNumero,

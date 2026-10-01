@@ -1,5 +1,35 @@
 import { apiRequest } from "@/lib/api";
 
+export type FiscalArcaEstado = {
+  ambiente: "dev" | "prod";
+  proveedorConfigurado: boolean;
+  cifradoDisponible: boolean;
+  vigente: boolean;
+  certificado: null | {
+    ambiente: string;
+    cuit: string;
+    huella: string;
+    validoDesde: string;
+    validoHasta: string;
+    revision: string;
+    actualizadoEl: string;
+  };
+};
+export const getFiscalArca = () =>
+  apiRequest<FiscalArcaEstado>("/plataforma/fiscal/arca", {
+    cache: "no-store",
+  });
+export const guardarFiscalArca = (datos: {
+  ambiente: "dev" | "prod";
+  certificado: string;
+  clavePrivada: string;
+  revisionAnterior: string | null;
+}) =>
+  apiRequest<FiscalArcaEstado>("/plataforma/fiscal/arca", {
+    method: "PUT",
+    body: JSON.stringify(datos),
+  });
+
 export type AccesoEmpresa = {
   modo: "operativo" | "solo_lectura" | "bloqueado";
   codigo: string;
