@@ -72,7 +72,7 @@ export class CrearRolDto {
    * versión anterior no tiene que romper el guardado.
    */
   @IsArray()
-  @ArrayMaxSize(64)
+  @ArrayMaxSize(200)
   @IsString({ each: true })
   permisos!: string[];
 }
@@ -91,7 +91,7 @@ export class EditarRolDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(64)
+  @ArrayMaxSize(200)
   @IsString({ each: true })
   permisos?: string[];
 }
@@ -101,4 +101,16 @@ export class EliminarRolDto {
   @IsOptional()
   @IsUUID('4')
   destinoId?: string;
+}
+
+export class CambiarCuentasDto {
+  @IsBoolean() restringidas!: boolean;
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID('4', { each: true })
+  operables!: string[];
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID('4', { each: true })
+  destinos!: string[];
 }

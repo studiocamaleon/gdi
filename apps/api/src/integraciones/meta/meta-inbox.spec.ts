@@ -24,7 +24,7 @@ const config = {
 const auth = {
   tenantId: config.tenantId,
   userId: 'operador',
-  permisos: new Set(['crm.ver']),
+  permisos: new Set(['acceso.por_vista', 'crm.clientes.ver']),
   role: 'ADMINISTRADOR',
 } as CurrentAuth;
 const scope = {
@@ -209,7 +209,7 @@ it('rechaza cursor ajeno antes de consultar el historial y el CRM', async () => 
   expect(prisma.mensajeWhatsappRecibido.findMany).not.toHaveBeenCalled();
   expect(clientes.contexto).not.toHaveBeenCalled();
 });
-it('sin crm.ver permite leer el piloto pero no busca fichas ni acepta una selección', async () => {
+it('sin crm.clientes.ver permite leer el piloto pero no busca fichas ni acepta una selección', async () => {
   const { servicio, clientes } = setup();
   const sinCrm = { ...auth, permisos: new Set<string>() };
   expect((await servicio.consultar(sinCrm, {}))?.contexto).toBeNull();

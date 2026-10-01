@@ -34,7 +34,7 @@ export function useClientesOrden(initialClientes: ClienteDetalle[]) {
     // Invalidar la consulta anterior apenas cambia el texto, antes del debounce.
     if (!open || query !== debouncedQuery) return;
     let cancelled = false;
-    listClientes({ q: debouncedQuery, limit: 30 })
+    listClientes({ q: debouncedQuery, limit: 30 }, true)
       .then((response) => {
         if (!cancelled)
           setRemoteOptions((current) => mergeClientes(current, response.data));

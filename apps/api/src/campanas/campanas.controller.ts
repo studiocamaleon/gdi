@@ -28,7 +28,7 @@ import {
 } from './dto/campanas.dto';
 
 @OcultaMargenes()
-@Permiso('comercial.ver')
+@Permiso("comercial.campanas.ver")
 @Controller('campanas')
 export class CampanasController {
   constructor(private readonly service: CampanasService) {}
@@ -60,14 +60,14 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post()
   crear(@CurrentSession() auth: CurrentAuth, @Body() dto: CrearCampanaDto) {
     return this.service.crear(auth, dto);
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Patch(':id')
   editar(
     @CurrentSession() auth: CurrentAuth,
@@ -78,7 +78,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Patch(':id/estado')
   cambiarEstado(
     @CurrentSession() auth: CurrentAuth,
@@ -89,7 +89,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Put(':id/equipo')
   reemplazarEquipo(
     @CurrentSession() auth: CurrentAuth,
@@ -100,7 +100,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post(':id/hitos')
   crearHito(
     @CurrentSession() auth: CurrentAuth,
@@ -111,7 +111,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Patch(':id/hitos/:hitoId')
   editarHito(
     @CurrentSession() auth: CurrentAuth,
@@ -123,7 +123,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post(':id/cotizaciones/:cotizacionId')
   vincularCotizacion(
     @CurrentSession() auth: CurrentAuth,
@@ -134,7 +134,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Delete(':id/cotizaciones/:cotizacionId')
   desvincularCotizacion(
     @CurrentSession() auth: CurrentAuth,
@@ -145,7 +145,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post(':id/ordenes/:ordenId')
   vincularOrden(
     @CurrentSession() auth: CurrentAuth,
@@ -156,7 +156,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Delete(':id/ordenes/:ordenId')
   desvincularOrden(
     @CurrentSession() auth: CurrentAuth,

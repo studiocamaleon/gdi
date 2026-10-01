@@ -1,3 +1,4 @@
+import { expandir } from '../../auth/permisos';
 import { PERMISO_KEY } from '../../auth/permiso.decorator';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { PanelGeneralController } from '../panel-general.controller';
@@ -13,7 +14,7 @@ const authCon = (permisos: string[]): CurrentAuth =>
     membershipId: 'membership-1',
     role: 'ADMINISTRADOR',
     email: 'persona@ejemplo.com',
-    permisos: new Set(permisos),
+    permisos: expandir(permisos),
   }) as CurrentAuth;
 
 function dependencias() {
@@ -142,7 +143,10 @@ describe('Panel General', () => {
 
   it('conserva la autorización del historial empresarial al compartir la presentación', async () => {
     const { servicio, admin } = dependencias();
-    const auth = authCon(['panel.ver', 'configuracion.gestionar']);
+    const sinResumen = authCon(['panel.ver', 'configuracion.gestionar']);
+    await servicio.obtener(sinResumen);
+    expect(admin.obtener).not.toHaveBeenCalled();
+    const auth = authCon(['panel.ver', 'configuracion.gestionar', 'reportes.resumen.ver']);
     await servicio.obtener({ ...auth, role: 'OPERADOR' });
     expect(admin.obtener).not.toHaveBeenCalled();
     await servicio.obtener(auth);

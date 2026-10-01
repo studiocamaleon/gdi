@@ -62,7 +62,7 @@ async function MaquinariaPageContent({
       estadoConfiguracion,
     }),
     getPlantas(),
-    puedeConfigurar("maquinaria", "costos.gestionar"),
+    puedeConfigurar("maquinaria", "costos.maquinaria.gestionar"),
   ]);
 
   return (

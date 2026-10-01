@@ -12,7 +12,7 @@ export default async function Layout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!(await tienePermiso("configuracion.ver"))) {
+  if (!(await tienePermiso("configuracion.suscripcion.ver"))) {
     return <SinPermiso modulo="la suscripción" />;
   }
   return <>{children}</>;

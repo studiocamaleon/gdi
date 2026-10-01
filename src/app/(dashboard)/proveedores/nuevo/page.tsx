@@ -20,7 +20,7 @@ const ProveedorFicha = dynamicImport(
 
 export default async function NuevoProveedorPage() {
   if (!(await tieneCapacidad("proveedores"))) return <FuncionNoIncluida />;
-  if (!(await tienePermiso("registros.gestionar"))) {
+  if (!(await tienePermiso("registros.proveedores.gestionar"))) {
     return <SinPermiso modulo="Gestionar proveedores" />;
   }
   return (

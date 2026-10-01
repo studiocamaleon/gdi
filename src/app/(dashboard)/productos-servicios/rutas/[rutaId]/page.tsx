@@ -46,7 +46,7 @@ export default async function RutaDetallePage({
   params: Promise<{ rutaId: string }>;
 }) {
   const { rutaId } = await params;
-  if (!(await puedeConfigurar("procesos", "costos.gestionar"))) {
+  if (!(await puedeConfigurar("procesos", "costos.flujos.gestionar"))) {
     return <SinPermiso modulo="Flujos de producción" />;
   }
   let ruta: RutaConPasos;

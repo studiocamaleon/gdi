@@ -1,3 +1,4 @@
+import { expandir } from '../auth/permisos';
 import {
   BadRequestException,
   ConflictException,
@@ -85,7 +86,7 @@ export class ContratacionService {
       !miembro ||
       !sesion ||
       (miembro.rolDelTenant &&
-        !miembro.rolDelTenant.permisos.includes('configuracion.gestionar'))
+        !expandir(miembro.rolDelTenant.permisos).has('configuracion.suscripcion.gestionar'))
     )
       throw new ForbiddenException(
         'La sesión o los permisos de administración cambiaron. Volvé a ingresar.',

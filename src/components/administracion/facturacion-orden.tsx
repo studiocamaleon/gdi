@@ -564,7 +564,7 @@ export function ComprobantesOrdenTab({
                   ) : null}
                 </span>
                 <span className="mov-comp">
-                  {c.numeroRecibo ? (
+                  {c.numeroRecibo && c.puedeAbrirRecibo !== false ? (
                     <a
                       className="mov-recibo"
                       href={reciboPdfUrl(c.id)}
@@ -575,7 +575,7 @@ export function ComprobantesOrdenTab({
                       {c.numeroRecibo}
                     </a>
                   ) : (
-                    "—"
+                    c.numeroRecibo ?? "—"
                   )}
                 </span>
                 <span className="mov-comp">
@@ -587,7 +587,7 @@ export function ComprobantesOrdenTab({
                   {formatMonedaOrden(montoCobroEnOrden(c), moneda)}
                 </span>
                 <span className="fo-comp-acc">
-                  {!soloLectura && puedeAnular ? (
+                  {!soloLectura && puedeAnular && c.puedeAbrirRecibo !== false ? (
                     <button
                       type="button"
                       className="fo-nc-btn"

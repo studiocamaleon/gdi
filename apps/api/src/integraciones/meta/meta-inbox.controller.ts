@@ -49,7 +49,7 @@ import { MetaInboxService } from './meta-inbox.service';
 /** Los operadores atienden; la conexión conserva su autorización de administrador. */
 @Controller('integraciones/meta/inbox')
 @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR, RolSistema.OPERADOR)
-@Permiso('configuracion.gestionar', 'inbox.atender')
+@Permiso("configuracion.integraciones.gestionar", "inbox.atender")
 @ProhibidoImpersonando()
 export class MetaInboxController {
   constructor(

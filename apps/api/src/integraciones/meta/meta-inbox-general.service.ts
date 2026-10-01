@@ -405,10 +405,10 @@ export class MetaInboxGeneralService {
           select: { nombre: true },
         })
       : null;
-    if (query.clienteId && !auth.permisos?.has('crm.ver'))
+    if (query.clienteId && !auth.permisos?.has('crm.clientes.ver'))
       throw new ForbiddenException();
     const contexto =
-      conversacion && auth.permisos?.has('crm.ver')
+      conversacion && auth.permisos?.has('crm.clientes.ver')
         ? await this.clientes.contexto(auth, {
             telefono: `+${conversacion.contactoWaId}`,
             clienteId: query.clienteId,

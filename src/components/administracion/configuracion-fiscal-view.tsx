@@ -78,7 +78,7 @@ export function ConfiguracionFiscalView({
 }) {
   const router = useRouter();
   const fiscalIncluida = useCapacidad("fiscal_argentina");
-  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeGestionar = usePuede("configuracion.fiscal.gestionar");
   const puedeGestionarFiscal = fiscalIncluida && puedeGestionar;
   const [form, setForm] = React.useState<FormState>(() =>
     estadoInicial(initialConfig),

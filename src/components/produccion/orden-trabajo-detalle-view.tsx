@@ -586,14 +586,14 @@ export function PagosTab({
                     {c.origenAplicacion === "cuenta_corriente" ? <span className="mov-who"> · Cuenta corriente</span> : null}
                   </span>
                   <span className="mov-ref">
-                    {c.numeroRecibo ? (
+                    {c.numeroRecibo && c.puedeAbrirRecibo !== false ? (
                       <a className="mov-recibo" href={reciboPdfUrl(c.id)} target="_blank" rel="noreferrer"
                         title={`Recibo completo: ${formatMonedaOrden(c.montoBruto, moneda)}`}>
                         {c.numeroRecibo}
                       </a>
-                    ) : null}
+                    ) : c.numeroRecibo}
                     {c.numeroRecibo ? " · " : null}
-                    {c.cuentaDestinoNombre ?? "Valor en cartera"}
+                    {c.puedeAbrirRecibo === false ? "Cobro registrado" : c.cuentaDestinoNombre ?? "Valor en cartera"}
                     {c.valor ? (
                       <span className="mov-who">
                         · {c.valor.numero} ({c.valor.estado})

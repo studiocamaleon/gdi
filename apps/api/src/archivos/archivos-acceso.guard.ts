@@ -13,6 +13,7 @@ import { ArchivoScope } from '@prisma/client';
 import { isUUID } from 'class-validator';
 import type { CurrentAuth } from '../auth/auth.types';
 import type { PermisoClave } from '../auth/permisos';
+import { alcanceCuentas, exigirCuenta } from '../administracion/acceso-cuentas';
 import { PrismaService } from '../prisma/prisma.service';
 
 type Accion = 'leer' | 'escribir';
@@ -28,42 +29,61 @@ const PERMISOS: Record<
   Exclude<ArchivoScope, 'INBOX'>,
   { leer: PermisoClave[] | 'autenticado'; escribir: PermisoClave[] }
 > = {
-  CLIENTE: { leer: ['crm.ver'], escribir: ['crm.gestionar'] },
-  CAMPANA: { leer: ['comercial.ver'], escribir: ['comercial.gestionar'] },
-  COTIZACION: { leer: ['comercial.ver'], escribir: ['comercial.gestionar'] },
-  ORDEN: {
-    leer: ['produccion.ver'],
+  CLIENTE: { leer: ['crm.clientes.ver'], escribir: ['crm.clientes.gestionar'] },
+  CAMPANA: {
+    leer: ['comercial.campanas.ver'],
+    escribir: ['comercial.campanas.gestionar'],
+  },
+  COTIZACION: {
+    leer: ['comercial.presupuestos.ver', 'comercial.ordenes.ver'],
     escribir: [
-      'comercial.gestionar',
+      'comercial.presupuestos.gestionar',
+      'comercial.ordenes.gestionar',
+    ],
+  },
+  ORDEN: {
+    leer: ['comercial.ordenes.ver', 'produccion.tablero.ver'],
+    escribir: [
+      'comercial.ordenes.gestionar',
       'produccion.ejecutar',
       'produccion.supervisar',
     ],
   },
   ORDEN_ITEM: {
-    leer: ['produccion.ver'],
+    leer: ['comercial.ordenes.ver', 'produccion.tablero.ver'],
     escribir: [
-      'comercial.gestionar',
+      'comercial.ordenes.gestionar',
       'produccion.ejecutar',
       'produccion.supervisar',
     ],
   },
   COMPROBANTE: {
-    leer: ['administracion.ver'],
-    escribir: ['administracion.gestionar'],
+    leer: ['administracion.comprobantes.ver'],
+    escribir: ['administracion.comprobantes.gestionar'],
   },
   COBRO: {
-    leer: ['administracion.ver', 'administracion.cobrar'],
-    escribir: ['administracion.gestionar', 'administracion.cobrar'],
+    leer: ['administracion.cobrar.ver', 'administracion.cobrar'],
+    escribir: ['administracion.cobrar.gestionar', 'administracion.cobrar'],
   },
   EGRESO: {
-    leer: ['administracion.ver'],
-    escribir: ['administracion.gestionar'],
+    leer: ['administracion.egresos.ver'],
+    escribir: ['administracion.egresos.gestionar'],
   },
-  PRODUCTO: { leer: ['costos.ver'], escribir: ['costos.gestionar'] },
-  PROVEEDOR: { leer: ['registros.ver'], escribir: ['registros.gestionar'] },
+  PRODUCTO: {
+    leer: [
+      'costos.catalogo.ver',
+      'comercial.ordenes.ver',
+      'comercial.presupuestos.ver',
+    ],
+    escribir: ['costos.catalogo.gestionar'],
+  },
+  PROVEEDOR: {
+    leer: ['registros.proveedores.ver'],
+    escribir: ['registros.proveedores.gestionar'],
+  },
   TENANT_BRANDING: {
     leer: 'autenticado',
-    escribir: ['configuracion.gestionar'],
+    escribir: ['configuracion.empresa.gestionar'],
   },
 };
 
@@ -81,8 +101,8 @@ export class ArchivosAccesoGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<{
       auth?: CurrentAuth;
       params: Record<string, string>;
-      body?: { scope?: unknown };
-      query: { scope?: unknown };
+      body?: { scope?: unknown; entidadId?: string };
+      query: { scope?: unknown; entidadId?: string };
     }>();
     const auth = req.auth;
     if (!auth?.tenantId)
@@ -97,6 +117,8 @@ export class ArchivosAccesoGuard implements CanActivate {
     if (politica.origen === 'uso') return true;
 
     let scope: ArchivoScope;
+    let cobroId: string | undefined;
+    let cotizacionId: string | undefined;
     if (politica.origen === 'archivo') {
       const id = req.params.id;
       if (!isUUID(id))
@@ -105,11 +127,13 @@ export class ArchivosAccesoGuard implements CanActivate {
       // debe ser explícito, y el scope debe salir de la base, nunca del cliente.
       const archivo = await this.prisma.archivo.findFirst({
         where: { id, tenantId: auth.tenantId },
-        select: { scope: true },
+        select: { scope: true, cobroId: true, cotizacionId: true },
       });
       if (!archivo || archivo.scope === ArchivoScope.INBOX)
         throw new NotFoundException('Archivo no encontrado.');
       scope = archivo.scope;
+      cobroId = archivo.cobroId ?? undefined;
+      cotizacionId = archivo.cotizacionId ?? undefined;
     } else if (politica.origen === 'orden') {
       scope = ArchivoScope.ORDEN;
     } else {
@@ -120,6 +144,10 @@ export class ArchivosAccesoGuard implements CanActivate {
       )
         throw new BadRequestException('Tipo de archivo inválido.');
       scope = declarado as ArchivoScope;
+      if (scope === ArchivoScope.COBRO)
+        cobroId = req[politica.origen]?.entidadId;
+      if (scope === ArchivoScope.COTIZACION)
+        cotizacionId = req[politica.origen]?.entidadId;
     }
     if (scope === ArchivoScope.INBOX)
       throw new ForbiddenException(
@@ -131,6 +159,48 @@ export class ArchivosAccesoGuard implements CanActivate {
       throw new ForbiddenException(
         'No tenés permisos para acceder a estos archivos.',
       );
+    if (
+      (scope === ArchivoScope.ORDEN || scope === ArchivoScope.ORDEN_ITEM) &&
+      politica.accion === 'escribir' &&
+      !auth.permisos?.has('comercial.ordenes.gestionar') &&
+      !auth.permisos?.has('produccion.tablero.ver')
+    )
+      throw new ForbiddenException('No tenés acceso a esta vista.');
+    if (
+      scope === ArchivoScope.COTIZACION &&
+      !auth.permisos?.has(
+        politica.accion === 'leer'
+          ? 'comercial.presupuestos.ver'
+          : 'comercial.presupuestos.gestionar',
+      )
+    ) {
+      if (!cotizacionId || !isUUID(cotizacionId))
+        throw new ForbiddenException('Elegí una cotización de la orden.');
+      const cotizacion = await this.prisma.cotizacion.findFirst({
+        where: { id: cotizacionId, tenantId: auth.tenantId },
+        select: { numero: true },
+      });
+      if (!cotizacion || cotizacion.numero)
+        throw new ForbiddenException(
+          'No tenés acceso a los archivos de este presupuesto.',
+        );
+    }
+    if (scope === ArchivoScope.COBRO) {
+      const alcance = await alcanceCuentas(this.prisma, auth);
+      if (alcance.restringido) {
+        if (!cobroId || !isUUID(cobroId))
+          throw new ForbiddenException(
+            'Elegí un cobro de una cuenta asignada.',
+          );
+        const cobro = await this.prisma.cobro.findFirst({
+          where: { id: cobroId, tenantId: auth.tenantId },
+          select: { cuentaDestinoId: true },
+        });
+        if (!cobro?.cuentaDestinoId)
+          throw new ForbiddenException('No tenés acceso a este recibo.');
+        exigirCuenta(alcance, cobro.cuentaDestinoId);
+      }
+    }
     return true;
   }
 }

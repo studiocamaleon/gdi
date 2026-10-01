@@ -39,7 +39,7 @@ async function ProveedorDetallePageContent({
   const { proveedorId } = await params;
   const [proveedor, canManage] = await Promise.all([
     getProveedorById(proveedorId),
-    tienePermiso("registros.gestionar"),
+    tienePermiso("registros.proveedores.gestionar"),
   ]);
 
   if (!proveedor) {

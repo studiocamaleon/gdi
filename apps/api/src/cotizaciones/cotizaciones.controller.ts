@@ -28,7 +28,7 @@ export class CotizacionesController {
   }
 
   @Patch('tipo-cambio/configuracion')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.empresa.gestionar")
   configurar(
     @CurrentSession() auth: CurrentAuth,
     @Body() dto: CrearTipoCambioDto,
@@ -37,7 +37,7 @@ export class CotizacionesController {
   }
 
   @Post('tipo-cambio')
-  @Permiso('comercial.ver', 'inventario.ver')
+  @Permiso("comercial.ordenes.ver", "comercial.presupuestos.ver", "inventario.materiales.ver")
   crearCambio(
     @CurrentSession() auth: CurrentAuth,
     @Body() dto: CrearTipoCambioDto,

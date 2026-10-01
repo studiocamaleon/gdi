@@ -19,7 +19,7 @@ import { InventarioBibliotecaService } from './inventario-biblioteca.service';
 import { InventarioService } from './inventario.service';
 import { Permiso } from '../auth/permiso.decorator';
 
-@Permiso('inventario.ver')
+@Permiso("inventario.materiales.ver")
 @Controller('inventario/materias-primas')
 export class InventarioController {
   constructor(
@@ -51,7 +51,7 @@ export class InventarioController {
     return this.bibliotecaService.obtener(auth, key);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.materiales.gestionar")
   @Post('biblioteca/:key/instalar')
   instalarBiblioteca(
     @CurrentSession() auth: CurrentAuth,
@@ -62,7 +62,7 @@ export class InventarioController {
   }
 
   // Ruta literal antes de las rutas con :id para evitar ambigüedad de matcheo.
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.materiales.gestionar")
   @Patch('costos')
   bulkUpdateCostos(
     @CurrentSession() auth: CurrentAuth,
@@ -76,7 +76,7 @@ export class InventarioController {
     return this.inventarioService.findMateriaPrima(auth, id);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.materiales.gestionar")
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -85,7 +85,7 @@ export class InventarioController {
     return this.inventarioService.createMateriaPrima(auth, payload);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.materiales.gestionar")
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -95,13 +95,13 @@ export class InventarioController {
     return this.inventarioService.updateMateriaPrima(auth, id, payload);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.materiales.gestionar")
   @Patch(':id/toggle')
   toggle(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.inventarioService.toggleMateriaPrima(auth, id);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.materiales.gestionar")
   @Patch('variantes/:varianteId/precio-referencia')
   updateVariantePrecioReferencia(
     @CurrentSession() auth: CurrentAuth,

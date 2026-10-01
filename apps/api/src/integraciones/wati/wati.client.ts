@@ -563,8 +563,8 @@ export function mapearParametros(
   cuerpoNombrado: string | null,
 ): string[] {
   if (!cuerpo || !cuerpoNombrado) return [];
-  const posiciones = cuerpo.match(/\{\{\s*(\d+)\s*\}\}/g) ?? [];
-  const nombres = cuerpoNombrado.match(/\{\{\s*([^}]+?)\s*\}\}/g) ?? [];
+  const posiciones: string[] = cuerpo.match(/\{\{\s*(\d+)\s*\}\}/g) ?? [];
+  const nombres: string[] = cuerpoNombrado.match(/\{\{\s*([^}]+?)\s*\}\}/g) ?? [];
   if (posiciones.length !== nombres.length) return [];
 
   const porNumero = new Map<number, string>();

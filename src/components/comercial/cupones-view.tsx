@@ -125,7 +125,7 @@ async function opcionesDeAlcance(
     );
   }
   if (tipo === "PRODUCTO") {
-    const productos = await getProductos(true);
+    const productos = await getProductos(true, true);
     return productos.map((producto) => ({
       ref: producto.id,
       nombre: producto.nombre,
@@ -136,7 +136,7 @@ async function opcionesDeAlcance(
     let page = 1;
     let pages = 1;
     do {
-      const response = await listClientes({ page, limit: 200 });
+      const response = await listClientes({ page, limit: 200 }, true);
       todos.push(
         ...response.data.map((cliente) => ({
           ref: cliente.id,

@@ -1,3 +1,4 @@
+import { alcanceCuentas, exigirCuentaOperable, exigirTesoreriaCompleta, filtroCuentas } from '../administracion/acceso-cuentas';
 import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
 import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -179,6 +180,8 @@ export class EgresosService {
       },
     });
     if (!pago) throw new NotFoundException('No encontramos ese pago.');
+    if (pago.cuentaOrigenId) await exigirCuentaOperable(this.prisma, auth, pago.cuentaOrigenId);
+    else await exigirTesoreriaCompleta(this.prisma, auth);
 
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: auth.tenantId },
@@ -1041,6 +1044,8 @@ export class EgresosService {
   // ── Pagos ──────────────────────────────────────────────────────────────
 
   async registrarPago(auth: CurrentAuth, dto: RegistrarPagoDto) {
+    if (dto.cuentaOrigenId) await exigirCuentaOperable(this.prisma, auth, dto.cuentaOrigenId);
+    else await exigirTesoreriaCompleta(this.prisma, auth);
     if (dto.cheque || dto.valorId)
       await this.capacidades.exigir(auth.tenantId, 'valores');
     await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
@@ -1127,6 +1132,8 @@ export class EgresosService {
     dto: RegistrarPagoDto,
     registradoPor: string,
   ) {
+    if (dto.cuentaOrigenId) await exigirCuentaOperable(tx, auth, dto.cuentaOrigenId);
+    else await exigirTesoreriaCompleta(tx, auth);
     await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
       'cuentas_pagar',
     ]);
@@ -1539,6 +1546,7 @@ export class EgresosService {
    * historial — se intentó y falló, y eso es información.
    */
   async anularPago(auth: CurrentAuth, id: string, dto: AnularDto) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     const actor = await resolverActorFondos(this.prisma, auth);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
@@ -1675,6 +1683,7 @@ export class EgresosService {
   }
 
   async pagosDeEgreso(auth: CurrentAuth, egresoId: string) {
+    const alcance = await alcanceCuentas(this.prisma, auth);
     const imputaciones = await this.prisma.pagoImputacion.findMany({
       where: { tenantId: auth.tenantId, egresoId },
       include: {
@@ -1687,6 +1696,7 @@ export class EgresosService {
             anuladoEl: true,
             motivoAnulacion: true,
             registradoPorNombre: true,
+            cuentaOrigenId: true,
             metodoPago: { select: { nombre: true } },
             cuentaOrigen: { select: { nombre: true } },
           },
@@ -1701,7 +1711,8 @@ export class EgresosService {
         fecha: i.pago.fecha.toISOString(),
         monto: dec(i.monto),
         metodoNombre: i.pago.metodoPago.nombre,
-        cuentaNombre: i.pago.cuentaOrigen?.nombre ?? 'Cheque endosado',
+        cuentaNombre: alcance.restringido && !alcance.operables.includes(i.pago.cuentaOrigenId ?? '') ? 'Cuenta no asignada' : i.pago.cuentaOrigen?.nombre ?? 'Cheque endosado',
+        puedeAbrirComprobante: !alcance.restringido || alcance.operables.includes(i.pago.cuentaOrigenId ?? ''),
         referencia: i.pago.referencia,
         anuladoEl: i.pago.anuladoEl ? i.pago.anuladoEl.toISOString() : null,
         motivoAnulacion: i.pago.motivoAnulacion,
@@ -1830,6 +1841,7 @@ export class EgresosService {
    * —ésos se emiten, no se endosan— ni los que ya salieron de la cartera.
    */
   async valoresEnCartera(auth: CurrentAuth) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     const valores = await this.prisma.valor.findMany({
       where: { tenantId: auth.tenantId, origen: 'tercero', estado: 'cartera' },
       include: { cliente: { select: { nombre: true } } },
@@ -1855,6 +1867,7 @@ export class EgresosService {
 
   /** Confirma que el banco debitó un cheque propio y recién entonces mueve fondos. */
   async debitarValor(auth: CurrentAuth, id: string, dto: DebitarValorDto) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'valores');
     await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     if (dto.idempotencyKey) {
@@ -1957,6 +1970,7 @@ export class EgresosService {
     id: string,
     dto: RechazarValorPropioDto,
   ) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'valores');
     await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     const actor = await resolverActorFondos(this.prisma, auth);
@@ -2167,6 +2181,7 @@ export class EgresosService {
    * lunes a la mañana: qué hay que pagar y qué ya se pasó.
    */
   async resumen(auth: CurrentAuth) {
+    const alcance = await alcanceCuentas(this.prisma, auth);
     const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
     const hoy = soloFecha(hoyEnZona(zonaHoraria));
     const en7 = new Date(hoy);
@@ -2194,7 +2209,7 @@ export class EgresosService {
     }
 
     const saldos = await this.prisma.cuentaFondos.aggregate({
-      where: { tenantId: auth.tenantId, activo: true },
+      where: { tenantId: auth.tenantId, activo: true, ...filtroCuentas(alcance) },
       _sum: { saldo: true },
     });
 

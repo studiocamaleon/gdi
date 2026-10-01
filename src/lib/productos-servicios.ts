@@ -17,14 +17,19 @@ export const unidadComercialProductoItems: Array<{
 ];
 
 export type ModoMedidasProducto =
-  "FIJA" | "LIBRE" | "COMERCIAL_ELIGE" | "MIXTA";
+  | "FIJA"
+  | "LIBRE"
+  | "COMERCIAL_ELIGE"
+  | "MIXTA";
 
 export type DimensionProducto = "ANCHO" | "ALTO" | "PROFUNDIDAD";
 
 export type EstructuraProducto = "SIMPLE" | "COMPUESTO";
 
 export type MinimoComercialPolitica =
-  "NONE" | "ADVERTIR_FACTURAR_MINIMO" | "BLOQUEAR";
+  | "NONE"
+  | "ADVERTIR_FACTURAR_MINIMO"
+  | "BLOQUEAR";
 
 export type MinimoComercialBase = "cantidad_comercial" | "pliegos_impresos";
 
@@ -317,6 +322,7 @@ export interface SlotMaterialDetalle {
     sku: string;
     nombreVariante: string | null;
     precioReferencia: string | null;
+    precioCargado?: boolean;
     atributosVarianteJson?: Record<string, unknown> | null;
     materiaPrima: {
       id: string;
@@ -330,6 +336,7 @@ export interface SlotMaterialDetalle {
         sku: string;
         nombreVariante: string | null;
         precioReferencia: string | null;
+        precioCargado?: boolean;
         atributosVarianteJson?: Record<string, unknown> | null;
       }>;
     };
@@ -354,6 +361,7 @@ export interface SlotMaterialDetalle {
         sku: string;
         nombreVariante: string | null;
         precioReferencia: string | null;
+        precioCargado?: boolean;
         atributosVarianteJson?: unknown;
       }>;
     };
@@ -362,6 +370,7 @@ export interface SlotMaterialDetalle {
       sku: string;
       nombreVariante: string | null;
       precioReferencia: string | null;
+      precioCargado?: boolean;
     } | null;
     variantes: Array<{
       variante: {
@@ -369,6 +378,7 @@ export interface SlotMaterialDetalle {
         sku: string;
         nombreVariante: string | null;
         precioReferencia: string | null;
+        precioCargado?: boolean;
         atributosVarianteJson?: Record<string, unknown> | null;
       };
     }>;

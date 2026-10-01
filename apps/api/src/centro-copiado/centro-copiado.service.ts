@@ -491,7 +491,7 @@ export class CentroCopiadoService {
    */
   async reparar(tenantId: string, actorUserId?: string) {
     await this.capacidades.exigir(tenantId, 'centro_copiado');
-    await provisionarPlantillaCentroCopiado(this.prisma, tenantId);
+    await this.asegurarPlantilla(tenantId);
     const config = await this.configDe(tenantId);
     await this.prisma.$transaction(async (tx) => {
       await this.regenerarCandidatas(tx, tenantId, config);
@@ -503,6 +503,28 @@ export class CentroCopiadoService {
       });
     });
     return this.getConfig(tenantId);
+  }
+
+  private async asegurarPlantilla(tenantId: string) {
+    const resultado = await provisionarPlantillaCentroCopiado(
+      this.prisma,
+      tenantId,
+    );
+    if (resultado.estado !== 'omitido') return;
+
+    const requisitos: Record<string, string> = {
+      'sin IMPRESORA_LASER':
+        'Agregá una impresora láser en Maquinaria y completá su configuración hasta que esté lista y activa.',
+      'sin papeles SUSTRATO_HOJA':
+        'Agregá un papel en hojas en Materiales, con al menos una variante activa.',
+      "sin subcategoría 'papeleria_comercial'":
+        'Falta la categoría comercial Papelería comercial. Pedí a soporte que revise el catálogo del sistema.',
+    };
+    // No guardar una configuración que parece activada cuando todavía no
+    // existe el producto ni la ruta que necesita el módulo.
+    throw new ConflictException(
+      `No se pudo inicializar el Centro de Copiado. ${requisitos[resultado.motivo] ?? 'Revisá las máquinas y los papeles disponibles antes de volver a intentar.'}`,
+    );
   }
 
   /**
@@ -828,7 +850,7 @@ export class CentroCopiadoService {
     // El producto y su ruta son infraestructura del módulo. Se provisionan
     // antes del commit de configuración; desde este punto, config + margen +
     // tiempos + candidatas se escriben como una sola unidad.
-    await provisionarPlantillaCentroCopiado(this.prisma, tenantId);
+    await this.asegurarPlantilla(tenantId);
     const jsonOrNull = (v: unknown) =>
       v == null ? Prisma.DbNull : (v as never);
     await this.prisma.$transaction(async (tx) => {

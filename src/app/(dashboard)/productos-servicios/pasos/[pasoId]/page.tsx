@@ -9,7 +9,7 @@ export default async function PasoTenantPage({
 }: {
   params: Promise<{ pasoId: string }>;
 }) {
-  if (!(await puedeConfigurar("procesos", "costos.gestionar"))) {
+  if (!(await puedeConfigurar("procesos", "costos.nodos.gestionar"))) {
     return <SinPermiso modulo="Configuración de nodos" />;
   }
   const { pasoId } = await params;

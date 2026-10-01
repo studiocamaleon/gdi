@@ -1,3 +1,4 @@
+import { VISTAS } from '../auth/vistas';
 import { textoErrorLog } from '../common/log-seguro';
 import {
   BadRequestException,
@@ -32,6 +33,7 @@ import {
 } from '../auth/permisos';
 import type { CurrentAuth } from '../auth/auth.types';
 import type {
+  CambiarCuentasDto,
   CrearRolDto,
   CrearUsuarioDto,
   EditarRolDto,
@@ -56,6 +58,78 @@ export class UsuariosService {
     private readonly sessionCache: SessionCacheService,
     private readonly suscripciones: SuscripcionesService,
   ) {}
+
+  async cuentasDisponibles(auth: CurrentAuth) {
+    return this.prisma.cuentaFondos.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        activo: true,
+        tipo: { in: ['caja', 'banco', 'billetera'] },
+      },
+      select: { id: true, nombre: true, moneda: true },
+      orderBy: { nombre: 'asc' },
+    });
+  }
+
+  async cambiarCuentas(
+    auth: CurrentAuth,
+    userId: string,
+    dto: CambiarCuentasDto,
+  ) {
+    const operables = dto.restringidas ? [...new Set(dto.operables)] : [];
+    const destinos = dto.restringidas ? [...new Set(dto.destinos)] : [];
+    await this.prisma.$transaction(
+      async (tx) => {
+        const miembro = await tx.membership.findFirst({
+          where: { tenantId: auth.tenantId, userId },
+        });
+        if (!miembro) throw new NotFoundException('Ese usuario no existe acá.');
+        const ids = [...new Set([...operables, ...destinos])];
+        const cuentas = await tx.cuentaFondos.count({
+          where: {
+            tenantId: auth.tenantId,
+            id: { in: ids },
+            activo: true,
+            tipo: { in: ['caja', 'banco', 'billetera'] },
+          },
+        });
+        if (cuentas !== ids.length)
+          throw new BadRequestException(
+            'Hay cuentas que no están disponibles en esta empresa.',
+          );
+        await tx.membership.update({
+          where: { id: miembro.id },
+          data: {
+            cuentasRestringidas: dto.restringidas,
+            cuentasOperablesIds: operables,
+            cuentasDestinoIds: destinos,
+          },
+        });
+        await tx.eventoAcceso.create({
+          data: {
+            tenantId: auth.tenantId,
+            actorUserId: auth.userId,
+            actorNombre: auth.impersonacion?.actorNombre ?? auth.email,
+            usuarioAfectadoId: userId,
+            tipo: 'cuentas_asignadas',
+            descripcion:
+              'Actualizó las cuentas de trabajo y los destinos permitidos.',
+            datosJson: {
+              anterior: {
+                restringidas: miembro.cuentasRestringidas,
+                operables: miembro.cuentasOperablesIds,
+                destinos: miembro.cuentasDestinoIds,
+              },
+              nuevo: { restringidas: dto.restringidas, operables, destinos },
+            },
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    this.sessionCache.invalidarTenant(auth.tenantId);
+    return { restringidas: dto.restringidas, operables, destinos };
+  }
 
   // ── Usuarios ────────────────────────────────────────────────────────
 
@@ -99,6 +173,11 @@ export class UsuariosService {
             rolNombre: m.rolDelTenant?.nombre ?? this.nombreDelEnum(m.rol),
             /** Vacío = entra desde cualquier lado. */
             ipsPermitidas: m.ipsPermitidas,
+            accesoCuentas: {
+              restringidas: m.cuentasRestringidas,
+              operables: m.cuentasOperablesIds,
+              destinos: m.cuentasDestinoIds,
+            },
             activa: m.activa,
             empleado: m.user.empleados[0] ?? null,
             /**
@@ -437,6 +516,11 @@ export class UsuariosService {
     ]);
     return {
       modulos: MODULOS.map((m) => ({
+        vistas: VISTAS.filter((v) => v.modulo === m.clave).map((v) => ({
+          clave: v.clave,
+          label: v.label,
+          permiteGestion: !!v.gestionAnterior,
+        })),
         clave: m.clave,
         label: m.label,
         descripcion: m.descripcion,
@@ -447,7 +531,15 @@ export class UsuariosService {
          */
         enElPlan: true,
       })),
-      transversales: PERMISOS_TRANSVERSALES.map((p) => ({ ...p })),
+      transversales: PERMISOS_TRANSVERSALES.filter(
+        (p) =>
+          ![
+            'registros.gestionar_empleados',
+            'crm.configurar_fidelizacion',
+            'reportes.ver_resumen',
+            'administracion.configurar',
+          ].includes(p.clave),
+      ).map((p) => ({ ...p })),
       /** Para el aviso del editor: qué features tiene el plan. */
       features: { afip, whatsapp },
     };
@@ -809,6 +901,18 @@ export class UsuariosService {
    *  matrices que se ven distintas y hacen lo mismo. */
   private limpiarPermisos(permisos: string[]): string[] {
     const validos = permisos.filter((p) => esPermisoValido(p));
+    if (
+      validos.includes('acceso.por_vista') &&
+      validos.some((p) =>
+        /^(comercial|crm|registros|costos|produccion|administracion|inventario|reportes|configuracion)\.(ver|gestionar)$/.test(
+          p,
+        ),
+      )
+    ) {
+      throw new BadRequestException(
+        'Elegí permisos por vista; no los combines con accesos globales de sección.',
+      );
+    }
     const gestion = new Set(
       validos
         .filter((p) => p.endsWith('.gestionar'))
@@ -851,7 +955,7 @@ export class UsuariosService {
     permisosNuevos: string[],
   ) {
     const sigueTeniendo = expandir(permisosNuevos).has(
-      'configuracion.gestionar',
+      'configuracion.usuarios.gestionar',
     );
     if (sigueTeniendo) return;
 
@@ -860,7 +964,14 @@ export class UsuariosService {
         tenantId: auth.tenantId,
         activa: true,
         rolId: { not: rolIdQueCambia },
-        rolDelTenant: { permisos: { has: 'configuracion.gestionar' } },
+        rolDelTenant: {
+          permisos: {
+            hasSome: [
+              'configuracion.gestionar',
+              'configuracion.usuarios.gestionar',
+            ],
+          },
+        },
       },
     });
     if (conLlaves === 0) {
@@ -892,7 +1003,7 @@ export class UsuariosService {
     const predefinido = ROLES_PREDEFINIDOS.find((r) => r.codigo === codigo);
     if (predefinido) return predefinido.rolBase;
     const efectivos = expandir(permisos);
-    if (efectivos.has('configuracion.gestionar'))
+    if (efectivos.has('configuracion.usuarios.gestionar'))
       return RolSistema.ADMINISTRADOR;
     if (efectivos.size <= 2 && efectivos.has('produccion.ver')) {
       return RolSistema.OPERADOR;

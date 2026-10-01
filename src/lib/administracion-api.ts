@@ -311,6 +311,7 @@ export async function getCuentasFondos(): Promise<CuentaFondosResumen[]> {
 // ── Tesorería ──────────────────────────────────────────────────────────
 
 export async function getTesoreria(): Promise<{
+  accesoRestringido?: boolean;
   monedaLocal: string;
   cuentas: CuentaFondos[];
   kpis: TesoreriaKpis;
@@ -602,4 +603,10 @@ export async function getFacturacionHabilitada(): Promise<boolean> {
     "/administracion/facturacion/estado",
   );
   return r.habilitada;
+}
+
+export type DestinoTransferencia = { id: string; nombre: string; moneda: string };
+export function getDestinosTransferencia(): Promise<DestinoTransferencia[]> { return apiRequest('/administracion/cuentas/destinos-transferencia'); }
+export function getArqueosCuenta(cuentaId: string): Promise<Array<{ id: string; actorNombre: string; createdAt: string; detalleJson: { esperado: number; contado: number; diferencia: number; moneda: string; notas: string | null } }>> {
+  return apiRequest(`/administracion/cuentas/${encodeURIComponent(cuentaId)}/arqueos`);
 }

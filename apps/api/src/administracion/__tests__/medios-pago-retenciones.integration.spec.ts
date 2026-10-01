@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CobrosService } from '../cobros.service';
@@ -66,6 +66,17 @@ describe('Retenciones y liquidación confirmada (base exclusiva de pruebas)', ()
       await prisma.tenant.create({
         data: { id, nombre: 'Empresa ficticia retenciones', slug: `ret-${id}` },
       });
+    await prisma.user.create({
+      data: { id: auth.userId, email: `ret-${auth.userId}@example.invalid` },
+    });
+    await prisma.membership.create({
+      data: {
+        id: auth.membershipId,
+        userId: auth.userId,
+        tenantId,
+        rol: 'ADMINISTRADOR',
+      },
+    });
     cuentaId = (
       await prisma.cuentaFondos.create({
         data: {
@@ -93,6 +104,7 @@ describe('Retenciones y liquidación confirmada (base exclusiva de pruebas)', ()
     await prisma.tenant.deleteMany({
       where: { id: { in: [tenantId, ajeno] } },
     });
+    await prisma.user.delete({ where: { id: auth.userId } });
     await prisma.$disconnect();
   });
   const nuevo = () =>
@@ -154,7 +166,7 @@ describe('Retenciones y liquidación confirmada (base exclusiva de pruebas)', ()
     const c = await nuevo();
     await expect(
       cobros.acreditar({ ...auth, tenantId: ajeno }, c.id, liquidacion),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
     await metodos.update(auth, metodoId, {
       nombre: 'Débito ficticio',
       tipo: 'tarjeta_debito',

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NuevaRutaPage() {
   if (!(await tieneCapacidad("procesos"))) return <FuncionNoIncluida />;
-  if (!(await puedeConfigurar("procesos", "costos.gestionar"))) {
+  if (!(await puedeConfigurar("procesos", "costos.flujos.gestionar"))) {
     return <SinPermiso modulo="Flujos de producción" />;
   }
   const catalogo = await getCatalogoFamilias();

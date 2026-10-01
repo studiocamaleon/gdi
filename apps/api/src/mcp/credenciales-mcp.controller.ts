@@ -19,7 +19,7 @@ import { CrearCredencialMcpDto } from './credenciales-mcp.dto';
  * el service además rechaza que una credencial MCP se gestione a sí misma.
  */
 @Controller('mcp/credenciales')
-@Permiso('configuracion.gestionar')
+@Permiso('configuracion.integraciones.gestionar')
 export class CredencialesMcpController {
   constructor(private readonly service: CredencialesMcpService) {}
 

@@ -35,12 +35,12 @@ export default async function OrdenTrabajoDetallePage({
   let productos: ProductoListItem[] = [];
   const documentos = await getEstadoDocumentalOrden(ordenId).catch(() => null);
   try {
-    clientes = await getClientes({ limit: 30 });
+    clientes = await getClientes({ limit: 30 }, true);
   } catch {
     clientes = [];
   }
   try {
-    productos = await getProductos(true);
+    productos = await getProductos(true, true);
   } catch {
     productos = [];
   }

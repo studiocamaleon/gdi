@@ -6,7 +6,7 @@ import { ImpresorasView } from "@/components/impresion/impresoras-view";
 export const dynamic = "force-dynamic";
 export default async function ImpresorasPage() {
   if (!(await tieneCapacidad("impresion_directa"))) notFound();
-  if (!(await tienePermiso("configuracion.ver")))
+  if (!(await tienePermiso("configuracion.impresoras.ver")))
     return <SinPermiso modulo="Impresoras" />;
   return <ImpresorasView />;
 }

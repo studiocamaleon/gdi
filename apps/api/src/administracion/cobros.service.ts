@@ -1,4 +1,9 @@
 import {
+  alcanceCuentas,
+  exigirCuentaOperable,
+  exigirTesoreriaCompleta,
+} from './acceso-cuentas';
+import {
   cifrasCobro,
   calcularRetenciones,
   estimarAcreditacion,
@@ -104,9 +109,13 @@ export class CobrosService {
   }
 
   async findAll(auth: CurrentAuth, filtros?: { ordenId?: string }) {
+    const alcance = await alcanceCuentas(this.prisma, auth);
     const cobros = await this.prisma.cobro.findMany({
       where: {
         tenantId: auth.tenantId,
+        ...(alcance.restringido && !filtros?.ordenId
+          ? { cuentaDestinoId: { in: alcance.operables } }
+          : {}),
         anuladoEl: null,
         ...(filtros?.ordenId
           ? {
@@ -135,6 +144,17 @@ export class CobrosService {
     });
     return cobros.map((cobro) => ({
       ...this.toResponse(cobro),
+      // La deuda de una venta siempre incluye todos sus recibos. Restringir
+      // cajas no puede inventar un saldo pendiente ni habilitar cobros dobles.
+      // Este resumen comercial no revela qué cuenta no asignada recibió el pago.
+      ...(alcance.restringido &&
+      !alcance.operables.includes(cobro.cuentaDestinoId ?? '')
+        ? {
+            cuentaDestinoNombre: null,
+            referenciaAcreditacion: null,
+            puedeAbrirRecibo: false,
+          }
+        : { puedeAbrirRecibo: true }),
       ...(filtros?.ordenId
         ? {
             montoAplicadoOrden: Number(
@@ -149,6 +169,9 @@ export class CobrosService {
   }
 
   async create(auth: CurrentAuth, payload: CrearCobroDto) {
+    if (payload.cuentaDestinoId)
+      await exigirCuentaOperable(this.prisma, auth, payload.cuentaDestinoId);
+    else await exigirTesoreriaCompleta(this.prisma, auth);
     if (payload.idempotencyKey) {
       const existente = await this.prisma.cobro.findUnique({
         where: {
@@ -375,6 +398,9 @@ export class CobrosService {
     let cobroId: string;
     try {
       cobroId = await ejecutarTransaccionFondos(this.prisma, async (tx) => {
+        if (payload.cuentaDestinoId)
+          await exigirCuentaOperable(tx, auth, payload.cuentaDestinoId);
+        else await exigirTesoreriaCompleta(tx, auth);
         await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
           'identidad',
         ]);
@@ -673,6 +699,7 @@ export class CobrosService {
 
   /** Confirmación de liquidación: una transacción, importes reales y fecha local. */
   async acreditar(auth: CurrentAuth, id: string, payload: AcreditarCobroDto) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'identidad');
     validarFechaLiquidacion(payload.fecha);
     validarRetenciones(payload.retenciones);
@@ -820,9 +847,13 @@ export class CobrosService {
 
   /** Los cobros electrónicos que todavía no acreditaron, con su fecha. */
   async pendientesAcreditacion(auth: CurrentAuth) {
+    const alcance = await alcanceCuentas(this.prisma, auth);
     const cobros = await this.prisma.cobro.findMany({
       where: {
         tenantId: auth.tenantId,
+        ...(alcance.restringido
+          ? { cuentaDestinoId: { in: alcance.operables } }
+          : {}),
         anuladoEl: null,
         estadoAcreditacion: 'pendiente',
       },
@@ -882,6 +913,7 @@ export class CobrosService {
    * imputaciones y deja actor/motivo congelados para auditoría.
    */
   async anular(auth: CurrentAuth, id: string, payload: AnularCobroDto) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     const actor = await resolverActorFondos(this.prisma, auth);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
       await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
@@ -991,8 +1023,15 @@ export class CobrosService {
   }
 
   async findOne(auth: CurrentAuth, id: string) {
+    const alcance = await alcanceCuentas(this.prisma, auth);
     const cobro = await this.prisma.cobro.findFirst({
-      where: { id, tenantId: auth.tenantId },
+      where: {
+        id,
+        tenantId: auth.tenantId,
+        ...(alcance.restringido
+          ? { cuentaDestinoId: { in: alcance.operables } }
+          : {}),
+      },
       include: {
         metodoPago: { select: { nombre: true, tipo: true } },
         cuentaDestino: { select: { nombre: true } },

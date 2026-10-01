@@ -123,7 +123,7 @@ export class MetaArchivosPlantillaService {
       !canal ||
       !plantillasInboxHabilitadas(auth.tenantId, canal.tipo) ||
       !adjuntosHabilitados() ||
-      !permisos.has('crm.ver')
+      !permisos.has('crm.clientes.ver')
     )
       throw new ForbiddenException('No está disponible el envío de archivos.');
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
@@ -154,7 +154,7 @@ export class MetaArchivosPlantillaService {
     const fuentes: Prisma.ArchivoWhereInput[] = [
       { scope: 'CLIENTE', clienteId, generado: false },
     ];
-    if (permisos.has('comercial.ver'))
+    if (permisos.has('comercial.presupuestos.ver'))
       fuentes.push({
         scope: 'COTIZACION',
         generado: true,
@@ -180,7 +180,7 @@ export class MetaArchivosPlantillaService {
           },
         ],
       });
-    if (permisos.has('administracion.ver'))
+    if (permisos.has('administracion.comprobantes.ver'))
       fuentes.push({
         scope: 'COMPROBANTE',
         generado: true,
@@ -222,7 +222,7 @@ export class MetaArchivosPlantillaService {
       const c = f.cotizacion,
         d = f.documentoPdf;
       if (
-        !permisos.has('comercial.ver') ||
+        !permisos.has('comercial.presupuestos.ver') ||
         !c ||
         c.tenantId !== f.tenantId ||
         (d && (d.tenantId !== f.tenantId || d.cotizacionId !== c.id))
@@ -234,7 +234,7 @@ export class MetaArchivosPlantillaService {
     } else if (f.scope === 'COMPROBANTE') {
       const c = f.comprobante;
       if (
-        !permisos.has('administracion.ver') ||
+        !permisos.has('administracion.comprobantes.ver') ||
         !c ||
         c.tenantId !== f.tenantId ||
         c.puntoVenta.tenantId !== f.tenantId

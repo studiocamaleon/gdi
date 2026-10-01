@@ -23,7 +23,7 @@ import { ProveedoresService } from './proveedores.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
 
-@Permiso('registros.ver')
+@Permiso("registros.proveedores.ver")
 @Controller('proveedores')
 export class ProveedoresController {
   constructor(private readonly proveedoresService: ProveedoresService) {}
@@ -48,7 +48,7 @@ export class ProveedoresController {
     return this.proveedoresService.findOne(auth, id);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso("registros.proveedores.gestionar")
   @RequiereCapacidad('proveedores')
   @Post()
   create(
@@ -58,7 +58,7 @@ export class ProveedoresController {
     return this.proveedoresService.create(auth, payload);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso("registros.proveedores.gestionar")
   @RequiereCapacidad('proveedores')
   @Post('importar')
   importar(
@@ -68,7 +68,7 @@ export class ProveedoresController {
     return this.proveedoresService.importar(auth, payload.proveedores);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso("registros.proveedores.gestionar")
   @RequiereCapacidad('proveedores')
   @Put(':id')
   update(
@@ -79,7 +79,7 @@ export class ProveedoresController {
     return this.proveedoresService.update(auth, id, payload);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso("registros.proveedores.gestionar")
   @RequiereCapacidad('proveedores')
   @Patch(':id/estado')
   estado(
@@ -90,7 +90,7 @@ export class ProveedoresController {
     return this.proveedoresService.fijarActivo(auth, id, payload.activo);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso("registros.proveedores.gestionar")
   @RequiereCapacidad('proveedores')
   @Delete(':id')
   @HttpCode(204)

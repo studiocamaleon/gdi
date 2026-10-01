@@ -117,7 +117,7 @@ function PresupuestoDetalleContent({
   inicial,
   rol,
 }: PresupuestoDetalleViewProps) {
-  const puedeEnviar = usePuede("comercial.gestionar");
+  const puedeEnviar = usePuede("comercial.presupuestos.gestionar");
   const conPresupuestos = useCapacidad("presupuestos");
   const conPdf = useCapacidad("documentos_pdf");
   const conEta = useCapacidad("eta_capacidad");
@@ -168,7 +168,7 @@ function PresupuestoDetalleContent({
       ),
   );
 
-  const puedeAprobar = rol === "administrador" || rol === "supervisor";
+  const puedeAprobar = puedeEnviar && (rol === "administrador" || rol === "supervisor");
   const id = d.id;
 
   const cargar = React.useCallback(async () => {
@@ -729,11 +729,13 @@ function AccionesEstado({
   seleccionadas: number;
   disponibles: number;
 }) {
-  const puedeEnviar = usePuede("comercial.gestionar");
+  const puedeEnviar = usePuede("comercial.presupuestos.gestionar");
   const conPresupuestos = useCapacidad("presupuestos");
   const conOrdenes = useCapacidad("ordenes");
+  const puedeCrearOrden = usePuede("comercial.ordenes.gestionar");
   const conEta = useCapacidad("eta_capacidad");
   const conEnlace = useCapacidad("aprobacion_presupuestos");
+  if (!puedeEnviar) return null;
   if (d.estado === "convertido") {
     return (
       <div className={s.actionBar} data-tone="success">
@@ -863,9 +865,9 @@ function AccionesEstado({
         </div>
         <ActionButton
           type="button"
-          isDisabled={trabajando || seleccionadas === 0 || !conOrdenes}
+          isDisabled={trabajando || seleccionadas === 0 || !conOrdenes || !puedeCrearOrden}
           isPending={trabajando}
-          title={!conOrdenes ? "La creación de órdenes no está incluida en el plan actual." : undefined}
+          title={!conOrdenes ? "La creación de órdenes no está incluida en el plan actual." : !puedeCrearOrden ? "Necesitás permiso para gestionar órdenes." : undefined}
           onPress={onConvertir}
         >
           {trabajando ? "Emitiendo OT…" : "Convertir en orden"}

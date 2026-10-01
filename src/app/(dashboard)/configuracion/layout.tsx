@@ -1,6 +1,6 @@
 import { ConfiguracionWorkspace } from "@/components/configuracion/configuracion-workspace";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
-import { tienePermiso } from "@/lib/permisos-server";
+import { tieneSeccion } from "@/lib/permisos-server";
 
 /**
  * Puerta del módulo. El sidebar ya lo esconde para quien no lo tiene, pero una
@@ -20,11 +20,7 @@ export default async function Layout({
 }: {
   children: React.ReactNode;
 }) {
-  const [config, facturacion] = await Promise.all([
-    tienePermiso("configuracion.ver"),
-    tienePermiso("administracion.configurar"),
-  ]);
-  if (!config && !facturacion) {
+  if (!(await tieneSeccion("configuracion"))) {
     return <SinPermiso modulo="Configuración" />;
   }
   return <ConfiguracionWorkspace>{children}</ConfiguracionWorkspace>;

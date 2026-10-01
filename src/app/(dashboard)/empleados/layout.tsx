@@ -13,7 +13,7 @@ export default async function Layout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!(await tienePermiso("registros.ver"))) {
+  if (!(await tienePermiso("registros.empleados.ver"))) {
     return <SinPermiso modulo="Empleados" />;
   }
   return (

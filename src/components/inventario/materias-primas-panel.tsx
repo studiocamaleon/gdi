@@ -85,7 +85,7 @@ export function MateriasPrimasPanel({
   initialMateriasPrimas,
 }: MateriasPrimasPanelProps) {
   const conMateriales = useCapacidad("materiales");
-  const permisoGestionar = usePuede("inventario.gestionar");
+  const permisoGestionar = usePuede("inventario.materiales.gestionar");
   const puedeGestionar = conMateriales && permisoGestionar;
   const scope = useDesignScope();
   const themeClass = useDesignTheme();

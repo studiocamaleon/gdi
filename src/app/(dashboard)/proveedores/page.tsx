@@ -19,7 +19,7 @@ export default function ProveedoresPage() {
 async function ProveedoresPageContent() {
   const [response, canManage] = await Promise.all([
     listProveedores({ page: 1, limit: 25 }),
-    tienePermiso("registros.gestionar"),
+    tienePermiso("registros.proveedores.gestionar"),
   ]);
 
   return (

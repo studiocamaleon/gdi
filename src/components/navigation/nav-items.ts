@@ -1,3 +1,5 @@
+import { expandirVistas } from "@/lib/permisos-vistas";
+import { vistaDeRuta } from "@/lib/permisos-rutas";
 // Estructura de navegación del sidebar, compartida entre el sidebar y el
 // buscador (command palette). Un solo lugar para las rutas del ERP.
 //
@@ -66,7 +68,7 @@ export const NAV: NavItem[] = [
     key: "inbox",
     label: "Inbox",
     icon: "Chat",
-    permiso: "configuracion.gestionar",
+    permiso: "configuracion.integraciones.gestionar",
     href: "/inbox",
     nuevaPestana: true,
     buscar: ["grafo inbox", "whatsapp", "mensajes", "conversaciones"],
@@ -330,7 +332,8 @@ export function navPara(
 ): NavItem[] {
   // Inbox tiene una bienvenida aun sin conexión o mensajes. La visibilidad
   // conserva permisos; los datos y las acciones siguen protegidos en la API.
-  const disponibles = NAV;
+  permisos = permisos ? expandirVistas(permisos) : null;
+  const disponibles = NAV.map(item => hasChildren(item) ? { ...item, children: item.children.map(c => ({ ...c, permiso: c.key === "crear-propuesta" ? "comercial.ordenes.gestionar" as PermisoClave : vistaDeRuta(c.href) ? `${vistaDeRuta(c.href)}.ver` as PermisoClave : c.permiso })) } : item);
   // El filtro por país corre SIEMPRE, incluso sin permisos: un tenant chileno
   // sin lista de permisos no tiene por qué ver el circuito fiscal argentino.
   const porPlan = (href: string) => {
@@ -363,7 +366,7 @@ export function navPara(
   }
   return disponibles.flatMap<NavItem>((item) => {
     if (!hasChildren(item)) {
-      return (permisos.has(item.permiso) || (item.key === "inbox" && permisos.has("inbox.atender"))) && porPlan(item.href) ? [item] : [];
+      return (item.key === "reportes" || permisos.has(item.permiso) || (item.key === "inbox" && permisos.has("inbox.atender"))) && porPlan(item.href) ? [item] : [];
     }
     // El permiso del hijo REEMPLAZA al del grupo, no se suma: un hijo que
     // declara el suyo se sostiene solo (Datos fiscales con

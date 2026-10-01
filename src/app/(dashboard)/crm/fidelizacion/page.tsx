@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function FidelizacionPage() {
   const [initial, permiso, conFidelizacion, { currentUser }] = await Promise.all([
     getFidelizacionResumen(),
-    tienePermiso("crm.configurar_fidelizacion"),
+    tienePermiso("crm.fidelizacion.gestionar"),
     tieneCapacidad("fidelizacion"),
     getCurrentUserCached(),
   ]);

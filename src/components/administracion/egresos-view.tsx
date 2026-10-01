@@ -433,7 +433,7 @@ export function EgresosView({
   );
   // Los permisos se resuelven en el cliente (patrón de la casa): el guard del
   // API es el que manda, esto sólo evita ofrecer botones que van a dar 403.
-  const permisoGestionar = usePuede("administracion.gestionar");
+  const permisoGestionar = usePuede(modo === "cuentas-por-pagar" ? "administracion.pagar.gestionar" : "administracion.egresos.gestionar");
   const puedeGestionar = permisoGestionar && conEgresos;
   const permisoAnular = usePuede("administracion.anular");
   const puedeAnular = permisoAnular && conEgresos;
@@ -2497,7 +2497,7 @@ function DetalleEgreso({
                     </span>
                   </div>
                   <span className="mono">{fmt(p.monto)}</span>
-                  {!p.anuladoEl && conPdf ? (
+                  {!p.anuladoEl && conPdf && p.puedeAbrirComprobante !== false ? (
                     <a
                       className="egr-link"
                       href={`/api/backend/egresos/pagos/${p.id}/orden-pago.pdf`}
@@ -2507,7 +2507,7 @@ function DetalleEgreso({
                       Orden de pago
                     </a>
                   ) : null}
-                  {!p.anuladoEl && puedeAnular ? (
+                  {!p.anuladoEl && puedeAnular && p.puedeAbrirComprobante !== false ? (
                     <EgresoButton
                       type="button"
                       className="egr-link"

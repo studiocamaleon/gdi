@@ -28,7 +28,7 @@ export default async function NuevoComprobantePage({
   const { origen: origenId } = await searchParams;
   if (
     !(await tienePermiso(
-      origenId ? "administracion.anular" : "administracion.gestionar",
+      origenId ? "administracion.anular" : "administracion.comprobantes.gestionar",
     ))
   )
     return <SinPermiso modulo="Emisión de comprobantes" />;
@@ -59,7 +59,7 @@ export default async function NuevoComprobantePage({
 
   {
     const [cs, os] = await Promise.all([
-      getClientes({ limit: 200 }),
+      getClientes({ limit: 200 }, true),
       getOrdenesTrabajo({ limit: 50 }),
     ]);
     clientes = cs.map((c) => ({

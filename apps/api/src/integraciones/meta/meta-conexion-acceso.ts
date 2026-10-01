@@ -55,10 +55,10 @@ async function exigirAcceso(
     !ipPermitida(ip, miembro.ipsPermitidas) ||
     !(inbox
       ? puedeAtenderInbox(miembro)
-      : miembro.rol === RolSistema.ADMINISTRADOR &&
+      : (miembro.rol === RolSistema.ADMINISTRADOR || miembro.rolDelTenant?.permisos.includes("acceso.por_vista")) &&
         expandir(
           miembro.rolDelTenant?.permisos ?? permisosDeRolBase(miembro.rol),
-        ).has('configuracion.gestionar'))
+        ).has('configuracion.integraciones.gestionar'))
   )
     throw new ForbiddenException();
   return expandir(
@@ -75,8 +75,8 @@ export function puedeAtenderInbox(miembro: {
   );
   return (
     permisos.has('inbox.atender') ||
-    (miembro.rol === RolSistema.ADMINISTRADOR &&
-      permisos.has('configuracion.gestionar'))
+    ((miembro.rol === RolSistema.ADMINISTRADOR || permisos.has("acceso.por_vista")) &&
+      permisos.has('configuracion.integraciones.gestionar'))
   );
 }
 export const exigirAccesoConexionMeta = (

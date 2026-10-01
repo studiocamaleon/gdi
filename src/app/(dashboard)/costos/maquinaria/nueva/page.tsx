@@ -32,7 +32,7 @@ async function NuevaMaquinariaContent() {
   const [maquinasPage, plantas, puedeGestionar] = await Promise.all([
     getMaquinasPage({ limit: 50 }),
     getPlantas(),
-    puedeConfigurar("maquinaria", "costos.gestionar"),
+    puedeConfigurar("maquinaria", "costos.maquinaria.gestionar"),
   ]);
 
   return (

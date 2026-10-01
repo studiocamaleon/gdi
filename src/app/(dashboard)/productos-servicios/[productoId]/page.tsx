@@ -106,7 +106,7 @@ async function ProductoDetalleContent({
         : Promise.resolve(undefined),
       getRecetasProducto(productoId),
       getEstadoPublicacionProducto(productoId),
-      puedeConfigurar("productos", "costos.gestionar"),
+      puedeConfigurar("productos", "costos.catalogo.gestionar"),
     ]);
 
     return (

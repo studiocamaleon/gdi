@@ -31,7 +31,7 @@ export function HistorialImpresionDialog({
   ordenId: string;
   onClose: () => void;
 }) {
-  const gestionar = usePuede("comercial.gestionar");
+  const gestionar = usePuede("comercial.ordenes.gestionar");
   const ejecutar = usePuede("produccion.ejecutar");
   const [vista, setVista] = useState<HistorialImpresion | null>(null);
   const [desde, setDesde] = useState(0);

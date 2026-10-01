@@ -20,12 +20,12 @@ import { ReservasMaterialService } from './reservas-material.service';
 export class ReservasMaterialController {
   constructor(private readonly reservas: ReservasMaterialService) {}
   @Get('inventario/reservas/configuracion')
-  @Permiso('inventario.ver')
+  @Permiso("inventario.stock.ver")
   politica(@CurrentSession() auth: CurrentAuth) {
     return this.reservas.politica(auth.tenantId);
   }
   @Put('inventario/reservas/configuracion')
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.stock.gestionar")
   configurar(
     @CurrentSession() auth: CurrentAuth,
     @Body() data: PoliticaReservasDto,
@@ -33,7 +33,7 @@ export class ReservasMaterialController {
     return this.reservas.guardarPolitica(auth.tenantId, data);
   }
   @Get('inventario/reservas/:varianteId')
-  @Permiso('inventario.ver')
+  @Permiso("inventario.stock.ver")
   listar(
     @CurrentSession() auth: CurrentAuth,
     @Param('varianteId', ParseUUIDPipe) varianteId: string,
@@ -43,7 +43,7 @@ export class ReservasMaterialController {
     return this.reservas.listarReservas(auth.tenantId, varianteId, ubicacionId);
   }
   @Post('ordenes-trabajo/:id/materiales/operaciones')
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.stock.gestionar")
   ejecutar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,

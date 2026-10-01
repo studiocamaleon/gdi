@@ -25,7 +25,7 @@ export default async function ConfigPasosFocusedPage({
     typeof query.nodo === "string" && query.nodo.trim()
       ? query.nodo
       : undefined;
-  if (!(await puedeConfigurar(["productos", "procesos"], "costos.gestionar"))) {
+  if (!(await puedeConfigurar(["productos", "procesos"], "costos.catalogo.gestionar"))) {
     redirect(
       `/productos-servicios/${productoId}?tab=produccion&vista=operaciones&rutaAltId=${rutaAltId}`,
     );

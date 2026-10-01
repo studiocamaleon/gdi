@@ -84,6 +84,15 @@ jobs:
             src/motor-universal/__tests__/nesting-compuesto-shadow.spec.ts \
             src/auth/__tests__/modulos-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
+            src/auth/__tests__/permisos-vistas.spec.ts \
+            src/usuarios/__tests__/roles.spec.ts \
+            src/administracion/__tests__/metodos-cajas.spec.ts \
+            src/administracion/__tests__/cajas-consultas-compartidas.spec.ts \
+            src/administracion/__tests__/anticipos-cuenta-corriente.spec.ts \
+            src/administracion/__tests__/tesoreria-operativa.spec.ts \
+            src/archivos/__tests__/cajas-recibos.spec.ts \
+            src/productos-servicios/__tests__/producto-cotizacion-publico.spec.ts \
+            src/centro-copiado/__tests__/inicializacion-requisitos.spec.ts \
             src/administracion/__tests__/medios-pago-retenciones.integration.spec.ts \
             src/auth/__tests__/comercial-relaciones-http.integration.spec.ts \
             src/auth/__tests__/registros-compras-aislamiento-http.integration.spec.ts \
@@ -108,6 +117,11 @@ jobs:
             src/motor-universal/geometria-vectorial/dxf-seguro.spec.ts \
             src/mcp/__tests__/armar-jobcontext.spec.ts \
             src/panel-general/__tests__/panel-actividad-entradas.spec.ts \
+            src/panel-general/__tests__/panel-admin.spec.ts \
+            src/panel-general/__tests__/panel-general.spec.ts \
+            src/gastos-fijos/__tests__/programacion.integration.spec.ts \
+            src/integraciones/meta/meta-inbox.spec.ts \
+            src/integraciones/meta/meta-inbox-general.integration.spec.ts \
             src/egresos/__tests__/egresos-entradas.spec.ts \
             src/archivos/storage/local-confinamiento.spec.ts \
             src/archivos/storage/local.driver.spec.ts \

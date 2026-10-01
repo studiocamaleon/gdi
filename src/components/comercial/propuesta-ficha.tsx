@@ -4887,6 +4887,8 @@ function PropuestaFichaContenido({
       .catch(() => {});
   }, [ordenProp?.id]);
   const conCotizacion = useCapacidad("cotizacion");
+  const permisoOrdenes = usePuede("comercial.ordenes.gestionar");
+  const permisoPresupuestos = usePuede("comercial.presupuestos.gestionar");
   const conOrdenes = useCapacidad("ordenes");
   const conPresupuestos = useCapacidad("presupuestos");
   const conCobros = useCapacidad("cobros");
@@ -4895,7 +4897,7 @@ function PropuestaFichaContenido({
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
   // Puerta de edición de los datos de la ficha. La entrega es una operación
   // independiente, con sus propios permisos y validación de estado.
-  const puedeEditarOrden = !orden || (editandoOrden && !guardandoEdicion && orden.estado !== "cancelada");
+  const puedeEditarOrden = orden ? permisoOrdenes && editandoOrden && !guardandoEdicion && orden.estado !== "cancelada" : permisoOrdenes || permisoPresupuestos;
   const permisoEdicionRef = React.useRef(puedeEditarOrden);
   React.useLayoutEffect(() => {
     permisoEdicionRef.current = puedeEditarOrden;
@@ -4985,7 +4987,7 @@ function PropuestaFichaContenido({
     if (!recienConvertida) return;
     window.history.replaceState(null, "", window.location.pathname);
   }, [recienConvertida]);
-  const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
+  const [tipo, setTipo] = React.useState<TipoPropuesta>(permisoOrdenes ? "orden_trabajo" : "presupuesto");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>(
     ordenProp ? "productos" : "datos",
@@ -5005,8 +5007,8 @@ function PropuestaFichaContenido({
   const impresionDocumentos = useImpresionDocumentos();
   const [confirmarEmisionDocumentos, setConfirmarEmisionDocumentos] = React.useState<"nueva" | "borrador" | null>(null);
   const imprimirAlEmitirRef = React.useRef(false);
-  const puedeImprimirEtiqueta = usePuede("produccion.ver");
-  const puedeVerMaterialesComercial = usePuede("comercial.ver");
+  const puedeImprimirEtiqueta = usePuede("produccion.tablero.ver");
+  const puedeVerMaterialesComercial = usePuede("comercial.ordenes.ver");
   const puedeEjecutarProduccion = usePuede("produccion.ejecutar");
   const puedeVerMateriales =
     puedeImprimirEtiqueta || puedeVerMaterialesComercial;
@@ -5024,7 +5026,7 @@ function PropuestaFichaContenido({
   // permiso que rige anular comprobantes.
   const verMargenes = usePuede("finanzas.ver_margenes");
   const puedeAnular = usePuede("administracion.anular");
-  const puedeEntregar = usePuede("produccion.gestionar");
+  const puedeEntregar = usePuede("produccion.tablero.gestionar");
   const puedeAbrirEntrega = orden?.estado === "finalizada" && puedeEntregar;
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
   const [cancelando, setCancelando] = React.useState(false);
@@ -7599,7 +7601,7 @@ function PropuestaFichaContenido({
                   )}
                 </div>
                 <div className={workspaceStyles.identity}>
-                  {!modoOrden ? (
+                  {!modoOrden && puedeEditarOrden ? (
                     <OrdenSaveActions
                       operacionPendiente={cuponValidando || descuentoAplicando}
                       tipo={ordenTipo}
@@ -7619,7 +7621,7 @@ function PropuestaFichaContenido({
                           : void guardarBorrador()
                       }
                     />
-                  ) : orden && orden.estado !== "cancelada" ? (
+                  ) : orden && permisoOrdenes && orden.estado !== "cancelada" ? (
                     // Acciones de la orden en la cabecera fija; facturación en Comprobantes.
                     <div className={workspaceStyles.quickActions}>
                       {editandoOrden ? (
@@ -7827,14 +7829,14 @@ function PropuestaFichaContenido({
 
                 <OrdenDatosSections
                   tipo={
-                    !modoOrden ? (
+                    !modoOrden && permisoOrdenes && permisoPresupuestos ? (
                       <OrdenSegmented
                         value={ordenTipo}
                         onChange={(value) => setTipo(fromOrdenTipo(value))}
                       />
                     ) : (
                       <span className="text-sm font-medium">
-                        Orden de trabajo
+                        {!modoOrden && !permisoOrdenes ? "Presupuesto" : "Orden de trabajo"}
                       </span>
                     )
                   }

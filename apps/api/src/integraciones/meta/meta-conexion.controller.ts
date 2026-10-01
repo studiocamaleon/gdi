@@ -42,7 +42,7 @@ export class VerificarMetaDto extends IntentoMetaDto {
 
 @Controller('integraciones/meta/conexion')
 @Roles(RolSistema.ADMINISTRADOR)
-@Permiso('configuracion.gestionar')
+@Permiso("configuracion.integraciones.gestionar")
 @ProhibidoImpersonando()
 export class MetaConexionController {
   constructor(private readonly service: MetaConexionService) {}

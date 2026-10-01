@@ -47,7 +47,7 @@ interface RequestWithAuth extends Request {
 }
 
 @OcultaMargenes()
-@Permiso('comercial.ver')
+@Permiso("comercial.ordenes.ver", "comercial.presupuestos.ver")
 @Controller('motor-universal')
 export class MotorUniversalController {
   constructor(
@@ -387,7 +387,7 @@ export class MotorUniversalController {
    * Si se pasa cotizacionId, agrega item a esa cotización; sino crea una nueva.
    */
   @Post('cotizar-y-guardar')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar", "comercial.presupuestos.gestionar")
   async cotizarYGuardar(@Body() dto: CotizarDto, @Req() req: RequestWithAuth) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) {
@@ -413,7 +413,7 @@ export class MotorUniversalController {
   }
 
   @Patch('cotizacion-items/:id/recotizar')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar", "comercial.presupuestos.gestionar")
   async recotizarItem(
     @Param('id') id: string,
     @Body() dto: RecotizarItemDto,

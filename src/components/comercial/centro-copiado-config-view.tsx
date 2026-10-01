@@ -1,4 +1,5 @@
 "use client";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import {
   ConfiguracionPage,
@@ -131,6 +132,7 @@ function dinero(valor: number) {
 }
 
 export function CentroCopiadoConfigView() {
+  const puedeGestionar = usePuede("configuracion.copiado.gestionar");
   const conTerminaciones = useCapacidad("terminaciones_copiado");
   const [cfg, setCfg] = React.useState<CentroCopiadoConfig | null>(null);
   const [salud, setSalud] = React.useState<SaludCentroCopiado | null>(null);
@@ -337,22 +339,28 @@ export function CentroCopiadoConfigView() {
   }, [hayCambios]);
 
   const inicializar = async () => {
+    if (!puedeGestionar) return;
     setInicializando(true);
     try {
       cargarFormulario(await inicializarCentroCopiado());
       await cargarRemoto();
       toast.success("Centro de Copiado inicializado.");
     } catch (error) {
-      toast.error(
+      const mensaje =
         error instanceof Error
           ? error.message
-          : "No se pudo inicializar el módulo.",
-      );
+          : "No se pudo inicializar el módulo.";
+      setErrorCarga({
+        mensaje,
+        status: error instanceof ApiError ? error.status : 409,
+      });
+      toast.error(mensaje);
     } finally {
       setInicializando(false);
     }
   };
   const reparar = async () => {
+    if (!puedeGestionar) return;
     setReparando(true);
     try {
       setSalud(await repararCentroCopiado());
@@ -426,6 +434,7 @@ export function CentroCopiadoConfigView() {
     });
 
   const guardar = async () => {
+    if (!puedeGestionar) return;
     if (!cfg) return;
     if (!papeles.size || !tamanos.size) {
       toast.error("Elegí al menos un papel y un tamaño para ofrecer.");
@@ -617,8 +626,33 @@ export function CentroCopiadoConfigView() {
                     ? "El Centro de Copiado necesita configuración"
                     : "No se pudo cargar el Centro de Copiado"}
               </AlertTitle>
-              <AlertDescription>{errorCarga.mensaje}</AlertDescription>
-              {!porPlan ? (
+              <AlertDescription>
+                <p>{errorCarga.mensaje}</p>
+                {requiereInicio && (
+                  <div className="flex flex-col gap-3 pt-2">
+                    <p>
+                      Para empezar necesitás una impresora láser lista y activa,
+                      y un papel en hojas con una variante activa. Después podés
+                      inicializar el módulo y configurar precios y terminaciones.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <Link
+                        className="underline underline-offset-4"
+                        href="/costos/maquinaria"
+                      >
+                        Revisar maquinaria
+                      </Link>
+                      <Link
+                        className="underline underline-offset-4"
+                        href="/inventario/materias-primas"
+                      >
+                        Revisar materiales
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </AlertDescription>
+              {!porPlan && (!requiereInicio || puedeGestionar) ? (
                 <AlertAction>
                   <Button
                     size="sm"
@@ -673,11 +707,11 @@ export function CentroCopiadoConfigView() {
                 Descartar
               </Button>
             )}
-            <GuardarConfiguracion
+            {puedeGestionar && <GuardarConfiguracion
               cambios={cantidadCambios}
               guardando={guardando}
               onGuardar={() => void guardar()}
-            />
+            />}
           </>
         }
       />
@@ -740,7 +774,7 @@ export function CentroCopiadoConfigView() {
                   Abrir costos de materiales
                 </Button>
               ) : null}
-              {salud.puedeReparar ? (
+              {puedeGestionar && salud.puedeReparar ? (
                 <Button
                   variant="outline"
                   loading={reparando}

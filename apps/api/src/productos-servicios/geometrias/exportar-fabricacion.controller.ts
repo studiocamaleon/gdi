@@ -65,7 +65,7 @@ export class ExportarFabricacionDto {
 }
 
 @Controller('productos-servicios/geometrias')
-@Permiso('comercial.ver', 'produccion.ver', 'costos.ver')
+@Permiso("comercial.ordenes.ver", "produccion.tablero.ver", "costos.catalogo.ver")
 export class ExportarFabricacionController {
   constructor(
     private readonly prisma: PrismaService,

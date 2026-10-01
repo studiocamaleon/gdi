@@ -26,7 +26,7 @@ import {
   RecibirCompraDto,
 } from './dto/compras.dto';
 @Controller('compras')
-@Permiso('inventario.ver')
+@Permiso("inventario.compras.ver")
 export class ComprasController {
   constructor(private readonly service: ComprasService) {}
   private page(value: number) {
@@ -76,19 +76,19 @@ export class ComprasController {
   }
   @RequiereCapacidad('compras')
   @Put('ofertas')
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.compras.gestionar")
   oferta(@CurrentSession() a: CurrentAuth, @Body() d: OfertaCompraDto) {
     return this.service.guardarOferta(a, d);
   }
   @RequiereCapacidad('compras')
   @Post()
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.compras.gestionar")
   crear(@CurrentSession() a: CurrentAuth, @Body() d: CrearCompraDto) {
     return this.service.crear(a, d);
   }
   @RequiereCapacidad('compras')
   @Post(':id/acciones')
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.compras.gestionar")
   actuar(
     @CurrentSession() a: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -98,7 +98,7 @@ export class ComprasController {
   }
   @RequiereCapacidades('compras', 'recepciones')
   @Post(':id/recepciones')
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.compras.gestionar")
   recibir(
     @CurrentSession() a: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,

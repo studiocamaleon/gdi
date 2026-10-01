@@ -1,3 +1,4 @@
+import { expandirVistas } from "@/lib/permisos-vistas";
 import { redirect } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { getCurrentUserCached } from "@/lib/auth-server";
@@ -23,14 +24,15 @@ export default async function InboxPage() {
   );
   if (!current) return <InboxRecuperacion />;
   const user = current.currentUser;
+  const permisos = expandirVistas(user.tenantActual?.permisos ?? []);
   if (user.debeCambiarPassword) redirect("/cambiar-clave");
   if (
     user.impersonacion ||
     !user.tenantActual ||
     !(
       user.tenantActual.permisos?.includes("inbox.atender") ||
-      (user.tenantActual.rol === "administrador" &&
-        user.tenantActual.permisos?.includes("configuracion.gestionar"))
+      ((user.tenantActual.rol === "administrador" || permisos.has("acceso.por_vista")) &&
+        permisos.has("configuracion.integraciones.gestionar"))
     )
   )
     return <SinPermiso modulo="Conversaciones" />;
@@ -39,8 +41,8 @@ export default async function InboxPage() {
       <InboxView
         identidad={{
           puedeConfigurarConexion:
-            user.tenantActual.rol === "administrador" &&
-            user.tenantActual.permisos?.includes("configuracion.gestionar"),
+            (user.tenantActual.rol === "administrador" || permisos.has("acceso.por_vista")) &&
+            permisos.has("configuracion.integraciones.gestionar"),
           empresaId: user.tenantActual.id,
           usuarioId: user.id,
           empresa: user.tenantActual.nombre,

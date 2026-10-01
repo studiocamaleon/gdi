@@ -1,11 +1,12 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { expandir } from '../../auth/permisos';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { PanelActividadService } from '../panel-actividad.service';
 import { PanelAdminService } from '../panel-admin.service';
 
-const auth = (permisos = ['panel.ver', 'comercial.ver', 'produccion.ver']) => ({
-  tenantId: '11111111-1111-4111-8111-111111111111', role: 'ADMINISTRADOR', permisos: new Set(permisos),
+const auth = (permisos = ['panel.ver', 'comercial.ver', 'produccion.ver', 'reportes.resumen.ver']) => ({
+  tenantId: '11111111-1111-4111-8111-111111111111', role: 'ADMINISTRADOR', permisos: expandir(permisos),
 }) as CurrentAuth;
 
 describe('Actividad del administrador', () => {
@@ -28,14 +29,14 @@ describe('Actividad del administrador', () => {
   it('limita las fuentes a los permisos y aplica tenant explícito en el SQL', async () => {
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) };
     const service = new PanelActividadService(prisma as never);
-    await service.listar(auth(['panel.ver', 'produccion.ver']));
+    await service.listar(auth(['panel.ver', 'produccion.ver', 'reportes.resumen.ver']));
     const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
     expect(sql.text).not.toContain('ClienteEvento');
     expect(sql.text).not.toContain("LIKE 'documento.%'");
     expect(sql.values).toContain(auth().tenantId);
     expect(sql.values).not.toContain('modificacion');
     expect(sql.values).toContain('paso');
-    await service.listar(auth(['panel.ver']));
+    await service.listar(auth(['panel.ver', 'reportes.resumen.ver']));
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
@@ -69,7 +70,7 @@ describe('Resumen del administrador', () => {
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'ot-1', numero: 'OT-1', requisitos: 2, total: 1 }]),
     };
     const actividad = { listar: jest.fn().mockResolvedValue({ items: [], siguienteCursor: null }) };
-    const resultado = await new PanelAdminService(prisma as never, actividad as never).obtener(auth(), '2026-09-13', 'America/Argentina/Buenos_Aires');
+    const resultado = await new PanelAdminService(prisma as never, actividad as never).obtener(auth(['acceso.por_vista', 'panel.ver', 'reportes.resumen.ver', 'produccion.tablero.ver']), '2026-09-13', 'America/Argentina/Buenos_Aires');
     expect(resultado.pasosCompletadosHoy).toBe(8);
     expect(resultado.documentacionPendiente.total).toBe(1);
     expect(resultado.documentacionPendiente.ordenes[0].requisitos).toBe(2);

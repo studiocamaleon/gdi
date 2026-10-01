@@ -369,7 +369,7 @@ export function AcreditacionesView({
   const router = useRouter();
   const scope = useLegacyDesignScope();
   const designScope = useDesignScope();
-  const permisoGestionar = usePuede("administracion.gestionar");
+  const permisoGestionar = usePuede("administracion.cobrar.gestionar");
   const permisoAnular = usePuede("administracion.anular");
   const conValores = useCapacidad("valores");
   const conTesoreria = useCapacidad("tesoreria");
