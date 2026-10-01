@@ -42,6 +42,9 @@ const kpis: TesoreriaKpis = {
 };
 const cobro: CobroPendienteAcreditacion = {
   id: "cobro",
+  comisionMonto: 8.36,
+  comisionIvaMonto: 1.75,
+  retenciones: [],
   fecha: "2026-09-16",
   fechaAcreditacionEstimada: null,
   metodoNombre: "Tarjeta",
@@ -234,29 +237,76 @@ describe("Tesorería y valores · presentación y operaciones disponibles", () =
 });
 
 describe("Historial financiero sin sus módulos en el plan", () => {
-  const sinFunciones = (children: ReactNode, funciones: Record<string, boolean> = {}) => render(
-    <CapacidadesProvider capacidades={{ funciones }}>{children}</CapacidadesProvider>,
-  );
+  const sinFunciones = (
+    children: ReactNode,
+    funciones: Record<string, boolean> = {},
+  ) =>
+    render(
+      <CapacidadesProvider capacidades={{ funciones }}>
+        {children}
+      </CapacidadesProvider>,
+    );
   it("conserva cuentas y exportación sin ofrecer gestión de tesorería", () => {
-    const html = sinFunciones(<TesoreriaView initialCuentas={[cuenta]} initialKpis={kpis} monedaLocal="ARS" />);
+    const html = sinFunciones(
+      <TesoreriaView
+        initialCuentas={[cuenta]}
+        initialKpis={kpis}
+        monedaLocal="ARS"
+      />,
+    );
     expect(html).toContain("Banco ARS");
     expect(html).toContain("Historial de tesorería");
     expect(buttons(html)).toContain("CSV");
-    expect(buttons(html)).not.toMatch(/Nueva cuenta|Transferir|Desactivar|Ajuste|Arqueo|Editar/);
+    expect(buttons(html)).not.toMatch(
+      /Nueva cuenta|Transferir|Desactivar|Ajuste|Arqueo|Editar/,
+    );
   });
   it("muestra también valores cerrados sin ofrecer sus operaciones", () => {
-    const html = sinFunciones(<AcreditacionesView initialValores={[{ ...valor, estado: "acreditado" }]} initialFilas={[]} cuentas={[cuenta]} />);
+    const html = sinFunciones(
+      <AcreditacionesView
+        initialValores={[{ ...valor, estado: "acreditado" }]}
+        initialFilas={[]}
+        cuentas={[cuenta]}
+      />,
+    );
     expect(html).toContain("Cliente cheque");
     expect(html).toContain("Historial de valores");
-    expect(buttons(html)).not.toMatch(/Depositar|Endosar|Rechazar|Acreditar|Deshacer|Confirmar débito/);
+    expect(buttons(html)).not.toMatch(
+      /Depositar|Endosar|Rechazar|Acreditar|Deshacer|Confirmar débito/,
+    );
   });
   it("sin CxP permite depositar valores contratados pero no endosar ni gestionar cheques propios", () => {
-    const html = sinFunciones(<AcreditacionesView initialValores={[valor, { ...valor, id: "propio", origen: "propio", estado: "emitido", pagoId: "pago1" }]} initialFilas={[]} cuentas={[cuenta]} />, { valores: true, tesoreria: true });
+    const html = sinFunciones(
+      <AcreditacionesView
+        initialValores={[
+          valor,
+          {
+            ...valor,
+            id: "propio",
+            origen: "propio",
+            estado: "emitido",
+            pagoId: "pago1",
+          },
+        ]}
+        initialFilas={[]}
+        cuentas={[cuenta]}
+      />,
+      { valores: true, tesoreria: true },
+    );
     expect(buttons(html)).toContain("Depositar");
-    expect(buttons(html)).not.toMatch(/Endosar|Confirmar débito|Informar rechazo|Anular emisión/);
+    expect(buttons(html)).not.toMatch(
+      /Endosar|Confirmar débito|Informar rechazo|Anular emisión/,
+    );
   });
   it("conserva el cierre de cobros electrónicos aunque no se contrate Tesorería", () => {
-    const html = sinFunciones(<AcreditacionesView initialValores={[]} initialFilas={[cobro]} cuentas={[cuenta]} />, { identidad: true, cobros: true });
+    const html = sinFunciones(
+      <AcreditacionesView
+        initialValores={[]}
+        initialFilas={[cobro]}
+        cuentas={[cuenta]}
+      />,
+      { identidad: true, cobros: true },
+    );
     expect(buttons(html)).toContain("Acreditar");
   });
 });

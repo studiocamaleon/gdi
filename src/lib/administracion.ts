@@ -1,3 +1,14 @@
+import {
+  calcularRetenciones,
+  cifrasCobro,
+  redondearDinero,
+  type ReglaRetencion,
+  type CalendarioAcreditacion,
+} from "../../apps/api/src/common/medios-pago";
+export type {
+  ReglaRetencion,
+  CalendarioAcreditacion,
+} from "../../apps/api/src/common/medios-pago";
 /**
  * Administración (pagos / tesorería) — contrato de datos.
  * Espejo del módulo API `administracion`.
@@ -580,6 +591,9 @@ export type MetodoPago = {
   comisionPct: number;
   ivaComisionPct: number;
   plazoAcreditacionDias: number;
+  calendarioAcreditacion?: CalendarioAcreditacion;
+  feriadosAdicionales?: string[];
+  retencionesConfig?: ReglaRetencion[];
   sufreRetencion: boolean;
   cuentaDestinoId: string | null;
   cuentaDestinoNombre: string | null;
@@ -600,23 +614,43 @@ export type CuentaFondosResumen = {
  * que dependen de cada cobro).
  */
 export function simularMetodo(
-  metodo: Pick<MetodoPago, "comisionPct" | "ivaComisionPct">,
+  metodo: Pick<MetodoPago, "comisionPct" | "ivaComisionPct"> &
+    Partial<Pick<MetodoPago, "sufreRetencion" | "retencionesConfig">>,
   base: number,
+  fecha = new Date().toISOString().slice(0, 10),
 ) {
-  const comision = (base * metodo.comisionPct) / 100;
-  const ivaComision = (comision * metodo.ivaComisionPct) / 100;
+  const cifras = cifrasCobro(
+    base,
+    metodo.comisionPct,
+    metodo.ivaComisionPct,
+    0,
+  );
+  const retenciones = calcularRetenciones(
+    metodo.sufreRetencion ? (metodo.retencionesConfig ?? []) : [],
+    base,
+    cifras.netoAcreditado,
+    fecha,
+  );
+  const retencionesTotal = redondearDinero(
+    retenciones.reduce((s, r) => s + r.monto, 0),
+  );
   return {
     base,
-    comision,
-    ivaComision,
-    neto: base - comision - ivaComision,
+    comision: cifras.comisionMonto,
+    ivaComision: cifras.comisionIvaMonto,
+    neto: cifras.netoAcreditado,
+    retenciones,
+    retencionesTotal,
+    disponible: redondearDinero(cifras.netoAcreditado - retencionesTotal),
   };
 }
 
-export function plazoAcreditacionLabel(dias: number): string {
+export function plazoAcreditacionLabel(
+  dias: number,
+  calendario: CalendarioAcreditacion = "habiles_bancarios",
+): string {
   if (dias === 0) return "Inmediato";
-  if (dias === 1) return "~1 día hábil";
-  return `~${dias} días`;
+  return `~${dias} ${dias === 1 ? "día" : "días"} ${calendario === "corridos" ? (dias === 1 ? "corrido" : "corridos") : dias === 1 ? "hábil bancario" : "hábiles bancarios"}`;
 }
 
 // ── Tesorería ──────────────────────────────────────────────────────────
@@ -649,6 +683,9 @@ export type TesoreriaKpis = {
 
 /** Una fila del detalle de "A acreditar": qué cobro es y cuándo entra. */
 export type CobroPendienteAcreditacion = {
+  comisionMonto: number;
+  comisionIvaMonto: number;
+  retenciones: RetencionLinea[];
   id: string;
   fecha: string;
   fechaAcreditacionEstimada: string | null;
@@ -755,6 +792,7 @@ export type ValorTesoreria = {
 export const RETENCION_REGIMENES = [
   "SIRCREB",
   "SIRTAC",
+  "SIRCUPA",
   "IIBB_CONVENIO",
   "SICORE_GANANCIAS",
   "IVA_RG2854",
@@ -764,6 +802,7 @@ export const RETENCION_REGIMENES = [
 export const RETENCION_REGIMEN_LABELS: Record<string, string> = {
   SIRCREB: "SIRCREB",
   SIRTAC: "SIRTAC",
+  SIRCUPA: "SIRCUPA",
   IIBB_CONVENIO: "IIBB Convenio",
   SICORE_GANANCIAS: "SICORE (Ganancias)",
   IVA_RG2854: "IVA RG 2854",
@@ -772,6 +811,9 @@ export const RETENCION_REGIMEN_LABELS: Record<string, string> = {
 };
 
 export type RetencionLinea = {
+  agente?: string;
+  reglaId?: string | null;
+  estado?: string;
   regimen: string;
   jurisdiccion: string | null;
   base: number;
@@ -805,6 +847,12 @@ export type Cobro = {
   disponibleReal: number;
   moneda: string;
   fechaAcreditacionEstimada: string | null;
+  fechaAcreditacionReal?: string | null;
+  referenciaAcreditacion?: string | null;
+  liquidacionEstimada?: {
+    disponibleReal: number;
+    retencionesTotal: number;
+  } | null;
   estadoAcreditacion: "pendiente" | "acreditado" | "rechazado" | "anulado";
   anuladoEl: string | null;
   anuladoPorNombre: string | null;

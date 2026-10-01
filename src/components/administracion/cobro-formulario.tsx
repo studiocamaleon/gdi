@@ -1,4 +1,11 @@
 "use client";
+import {
+  calcularRetenciones,
+  cifrasCobro,
+  estimarAcreditacion,
+  redondearDinero,
+} from "../../../apps/api/src/common/medios-pago";
+import { AGENTES_RETENCION } from "./retenciones-config-editor";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
@@ -45,6 +52,8 @@ const BANCOS = [
 ];
 
 type RetLinea = {
+  agente: string;
+  reglaId?: string;
   regimen: string;
   jurisdiccion: string;
   base: string;
@@ -73,20 +82,13 @@ export type CobroDraft = {
   acreditacionLabel: string;
 };
 
-function hoyIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function sumarDias(iso: string, dias: number) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const fecha = new Date(y, (m ?? 1) - 1, d ?? 1);
-  let restantes = Math.max(0, Math.trunc(dias));
-  while (restantes > 0) {
-    fecha.setDate(fecha.getDate() + 1);
-    if (fecha.getDay() !== 0 && fecha.getDay() !== 6) restantes -= 1;
-  }
-  return `${String(fecha.getDate()).padStart(2, "0")}/${String(fecha.getMonth() + 1).padStart(2, "0")}/${fecha.getFullYear()}`;
+function hoyIso(zonaHoraria: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: zonaHoraria,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 /**
@@ -116,8 +118,8 @@ export function CobroFormulario({
   onCancel?: () => void;
   cancelHref?: string;
 }) {
-  const { moneda } = useConfigRegional();
-  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
+  const { moneda, zonaHoraria, paisCodigo } = useConfigRegional();
+  const fmt = (n: number) => formatearMoneda(n, moneda);
   const conValores = useCapacidad("valores");
   const metodosActivos = metodos.filter(
     (m) => m.activo && (conValores || m.tipo !== "cheque_echeq"),
@@ -143,11 +145,11 @@ export function CobroFormulario({
   // "N° de operación": va impreso en el recibo, que es donde el cliente lo
   // reconoce (el ID de la transferencia, el cupón de la tarjeta, el ticket).
   const [referencia, setReferencia] = React.useState("");
-  const [fecha, setFecha] = React.useState(hoyIso());
+  const [fecha, setFecha] = React.useState(() => hoyIso(zonaHoraria));
   const [comEdit, setComEdit] = React.useState<number | null>(null);
   const [cuentaId, setCuentaId] = React.useState<string | null>(null);
   const [retOpen, setRetOpen] = React.useState(false);
-  const [rets, setRets] = React.useState<RetLinea[]>([]);
+  const [retsManual, setRetsManual] = React.useState<RetLinea[] | null>(null);
   const [chq, setChq] = React.useState({
     formato: "fisico" as "fisico" | "echeq",
     modalidad: "comun" as "comun" | "diferido",
@@ -160,14 +162,33 @@ export function CobroFormulario({
 
   const bruto = montoNum ?? 0;
   const comPct = comEdit ?? metodo?.comisionPct ?? 0;
-  const comision = (bruto * comPct) / 100;
-  const ivaCom = (comision * (metodo?.ivaComisionPct ?? 0)) / 100;
-  const neto = bruto - comision - ivaCom;
+  const cifras = cifrasCobro(bruto, comPct, metodo?.ivaComisionPct ?? 0, 0);
+  const comision = cifras.comisionMonto;
+  const ivaCom = cifras.comisionIvaMonto;
+  const neto = cifras.netoAcreditado;
+  const sugeridas: RetLinea[] = calcularRetenciones(
+    metodo?.sufreRetencion ? (metodo.retencionesConfig ?? []) : [],
+    bruto,
+    neto,
+    fecha,
+  ).map((r) => ({
+    regimen: r.regimen,
+    jurisdiccion: r.jurisdiccion ?? "",
+    agente: r.agente ?? "procesador",
+    reglaId: r.reglaId ?? undefined,
+    base: numeroMoneda(r.base, moneda),
+    alicuota: String(r.alicuota),
+    monto: numeroMoneda(r.monto, moneda),
+    comprobante: "",
+  }));
+  const rets = retsManual ?? sugeridas;
+  const setRets = (update: (prev: RetLinea[]) => RetLinea[]) =>
+    setRetsManual((prev) => update(prev ?? sugeridas));
   const totalRet = rets.reduce(
     (s, r) => s + (parsearMonto(r.monto, moneda) ?? 0),
     0,
   );
-  const disponible = neto - totalRet;
+  const disponible = redondearDinero(neto - totalRet);
   const cuentaUsadaId = esCheque
     ? null
     : (cuentaId ??
@@ -175,15 +196,27 @@ export function CobroFormulario({
       cuentasCompatibles[0]?.id ??
       null);
   const cuentaUsada = cuentasCompatibles.find((c) => c.id === cuentaUsadaId);
+  const estimacion =
+    fecha && !esCheque
+      ? estimarAcreditacion(
+          fecha,
+          metodo?.plazoAcreditacionDias ?? 0,
+          metodo?.calendarioAcreditacion,
+          paisCodigo,
+          metodo?.feriadosAdicionales?.filter(Boolean),
+        )
+      : null;
   const fechaAcreditacion = esCheque
     ? chq.modalidad === "diferido"
       ? chq.pago || "al acreditar el valor"
       : "al acreditar el valor"
-    : sumarDias(fecha, metodo?.plazoAcreditacionDias ?? 0);
+    : (estimacion?.fecha.split("-").reverse().join("/") ??
+      "Elegí la fecha del cobro");
 
   const seleccionarMetodo = (id: string) => {
     setMetodoId(id);
     setComEdit(null);
+    setRetsManual(null);
     setCuentaId(null);
   };
 
@@ -192,6 +225,7 @@ export function CobroFormulario({
     setRets((prev) => [
       ...prev,
       {
+        agente: "cliente",
         regimen: RETENCION_REGIMENES[0],
         jurisdiccion: JURISDICCIONES[0],
         base: monto,
@@ -211,8 +245,7 @@ export function CobroFormulario({
           const a = Number(nr.alicuota) || 0;
           // El monto calculado se escribe ya formateado: es el texto de un
           // MoneyInput y tiene que re-parsear con los separadores de la moneda.
-          if (b && a)
-            nr.monto = numeroMoneda(Math.round((b * a) / 100), moneda);
+          nr.monto = numeroMoneda(redondearDinero((b * a) / 100), moneda);
         }
         return nr;
       }),
@@ -221,7 +254,8 @@ export function CobroFormulario({
     setRets((prev) => prev.filter((_, j) => j !== i));
 
   const submit = () => {
-    if (!metodo || bruto <= 0 || (!esCheque && !cuentaUsadaId)) return;
+    if (!metodo || !fecha || bruto <= 0 || (!esCheque && !cuentaUsadaId))
+      return;
     if (disponible <= 0) {
       toast.error(
         "Las comisiones y retenciones no pueden consumir todo el cobro.",
@@ -257,6 +291,8 @@ export function CobroFormulario({
         retenciones: rets
           .filter((r) => (parsearMonto(r.monto, moneda) ?? 0) > 0)
           .map((r) => ({
+            agente: r.agente,
+            reglaId: r.reglaId,
             regimen: r.regimen,
             jurisdiccion: r.jurisdiccion,
             base: parsearMonto(r.base, moneda) ?? 0,
@@ -296,6 +332,11 @@ export function CobroFormulario({
 
   return (
     <div className="arc-grid">
+      {estimacion?.advertencia ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {estimacion.advertencia}
+        </p>
+      ) : null}
       <div className="arc-card">
         <div className="arc-card-sec">
           <div className="arc-sec-t">Datos del cobro</div>
@@ -381,13 +422,13 @@ export function CobroFormulario({
               </div>
             </div>
             <div className="arc-field">
-              <label>Neto acreditado</label>
+              <label>Neto antes de retenciones</label>
               <div className="arc-money">
                 <span className="c">{moneda.simbolo}</span>
                 <input
                   type="text"
                   disabled
-                  value={numeroMoneda(neto, moneda, 0)}
+                  value={numeroMoneda(neto, moneda, 2)}
                 />
               </div>
             </div>
@@ -576,6 +617,16 @@ export function CobroFormulario({
           </div>
           {retOpen ? (
             <div className="arc-ret-body">
+              <p className="text-sm text-muted-foreground">
+                Las retenciones del procesador o banco son estimadas hasta
+                confirmar su liquidación. No agregan un segundo costo de IIBB al
+                producto.
+              </p>
+              {retsManual !== null && sugeridas.length > 0 ? (
+                <button type="button" onClick={() => setRetsManual(null)}>
+                  Recalcular con la configuración del método
+                </button>
+              ) : null}
               {rets.map((r, i) => (
                 <div key={i} className="arc-ret-line">
                   <button
@@ -586,6 +637,20 @@ export function CobroFormulario({
                   >
                     <XIcon />
                   </button>
+                  <div className="arc-field">
+                    <label>Quién retiene</label>
+                    <select
+                      aria-label="Quién retiene"
+                      value={r.agente}
+                      onChange={(e) => setRet(i, "agente", e.target.value)}
+                    >
+                      {AGENTES_RETENCION.map((a) => (
+                        <option key={a.value} value={a.value}>
+                          {a.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="arc-frow" style={{ marginBottom: 10 }}>
                     <div className="arc-field sm" style={{ marginBottom: 0 }}>
                       <label>Régimen</label>
@@ -674,8 +739,8 @@ export function CobroFormulario({
               style={{ marginTop: 10, marginBottom: 0 }}
             >
               <InfoIcon />
-              Sin retenciones. Abrí la sección si el cliente retiene sobre este
-              pago.
+              Sin retenciones cargadas. Abrí la sección para informar
+              retenciones sobre este pago.
             </div>
           ) : null}
         </div>
@@ -686,14 +751,14 @@ export function CobroFormulario({
           <div className="h">Resumen del cobro</div>
           <div className="arc-three">
             <div className="arc-tc f">
-              <div className="l">Facturado / cobrado</div>
+              <div className="l">Bruto cobrado</div>
               <div className="v">{fmt(bruto)}</div>
               {/* El sistema imputa el cobro a las facturas impagas de la orden
                   (FIFO); lo que sobra queda a cuenta del cliente. */}
               <div className="sub">Se imputa a la orden</div>
             </div>
             <div className="arc-tc n">
-              <div className="l">Neto acreditado</div>
+              <div className="l">Neto antes de retenciones</div>
               <div className="v">{fmt(neto)}</div>
               {comision > 0 ? (
                 <div className="delta">
@@ -704,7 +769,7 @@ export function CobroFormulario({
               )}
             </div>
             <div className="arc-tc d">
-              <div className="l">Disponible real</div>
+              <div className="l">Disponible previsto</div>
               <div className="v">{fmt(disponible)}</div>
               {totalRet > 0 ? (
                 <div className="delta">−{fmt(totalRet)} retenciones</div>
