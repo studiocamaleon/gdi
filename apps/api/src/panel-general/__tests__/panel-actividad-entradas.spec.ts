@@ -1,11 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
+import { expandir } from '../../auth/permisos';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { PanelActividadService } from '../panel-actividad.service';
 
 const auth = {
   tenantId: '11111111-1111-4111-8111-111111111111',
   role: 'ADMINISTRADOR',
-  permisos: new Set(['panel.ver', 'comercial.ver']),
+  permisos: expandir(['panel.ver', 'comercial.ver', 'reportes.resumen.ver']),
 } as CurrentAuth;
 const encode = (value: unknown) =>
   Buffer.from(JSON.stringify(value)).toString('base64url');

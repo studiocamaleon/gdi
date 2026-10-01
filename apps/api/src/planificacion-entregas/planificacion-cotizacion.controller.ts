@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 import { PlanificacionEntregasService } from './planificacion.service';
 import {
@@ -18,7 +18,7 @@ import {
   SolicitarPlanEntregaDto,
 } from './planificacion.dto';
 
-@Permiso('comercial.gestionar')
+@Permiso("comercial.ordenes.gestionar", "comercial.presupuestos.gestionar")
 @OcultaMargenes()
 @Controller('cotizaciones/items/:itemId/planificacion-entregas')
 export class PlanificacionCotizacionController {
@@ -41,7 +41,8 @@ export class PlanificacionCotizacionController {
   }
   @Post('reprogramar')
   @RequiereCapacidad('planificacion_avanzada')
-  @Permiso('produccion.supervisar')
+  @Permiso("produccion.supervisar")
+  @RequiereVista("comercial.ordenes.ver")
   reprogramar(
     @CurrentSession() auth: CurrentAuth,
     @Param('itemId', ParseUUIDPipe) itemId: string,

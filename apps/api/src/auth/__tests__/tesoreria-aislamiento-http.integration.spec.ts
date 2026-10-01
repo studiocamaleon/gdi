@@ -11,6 +11,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextInterceptor } from '../../common/interceptors/tenant-context.interceptor';
 import { AdministracionController } from '../../administracion/administracion.controller';
 import { MetodosPagoService } from '../../administracion/metodos-pago.service';
+import { UsuariosService } from '../../usuarios/usuarios.service';
+import { UsuariosController } from '../../usuarios/usuarios.controller';
 import { TesoreriaService } from '../../administracion/tesoreria.service';
 import { ConfiguracionFiscalService } from '../../administracion/configuracion-fiscal.service';
 import { ImputacionesService } from '../../administracion/imputaciones.service';
@@ -147,9 +149,10 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
       comprobantes.push(comprobante.id);
     }
     for (const [actor, permisos] of [
-      ['gestor', ['administracion.ver', 'administracion.gestionar']],
+      ['gestor', ['administracion.ver', 'administracion.gestionar', 'configuracion.usuarios.gestionar']],
       ['lector', ['administracion.ver']],
       ['sin-permisos', []],
+      ['cajero', ['acceso.por_vista', 'administracion.tesoreria.ver', 'tesoreria.arquear', 'tesoreria.transferir']],
     ] as const) {
       const user = await prisma.user.create({
         data: {
@@ -170,6 +173,9 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
           userId: user.id,
           rol: 'ADMINISTRADOR',
           rolId: rol.id,
+          cuentasRestringidas: actor === 'cajero',
+          cuentasOperablesIds: actor === 'cajero' ? [cuentas[0][0]] : [],
+          cuentasDestinoIds: actor === 'cajero' ? [cuentas[0][1]] : [],
         },
       });
       const sesion = await prisma.authSession.create({
@@ -206,9 +212,10 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
       AdministracionController,
     ) as Array<new (...args: never[]) => unknown>;
     const modulo = await Test.createTestingModule({
-      controllers: [AdministracionController],
+      controllers: [AdministracionController, UsuariosController],
       providers: [
         { provide: CapacidadesEmpresaService, useValue: capacidades },
+        { provide: UsuariosService, useValue: new UsuariosService(prisma, { invalidarTenant: jest.fn() } as never, noUsado as never) },
         ...dependencias.map((provide) => ({
           provide,
           useValue: reales.get(provide) ?? noUsado,
@@ -486,4 +493,91 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
     ).toBe(before);
     expect(ajenoNoInvocado).not.toHaveBeenCalled();
   });
+  it('un vendedor sólo recibe su cuenta, sus totales y destinos sin saldos', async () => {
+    const res = await http('get', 'tesoreria', 'cajero').expect(200);
+    expect(res.body.accesoRestringido).toBe(true);
+    expect(res.body.cuentas.map((c: { id: string }) => c.id)).toEqual([cuentas[0][0]]);
+    expect(res.body.kpis.posicionLocal).toBe(Number(res.body.cuentas[0].saldo));
+    expect(JSON.stringify(res.body)).not.toContain(cuentas[0][1]);
+    const selector = await http('get', 'cuentas', 'cajero').expect(200);
+    expect(selector.body.map((c: {id: string}) => c.id)).toEqual([cuentas[0][0]]);
+    const destinos = await http('get', 'cuentas/destinos-transferencia', 'cajero').expect(200);
+    expect(destinos.body).toEqual([{ id: cuentas[0][1], nombre: 'Caja ficticia 2', moneda: 'ARS' }]);
+  });
+
+  it('el destino no permite consultar movimientos, arquear, ajustar, configurar ni transferir en sentido inverso', async () => {
+    const antes = await saldos();
+    await http('get', `cuentas/${cuentas[0][1]}/movimientos`, 'cajero').expect(403);
+    await http('get', `cuentas/${cuentas[1][0]}/movimientos`, 'cajero').expect(403);
+    await http('post', `cuentas/${cuentas[0][1]}/arqueo`, 'cajero').send({ contado: 100 }).expect(403);
+    await http('post', `cuentas/${cuentas[0][0]}/ajustes`, 'cajero').send({}).expect(403);
+    await http('patch', `cuentas/${cuentas[0][0]}`, 'cajero').send({ nombre: 'No cambiar' }).expect(403);
+    await http('post', 'cuentas/transferencias', 'cajero').send({ desdeCuentaId: cuentas[0][1], haciaCuentaId: cuentas[0][0], monto: 5 }).expect(403);
+    await http('post', 'cuentas/transferencias', 'cajero').send({ desdeCuentaId: cuentas[0][0], haciaCuentaId: cuentas[1][0], monto: 5 }).expect(403);
+    expect(await saldos()).toEqual(antes);
+  });
+
+  it('registra un arqueo exacto una sola vez y conserva el contado y responsable', async () => {
+    const saldo = Number((await prisma.cuentaFondos.findUniqueOrThrow({ where: { id: cuentas[0][0] } })).saldo);
+    const clave = randomUUID();
+    const payload = { contado: saldo, notas: 'Cierre ficticio', idempotencyKey: clave };
+    const a = await http('post', `cuentas/${cuentas[0][0]}/arqueo`, 'cajero').send(payload).expect(201);
+    const b = await http('post', `cuentas/${cuentas[0][0]}/arqueo`, 'cajero').send(payload).expect(201);
+    expect(a.body.id).toBe(b.body.id);
+    expect(b.body.idempotente).toBe(true);
+    const registros = await http('get', `cuentas/${cuentas[0][0]}/arqueos`, 'cajero').expect(200);
+    expect(registros.body.filter((r: {id: string}) => r.id === a.body.id)).toHaveLength(1);
+    expect(registros.body[0].detalleJson).toMatchObject({ esperado: saldo, contado: saldo, diferencia: 0 });
+    expect(registros.body[0].actorNombre).toBeTruthy();
+    await http('post', `cuentas/${cuentas[0][0]}/arqueo`, 'cajero').send({ ...payload, contado: saldo + 1 }).expect(409);
+  });
+
+  it('registra diferencia una sola vez y transfiere sólo desde el origen autorizado', async () => {
+    const saldo = Number((await prisma.cuentaFondos.findUniqueOrThrow({ where: { id: cuentas[0][0] } })).saldo);
+    const payload = { contado: saldo + 10, idempotencyKey: randomUUID() };
+    await http('post', `cuentas/${cuentas[0][0]}/arqueo`, 'cajero').send(payload).expect(201);
+    await http('post', `cuentas/${cuentas[0][0]}/arqueo`, 'cajero').send(payload).expect(201);
+    expect(Number((await prisma.cuentaFondos.findUniqueOrThrow({ where: { id: cuentas[0][0] } })).saldo)).toBe(saldo + 10);
+    const mov = { desdeCuentaId: cuentas[0][0], haciaCuentaId: cuentas[0][1], monto: 5, idempotencyKey: randomUUID() };
+    const a = await http('post', 'cuentas/transferencias', 'cajero').send(mov).expect(201);
+    const b = await http('post', 'cuentas/transferencias', 'cajero').send(mov).expect(201);
+    expect(a.body.operacionId).toBe(b.body.operacionId);
+    expect(Number((await prisma.cuentaFondos.findUniqueOrThrow({ where: { id: cuentas[0][0] } })).saldo)).toBe(saldo + 5);
+  });
+
+  it('un reintento simultáneo de arqueo no duplica el conteo ni el ajuste', async () => {
+    const cuenta = await prisma.cuentaFondos.findUniqueOrThrow({where:{id:cuentas[0][0]}});
+    const payload = {contado:Number(cuenta.saldo)+3,idempotencyKey:randomUUID(),notas:'Conteo simultáneo ficticio'};
+    const resultados = await Promise.all([1,2].map(()=>http('post',`cuentas/${cuenta.id}/arqueo`,'cajero').send(payload)));
+    expect(resultados.map(r=>r.status)).toEqual([201,201]);
+    expect(resultados[0].body.id).toBe(resultados[1].body.id);
+    expect(await prisma.cuentaFondosEvento.count({where:{tenantId:tenants[0],idempotencyKey:payload.idempotencyKey}})).toBe(1);
+    expect(await prisma.movimientoFondos.count({where:{tenantId:tenants[0],idempotencyKey:payload.idempotencyKey}})).toBe(1);
+    expect(Number((await prisma.cuentaFondos.findUniqueOrThrow({where:{id:cuenta.id}})).saldo)).toBe(payload.contado);
+  });
+  it('rechaza reutilizar una clave de transferencia para un importe distinto', async () => {
+    const payload={desdeCuentaId:cuentas[0][0],haciaCuentaId:cuentas[0][1],monto:1,idempotencyKey:randomUUID()};
+    await http('post','cuentas/transferencias','cajero').send(payload).expect(201);
+    await http('post','cuentas/transferencias','cajero').send({...payload,monto:8}).expect(409);
+  });
+  it('sólo quien administra usuarios asigna cuentas, y nunca de otra empresa', async () => {
+    const miembro=await prisma.membership.findFirstOrThrow({where:{tenantId:tenants[0],rolDelTenant:{nombre:'cajero'}}});
+    const ruta=`/usuarios/${miembro.userId}/cuentas`;
+    const body={restringidas:true,operables:[cuentas[0][0]],destinos:[cuentas[0][1]]};
+    await request(app.getHttpServer()).put(ruta).set('Authorization',`Bearer ${tokens.cajero}`).send(body).expect(403);
+    await request(app.getHttpServer()).put(ruta).set('Authorization',`Bearer ${tokens.gestor}`).send({...body,destinos:[cuentas[1][0]]}).expect(400);
+    expect((await prisma.membership.findUniqueOrThrow({where:{id:miembro.id}})).cuentasDestinoIds).toEqual([cuentas[0][1]]);
+    await request(app.getHttpServer()).put(ruta).set('Authorization',`Bearer ${tokens.gestor}`).send(body).expect(200);
+    expect(await prisma.eventoAcceso.count({where:{tenantId:tenants[0],usuarioAfectadoId:miembro.userId,tipo:'cuentas_asignadas'}})).toBe(1);
+  });
+  it('revocar las cuentas toma efecto en la misma sesión y una lista vacía no abre todo', async () => {
+    const miembro = await prisma.membership.findFirstOrThrow({ where: { tenantId: tenants[0], rolDelTenant: { nombre: 'cajero' } } });
+    await prisma.membership.update({ where: { id: miembro.id }, data: { cuentasOperablesIds: [], cuentasDestinoIds: [] } });
+    const r = await http('get', 'tesoreria', 'cajero').expect(200);
+    expect(r.body.cuentas).toEqual([]);
+    expect(r.body.kpis.posicionLocal).toBe(0);
+    await http('get', `cuentas/${cuentas[0][0]}/movimientos`, 'cajero').expect(403);
+    await http('post', `cuentas/${cuentas[0][0]}/arqueo`, 'cajero').send({ contado: 10 }).expect(403);
+  });
+
 });

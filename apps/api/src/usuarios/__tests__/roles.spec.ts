@@ -106,6 +106,11 @@ const A_MEDIDA = {
 };
 
 describe('crear rol', () => {
+  it('rechaza combinar permisos por vista con un permiso global que los contradiga',async()=>{
+    const {service,rolCreate}=armar();
+    await expect(service.crearRol(AUTH,{nombre:'Rol ficticio',permisos:['acceso.por_vista','comercial.ver','comercial.ordenes.gestionar']})).rejects.toThrow(BadRequestException);
+    expect(rolCreate).not.toHaveBeenCalled();
+  });
   it('guarda sólo claves del catálogo', async () => {
     const { service, rolCreate } = armar();
     await service.crearRol(AUTH, {

@@ -40,7 +40,7 @@ function tenantId(req: RequestWithAuth): string {
  * Las rutas de actualizar/borrar usan path absoluto sin productoId porque el
  * id del precio especial es único globalmente.
  */
-@Permiso('costos.ver')
+@Permiso("costos.catalogo.ver")
 @Controller()
 export class PreciosEspecialesClientesController {
   constructor(private readonly service: PreciosEspecialesClientesService) {}
@@ -53,7 +53,7 @@ export class PreciosEspecialesClientesController {
     return this.service.listarPorProducto(tenantId(req), productoId);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   @RequiereCapacidad('precios_especiales')
   @Post('productos-servicios/productos/:productoId/precios-especiales')
   async crear(
@@ -64,7 +64,7 @@ export class PreciosEspecialesClientesController {
     return this.service.crear(tenantId(req), productoId, dto);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   @RequiereCapacidad('precios_especiales')
   @Patch('productos-servicios/precios-especiales/:id')
   async actualizar(
@@ -75,7 +75,7 @@ export class PreciosEspecialesClientesController {
     return this.service.actualizar(tenantId(req), id, dto);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   @RequiereCapacidad('precios_especiales')
   @Delete('productos-servicios/precios-especiales/:id')
   @HttpCode(200)

@@ -129,11 +129,11 @@ export class PanelGeneralService {
       );
     };
     const permisos = auth.permisos ?? new Set<string>();
-    const veComercial = permisos.has('comercial.ver');
-    const gestionaComercial = permisos.has('comercial.gestionar');
-    const veProduccion = permisos.has('produccion.ver');
-    const gestionaProduccion = permisos.has('produccion.gestionar');
-    const gestionaAdministracion = permisos.has('administracion.gestionar');
+    const veComercial = permisos.has('comercial.ordenes.ver');
+    const gestionaComercial = permisos.has('comercial.ordenes.gestionar');
+    const veProduccion = permisos.has('produccion.tablero.ver');
+    const gestionaProduccion = permisos.has('produccion.tablero.gestionar');
+    const gestionaAdministracion = ['administracion.facturacion.gestionar','administracion.cobrar.gestionar','administracion.pagar.gestionar'].every(p => permisos.has(p));
     const aprueba = permisos.has('comercial.aprobar_descuento');
     const perfilSoloProductivo =
       veProduccion &&
@@ -144,7 +144,7 @@ export class PanelGeneralService {
       gestionaComercial &&
       !gestionaAdministracion &&
       !gestionaProduccion &&
-      !permisos.has('reportes.ver_resumen');
+      !permisos.has('reportes.resumen.ver');
 
     const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
     const ahora = new Date();
@@ -187,7 +187,7 @@ export class PanelGeneralService {
       perfilSoloProductivo || (!veProduccion && !veComercial)
         ? Promise.resolve([])
         : this.ordenesProximas(auth.tenantId, hoy, enSiete, filtroVendedor),
-      veComercial && !vendedorSinVinculo
+      veComercial && permisos.has('comercial.presupuestos.ver') && !vendedorSinVinculo
         ? this.resumenComercial(auth.tenantId, hoy, enTres, filtroVendedor)
         : Promise.resolve({ pendientesAprobacion: 0, porVencer: 0 }),
       gestionaAdministracion

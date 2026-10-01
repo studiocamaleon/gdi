@@ -63,9 +63,9 @@ import {
   TransferenciaDto,
   UpsertCuentaFondosDto,
 } from './dto/tesoreria.dto';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 
-@Permiso('administracion.ver')
+@Permiso("administracion.comprobantes.ver")
 @Controller('administracion')
 export class AdministracionController {
   constructor(
@@ -115,11 +115,13 @@ export class AdministracionController {
 
   // ── Cuenta corriente ─────────────────────────────────────────────────
 
+  @Permiso("administracion.cobrar.ver")
   @Get('deudores')
   deudores(@CurrentSession() auth: CurrentAuth) {
     return this.cuentaCorrienteService.deudores(auth);
   }
 
+  @Permiso("administracion.cobrar.ver")
   @Get('clientes/:clienteId/cuenta-corriente')
   cuentaCorriente(
     @CurrentSession() auth: CurrentAuth,
@@ -132,6 +134,7 @@ export class AdministracionController {
    * Estado de cuenta en PDF: mismos datos que la vista, generado en el
    * server (mismo patrón que el PDF del comprobante).
    */
+  @Permiso("administracion.cobrar.ver")
   @Get('clientes/:clienteId/cuenta-corriente/pdf')
   @RequiereCapacidad('documentos_pdf')
   async cuentaCorrientePdf(
@@ -200,6 +203,7 @@ export class AdministracionController {
   // ── Integración AFIP (facturación electrónica por delegación) ────────
   // Ver docs/integracion-afip-delegacion-diseno.md
 
+  @Permiso("configuracion.fiscal.ver")
   @Get('afip')
   afip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.obtener(auth);
@@ -207,7 +211,7 @@ export class AdministracionController {
 
   /** Verifica la delegación sin encender nada (chequeo en seco). */
   @ProhibidoImpersonando()
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.fiscal.gestionar")
   @Post('afip/verificar')
   verificarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.verificar(auth);
@@ -215,20 +219,21 @@ export class AdministracionController {
 
   /** Enciende la facturación: verifica y, si pasa, activa. */
   @ProhibidoImpersonando()
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.fiscal.gestionar")
   @Post('afip/activar')
   activarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.activar(auth);
   }
 
   @ProhibidoImpersonando()
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.fiscal.gestionar")
   @Post('afip/desactivar')
   desactivarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.desactivar(auth);
   }
 
   /** El gate del botón Facturar. Liviano: sólo el booleano. */
+  @Permiso("administracion.facturacion.ver")
   @Get('facturacion/estado')
   async estadoFacturacion(@CurrentSession() auth: CurrentAuth) {
     return {
@@ -239,6 +244,7 @@ export class AdministracionController {
   }
 
   /** Órdenes finalizadas con saldo sin facturar (vista Facturación). */
+  @Permiso("administracion.facturacion.ver")
   @Get('facturacion/pendientes')
   pendientesFacturacion(@CurrentSession() auth: CurrentAuth) {
     return this.facturacionOrdenesService.pendientesFacturacion(auth.tenantId);
@@ -249,7 +255,8 @@ export class AdministracionController {
    * —no `gestionar`— porque es la operación que DESHACE: emitir factura y
    * anularla son dos permisos distintos, igual que descartar un comprobante.
    */
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.facturacion.ver")
   @Post('ordenes/:ordenId/nota-credito')
   notaCreditoOrden(
     @CurrentSession() auth: CurrentAuth,
@@ -260,7 +267,7 @@ export class AdministracionController {
   }
 
   /** Facturar (parcial o total) una orden desde su ficha. */
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.facturacion.gestionar")
   @Post('ordenes/:ordenId/facturar')
   facturarOrden(
     @CurrentSession() auth: CurrentAuth,
@@ -271,7 +278,7 @@ export class AdministracionController {
   }
 
   /** Facturar un lote de órdenes (N facturas o una agrupada). */
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.facturacion.gestionar")
   @Post('facturacion/lote')
   facturarLote(
     @CurrentSession() auth: CurrentAuth,
@@ -288,7 +295,7 @@ export class AdministracionController {
     return this.comprobantesService.obtener(auth, id);
   }
 
-  @Permiso('administracion.gestionar', 'administracion.anular')
+  @Permiso("administracion.comprobantes.gestionar", "administracion.anular")
   @Post('comprobantes')
   crearComprobante(
     @CurrentSession() auth: CurrentAuth,
@@ -297,7 +304,7 @@ export class AdministracionController {
     return this.comprobantesService.crear(auth, body);
   }
 
-  @Permiso('administracion.gestionar', 'administracion.anular')
+  @Permiso("administracion.comprobantes.gestionar", "administracion.anular")
   @Post('comprobantes/:id/emitir')
   emitirComprobante(
     @CurrentSession() auth: CurrentAuth,
@@ -306,7 +313,7 @@ export class AdministracionController {
     return this.comprobantesService.emitir(auth, id);
   }
 
-  @Permiso('administracion.gestionar', 'administracion.anular')
+  @Permiso("administracion.comprobantes.gestionar", "administracion.anular")
   @Post('comprobantes/:id/consultar-emision')
   consultarEmision(
     @CurrentSession() auth: CurrentAuth,
@@ -315,7 +322,7 @@ export class AdministracionController {
     return this.comprobantesService.consultarEmision(auth, id);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.comprobantes.gestionar")
   @Post('comprobantes/:id/cae')
   cargarCae(
     @CurrentSession() auth: CurrentAuth,
@@ -327,7 +334,8 @@ export class AdministracionController {
 
   // Deshacer un movimiento de plata pide su propio permiso: manejar
   // administración no es lo mismo que poder anular lo ya registrado.
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.comprobantes.ver")
   @Delete('comprobantes/:id')
   descartarComprobante(
     @CurrentSession() auth: CurrentAuth,
@@ -338,6 +346,7 @@ export class AdministracionController {
 
   // ── Imputaciones ─────────────────────────────────────────────────────
 
+  @Permiso("administracion.cobrar.ver")
   @Get('clientes/:clienteId/comprobantes-pendientes')
   comprobantesPendientes(
     @CurrentSession() auth: CurrentAuth,
@@ -346,7 +355,7 @@ export class AdministracionController {
     return this.imputacionesService.pendientesDeCliente(auth, clienteId);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.cobrar.gestionar")
   @Post('cobros/:id/imputaciones')
   imputarCobro(
     @CurrentSession() auth: CurrentAuth,
@@ -356,7 +365,7 @@ export class AdministracionController {
     return this.imputacionesService.imputar(auth, id, body);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.cobrar.gestionar")
   @Delete('imputaciones/:id')
   quitarImputacion(
     @CurrentSession() auth: CurrentAuth,
@@ -367,12 +376,13 @@ export class AdministracionController {
 
   // ── Configuración fiscal del emisor ──────────────────────────────────
 
+  @Permiso("configuracion.fiscal.ver", "administracion.comprobantes.ver", "administracion.facturacion.ver")
   @Get('configuracion-fiscal')
   obtenerConfiguracionFiscal(@CurrentSession() auth: CurrentAuth) {
     return this.configuracionFiscalService.obtener(auth);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.fiscal.gestionar")
   @Put('configuracion-fiscal')
   guardarConfiguracionFiscal(
     @CurrentSession() auth: CurrentAuth,
@@ -381,6 +391,7 @@ export class AdministracionController {
     return this.configuracionFiscalService.guardar(auth, body);
   }
 
+  @Permiso("configuracion.fiscal.ver", "administracion.comprobantes.ver", "administracion.facturacion.ver")
   @Get('configuracion-fiscal/letra')
   letraSugerida(
     @CurrentSession() auth: CurrentAuth,
@@ -389,7 +400,7 @@ export class AdministracionController {
     return this.configuracionFiscalService.letraPara(auth, receptor);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.fiscal.gestionar")
   @Post('puntos-venta')
   crearPuntoVenta(
     @CurrentSession() auth: CurrentAuth,
@@ -398,7 +409,7 @@ export class AdministracionController {
     return this.configuracionFiscalService.crearPuntoVenta(auth, body);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.fiscal.gestionar")
   @Patch('puntos-venta/:id')
   actualizarPuntoVenta(
     @CurrentSession() auth: CurrentAuth,
@@ -408,7 +419,7 @@ export class AdministracionController {
     return this.configuracionFiscalService.actualizarPuntoVenta(auth, id, body);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.fiscal.gestionar")
   @Delete('puntos-venta/:id')
   eliminarPuntoVenta(
     @CurrentSession() auth: CurrentAuth,
@@ -419,12 +430,21 @@ export class AdministracionController {
 
   // ── Tesorería ────────────────────────────────────────────────────────
 
+  @Permiso("administracion.tesoreria.ver")
   @Get('tesoreria')
   resumenTesoreria(@CurrentSession() auth: CurrentAuth) {
     return this.tesoreriaService.resumen(auth);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso('administracion.tesoreria.ver')
+  @Get('cuentas/destinos-transferencia')
+  destinosTransferencia(@CurrentSession() auth: CurrentAuth) { return this.tesoreriaService.destinos(auth); }
+
+  @Permiso('administracion.tesoreria.ver')
+  @Get('cuentas/:id/arqueos')
+  arqueos(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string) { return this.tesoreriaService.arqueos(auth, id); }
+
+  @Permiso("administracion.tesoreria.gestionar")
   @Post('cuentas')
   crearCuenta(
     @CurrentSession() auth: CurrentAuth,
@@ -433,6 +453,7 @@ export class AdministracionController {
     return this.tesoreriaService.crearCuenta(auth, payload);
   }
 
+  @Permiso("administracion.tesoreria.ver")
   @Get('cuentas/:id/movimientos')
   movimientosCuenta(
     @CurrentSession() auth: CurrentAuth,
@@ -442,7 +463,7 @@ export class AdministracionController {
     return this.tesoreriaService.movimientos(auth, id, filtros);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.tesoreria.gestionar")
   @Patch('cuentas/:id')
   editarCuenta(
     @CurrentSession() auth: CurrentAuth,
@@ -452,7 +473,8 @@ export class AdministracionController {
     return this.tesoreriaService.editarCuenta(auth, id, payload);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("tesoreria.transferir")
+  @RequiereVista("administracion.tesoreria.ver")
   @RequiereCapacidad('tesoreria')
   @Post('cuentas/transferencias')
   transferir(
@@ -462,7 +484,8 @@ export class AdministracionController {
     return this.tesoreriaService.transferir(auth, payload);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("tesoreria.arquear")
+  @RequiereVista("administracion.tesoreria.ver")
   @RequiereCapacidad('tesoreria')
   @Post('cuentas/:id/arqueo')
   arqueo(
@@ -473,7 +496,7 @@ export class AdministracionController {
     return this.tesoreriaService.arqueo(auth, id, payload);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.tesoreria.gestionar")
   @RequiereCapacidad('tesoreria')
   @Post('cuentas/:id/ajustes')
   ajustarFondos(
@@ -484,7 +507,7 @@ export class AdministracionController {
     return this.tesoreriaService.ajustar(auth, id, payload);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.tesoreria.gestionar")
   @RequiereCapacidad('tesoreria')
   @Patch('cuentas/:cuentaId/movimientos/:movimientoId/conciliacion')
   conciliarMovimiento(
@@ -501,12 +524,13 @@ export class AdministracionController {
     );
   }
 
+  @Permiso("administracion.tesoreria.ver")
   @Get('valores')
   valores(@CurrentSession() auth: CurrentAuth) {
     return this.tesoreriaService.valores(auth);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.tesoreria.gestionar")
   @RequiereCapacidad('valores')
   @Post('valores/:id/depositar')
   depositarValor(
@@ -517,7 +541,7 @@ export class AdministracionController {
     return this.tesoreriaService.depositarValor(auth, id, payload);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.tesoreria.gestionar")
   @RequiereCapacidad('valores')
   @Post('valores/:id/acreditar')
   acreditarValor(
@@ -528,7 +552,8 @@ export class AdministracionController {
     return this.tesoreriaService.acreditarValor(auth, id, payload);
   }
 
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.tesoreria.ver")
   @RequiereCapacidad('valores')
   @Post('valores/:id/revertir-deposito')
   revertirDepositoValor(
@@ -539,7 +564,8 @@ export class AdministracionController {
     return this.tesoreriaService.revertirDepositoValor(auth, id, payload);
   }
 
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.tesoreria.ver")
   @RequiereCapacidad('valores')
   @Post('valores/:id/revertir-acreditacion')
   revertirAcreditacionValor(
@@ -550,7 +576,8 @@ export class AdministracionController {
     return this.tesoreriaService.revertirAcreditacionValor(auth, id, payload);
   }
 
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.tesoreria.ver")
   @RequiereCapacidad('valores')
   @Post('valores/:id/rechazar')
   rechazarValor(
@@ -563,6 +590,7 @@ export class AdministracionController {
 
   // ── Cobros ───────────────────────────────────────────────────────────
 
+  @Permiso("administracion.cobrar.ver")
   @Get('cobros')
   cobros(
     @CurrentSession() auth: CurrentAuth,
@@ -571,13 +599,14 @@ export class AdministracionController {
     return this.cobrosService.findAll(auth, { ordenId });
   }
 
+  @Permiso("administracion.cobrar.ver")
   @Get('cobros/pendientes-acreditacion')
   cobrosPendientesAcreditacion(@CurrentSession() auth: CurrentAuth) {
     return this.cobrosService.pendientesAcreditacion(auth);
   }
 
   // También el Vendedor: la seña se toma al cerrar la venta, no en la caja.
-  @Permiso('administracion.gestionar', 'administracion.cobrar')
+  @Permiso("administracion.cobrar.gestionar", "administracion.cobrar")
   @Post('cobros')
   crearCobro(
     @CurrentSession() auth: CurrentAuth,
@@ -591,27 +620,30 @@ export class AdministracionController {
    * después es un 302 a una URL firmada. Si el render de fondo falló, este
    * pedido lo rehace.
    */
+  @Permiso("administracion.cobrar.ver")
   @Get('cobros/:id/recibo/pdf')
   async pdfRecibo(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
     @Res() res: Response,
   ): Promise<void> {
+    await this.cobrosService.findOne(auth, id);
     const archivo = await this.recibosService.pdfDe(id, auth.tenantId);
     res.redirect(302, await this.archivos.urlDeDescarga(archivo.id));
   }
 
   /** El link que se comparte con el cliente (`/c/<token>`), si ya se emitió. */
+  @Permiso("administracion.cobrar.ver")
   @Get('cobros/:id/recibo/enlace')
   async enlaceRecibo(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    void auth;
+    await this.cobrosService.findOne(auth, id);
     return { url: await this.recibosService.urlPublica(id) };
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.cobrar.gestionar")
   @Post('cobros/:id/acreditar')
   acreditarCobro(
     @CurrentSession() auth: CurrentAuth,
@@ -621,7 +653,8 @@ export class AdministracionController {
     return this.cobrosService.acreditar(auth, id, payload);
   }
 
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.cobrar.ver")
   @Delete('cobros/:id')
   anularCobro(
     @CurrentSession() auth: CurrentAuth,
@@ -633,13 +666,13 @@ export class AdministracionController {
 
   // El formulario de cobro los necesita para pintarse, así que quien puede
   // cobrar tiene que poder leerlos aunque no vea el resto de administración.
-  @Permiso('administracion.ver', 'administracion.cobrar')
+  @Permiso("configuracion.metodos.ver", "administracion.cobrar.ver", "administracion.cobrar")
   @Get('metodos-pago')
   findAllMetodos(@CurrentSession() auth: CurrentAuth) {
     return this.metodosPagoService.findAll(auth);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.metodos.gestionar")
   @Post('metodos-pago')
   createMetodo(
     @CurrentSession() auth: CurrentAuth,
@@ -648,13 +681,13 @@ export class AdministracionController {
     return this.metodosPagoService.create(auth, payload);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.metodos.gestionar")
   @Post('metodos-pago/instalar-catalogo')
   instalarCatalogo(@CurrentSession() auth: CurrentAuth) {
     return this.metodosPagoService.instalarCatalogo(auth);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.metodos.gestionar")
   @Patch('metodos-pago/:id')
   updateMetodo(
     @CurrentSession() auth: CurrentAuth,
@@ -664,14 +697,14 @@ export class AdministracionController {
     return this.metodosPagoService.update(auth, id, payload);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("configuracion.metodos.gestionar")
   @Patch('metodos-pago/:id/toggle')
   toggleMetodo(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.metodosPagoService.toggle(auth, id);
   }
 
   /** Idem métodos de pago: es la cuenta a la que entra lo que se cobra. */
-  @Permiso('administracion.ver', 'administracion.cobrar')
+  @Permiso("administracion.tesoreria.ver", "administracion.cobrar.ver", "administracion.pagar.ver", "configuracion.metodos.ver", "administracion.cobrar")
   @Get('cuentas')
   listarCuentas(@CurrentSession() auth: CurrentAuth) {
     return this.metodosPagoService.listarCuentas(auth);

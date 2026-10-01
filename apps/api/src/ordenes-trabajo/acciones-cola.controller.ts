@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import { CompletarColaDto } from './dto/completar-cola.dto';
@@ -20,7 +20,8 @@ import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 export class AccionesColaController {
   constructor(private readonly ordenes: OrdenesTrabajoService) {}
 
-  @Permiso('produccion.ejecutar', 'produccion.supervisar')
+  @Permiso("produccion.ejecutar", "produccion.supervisar")
+  @RequiereVista("produccion.colas.ver")
   @Post(':maquinaId/pasos/:pasoId/accion')
   @HttpCode(200)
   accion(
@@ -32,7 +33,8 @@ export class AccionesColaController {
     return this.ordenes.accionTrabajoCola(auth, maquinaId, pasoId, dto);
   }
 
-  @Permiso('produccion.ejecutar', 'produccion.supervisar')
+  @Permiso("produccion.ejecutar", "produccion.supervisar")
+  @RequiereVista("produccion.colas.ver")
   @Post(':maquinaId/completar')
   @HttpCode(200)
   completar(

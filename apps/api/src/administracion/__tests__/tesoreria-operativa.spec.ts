@@ -69,10 +69,13 @@ describe('Tesorería operativa', () => {
         slug: `tesoreria-${tenantId}`,
       },
     });
+    await prisma.user.create({ data: { id: auth.userId, email: auth.email } });
+    await prisma.membership.create({ data: { id: auth.membershipId, userId: auth.userId, tenantId, rol: 'ADMINISTRADOR' } });
   });
 
   afterAll(async () => {
     await prisma.tenant.delete({ where: { id: tenantId } });
+    await prisma.user.delete({ where: { id: auth.userId } });
     await prisma.$disconnect();
   });
 

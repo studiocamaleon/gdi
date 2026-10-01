@@ -13,7 +13,7 @@ export class PanelAdminService {
   ) {}
 
   async obtener(auth: CurrentAuth, hoy: string, zona: string) {
-    const veProduccion = auth.permisos?.has('produccion.ver');
+    const veProduccion = auth.permisos?.has('produccion.tablero.ver');
     const [actividad, pasosCompletadosHoy, pendientes] = await Promise.all([
       this.actividad.listar(auth, undefined, 4),
       veProduccion

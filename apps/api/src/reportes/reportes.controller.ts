@@ -22,7 +22,7 @@ import { EmbudoService } from './embudo.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
 import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 import { EtaService } from '../eta/eta.service';
 
@@ -37,7 +37,7 @@ import { EtaService } from '../eta/eta.service';
  * vendedor puede leer sus ventas sin ver cuánto gana la imprenta en cada una.
  */
 @OcultaMargenes()
-@Permiso('reportes.ver')
+@Permiso("reportes.comercial.ver")
 @Controller('reportes/panel')
 export class ReportesController {
   constructor(
@@ -57,7 +57,7 @@ export class ReportesController {
   /** El permiso específico del handler reemplaza @Permiso en Nest. Conserva
    * además la entrada al módulo, igual que el layout y el menú de Reportes. */
   private exigirAccesoModulo(auth: CurrentAuth) {
-    if (!auth.permisos?.has('reportes.ver'))
+    if (![...(auth.permisos ?? [])].some(p => p.startsWith('reportes.') && p.endsWith('.ver')))
       throw new ForbiddenException(
         'No tenés permisos para acceder a Reportes.',
       );
@@ -69,9 +69,10 @@ export class ReportesController {
    * equilibrio y alertas en una pantalla, y esa lectura completa del negocio
    * de fábrica la tiene sólo el Administrador.
    */
-  @Permiso('reportes.ver_resumen')
+  @Permiso("reportes.resumen.ver")
   @OcultaMargenes(false)
   @RequiereCapacidad('reportes_resumen')
+  @RequiereVista("reportes.resumen.ver")
   @Get('resumen')
   async resumen(
     @CurrentSession() auth: CurrentAuth,
@@ -135,6 +136,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_resumen')
+  @Permiso("reportes.comercial.ver")
   @Get('comercial')
   async comercial(
     @CurrentSession() auth: CurrentAuth,
@@ -161,6 +163,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_resumen')
+  @Permiso("reportes.embudo.ver")
   @Get('embudo')
   async embudo(
     @CurrentSession() auth: CurrentAuth,
@@ -196,8 +199,9 @@ export class ReportesController {
    * esto lo tapaba sólo el front escondiendo el tab; ahora que es una ruta con
    * URL propia, el gate tiene que estar acá.
    */
-  @Permiso('finanzas.ver_margenes')
+  @Permiso("finanzas.ver_margenes")
   @RequiereCapacidad('reportes_finanzas')
+  @RequiereVista("reportes.finanzas.ver")
   @Get('finanzas')
   async finanzas(
     @CurrentSession() auth: CurrentAuth,
@@ -210,7 +214,7 @@ export class ReportesController {
     );
     const [{ actual, sinComparativa, deltas }, cobranza] = await Promise.all([
       this.rentabilidad.bloque(auth.tenantId, rango, anterior),
-      this.cobranza.finanzas(auth.tenantId, rango),
+      this.cobranza.finanzas(auth, rango),
     ]);
     return {
       meta: this.service.metaBase(rango, anterior, 'Comprobantes y costos', {
@@ -239,6 +243,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_produccion')
+  @Permiso("reportes.produccion.ver")
   @Get('produccion')
   async produccion(
     @CurrentSession() auth: CurrentAuth,
@@ -258,6 +263,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_produccion')
+  @Permiso("reportes.resumen.ver")
   @Get('alertas')
   async alertasActivas(
     @CurrentSession() auth: CurrentAuth,
@@ -285,6 +291,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_comerciales')
+  @Permiso("reportes.producto.ver")
   @Get('producto')
   async producto(
     @CurrentSession() auth: CurrentAuth,
@@ -305,6 +312,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_comerciales')
+  @Permiso("reportes.producto.ver")
   @Get('producto/mix-categoria')
   async mixCategoria(
     @CurrentSession() auth: CurrentAuth,
@@ -326,6 +334,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_comerciales')
+  @Permiso("reportes.clientes.ver")
   @Get('clientes')
   async clientes(
     @CurrentSession() auth: CurrentAuth,
@@ -356,6 +365,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_produccion')
+  @Permiso("reportes.equipo.ver")
   @Get('equipo')
   async equipo(
     @CurrentSession() auth: CurrentAuth,
@@ -386,6 +396,7 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_produccion')
+  @Permiso("reportes.salud_eta.ver")
   @Get('salud-eta')
   async saludEta(
     @CurrentSession() auth: CurrentAuth,
@@ -416,14 +427,16 @@ export class ReportesController {
   }
 
   @RequiereCapacidad('reportes_produccion')
+  @Permiso("reportes.resumen.ver")
   @Get('umbrales')
   getUmbrales(@CurrentSession() auth: CurrentAuth) {
     return this.alertas.getUmbrales(auth.tenantId);
   }
 
   @RequiereCapacidad('reportes_produccion')
+  @RequiereVista("reportes.resumen.ver")
   @Put('umbrales')
-  @Permiso('reportes.ver_resumen')
+  @Permiso("reportes.resumen.ver")
   actualizarUmbrales(
     @CurrentSession() auth: CurrentAuth,
     @Body() payload: ActualizarUmbralesDto,

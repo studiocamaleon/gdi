@@ -18,7 +18,7 @@ import { PerfilCadDto, SimularPerfilCadDto } from './perfiles-cad.dto';
 
 @UseGuards(ImpresionDirectaGuard)
 @Controller('impresion/cad')
-@Permiso('configuracion.gestionar')
+@Permiso("configuracion.impresoras.gestionar")
 export class PerfilesCadController {
   constructor(private readonly service: PerfilesCadService) {}
   @Get('destinos/:id/opciones')

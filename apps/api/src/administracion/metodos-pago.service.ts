@@ -1,3 +1,8 @@
+import {
+  alcanceCuentas,
+  exigirTesoreriaCompleta,
+  filtroCuentas,
+} from './acceso-cuentas';
 import { validarReglasRetencion } from './retenciones-validacion';
 import type { Prisma } from '@prisma/client';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -130,15 +135,28 @@ export class MetodosPagoService {
   ) {}
 
   async findAll(auth: CurrentAuth) {
+    const alcance = await alcanceCuentas(this.prisma, auth);
     const metodos = await this.prisma.metodoPago.findMany({
       where: { tenantId: auth.tenantId },
       include: { cuentaDestino: { select: { id: true, nombre: true } } },
       orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
     });
-    return metodos.map((metodo) => this.toResponse(metodo));
+    return metodos.map((metodo) =>
+      this.toResponse({
+        ...metodo,
+        // El medio sigue disponible para cobrar en una cuenta asignada; su
+        // destino predeterminado no concede acceso a otra cuenta.
+        cuentaDestino:
+          alcance.restringido &&
+          !alcance.operables.includes(metodo.cuentaDestinoId ?? '')
+            ? null
+            : metodo.cuentaDestino,
+      }),
+    );
   }
 
   async create(auth: CurrentAuth, payload: UpsertMetodoPagoDto) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'cobros');
     validarReglasRetencion(
       payload.retencionesConfig ?? [],
@@ -178,6 +196,7 @@ export class MetodosPagoService {
   }
 
   async update(auth: CurrentAuth, id: string, payload: UpsertMetodoPagoDto) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'cobros');
     const existente = await this.prisma.metodoPago.findFirst({
       where: { id, tenantId: auth.tenantId },
@@ -217,6 +236,7 @@ export class MetodosPagoService {
   }
 
   async toggle(auth: CurrentAuth, id: string) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'cobros');
     const existente = await this.prisma.metodoPago.findFirst({
       where: { id, tenantId: auth.tenantId },
@@ -238,6 +258,7 @@ export class MetodosPagoService {
    * Idempotente: correrlo dos veces no duplica nada.
    */
   async instalarCatalogo(auth: CurrentAuth) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'cobros');
     let creados = 0;
     for (const [indice, sugerido] of CATALOGO_SUGERIDO.entries()) {
@@ -286,9 +307,11 @@ export class MetodosPagoService {
   }
 
   async listarCuentas(auth: CurrentAuth) {
+    const alcance = await alcanceCuentas(this.prisma, auth);
     const cuentas = await this.prisma.cuentaFondos.findMany({
       where: {
         tenantId: auth.tenantId,
+        ...filtroCuentas(alcance),
         activo: true,
         tipo: { notIn: ['cartera_valores', 'cartera_valores_legacy'] },
       },

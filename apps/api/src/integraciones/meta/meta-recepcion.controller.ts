@@ -9,7 +9,7 @@ import { MetaRecepcionService } from './meta-recepcion.service';
 
 @Controller('integraciones/meta/recepcion')
 @Roles(RolSistema.ADMINISTRADOR)
-@Permiso('configuracion.gestionar')
+@Permiso("configuracion.integraciones.gestionar")
 @ProhibidoImpersonando()
 export class MetaRecepcionController {
   constructor(private readonly service: MetaRecepcionService) {}

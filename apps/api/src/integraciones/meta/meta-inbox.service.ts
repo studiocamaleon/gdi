@@ -63,7 +63,7 @@ export class MetaInboxService {
     const config = configuracionMetaRecepcion();
     if (!auth.tenantId || config?.tenantId !== auth.tenantId) return null;
     await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
-    const puedeVerClientes = auth.permisos?.has('crm.ver') === true;
+    const puedeVerClientes = auth.permisos?.has('crm.clientes.ver') === true;
     if (query.clienteId && !puedeVerClientes)
       throw new ForbiddenException('No tenés permiso para consultar clientes.');
 

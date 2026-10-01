@@ -17,6 +17,7 @@ import { Permiso } from '../auth/permiso.decorator';
 import { esIpPrivada, ipDeRequest } from '../auth/ip';
 import {
   CambiarIpsDto,
+  CambiarCuentasDto,
   CrearRolDto,
   CrearUsuarioDto,
   EditarRolDto,
@@ -37,10 +38,20 @@ import type { CurrentAuth } from '../auth/auth.types';
  * Los métodos de ROL van antes que los de `:userId`: Nest resuelve por orden de
  * declaración y `roles` es un segmento como cualquier otro.
  */
-@Permiso('configuracion.ver')
+@Permiso("configuracion.usuarios.ver")
 @Controller('usuarios')
 export class UsuariosController {
   constructor(private readonly usuarios: UsuariosService) {}
+
+  @Permiso('configuracion.usuarios.gestionar')
+  @Get('cuentas-disponibles')
+  cuentasDisponibles(@CurrentSession() auth: CurrentAuth) { return this.usuarios.cuentasDisponibles(auth); }
+
+  @Permiso('configuracion.usuarios.gestionar')
+  @Put(':userId/cuentas')
+  cambiarCuentas(@CurrentSession() auth: CurrentAuth, @Param('userId', ParseUUIDPipe) userId: string, @Body() dto: CambiarCuentasDto) {
+    return this.usuarios.cambiarCuentas(auth, userId, dto);
+  }
 
   @Get()
   listar(@CurrentSession() auth: CurrentAuth) {
@@ -77,7 +88,7 @@ export class UsuariosController {
     return this.usuarios.historial(auth);
   }
 
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Delete('invitaciones/:id')
   cancelarInvitacion(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string) {
     return this.usuarios.cancelarInvitacion(auth, id);
@@ -99,13 +110,13 @@ export class UsuariosController {
     return this.usuarios.catalogo(auth);
   }
 
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Post('roles')
   crearRol(@CurrentSession() auth: CurrentAuth, @Body() dto: CrearRolDto) {
     return this.usuarios.crearRol(auth, dto);
   }
 
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Patch('roles/:rolId')
   editarRol(
     @CurrentSession() auth: CurrentAuth,
@@ -115,7 +126,7 @@ export class UsuariosController {
     return this.usuarios.editarRol(auth, rolId, dto);
   }
 
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Delete('roles/:rolId')
   eliminarRol(
     @CurrentSession() auth: CurrentAuth,
@@ -127,13 +138,13 @@ export class UsuariosController {
 
   // ── Usuarios ────────────────────────────────────────────────────────
 
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Post()
   crear(@CurrentSession() auth: CurrentAuth, @Body() dto: CrearUsuarioDto) {
     return this.usuarios.crear(auth, dto);
   }
 
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Patch(':userId')
   editar(
     @CurrentSession() auth: CurrentAuth,
@@ -148,7 +159,7 @@ export class UsuariosController {
    * justamente el caso es "se la olvidó"— y la provisoria muere en el primer
    * ingreso.
    */
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Post(':userId/password')
   restablecerPassword(
     @CurrentSession() auth: CurrentAuth,
@@ -161,7 +172,7 @@ export class UsuariosController {
    * Desde qué IPs puede entrar. La IP de ESTA request viaja al service para el
    * cerrojo de "no te dejes afuera vos mismo".
    */
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Put(':userId/ips')
   cambiarIps(
     @CurrentSession() auth: CurrentAuth,
@@ -173,7 +184,7 @@ export class UsuariosController {
   }
 
   /** Lo echa de todos los dispositivos donde tenga la sesión abierta. */
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.usuarios.gestionar")
   @Post(':userId/cerrar-sesiones')
   cerrarSesiones(
     @CurrentSession() auth: CurrentAuth,

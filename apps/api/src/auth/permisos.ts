@@ -1,4 +1,5 @@
 import { RolSistema } from '@prisma/client';
+import { expandirVistas, VISTAS, type PermisoVista } from './vistas';
 
 /**
  * Catálogo canónico de permisos de Grafo.
@@ -8,10 +9,10 @@ import { RolSistema } from '@prisma/client';
  * haber dos tenants con claves distintas para lo mismo. Lo que el tenant
  * configura es el ROL —qué claves junta— no el catálogo.
  *
- * Granularidad: dos niveles por módulo, `ver` y `gestionar`. La versión CRUD
- * completa (ver/crear/editar/eliminar × 8 módulos) da 32 casillas y no la usa
- * nadie: en una imprenta de seis personas no existe "puede crear clientes pero
- * no editarlos". Ver docs/usuarios-roles-permisos-diseno.md
+ * Cada vista tiene `ver` y `gestionar`; los informes son de lectura.
+ * Los permisos globales anteriores se expanden por compatibilidad. Los roles
+ * guardados por el editor granular usan acceso.por_vista y hojas explícitas.
+ * Ver docs/permisos-por-vista-y-cajas.md.
  */
 
 /** Módulos del sistema, en el orden del sidebar. */
@@ -85,6 +86,8 @@ export type ModuloClave = (typeof MODULOS)[number]['clave'];
  * que poder cotizar sin ver cuánto gana la imprenta en cada renglón.
  */
 export const PERMISOS_TRANSVERSALES = [
+  { clave: 'tesoreria.arquear', label: 'Registrar arqueos de caja', descripcion: 'Contar y cerrar las cajas asignadas. Registra el conteo, incluso sin diferencia.' },
+  { clave: 'tesoreria.transferir', label: 'Transferir entre cuentas autorizadas', descripcion: 'Mover fondos desde las cuentas de trabajo hacia los destinos autorizados.' },
   {
     clave: 'inbox.atender',
     label: 'Atender Grafo Inbox',
@@ -206,12 +209,16 @@ export type PermisoTransversal =
 /** Una clave del catálogo. Se llama así y no `Permiso` para no chocar con el
  *  decorador `@Permiso`, que es lo que se lee en los controllers. */
 export type PermisoClave =
+  | "acceso.por_vista"
+  | PermisoVista
   | `${ModuloClave}.ver`
   | `${ModuloClave}.gestionar`
   | PermisoTransversal;
 
 /** Todas las claves válidas. Lo que no está acá no existe. */
 export const PERMISOS: PermisoClave[] = [
+  "acceso.por_vista",
+  ...VISTAS.flatMap(v => [`${v.clave}.ver`, ...(v.gestionAnterior ? [`${v.clave}.gestionar`] : [])] as PermisoVista[]),
   ...MODULOS.flatMap((m) => [
     `${m.clave}.ver` as PermisoClave,
     `${m.clave}.gestionar` as PermisoClave,
@@ -250,7 +257,7 @@ export function expandir(permisos: string[]): Set<string> {
       out.add('produccion.configurar');
     }
   }
-  return out;
+  return expandirVistas(out);
 }
 
 export function puede(permisos: Set<string>, requerido: PermisoClave): boolean {

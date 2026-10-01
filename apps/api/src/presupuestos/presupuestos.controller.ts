@@ -32,13 +32,13 @@ import {
   ResolverPresupuestoDto,
   EnviarCorreoPresupuestoDto,
 } from './dto/presupuestos.dto';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 import { PresupuestoPilotoService } from './pdf-piloto/presupuesto-piloto.service';
 import { pilotoPdfHabilitado } from './pdf-piloto/presupuesto-render.service';
 
 @OcultaMargenes()
-@Permiso('comercial.ver')
+@Permiso("comercial.presupuestos.ver")
 @Controller('presupuestos')
 export class PresupuestosController {
   constructor(
@@ -87,7 +87,7 @@ export class PresupuestosController {
   }
 
   /** El operador no se sube su propio umbral (plan F2 §6). */
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
   @Put('config')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   actualizarConfig(
@@ -106,7 +106,7 @@ export class PresupuestosController {
     return this.service.listado(auth, filtros);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
   @Post('emitir')
   emitir(
     @CurrentSession() auth: CurrentAuth,
@@ -123,7 +123,7 @@ export class PresupuestosController {
     return this.service.detalle(auth, id);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
   @Patch(':id/enviar')
   enviar(
     @CurrentSession() auth: CurrentAuth,
@@ -132,19 +132,19 @@ export class PresupuestosController {
     return this.service.enviar(auth, id);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
   @Get(':id/correo/preparar')
   prepararCorreo(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string) {
     return this.correos.preparar(auth, id);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
   @Post(':id/correo/vista-previa')
   vistaPreviaCorreo(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string, @Body() dto: EnviarCorreoPresupuestoDto) {
     return this.correos.vistaPrevia(auth, id, dto);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
   @Post(':id/correo')
   enviarCorreo(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string, @Body() dto: EnviarCorreoPresupuestoDto) {
     return this.correos.encolar(auth, id, dto);
@@ -155,13 +155,13 @@ export class PresupuestosController {
     return this.correos.historial(auth, id);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
   @Post(':id/correos/:correoId/reintentar')
   reintentarCorreo(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string, @Param('correoId', ParseUUIDPipe) correoId: string) {
     return this.correos.reintentar(auth, id, correoId);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
   @Patch(':id/resolver')
   resolver(
     @CurrentSession() auth: CurrentAuth,
@@ -173,7 +173,8 @@ export class PresupuestosController {
 
   // La excepción: cotizar lo hace el vendedor, autorizar un margen por debajo
   // del piso lo firma otro. Por eso no alcanza con `comercial.gestionar`.
-  @Permiso('comercial.aprobar_descuento')
+  @Permiso("comercial.aprobar_descuento")
+  @RequiereVista("comercial.presupuestos.ver")
   @Patch(':id/aprobacion')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   resolverAprobacion(
@@ -184,7 +185,8 @@ export class PresupuestosController {
     return this.service.resolverAprobacion(auth, id, dto);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.presupuestos.gestionar")
+  @RequiereVista("comercial.ordenes.gestionar")
   @Post(':id/convertir')
   convertir(
     @CurrentSession() auth: CurrentAuth,

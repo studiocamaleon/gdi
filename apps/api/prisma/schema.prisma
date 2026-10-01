@@ -1315,6 +1315,10 @@ model Membership {
   /// misma persona puede entrar sin restricción a una y sólo desde la oficina
   /// a otra. Ver docs/usuarios-roles-permisos-diseno.md
   ipsPermitidas   String[]        @default([])
+  /// False conserva el alcance histórico. True + listas vacías deniega todas.
+  cuentasRestringidas Boolean @default(false)
+  cuentasOperablesIds String[] @default([]) @db.Uuid
+  cuentasDestinoIds String[] @default([]) @db.Uuid
   activa          Boolean         @default(true)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -4776,9 +4780,12 @@ model CuentaFondosEvento {
   actorUserId String?      @db.Uuid
   actorNombre String
   detalleJson Json?
+  /// Clave para registrar una única vez el arqueo, también sin diferencia.
+  idempotencyKey String? @db.Uuid
   createdAt   DateTime     @default(now())
   cuenta      CuentaFondos @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, cuentaId, createdAt])
 }
 

@@ -23,7 +23,7 @@ import {
 } from './automaticos.dto';
 import { AutomaticosWebService } from './automaticos.service';
 
-@Permiso('configuracion.gestionar')
+@Permiso("configuracion.integraciones.gestionar")
 @Roles(RolSistema.ADMINISTRADOR)
 @Controller('chrome-whatsapp/automaticos')
 export class AutomaticosWebController {

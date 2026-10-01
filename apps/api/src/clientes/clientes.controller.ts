@@ -23,7 +23,7 @@ import { ClientesService } from './clientes.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
 
-@Permiso('crm.ver')
+@Permiso("crm.clientes.ver")
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
@@ -40,6 +40,14 @@ export class ClientesController {
    * ¿Este documento ya está cargado? Se consulta al escanear, antes de
    * ofrecer el alta. Va antes de `:id` — "por-documento" no es un id.
    */
+  @Get('opciones-comerciales')
+  @Permiso('crm.clientes.ver', 'comercial.ordenes.ver', 'comercial.presupuestos.ver', 'comercial.campanas.ver', 'crm.cupones.ver', 'administracion.comprobantes.ver')
+  opciones(@CurrentSession() auth: CurrentAuth, @Query() query: ClientesQueryDto) {
+    // El listado incluye identificación y datos para entrega/facturación;
+    // nunca trae la actividad ni el historial de la ficha individual.
+    return this.clientesService.findAll(auth, query);
+  }
+
   @Get('por-documento/:documento')
   porDocumento(
     @CurrentSession() auth: CurrentAuth,
@@ -53,7 +61,7 @@ export class ClientesController {
     return this.clientesService.findOne(auth, id);
   }
 
-  @Permiso('crm.gestionar')
+  @Permiso("crm.clientes.gestionar")
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -62,7 +70,7 @@ export class ClientesController {
     return this.clientesService.create(auth, payload);
   }
 
-  @Permiso('crm.gestionar')
+  @Permiso("crm.clientes.gestionar")
   @Post('importar')
   importar(
     @CurrentSession() auth: CurrentAuth,
@@ -76,7 +84,7 @@ export class ClientesController {
    * atiende, así que va con `comercial.gestionar` además del permiso de
    * registros: quien puede cargar la venta puede identificar al cliente.
    */
-  @Permiso('crm.gestionar', 'comercial.gestionar')
+  @Permiso("crm.clientes.gestionar", "comercial.ordenes.gestionar")
   @Post('alta-por-documento')
   altaPorDocumento(
     @CurrentSession() auth: CurrentAuth,
@@ -85,7 +93,7 @@ export class ClientesController {
     return this.clientesService.altaPorDocumento(auth, payload);
   }
 
-  @Permiso('crm.gestionar')
+  @Permiso("crm.clientes.gestionar")
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -96,7 +104,7 @@ export class ClientesController {
   }
 
   /** Fijar el estado explícitamente evita el read-toggle-write concurrente. */
-  @Permiso('crm.gestionar')
+  @Permiso("crm.clientes.gestionar")
   @Patch(':id/estado')
   estado(
     @CurrentSession() auth: CurrentAuth,
@@ -106,7 +114,7 @@ export class ClientesController {
     return this.clientesService.fijarActivo(auth, id, payload.activo);
   }
 
-  @Permiso('crm.gestionar')
+  @Permiso("crm.clientes.gestionar")
   @Delete(':id')
   @HttpCode(204)
   async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {

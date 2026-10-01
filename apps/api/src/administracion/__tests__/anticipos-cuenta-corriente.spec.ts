@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { PrismaClient, RolSistema } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { CurrentAuth } from '../../auth/auth.types';
@@ -47,6 +48,17 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
       role: RolSistema.ADMINISTRADOR,
       email: 'test@test.local',
     };
+    await prisma.user.create({
+      data: { id: auth.userId, email: `ant-${auth.userId}@example.invalid` },
+    });
+    await prisma.membership.create({
+      data: {
+        id: auth.membershipId,
+        userId: auth.userId,
+        tenantId,
+        rol: 'ADMINISTRADOR',
+      },
+    });
     const config = await prisma.configuracionFiscal.create({
       data: {
         tenantId,
@@ -97,6 +109,7 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
   });
   afterAll(async () => {
     if (tenantId) await prisma.tenant.delete({ where: { id: tenantId } });
+    await prisma.user.deleteMany({ where: { id: auth.userId } });
     await prisma.$disconnect();
   });
 
@@ -210,6 +223,60 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
     ).toBeUndefined();
   });
 
+  it('conserva el total pagado de la orden sin revelar una caja no asignada', async () => {
+    const o = await orden(100);
+    const propio = await cobro(40, o.id);
+    const otra = await prisma.cuentaFondos.create({
+      data: { tenantId, tipo: 'caja', nombre: `Privada ${randomUUID()}` },
+    });
+    const ajeno = await cobro(60, o.id);
+    await prisma.cobro.update({
+      where: { id: ajeno.id },
+      data: { cuentaDestinoId: otra.id },
+    });
+    await prisma.membership.update({
+      where: { id: auth.membershipId },
+      data: {
+        cuentasRestringidas: true,
+        cuentasOperablesIds: [cuentaId],
+        cuentasDestinoIds: [otra.id],
+      },
+    });
+    try {
+      const pagos = await cobrosApi.findAll(auth, { ordenId: o.id });
+      expect(
+        pagos.reduce((sum, p) => sum + (p.montoAplicadoOrden ?? 0), 0),
+      ).toBe(100);
+      expect(pagos.find((p) => p.id === propio.id)).toMatchObject({
+        puedeAbrirRecibo: true,
+      });
+      expect(pagos.find((p) => p.id === ajeno.id)).toMatchObject({
+        cuentaDestinoNombre: null,
+        referenciaAcreditacion: null,
+        puedeAbrirRecibo: false,
+      });
+      expect(
+        (await cobrosApi.findAll(auth)).some((p) => p.id === ajeno.id),
+      ).toBe(false);
+      await expect(cobrosApi.findOne(auth, ajeno.id)).rejects.toThrow();
+      await expect(
+        imputaciones.imputar(auth, ajeno.id, {
+          comprobanteId: randomUUID(),
+          monto: 10,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    } finally {
+      await prisma.membership.update({
+        where: { id: auth.membershipId },
+        data: {
+          cuentasRestringidas: false,
+          cuentasOperablesIds: [],
+          cuentasDestinoIds: [],
+        },
+      });
+    }
+  });
+
   it('distribuye FIFO, expone sólo la porción de cada OT y conserva el recibo original', async () => {
     const a = await orden(100, 1);
     const b = await orden(150, 2);
@@ -230,12 +297,9 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
     );
     expect((await saldoComercialCobro(prisma, tenantId, c.id)).libre).toBe(50);
     expect((await cc.obtener(auth, clienteId)).saldo).toBe(-50);
-    expect(
-      await cobrosApi.findAll(
-        { ...auth, tenantId: randomUUID() },
-        { ordenId: a.id },
-      ),
-    ).toEqual([]);
+    await expect(
+      cobrosApi.findAll({ ...auth, tenantId: randomUUID() }, { ordenId: a.id }),
+    ).rejects.toThrow(ForbiddenException);
   });
 
   it('no usa fondos reservados a OTs para otra factura histórica (automático ni manual)', async () => {
@@ -278,7 +342,12 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
     const fechaEmision = new Date('2026-05-20T12:00:00Z');
     await prisma.ordenTrabajo.update({
       where: { id: abierta.id },
-      data: { estado: 'pendiente', fechaEmision, fechaFinalizada: null, fechaVencimientoComercial: null },
+      data: {
+        estado: 'pendiente',
+        fechaEmision,
+        fechaFinalizada: null,
+        fechaVencimientoComercial: null,
+      },
     });
     const senia = await cobro(200, abierta.id);
     await motor.aplicarCobroComercial(prisma, tenantId, senia.id);
@@ -290,20 +359,35 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
     expect(cuenta.agingTotal).toBe(100);
     expect(await cobrado(terminada.id)).toBe(0);
     expect(cuenta.movimientos.filter((m) => m.ordenId === abierta.id)).toEqual([
-      expect.objectContaining({ tipo: 'orden', fecha: '2026-05-20', debe: 200, haber: 0 }),
+      expect.objectContaining({
+        tipo: 'orden',
+        fecha: '2026-05-20',
+        debe: 200,
+        haber: 0,
+      }),
     ]);
     expect(cuenta.movimientos.filter((m) => m.tipo === 'reserva')).toEqual([]);
-    expect(cuenta.movimientos[0].saldo).toBe(cuenta.agingTotal - cuenta.anticipoDisponible);
-    expect(await prisma.cobroOrden.count({ where: { cobroId: senia.id } })).toBe(1);
+    expect(cuenta.movimientos[0].saldo).toBe(
+      cuenta.agingTotal - cuenta.anticipoDisponible,
+    );
+    expect(
+      await prisma.cobroOrden.count({ where: { cobroId: senia.id } }),
+    ).toBe(1);
 
     await prisma.ordenTrabajo.update({
       where: { id: abierta.id },
       data: { estado: 'finalizada', fechaFinalizada: new Date('2026-07-02') },
     });
     const cerrada = await cc.obtener(auth, clienteId);
-    expect(cerrada.movimientos.filter((m) => m.ordenId === abierta.id)).toEqual([
-      expect.objectContaining({ tipo: 'orden', fecha: '2026-05-20', debe: 200 }),
-    ]);
+    expect(cerrada.movimientos.filter((m) => m.ordenId === abierta.id)).toEqual(
+      [
+        expect.objectContaining({
+          tipo: 'orden',
+          fecha: '2026-05-20',
+          debe: 200,
+        }),
+      ],
+    );
     expect(cerrada.saldo).toBe(100);
     expect(cerrada.agingTotal).toBe(100);
     expect(await cobrado(abierta.id)).toBe(200);
@@ -313,7 +397,11 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
     const abierta = await orden(80);
     await prisma.ordenTrabajo.update({
       where: { id: abierta.id },
-      data: { estado: 'pendiente', fechaFinalizada: null, fechaVencimientoComercial: null },
+      data: {
+        estado: 'pendiente',
+        fechaFinalizada: null,
+        fechaVencimientoComercial: null,
+      },
     });
     const senia = await cobro(80, abierta.id);
     await motor.recalcularCobrado(prisma, tenantId, abierta.id);
@@ -328,7 +416,9 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
       await motor.revertirCobro(tx, tenantId, senia.id);
     });
     const despues = await cc.obtener(auth, clienteId);
-    expect(despues.movimientos).toEqual([expect.objectContaining({ tipo: 'orden', debe: 80 })]);
+    expect(despues.movimientos).toEqual([
+      expect.objectContaining({ tipo: 'orden', debe: 80 }),
+    ]);
     expect(despues.saldo).toBe(80);
     expect(despues.agingTotal).toBe(80);
     expect(despues.aging.a_vencer).toBe(80);
@@ -341,7 +431,10 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
     const c = await cobro(150);
     await motor.aplicarCobroComercial(prisma, tenantId, c.id);
     const cerrada = await cc.obtener(auth, clienteId);
-    await prisma.ordenTrabajo.update({ where: { id: o.id }, data: { estado: 'produccion' } });
+    await prisma.ordenTrabajo.update({
+      where: { id: o.id },
+      data: { estado: 'produccion' },
+    });
     const abierta = await cc.obtener(auth, clienteId);
     expect(abierta.movimientos).toEqual(cerrada.movimientos);
     expect(abierta.anticipoDisponible).toBe(50);
@@ -352,44 +445,93 @@ describe('Anticipos y deuda comercial — integración aislada', () => {
     const o = await orden(100);
     const creadaEl = new Date('2026-01-01T12:00:00Z');
     const emitidaEl = new Date('2026-02-01T12:00:00Z');
-    await prisma.ordenTrabajo.update({ where: { id: o.id }, data: {
-      estado: 'borrador', createdAt: creadaEl, fechaFinalizada: null, fechaVencimientoComercial: null,
-    } });
+    await prisma.ordenTrabajo.update({
+      where: { id: o.id },
+      data: {
+        estado: 'borrador',
+        createdAt: creadaEl,
+        fechaFinalizada: null,
+        fechaVencimientoComercial: null,
+      },
+    });
     expect((await cc.obtener(auth, clienteId)).movimientos).toEqual([]);
-    await prisma.ordenTrabajo.update({ where: { id: o.id }, data: { estado: 'pendiente', fechaEmision: emitidaEl } });
+    await prisma.ordenTrabajo.update({
+      where: { id: o.id },
+      data: { estado: 'pendiente', fechaEmision: emitidaEl },
+    });
     const emitida = await cc.obtener(auth, clienteId);
-    expect(emitida.movimientos).toEqual([expect.objectContaining({ tipo: 'orden', fecha: '2026-02-01', debe: 100 })]);
+    expect(emitida.movimientos).toEqual([
+      expect.objectContaining({
+        tipo: 'orden',
+        fecha: '2026-02-01',
+        debe: 100,
+      }),
+    ]);
     expect(emitida.saldo).toBe(100);
     expect(emitida.agingTotal).toBe(100);
     expect(emitida.aging.a_vencer).toBe(100);
     expect(emitida.sinVencimiento).toBe(100);
     expect(emitida.comprobantesPendientes).toBe(1);
-    expect((await cc.deudores(auth)).find((d) => d.clienteId === clienteId)).toMatchObject({ total: 100, aging: { a_vencer: 100 } });
+    expect(
+      (await cc.deudores(auth)).find((d) => d.clienteId === clienteId),
+    ).toMatchObject({ total: 100, aging: { a_vencer: 100 } });
 
-    await prisma.ordenTrabajo.update({ where: { id: o.id }, data: { total: 125, estado: 'produccion' } });
+    await prisma.ordenTrabajo.update({
+      where: { id: o.id },
+      data: { total: 125, estado: 'produccion' },
+    });
     const editada = await cc.obtener(auth, clienteId);
-    expect(editada.movimientos).toEqual([expect.objectContaining({ fecha: '2026-02-01', debe: 125 })]);
+    expect(editada.movimientos).toEqual([
+      expect.objectContaining({ fecha: '2026-02-01', debe: 125 }),
+    ]);
     expect(editada.saldo).toBe(125);
-    await prisma.ordenTrabajo.update({ where: { id: o.id }, data: { estado: 'finalizada', fechaFinalizada: new Date('2026-03-01'), fechaVencimientoComercial: new Date('2026-03-31') } });
+    await prisma.ordenTrabajo.update({
+      where: { id: o.id },
+      data: {
+        estado: 'finalizada',
+        fechaFinalizada: new Date('2026-03-01'),
+        fechaVencimientoComercial: new Date('2026-03-31'),
+      },
+    });
     const finalizada = await cc.obtener(auth, clienteId);
     expect(finalizada.movimientos).toEqual(editada.movimientos);
     expect(finalizada.sinVencimiento).toBe(0);
-    await prisma.ordenTrabajo.update({ where: { id: o.id }, data: { estado: 'cancelada', canceladaEl: new Date() } });
+    await prisma.ordenTrabajo.update({
+      where: { id: o.id },
+      data: { estado: 'cancelada', canceladaEl: new Date() },
+    });
     const cancelada = await cc.obtener(auth, clienteId);
     expect(cancelada.movimientos).toEqual([]);
     expect(cancelada.saldo).toBe(0);
     expect(cancelada.agingTotal).toBe(0);
-    expect((await cc.deudores(auth)).find((d) => d.clienteId === clienteId)).toBeUndefined();
+    expect(
+      (await cc.deudores(auth)).find((d) => d.clienteId === clienteId),
+    ).toBeUndefined();
   });
 
   it('usa una fecha estable para OTs antiguas sin fecha de emisión: evento y luego creación', async () => {
     const o = await orden(100);
-    await prisma.ordenTrabajo.update({ where: { id: o.id }, data: { createdAt: new Date('2026-01-01T12:00:00Z') } });
-    expect((await cc.obtener(auth, clienteId)).movimientos[0].fecha).toBe('2026-01-01');
-    await prisma.ordenTrabajoEvento.create({ data: {
-      tenantId, ordenId: o.id, tipo: 'emision', descripcion: 'OT emitida', usuarioNombre: 'Test', origen: 'sistema', fecha: new Date('2026-02-01T12:00:00Z'),
-    } });
-    expect((await cc.obtener(auth, clienteId)).movimientos[0].fecha).toBe('2026-02-01');
+    await prisma.ordenTrabajo.update({
+      where: { id: o.id },
+      data: { createdAt: new Date('2026-01-01T12:00:00Z') },
+    });
+    expect((await cc.obtener(auth, clienteId)).movimientos[0].fecha).toBe(
+      '2026-01-01',
+    );
+    await prisma.ordenTrabajoEvento.create({
+      data: {
+        tenantId,
+        ordenId: o.id,
+        tipo: 'emision',
+        descripcion: 'OT emitida',
+        usuarioNombre: 'Test',
+        origen: 'sistema',
+        fecha: new Date('2026-02-01T12:00:00Z'),
+      },
+    });
+    expect((await cc.obtener(auth, clienteId)).movimientos[0].fecha).toBe(
+      '2026-02-01',
+    );
   });
 
   it('permite completar una aplicación existente sin duplicarla e incluye el último centavo', async () => {

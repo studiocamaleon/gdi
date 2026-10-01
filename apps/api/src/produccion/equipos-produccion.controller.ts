@@ -13,7 +13,7 @@ import { Permiso } from '../auth/permiso.decorator';
 import { EquipoProduccionDto } from './dto/equipo-produccion.dto';
 import { EquiposProduccionService } from './equipos-produccion.service';
 
-@Permiso('produccion.configurar')
+@Permiso("produccion.configurar")
 @Controller('produccion/equipos')
 export class EquiposProduccionController {
   constructor(private readonly service: EquiposProduccionService) {}

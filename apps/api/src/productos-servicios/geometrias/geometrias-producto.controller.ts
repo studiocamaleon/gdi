@@ -77,7 +77,7 @@ class InterpretarDto extends ArchivoGeometriaDto {
 
 @Controller('productos-servicios/productos/:productoId/geometrias')
 // Interpretaciones inmutables para recetas y cotizaciones; no modifica el producto.
-@Permiso('costos.gestionar', 'comercial.gestionar')
+@Permiso("costos.catalogo.gestionar", "comercial.ordenes.gestionar", "comercial.presupuestos.gestionar")
 export class GeometriasProductoController {
   constructor(
     private readonly prisma: PrismaService,

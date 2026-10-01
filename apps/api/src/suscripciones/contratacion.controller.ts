@@ -40,7 +40,7 @@ export class ConfirmarContratacionDto {
 }
 
 @Controller('suscripcion/contrataciones')
-@Permiso('configuracion.gestionar')
+@Permiso("configuracion.suscripcion.gestionar")
 @Roles('ADMINISTRADOR')
 @ProhibidoImpersonando()
 @PermitirSuscripcionInactiva()

@@ -3,6 +3,9 @@ import type { PermisoClave } from './permisos';
 
 export const PERMISO_KEY = 'permisoRequerido';
 export const SOLO_AUTENTICADO_KEY = 'soloAutenticado';
+export const VISTA_KEY = 'vistaRequerida';
+/** Restricción adicional (AND) para acciones especiales como anular. */
+export const RequiereVista = (...permisos: PermisoClave[]) => SetMetadata(VISTA_KEY, permisos);
 
 /**
  * Exige un permiso para entrar al endpoint (o a todo el controller).

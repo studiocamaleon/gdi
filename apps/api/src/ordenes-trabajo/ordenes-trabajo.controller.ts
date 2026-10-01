@@ -37,7 +37,7 @@ import { MesaPasoDto } from './dto/mesa-paso.dto';
 import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
 import { ResolverGatePasoDto } from './dto/resolver-gate-paso.dto';
 import { Public } from '../auth/public.decorator';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 
 /**
@@ -52,7 +52,7 @@ import { OcultaMargenes } from '../auth/margenes.decorator';
  * Por eso la base es `produccion.ver` y cada método dice lo suyo.
  */
 @OcultaMargenes()
-@Permiso('produccion.ver')
+@Permiso("produccion.tablero.ver")
 @Controller('ordenes-trabajo')
 export class OrdenesTrabajoController {
   constructor(
@@ -139,12 +139,7 @@ export class OrdenesTrabajoController {
   }
 
   @Get()
-  @Permiso(
-    'produccion.ver',
-    'comercial.ver',
-    'administracion.ver',
-    'administracion.gestionar',
-  )
+  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver", "administracion.comprobantes.ver", "administracion.comprobantes.gestionar")
   findAll(
     @CurrentSession() auth: CurrentAuth,
     @Query() query: OrdenesTrabajoQueryDto,
@@ -153,29 +148,34 @@ export class OrdenesTrabajoController {
   }
 
   /** Dataset del Tablero de producción (antes de :id: "tablero" no es un id). */
+  @Permiso("produccion.tablero.ver")
   @Get('tablero')
   tablero(@CurrentSession() auth: CurrentAuth, @Query() query: TableroQueryDto) {
     return this.ordenesTrabajoService.tablero(auth, query.vista === 'activos');
   }
 
+  @Permiso("produccion.tablero.ver")
   @Get('tablero/terminados')
   tableroTerminados(@CurrentSession() auth: CurrentAuth, @Query() query: TableroTerminadosQueryDto) {
     return this.ordenesTrabajoService.tableroTerminados(auth, query);
   }
 
+  @Permiso("produccion.tablero.ver")
   @Get('tablero/items/:itemId')
   tableroItem(@CurrentSession() auth: CurrentAuth, @Param('itemId', ParseUUIDPipe) itemId: string) {
     return this.ordenesTrabajoService.consultarItemTablero(auth, itemId);
   }
 
   /** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */
+  @Permiso("produccion.tablero.ver")
   @Get('tablero/mis-tramos')
   misTramos(@CurrentSession() auth: CurrentAuth) {
     return this.ordenesTrabajoService.misTramosAbiertos(auth);
   }
 
   /** Pausa automática por inactividad (D13): sin respuesta al countdown. */
-  @Permiso('produccion.ejecutar', 'produccion.supervisar')
+  @Permiso("produccion.ejecutar", "produccion.supervisar")
+  @RequiereVista("produccion.tablero.ver")
   @Patch('tablero/pasos/:pasoId/auto-pausa')
   autoPausa(
     @CurrentSession() auth: CurrentAuth,
@@ -185,7 +185,8 @@ export class OrdenesTrabajoController {
   }
 
   /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
-  @Permiso('produccion.ejecutar', 'produccion.supervisar')
+  @Permiso("produccion.ejecutar", "produccion.supervisar")
+  @RequiereVista("produccion.tablero.ver")
   @Patch('tablero/pasos/:pasoId/mesa')
   mesaPaso(
     @CurrentSession() auth: CurrentAuth,
@@ -196,7 +197,8 @@ export class OrdenesTrabajoController {
   }
 
   /** Panel de Compras: avanzar el estado de una compra tercerizada (F2). */
-  @Permiso('produccion.supervisar')
+  @Permiso("produccion.supervisar")
+  @RequiereVista("produccion.tablero.ver")
   @Patch('tablero/pasos/:pasoId/compra')
   avanzarCompra(
     @CurrentSession() auth: CurrentAuth,
@@ -211,7 +213,8 @@ export class OrdenesTrabajoController {
   }
 
   /** Resolver/reabrir una condición operativa de material o calidad. */
-  @Permiso('produccion.supervisar')
+  @Permiso("produccion.supervisar")
+  @RequiereVista("produccion.tablero.ver")
   @Patch('tablero/pasos/:pasoId/gate')
   resolverGatePaso(
     @CurrentSession() auth: CurrentAuth,
@@ -222,18 +225,13 @@ export class OrdenesTrabajoController {
   }
 
   @Get(':id')
-  @Permiso(
-    'produccion.ver',
-    'comercial.ver',
-    'administracion.ver',
-    'administracion.gestionar',
-  )
+  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver", "administracion.comprobantes.ver", "administracion.comprobantes.gestionar")
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.ordenesTrabajoService.findOne(auth, id);
   }
 
   @Get(':id/materiales')
-  @Permiso('produccion.ver', 'comercial.ver')
+  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver")
   materialesOrden(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -243,12 +241,12 @@ export class OrdenesTrabajoController {
 
   /** Pasos materializados de la orden (tab Producción del detalle). */
   @Get(':id/pasos')
-  @Permiso('produccion.ver', 'comercial.ver')
+  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver")
   pasosDeOrden(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.ordenesTrabajoService.pasosDeOrden(auth, id);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -257,7 +255,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.create(auth, payload);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Patch(':id/lote')
   editarLote(
     @CurrentSession() auth: CurrentAuth,
@@ -267,7 +265,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.editarLote(auth, id, payload);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Patch(':id')
   editar(
     @CurrentSession() auth: CurrentAuth,
@@ -282,7 +280,7 @@ export class OrdenesTrabajoController {
    * decisión de precio (misma llave que el descuento), por eso
    * `comercial.gestionar`. Ver docs/margen-y-decisiones-de-precio.md §6.
    */
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Patch(':id/tratamiento-fiscal')
   setTratamientoFiscal(
     @CurrentSession() auth: CurrentAuth,
@@ -296,7 +294,7 @@ export class OrdenesTrabajoController {
     );
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Post(':id/items')
   agregarItem(
     @CurrentSession() auth: CurrentAuth,
@@ -306,7 +304,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.agregarItem(auth, id, payload);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Patch(':id/items/:itemId')
   editarItem(
     @CurrentSession() auth: CurrentAuth,
@@ -317,7 +315,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.editarItem(auth, id, itemId, payload);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Delete(':id/items/:itemId')
   quitarItem(
     @CurrentSession() auth: CurrentAuth,
@@ -327,7 +325,8 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.quitarItem(auth, id, itemId);
   }
 
-  @Permiso('produccion.ejecutar', 'produccion.supervisar')
+  @Permiso("produccion.ejecutar", "produccion.supervisar")
+  @RequiereVista("comercial.ordenes.ver", "produccion.tablero.ver")
   @Patch(':id/items/:itemId/pasos/:pasoId')
   accionPaso(
     @CurrentSession() auth: CurrentAuth,
@@ -350,7 +349,7 @@ export class OrdenesTrabajoController {
    * entera de que se cayó—, y queda todo en el historial de la orden: quién,
    * cuándo, por qué y con cuánto trabajo encima.
    */
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Post(':id/cancelar')
   cancelar(
     @CurrentSession() auth: CurrentAuth,
@@ -364,6 +363,7 @@ export class OrdenesTrabajoController {
   // Resolver el código es de lectura (el operador todavía no hizo nada);
   // entregar y revertir mueven el estado de la orden.
 
+  @Permiso("produccion.tablero.ver")
   @Post('escaneo')
   escanear(
     @CurrentSession() auth: CurrentAuth,
@@ -372,7 +372,7 @@ export class OrdenesTrabajoController {
     return this.entrega.escanear(auth, payload.codigo);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso("produccion.tablero.gestionar")
   @Post(':id/entregar')
   entregar(
     @CurrentSession() auth: CurrentAuth,
@@ -383,7 +383,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Deshacer una entrega: el único retroceso desde `entregada`. */
-  @Permiso('produccion.gestionar')
+  @Permiso("produccion.tablero.gestionar")
   @Post(':id/entregar/revertir')
   revertirEntrega(
     @CurrentSession() auth: CurrentAuth,
@@ -393,7 +393,7 @@ export class OrdenesTrabajoController {
     return this.entrega.revertir(auth, id, payload);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Patch(':id/estado')
   cambiarEstado(
     @CurrentSession() auth: CurrentAuth,

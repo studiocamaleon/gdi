@@ -8,9 +8,13 @@ import {
 import { Reflector } from '@nestjs/core';
 
 import { CurrentAuth } from './auth.types';
-import { PERMISO_KEY, SOLO_AUTENTICADO_KEY } from './permiso.decorator';
+import {
+  PERMISO_KEY,
+  SOLO_AUTENTICADO_KEY,
+  VISTA_KEY,
+} from './permiso.decorator';
 import { SIN_TENANT_KEY } from '../common/sin-tenant.decorator';
-import type { PermisoClave } from './permisos';
+import { expandir, type PermisoClave } from './permisos';
 
 /**
  * Guard de autorización por permiso. Corre después de AuthGuard, así que
@@ -48,6 +52,14 @@ export class PermisosGuard implements CanActivate {
     // Sin auth es una ruta @Public que AuthGuard dejó pasar: no hay permiso que
     // evaluar. (Si no fuera pública, AuthGuard ya habría tirado 401.)
     if (!auth) return true;
+    if (!auth.mcp) auth.permisos = expandir([...(auth.permisos ?? [])]);
+    const vistas = this.reflector.getAllAndOverride<PermisoClave[]>(VISTA_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (vistas && !vistas.some((p) => auth.permisos?.has(p))) {
+      throw new ForbiddenException('No tenés acceso a esta vista.');
+    }
 
     // Resolver ambas reglas en el mismo nivel antes de heredar. Buscar cada
     // clave por separado permitía que @SoloAutenticado del controller anulase

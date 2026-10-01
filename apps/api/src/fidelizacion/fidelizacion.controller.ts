@@ -2,7 +2,7 @@ import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import {
   AjustarPuntosDto,
   ActualizarFidelizacionDto,
@@ -10,7 +10,7 @@ import {
 } from './dto/fidelizacion.dto';
 import { FidelizacionService } from './fidelizacion.service';
 
-@Permiso('crm.ver')
+@Permiso("crm.fidelizacion.ver")
 @Controller('fidelizacion')
 export class FidelizacionController {
   constructor(private readonly service: FidelizacionService) {}
@@ -18,7 +18,8 @@ export class FidelizacionController {
     return this.service.configuracion(auth.tenantId);
   }
   @RequiereCapacidad('fidelizacion')
-  @Permiso('crm.configurar_fidelizacion')
+  @Permiso("crm.fidelizacion.gestionar")
+  @RequiereVista("crm.fidelizacion.ver")
   @Patch('configuracion')
   actualizar(
     @CurrentSession() auth: CurrentAuth,
@@ -35,7 +36,8 @@ export class FidelizacionController {
   ) {
     return this.service.cuenta(auth, clienteId);
   }
-  @Permiso('crm.configurar_fidelizacion')
+  @Permiso("crm.fidelizacion.gestionar")
+  @RequiereVista("crm.fidelizacion.ver")
   @RequiereCapacidad('fidelizacion')
   @Post('clientes/:clienteId/ajustes')
   ajustar(
@@ -46,7 +48,7 @@ export class FidelizacionController {
     return this.service.ajustar(auth, clienteId, dto);
   }
   @RequiereCapacidad('fidelizacion')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @Post('clientes/:clienteId/simular')
   simular(
     @CurrentSession() auth: CurrentAuth,

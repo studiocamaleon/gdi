@@ -27,7 +27,7 @@ import { Permiso } from '../auth/permiso.decorator';
  * mandarles mensajes desde su número oficial. No es una preferencia de
  * usuario.
  */
-@Permiso('configuracion.ver')
+@Permiso("configuracion.integraciones.ver")
 @Controller('integraciones')
 export class IntegracionesController {
   constructor(private readonly service: IntegracionesService) {}
@@ -54,7 +54,7 @@ export class IntegracionesController {
 
   /** Somete una plantilla del catálogo de Grafo a Meta. */
   @ProhibidoImpersonando()
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.integraciones.gestionar")
   @RequiereCapacidad('whatsapp_automatico')
   @Post('wati/plantillas/:codigo/someter')
   @Roles(RolSistema.ADMINISTRADOR)
@@ -64,7 +64,7 @@ export class IntegracionesController {
 
   /** Envío de prueba a un número propio, antes de encender la integración. */
   @ProhibidoImpersonando()
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.integraciones.gestionar")
   @RequiereCapacidad('whatsapp_automatico')
   @Post('wati/probar-envio')
   @Roles(RolSistema.ADMINISTRADOR)
@@ -81,7 +81,7 @@ export class IntegracionesController {
   }
 
   @ProhibidoImpersonando()
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.integraciones.gestionar")
   @RequiereCapacidad('whatsapp_automatico')
   @Put('wati')
   @Roles(RolSistema.ADMINISTRADOR)
@@ -93,7 +93,7 @@ export class IntegracionesController {
   }
 
   @ProhibidoImpersonando()
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.integraciones.gestionar")
   @Post(':proveedor/probar')
   @Roles(RolSistema.ADMINISTRADOR)
   probar(
@@ -105,7 +105,7 @@ export class IntegracionesController {
   }
 
   @ProhibidoImpersonando()
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.integraciones.gestionar")
   @Delete(':proveedor')
   @Roles(RolSistema.ADMINISTRADOR)
   async desconectar(

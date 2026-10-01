@@ -31,7 +31,7 @@ import { ProhibidoImpersonando } from '../../auth/prohibido-impersonando.decorat
  * ADMINISTRADOR — encender un evento le manda WhatsApps a todos los clientes
  * desde el número oficial de la empresa.
  */
-@Permiso('configuracion.ver')
+@Permiso("configuracion.integraciones.ver")
 @Controller('integraciones/notificaciones')
 export class NotificacionesController {
   constructor(private readonly service: NotificacionesService) {}
@@ -53,7 +53,7 @@ export class NotificacionesController {
   }
 
   @Post(':id/resolver')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.integraciones.gestionar")
   @Roles(RolSistema.ADMINISTRADOR)
   resolver(
     @CurrentSession() auth: CurrentAuth,
@@ -64,7 +64,7 @@ export class NotificacionesController {
   }
 
   @ProhibidoImpersonando()
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.integraciones.gestionar")
   @Put('configuracion')
   @Roles(RolSistema.ADMINISTRADOR)
   cambiarConfiguracion(@Body() dto: CambiarConfigDto) {
@@ -72,7 +72,7 @@ export class NotificacionesController {
   }
 
   @ProhibidoImpersonando()
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.integraciones.gestionar")
   @Put('eventos/:evento')
   @Roles(RolSistema.ADMINISTRADOR)
   cambiarEvento(

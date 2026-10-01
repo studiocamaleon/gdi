@@ -184,7 +184,7 @@ export class GastosFijosService {
         });
       return;
     }
-    if (!auth.permisos?.has('administracion.gestionar'))
+    if (!auth.permisos?.has('administracion.pagar.gestionar'))
       throw new ForbiddenException(
         'Necesitás permiso para gestionar pagos antes de activar o modificar su generación.',
       );

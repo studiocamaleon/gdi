@@ -3,9 +3,9 @@ import { Controller, Get, Post, Query } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { EtaService } from './eta.service';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 
-@Permiso('produccion.ver')
+@Permiso("produccion.planificacion.ver")
 @RequiereCapacidad('eta_capacidad')
 @Controller('eta')
 export class EtaController {
@@ -52,7 +52,8 @@ export class EtaController {
 
   /** Dispara la foto del día para este tenant (backfill / "actualizar ahora"). */
   @Post('snapshot')
-  @Permiso('produccion.supervisar')
+  @Permiso("produccion.supervisar")
+  @RequiereVista("produccion.planificacion.ver")
   async snapshot(@CurrentSession() auth: CurrentAuth) {
     const ok = await this.eta.snapshotDiario(auth.tenantId);
     return { ok };

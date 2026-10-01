@@ -33,7 +33,7 @@ function tenantId(req: RequestWithAuth): string {
  * Controller del catálogo de impuestos del tenant.
  * URL: /productos-servicios/impuestos-catalogo
  */
-@Permiso('costos.ver')
+@Permiso("configuracion.impuestos.ver")
 @Controller('productos-servicios/impuestos-catalogo')
 export class ImpuestosCatalogoController {
   constructor(private readonly service: ImpuestosCatalogoService) {}
@@ -52,7 +52,7 @@ export class ImpuestosCatalogoController {
     return this.service.obtener(tenantId(req), id);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("configuracion.impuestos.gestionar")
   @Post()
   async crear(
     @Req() req: RequestWithAuth,
@@ -61,7 +61,7 @@ export class ImpuestosCatalogoController {
     return this.service.crear(tenantId(req), dto);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("configuracion.impuestos.gestionar")
   @Patch(':id')
   async actualizar(
     @Req() req: RequestWithAuth,
@@ -71,7 +71,7 @@ export class ImpuestosCatalogoController {
     return this.service.actualizar(tenantId(req), id, dto);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("configuracion.impuestos.gestionar")
   @Delete(':id')
   @HttpCode(200)
   async eliminar(@Req() req: RequestWithAuth, @Param('id') id: string) {
