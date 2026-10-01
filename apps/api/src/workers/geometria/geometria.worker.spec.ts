@@ -30,19 +30,21 @@ describe('pérdida del permiso distribuido de geometría', () => {
       };
       let signal: AbortSignal | undefined;
       const detener = jest.fn();
-      const resolver = jest.fn(async (_data, options) => {
-        signal = options.signal;
-        await new Promise<void>((_resolve, reject) =>
-          options.signal.addEventListener(
-            'abort',
-            () => {
-              detener();
-              reject(new Error('Proceso geométrico detenido'));
-            },
-            { once: true },
-          ),
-        );
-      });
+      const resolver = jest.fn(
+        async (_data: unknown, options: { signal: AbortSignal }) => {
+          signal = options.signal;
+          await new Promise<void>((_resolve, reject) =>
+            options.signal.addEventListener(
+              'abort',
+              () => {
+                detener();
+                reject(new Error('Proceso geométrico detenido'));
+              },
+              { once: true },
+            ),
+          );
+        },
+      );
       const worker = new GeometriaWorker(
         { resolver } as never,
         { leerCancelacion: jest.fn().mockResolvedValue(false) } as never,
@@ -54,7 +56,11 @@ describe('pérdida del permiso distribuido de geometría', () => {
           renovar: jest.fn().mockResolvedValue(caso !== 'capacidad-expirada'),
           liberar: jest.fn().mockResolvedValue(true),
           siguiente: jest.fn().mockResolvedValue(null),
-        } as never,{ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never
+        } as never,
+        {
+          exigirTodas: jest.fn().mockResolvedValue(undefined),
+          exigir: jest.fn().mockResolvedValue(undefined),
+        } as never,
       );
       const job = {
         id: 'job-largo',
@@ -111,13 +117,19 @@ describe('admisión y finalización de geometría', () => {
       cancelar: jest.fn().mockResolvedValue(undefined),
       siguiente: jest.fn().mockResolvedValue(null),
     };
-    const resolver = jest.fn().mockResolvedValue({ placasUsadas: 1 });
+    const resolver = jest
+      .fn<Promise<{ placasUsadas: number }>, [unknown, unknown]>()
+      .mockResolvedValue({ placasUsadas: 1 });
     const control = { leerCancelacion: jest.fn().mockResolvedValue(false) };
     const worker = new GeometriaWorker(
       { resolver } as never,
       control as never,
       tenant as never,
-      pool as never,{ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never
+      pool as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+      } as never,
     );
     const job = {
       id: 'j',
@@ -203,12 +215,22 @@ describe('admisión y finalización de geometría', () => {
     });
   });
 
+  it('conserva el contexto del job sin enviarlo al proceso de cálculo', async () => {
+    const t = preparar();
+    const contextoAnalisis = { nombreArchivo: 'diseno-ficticio.svg' };
+    Object.assign(t.job.data, { contextoAnalisis });
+    await expect(t.ejecutar()).resolves.toEqual({ placasUsadas: 1 });
+    expect(t.resolver.mock.calls[0][0]).not.toHaveProperty('contextoAnalisis');
+    expect(t.resolver.mock.calls[0][0]).toMatchObject({ tenantId: 'fabrica' });
+    expect(t.job.data).toHaveProperty('contextoAnalisis', contextoAnalisis);
+  });
+
   it('despierta el siguiente trabajo sin esperar el reintento periódico', async () => {
     const t = preparar();
     t.pool.siguiente.mockResolvedValue('j2');
     const promote = jest.fn().mockResolvedValue(undefined);
     const fromId = jest.spyOn(Job, 'fromId').mockResolvedValue({
-      getState: async () => 'delayed',
+      getState: jest.fn().mockResolvedValue('delayed'),
       promote,
     } as never);
     try {

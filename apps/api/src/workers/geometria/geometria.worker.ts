@@ -241,10 +241,15 @@ export class GeometriaWorker
       throw new Error('El cálculo de geometría fue cancelado.');
     }
     try {
-      await this.capacidadesPlan.exigirTodas(job.data.tenantId,
+      await this.capacidadesPlan.exigirTodas(
+        job.data.tenantId,
         job.data.calculoCotizacion
           ? ['nesting_irregular']
-          : ['analisis_vectorial', 'aprovechamiento_cotizacion', 'nesting_irregular'],
+          : [
+              'analisis_vectorial',
+              'aprovechamiento_cotizacion',
+              'nesting_irregular',
+            ],
       );
     } catch (error) {
       await this.capacidad.cancelar(jobId);
@@ -356,7 +361,11 @@ export class GeometriaWorker
       await verificarCancelacion();
       timer = setInterval(() => void verificarCancelacion(), 250);
       timer.unref();
-      const result = await this.openNestService.resolver(job.data, {
+      // El contexto de presentación vive con el job, pero no se copia al
+      // proceso nativo ni a las estructuras de búsqueda geométrica.
+      const calculo = { ...job.data };
+      delete calculo.contextoAnalisis;
+      const result = await this.openNestService.resolver(calculo, {
         signal: controller.signal,
         onCandidate: async () => {
           await verificarCancelacion();

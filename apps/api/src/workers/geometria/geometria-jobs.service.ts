@@ -87,6 +87,8 @@ export class GeometriaJobsService implements OnApplicationShutdown {
   async crear(input: {
     tenantId: string;
     dto: CrearTrabajoNestingOpenNestDto;
+    /** Sólo lo agrega el adaptador interno; nunca se copia del DTO HTTP. */
+    contextoAnalisis?: NestingIrregularOpenNestData['contextoAnalisis'];
   }): Promise<VistaTrabajoGeometria> {
     await this.capacidadesPlan.exigirTodas(input.tenantId, [
       'analisis_vectorial',
@@ -100,18 +102,35 @@ export class GeometriaJobsService implements OnApplicationShutdown {
   async crearParaCotizacion(input: {
     tenantId: string;
     dto: CrearTrabajoNestingOpenNestDto;
+    /** Sólo lo agrega el adaptador interno; nunca se copia del DTO HTTP. */
+    contextoAnalisis?: NestingIrregularOpenNestData['contextoAnalisis'];
   }) {
     await this.capacidadesPlan.exigir(input.tenantId, 'nesting_irregular');
     return this.encolar(input, true);
   }
 
   private async encolar(
-    input: { tenantId: string; dto: CrearTrabajoNestingOpenNestDto },
+    input: {
+      tenantId: string;
+      dto: CrearTrabajoNestingOpenNestDto;
+      contextoAnalisis?: NestingIrregularOpenNestData['contextoAnalisis'];
+    },
     calculoCotizacion: boolean,
   ): Promise<VistaTrabajoGeometria> {
+    if (
+      input.contextoAnalisis &&
+      (input.contextoAnalisis.tenantId !== input.tenantId ||
+        input.contextoAnalisis.schemaVersion !== 1)
+    )
+      throw new BadRequestException(
+        'El contexto no corresponde a este cálculo.',
+      );
     const correlationId = randomUUID();
     const data: NestingIrregularOpenNestData = {
       schemaVersion: 1,
+      ...(input.contextoAnalisis
+        ? { contextoAnalisis: input.contextoAnalisis }
+        : {}),
       calculoCotizacion,
       tenantId: input.tenantId,
       correlationId,
@@ -282,6 +301,18 @@ export class GeometriaJobsService implements OnApplicationShutdown {
         'El servicio de cálculos está temporalmente no disponible.',
       );
     }
+  }
+
+  /** Lectura interna del contexto, con la misma pertenencia que el resultado. */
+  async leerContextoAnalisis(
+    tenantId: string,
+    jobId: string,
+  ): Promise<NestingIrregularOpenNestData['contextoAnalisis'] | null> {
+    exigirIdTrabajo(jobId);
+    const job = await this.buscarJob(jobId);
+    if (!job || job.data.tenantId !== tenantId)
+      throw new NotFoundException('No se encontró el trabajo de geometría.');
+    return job.data.contextoAnalisis ?? null;
   }
 
   async cancelar(
@@ -535,6 +566,12 @@ export function idTrabajo(
     .update('\0')
     .update(
       JSON.stringify({
+        contextoAnalisisHash:
+          data.contextoAnalisis === undefined
+            ? undefined
+            : createHash('sha256')
+                .update(JSON.stringify(data.contextoAnalisis))
+                .digest('hex'),
         calculoCotizacion: data.calculoCotizacion === true,
         versionPoliticaOrientacion: VERSION_POLITICA_ORIENTACION_GRAFONEST,
         versionPoliticaBusqueda: VERSION_POLITICA_BUSQUEDA_GRAFONEST,

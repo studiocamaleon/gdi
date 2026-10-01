@@ -94,6 +94,8 @@ jobs:
             src/impresion/impresion-aislamiento-http.integration.spec.ts \
             src/integraciones/integraciones-aislamiento-http.integration.spec.ts \
             src/workers/admision-colas.integration.spec.ts \
+            src/workers/contexto-calculos.integration.spec.ts \
+            src/workers/geometria/geometria.worker.spec.ts \
             src/motor-universal/geometria-vectorial/cache-presupuesto.integration.spec.ts \
             src/motor-universal/geometria-vectorial/geometria-vectorial-cache.service.spec.ts \
             src/motor-universal/geometria-vectorial/analisis-vectorial-async.service.spec.ts \

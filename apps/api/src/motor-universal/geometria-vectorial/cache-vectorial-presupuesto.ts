@@ -1,3 +1,5 @@
+import { serializarJsonAcotado } from '../../common/json-acotado';
+
 /** Presupuesto de datos serializados; no equivale a toda la RAM de Redis/Node.
  * Es caché prescindible: nunca usar para entradas de trabajos aceptados. */
 export const PRESUPUESTO_CACHE_VECTORIAL = {
@@ -23,24 +25,7 @@ export const CLAVES_CACHE_VECTORIAL = [
  * descubrir después que no entra. La cuenta es conservadora (incluye separadores).
  * No compacta referencias: el JSON leído tampoco puede expandirse como un DAG. */
 export function serializarEntradaCache(valor: unknown): string | null {
-  let restante: number = PRESUPUESTO_CACHE_VECTORIAL.entradaBytes;
-  const limite = new Error('Entrada demasiado grande para caché.');
-  try {
-    return JSON.stringify(valor, (clave, dato: unknown) => {
-      restante -= clave.length * 6 + 4;
-      if (typeof dato === 'string') {
-        if (dato.length > restante) throw limite;
-        restante -= Buffer.byteLength(JSON.stringify(dato), 'utf8');
-      } else if (dato === null || typeof dato !== 'object') {
-        restante -= 24;
-      } else restante -= 2;
-      if (restante < 0) throw limite;
-      return dato;
-    });
-  } catch (error) {
-    if (error === limite) return null;
-    throw error;
-  }
+  return serializarJsonAcotado(valor, PRESUPUESTO_CACHE_VECTORIAL.entradaBytes);
 }
 
 /** Todo el cupo se aplica dentro de una única operación, entre réplicas.

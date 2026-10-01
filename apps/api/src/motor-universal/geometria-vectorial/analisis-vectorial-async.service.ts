@@ -1,6 +1,8 @@
 import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -30,7 +32,8 @@ import { MotorCotizacionError } from '../motor-error';
 import type { ProblemaNesting, SolucionNesting } from './contrato-nesting';
 import { timeoutOpenNestMs } from '../../workers/geometria/politica-busqueda';
 
-const TTL_PREPARACION_SEGUNDOS = 24 * 60 * 60;
+import { serializarJsonAcotado } from '../../common/json-acotado';
+import { CUPO_CALCULOS } from '../../workers/cola-calculos';
 const PREFIX_PREPARACION = 'grafo:geometry:vector-analysis:v1';
 
 export type ResultadoAnalisisVectorial = ReturnType<
@@ -107,12 +110,22 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     if (!preparacion.trabajo)
       throw new Error('No se generó el trabajo de nesting vectorial.');
 
+    const contextoAnalisis = serializarJsonAcotado(
+      preparacion.contexto,
+      CUPO_CALCULOS.bytesTrabajo,
+    );
+    if (!contextoAnalisis)
+      throw new HttpException(
+        'El diseño requiere demasiada información para este cálculo. Reducí su complejidad.',
+        HttpStatus.PAYLOAD_TOO_LARGE,
+      );
     const trabajo = await (
       calculoCotizacion
         ? this.jobs.crearParaCotizacion.bind(this.jobs)
         : this.jobs.crear.bind(this.jobs)
     )({
       tenantId: input.tenantId,
+      contextoAnalisis: preparacion.contexto,
       dto: {
         motor: preparacion.trabajo.motor,
         placa: preparacion.trabajo.placa,
@@ -135,7 +148,6 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
       await this.cache.guardarCompartido(entry);
       return vistaCache(entry, input.dto.nombreArchivo);
     }
-    await this.guardarPreparacion(trabajo.id, preparacion.contexto);
     return vistaDesdeTrabajo(trabajo);
   }
 
@@ -147,7 +159,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     if (trabajo.estado !== 'completado' || !trabajo.resultado)
       return vistaDesdeTrabajo(trabajo);
 
-    const contexto = await this.leerPreparacion(jobId);
+    const contexto = await this.leerPreparacion(tenantId, jobId);
     if (!contexto || contexto.tenantId !== tenantId) {
       throw new NotFoundException(
         'El contexto del análisis vectorial venció o no está disponible.',
@@ -272,21 +284,13 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     this.redis = undefined;
   }
 
-  private async guardarPreparacion(
-    jobId: string,
-    contexto: PreparacionAnalisisOpenNest,
-  ): Promise<void> {
-    await this.client().set(
-      clavePreparacion(jobId),
-      JSON.stringify(contexto),
-      'EX',
-      TTL_PREPARACION_SEGUNDOS,
-    );
-  }
-
   private async leerPreparacion(
+    tenantId: string,
     jobId: string,
   ): Promise<PreparacionAnalisisOpenNest | null> {
+    // La lectura anterior sólo permite drenar trabajos aceptados antes del despliegue.
+    const actual = await this.jobs.leerContextoAnalisis(tenantId, jobId);
+    if (actual) return actual;
     const raw = await this.client().get(clavePreparacion(jobId));
     if (!raw) return null;
     try {

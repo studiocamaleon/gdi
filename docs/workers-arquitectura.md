@@ -127,6 +127,16 @@ cantidades cabe en el cupo por cantidad; también debe cumplir el límite de
 bytes. Los límites son independientes por cola: una cotización pendiente no
 ocupa el cupo de los nestings que necesita para terminar.
 
+El análisis vectorial guarda la información para reconstruir su vista dentro
+de los datos del mismo job. Ese contexto cuenta completo en el cupo de bytes,
+se escribe al aceptar el trabajo y se retira con él. No hay una escritura
+separada que pueda quedar huérfana. El worker excluye ese contexto antes de
+llamar al motor nativo. La consulta verifica siempre la empresa del trabajo.
+Durante la transición se siguen leyendo las preparaciones anteriores con su
+TTL original; no se crean nuevas claves del prefijo `vector-analysis:v1`.
+Su retención histórica y los datos de jobs terminales requieren medición
+separada: el cupo de pendientes no limita esos resultados retenidos.
+
 Al alcanzar el cupo, el productor devuelve **429** y conserva los trabajos ya
 aceptados. Una entrada demasiado grande devuelve **413**. Terminar o cancelar
 un trabajo libera capacidad al evaluar la siguiente alta; el resultado
@@ -150,6 +160,12 @@ en `127.0.0.1:16387`, indicado por `TEST_QUEUE_REDIS_URL`. Prueba productores
 y BullMQ reales, concurrencia, reinicios, cortes de conexión, reintentos y
 cupos de ambas familias. El workflow `security-boundaries.yml` crea ese
 servicio de prueba sin credenciales cloud.
+
+`contexto-calculos.integration.spec.ts` comprueba el cupo completo, retiro sin
+preparaciones huérfanas, recuperación desde otro servidor, aislamiento entre
+empresas, deduplicación y lectura de trabajos anteriores sobre ese mismo Redis
+desechable. El resultado se resuelve en JavaScript en este ensayo; no ejecuta
+el optimizador nativo.
 
 ## Ejecución local
 
