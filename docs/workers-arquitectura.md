@@ -66,11 +66,50 @@ lo que no levanta HTTP, guards ni los cron que todavía viven en el API.
   cambie de vista o se corte la conexión original.
 - Semáforo distribuido por tenant para cotización y geometría. Una ráfaga de
   una empresa se reprograma sin fallar y deja avanzar trabajos de las demás.
-- Caché compartida de soluciones validadas durante siete días, configurable
-  con `GRAFONEST_CACHE_TTL_SECONDS`.
+- Caché compartida de soluciones validadas con vencimiento máximo de siete días,
+  configurable con `GRAFONEST_CACHE_TTL_SECONDS`, y presupuestos de espacio.
 
 El job de medición sigue siendo el smoke liviano para separar una falla de
 Redis/BullMQ de una falla de la dependencia nativa.
+
+## Espacio de la caché vectorial
+
+La caché conserva resultados reutilizables; si una entrada vence o sale por
+capacidad, el motor vuelve a calcular desde la fuente que conserva la solicitud.
+El resultado de un trabajo terminado se entrega aunque no quepa en la caché.
+No usar este mecanismo para descartar entradas pendientes ni contextos necesarios
+para recuperar un trabajo aceptado.
+
+| Datos serializados | Por proceso (L1) | Redis compartido (L2) |
+| --- | ---: | ---: |
+| Total | 16 MiB / 100 entradas | 32 MiB / 128 entradas |
+| Una empresa | 4 MiB / 32 entradas | 8 MiB / 32 entradas |
+| Una entrada | 2 MiB | 2 MiB |
+
+La serialización tiene presupuesto previo y conservador; algunas entradas muy
+fragmentadas pueden quedar fuera aunque su JSON final pese menos de 2 MiB. No se
+redondean coordenadas. L1 conserva strings y entrega copias independientes, sin
+retener un árbol de objetos ampliable por sus consumidores. Los valores son
+presupuestos de JSON, **no mediciones ni límites de toda la RAM de Node/Redis**.
+
+L2 aplica cantidad y bytes dentro de Lua, compartido entre réplicas. Usa tres
+claves fijas: datos, uso y vencimiento. Retira primero las entradas menos utilizadas
+de la misma empresa cuando ésta agota su cupo; después aplica el límite global.
+Las lecturas L1 actualizan sólo el orden local. Redis registra las escrituras y
+lecturas L2; no representa cada consulta que se resolvió desde L1. Una caída de
+esta caché permite recalcular; no evita que otras operaciones que requieren
+Redis puedan fallar.
+
+El espacio `analysis:{v4}:…` no lee la caché histórica `analysis:v3:…`. En el
+primer despliegue del cambio, verificar los bytes y TTL del prefijo antiguo:
+dejar vencer sus entradas o retirar **sólo esa caché reconstruible** una vez
+actualizadas todas las réplicas. No afirmar un límite total durante la transición
+ni borrar colas, preparaciones o resultados de trabajos. Esos datos tienen otro
+ciclo de vida y requieren su propio presupuesto.
+
+`cache-presupuesto.integration.spec.ts` usa Redis desechable en 127.0.0.1:16387:
+cantidad/bytes, concurrencia, empresas, reinicio, vencimiento, Unicode, descarte
+de resultados grandes y fallo de Redis. Nunca ejecutarla sobre Redis persistente.
 
 ## Admisión de cálculos
 

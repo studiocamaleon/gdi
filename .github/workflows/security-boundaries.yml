@@ -94,6 +94,9 @@ jobs:
             src/impresion/impresion-aislamiento-http.integration.spec.ts \
             src/integraciones/integraciones-aislamiento-http.integration.spec.ts \
             src/workers/admision-colas.integration.spec.ts \
+            src/motor-universal/geometria-vectorial/cache-presupuesto.integration.spec.ts \
+            src/motor-universal/geometria-vectorial/geometria-vectorial-cache.service.spec.ts \
+            src/motor-universal/geometria-vectorial/analisis-vectorial-async.service.spec.ts \
             src/motor-universal/geometria-vectorial/dxf-seguro.spec.ts \
             src/mcp/__tests__/armar-jobcontext.spec.ts \
             src/panel-general/__tests__/panel-actividad-entradas.spec.ts \
