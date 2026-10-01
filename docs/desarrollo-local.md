@@ -2,6 +2,8 @@
 
 ## Impresión rígida y corte — comprobación local del 01/10/2026
 
+La comprobación local descrita abajo se publicó posteriormente junto con el arreglo de primer ingreso en `b378ae41e`, desde `codex/acceso-clave-provisoria` y el PR #13. Staging y producción quedaron verificados; consultar los [resultados del despliegue](../deploy/produccion/VALIDACION.md). La compilación completa con tipos pasó en remoto. El worktree local conserva su rama y configuración de desarrollo.
+
 - Rama de desarrollo: `codex/layout-impresion-laser`, basada en `b7d4842e2`. Conserva la base de seguridad ya desplegada; depende del PR #12 todavía sin integrar. Un futuro PR debe declarar esa dependencia y ajustar su base cuando se integre.
 - La API del worktree `meta-cloud-base` ejecuta la corrección en `codex/local-layout-impresion-laser`, manteniendo su configuración local. Sin cambios de migraciones, datos maestros, credenciales, workers ni tareas programadas. Sin despliegue en staging o producción.
 - La impresión sobre placa considera antes del acomodo los cortes activos que usan el mismo material, incluidos extras y selección comercial de máquina. Mantiene las dimensiones físicas de la placa, las posiciones compartidas y el costeo del tramo realmente impreso.

@@ -1,5 +1,15 @@
 # Validación de producción
 
+## Primer ingreso e impresión rígida con corte — 01/10/2026, 16:20 UTC
+
+- Publicación conjunta autorizada después del ensayo local y de staging. API y ambos workers ejecutan `b378ae41ead10c5a6ad08b0432aabecb660a5859`, imagen `registry.fly.io/grafoprint-production-api@sha256:f4171c0f2035177c75d8794a52a0cbfc526687f1b9897726a9e57088ab8e0319`. Se promovió el mismo digest probado en staging, sin recompilar. Web conserva `c42d6d506`; PDF y copiador conservan sus imágenes. Mismas máquinas, tamaños y controles de salud correctos.
+- Corrige el bloqueo de `/tenants/current` posterior a un login válido con clave provisoria: permite mostrar el cambio obligatorio de contraseña. No se modificaron claves ni permisos de usuarios existentes. El alta de Usuarios continúa entregando clave provisoria, sin correo automático.
+- El acomodo de impresión rígida incorpora el área útil de los cortes posteriores sobre el mismo material. En la imagen activa se comprobaron nueve piezas, dos placas y posiciones idénticas para impresión y láser, sin escribir datos de negocio. También se confirmó que la excepción de clave provisoria sólo está en el método de contexto de sesión.
+- Pasaron 207 pruebas locales y los controles remotos de [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36889386716) y [contenedores con tipos](https://github.com/studiocamaleon/gdi/actions/runs/36889386717). El recorrido HTTPS de primer ingreso, cambio de clave y permisos se completó con un operador ficticio en [staging](../staging/VALIDACION.md); no se usaron contraseñas de personas reales para el ensayo de producción.
+- Tras el despliegue, HTTPS de web/API devuelve 200 y PostgreSQL está disponible. Contexto vía web sin sesión: 401; API directa protegida: 403. Sin nuevas migraciones, seeds, resets ni cambios de DNS, integraciones fiscales o datos comerciales.
+- Respaldo previo de las 16:00 UTC firmado y descifrado antes de desplegar. Fuentes nuevas cifradas bajo retención e inventario actualizado. Copia posterior `bf89d357-27b8-4358-bc72-18a3c3cea07f`, completada a las 16:19:47 UTC: firma y descifrado aprobados, 301 migraciones, un archivo e imágenes/fuentes correctas. No se repitió la restauración SQL. Constructor remoto y túnel retirados; Docker local no se reinició.
+- [PR #13](https://github.com/studiocamaleon/gdi/pull/13), dependiente de #12, sin fusionar. Reversión de código disponible al digest backend anterior `338ce43559d5d91558f32f52587d93cd8200206aa71b9175071b41157e3b2b0e`; conserva el esquema pero recupera los dos fallos corregidos. No requiere revertir datos.
+
 ## Retenciones y acreditaciones — 01/10/2026, 10:35 UTC
 
 - Despliegue expresamente autorizado después de probar en local y staging. Backend `c0aa8cf46cf31a00c942afd9d99dc7f952475690` y web `c42d6d5063ce9cea23ae037475443edc0b6a6156`; imágenes promovidas sin recompilar desde los artefactos probados de staging. Los cuatro servicios terminaron saludables y conservan sus tamaños. PDF, copiador, DNS e integraciones fiscales no cambiaron.

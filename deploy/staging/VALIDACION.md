@@ -1,5 +1,16 @@
 # Validación de staging — historial
 
+## Primer ingreso e impresión rígida con corte — 01/10/2026, 16:20 UTC
+
+- Publicación conjunta autorizada. API y ambos workers ejecutan `b378ae41ead10c5a6ad08b0432aabecb660a5859`, imagen `registry.fly.io/grafoprint-staging-api@sha256:f4171c0f2035177c75d8794a52a0cbfc526687f1b9897726a9e57088ab8e0319`. Web conserva `c42d6d506`; PDF y copiador conservan sus imágenes. Mismas máquinas y tamaños; sin nuevas migraciones, seeds, resets ni cambios de DNS.
+- Primer acceso: una clave provisoria puede consultar `/tenants/current` para mostrar «Elegí tu clave». La excepción está limitada a ese método; las operaciones de empresa continúan bloqueadas hasta cambiar la contraseña. El alta de Usuarios continúa entregando clave provisoria al administrador, sin envío automático de correo.
+- Impresión rígida: considera el área de los cortes posteriores activos sobre el mismo material antes del acomodo. Conserva placa física, posiciones compartidas y consumo impreso; mantiene las optimizaciones existentes si el corte no agrega restricciones.
+- Validación local del conjunto: 207 casos aprobados en diez suites. La revisión ejecutable aprobó [permisos HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36889386716) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36889386717). Compilación remota con tipos; no se compiló en Docker de la Mac.
+- Ensayo HTTPS con una empresa y operador ficticios: login, cookie segura, contexto de sesión y página SSR de cambio de clave, rechazo de operaciones con clave provisoria, cambio personal, revocación de cookie anterior, conservación del rol, rechazo de la clave anterior y reingreso con la nueva. Sólo se retiraron los fixtures creados por el ensayo; sin correo ni proveedores externos.
+- Motor compilado en Fly: nueve piezas de 400 × 400 mm, dos placas físicas de 1220 × 1220 mm y área de corte de 1300 × 1000 mm; impresión y corte conservan las mismas posiciones y no exceden el área accesible. Cálculo en memoria, sin guardar presupuestos ni órdenes.
+- Fuentes cifradas y retenidas en B2; inventario del copiador actualizado. Copia posterior `b053ccf7-9461-40ab-b25c-fd24be4b2514`, completada a las 16:16:59 UTC: firma y descifrado del manifiesto aprobados, 301 migraciones, 13 archivos y fuentes/imágenes correctas. No se repitió la restauración SQL. Constructor y túnel temporales retirados al finalizar.
+- [PR #13](https://github.com/studiocamaleon/gdi/pull/13), dependiente de #12, sin fusionar. La misma imagen se promovió a producción; ver [su registro](../produccion/VALIDACION.md).
+
 ## Medios de pago y liquidaciones reales — 01/10/2026, 10:32 UTC
 
 - API y ambos workers ejecutan `c0aa8cf46cf31a00c942afd9d99dc7f952475690`, imagen `registry.fly.io/grafoprint-staging-api@sha256:338ce43559d5d91558f32f52587d93cd8200206aa71b9175071b41157e3b2b0e`. La web ejecuta `c42d6d5063ce9cea23ae037475443edc0b6a6156`, imagen `registry.fly.io/grafoprint-staging-web@sha256:839e3c369a7c1a4643ce8bb8c876dd249cbbf223f1793d9cdbd5fdc77b9e827b`. PDF y copiador conservan las imágenes anteriores. Mismos tamaños, sin cambios de DNS ni credenciales de aplicación.
