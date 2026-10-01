@@ -35,9 +35,13 @@
 
 ### Dominios y pendientes para habilitar el uso
 
-Donweb contiene A/AAAA para `app.grafoprint.com.ar` y `api.grafoprint.com.ar`, y los CNAME ACME/TXT de propiedad indicados por Fly. Los DNS autoritativos, Google, Cloudflare y consultas desde la API en Fly devuelven las direcciones esperadas. Fly todavía informa ausencia de registros en su verificador: no se declara HTTPS operativo para esos dos nombres hasta comprobar certificados y conexión real. Los nombres `.fly.dev` responden con HTTPS válido. La web comercial y los DNS de correo conservan sus destinos.
+Donweb contiene A/AAAA para `app.grafoprint.com.ar` y `api.grafoprint.com.ar`, y los CNAME ACME/TXT de propiedad indicados por Fly. Tras la espera inicial de propagación, Fly emitió ambos certificados administrados a las 06:06 UTC: estado Ready/active, RSA y ECDSA, vencimiento 30/12/2026. A las 06:13 UTC se comprobó HTTPS real con validación estricta: web `/login` y `/api/health`, y API `/api`, todos 200. La web comercial y los DNS de correo conservan sus destinos.
 
-Pendientes: HTTPS y origen web definitivos; alta de empresa vacía con Founder privado/manual; invitación y acceso; configuración fiscal por empresa; recorrido funcional con datos sintéticos en entorno aislado y sin emisión fiscal. Paddle live continúa separado. No fusionar PR ni declarar seguridad absoluta a partir de estas verificaciones.
+Se aplicó `WEB_ORIGIN=https://app.grafoprint.com.ar` en la máquina web existente, reutilizando su imagen y tamaño. Salud correcta tras el reinicio de esa máquina. La prueba de creación de sesión sin token devuelve 400 desde el origen definitivo, y 403 desde el anterior `.fly.dev` o un origen ajeno. No se crearon sesiones con esas pruebas. Falta comprobar el ingreso interactivo del administrador en el dominio definitivo.
+
+El panel de AFIP SDK, proyecto Grafoprint Pro, registra dos consultas Production/WSFE `FECompUltimoAutorizado` (01:48 y 02:50 hora argentina). La sección CUITs mostró cero para el período seleccionado; ese listado no sustituye el resultado de las consultas ni requiere cargar allí el certificado propio, que la integración envía por API. Sin emisiones.
+
+Pendientes: ingreso del administrador en el dominio definitivo; alta de empresa vacía con Founder privado/manual; invitación y acceso; configuración fiscal por empresa; recorrido funcional con datos sintéticos en entorno aislado y sin emisión fiscal. Paddle live continúa separado. No fusionar PR ni declarar seguridad absoluta a partir de estas verificaciones.
 
 ## Preparación — 01/10/2026
 
