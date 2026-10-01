@@ -713,7 +713,12 @@ function limitarImpresionPorCorte(
     config.separationVMm = Math.max(config.separationVMm, limite.separationVMm);
     config.allowRotation = config.allowRotation && limite.allowRotation;
   }
-  return config;
+  const cambia = config.allowRotation !== impresion.allowRotation ||
+    config.separationHMm !== impresion.separationHMm ||
+    config.separationVMm !== impresion.separationVMm ||
+    (Object.keys(config.margins) as Array<keyof typeof config.margins>)
+      .some(lado => config.margins[lado] !== impresion.margins[lado]);
+  return cambia ? config : impresion;
 }
 
 function finalizarImpresionCompartida(

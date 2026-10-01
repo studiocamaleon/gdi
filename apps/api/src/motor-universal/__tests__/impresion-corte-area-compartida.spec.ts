@@ -144,6 +144,14 @@ describe('Impresión rígida y corte sobre un único layout compatible', () => {
     });
     expect(n.metricasRaw.areaTotalMm2).toBe(2 * 1220 * 1220);
   });
+  it('conserva las optimizaciones existentes si el corte no agrega restricciones', async () => {
+    const { impresion, corte } = pasos();
+    corte.maquina!.largoUtil = 1400;
+    const original = await runNestingForPaso(impresion, contexto(), material);
+    const conjunto = await runNestingForPaso(impresion, contexto(), material, { pasosCortePosteriores: [corte] });
+    expect(conjunto).toEqual(original);
+    expect(conjunto?.visualConfig?.restriccionCortePosterior).toBeUndefined();
+  });
   it('también conserva el registro cuando el corte viene de un vector', async () => {
     const { impresion, corte } = pasos();
     const ctx = contexto();
