@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  ForbiddenException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -590,12 +591,20 @@ export class AdministracionController {
 
   // ── Cobros ───────────────────────────────────────────────────────────
 
-  @Permiso("administracion.cobrar.ver")
+  @Permiso("administracion.cobrar.ver", "comercial.ordenes.ver")
   @Get('cobros')
   cobros(
     @CurrentSession() auth: CurrentAuth,
     @Query('ordenId') ordenId?: string,
   ) {
+    // El resumen de pagos de una OT pertenece a su vista comercial. No concede
+    // el listado global de Cobrar ni evita las restricciones de cajas del servicio.
+    if (
+      !auth.permisos?.has('administracion.cobrar.ver') &&
+      (!ordenId || !auth.permisos?.has('comercial.ordenes.ver'))
+    ) {
+      throw new ForbiddenException('Seleccioná una orden para consultar sus cobros.');
+    }
     return this.cobrosService.findAll(auth, { ordenId });
   }
 
@@ -620,27 +629,39 @@ export class AdministracionController {
    * después es un 302 a una URL firmada. Si el render de fondo falló, este
    * pedido lo rehace.
    */
-  @Permiso("administracion.cobrar.ver")
+  @Permiso("administracion.cobrar.ver", "administracion.cobrar")
   @Get('cobros/:id/recibo/pdf')
   async pdfRecibo(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
     @Res() res: Response,
   ): Promise<void> {
-    await this.cobrosService.findOne(auth, id);
+    await this.exigirLecturaRecibo(auth, id);
     const archivo = await this.recibosService.pdfDe(id, auth.tenantId);
     res.redirect(302, await this.archivos.urlDeDescarga(archivo.id));
   }
 
   /** El link que se comparte con el cliente (`/c/<token>`), si ya se emitió. */
-  @Permiso("administracion.cobrar.ver")
+  @Permiso("administracion.cobrar.ver", "administracion.cobrar")
   @Get('cobros/:id/recibo/enlace')
   async enlaceRecibo(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    await this.cobrosService.findOne(auth, id);
+    await this.exigirLecturaRecibo(auth, id);
     return { url: await this.recibosService.urlPublica(id) };
+  }
+
+  private async exigirLecturaRecibo(auth: CurrentAuth, id: string) {
+    // findOne comprueba tenant y cuenta operable antes de acceder al archivo.
+    const cobro = await this.cobrosService.findOne(auth, id);
+    if (
+      !auth.permisos?.has('administracion.cobrar.ver') &&
+      (!auth.permisos?.has('administracion.cobrar') ||
+        !auth.permisos?.has('comercial.ordenes.ver') || !cobro.ordenId)
+    ) {
+      throw new ForbiddenException('No tenés acceso a este recibo.');
+    }
   }
 
   @Permiso("administracion.cobrar.gestionar")
