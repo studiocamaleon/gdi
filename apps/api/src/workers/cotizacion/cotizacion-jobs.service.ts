@@ -3,6 +3,7 @@ import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empre
 import { capacidadesJobGeometria } from '../../suscripciones/capacidades-geometria';
 import { capacidadesJobCopiado } from '../../suscripciones/capacidades-copiado';
 import {
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -12,7 +13,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { Job, Queue, type JobState } from 'bullmq';
 import type { CotizarInput, CotizarOutput } from '../../motor-universal/tipos';
-import { conexionRedisApi } from '../redis';
+import { ColaCalculos } from '../cola-calculos';
 import { restaurarJson } from '../../common/json-compartido';
 
 export const COLA_COTIZACIONES = 'grafo-quotes-v1';
@@ -101,7 +102,7 @@ export class CotizacionJobsService implements OnApplicationShutdown {
       await this.capacidadesPlan.exigirTodas(input.cotizacion.tenantId, [
         'analisis_vectorial',
         'aprovechamiento_cotizacion',
-      'nesting_irregular',
+        'nesting_irregular',
       ]);
     const data: CotizacionJobData = {
       preparacionNestingId: input.preparacionNestingId,
@@ -138,6 +139,7 @@ export class CotizacionJobsService implements OnApplicationShutdown {
       const job = (await this.getQueue().getJob(jobId)) ?? queued;
       return this.vistaDesdeJob(job);
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       this.logger.warn(
         `No se pudo encolar cotización: ${textoErrorLog(error)}`,
       );
@@ -247,11 +249,11 @@ export class CotizacionJobsService implements OnApplicationShutdown {
 
   private getQueue() {
     if (this.queue) return this.queue;
-    this.queue = new Queue<
+    this.queue = new ColaCalculos<
       CotizacionJobData,
       CotizarOutput,
       typeof TRABAJO_COTIZAR
-    >(COLA_COTIZACIONES, { connection: conexionRedisApi() });
+    >(COLA_COTIZACIONES, (data) => data.input.tenantId);
     this.queue.on('error', (error) =>
       this.logger.warn(`Cola de cotizaciones: ${textoErrorLog(error)}`),
     );

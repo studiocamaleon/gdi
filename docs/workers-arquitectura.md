@@ -72,6 +72,46 @@ lo que no levanta HTTP, guards ni los cron que todavía viven en el API.
 El job de medición sigue siendo el smoke liviano para separar una falla de
 Redis/BullMQ de una falla de la dependencia nativa.
 
+## Admisión de cálculos
+
+`ColaCalculos` limita los trabajos aceptados en cada una de las tres colas,
+además del semáforo que decide cuáles se ejecutan. Cuenta los trabajos en
+espera, activos, demorados y pausados. Los cupos iniciales son:
+
+| Por cola | Cantidad | Datos de entrada acumulados |
+| --- | ---: | ---: |
+| Una empresa | 32 | 8 MiB |
+| Todas las empresas | 128 | 32 MiB |
+
+Cada entrada admite hasta 8 MiB. Una preparación comercial de hasta veinte
+cantidades cabe en el cupo por cantidad; también debe cumplir el límite de
+bytes. Los límites son independientes por cola: una cotización pendiente no
+ocupa el cupo de los nestings que necesita para terminar.
+
+Al alcanzar el cupo, el productor devuelve **429** y conserva los trabajos ya
+aceptados. Una entrada demasiado grande devuelve **413**. Terminar o cancelar
+un trabajo libera capacidad al evaluar la siguiente alta; el resultado
+terminado conserva su retención habitual. Un reintento de nesting fallido
+tiene una identidad nueva y las solicitudes iguales en curso se comparten.
+
+La admisión y el alta usan `WATCH`/`MULTI` en una conexión exclusiva de Redis.
+El registro sobrevive a reinicios y no usa reservas con vencimiento. Si cambia
+la conexión, el alta se rechaza; no continúa con una vigilancia perdida.
+Los productores no deben usar `addBulk` ni reactivar jobs terminales evitando
+esta admisión.
+
+Antes de desplegar por primera vez, dejar terminar los cálculos pendientes
+de la versión anterior. Mientras existan jobs sin registro de admisión, las
+nuevas altas reciben **503**; no se borran ni se reinician las colas para
+actualizar. Estos cupos **no limitan toda la memoria de Redis**: resultados
+terminados, cachés e índices necesitan presupuesto y medición adicionales.
+
+La suite `admision-colas.integration.spec.ts` usa un Redis desechable exclusivo
+en `127.0.0.1:16387`, indicado por `TEST_QUEUE_REDIS_URL`. Prueba productores
+y BullMQ reales, concurrencia, reinicios, cortes de conexión, reintentos y
+cupos de ambas familias. El workflow `security-boundaries.yml` crea ese
+servicio de prueba sin credenciales cloud.
+
 ## Ejecución local
 
 ```bash

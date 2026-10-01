@@ -22,6 +22,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
+      redis-colas:
+        image: redis:7-alpine
+        ports:
+          - 16387:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
       postgres:
         image: postgres:16-alpine
         env:
@@ -42,6 +51,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5436/gdi_saas_test?schema=public
       GRAFO_LOCAL_DISABLE_CRON: 'true'
       TZ: UTC
+      TEST_QUEUE_REDIS_URL: redis://127.0.0.1:16387
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -83,6 +93,7 @@ jobs:
             src/cotizaciones/cotizaciones-aislamiento-http.integration.spec.ts \
             src/impresion/impresion-aislamiento-http.integration.spec.ts \
             src/integraciones/integraciones-aislamiento-http.integration.spec.ts \
+            src/workers/admision-colas.integration.spec.ts \
             src/motor-universal/geometria-vectorial/dxf-seguro.spec.ts \
             src/mcp/__tests__/armar-jobcontext.spec.ts \
             src/panel-general/__tests__/panel-actividad-entradas.spec.ts \
