@@ -59,7 +59,7 @@ export const MODULOS = [
   },
   {
     clave: 'reportes',
-    label: 'Reportes',
+    label: 'Centro de análisis',
     descripcion: 'Métricas del negocio, ventas y producción.',
   },
   {

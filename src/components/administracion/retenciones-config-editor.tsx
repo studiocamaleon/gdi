@@ -1,7 +1,14 @@
 "use client";
 
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { CalendarDays, ChevronDown, PlusIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import styles from "./retenciones-config-editor.module.css";
 import {
   Field,
   FieldGroup,
@@ -24,6 +31,40 @@ export const AGENTES_RETENCION = [
   { value: "cliente", label: "Cliente" },
 ];
 
+function VigenciaRetencion({
+  regla,
+  children,
+}: {
+  regla: ReglaRetencion;
+  children: ReactNode;
+}) {
+  const [abierta, setAbierta] = useState(
+    !!(regla.vigenteDesde || regla.vigenteHasta),
+  );
+  return (
+    <Collapsible
+      open={abierta}
+      onOpenChange={setAbierta}
+      className={styles.vigencia}
+    >
+      <CollapsibleTrigger
+        render={<Button type="button" variant="ghost" size="sm" />}
+        className={styles.desplegar}
+      >
+        <CalendarDays data-icon="inline-start" />
+        Vigencia
+        <span>
+          {regla.vigenteDesde || regla.vigenteHasta
+            ? "Fechas configuradas"
+            : "Sin límite de fechas"}
+        </span>
+        <ChevronDown data-icon="inline-end" className={styles.flecha} />
+      </CollapsibleTrigger>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function RetencionesConfigEditor({
   reglas,
   onChange,
@@ -36,12 +77,35 @@ export function RetencionesConfigEditor({
   const editar = (id: string, patch: Partial<ReglaRetencion>) =>
     onChange(reglas.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   return (
-    <FieldGroup>
+    <FieldGroup className={styles.editor}>
       {reglas.map((r, i) => (
-        <FieldSet key={r.id}>
-          <FieldLegend>Retención {i + 1}</FieldLegend>
-          <FieldGroup>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FieldSet key={r.id} className={styles.regla}>
+          <FieldLegend className="sr-only">Retención {i + 1}</FieldLegend>
+          <div className={styles.cabecera}>
+            <span className={styles.numero}>
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <div className={styles.identidad}>
+              <span className={styles.etiqueta}>Retención estimada</span>
+              <strong>{RETENCION_REGIMEN_LABELS[r.regimen]}</strong>
+            </div>
+            <span className={styles.tasa}>
+              {r.alicuota.toLocaleString("es-AR", { maximumFractionDigits: 3 })}
+              <small>%</small>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Quitar retención ${i + 1}`}
+              title={`Quitar retención ${i + 1}`}
+              onClick={() => onChange(reglas.filter((x) => x.id !== r.id))}
+            >
+              <Trash2Icon />
+            </Button>
+          </div>
+          <FieldGroup className={styles.campos}>
+            <div className={styles.grilla}>
               <Field>
                 <FieldLabel htmlFor={`${r.id}-regimen`}>Régimen</FieldLabel>
                 <SelectField
@@ -91,17 +155,20 @@ export function RetencionesConfigEditor({
                 <FieldLabel htmlFor={`${r.id}-alicuota`}>
                   Alícuota (%)
                 </FieldLabel>
-                <Input
-                  id={`${r.id}-alicuota`}
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.001"
-                  value={r.alicuota}
-                  onChange={(e) =>
-                    editar(r.id, { alicuota: Number(e.target.value) })
-                  }
-                />
+                <div className={styles.porcentaje}>
+                  <Input
+                    id={`${r.id}-alicuota`}
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.001"
+                    value={r.alicuota}
+                    onChange={(e) =>
+                      editar(r.id, { alicuota: Number(e.target.value) })
+                    }
+                  />
+                  <span aria-hidden="true">%</span>
+                </div>
               </Field>
             </div>
             <Field>
@@ -128,43 +195,47 @@ export function RetencionesConfigEditor({
                 cargá su importe manualmente al registrar el cobro.
               </FieldDescription>
             </Field>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={`${r.id}-desde`}>Vigente desde</FieldLabel>
-                <Input
-                  id={`${r.id}-desde`}
-                  type="date"
-                  value={r.vigenteDesde ?? ""}
-                  onChange={(e) =>
-                    editar(r.id, { vigenteDesde: e.target.value || undefined })
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${r.id}-hasta`}>Vigente hasta</FieldLabel>
-                <Input
-                  id={`${r.id}-hasta`}
-                  type="date"
-                  value={r.vigenteHasta ?? ""}
-                  onChange={(e) =>
-                    editar(r.id, { vigenteHasta: e.target.value || undefined })
-                  }
-                />
-              </Field>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onChange(reglas.filter((x) => x.id !== r.id))}
-            >
-              <Trash2Icon data-icon="inline-start" />
-              Quitar retención {i + 1}
-            </Button>
+            <VigenciaRetencion regla={r}>
+              <div className={styles.grilla}>
+                <Field>
+                  <FieldLabel htmlFor={`${r.id}-desde`}>
+                    Vigente desde
+                  </FieldLabel>
+                  <Input
+                    id={`${r.id}-desde`}
+                    type="date"
+                    value={r.vigenteDesde ?? ""}
+                    onChange={(e) =>
+                      editar(r.id, {
+                        vigenteDesde: e.target.value || undefined,
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`${r.id}-hasta`}>
+                    Vigente hasta
+                  </FieldLabel>
+                  <Input
+                    id={`${r.id}-hasta`}
+                    type="date"
+                    value={r.vigenteHasta ?? ""}
+                    onChange={(e) =>
+                      editar(r.id, {
+                        vigenteHasta: e.target.value || undefined,
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </VigenciaRetencion>
           </FieldGroup>
         </FieldSet>
       ))}
       <Button
+        type="button"
         variant="outline"
+        className={styles.agregar}
         disabled={reglas.length >= 20}
         onClick={() =>
           onChange([
@@ -183,7 +254,7 @@ export function RetencionesConfigEditor({
         <PlusIcon data-icon="inline-start" />
         Agregar retención
       </Button>
-      <FieldDescription>
+      <FieldDescription className={styles.ayuda}>
         Usá la alícuota informada por el agente. Son anticipos fiscales: reducen
         el dinero recibido sin volver a sumar IIBB al costo del producto. Sin
         reglas, las retenciones se cargan manualmente.
