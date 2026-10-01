@@ -2,7 +2,7 @@ name: Comprobar permisos y separación de empresas
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'codex/**']
     # Este control será obligatorio para main: no filtrar por paths, porque
     # GitHub dejaría el requisito pendiente en PR de documentación o frontend.
   workflow_dispatch:
@@ -106,3 +106,32 @@ jobs:
             src/archivos/storage/local-confinamiento.spec.ts \
             src/archivos/storage/local.driver.spec.ts \
             src/archivos/storage/subida-inmutable.spec.ts
+      - name: Comprobar canal privado de producción y credenciales fiscales ficticias
+        working-directory: apps/api
+        run: |
+          node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/common/staging-ingress.spec.ts \
+            src/common/production-ingress.spec.ts \
+            src/fiscal-plataforma/certificado-arca.spec.ts \
+            src/administracion/__tests__/afip-credenciales-seguridad.spec.ts \
+            src/administracion/__tests__/afip-tickets.spec.ts
+      - name: Crear base desechable exclusiva para la prueba ARCA de Plataforma
+        working-directory: apps/api
+        run: |
+          node <<'NODE'
+          const { Client } = require('pg');
+          (async () => {
+            const c = new Client({ connectionString: process.env.DATABASE_URL });
+            await c.connect();
+            try { await c.query('CREATE DATABASE grafo_arca_20261001_test'); }
+            finally { await c.end(); }
+          })().catch(() => process.exit(1));
+          NODE
+      - name: Comprobar autorización, cifrado y concurrencia de certificados ARCA
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5436/grafo_arca_20261001_test?schema=public
+          MIGRATE_DATABASE_URL: postgresql://postgres:postgres@localhost:5436/grafo_arca_20261001_test?schema=public
+        run: |
+          npm run prisma:migrate:deploy
+          node node_modules/jest/bin/jest.js --runInBand --runTestsByPath src/plataforma/__tests__/fiscal-arca.integration.spec.ts

@@ -2,16 +2,23 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { Express, RequestHandler } from 'express';
 
-/** API de staging: sólo salud pública y pedidos autenticados de nuestra web. */
+/** Canal autenticado Next → API en Fly. No reemplaza los guards de sesión. */
 export function configurarEntradaStaging(express: Express): boolean {
-  if (process.env.STAGING_PRIVATE !== 'true') return false;
-  const token = process.env.STAGING_WEB_API_TOKEN;
+  const staging = process.env.STAGING_PRIVATE === 'true';
+  const production = process.env.GRAFO_DEPLOY_ENV === 'production';
+  if (staging && production)
+    throw new Error('Producción no puede usar la configuración de staging.');
+  if (!staging && !production) return false;
+  const tokenName = production ? 'WEB_API_TOKEN' : 'STAGING_WEB_API_TOKEN';
+  const token = process.env[tokenName];
   if (!token || token.length < 32) {
-    throw new Error('STAGING_WEB_API_TOKEN debe tener al menos 32 caracteres.');
+    throw new Error(`${tokenName} debe tener al menos 32 caracteres.`);
   }
   const digest = (value: string) => createHash('sha256').update(value).digest();
   const expected = digest(token);
-  const metaHabilitado = process.env.STAGING_META_WEBHOOK_ENABLED === 'true';
+  // El primer lanzamiento de producción no habilita Inbox ni cobros Paddle.
+  const metaHabilitado =
+    staging && process.env.STAGING_META_WEBHOOK_ENABLED === 'true';
   if (
     metaHabilitado &&
     (!process.env.META_APP_SECRET || !process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN)
@@ -54,7 +61,7 @@ export function configurarEntradaStaging(express: Express): boolean {
       return;
     }
     if (!timingSafeEqual(expected, digest(supplied))) {
-      res.status(403).json({ message: 'Acceso de staging restringido.' });
+      res.status(403).json({ message: 'Acceso directo a la API restringido.' });
       return;
     }
     if (!isIP(ip)) {

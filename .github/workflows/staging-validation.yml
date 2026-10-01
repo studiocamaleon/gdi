@@ -4,7 +4,7 @@ on:
   # Las ramas nuevas se validan por su PR, sin agregarlas a una lista manual.
   # Se comprueba también la combinación con main, usando sólo datos efímeros.
   pull_request:
-    branches: [main]
+    branches: [main, 'codex/**']
     paths:
       - '.github/workflows/staging-validation.yml'
       - 'deploy/**'

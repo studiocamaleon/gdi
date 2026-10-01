@@ -1,0 +1,42 @@
+app = "grafoprint-production-worker"
+primary_region = "gru"
+kill_signal = "SIGTERM"
+kill_timeout = 300
+
+[build]
+  dockerfile = "../Dockerfile"
+  build-target = "backend"
+
+[processes]
+  app = "node dist/src/workers/worker-main.js"
+
+[env]
+  # Desactivar sólo tras comprobar servicios, respaldos y efectos externos.
+  GRAFO_LOCAL_DISABLE_CRON = "true"
+  API_LIMITES_PREFIJO = "grafo:production:limites:v1"
+  META_WHATSAPP_PILOT_ENABLED = "false"
+  META_WHATSAPP_RECEPCION_PILOT_ENABLED = "false"
+  META_INBOX_PRUEBA_ENABLED = "false"
+  META_INBOX_ENVIOS_ENABLED = "false"
+  META_INBOX_ADJUNTOS_ENABLED = "false"
+  META_INBOX_PLANTILLAS_ENABLED = "false"
+  GRAFO_DEPLOY_ENV = "production"
+  FRONTEND_URL = "https://app.grafoprint.com.ar"
+  REGISTRO_PUBLICO_URL = "https://app.grafoprint.com.ar"
+  REGISTRO_PUBLICO_HABILITADO = "false"
+  PADDLE_ENV = "production"
+  AFIPSDK_ENVIRONMENT = "prod"
+  PDF_RENDER_URL = "http://grafoprint-production-pdf.internal:3000"
+  GRAFONEST_POOL_ID = "production"
+  GRAFONEST_POOL_CPU = "2"
+  GRAFONEST_POOL_MEMORY_MB = "3072"
+  GRAFONEST_NORMAL_MAX_ACTIVE = "1"
+  WORKER_GEOMETRY_CONCURRENCY = "1"
+  WORKER_GEOMETRY_HEAVY_CONCURRENCY = "1"
+  WORKER_QUOTE_CONCURRENCY = "2"
+
+# Sin servicio HTTP público.
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory = "4gb"
