@@ -1,6 +1,8 @@
+import { textoErrorLog } from '../common/log-seguro';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -17,6 +19,8 @@ import * as bcrypt from 'bcryptjs';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionCacheService } from '../auth/session-cache.service';
+import { bloquearIdentidad } from '../auth/mfa.service';
+import { revocarAccesoEmpresa } from '../auth/revocar-acceso-empresa';
 import { SuscripcionesService } from '../suscripciones/suscripciones.service';
 import { esIpOrangoValido, ipPermitida } from '../auth/ip';
 import {
@@ -170,15 +174,18 @@ export class UsuariosService {
           },
         }));
 
-      // Vale también para el que YA tenía cuenta en otra empresa: la clave se
-      // le pisa con la provisoria y la cambia al entrar.
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          passwordHash,
-          debeCambiarPassword: true,
-        },
-      });
+      // La identidad es global: dar acceso a ESTA empresa no autoriza a
+      // cambiar la contraseña personal que sirve en las demás.
+      if (!existente) {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { passwordHash, debeCambiarPassword: true },
+        });
+      } else if (!existente.passwordHash) {
+        throw new ConflictException(
+          'Esta cuenta tiene una activación pendiente. Su titular debe completar la invitación original antes de agregar otro acceso.',
+        );
+      }
 
       await tx.membership.upsert({
         where: {
@@ -224,7 +231,7 @@ export class UsuariosService {
     });
 
     return {
-      provisoria,
+      provisoria: yaTeniaCuenta ? null : provisoria,
       yaTeniaCuenta,
     };
   }
@@ -269,6 +276,7 @@ export class UsuariosService {
 
   async editar(auth: CurrentAuth, userId: string, dto: EditarUsuarioDto) {
     const { membership, rol } = await this.prisma.$transaction(async (tx) => {
+      if (dto.activa === false) await bloquearIdentidad(tx, userId);
       await bloquearCupoUsuarios(tx, auth.tenantId);
       const membership = await tx.membership.findUnique({
         where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
@@ -312,6 +320,7 @@ export class UsuariosService {
       }
 
       if (dto.activa === false) {
+        await revocarAccesoEmpresa(tx, auth.tenantId, userId);
         await tx.invitation.updateMany({
           where: {
             tenantId: auth.tenantId,
@@ -332,14 +341,6 @@ export class UsuariosService {
     // hasta el TTL del cache de sesión, que es justo cuando el admin está
     // mirando si funcionó.
     this.sessionCache.invalidarTenant(auth.tenantId);
-
-    // Desactivar tiene que cortar de verdad: las sesiones abiertas se revocan.
-    if (dto.activa === false) {
-      await this.prisma.authSession.updateMany({
-        where: { userId, currentTenantId: auth.tenantId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    }
 
     const quien = membership.user.nombreCompleto || membership.user.email;
     if (rol) {
@@ -379,23 +380,39 @@ export class UsuariosService {
    * estuviera abierto en otra máquina deja de valer.
    */
   async restablecerPassword(auth: CurrentAuth, userId: string) {
-    const membership = await this.prisma.membership.findUnique({
-      where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
-      include: { user: { select: { email: true, nombreCompleto: true } } },
-    });
-    if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
-
     const provisoria = generarProvisoria();
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        passwordHash: await bcrypt.hash(provisoria, 10),
-        debeCambiarPassword: true,
-      },
-    });
-    await this.prisma.authSession.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
+    const passwordHash = await bcrypt.hash(provisoria, 10);
+    const membership = await this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, userId);
+      const propio = await tx.membership.findUnique({
+        where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
+        include: {
+          user: {
+            select: { email: true, nombreCompleto: true, rolPlataforma: true },
+          },
+        },
+      });
+      if (!propio) throw new NotFoundException('Ese usuario no existe acá.');
+      // Incluye accesos inactivos: desactivar la otra membresía no debe
+      // convertir una identidad compartida en propiedad de este administrador.
+      const accesoAjeno = await tx.membership.findFirst({
+        where: { userId, tenantId: { not: auth.tenantId } },
+        select: { id: true },
+      });
+      if (propio.user.rolPlataforma || accesoAjeno) {
+        throw new ForbiddenException(
+          'Esta contraseña pertenece a una cuenta personal con otros accesos. Debe cambiarla su titular; esta empresa no puede restablecerla.',
+        );
+      }
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash, debeCambiarPassword: true },
+      });
+      await tx.authSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return propio;
     });
     this.sessionCache.invalidarTenant(auth.tenantId);
 
@@ -763,7 +780,7 @@ export class UsuariosService {
     } catch (error) {
       this.logger.error(
         `No pude registrar el evento de acceso ${evento.tipo}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }

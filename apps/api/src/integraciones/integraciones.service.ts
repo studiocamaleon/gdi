@@ -325,7 +325,9 @@ export class IntegracionesService {
       const motivo = alta.ok
         ? 'Wati respondió que la creó, pero no aparece en la cuenta.'
         : alta.motivo;
-      this.logger.warn(`No se pudo crear ${codigo}: ${motivo}`);
+      this.logger.warn(
+        `No se pudo confirmar la creación de la plantilla ${codigo}.`,
+      );
       return { codigo, ok: false, estado: 'SIN_SOMETER', motivo };
     }
 
@@ -346,9 +348,7 @@ export class IntegracionesService {
   ): Promise<{ codigo: string; ok: boolean; estado: string; motivo?: string }> {
     const envio = await this.wati.enviarAAprobacion(cred, id);
     if (!envio.ok) {
-      this.logger.warn(
-        `No se pudo enviar a revisión ${codigo}: ${envio.motivo}`,
-      );
+      this.logger.warn(`No se pudo enviar a revisión la plantilla ${codigo}.`);
       return { codigo, ok: false, estado: 'DRAFT', motivo: envio.motivo };
     }
     const final = (await this.wati.listarPlantillas(cred)).find(

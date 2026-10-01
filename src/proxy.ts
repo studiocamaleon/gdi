@@ -19,6 +19,7 @@ import {
 // rebota al home (no tiene sentido re-loguearse).
 const AUTH_PATHS = ["/login"];
 const PUBLIC_PATHS = [
+  "/recuperar-acceso",
   "/registro",
   "/terminos",
   "/privacidad",

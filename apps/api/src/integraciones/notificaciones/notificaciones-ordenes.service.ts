@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { TipoEnlacePublico } from '@prisma/client';
 
@@ -55,7 +56,7 @@ export class NotificacionesOrdenesService {
     } catch (error) {
       this.logger.error(
         `Falló al sincronizar avisos de la orden ${ordenId}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -105,7 +106,7 @@ export class NotificacionesOrdenesService {
     } catch (error) {
       this.logger.error(
         'No se pudo encolar el cambio de entrega.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }

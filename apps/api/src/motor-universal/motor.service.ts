@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { insertarPasosExtrasEnSecuencia, ordenarPasosConExtras } from '../productos-servicios/orden-pasos-producto';
 import { contextoStockCotizacion, DisponibilidadCotizacion } from './disponibilidad-materiales';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -961,7 +962,7 @@ export class MotorUniversalService {
       if (!(err instanceof MotorCotizacionError)) {
         this.logger.error(
           `Fallo inesperado cargando el producto ${input.productoId} para cotizar`,
-          err instanceof Error ? err.stack : String(err),
+          textoErrorLog(err),
         );
         throw err;
       }
@@ -2365,7 +2366,7 @@ export class MotorUniversalService {
       if (!esperado) {
         this.logger.error(
           `Fallo inesperado calculando precio [quoteRunId=${quoteRunId}]`,
-          error instanceof Error ? error.stack : String(error),
+          textoErrorLog(error),
         );
       }
       return fallar([

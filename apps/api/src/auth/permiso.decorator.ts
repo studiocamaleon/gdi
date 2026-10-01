@@ -30,5 +30,8 @@ export const Permiso = (...permisos: PermisoClave[]) =>
  * olvido, no una decisión, y la única forma de distinguirlos es que la decisión
  * se escriba. Es para lo que todo usuario tiene que poder hacer sin importar su
  * rol: leer su propia sesión, cambiar su contraseña, cerrar sesión.
+ * La regla del método prevalece sobre la del controlador, también cuando
+ * cambia entre @SoloAutenticado y @Permiso. En un mismo nivel, un permiso
+ * explícito nunca se relaja por agregar @SoloAutenticado.
  */
 export const SoloAutenticado = () => SetMetadata(SOLO_AUTENTICADO_KEY, true);

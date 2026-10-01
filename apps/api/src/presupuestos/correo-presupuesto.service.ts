@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import {
   BadRequestException,
   ConflictException,
@@ -349,7 +350,7 @@ export class CorreoPresupuestoService {
     } catch (error) {
       this.logger.error(
         'No se pudo procesar la cola de correos de presupuestos.',
-        error instanceof Error ? error.stack : undefined,
+        textoErrorLog(error),
       );
     }
   }

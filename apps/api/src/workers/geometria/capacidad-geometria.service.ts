@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import {
   Injectable,
   Logger,
@@ -157,7 +158,7 @@ export class CapacidadGeometriaService implements OnApplicationShutdown {
         commandTimeout: 5000,
       });
       this.redis.on('error', (e) =>
-        this.logger.warn(`Redis de capacidad: ${e.message}`),
+        this.logger.warn(`Redis de capacidad: ${textoErrorLog(e)}`),
       );
     }
     return this.redis.eval(

@@ -2,6 +2,7 @@
 
 # dependencies
 node_modules/
+**/node_modules
 /apps/api/.venv-opennest/
 /apps/api/.native/
 /.pnp
@@ -75,3 +76,8 @@ apps/api/scripts/*.baseline.json
 # Cache del lector CAD de Python
 __pycache__/
 *.pyc
+
+# Respaldos privados: no pertenecen al historial ni a los artefactos de build.
+**/backup*.sql
+**/*.dump
+**/*.sql.gz

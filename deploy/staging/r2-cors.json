@@ -2,7 +2,7 @@
   {
     "AllowedOrigins": ["https://staging.grafoprint.com.ar"],
     "AllowedMethods": ["GET", "HEAD", "PUT"],
-    "AllowedHeaders": ["Content-Type"],
+    "AllowedHeaders": ["Content-Type", "If-None-Match"],
     "ExposeHeaders": ["ETag"],
     "MaxAgeSeconds": 3600
   }

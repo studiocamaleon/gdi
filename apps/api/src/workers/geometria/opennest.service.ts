@@ -21,6 +21,7 @@ import {
   satisfaceBusqueda,
 } from './nestings-guardados.service';
 import { spawn } from 'node:child_process';
+import { entornoProcesoNativo } from '../../common/entorno-proceso-nativo';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type {
@@ -969,7 +970,7 @@ export function ejecutarSubprocesoJson<T>(
     const child = spawn(options.ejecutable, options.argumentos, {
       detached: process.platform !== 'win32',
       env: {
-        ...process.env,
+        ...entornoProcesoNativo(),
         PYTHONUNBUFFERED: '1',
         ...(process.platform !== 'win32' ? { GRAFONEST_GUARD_FD: '3' } : {}),
       },

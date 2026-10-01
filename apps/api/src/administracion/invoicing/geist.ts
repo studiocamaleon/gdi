@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Logger } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,7 +27,7 @@ function cargar(log: Logger, queDocumento: string) {
     };
   } catch (e) {
     log.warn(
-      `No pude cargar Geist para ${queDocumento} (${e instanceof Error ? e.message : e}). Sale en Helvetica.`,
+      `No pude cargar Geist para ${queDocumento} (${textoErrorLog(e)}). Sale en Helvetica.`,
     );
     cache = null;
   }

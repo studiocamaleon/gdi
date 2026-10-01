@@ -21,6 +21,7 @@ import type { CurrentAuth } from '../../auth/auth.types';
 import { NotificacionesService } from './notificaciones.service';
 import type { EventoNotificacion } from '../wati/catalogo';
 import { Permiso } from '../../auth/permiso.decorator';
+import { ProhibidoImpersonando } from '../../auth/prohibido-impersonando.decorator';
 
 /**
  * Configuración → Integraciones → Wati → Notificaciones.
@@ -62,6 +63,7 @@ export class NotificacionesController {
     return this.service.resolver(auth, id, dto);
   }
 
+  @ProhibidoImpersonando()
   @Permiso('configuracion.gestionar')
   @Put('configuracion')
   @Roles(RolSistema.ADMINISTRADOR)
@@ -69,6 +71,7 @@ export class NotificacionesController {
     return this.service.cambiarConfiguracion(dto);
   }
 
+  @ProhibidoImpersonando()
   @Permiso('configuracion.gestionar')
   @Put('eventos/:evento')
   @Roles(RolSistema.ADMINISTRADOR)

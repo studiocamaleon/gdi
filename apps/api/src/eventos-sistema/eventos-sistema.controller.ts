@@ -6,12 +6,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Query,
+  Req,
   Sse,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Permiso } from '../auth/permiso.decorator';
 import { EventosSistemaService } from './eventos-sistema.service';
+import {
+  REVALIDAR_ACCESO,
+  type RequestConRevalidacion,
+} from '../auth/revalidacion-acceso';
 
 @Permiso('panel.ver')
 @Controller('eventos-sistema')
@@ -52,8 +58,11 @@ export class EventosSistemaController {
   @Sse('stream')
   stream(
     @CurrentSession() auth: CurrentAuth,
+    @Req() request: RequestConRevalidacion,
     @Headers('last-event-id') lastEventId?: string,
   ) {
-    return this.service.stream(auth, lastEventId);
+    const revalidar = request[REVALIDAR_ACCESO];
+    if (!revalidar) throw new UnauthorizedException();
+    return this.service.stream(auth, revalidar, lastEventId);
   }
 }

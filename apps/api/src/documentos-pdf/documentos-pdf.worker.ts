@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   ForbiddenException,
@@ -213,7 +214,7 @@ export class DocumentosPdfWorker
     } catch (error) {
       this.logger.warn({
         event: 'pdf_dispatch_unavailable',
-        message: error instanceof Error ? error.name : 'Error',
+        message: textoErrorLog(error),
       });
     } finally {
       this.despachando = false;

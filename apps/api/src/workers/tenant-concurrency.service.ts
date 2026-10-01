@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
@@ -87,7 +88,9 @@ export class TenantConcurrencyService implements OnApplicationShutdown {
       ),
     });
     this.redis.on('error', (error) =>
-      this.logger.warn(`Redis de concurrencia por tenant: ${error.message}`),
+      this.logger.warn(
+        `Redis de concurrencia por tenant: ${textoErrorLog(error)}`,
+      ),
     );
     return this.redis;
   }

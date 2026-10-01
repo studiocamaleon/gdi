@@ -40,11 +40,18 @@ function armar(membership: Record<string, unknown> | null) {
     .fn<Promise<unknown>, [CreateEvento]>()
     .mockResolvedValue({});
   const prisma = {
-    membership: { findUnique: jest.fn().mockResolvedValue(membership) },
+    membership: {
+      findUnique: jest.fn().mockResolvedValue(membership),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    $queryRaw: jest.fn().mockResolvedValue([]),
     user: { update: userUpdate },
     authSession: { updateMany: sesionesUpdate },
     eventoAcceso: { create: eventoCreate },
   } as unknown as PrismaService;
+  prisma.$transaction = jest.fn((fn: (tx: PrismaService) => Promise<unknown>) =>
+    fn(prisma),
+  ) as never;
   const invalidarTenant = jest.fn();
   const service = new UsuariosService(
     prisma,

@@ -43,7 +43,7 @@ export type SuscripcionExterna = {
   precios: string[];
   /** Cantidades confirmadas por el proveedor. Null si el payload es incompleto. */
   items?: { priceId: string; quantity: number }[] | null;
-  /** tenantId que viajó en custom_data (lo pone nuestro checkout). */
+  /** Dato externo de custom_data; no autoriza por sí solo un vínculo nuevo. */
   tenantId: string | null;
   contratacionId?: string | null;
   /** Cambio programado ('cancel' | 'pause' | 'resume') y cuándo se hace
@@ -230,6 +230,7 @@ export class SuscripcionSyncService {
       select: {
         id: true,
         tenantId: true,
+        proveedor: true,
         moraDesde: true,
         graciaHasta: true,
         ultimoEventoProveedorEl: true,
@@ -255,6 +256,7 @@ export class SuscripcionSyncService {
       select: {
         id: true,
         tenantId: true,
+        proveedor: true,
         moraDesde: true,
         graciaHasta: true,
         ultimoEventoProveedorEl: true,
@@ -327,6 +329,18 @@ export class SuscripcionSyncService {
     // El plan sale del price_id: si el tenant hizo un upgrade en Paddle, el
     // cambio de plan se refleja solo, sin que nadie lo toque a mano acá.
     const contrato = await resolverContratoOferta(tx, externa);
+    // Los metadatos del checkout también pueden escribirse desde Paddle.js.
+    // Conservar renovaciones históricas, pero sólo el flujo de contratación
+    // revisado en Grafo puede autorizar una referencia nueva para una empresa.
+    if (
+      contrato.tipo === 'legacy' &&
+      (!existente || existente.proveedor !== 'paddle')
+    )
+      return {
+        aplicado: false,
+        motivo:
+          'Los precios históricos sólo admiten suscripciones ya vinculadas. Las altas nuevas requieren una oferta revisada en Grafo.',
+      };
     // Una cancelación, pausa o mora de una referencia ya vinculada sigue
     // siendo válida aunque falten ítems. Cierra acceso sin inventar derechos.
     const conservarContrato =

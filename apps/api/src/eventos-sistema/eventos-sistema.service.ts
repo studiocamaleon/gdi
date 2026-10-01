@@ -1,9 +1,16 @@
-import { Injectable, MessageEvent, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  MessageEvent,
+  NotFoundException,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { Prisma, SeveridadNotificacionInterna } from '@prisma/client';
-import { Observable } from 'rxjs';
+import { Observable, ReplaySubject, takeUntil } from 'rxjs';
 import type { CurrentAuth } from '../auth/auth.types';
 import { firmaActor } from '../common/firma-actor';
 import { PrismaService } from '../prisma/prisma.service';
+import type { RevalidarAcceso } from '../auth/revalidacion-acceso';
 
 type Db = PrismaService | Prisma.TransactionClient;
 
@@ -27,8 +34,14 @@ export type PublicarEventoSistema = {
 };
 
 @Injectable()
-export class EventosSistemaService {
+export class EventosSistemaService implements OnModuleDestroy {
+  private readonly cierre = new ReplaySubject<void>(1);
   constructor(private readonly prisma: PrismaService) {}
+
+  onModuleDestroy() {
+    this.cierre.next();
+    this.cierre.complete();
+  }
 
   async publicar(input: PublicarEventoSistema, db: Db = this.prisma) {
     const destinatarios = new Set(input.destinatariosUserId ?? []);
@@ -214,17 +227,38 @@ export class EventosSistemaService {
     };
   }
 
-  stream(auth: CurrentAuth, lastEventId?: string): Observable<MessageEvent> {
+  stream(
+    auth: CurrentAuth,
+    revalidar: RevalidarAcceso,
+    lastEventId?: string,
+  ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
       let cerrado = false;
       let consultando = false;
       let inicializado = false;
       let cursor: bigint | null = this.cursorValido(lastEventId);
+      let ultimoLatido = Date.now();
+      const permisosIniciales = [...(auth.permisos ?? [])].sort().join('|');
+      const validar = async () => {
+        const actual = await revalidar();
+        if (
+          actual.sessionId !== auth.sessionId ||
+          actual.userId !== auth.userId ||
+          actual.tenantId !== auth.tenantId ||
+          actual.membershipId !== auth.membershipId ||
+          actual.role !== auth.role ||
+          !actual.permisos?.has('panel.ver') ||
+          [...actual.permisos].sort().join('|') !== permisosIniciales
+        )
+          throw new ForbiddenException();
+      };
 
       const emitirPendientes = async () => {
         if (cerrado || consultando) return;
         consultando = true;
         try {
+          await validar();
+          if (cerrado || subscriber.closed) return;
           if (!inicializado) {
             const esConexionNueva = cursor === null;
             if (cursor === null) {
@@ -236,6 +270,10 @@ export class EventosSistemaService {
               cursor = ultimo?.id ?? 0n;
             }
             const { cantidad } = await this.contarNoLeidas(auth);
+            // La revocación puede ocurrir mientras se lee la base. Volver a
+            // autorizar antes de entregar los datos, no sólo al abrir el SSE.
+            await validar();
+            if (cerrado || subscriber.closed) return;
             inicializado = true;
             subscriber.next({
               id: cursor.toString(),
@@ -255,6 +293,9 @@ export class EventosSistemaService {
             take: 100,
             select: { id: true, tipo: true, topicos: true, createdAt: true },
           });
+          if (eventos.length || Date.now() - ultimoLatido >= 15000)
+            await validar();
+          if (cerrado || subscriber.closed) return;
           for (const evento of eventos) {
             cursor = evento.id;
             subscriber.next({
@@ -269,8 +310,18 @@ export class EventosSistemaService {
               retry: 3000,
             });
           }
-        } catch (error) {
-          subscriber.error(error);
+          if (Date.now() - ultimoLatido >= 15000) {
+            ultimoLatido = Date.now();
+            subscriber.next({
+              id: cursor.toString(),
+              type: 'heartbeat',
+              data: { ahora: Date.now() },
+            });
+          }
+        } catch {
+          // Un rechazo o una base no disponible cierran sin entregar datos ni
+          // detalles internos. La reconexión vuelve a atravesar los guards.
+          subscriber.complete();
         } finally {
           consultando = false;
         }
@@ -278,22 +329,13 @@ export class EventosSistemaService {
 
       void emitirPendientes();
       const polling = setInterval(() => void emitirPendientes(), 1500);
-      const heartbeat = setInterval(() => {
-        if (!inicializado || cursor === null) return;
-        // Nest genera un id secuencial cuando se omite. Un latido nunca
-        // debe adelantar el cursor real y hacer perder eventos al reconectar.
-        subscriber.next({
-          id: cursor.toString(),
-          type: 'heartbeat',
-          data: { ahora: Date.now() },
-        });
-      }, 15000);
+      const vencimiento = setTimeout(() => subscriber.complete(), 5 * 60_000);
       return () => {
         cerrado = true;
         clearInterval(polling);
-        clearInterval(heartbeat);
+        clearTimeout(vencimiento);
       };
-    });
+    }).pipe(takeUntil(this.cierre));
   }
 
   private cursorValido(value?: string) {

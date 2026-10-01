@@ -1,7 +1,19 @@
 import { cookies } from "next/headers";
 
-import { SESSION_COOKIE_NAME } from "@/lib/session";
-import { cabecerasBackendStaging, cabecerasPrivadas, controlAccesoStaging, stagingPrivado } from "@/lib/staging-access";
+import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/lib/session";
+import { SESION_RENOVADA_HEADER } from "../../../../../apps/api/src/auth/sesion-renovada";
+import { comprobarOrigenDeEscritura } from "@/lib/request-origin";
+import {
+  CuerpoDemasiadoGrande,
+  leerCuerpoLimitado,
+  MAX_CUERPO_API,
+} from "@/lib/request-body";
+import {
+  cabecerasBackendStaging,
+  cabecerasPrivadas,
+  controlAccesoStaging,
+  stagingPrivado,
+} from "@/lib/staging-access";
 import {
   MFA_COOKIES,
   MFA_HEADERS,
@@ -29,6 +41,8 @@ async function handler(
 ) {
   const denied = controlAccesoStaging(request.headers);
   if (denied) return cabecerasPrivadas(denied);
+  const origenDenegado = comprobarOrigenDeEscritura(request);
+  if (origenDenegado) return cabecerasPrivadas(origenDenegado);
   const { path } = await ctx.params;
   const { search } = new URL(request.url);
   const target = `${backendBaseUrl()}/${path.join("/")}${search}`;
@@ -67,13 +81,32 @@ async function handler(
   const method = request.method;
   const hasBody = method !== "GET" && method !== "HEAD";
 
+  let body: ArrayBuffer | undefined;
+  try {
+    if (hasBody)
+      body = (await leerCuerpoLimitado(request, MAX_CUERPO_API))
+        .buffer as ArrayBuffer;
+  } catch (error) {
+    return cabecerasPrivadas(
+      Response.json(
+        {
+          message:
+            error instanceof CuerpoDemasiadoGrande
+              ? error.message
+              : "No se pudo leer la solicitud.",
+        },
+        { status: error instanceof CuerpoDemasiadoGrande ? 413 : 400 },
+      ),
+    );
+  }
+
   let response: Response;
   try {
     cabecerasBackendStaging(request.headers, headers);
     response = await fetch(target, {
       method,
       headers,
-      body: hasBody ? await request.arrayBuffer() : undefined,
+      body,
       cache: "no-store",
       // Sin esto, `fetch` sigue el redirect ACÁ DENTRO: la descarga de un
       // archivo se resolvería en el proceso de Next y volveríamos a bufferear
@@ -84,10 +117,10 @@ async function handler(
       signal: request.signal,
     });
   } catch {
-    return new Response(
+    return cabecerasPrivadas(new Response(
       JSON.stringify({ message: "No se pudo conectar con el API." }),
       { status: 503, headers: { "content-type": "application/json" } },
-    );
+    ));
   }
 
   if (response.ok && ruta === "auth/mfa/verificar") {
@@ -115,6 +148,31 @@ async function handler(
       }
     }
   }
+  if (response.ok && method === "POST" && ruta === "auth/recuperacion/restablecer") {
+    cookieStore.delete(SESSION_COOKIE_NAME);
+    for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
+  }
+  if (response.ok && method === "POST" && ruta === "auth/password") {
+    const renovada = response.headers.get(SESION_RENOVADA_HEADER);
+    // Sólo una respuesta del API a esta operación puede renovar la cookie.
+    // No admitir un valor aportado por el navegador ni filtrar el token.
+    if (!renovada || renovada.length > 16384 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(renovada)) {
+      await response.body?.cancel();
+      cookieStore.delete(SESSION_COOKIE_NAME);
+      for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
+      return cabecerasPrivadas(Response.json({
+        message: "La contraseña se actualizó. Volvé a ingresar con tu nueva clave.",
+      }, { status: 401, headers: { "cache-control": "private, no-store" } }));
+    }
+    cookieStore.set(SESSION_COOKIE_NAME, renovada, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    });
+    for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
+  }
   if (
     response.ok &&
     method === "DELETE" &&
@@ -123,13 +181,16 @@ async function handler(
     for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
   }
 
-  const responseHeaders = new Headers();
+  // El BFF transmite datos privados y enlaces firmados, también fuera de staging.
+  const responseHeaders = new Headers({
+    "cache-control": "private, no-store",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+  });
   if (stagingPrivado()) {
     responseHeaders.set("x-robots-tag", "noindex, nofollow, noarchive");
     responseHeaders.set("cache-control", "private, no-store");
   }
-  const cacheControl = response.headers.get("cache-control");
-  if (cacheControl && !stagingPrivado()) responseHeaders.set("cache-control", cacheControl);
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) responseHeaders.set("retry-after", retryAfter);
   const respContentType = response.headers.get("content-type");
@@ -161,16 +222,16 @@ async function handler(
   // navegador. El body de un 3xx no interesa.
   const location = response.headers.get("location");
   if (status >= 300 && status < 400 && location) {
+    await response.body?.cancel().catch(() => undefined);
     responseHeaders.set("location", location);
     return new Response(null, { status, headers: responseHeaders });
   }
 
   // 204/304 no pueden llevar body: construir Response con body nulo, o el
   // constructor lanza y el proxy devolvería 500 (rompía todos los DELETE).
-  const body =
-    status === 204 || status === 304 ? null : await response.arrayBuffer();
-
-  return new Response(body, {
+  // Transmitir conserva backpressure y cancelación también para PDFs/JSON:
+  // el tamaño de una descarga no determina la memoria consumida por Next.
+  return new Response(status === 204 || status === 304 ? null : response.body, {
     status,
     headers: responseHeaders,
   });

@@ -137,7 +137,7 @@ async function preparar(c: Contexto) {
   const completa: CurrentAuth = {
     ...c.auth,
     tenantId,
-    role: 'OPERARIO',
+    role: 'OPERADOR',
     permisos: new Set([
       'reportes.ver',
       'reportes.ver_resumen',
@@ -407,6 +407,58 @@ it('rechaza empresa inyectada por query y no mezcla datos entre empresas', async
       expect(JSON.stringify(otro)).not.toContain('Trabajo QA');
     }),
   );
+});
+
+it('los doce reportes excluyen la actividad de otra empresa con el mismo plan', async () => {
+  await conPlanesAsignados(db, async (c) => {
+    const propia = await preparar(c);
+    let ajena: Awaited<ReturnType<typeof preparar>> | undefined;
+    try {
+      ajena = await preparar(c);
+      const marca = `AJENO-${randomUUID()}`;
+      await c.db.cliente.updateMany({
+        where: { tenantId: ajena.tenantId },
+        data: { nombre: marca },
+      });
+      await c.db.ordenTrabajoItem.updateMany({
+        where: { tenantId: ajena.tenantId },
+        data: {
+          nombre: marca,
+          categoriaComercial: marca,
+          subtotal: 1000000,
+          total: 1210000,
+        },
+      });
+      await c.db.ordenTrabajo.updateMany({
+        where: { tenantId: ajena.tenantId },
+        data: { subtotal: 1000000, total: 1210000 },
+      });
+      await c.db.gastoFijoEstructura.updateMany({
+        where: { tenantId: ajena.tenantId },
+        data: { nombre: marca, valor: 700000, importeMensual: 700000 },
+      });
+      for (const [ruta] of rutas) {
+        const response = await propia.get(ruta).expect(200);
+        expect(JSON.stringify(response.body)).not.toContain(marca);
+        expect(JSON.stringify(response.body)).not.toContain(ajena.tenantId);
+        if (ruta === 'resumen') {
+          expect(response.body as unknown).toMatchObject({
+            rentabilidad: { ventas: 100, costosFijos: 5000 },
+            topClientes: [{ nombre: 'Cliente QA' }],
+          });
+        }
+      }
+      // Control positivo: los marcadores sí están presentes en su propio informe.
+      const informeAjeno = await ajena.get('resumen').expect(200);
+      expect(JSON.stringify(informeAjeno.body)).toContain(marca);
+      expect(informeAjeno.body as unknown).toMatchObject({
+        rentabilidad: { ventas: 1000000, costosFijos: 700000 },
+      });
+    } finally {
+      await ajena?.app.close();
+      await propia.app.close();
+    }
+  });
 });
 
 it('la retirada se aplica a la siguiente lectura; las cuentas vencidas conservan consulta y no editan umbrales', async () => {

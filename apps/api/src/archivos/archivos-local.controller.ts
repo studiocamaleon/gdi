@@ -59,7 +59,7 @@ export class ArchivosLocalController {
   ): Promise<void> {
     const clave = this.claveDe(key, query);
     const cuerpo = await this.leerCuerpo(req);
-    await this.local.escribir(clave, cuerpo);
+    await this.local.escribir(clave, cuerpo, { soloCrear: query.sc === '1' });
     // ETag como lo devuelve S3/R2 (md5 entre comillas). La subida en partes
     // lo necesita para cerrar el multipart, así que el front usa el mismo
     // código en dev que en producción.

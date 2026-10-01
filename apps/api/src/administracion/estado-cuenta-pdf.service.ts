@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -49,7 +50,7 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
     };
   } catch (e) {
     log.warn(
-      `No pude cargar Geist para el estado de cuenta (${e instanceof Error ? e.message : e}). Sale en Helvetica.`,
+      `No pude cargar Geist para el estado de cuenta (${textoErrorLog(e)}). Sale en Helvetica.`,
     );
     geistCache = null;
   }
@@ -151,7 +152,7 @@ export class EstadoCuentaPdfService {
         xEmisor = MARGEN + LADO + 4;
       } catch (error) {
         this.log.warn(
-          `No pude dibujar el logo en el estado de cuenta: ${error instanceof Error ? error.message : String(error)}`,
+          `No pude dibujar el logo en el estado de cuenta: ${textoErrorLog(error)}`,
         );
       }
     }

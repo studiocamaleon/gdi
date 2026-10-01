@@ -27,6 +27,7 @@ import {
   subirFotoPerfil,
 } from "@/lib/perfil-api";
 import { setSessionToken } from "@/lib/session";
+import { CorreoRecuperacion } from "./auth/correo-recuperacion";
 import { PerfilMfa } from "./perfil-mfa";
 import { UsuarioAvatar } from "./usuario-avatar";
 import s from "./perfil-usuario-modal.module.css";
@@ -297,6 +298,7 @@ export function PerfilUsuarioModal({
                     </ActionButton>
                   </div>
                   <PerfilMfa onBloqueoChange={setMfaBloquea} />
+                  <CorreoRecuperacion disabled={mfaBloquea} />
                 </>
               )}
             </Tabs.Panel>

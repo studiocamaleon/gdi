@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import {
   Injectable,
   Logger,
@@ -56,7 +57,9 @@ export class PlanificacionEntregasDispatcher
         this.queue = new Queue(COLA_PLANES_ENTREGA, {
           connection: conexionRedisApi(),
         });
-        this.queue.on('error', (error) => this.logger.warn(error.message));
+        this.queue.on('error', (error) =>
+          this.logger.warn(textoErrorLog(error)),
+        );
       }
       for (const r of pendientes)
         await this.queue.add(
@@ -72,7 +75,7 @@ export class PlanificacionEntregasDispatcher
         );
     } catch (error) {
       this.logger.warn(
-        `Las propuestas pendientes se reintentarán: ${error instanceof Error ? error.message : String(error)}`,
+        `Las propuestas pendientes se reintentarán: ${textoErrorLog(error)}`,
       );
     } finally {
       this.ejecutando = false;

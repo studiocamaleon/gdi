@@ -108,3 +108,12 @@ describe("cambio de clave según la sesión", () => {
     );
   });
 });
+
+describe("recuperación de identidad", () => {
+  it.each([undefined, "empresa", "plataforma", "vencida"] as const)("permite el enlace sin depender de una sesión %s", tipo => {
+    expect(proxy(request("/recuperar-acceso", tipo)).headers.get("x-middleware-next")).toBe("1");
+  });
+  it("no abre rutas con un prefijo similar", () => {
+    expect(proxy(request("/recuperar-acceso-admin")).headers.get("location")).toBe("http://localhost:3000/login");
+  });
+});

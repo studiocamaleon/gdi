@@ -266,7 +266,7 @@ export class PlataformaController {
     @CurrentSession() auth: CurrentAuth,
     @Body() dto: IniciarImpersonacionDto,
   ) {
-    return this.impersonacion.iniciar(auth.userId, dto.tenantId, dto.motivo);
+    return this.impersonacion.iniciar(auth, dto.tenantId, dto.motivo);
   }
 
   @Post('impersonacion/:id/cerrar')

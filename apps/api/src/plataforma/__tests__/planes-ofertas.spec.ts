@@ -84,6 +84,8 @@ async function preparar(c: Ctx) {
   };
   const remoto = (id: string) => {
     const i = dto.precios.find((p) => p.priceId === id)!;
+    if (i.ciclo === 'unico')
+      throw new Error('Este fixture sólo describe precios recurrentes');
     return {
       status: 'active',
       type: 'standard',
@@ -299,6 +301,11 @@ it('el registro conserva la oferta elegida aunque otra versión se active durant
       x.registro.iniciar({ ...dto, email: `${randomUUID()}@test.local` }),
     ).rejects.toThrow(/oferta cambió/);
     await x.registro.completarNuevo(token);
+    const identidad = await c.tx.user.findUniqueOrThrow({
+      where: { email: dto.email },
+    });
+    expect(identidad.emailVerificado).toBe(dto.email);
+    expect(identidad.emailVerificadoEl).toBeInstanceOf(Date);
     const solicitud = await c.tx.registroTenant.findFirstOrThrow({
       where: { email: dto.email },
     });

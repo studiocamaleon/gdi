@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { runWithTenant } from '../../common/tenant-context';
-import { tenantGuardExtension } from '../tenant-guard.extension';
+import {
+  MODELOS_EXENTOS,
+  tenantGuardExtension,
+} from '../tenant-guard.extension';
 
 /**
  * Aislamiento entre tenants — la promesa central del producto.
@@ -21,8 +24,7 @@ import { tenantGuardExtension } from '../tenant-guard.extension';
  *    con `tenantId` queda cubierto sin tocar este archivo — y uno nuevo SIN
  *    `tenantId` rompe el build hasta que alguien lo justifique en la lista.
  *  - El test de OPERACIONES recorre todos los verbos de Prisma, que es donde
- *    la extensión tiene que ramificar (el `where` de findUnique no admite
- *    tenantId y se post-filtra; `create` inyecta; `upsert` sólo en el create).
+ *    la extensión debe cubrir: filtros de lectura y propiedad de escrituras.
  *
  * Corre contra gdi_saas_test (ver test/jest-setup-db.ts).
  *
@@ -59,6 +61,10 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   'User',
   'AuthSession',
   'UserMfa',
+  // Recuperación de identidad global y cuotas compartidas: sin acceso por tenant.
+  'AccesoToken',
+  'AccesoCorreo',
+  'AccesoLimite',
   // El navegador recordado pertenece a la identidad, no a una empresa.
   'MfaDispositivo',
   'MfaChallenge',
@@ -94,7 +100,14 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
  * código, sino que el uso esté confinado a `auth.service.ts` — eso lo
  * verifica el test de abajo.
  */
-const EXENTOS_CON_TENANT_ID = new Set(['Membership', 'Invitation']);
+const EXENTOS_CON_TENANT_ID = new Set([
+  'Membership',
+  'Invitation',
+  // Se resuelve por hash antes de establecer el contexto de autenticación.
+  'CredencialMcp',
+  // Entrada firmada de Meta: tenant todavía desconocido; resolución por número.
+  'WebhookWhatsappCrudo',
+]);
 
 /**
  * Archivos autorizados a tocar los modelos de arriba.
@@ -109,6 +122,11 @@ const EXENTOS_CON_TENANT_ID = new Set(['Membership', 'Invitation']);
  */
 const ARCHIVOS_AUTORIZADOS = new Set([
   'auth/auth.service.ts',
+  // Recuperación global: revoca sesiones únicamente de la identidad del token.
+  'auth/recuperacion.service.ts',
+  // Baja transaccional: membership y credencialMcp llevan tenantId explícito;
+  // sólo revoca al userId indicado, conservando sus otras empresas.
+  'auth/revocar-acceso-empresa.ts',
   'plataforma/plataforma.service.ts',
   // Envío/reenvío del primer administrador: sólo staff ADMIN, tenantId
   // explícito, token hasheado y resultado auditado. No lista invitaciones globales.
@@ -117,39 +135,18 @@ const ARCHIVOS_AUTORIZADOS = new Set([
   // transacción que crea su tenant y siempre con ese tenantId explícito.
   'registro/registro.service.ts',
   'usuarios/usuarios.service.ts',
+  // Operadores: las dos consultas a membership filtran tenantId explícitamente.
+  'integraciones/meta/inbox/meta-equipo.ts',
+  // MCP: autenticación por hash; gestión por tenant y usuario, comprobados.
+  'auth/auth.guard.ts',
+  'mcp/credenciales-mcp.service.ts',
+  // Webhook firmado y procesamiento interno: resolución de tenant por número.
+  'webhooks-whatsapp/webhooks-whatsapp.service.ts',
+  'integraciones/meta/inbox/meta-inbox-procesador.service.ts',
   // Cuenta accesos e invitaciones con tenantId explícito en ambas consultas.
   'suscripciones/cupos-usuarios.ts',
   // Contratación: revalida al administrador con tenantId, userId y membershipId.
   'suscripciones/contratacion.service.ts',
-]);
-
-/** Copiado del guard: los que quedan fuera de la inyección automática. */
-const MODELOS_EXENTOS = new Set([
-  'Tenant',
-  'CronLock',
-  'PlataformaEvento',
-  'EventoCobro',
-  'Plan',
-  'PlanPrecioLegacy',
-  'PlanBorrador',
-  'PlanPaddleRecurso',
-  'PlanVersion',
-  // Oferta global y precios asociados a versiones inmutables.
-  'PlanOferta',
-  'PlanOfertaPrecio',
-  'RegistroTenant',
-  'User',
-  'AuthSession',
-  'UserMfa',
-  'MfaDispositivo',
-  'MfaChallenge',
-  'InvitacionPlataforma',
-  'Membership',
-  'Invitation',
-  'MaterialPreset',
-  'MaterialPresetVariante',
-  'ProductoCategoriaComercial',
-  'ProductoSubcategoriaComercial',
 ]);
 
 const modelos = Prisma.dmmf.datamodel.models;
@@ -185,7 +182,7 @@ describe('Aislamiento entre tenants — cobertura del datamodel', () => {
     expect([...MODELOS_EXENTOS].sort()).toEqual(justificados);
   });
 
-  it('los exentos con tenantId sólo se consultan desde auth', () => {
+  it('los exentos con tenantId sólo se consultan desde servicios revisados', () => {
     // El invariante que sostiene la excepción. Si mañana un servicio nuevo
     // consulta Membership sin filtrar a mano, listaría las membresías de
     // TODOS los tenants — y sin esto, nada lo avisaría.
@@ -288,8 +285,7 @@ describe('Aislamiento entre tenants — operaciones', () => {
   });
 
   it('findUnique de una fila ajena devuelve null', async () => {
-    // El `where` de findUnique no admite tenantId, así que el guard
-    // post-filtra el resultado. Es la rama más fácil de romper.
+    // Prisma filtra por id y tenantId antes de devolver resultados.
     const visto = await runWithTenant(tenantA, async () =>
       app.cliente.findUnique({ where: { id: clienteDeB } }),
     );
@@ -397,28 +393,22 @@ describe('Aislamiento entre tenants — operaciones', () => {
     expect(sigue).not.toBeNull();
   });
 
-  it('create ignora un tenantId ajeno mandado en el body (mass assignment)', async () => {
-    // El ValidationPipe ya saca `tenantId` de los DTO, pero si algún día se
-    // cuela, el guard NO tiene que dejar crear la fila en otro tenant.
-    const creado = await runWithTenant(tenantA, async () =>
-      app.cliente.create({
-        data: {
-          tenantId: tenantB,
-          nombre: 'Intruso',
-          emailPrincipal: `intruso-${randomUUID().slice(0, 6)}@test.local`,
-          telefonoCodigo: '11',
-          telefonoNumero: '55550002',
-          paisCodigo: 'AR',
-        },
-      }),
-    );
-
-    // Ojo: el guard sólo inyecta cuando el dato NO trae tenantId, así que un
-    // tenantId explícito GANA. Se documenta el comportamiento real en vez de
-    // afirmar una garantía que no existe: la defensa contra esto es el
-    // ValidationPipe con whitelist, que nunca deja llegar el campo.
-    expect(creado.tenantId).toBe(tenantB);
-    await base.cliente.delete({ where: { id: creado.id } });
+  it('create rechaza un tenantId ajeno aunque llegue hasta el cliente de datos', async () => {
+    await expect(
+      runWithTenant(tenantA, async () =>
+        app.cliente.create({
+          data: {
+            tenantId: tenantB,
+            nombre: 'Intruso',
+            emailPrincipal: `intruso-${randomUUID().slice(0, 6)}@example.invalid`,
+            telefonoCodigo: '11',
+            telefonoNumero: '55550002',
+            paisCodigo: 'AR',
+          },
+        }),
+      ),
+    ).rejects.toThrow('otra empresa');
+    expect(await base.cliente.count({ where: { tenantId: tenantB } })).toBe(1);
   });
 
   // ── Sin contexto de tenant ─────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { EstadoIntegracion, ProveedorIntegracion } from '@prisma/client';
@@ -65,7 +66,7 @@ export class NotificacionesScheduler {
     } catch (error) {
       this.logger.error(
         'Falló el drenado de notificaciones.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     } finally {
       this.corriendo = false;
@@ -109,7 +110,7 @@ export class NotificacionesScheduler {
     } catch (error) {
       this.logger.error(
         'Falló el barrido de pedidos de reseña.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -136,7 +137,7 @@ export class NotificacionesScheduler {
     } catch (error) {
       this.logger.error(
         'Falló el barrido de presupuestos por vencer.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }

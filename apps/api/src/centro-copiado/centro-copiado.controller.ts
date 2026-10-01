@@ -104,6 +104,7 @@ export class CentroCopiadoController {
    * renglones de tomo. Recibe los documentos del tomo + su grupo + cotizacionId.
    */
   @Post('guardar-tomo')
+  @Permiso('comercial.gestionar')
   async guardarTomo(
     @Body() dto: AgregarAOrdenCentroCopiadoDto,
     @Req() req: RequestWithAuth,
@@ -120,6 +121,7 @@ export class CentroCopiadoController {
    * la OrdenTrabajo: eso sigue el flujo normal.
    */
   @Post('agregar-a-orden')
+  @Permiso('comercial.gestionar')
   async agregarAOrden(
     @Body() dto: AgregarAOrdenCentroCopiadoDto,
     @Req() req: RequestWithAuth,

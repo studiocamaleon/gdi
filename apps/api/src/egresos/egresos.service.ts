@@ -64,8 +64,19 @@ const dec = (v: Prisma.Decimal | null | undefined) => (v ? Number(v) : 0);
  * docs/multi-moneda-zona-horaria.
  */
 function soloFecha(iso: string): Date {
-  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
-  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  if (
+    typeof iso !== 'string' ||
+    iso.length > 40 ||
+    !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(iso) ||
+    !Number.isFinite(Date.parse(iso))
+  )
+    throw new BadRequestException('La fecha no es válida.');
+  const dia = iso.slice(0, 10);
+  const fecha = new Date(`${dia}T00:00:00.000Z`);
+  // Date normaliza días inexistentes; rechazarlos evita cambiar el período.
+  if (!Number.isFinite(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== dia)
+    throw new BadRequestException('La fecha no es válida.');
+  return fecha;
 }
 
 /**
@@ -453,6 +464,12 @@ export class EgresosService {
       texto?: string;
     },
   ) {
+    // Los parámetros HTTP repetidos pueden ser listas aunque TypeScript
+    // declare string. No permitir objetos de consulta dentro de un filtro.
+    for (const valor of Object.values(q)) {
+      if (valor !== undefined && typeof valor !== 'string')
+        throw new BadRequestException('Cada filtro debe tener un solo valor.');
+    }
     const where: Prisma.EgresoWhereInput = { tenantId: auth.tenantId };
     if (q.estado) where.estado = q.estado;
     if (q.categoriaId) where.categoriaEgresoId = q.categoriaId;
@@ -731,6 +748,19 @@ export class EgresosService {
           ['cuentas_pagar'],
           ['cuentas_pagar'],
         );
+        // La FK global no impide imputar importes a otra empresa. Validar
+        // antes de numerar o crear cualquier cuota, en la misma transacción.
+        if (dto.gastoFijoEstructuraId) {
+          const gasto = await tx.gastoFijoEstructura.findFirst({
+            where: { id: dto.gastoFijoEstructuraId, tenantId: auth.tenantId },
+            select: { id: true },
+          });
+          if (!gasto) {
+            throw new BadRequestException(
+              'El gasto fijo no está disponible en esta empresa.',
+            );
+          }
+        }
         if (cuotas > 1) {
           // El resto de la división va en la PRIMERA cuota, no en la última:
           // así el total siempre cierra y la diferencia se paga antes, no

@@ -53,6 +53,7 @@ export class IntegracionesController {
   }
 
   /** Somete una plantilla del catálogo de Grafo a Meta. */
+  @ProhibidoImpersonando()
   @Permiso('configuracion.gestionar')
   @RequiereCapacidad('whatsapp_automatico')
   @Post('wati/plantillas/:codigo/someter')
@@ -62,6 +63,7 @@ export class IntegracionesController {
   }
 
   /** Envío de prueba a un número propio, antes de encender la integración. */
+  @ProhibidoImpersonando()
   @Permiso('configuracion.gestionar')
   @RequiereCapacidad('whatsapp_automatico')
   @Post('wati/probar-envio')

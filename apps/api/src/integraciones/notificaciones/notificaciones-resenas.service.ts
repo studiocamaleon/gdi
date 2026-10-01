@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -56,7 +57,7 @@ export class NotificacionesResenasService {
     } catch (error) {
       this.logger.error(
         `Falló el barrido de reseñas del tenant ${tenantId}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
       return 0;
     }

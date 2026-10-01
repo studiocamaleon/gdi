@@ -21,7 +21,9 @@ const db = prisma as unknown as PrismaService;
 const cache = new SessionCacheService();
 const secretos = new SecretosService();
 const mfa = new MfaService(db, secretos, cache);
-const jwt = new JwtService({ secret: process.env.JWT_SECRET });
+const originalJwt = process.env.JWT_SECRET;
+const jwtDePrueba = randomBytes(32).toString('hex');
+const jwt = new JwtService({ secret: jwtDePrueba });
 const auth = new AuthService(db, jwt, cache, mfa);
 const equipo = new EquipoPlataformaService(db, cache);
 const originalKey = process.env.INTEGRACIONES_ENCRYPTION_KEY;
@@ -48,6 +50,7 @@ function sesion(payload: JwtPayload): CurrentAuth {
 const token = (url: string) =>
   new URLSearchParams(new URL(url).hash.slice(1)).get('token')!;
 beforeAll(() => {
+  process.env.JWT_SECRET = jwtDePrueba;
   process.env.INTEGRACIONES_ENCRYPTION_KEY = randomBytes(32).toString('base64');
   secretos.onModuleInit();
 });
@@ -103,6 +106,8 @@ afterAll(async () => {
   if (originalKey === undefined)
     delete process.env.INTEGRACIONES_ENCRYPTION_KEY;
   else process.env.INTEGRACIONES_ENCRYPTION_KEY = originalKey;
+  if (originalJwt === undefined) delete process.env.JWT_SECRET;
+  else process.env.JWT_SECRET = originalJwt;
 });
 
 async function proteger(current: CurrentAuth) {
@@ -156,7 +161,7 @@ const reflector = {
         ? !!targets[0].enrolar
         : false,
 } as unknown as Reflector;
-const guard = new AuthGuard(reflector, jwt, db, cache);
+const guard = new AuthGuard(reflector, jwt, db);
 
 it('guarda sólo el hash, no otorga acceso al invitar y no expone tokens en directorio o auditoría', async () => {
   const email = correo();

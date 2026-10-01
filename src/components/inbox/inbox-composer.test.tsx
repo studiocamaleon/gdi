@@ -7,7 +7,7 @@ import type { EnviarTextoInbox, RespuestaInbox } from "@/lib/meta-inbox-api";
 import { ApiError } from "@/lib/api";
 let root: Root, container: HTMLDivElement;
 let enviar: ReturnType<typeof vi.fn<EnviarTextoInbox>>;
-let actualizar: ReturnType<typeof vi.fn>;
+let actualizar: ReturnType<typeof vi.fn<() => Promise<unknown>>>;
 let borradores: BorradoresInbox;
 const aceptado = {
   id: "envio",
@@ -34,7 +34,7 @@ beforeEach(() => {
   root = createRoot(container);
   borradores = new Map();
   enviar = vi.fn<EnviarTextoInbox>().mockResolvedValue(aceptado);
-  actualizar = vi.fn().mockResolvedValue(true);
+  actualizar = vi.fn<() => Promise<unknown>>().mockResolvedValue(true);
 });
 afterEach(async () => {
   await act(async () => root.unmount());

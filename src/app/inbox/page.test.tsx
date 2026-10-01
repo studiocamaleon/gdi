@@ -4,6 +4,7 @@ import { getSessionToken } from "@/lib/session";
 import { getCurrentUserCached } from "@/lib/auth-server";
 import { redirect } from "next/navigation";
 import InboxPage from "./page";
+import { InboxRecuperacion } from "@/components/inbox/inbox-recuperacion";
 import type { CurrentUser } from "@/lib/auth";
 vi.mock("@/lib/session", () => ({ getSessionToken: vi.fn() }));
 vi.mock("@/lib/auth-server", () => ({ getCurrentUserCached: vi.fn() }));
@@ -41,6 +42,23 @@ it("una sesión revocada va a la salida que limpia la cookie", async () => {
     new ApiError("revocada", 401),
   );
   await expect(InboxPage()).rejects.toThrow("redirect:/salir?motivo=sesion");
+});
+it.each([500, 502, 503, 504])(
+  "una interrupción %s ofrece recuperación sin salir de la sesión",
+  async (status) => {
+    vi.mocked(getCurrentUserCached).mockRejectedValue(
+      new ApiError("interno", status),
+    );
+    const result = await InboxPage();
+    expect(result.type).toBe(InboxRecuperacion);
+    expect(redirect).not.toHaveBeenCalled();
+    expect(getCurrentUserCached).toHaveBeenCalledWith(expect.any(AbortSignal));
+  },
+);
+it("no confunde un acceso prohibido con una interrupción", async () => {
+  const error = new ApiError("prohibido", 403);
+  vi.mocked(getCurrentUserCached).mockRejectedValue(error);
+  await expect(InboxPage()).rejects.toBe(error);
 });
 it("la ruta independiente mantiene el cambio de clave obligatorio", async () => {
   vi.mocked(getCurrentUserCached).mockResolvedValue({

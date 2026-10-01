@@ -9,6 +9,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
 import { rutaLog } from '../ruta-log';
+import { errorParaLog } from '../log-seguro';
 
 /**
  * Filtro global de excepciones. Mapea errores conocidos de Prisma a códigos
@@ -43,19 +44,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const where = `${req.method} ${rutaLog(req.url)}`;
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
-      // 5xx: error real, logueamos con stack para diagnóstico.
+      // 5xx: conservar categoría y ubicaciones, nunca datos de SQL/proveedores.
       this.logger.error(
         `${where} → ${status}`,
-        req.path === '/api/webhooks/whatsapp'
-          ? 'Falló el receptor de Meta; el proveedor puede reintentar.'
-          : exception instanceof Error
-            ? exception.stack
-            : String(exception),
+        JSON.stringify(errorParaLog(exception)),
       );
     } else {
       // 4xx: esperado (validación/negocio), log liviano.
-      const text = Array.isArray(message) ? message.join(', ') : message;
-      this.logger.warn(`${where} → ${status}: ${text}`);
+      this.logger.warn(`${where} → ${status}`);
     }
 
     res.status(status).json({

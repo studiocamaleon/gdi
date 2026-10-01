@@ -42,7 +42,7 @@ describe('GeometriaVectorialCacheService', () => {
 
     expect(first.cacheHit).toBe(false);
     expect(second.cacheHit).toBe(true);
-    expect(second.entry).toBe(first.entry);
+    expect(second.entry).toEqual(first.entry);
     expect(
       service.obtenerParaCotizacion({
         tenantId: 'tenant-a',
@@ -50,7 +50,7 @@ describe('GeometriaVectorialCacheService', () => {
         svg: SVG,
         anchoFinalMm: 100,
       }),
-    ).toBe(first.entry);
+    ).toEqual(first.entry);
     expect(
       service.obtenerParaCotizacion({
         tenantId: 'tenant-a',

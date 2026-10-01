@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   Injectable,
@@ -60,7 +61,7 @@ export class CotizacionWorker
         event: 'quote_job_failed',
         jobId: job?.id,
         tenantId: job?.data.input.tenantId,
-        message: error.message,
+        message: textoErrorLog(error),
       }),
     );
     this.worker.on('completed', (job) =>
@@ -169,7 +170,7 @@ export class CotizacionWorker
         .liberar(lease)
         .catch((error: unknown) =>
           this.logger.warn(
-            `No se pudo liberar concurrencia de cotización job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+            `No se pudo liberar concurrencia de cotización job=${jobId}: ${textoErrorLog(error)}`,
           ),
         );
     }

@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { InspeccionVector } from './interpretar-vector';
+import { entornoProcesoNativo } from '../../common/entorno-proceso-nativo';
 
 export function ejecutarDxfNativo<T>(entrada: object): Promise<T> {
   const candidatos = [
@@ -20,6 +21,7 @@ export function ejecutarDxfNativo<T>(entrada: object): Promise<T> {
       {
         timeout: 30_000,
         maxBuffer: 32 * 1024 * 1024,
+        env: entornoProcesoNativo(),
       },
       (error, stdout) => {
         try {

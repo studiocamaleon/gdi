@@ -8,7 +8,6 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { AuthController } from '../auth.controller';
 import { AuthGuard } from '../auth.guard';
-import { SessionCacheService } from '../session-cache.service';
 import { PlataformaController } from '../../plataforma/plataforma.controller';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentAuth } from '../auth.types';
@@ -46,7 +45,6 @@ function escenario(clavePendiente: boolean, mfaCompleta: boolean) {
     new Reflector(),
     jwt as unknown as JwtService,
     prisma as unknown as PrismaService,
-    new SessionCacheService(),
   );
   const request: { headers: Record<string, string>; auth?: CurrentAuth } = {
     headers: { authorization: 'Bearer token-de-ensayo' },

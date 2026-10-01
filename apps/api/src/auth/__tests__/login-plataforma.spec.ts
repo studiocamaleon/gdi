@@ -72,7 +72,6 @@ describe('Login de backoffice (sesión de plataforma)', () => {
     reflector,
     jwt,
     prisma as unknown as PrismaService,
-    new SessionCacheService(),
   );
 
   const emails: string[] = [];

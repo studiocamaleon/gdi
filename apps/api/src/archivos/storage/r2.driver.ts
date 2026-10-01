@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   AbortMultipartUploadCommand,
@@ -70,12 +71,18 @@ export class R2Driver implements StorageDriver {
       Bucket: this.bucket,
       Key: key,
       ContentType: opciones.contentType,
+      // Una URL vigente nunca debe sustituir bytes ya validados por confirmar.
+      IfNoneMatch: '*',
     });
     const expiraEn = opciones.expiraSegundos ?? SUBIDA_SEGUNDOS;
     const url = await getSignedUrl(this.cliente, comando, {
       expiresIn: expiraEn,
     });
-    return { url, headers: { 'Content-Type': opciones.contentType }, expiraEn };
+    return {
+      url,
+      headers: { 'Content-Type': opciones.contentType, 'If-None-Match': '*' },
+      expiraEn,
+    };
   }
 
   firmarDescarga(
@@ -161,7 +168,7 @@ export class R2Driver implements StorageDriver {
       // creado antes de devolver el error; la fila reservada la libera el service.
       await this.abortarMultipart(key, uploadId).catch((aborto: unknown) => {
         this.logger.warn(
-          `No se pudo abortar el multipart ${uploadId}: ${String(aborto)}`,
+          `No se pudo abortar el multipart ${uploadId}: ${textoErrorLog(aborto)}`,
         );
       });
       throw error;
@@ -257,9 +264,7 @@ export class R2Driver implements StorageDriver {
       return Buffer.from(await r.Body.transformToByteArray());
     } catch (error) {
       if (esNoEncontrado(error)) return null;
-      this.logger.warn(
-        `No pude leer ${key}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.logger.warn(`No pude leer ${key}: ${textoErrorLog(error)}`);
       return null;
     }
   }

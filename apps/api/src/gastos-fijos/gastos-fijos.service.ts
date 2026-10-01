@@ -13,6 +13,7 @@ import { exigirProveedorActivoDelTenant } from '../proveedores/proveedor-validac
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
 import { regionalDelTenant } from '../common/regional';
+import { exigirMetodoPagoDelTenant } from '../administracion/metodo-pago-validacion';
 
 /**
  * Gastos fijos de estructura — fuente ÚNICA del pool de costos fijos del
@@ -72,6 +73,7 @@ export class GastosFijosService {
     );
     return this.prisma.$transaction(async (tx) => {
       await bloquearCupoUsuarios(tx, auth.tenantId);
+      await exigirMetodoPagoDelTenant(tx, auth.tenantId, dto.metodoPagoId);
       const row = await tx.gastoFijoEstructura.create({
         data: { tenantId: auth.tenantId, ...this.datosDesdeDto(dto) },
         include: INCLUDE_GASTO,
@@ -97,6 +99,7 @@ export class GastosFijosService {
     return this.prisma.$transaction(async (tx) => {
       await bloquearCupoUsuarios(tx, auth.tenantId);
       await this.obtenerOFallar(auth, id, tx);
+      await exigirMetodoPagoDelTenant(tx, auth.tenantId, dto.metodoPagoId);
       const row = await tx.gastoFijoEstructura.update({
         where: { id },
         data: this.datosDesdeDto(dto),

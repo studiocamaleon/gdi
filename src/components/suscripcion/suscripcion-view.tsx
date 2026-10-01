@@ -569,19 +569,9 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       elegirPlan(plan);
       return;
     }
-    if (!paddle) {
-      toast.error("El checkout todavía se está cargando. Probá en un momento.");
-      return;
-    }
-    setAbriendo(plan.codigo);
-    contratacionRef.current = null;
-    // El ciclo define QUÉ precio de Paddle se cobra: son dos precios distintos
-    // del mismo plan, no un descuento aplicado sobre el mensual.
-    const priceId =
-      ciclo === "anual" && plan.anual ? plan.anual.priceId : plan.priceId;
-    setCheckoutError(null);
-    setCheckoutCargando(true);
-    setCheckoutInline({ plan, ciclo, priceId });
+    toast.error(
+      "Este plan ya no admite nuevas contrataciones. Elegí una de las opciones disponibles.",
+    );
   };
 
   const cerrarCheckout = React.useCallback(() => {
@@ -601,20 +591,19 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
   React.useEffect(() => {
     if (!checkoutInline || !paddle) return;
+    const transaccionId = checkoutInline.contratacion?.transaccionId;
+    if (!transaccionId) {
+      setCheckoutError("Volvé a revisar el plan antes de continuar con el pago.");
+      setCheckoutCargando(false);
+      return;
+    }
 
     // El frameTarget tiene que existir en el DOM antes de llamar a Paddle.
     // El siguiente frame garantiza que el Dialog ya montó su contenido.
     const frame = window.requestAnimationFrame(() => {
       try {
         paddle.Checkout.open({
-          ...(checkoutInline.contratacion?.transaccionId
-            ? { transactionId: checkoutInline.contratacion.transaccionId }
-            : {
-                items: [{ priceId: checkoutInline.priceId, quantity: 1 }],
-                // El tenantId sale de la SESIÓN (lo puso el backend): es lo que el
-                // webhook usa para saber a qué imprenta corresponde el pago.
-                customData: { tenantId: datos.checkout.tenantId },
-              }),
+          transactionId: transaccionId,
           customer: { email: datos.checkout.email },
           settings: {
             displayMode: "inline",

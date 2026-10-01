@@ -22,7 +22,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 function llamar(path: string, method = "POST", headers = {}) {
   const request = new Request(`http://localhost/api/backend/${path}`, {
     method,
-    headers,
+    headers: { origin: "http://localhost", ...headers },
   });
   return (method === "DELETE" ? DELETE : POST)(request, {
     params: Promise.resolve({ path: path.split("/") }),
@@ -51,6 +51,10 @@ it.each(["tenant", "plataforma"] as const)(
     expect(await response.json()).toEqual({ accessToken: "sesion" });
   },
 );
+it("no reenvía al API una escritura de otro origen", async () => {
+  expect((await llamar("usuarios", "POST", { origin: "https://otro.example.invalid" })).status).toBe(403);
+  expect(mocks.fetch).not.toHaveBeenCalled();
+});
 it("usa sólo la cookie del servidor e ignora encabezados escritos por el cliente", async () => {
   mocks.get.mockImplementation((name) =>
     name === MFA_COOKIES.tenant ? { value: token } : undefined,
@@ -99,6 +103,7 @@ it("un MFA fallido no emite confianza y sólo una revocación exitosa borra cook
 
 it("protege el BFF de staging y sólo envía el secreto interno configurado por el servidor", async () => {
   vi.stubEnv("STAGING_PRIVATE", "true");
+  vi.stubEnv("STAGING_WEB_ORIGIN", "http://localhost");
   vi.stubEnv("STAGING_ACCESS_USER", "ensayo");
   vi.stubEnv("STAGING_ACCESS_PASSWORD", "clave-ficticia-de-staging-123456");
   vi.stubEnv("STAGING_WEB_API_TOKEN", "secreto-interno-del-servidor-12345678");
