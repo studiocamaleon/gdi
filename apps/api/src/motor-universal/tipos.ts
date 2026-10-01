@@ -1063,6 +1063,9 @@ export interface NestingEjecutado {
  * separados porque la UI los muestra como dos cosas distintas.
  */
 export interface NestingVisualConfig {
+  /** Acomodo común ya validado para impresión y corte. No reagrupar sólo la
+   * impresión: se perderían los límites del paso posterior y su registro. */
+  restriccionCortePosterior?: { pasos: string[] };
   /** Margen de máquina, SIN la demasía. Ver el diagrama de arriba. */
   margins: {
     leftMm: number;
