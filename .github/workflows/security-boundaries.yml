@@ -119,12 +119,11 @@ jobs:
         working-directory: apps/api
         run: |
           node <<'NODE'
-          const { Client } = require('pg');
+          const { PrismaClient } = require('@prisma/client');
           (async () => {
-            const c = new Client({ connectionString: process.env.DATABASE_URL });
-            await c.connect();
-            try { await c.query('CREATE DATABASE grafo_arca_20261001_test'); }
-            finally { await c.end(); }
+            const c = new PrismaClient();
+            try { await c.$executeRawUnsafe('CREATE DATABASE grafo_arca_20261001_test'); }
+            finally { await c.$disconnect(); }
           })().catch(() => process.exit(1));
           NODE
       - name: Comprobar autorización, cifrado y concurrencia de certificados ARCA
