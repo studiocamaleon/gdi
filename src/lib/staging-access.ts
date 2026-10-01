@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
 
 /** Sólo se importa en el servidor. Ninguna de estas variables es NEXT_PUBLIC. */
@@ -17,8 +17,10 @@ export function controlAccesoStaging(headers: Headers): Response | null {
   }
   const expected = `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
   const supplied = headers.get("authorization") ?? "";
-  const hash = (value: string) => createHash("sha256").update(value).digest();
-  if (!timingSafeEqual(hash(expected), hash(supplied))) {
+  // Comparación de bytes efímeros, sin generar ni almacenar hashes de claves.
+  const esperado = Buffer.from(expected);
+  const recibido = Buffer.from(supplied);
+  if (esperado.length !== recibido.length || !timingSafeEqual(esperado, recibido)) {
     return new Response("Entorno de pruebas: se requiere acceso autorizado.", {
       status: 401,
       headers: { "WWW-Authenticate": 'Basic realm="Grafoprint staging", charset="UTF-8"' },

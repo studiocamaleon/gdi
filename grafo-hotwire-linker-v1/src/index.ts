@@ -263,18 +263,25 @@ function parseArgs(argv: string[]): CliOptions {
 
 function parseAttributes(tag: string): Record<string, string> {
   const attrs: Record<string, string> = Object.create(null);
-  // Anclar cada atributo evita volver a intentar desde cada carácter cuando
-  // un archivo contiene un nombre muy largo sin "=" o una comilla sin cerrar.
-  const regex = /([:\w-]+)\s*=\s*("([^"]*)"|'([^']*)')/y;
+  // Escáner lineal: nunca reintenta desde posiciones anteriores del atributo.
   let index = /^<[\w:-]+/.exec(tag)?.[0].length ?? 0;
+  const espacios = () => { while (index < tag.length && /\s/.test(tag[index])) index++; };
   while (index < tag.length) {
-    while (index < tag.length && /\s/.test(tag[index])) index++;
+    espacios();
     if (tag[index] === ">" || (tag[index] === "/" && tag[index + 1] === ">")) break;
-    regex.lastIndex = index;
-    const match = regex.exec(tag);
-    if (!match) throw new Error("El SVG contiene un atributo inválido");
-    attrs[match[1]] = match[3] ?? match[4] ?? "";
-    index = regex.lastIndex;
+    const inicioNombre = index;
+    while (index < tag.length && /[:\w-]/.test(tag[index])) index++;
+    if (index === inicioNombre) throw new Error("El SVG contiene un atributo inválido");
+    const nombre = tag.slice(inicioNombre, index);
+    espacios();
+    if (tag[index++] !== "=") throw new Error("El SVG contiene un atributo inválido");
+    espacios();
+    const comilla = tag[index++];
+    if (comilla !== '"' && comilla !== "'") throw new Error("El SVG contiene un atributo inválido");
+    const inicioValor = index;
+    while (index < tag.length && tag[index] !== comilla) index++;
+    if (index === tag.length) throw new Error("El SVG contiene un atributo inválido");
+    attrs[nombre] = tag.slice(inicioValor, index++);
   }
   return attrs;
 }
@@ -1760,7 +1767,9 @@ function normalizeNegativeZero(value: number): number {
 }
 
 function formatFeed(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(value).replace(/0+$/, "").replace(/\.$/, "");
+  // Number ya produce una representación sin ceros decimales sobrantes.
+  // Recortarlos con una regex también alteraba exponentes como 1e-10.
+  return String(value);
 }
 
 function makeReport(
