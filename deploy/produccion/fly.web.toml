@@ -10,6 +10,7 @@ kill_timeout = 30
 
 [env]
   GRAFO_DEPLOY_ENV = "production"
+  WEB_ORIGIN = "https://app.grafoprint.com.ar"
   PORT = "3000"
   HOSTNAME = "0.0.0.0"
   API_URL = "http://grafoprint-production-api.internal:3001/api"

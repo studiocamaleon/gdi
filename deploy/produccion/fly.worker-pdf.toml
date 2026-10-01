@@ -11,7 +11,8 @@ kill_timeout = 300
   app = "node dist/src/documentos-pdf/documentos-worker-main.js"
 
 [env]
-  # Desactivar sólo tras comprobar servicios, respaldos y efectos externos.
+  # No desactiva el planificador general en NODE_ENV=production.
+  # Inbox permanece cerrado por sus banderas explícitas.
   GRAFO_LOCAL_DISABLE_CRON = "true"
   API_LIMITES_PREFIJO = "grafo:production:limites:v1"
   META_WHATSAPP_PILOT_ENABLED = "false"

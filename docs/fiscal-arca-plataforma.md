@@ -1,6 +1,6 @@
 # Certificado ARCA de la plataforma
 
-Implementación local del 01/10/2026; todavía sin despliegue ni certificado real cargado.
+Implementación desplegada el 01/10/2026. Certificado real guardado cifrado mediante Plataforma con MFA y consulta WSFE de producción verificada, sin emisión. El alta fiscal de la primera empresa sigue pendiente; consultar [validación de producción](../deploy/produccion/VALIDACION.md).
 
 ## Qué cambia
 

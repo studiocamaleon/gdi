@@ -33,7 +33,7 @@ Propuesta de proveedor: Backblaze B2, con cuenta y recuperación separadas de Fl
 
 ## Ejecutor manual preparado
 
-`ejecutar.mjs` sólo habilita staging. No crea recursos, no instala un horario y no modifica la base ni los archivos de origen. Sus dependencias están aisladas de las de la aplicación en el `package-lock.json` de esta carpeta. Requiere Node 22+, `age` (ensayado con 1.3.2), `pg_dump` 16 y certificados raíz del sistema. Ambos accesos PostgreSQL validan TLS y nombre de servidor; usar el host directo de Neon, sin `-pooler`.
+`ejecutar.mjs` admite staging y producción explícita. Producción exige además `habilitarProduccion=true` y que `origenProduccionEsperado` coincida con el proyecto Neon, la base y el bucket R2; ver [procedimiento de producción](../produccion/README.md). No crea recursos, no instala un horario y no modifica la base ni los archivos de origen. Sus dependencias están aisladas de las de la aplicación en el `package-lock.json` de esta carpeta. Requiere Node 22+, `age` (ensayado con 1.3.2), `pg_dump` 16 y certificados raíz del sistema. Ambos accesos PostgreSQL validan TLS y nombre de servidor; usar el host directo de Neon, sin `-pooler`.
 
 1. Instalar las dependencias en el ejecutor separado: `npm ci --ignore-scripts --prefix deploy/recuperacion`. Instalar `age` desde su distribución oficial verificada y el cliente PostgreSQL 16 desde una fuente confiable.
 2. Copiar `configuracion.example.json` **fuera de Git**, con permisos 0600 y directorio 0700. Usar rutas absolutas sin enlaces simbólicos. Completar accesos exclusivos de lectura a la base y al bucket R2. El endpoint jurisdiccional US termina en `.us.r2.cloudflarestorage.com`.

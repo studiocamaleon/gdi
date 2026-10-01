@@ -1,6 +1,6 @@
 # Producción de Grafoprint
 
-Estado: preparación autorizada; **todavía no habilitada para uso real**. La web comercial permanece en Vercel. La aplicación y sus servicios usan Fly; cada entorno tiene bases, depósitos y credenciales propias.
+Estado al 01/10/2026: infraestructura desplegada y primera recuperación de base, archivo y código comprobada; administrador con clave personal y MFA, certificado ARCA cifrado y consulta WSFE de producción verificada. **Todavía no habilitada para uso real**: faltan HTTPS de los dominios definitivos, alta de la empresa y recorrido funcional. Consultar el registro vigente en [VALIDACION.md](VALIDACION.md). La web comercial permanece en Vercel. La aplicación y sus servicios usan Fly; cada entorno tiene bases, depósitos y credenciales propias.
 
 ## Alcance del primer lanzamiento
 
@@ -34,11 +34,13 @@ Las cinco apps Fly usan la red `grafoprint-production`. El copiador usa `grafopr
 7. Preparar copias horarias: clave de descifrado nueva, kit completo bajo custodia, lector Neon/R2, escritor B2 limitado y monitor externo propio. En el JSON privado, usar `RESPALDO_ENTORNO=produccion`, `habilitarProduccion=true` y `origenProduccionEsperado` con `pgHost`, `pgDatabase=grafoprint_production`, `r2Bucket=grafoprint-production-files`. Conservar los controles de custodia y sólo lectura. Registrar revisión e imágenes exactas y custodiar también sus fuentes.
 8. Ejecutar una copia y restaurarla en un entorno aislado. Comprobar base, archivos, claves, código, MFA y rechazo de envíos externos. Una copia creada no demuestra recuperación. El monitor de producción debe avisar ante fallo o ausencia de copia.
 9. Crear el administrador de Plataforma; el titular elige su contraseña y activa MFA. Crear empresa y plan mediante el flujo normal; comprobar invitación, acceso, aislamiento y recorrido de cotización → orden → inventario → caja/documentos.
-10. Retirar `GRAFO_LOCAL_DISABLE_CRON=true` sólo después de revisar los efectos externos de las tareas y las pruebas. Registrar ese cambio como una nueva revisión. Enviar la invitación autorizada cuando el acceso y los respaldos funcionen; habilitar uso real tras completar el recorrido.
+10. Revisar los efectos de las tareas programadas antes de dar de alta la empresa. `GRAFO_LOCAL_DISABLE_CRON` sólo desactiva el planificador general con `NODE_ENV=development`: no es un interruptor global de producción. Las tareas de mantenimiento, acreditaciones, gastos recurrentes y correos pendientes permanecen habilitadas en producción. Inbox usa sus banderas explícitas; Paddle requiere credenciales y WATI una integración conectada. Enviar la invitación autorizada cuando el acceso y los respaldos funcionen; habilitar uso real tras completar el recorrido.
 
 ## Acceso web → API
 
 API y Next llevan `GRAFO_DEPLOY_ENV=production` y una credencial nueva `WEB_API_TOKEN` de al menos 32 caracteres. No usar `STAGING_PRIVATE`. El canal interno conserva la IP validada por Fly para las cuotas; descarta cabeceras aportadas por el cliente. Las páginas del servidor y el proxy del navegador usan el mismo control y no siguen redirecciones con esa credencial. Los permisos de sesión y empresa siguen siendo obligatorios.
+
+Next requiere además `WEB_ORIGIN=https://app.grafoprint.com.ar` para aceptar escrituras y crear sesiones desde ese origen exacto. Sin la variable responde 503; un origen distinto recibe 403. Durante la emisión inicial de TLS se habilitó temporalmente sólo el dominio propio de Fly, con HTTPS válido, para el alta del administrador. Al terminar, aplicar el origen definitivo del manifiesto y comprobar ambos rechazos. No agregar comodines ni aceptar cualquier Host.
 
 Sólo `GET/HEAD /api` es público en la API durante este primer lanzamiento. Webhooks Meta y Paddle están cerrados; abrirlos requiere una implementación opt-in con firmas verificadas y sus pruebas. No agregar `TRUST_PROXY` para saltarse el canal. La web pública debe recibir tráfico directamente de Fly, como se validó; si cambia el proxy del dominio, revisar la IP antes.
 
