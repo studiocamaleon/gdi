@@ -1,8 +1,16 @@
 # Validación de producción
 
+## Alta inicial y acceso definitivo — 01/10/2026, 06:17–06:22 UTC
+
+- El titular ingresó a Plataforma en `app.grafoprint.com.ar` con su cuenta y MFA. Se creó la primera empresa desde la interfaz normal: plan Founder, suscripción activa/manual, sin importar datos locales.
+- Se envió una única invitación al correo autorizado. La aplicación confirmó aceptación por el proveedor y Resend confirmó `Delivered`; el titular la aceptó y eligió personalmente su contraseña. No se copiaron el enlace de activación ni la contraseña al registro público.
+- Se comprobó en Chrome el acceso del administrador de la empresa, el nombre correcto, Founder en el menú y el panel inicial sin órdenes ni actividad. La ficha de Plataforma confirmó la suscripción. Esta comprobación no sustituye el recorrido de cotización, orden, inventario y caja.
+- Falta completar los datos fiscales confirmados por el titular, registrar el PV de webservices y verificar/activar la integración de esa empresa. La comprobación previa de WSFE con el certificado de Plataforma no equivale a esa configuración por empresa. No se emitieron facturas ni se creó historial sintético de negocio en producción.
+- No se cambiaron imágenes, tamaños, credenciales ni DNS durante esta alta. Inbox continúa sin habilitación operativa y Paddle live permanece pendiente por separado.
+
 ## Despliegue inicial — 01/10/2026, 05:34 UTC
 
-**Infraestructura desplegada; uso empresarial todavía pendiente de habilitación.** No se importaron datos locales, no se creó la primera empresa ni se enviaron invitaciones. El administrador de Plataforma ya cambió su clave y activó MFA; el certificado fiscal se cargó mediante esa sesión.
+**Registro de la fase previa al alta; para el estado vigente, consultar la sección superior.** En esta fase no se importaron datos locales, no se había creado la primera empresa ni se habían enviado invitaciones. El administrador de Plataforma cambió su clave y activó MFA; el certificado fiscal se cargó mediante esa sesión.
 
 ### Versión y servicios
 

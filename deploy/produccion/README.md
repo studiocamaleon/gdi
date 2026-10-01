@@ -1,6 +1,6 @@
 # Producción de Grafoprint
 
-Estado al 01/10/2026: infraestructura desplegada y primera recuperación de base, archivo y código comprobada; administrador con clave personal y MFA, certificado ARCA cifrado y consulta WSFE de producción verificada. HTTPS y origen web definitivos comprobados. **Todavía no habilitada para uso real**: faltan alta de la empresa y recorrido funcional. Consultar el registro vigente en [VALIDACION.md](VALIDACION.md). La web comercial permanece en Vercel. La aplicación y sus servicios usan Fly; cada entorno tiene bases, depósitos y credenciales propias.
+Estado al 01/10/2026: infraestructura desplegada y primera recuperación de base, archivo y código comprobada; administrador con clave personal y MFA, certificado ARCA cifrado y consulta WSFE de producción verificada. HTTPS, origen web definitivo y acceso de la primera empresa comprobados; invitación entregada y aceptada, Founder manual activo, sin importar datos locales. **Todavía falta completar la configuración fiscal por empresa y el recorrido funcional antes de facturar u operar comercialmente.** Consultar el registro vigente en [VALIDACION.md](VALIDACION.md). La web comercial permanece en Vercel. La aplicación y sus servicios usan Fly; cada entorno tiene bases, depósitos y credenciales propias.
 
 ## Alcance del primer lanzamiento
 
