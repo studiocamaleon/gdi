@@ -10,7 +10,6 @@ import { RecibosController } from './recibos.controller';
 import { ComprobantesPublicosController } from './comprobantes-publicos.controller';
 import { MetodosPagoService } from './metodos-pago.service';
 import { CobrosService } from './cobros.service';
-import { AcreditacionesScheduler } from './acreditaciones.scheduler';
 import { TesoreriaService } from './tesoreria.service';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { AfipIntegracionService } from './afip-integracion.service';
@@ -46,7 +45,6 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
   providers: [
     MetodosPagoService,
     CobrosService,
-    AcreditacionesScheduler,
     TesoreriaService,
     ConfiguracionFiscalService,
     AfipIntegracionService,

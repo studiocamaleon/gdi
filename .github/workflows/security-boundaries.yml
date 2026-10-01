@@ -79,6 +79,7 @@ jobs:
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
             src/auth/__tests__/modulos-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
+            src/administracion/__tests__/medios-pago-retenciones.integration.spec.ts \
             src/auth/__tests__/comercial-relaciones-http.integration.spec.ts \
             src/auth/__tests__/registros-compras-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/egresos-aislamiento-http.integration.spec.ts \

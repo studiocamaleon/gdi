@@ -4794,7 +4794,11 @@ model MetodoPago {
   comisionPct           Decimal               @default(0) @db.Decimal(6, 3)
   ivaComisionPct        Decimal               @default(0) @db.Decimal(6, 3)
   plazoAcreditacionDias Int                   @default(0)
-  /// Sugiere cargar líneas de retención al registrar cobros con este método.
+  calendarioAcreditacion String @default("habiles_bancarios")
+  feriadosAdicionales String[] @default([])
+  /// Reglas por agente, régimen, jurisdicción, base y vigencia.
+  retencionesConfig Json @default("[]")
+  /// Habilita las reglas; sin reglas permite cargar retenciones manuales.
   sufreRetencion        Boolean               @default(false)
   cuentaDestinoId       String?               @db.Uuid
   activo                Boolean               @default(true)
@@ -4887,6 +4891,11 @@ model Cobro {
   retencionesTotal          Decimal               @default(0) @db.Decimal(14, 2)
   disponibleReal            Decimal               @db.Decimal(14, 2)
   fechaAcreditacionEstimada DateTime?
+  fechaAcreditacionReal DateTime?
+  referenciaAcreditacion String? @db.VarChar(100)
+  /// Configuración y estimación originales: no se reescriben al confirmar.
+  configMetodoSnapshot Json?
+  liquidacionEstimada Json?
   /// 'pendiente' | 'acreditado'. Los cheques acreditan vía su Valor.
   estadoAcreditacion        String                @default("pendiente")
   moneda                    String                @default("ARS") @db.VarChar(3)
@@ -4937,6 +4946,10 @@ model ReciboContador {
 }
 
 model RetencionPercepcion {
+  agente String @default("no_informado")
+  reglaId String? @db.Uuid
+  /// Las estimadas no son comprobantes fiscales confirmados.
+  estado String @default("confirmada")
   id             String   @id @default(uuid()) @db.Uuid
   tenantId       String   @db.Uuid
   cobroId        String?  @db.Uuid
