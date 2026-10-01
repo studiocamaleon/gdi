@@ -1,3 +1,5 @@
+import { validarReglasRetencion } from './retenciones-validacion';
+import type { Prisma } from '@prisma/client';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -138,6 +140,11 @@ export class MetodosPagoService {
 
   async create(auth: CurrentAuth, payload: UpsertMetodoPagoDto) {
     await this.capacidades.exigir(auth.tenantId, 'cobros');
+    validarReglasRetencion(
+      payload.retencionesConfig ?? [],
+      payload.feriadosAdicionales,
+      payload.tipo,
+    );
     const cuentaDestinoId =
       payload.tipo === 'cheque_echeq' ? null : payload.cuentaDestinoId;
     await this.validarCuentaDestino(auth, cuentaDestinoId);
@@ -155,6 +162,11 @@ export class MetodosPagoService {
         comisionPct: payload.comisionPct,
         ivaComisionPct: payload.ivaComisionPct,
         plazoAcreditacionDias: payload.plazoAcreditacionDias,
+        calendarioAcreditacion: payload.calendarioAcreditacion,
+        feriadosAdicionales: payload.feriadosAdicionales,
+        retencionesConfig: payload.retencionesConfig as unknown as
+          | Prisma.InputJsonValue
+          | undefined,
         sufreRetencion: payload.sufreRetencion,
         cuentaDestinoId: cuentaDestinoId ?? null,
         activo: payload.activo ?? true,
@@ -176,6 +188,12 @@ export class MetodosPagoService {
     const cuentaDestinoId =
       payload.tipo === 'cheque_echeq' ? null : payload.cuentaDestinoId;
     await this.validarCuentaDestino(auth, cuentaDestinoId);
+    validarReglasRetencion(
+      (payload.retencionesConfig ??
+        existente.retencionesConfig) as unknown as import('../common/medios-pago').ReglaRetencion[],
+      payload.feriadosAdicionales,
+      payload.tipo,
+    );
     const actualizado = await this.prisma.metodoPago.update({
       where: { id: existente.id },
       data: {
@@ -184,6 +202,11 @@ export class MetodosPagoService {
         comisionPct: payload.comisionPct,
         ivaComisionPct: payload.ivaComisionPct,
         plazoAcreditacionDias: payload.plazoAcreditacionDias,
+        calendarioAcreditacion: payload.calendarioAcreditacion,
+        feriadosAdicionales: payload.feriadosAdicionales,
+        retencionesConfig: payload.retencionesConfig as unknown as
+          | Prisma.InputJsonValue
+          | undefined,
         sufreRetencion: payload.sufreRetencion,
         cuentaDestinoId: cuentaDestinoId ?? null,
         ...(payload.activo !== undefined ? { activo: payload.activo } : {}),
@@ -318,6 +341,9 @@ export class MetodosPagoService {
     ivaComisionPct: unknown;
     plazoAcreditacionDias: number;
     sufreRetencion: boolean;
+    calendarioAcreditacion: string;
+    feriadosAdicionales: string[];
+    retencionesConfig: unknown;
     activo: boolean;
     orden: number;
     cuentaDestino?: { id: string; nombre: string } | null;
@@ -331,6 +357,9 @@ export class MetodosPagoService {
       ivaComisionPct: Number(metodo.ivaComisionPct),
       plazoAcreditacionDias: metodo.plazoAcreditacionDias,
       sufreRetencion: metodo.sufreRetencion,
+      calendarioAcreditacion: metodo.calendarioAcreditacion,
+      feriadosAdicionales: metodo.feriadosAdicionales,
+      retencionesConfig: metodo.retencionesConfig,
       cuentaDestinoId: metodo.cuentaDestino?.id ?? null,
       cuentaDestinoNombre: metodo.cuentaDestino?.nombre ?? null,
       activo: metodo.activo,

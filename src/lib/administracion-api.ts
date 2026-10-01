@@ -1,3 +1,4 @@
+import type { ReglaRetencion, CalendarioAcreditacion } from "./administracion";
 import { apiRequest } from "@/lib/api";
 import type {
   Cobro,
@@ -182,9 +183,7 @@ export async function emitirComprobante(id: string): Promise<Comprobante> {
   });
 }
 
-export async function consultarEmisionComprobante(
-  id: string,
-): Promise<{
+export async function consultarEmisionComprobante(id: string): Promise<{
   aplicada: boolean;
   detalle: string | null;
   comprobante: ComprobanteDetalle;
@@ -254,6 +253,9 @@ export async function quitarImputacion(id: string): Promise<{ ok: boolean }> {
 }
 
 export type UpsertMetodoPagoPayload = {
+  calendarioAcreditacion?: CalendarioAcreditacion;
+  feriadosAdicionales?: string[];
+  retencionesConfig?: ReglaRetencion[];
   nombre: string;
   tipo: MetodoPagoTipo;
   comisionPct: number;
@@ -516,6 +518,8 @@ export type CrearCobroPayload = {
   montoBruto: number;
   comisionPctAplicada: number;
   retenciones?: Array<{
+    agente?: string;
+    reglaId?: string;
     regimen: string;
     jurisdiccion?: string;
     base: number;
@@ -575,9 +579,20 @@ export async function getCobrosPendientesAcreditacion(): Promise<
   return apiRequest("/administracion/cobros/pendientes-acreditacion");
 }
 
-export async function acreditarCobro(id: string): Promise<Cobro> {
+export type AcreditarCobroPayload = {
+  fecha: string;
+  referencia: string;
+  comisionMonto: number;
+  comisionIvaMonto: number;
+  retenciones: NonNullable<CrearCobroPayload["retenciones"]>;
+};
+export async function acreditarCobro(
+  id: string,
+  payload: AcreditarCobroPayload,
+): Promise<Cobro> {
   return apiRequest(`/administracion/cobros/${id}/acreditar`, {
     method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

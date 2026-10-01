@@ -1,5 +1,16 @@
 # Validación de producción
 
+## Retenciones y acreditaciones — 01/10/2026, 10:35 UTC
+
+- Despliegue expresamente autorizado después de probar en local y staging. Backend `c0aa8cf46cf31a00c942afd9d99dc7f952475690` y web `c42d6d5063ce9cea23ae037475443edc0b6a6156`; imágenes promovidas sin recompilar desde los artefactos probados de staging. Los cuatro servicios terminaron saludables y conservan sus tamaños. PDF, copiador, DNS e integraciones fiscales no cambiaron.
+- API y ambos workers: `registry.fly.io/grafoprint-production-api@sha256:338ce43559d5d91558f32f52587d93cd8200206aa71b9175071b41157e3b2b0e`. Web: `registry.fly.io/grafoprint-production-web@sha256:839e3c369a7c1a4643ce8bb8c876dd249cbbf223f1793d9cdbd5fdc77b9e827b`.
+- Respaldo previo firmado de las 10:00 UTC comprobado antes de migrar. Migración aditiva `20261001100000_medios_pago_retenciones`: 300 → 301, sin seeds ni resets. Los recuentos de empresas, clientes, cobros, métodos y movimientos no variaron. Rol de aplicación verificado sobre los nuevos campos, sin permiso DDL. No se aplicaron tasas fiscales supuestas ni se generaron cobros/facturas de prueba en producción.
+- Las 91 pruebas locales dirigidas y el ensayo de servicios compilados sobre PostgreSQL de staging están detallados en [su registro](../staging/VALIDACION.md). HTTP y contenedores de GitHub aprobaron la revisión ejecutable final; ambas imágenes se compilaron con comprobación de tipos.
+- Después del despliegue, HTTPS de API/web devuelve 200 y la base está disponible. El proxy sin sesión devuelve 401 y la API directa protegida 403. Chrome mostró los nueve métodos existentes y permitió abrir el formulario con calendario, fechas adicionales y reglas de retención. Se dejó una pestaña nueva para configurar; no se guardó ni se recargó el formulario anterior del usuario.
+- Fuentes exactas cifradas y retenidas en B2; inventario del copiador actualizado. La copia posterior `e86d3286-66ee-4e7a-b334-11e8c74c0608`, completada a las 10:35:08 UTC, pasó firma y descifrado del manifiesto con 301 migraciones, archivo e imágenes/fuentes correctas. **No se repitió la restauración SQL en esta actualización.** Constructor remoto y túnel retirados; Docker de la Mac no se reinició.
+- El calendario incluido cubre Argentina 2026; otros años/países muestran advertencia de cobertura parcial. Los cobros electrónicos requieren confirmar importes, fecha real y referencia desde Tesorería; el vencimiento previsto ya no crea ingresos automáticos. Efectivo/transferencias inmediatas sin agente bancario conservan su circuito; cheques siguen en cartera. Ver [guía y límites](../../docs/medios-pago-retenciones.md).
+- [PR #12](https://github.com/studiocamaleon/gdi/pull/12), dependiente de #11, sin fusionar. Una reversión al backend anterior reactivaría el planificador antiguo de acreditaciones: revisar pendientes antes de revertir. El recorrido comercial completo y el primer comprobante fiscal legítimo siguen siendo verificaciones independientes.
+
 ## Activación fiscal y aviso de ambiente — 01/10/2026, 06:35–06:52 UTC
 
 - El titular completó los datos fiscales y el punto de venta de webservices de la primera empresa. Se verificó la autorización mediante consulta WSFE y, con su confirmación expresa, se activó la integración. La interfaz confirmó `Conectada` y ambiente `Producción`. No se emitieron facturas en esta revisión.

@@ -1,4 +1,6 @@
 "use client";
+import { CobroAcreditacionDialog } from "./cobro-acreditacion-dialog";
+import type { AcreditarCobroPayload } from "@/lib/administracion-api";
 
 import * as React from "react";
 import Link from "next/link";
@@ -387,6 +389,8 @@ export function AcreditacionesView({
   const [busqueda, setBusqueda] = React.useState("");
   const [estado, setEstado] = React.useState(conValores ? "activos" : "todos");
   const [ocupadoId, setOcupadoId] = React.useState<string | null>(null);
+  const [liquidacion, setLiquidacion] =
+    React.useState<CobroPendienteAcreditacion | null>(null);
   const [operacion, setOperacion] = React.useState<OperacionValor>(null);
   const fmt = (importe: number, codigo: string) =>
     formatearMoneda(importe, monedaDe(codigo));
@@ -396,10 +400,14 @@ export function AcreditacionesView({
   }, [initialFilas]);
   React.useEffect(() => setValores(initialValores), [initialValores]);
 
-  const acreditarElectronico = async (fila: CobroPendienteAcreditacion) => {
+  const acreditarElectronico = async (
+    fila: CobroPendienteAcreditacion,
+    payload: AcreditarCobroPayload,
+  ) => {
     setOcupadoId(fila.id);
     try {
-      await acreditarCobro(fila.id);
+      await acreditarCobro(fila.id, payload);
+      setLiquidacion(null);
       setFilas((actuales) => actuales.filter((item) => item.id !== fila.id));
       toast.success("Cobro acreditado.");
       router.refresh();
@@ -412,9 +420,12 @@ export function AcreditacionesView({
     }
   };
 
-  const operacionPermitida = operacion !== null &&
+  const operacionPermitida =
+    operacion !== null &&
     (operacion.valor.origen !== "propio" || conEgresos) &&
-    (["depositar", "acreditar", "debitar"].includes(operacion.tipo) ? puedeGestionar : puedeAnular);
+    (["depositar", "acreditar", "debitar"].includes(operacion.tipo)
+      ? puedeGestionar
+      : puedeAnular);
 
   const operarValor = async (payload: {
     cuentaDestinoId?: string;
@@ -583,10 +594,26 @@ export function AcreditacionesView({
       {...scope}
       className={[scope.className, styles.pagina].filter(Boolean).join(" ")}
     >
-      {!conValores ? <Alert>
-        <AlertTitle>Historial de valores</AlertTitle>
-        <AlertDescription>Conservás la consulta de los cheques y sus eventos. El plan actual no incluye la gestión de valores.</AlertDescription>
-      </Alert> : null}
+      {liquidacion && puedeAcreditarCobros ? (
+        <CobroAcreditacionDialog
+          cobro={liquidacion}
+          hoy={hoy}
+          ocupado={ocupadoId === liquidacion.id}
+          onClose={() => setLiquidacion(null)}
+          onConfirmar={(payload) =>
+            void acreditarElectronico(liquidacion, payload)
+          }
+        />
+      ) : null}
+      {!conValores ? (
+        <Alert>
+          <AlertTitle>Historial de valores</AlertTitle>
+          <AlertDescription>
+            Conservás la consulta de los cheques y sus eventos. El plan actual
+            no incluye la gestión de valores.
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <header className={styles.subEncabezado}>
         <Link
           href="/administracion/tesoreria"
@@ -660,7 +687,8 @@ export function AcreditacionesView({
         <CardHeader className={styles.operacionesHeader}>
           <CardTitle>Cobros electrónicos</CardTitle>
           <CardDescription>
-            El importe disponible ya descuenta comisiones y retenciones.
+            El importe previsto descuenta comisiones y retenciones estimadas.
+            Confirmá la liquidación para registrar el ingreso real.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -675,7 +703,9 @@ export function AcreditacionesView({
                   <TableHead>Cliente / operación</TableHead>
                   <TableHead>Cuenta</TableHead>
                   <TableHead className="text-right">Bruto</TableHead>
-                  <TableHead className="text-right">Disponible</TableHead>
+                  <TableHead className="text-right">
+                    A recibir estimado
+                  </TableHead>
                   {puedeAcreditarCobros ? <TableHead /> : null}
                 </TableRow>
               </TableHeader>
@@ -711,7 +741,7 @@ export function AcreditacionesView({
                           size="sm"
                           loading={ocupadoId === fila.id}
                           loadingText="Acreditando…"
-                          onClick={() => void acreditarElectronico(fila)}
+                          onClick={() => setLiquidacion(fila)}
                         >
                           <CheckIcon data-icon="inline-start" />
                           Acreditar
@@ -730,8 +760,8 @@ export function AcreditacionesView({
                 </EmptyMedia>
                 <EmptyTitle>No hay cobros electrónicos pendientes</EmptyTitle>
                 <EmptyDescription>
-                  Los que vencen se acreditan automáticamente y también pueden
-                  confirmarse manualmente.
+                  Los cobros con liquidación quedan pendientes hasta que
+                  confirmes el ingreso real.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -879,7 +909,8 @@ export function AcreditacionesView({
                         Depositar
                       </Button>
                     ) : null}
-                    {puedeGestionar && conEgresos &&
+                    {puedeGestionar &&
+                    conEgresos &&
                     valor.origen === "tercero" &&
                     valor.estado === "cartera" ? (
                       <Button
@@ -943,7 +974,8 @@ export function AcreditacionesView({
                         Deshacer acreditación
                       </Button>
                     ) : null}
-                    {puedeGestionar && conEgresos &&
+                    {puedeGestionar &&
+                    conEgresos &&
                     valor.origen === "propio" &&
                     valor.estado === "emitido" ? (
                       <Button
@@ -955,7 +987,8 @@ export function AcreditacionesView({
                         Confirmar débito
                       </Button>
                     ) : null}
-                    {puedeAnular && conEgresos &&
+                    {puedeAnular &&
+                    conEgresos &&
                     valor.origen === "propio" &&
                     ["emitido", "debitado"].includes(valor.estado) ? (
                       <Button
@@ -975,7 +1008,8 @@ export function AcreditacionesView({
                       ["cartera", "depositado", "acreditado"].includes(
                         valor.estado,
                       )) ||
-                      (conEgresos && valor.origen === "propio" &&
+                      (conEgresos &&
+                        valor.origen === "propio" &&
                         valor.estado === "emitido" &&
                         valor.pagoId)) ? (
                       <Button

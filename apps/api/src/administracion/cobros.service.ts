@@ -1,3 +1,16 @@
+import {
+  cifrasCobro,
+  calcularRetenciones,
+  estimarAcreditacion,
+  redondearDinero,
+  type ReglaRetencion,
+} from '../common/medios-pago';
+import {
+  validarFechaLiquidacion,
+  validarRetenciones,
+} from './retenciones-validacion';
+import { claveFechaEnZona } from '../common/zona';
+import type { AcreditarCobroDto } from './dto/cobro.dto';
 import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -22,8 +35,6 @@ import {
   fechaNegocio,
   registrarMovimientoFondos,
   resolverActorFondos,
-  sumarDiasHabiles,
-  type ActorFondos,
 } from './fondos-ledger';
 import {
   bancoValorNormalizado,
@@ -84,17 +95,12 @@ export class CobrosService {
     ivaComisionPct: number;
     retencionesTotal: number;
   }) {
-    const comisionMonto = (input.montoBruto * input.comisionPctAplicada) / 100;
-    const comisionIvaMonto = (comisionMonto * input.ivaComisionPct) / 100;
-    const netoAcreditado = input.montoBruto - comisionMonto - comisionIvaMonto;
-    const disponibleReal = netoAcreditado - input.retencionesTotal;
-    const r = (n: number) => Math.round(n * 100) / 100;
-    return {
-      comisionMonto: r(comisionMonto),
-      comisionIvaMonto: r(comisionIvaMonto),
-      netoAcreditado: r(netoAcreditado),
-      disponibleReal: r(disponibleReal),
-    };
+    return cifrasCobro(
+      input.montoBruto,
+      input.comisionPctAplicada,
+      input.ivaComisionPct,
+      input.retencionesTotal,
+    );
   }
 
   async findAll(auth: CurrentAuth, filtros?: { ordenId?: string }) {
@@ -264,8 +270,30 @@ export class CobrosService {
       );
     }
 
-    const retenciones = payload.retenciones ?? [];
-    const retencionesTotal = retenciones.reduce((s, r) => s + r.monto, 0);
+    const reglas = (metodo.sufreRetencion
+      ? (metodo.retencionesConfig ?? [])
+      : []) as unknown as ReglaRetencion[];
+    const sinRetenciones = this.calcularCifras({
+      montoBruto: payload.montoBruto,
+      comisionPctAplicada: payload.comisionPctAplicada,
+      ivaComisionPct: Number(metodo.ivaComisionPct),
+      retencionesTotal: 0,
+    });
+    const retencionesSugeridas = calcularRetenciones(
+      reglas,
+      payload.montoBruto,
+      sinRetenciones.netoAcreditado,
+      payload.fecha.slice(0, 10),
+    );
+    const retenciones = payload.retenciones ?? retencionesSugeridas;
+    validarRetenciones(retenciones);
+    if (esCheque && retenciones.some((r) => r.agente && r.agente !== 'cliente'))
+      throw new BadRequestException(
+        'En cheques registrá sólo retenciones del cliente; los descuentos bancarios se registran al gestionar el valor.',
+      );
+    const retencionesTotal = redondearDinero(
+      retenciones.reduce((s, r) => s + r.monto, 0),
+    );
     const cifras = this.calcularCifras({
       montoBruto: payload.montoBruto,
       comisionPctAplicada: payload.comisionPctAplicada,
@@ -292,14 +320,25 @@ export class CobrosService {
         );
       }
     }
-    const acreditaInmediato = !esCheque && metodo.plazoAcreditacionDias === 0;
+    const acreditaInmediato =
+      !esCheque &&
+      metodo.plazoAcreditacionDias === 0 &&
+      ['efectivo', 'transferencia'].includes(metodo.tipo) &&
+      !retenciones.some(
+        (r) => r.agente === 'banco' || r.agente === 'procesador',
+      );
     const fechaAcreditacionEstimada = esCheque
       ? payload.valor?.fechaPago
         ? fechaNegocio(payload.valor.fechaPago, regional.zonaHoraria)
         : null
-      : sumarDiasHabiles(
-          fecha,
-          metodo.plazoAcreditacionDias,
+      : fechaNegocio(
+          estimarAcreditacion(
+            payload.fecha.slice(0, 10),
+            metodo.plazoAcreditacionDias,
+            metodo.calendarioAcreditacion as 'habiles_bancarios' | 'corridos',
+            regional.paisCodigo,
+            metodo.feriadosAdicionales,
+          ).fecha,
           regional.zonaHoraria,
         );
     const periodoFiscal = payload.fecha.slice(0, 7);
@@ -420,12 +459,36 @@ export class CobrosService {
             retencionesTotal,
             disponibleReal: cifras.disponibleReal,
             fechaAcreditacionEstimada,
+            fechaAcreditacionReal: acreditaInmediato ? fecha : null,
+            configMetodoSnapshot: {
+              tipo: metodo.tipo,
+              comisionPct: Number(metodo.comisionPct),
+              ivaComisionPct: Number(metodo.ivaComisionPct),
+              plazoAcreditacionDias: metodo.plazoAcreditacionDias,
+              calendarioAcreditacion: metodo.calendarioAcreditacion,
+              feriadosAdicionales: metodo.feriadosAdicionales,
+              retencionesConfig: reglas,
+            } as unknown as Prisma.InputJsonValue,
+            liquidacionEstimada: {
+              ...cifras,
+              retencionesTotal,
+              fechaAcreditacionEstimada:
+                fechaAcreditacionEstimada?.toISOString() ?? null,
+              retenciones,
+              retencionesSugeridas,
+            } as unknown as Prisma.InputJsonValue,
             estadoAcreditacion: acreditaInmediato ? 'acreditado' : 'pendiente',
             notas: payload.notas ?? null,
             retenciones: {
               create: retenciones.map((r) => ({
                 tenantId: auth.tenantId,
                 direccion: 'sufrida',
+                agente: r.agente ?? 'cliente',
+                reglaId: r.reglaId ?? null,
+                estado:
+                  acreditaInmediato || (r.agente ?? 'cliente') === 'cliente'
+                    ? 'confirmada'
+                    : 'estimada',
                 regimen: r.regimen,
                 jurisdiccion: r.jurisdiccion ?? null,
                 base: r.base,
@@ -608,40 +671,151 @@ export class CobrosService {
     return this.findOne(auth, cobroId);
   }
 
-  /** Acreditación manual de un cobro electrónico pendiente. */
-  async acreditar(auth: CurrentAuth, id: string) {
-    const cobro = await this.prisma.cobro.findFirst({
-      where: { id, tenantId: auth.tenantId, anuladoEl: null },
-      include: {
-        metodoPago: { select: { tipo: true, nombre: true } },
-        orden: { select: { id: true, numero: true } },
-      },
-    });
-    if (!cobro) throw new NotFoundException('No se encontró el cobro.');
-    if (cobro.estadoAcreditacion === 'acreditado') {
-      return this.findOne(auth, cobro.id);
-    }
-    if (cobro.metodoPago.tipo === 'cheque_echeq') {
+  /** Confirmación de liquidación: una transacción, importes reales y fecha local. */
+  async acreditar(auth: CurrentAuth, id: string, payload: AcreditarCobroDto) {
+    await this.capacidades.exigir(auth.tenantId, 'identidad');
+    validarFechaLiquidacion(payload.fecha);
+    validarRetenciones(payload.retenciones);
+    if (
+      [payload.comisionMonto, payload.comisionIvaMonto].some(
+        (n) => !Number.isFinite(n) || n < 0 || n > 999999999999.99,
+      )
+    )
+      throw new BadRequestException('Revisá los importes de comisión e IVA.');
+    if (!payload.referencia.trim())
       throw new BadRequestException(
-        'Los cheques se acreditan desde la cartera de valores.',
+        'Indicá el comprobante o referencia de la liquidación.',
       );
-    }
-    if (!cobro.cuentaDestinoId) {
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    if (payload.fecha > claveFechaEnZona(new Date(), regional.zonaHoraria))
       throw new BadRequestException(
-        'El cobro no tiene una cuenta destino. Asignala antes de acreditarlo.',
+        'La acreditación real no puede tener una fecha futura.',
       );
-    }
     const actor = await resolverActorFondos(this.prisma, auth);
-    await this.acreditarUno({
-      id: cobro.id,
-      tenantId: auth.tenantId,
-      cuentaDestinoId: cobro.cuentaDestinoId,
-      disponibleReal: Number(cobro.disponibleReal),
-      ordenId: cobro.orden?.id ?? null,
-      ordenNumero: cobro.orden?.numero ?? null,
-      actor,
+    await ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
+      await this.capacidades.exigir(auth.tenantId, 'identidad', tx);
+      const locked = await tx.$queryRaw<
+        Array<{ id: string }>
+      >`SELECT id FROM "Cobro" WHERE id = ${id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+      if (!locked.length)
+        throw new NotFoundException('No se encontró el cobro.');
+      const cobro = await tx.cobro.findFirstOrThrow({
+        where: { id, tenantId: auth.tenantId },
+        include: { metodoPago: true, orden: true, retenciones: true },
+      });
+      if (cobro.anuladoEl)
+        throw new BadRequestException('El cobro está anulado.');
+      if (cobro.estadoAcreditacion === 'acreditado') return;
+      const tipoOriginal =
+        (cobro.configMetodoSnapshot as { tipo?: string } | null)?.tipo ??
+        cobro.metodoPago.tipo;
+      if (tipoOriginal === 'cheque_echeq')
+        throw new BadRequestException(
+          'Los cheques se acreditan desde la cartera de valores.',
+        );
+      if (!cobro.cuentaDestinoId)
+        throw new BadRequestException('El cobro no tiene cuenta destino.');
+      if (payload.fecha < claveFechaEnZona(cobro.fecha, regional.zonaHoraria))
+        throw new BadRequestException(
+          'La acreditación no puede ser anterior al cobro.',
+        );
+      const retencionesTotal = redondearDinero(
+        payload.retenciones.reduce((s, r) => s + r.monto, 0),
+      );
+      const netoAcreditado = redondearDinero(
+        Number(cobro.montoBruto) -
+          payload.comisionMonto -
+          payload.comisionIvaMonto,
+      );
+      const disponibleReal = redondearDinero(netoAcreditado - retencionesTotal);
+      if (disponibleReal <= 0)
+        throw new BadRequestException(
+          'Los descuentos no pueden consumir todo el cobro.',
+        );
+      const fecha = fechaNegocio(payload.fecha, regional.zonaHoraria);
+      await tx.cobro.update({
+        where: { id },
+        data: {
+          estadoAcreditacion: 'acreditado',
+          fechaAcreditacionReal: fecha,
+          referenciaAcreditacion: payload.referencia.trim(),
+          comisionMonto: payload.comisionMonto,
+          comisionIvaMonto: payload.comisionIvaMonto,
+          netoAcreditado,
+          retencionesTotal,
+          disponibleReal,
+          // Los cobros anteriores al cambio también conservan su previsión original.
+          liquidacionEstimada:
+            cobro.liquidacionEstimada ??
+            ({
+              comisionMonto: Number(cobro.comisionMonto),
+              comisionIvaMonto: Number(cobro.comisionIvaMonto),
+              retencionesTotal: Number(cobro.retencionesTotal),
+              disponibleReal: Number(cobro.disponibleReal),
+              retenciones: cobro.retenciones.map((r) => ({
+                regimen: r.regimen,
+                jurisdiccion: r.jurisdiccion,
+                base: Number(r.base),
+                alicuota: Number(r.alicuota),
+                monto: Number(r.monto),
+                agente: r.agente,
+              })),
+            } as Prisma.InputJsonValue),
+        },
+      });
+      await tx.retencionPercepcion.deleteMany({
+        where: { tenantId: auth.tenantId, cobroId: id },
+      });
+      for (const r of payload.retenciones)
+        await tx.retencionPercepcion.create({
+          data: {
+            tenantId: auth.tenantId,
+            cobroId: id,
+            direccion: 'sufrida',
+            estado: 'confirmada',
+            agente: r.agente ?? 'no_informado',
+            reglaId: r.reglaId ?? null,
+            regimen: r.regimen,
+            jurisdiccion: r.jurisdiccion ?? null,
+            base: r.base,
+            alicuota: r.alicuota,
+            monto: r.monto,
+            nroComprobante: r.nroComprobante ?? payload.referencia.trim(),
+            periodoFiscal:
+              r.agente === 'cliente'
+                ? claveFechaEnZona(cobro.fecha, regional.zonaHoraria).slice(
+                    0,
+                    7,
+                  )
+                : payload.fecha.slice(0, 7),
+          },
+        });
+      await registrarMovimientoFondos(tx, {
+        tenantId: auth.tenantId,
+        cuentaId: cobro.cuentaDestinoId,
+        fecha,
+        tipo: 'entrada',
+        monto: disponibleReal,
+        concepto: cobro.orden
+          ? `Acreditación cobro ${cobro.orden.numero}`
+          : 'Acreditación de cobro',
+        origenTipo: 'cobro',
+        actor,
+        cobroId: id,
+        ordenId: cobro.ordenId,
+        operacionId: randomUUID(),
+        referencia: payload.referencia.trim(),
+        estadoConciliacion: 'conciliado',
+      });
+      const aplicaciones = await tx.cobroOrden.findMany({
+        where: { cobroId: id, tenantId: auth.tenantId },
+        select: { ordenId: true },
+      });
+      for (const a of aplicaciones)
+        await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, a.ordenId);
     });
-    return this.findOne(auth, cobro.id);
+    return this.findOne(auth, id);
   }
 
   /** Los cobros electrónicos que todavía no acreditaron, con su fecha. */
@@ -658,6 +832,7 @@ export class CobrosService {
         cliente: { select: { nombre: true } },
         orden: { select: { id: true, numero: true } },
         valores: { select: { estado: true, numero: true } },
+        retenciones: true,
       },
       orderBy: [{ fechaAcreditacionEstimada: 'asc' }, { fecha: 'asc' }],
     });
@@ -673,6 +848,19 @@ export class CobrosService {
       ordenId: cobro.orden?.id ?? null,
       ordenNumero: cobro.orden?.numero ?? null,
       montoBruto: Number(cobro.montoBruto),
+      comisionMonto: Number(cobro.comisionMonto),
+      comisionIvaMonto: Number(cobro.comisionIvaMonto),
+      retenciones: cobro.retenciones.map((r) => ({
+        regimen: r.regimen,
+        jurisdiccion: r.jurisdiccion,
+        agente: r.agente,
+        reglaId: r.reglaId,
+        estado: r.estado,
+        base: Number(r.base),
+        alicuota: Number(r.alicuota),
+        monto: Number(r.monto),
+        nroComprobante: r.nroComprobante,
+      })),
       netoAcreditado: Number(cobro.netoAcreditado),
       disponibleReal: Number(cobro.disponibleReal),
       moneda: cobro.moneda,
@@ -683,127 +871,10 @@ export class CobrosService {
     }));
   }
 
-  /**
-   * Acredita los cobros electrónicos cuya fecha estimada ya pasó.
-   * Idempotente y seguro ante concurrencia (el UPDATE condicional decide
-   * quién gana). Lo ejecuta el cron; consultar el historial no mueve fondos.
-   * Los cheques quedan afuera: acreditan vía su Valor.
-   * @param tenantId acota a un tenant; sin él barre todos (cron nocturno).
-   */
-  async barrerVencidos(tenantId?: string) {
-    const hasta = new Date();
-    let ultimoId: string | undefined;
-    let acreditados = 0;
-    // Avanzar también sobre las empresas en sólo lectura: de lo contrario sus
-    // primeros 500 pendientes podrían postergar indefinidamente a las demás.
-    for (;;) {
-      const vencidos = await this.prisma.cobro.findMany({
-        where: {
-          ...(tenantId ? { tenantId } : {}),
-          anuladoEl: null,
-          estadoAcreditacion: 'pendiente',
-          fechaAcreditacionEstimada: { not: null, lte: hasta },
-          ...(ultimoId ? { id: { gt: ultimoId } } : {}),
-          cuentaDestinoId: { not: null },
-          metodoPago: { tipo: { not: 'cheque_echeq' } },
-        },
-        select: {
-          id: true,
-          tenantId: true,
-          cuentaDestinoId: true,
-          disponibleReal: true,
-          fechaAcreditacionEstimada: true,
-          orden: { select: { id: true, numero: true } },
-        },
-        orderBy: { id: 'asc' },
-        take: 500,
-      });
-
-      for (const cobro of vencidos) {
-        if (!cobro.cuentaDestinoId) continue;
-        const ok = await this.acreditarUno({
-          id: cobro.id,
-          tenantId: cobro.tenantId,
-          cuentaDestinoId: cobro.cuentaDestinoId,
-          disponibleReal: Number(cobro.disponibleReal),
-          ordenId: cobro.orden?.id ?? null,
-          ordenNumero: cobro.orden?.numero ?? null,
-          // El movimiento lleva la fecha en que la plata realmente entró,
-          // no la del barrido: si el job corrió tarde, el saldo corrido
-          // igual queda ordenado.
-          fecha: cobro.fechaAcreditacionEstimada ?? undefined,
-          actor: { userId: null, nombre: 'Sistema' },
-          automatico: true,
-        });
-        if (ok) acreditados += 1;
-      }
-      if (vencidos.length < 500) break;
-      ultimoId = vencidos[vencidos.length - 1].id;
-    }
-    return acreditados;
-  }
-
-  /**
-   * Transición pendiente → acreditado + movimiento de entrada, en una sola
-   * transacción. Devuelve false si otro proceso la hizo primero.
-   */
-  private async acreditarUno(cobro: {
-    id: string;
-    tenantId: string;
-    cuentaDestinoId: string;
-    disponibleReal: number;
-    ordenId: string | null;
-    ordenNumero: string | null;
-    fecha?: Date;
-    actor: ActorFondos;
-    automatico?: boolean;
-  }) {
-    return ejecutarTransaccionFondos(this.prisma, async (tx) => {
-      await bloquearCupoUsuarios(tx, cobro.tenantId);
-      if (
-        cobro.automatico &&
-        !(await this.capacidades.puedeOperar(cobro.tenantId, 'identidad', tx))
-      )
-        return false;
-      await this.capacidades.exigir(cobro.tenantId, 'identidad', tx);
-      const { count } = await tx.cobro.updateMany({
-        where: {
-          id: cobro.id,
-          tenantId: cobro.tenantId,
-          anuladoEl: null,
-          estadoAcreditacion: 'pendiente',
-        },
-        data: { estadoAcreditacion: 'acreditado' },
-      });
-      if (count === 0) return false;
-      await registrarMovimientoFondos(tx, {
-        tenantId: cobro.tenantId,
-        cuentaId: cobro.cuentaDestinoId,
-        fecha: cobro.fecha ?? new Date(),
-        tipo: 'entrada',
-        monto: cobro.disponibleReal,
-        concepto: cobro.ordenNumero
-          ? `Acreditación cobro ${cobro.ordenNumero}`
-          : 'Acreditación de cobro',
-        origenTipo: 'cobro',
-        actor: cobro.actor,
-        cobroId: cobro.id,
-        ordenId: cobro.ordenId,
-        operacionId: randomUUID(),
-      });
-      const aplicaciones = await tx.cobroOrden.findMany({
-        where: { cobroId: cobro.id },
-        select: { ordenId: true },
-      });
-      for (const aplicacion of aplicaciones) {
-        await this.fidelizacion.reconciliarOrden(
-          tx,
-          cobro.tenantId,
-          aplicacion.ordenId,
-        );
-      }
-      return true;
-    });
+  /** Compatibilidad con llamadas antiguas. El paso del tiempo no acredita fondos. */
+  barrerVencidos(_tenantId?: string) {
+    void _tenantId;
+    return Promise.resolve(0);
   }
 
   /**
@@ -948,6 +1019,9 @@ export class CobrosService {
     disponibleReal: unknown;
     moneda: string;
     fechaAcreditacionEstimada: Date | null;
+    fechaAcreditacionReal?: Date | null;
+    referenciaAcreditacion?: string | null;
+    liquidacionEstimada?: unknown;
     estadoAcreditacion: string;
     notas: string | null;
     numeroRecibo?: string | null;
@@ -959,6 +1033,9 @@ export class CobrosService {
     cuentaDestino: { nombre: string } | null;
     cliente: { nombre: string } | null;
     retenciones: Array<{
+      agente?: string;
+      estado?: string;
+      reglaId?: string | null;
       regimen: string;
       jurisdiccion: string | null;
       base: unknown;
@@ -990,11 +1067,17 @@ export class CobrosService {
       fechaAcreditacionEstimada:
         cobro.fechaAcreditacionEstimada?.toISOString() ?? null,
       estadoAcreditacion: cobro.estadoAcreditacion,
+      fechaAcreditacionReal: cobro.fechaAcreditacionReal?.toISOString() ?? null,
+      referenciaAcreditacion: cobro.referenciaAcreditacion ?? null,
+      liquidacionEstimada: cobro.liquidacionEstimada ?? null,
       anuladoEl: cobro.anuladoEl?.toISOString() ?? null,
       anuladoPorNombre: cobro.anuladoPorNombre ?? null,
       motivoAnulacion: cobro.motivoAnulacion ?? null,
       notas: cobro.notas,
       retenciones: cobro.retenciones.map((r) => ({
+        agente: r.agente ?? 'no_informado',
+        estado: r.estado ?? 'confirmada',
+        reglaId: r.reglaId ?? null,
         regimen: r.regimen,
         jurisdiccion: r.jurisdiccion,
         base: Number(r.base),

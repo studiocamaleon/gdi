@@ -31,7 +31,11 @@ import { RecibosService } from './recibos.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
-import { AnularCobroDto, CrearCobroDto } from './dto/cobro.dto';
+import {
+  AcreditarCobroDto,
+  AnularCobroDto,
+  CrearCobroDto,
+} from './dto/cobro.dto';
 import {
   CargarCaeDto,
   CrearComprobanteDto,
@@ -609,8 +613,12 @@ export class AdministracionController {
 
   @Permiso('administracion.gestionar')
   @Post('cobros/:id/acreditar')
-  acreditarCobro(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
-    return this.cobrosService.acreditar(auth, id);
+  acreditarCobro(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: AcreditarCobroDto,
+  ) {
+    return this.cobrosService.acreditar(auth, id, payload);
   }
 
   @Permiso('administracion.anular')

@@ -322,8 +322,24 @@ describe('Tesorería operativa', () => {
     });
 
     const resultado = await Promise.allSettled([
-      cobros.acreditar(auth, cobro.id),
-      cobros.acreditar(auth, cobro.id),
+      cobros.acreditar(auth, cobro.id, {
+        fecha: '2026-03-02',
+        referencia: 'LIQ-TEST',
+        comisionMonto: 100,
+        comisionIvaMonto: 21,
+        retenciones: [
+          { regimen: 'otro', base: 1000, alicuota: 7.9, monto: 79 },
+        ],
+      }),
+      cobros.acreditar(auth, cobro.id, {
+        fecha: '2026-03-02',
+        referencia: 'LIQ-TEST',
+        comisionMonto: 100,
+        comisionIvaMonto: 21,
+        retenciones: [
+          { regimen: 'otro', base: 1000, alicuota: 7.9, monto: 79 },
+        ],
+      }),
     ]);
     const actual = await prisma.cuentaFondos.findUniqueOrThrow({
       where: { id: cuentaId },

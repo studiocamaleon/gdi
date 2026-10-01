@@ -299,7 +299,7 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
     },
   );
 
-  it('impide nueve escrituras de un lector antes de acceder al servicio', async () => {
+  it('impide las escrituras de un lector antes de acceder al servicio', async () => {
     const antes = await saldos();
     for (const [method, ruta] of [
       ['post', 'cuentas'],
@@ -311,6 +311,7 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
       ['post', 'puntos-venta'],
       ['delete', `puntos-venta/${puntos[0]}`],
       ['post', `cobros/${cobros[0]}/imputaciones`],
+      ['post', `cobros/${cobros[0]}/acreditar`],
     ] as const)
       await http(method, ruta, 'lector').send({}).expect(403);
     expect(await saldos()).toEqual(antes);
