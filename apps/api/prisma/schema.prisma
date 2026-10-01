@@ -3986,6 +3986,8 @@ model OrdenTrabajo {
   /// Permite terminar de cobrar una OT emitida con F01 aunque luego se retire el plan.
   cobrosHabilitadosEmision Boolean @default(true)
   materialesControlados Boolean @default(false)
+  /// Fija el modo al emitir: desactivarlo en la empresa no altera OTs anteriores.
+  materialesInicioSinStock Boolean @default(false)
   materialesRevision String? @db.VarChar(64)
   necesidadesMaterialOt NecesidadMaterialOt[]
   operacionesReservasMaterial OperacionReservasMaterial[]
@@ -6989,6 +6991,7 @@ model TipoCambioCotizacion {
 /// Optativo: activar no incorpora retroactivamente órdenes ni compromete stock.
 model PoliticaReservasMaterial {
   tenantId String @id @db.Uuid
+  inicioSinStock Boolean @default(false)
   modo String @default("AL_EMITIR") @db.VarChar(16)
   habilitada Boolean @default(false)
   incluirConsumibles Boolean @default(false)

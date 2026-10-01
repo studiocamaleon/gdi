@@ -10,6 +10,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextInterceptor } from '../../common/interceptors/tenant-context.interceptor';
 import { InventarioController } from '../../inventario/inventario.controller';
 import { InventarioStockController } from '../../inventario/inventario-stock.controller';
+import { ReservasMaterialController } from '../../inventario/reservas-material.controller';
+import { ReservasMaterialService } from '../../inventario/reservas-material.service';
 import { InventarioService } from '../../inventario/inventario.service';
 import { InventarioBibliotecaService } from '../../inventario/inventario-biblioteca.service';
 import { AuthGuard } from '../auth.guard';
@@ -120,6 +122,8 @@ describe('Inventario: permisos HTTP y relaciones entre empresas', () => {
       ['gestor', ['inventario.ver', 'inventario.gestionar']],
       ['lector', ['inventario.ver']],
       ['sin-permisos', []],
+      ['vendedor', ['comercial.ordenes.ver']],
+      ['presupuestos', ['comercial.presupuestos.ver']],
     ] as const) {
       const user = await prisma.user.create({
         data: {
@@ -160,8 +164,20 @@ describe('Inventario: permisos HTTP y relaciones entre empresas', () => {
       });
     }
     const modulo = await Test.createTestingModule({
-      controllers: [InventarioController, InventarioStockController],
+      controllers: [
+        InventarioController,
+        InventarioStockController,
+        ReservasMaterialController,
+      ],
       providers: [
+        {
+          provide: ReservasMaterialService,
+          useValue: new ReservasMaterialService(
+            prisma,
+            new InventarioService(prisma),
+            capacidades,
+          ),
+        },
         {
           provide: InventarioService,
           useValue: new InventarioService(prisma, undefined, capacidades),
@@ -212,6 +228,46 @@ describe('Inventario: permisos HTTP y relaciones entre empresas', () => {
       .auth(tokens[actor], { type: 'bearer' })
       .set('x-tenant-id', tenants[1]);
   }
+  it('el modo de inicio exige gestión, limita cambios a la propia empresa y registra al actor', async () => {
+    await request(app.getHttpServer()).get('/inventario/inicio').expect(401);
+    await http('get', '/inventario/inicio', 'sin-permisos').expect(403);
+    const inicial = await http('get', '/inventario/inicio', 'vendedor').expect(
+      200,
+    );
+    expect(inicial.body).toEqual({ activo: false, version: 0 });
+    await http('get', '/inventario/inicio', 'presupuestos').expect(200);
+    for (const actor of ['lector', 'vendedor', 'presupuestos', 'sin-permisos'])
+      await http('put', '/inventario/inicio', actor)
+        .send({ activo: true, version: 0 })
+        .expect(403);
+    for (const invalido of [
+      { activo: true, version: 0, tenantId: tenants[1] },
+      { activo: 'true', version: 0 },
+      { activo: true, version: -1 },
+    ])
+      await http('put', '/inventario/inicio').send(invalido).expect(400);
+    const activado = await http('put', '/inventario/inicio')
+      .send({ activo: true, version: 0 })
+      .expect(200);
+    expect(activado.body).toEqual({ activo: true, version: 1 });
+    await http('put', '/inventario/inicio')
+      .send({ activo: false, version: 0 })
+      .expect(409);
+    expect(
+      await prisma.politicaReservasMaterial.findUnique({
+        where: { tenantId: tenants[1] },
+      }),
+    ).toBeNull();
+    expect(
+      await prisma.eventoSistema.findMany({
+        where: { tenantId: tenants[0], tipo: 'inventario.modo_inicio' },
+      }),
+    ).toEqual([expect.objectContaining({ actorUserId: users[0] })]);
+    await http('put', '/inventario/inicio')
+      .send({ activo: false, version: activado.body.version })
+      .expect(200);
+  });
+
   const materialPayload = (proveedorId = proveedores[0]) => ({
     codigo: 'QA-MATERIAL-NUEVO',
     nombre: 'Material ficticio nuevo',

@@ -87,15 +87,14 @@ function fixture(
   saldos: Record<string, number> = { a: 0, b: 10 },
   reservado = 0,
   previos: ConstructorParameters<typeof DisponibilidadCotizacion>[2] = [],
+  inicioSinStock = false,
 ) {
   const tx = {
     materiaPrimaVariante: {
-      findFirst: jest
-        .fn()
-        .mockResolvedValue({
-          unidadStock: 'M2',
-          materiaPrima: { unidadStock: 'M2' },
-        }),
+      findFirst: jest.fn().mockResolvedValue({
+        unidadStock: 'M2',
+        materiaPrima: { unidadStock: 'M2' },
+      }),
     },
     stockMateriaPrimaVariante: {
       findMany: jest.fn(async ({ where }) => [
@@ -118,7 +117,13 @@ function fixture(
   const prisma = {
     $transaction: jest.fn((fn) => fn(tx)),
   } as unknown as PrismaService;
-  const stock = new DisponibilidadCotizacion(prisma, 'tenant', previos);
+  const stock = new DisponibilidadCotizacion(
+    prisma,
+    'tenant',
+    previos,
+    undefined,
+    inicioSinStock,
+  );
   const motor = Object.create(MotorUniversalService.prototype) as any;
   motor.capacidadesPlan = { puedeOperar: jest.fn().mockResolvedValue(true) };
   motor.cargarVariantePorId = jest.fn(async (_tenant, id) => variante(id));
@@ -139,6 +144,25 @@ function fixture(
 }
 
 describe('Selección automática según stock libre real', () => {
+  it('inicio sin stock cotiza materiales reales y conserva costos sin consultar existencias', async () => {
+    const f = fixture({ a: 0, b: 0 }, 0, [], true);
+    const configurado = paso('SOLO_DISPONIBLES');
+    const original = JSON.stringify(configurado);
+    const { resultado, errores } = await f.ejecutar(configurado);
+    const normal = await fixture({ a: 0, b: 0 }).ejecutar(paso('TODAS'));
+    expect(errores.filter((e) => e.severidad === 'ERROR')).toEqual([]);
+    expect(
+      resultado.materiales?.map(({ seleccionStock, ...material }) => material),
+    ).toEqual(normal.resultado.materiales);
+    expect(resultado.materiales?.[0].materialVarianteId).toBe('a');
+    expect(resultado.materiales?.[0].seleccionStock).toEqual({
+      politica: 'SOLO_DISPONIBLES',
+      estado: 'sin_verificar_inicio',
+      alternativas: [],
+    });
+    expect(f.tx.stockMateriaPrimaVariante.findMany).not.toHaveBeenCalled();
+    expect(JSON.stringify(configurado)).toBe(original);
+  });
   it('descarta la placa agotada y cuenta la placa entera aunque cotice por m² útil', async () => {
     const f = fixture();
     const { resultado, errores } = await f.ejecutar();

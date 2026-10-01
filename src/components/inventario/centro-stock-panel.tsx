@@ -80,6 +80,7 @@ import {
 } from "./reservas-stock-controls";
 import layout from "@/components/design-system/list-page.module.css";
 import materialStyles from "./materiales.module.css";
+import { ModoInicioInventario } from "./modo-inicio-inventario";
 import styles from "./centro-stock.module.css";
 
 type CentroStockPanelProps = {
@@ -721,6 +722,7 @@ export function CentroStockPanel({
           </p>
         </div>
         <div className={styles.headerActions}>
+          {canManage && <ModoInicioInventario configuracion />}
           {canManage && <ConfiguracionReservas />}
           <ActionButton variant="outline" onPress={() => setDepositsOpen(true)}>
             <Warehouse data-icon="inline-start" />
@@ -741,6 +743,7 @@ export function CentroStockPanel({
           )}
         </div>
       </header>
+      <ModoInicioInventario />
       {!conExistencias && <p className={layout.subtitle}>
         Consulta de existencias registradas. El plan actual no incluye nuevos ingresos, ajustes ni transferencias.
       </p>}

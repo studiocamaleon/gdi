@@ -1,3 +1,4 @@
+import { gateOperativoCumplido } from '../../ordenes-trabajo/gate-operativo-cumplido';
 import {
   leerAsignacionPersonal,
   proyectarAsignacionPersonal,
@@ -132,7 +133,7 @@ export function disponibilidadCola(
   if (pendientes.length)
     motivos.push(`Espera: ${pendientes.map((p) => p.nombre).join(', ')}.`);
   for (const g of paso.gatesOperativos)
-    if (g.estado !== 'CUMPLIDO') {
+    if (!gateOperativoCumplido(g)) {
       motivos.push(
         g.detalle ||
           (g.tipo === 'MATERIAL'

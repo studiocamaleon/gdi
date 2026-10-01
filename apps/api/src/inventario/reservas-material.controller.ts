@@ -14,18 +14,36 @@ import { Permiso } from '../auth/permiso.decorator';
 import {
   ComandoReservasDto,
   PoliticaReservasDto,
+  InicioInventarioDto,
 } from './dto/comando-reservas.dto';
 import { ReservasMaterialService } from './reservas-material.service';
 @Controller()
 export class ReservasMaterialController {
   constructor(private readonly reservas: ReservasMaterialService) {}
+  @Get('inventario/inicio')
+  @Permiso(
+    'comercial.ordenes.ver',
+    'comercial.presupuestos.ver',
+    'inventario.stock.ver',
+  )
+  inicio(@CurrentSession() auth: CurrentAuth) {
+    return this.reservas.consultarInicio(auth.tenantId);
+  }
+  @Put('inventario/inicio')
+  @Permiso('inventario.stock.gestionar')
+  configurarInicio(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() data: InicioInventarioDto,
+  ) {
+    return this.reservas.guardarInicio(auth, data);
+  }
   @Get('inventario/reservas/configuracion')
-  @Permiso("inventario.stock.ver")
+  @Permiso('inventario.stock.ver')
   politica(@CurrentSession() auth: CurrentAuth) {
     return this.reservas.politica(auth.tenantId);
   }
   @Put('inventario/reservas/configuracion')
-  @Permiso("inventario.stock.gestionar")
+  @Permiso('inventario.stock.gestionar')
   configurar(
     @CurrentSession() auth: CurrentAuth,
     @Body() data: PoliticaReservasDto,
@@ -33,7 +51,7 @@ export class ReservasMaterialController {
     return this.reservas.guardarPolitica(auth.tenantId, data);
   }
   @Get('inventario/reservas/:varianteId')
-  @Permiso("inventario.stock.ver")
+  @Permiso('inventario.stock.ver')
   listar(
     @CurrentSession() auth: CurrentAuth,
     @Param('varianteId', ParseUUIDPipe) varianteId: string,
@@ -43,7 +61,7 @@ export class ReservasMaterialController {
     return this.reservas.listarReservas(auth.tenantId, varianteId, ubicacionId);
   }
   @Post('ordenes-trabajo/:id/materiales/operaciones')
-  @Permiso("inventario.stock.gestionar")
+  @Permiso('inventario.stock.gestionar')
   ejecutar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,

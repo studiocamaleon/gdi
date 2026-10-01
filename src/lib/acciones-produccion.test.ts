@@ -62,6 +62,22 @@ describe("controles compartidos entre Tablero y Colas", () => {
       }),
     ).toEqual([]);
   });
+  it("habilita materiales omitidos por inicio y sigue exigiendo calidad", () => {
+    const material = { tipo: "MATERIAL", estado: "OMITIDO_INICIO" };
+    const calidad = { tipo: "CALIDAD", estado: "PENDIENTE" };
+    expect(
+      accionesDisponiblesProduccion({
+        ...base,
+        paso: { ...base.paso, gatesOperativos: [material] },
+      }),
+    ).toContain("completar");
+    expect(
+      accionesDisponiblesProduccion({
+        ...base,
+        paso: { ...base.paso, gatesOperativos: [material, calidad] },
+      }),
+    ).toEqual([]);
+  });
   it("sólo el supervisor desbloquea o reabre y respeta las etapas siguientes", () => {
     expect(
       accionesDisponiblesProduccion({

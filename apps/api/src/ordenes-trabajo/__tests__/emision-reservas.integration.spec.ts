@@ -1,4 +1,5 @@
 import { DisponibilidadCotizacion } from '../../motor-universal/disponibilidad-materiales';
+import { inicioSinStock } from '../../inventario/inicio-sin-stock';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { contratoPropuesto } from '../../suscripciones/evaluador-capacidades';
 import {
@@ -278,6 +279,200 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     await db.productoCategoriaComercial.delete({ where: { id: categoriaId } });
   });
   afterAll(() => db.$disconnect());
+
+  it.each(['directa', 'borrador'])(
+    'modo de inicio emite por vía %s sin stock ficticio ni demanda de compra',
+    async (via) => {
+      const activado = await reservas.guardarInicio(auth, {
+        activo: true,
+        version: 1,
+      });
+      const item = await db.cotizacionItem.findUniqueOrThrow({
+        where: { id: payload.items[0].cotizacionItemId },
+      });
+      const traza = item.trazabilidadJson as any;
+      traza.pasos[0].materiales[0].seleccionStock = {
+        politica: 'SOLO_DISPONIBLES',
+        estado: 'sin_verificar_inicio',
+        alternativas: [],
+      };
+      await db.cotizacionItem.update({
+        where: { id: item.id },
+        data: { trazabilidadJson: traza },
+      });
+      const stockAntes = await db.stockMateriaPrimaVariante.findMany({
+        where: { tenantId: auth.tenantId },
+      });
+      const movimientosAntes = await db.movimientoStockMateriaPrima.count({
+        where: { tenantId: auth.tenantId },
+      });
+      const orden = await ordenes.create(auth, {
+        ...payload,
+        estado: via === 'directa' ? 'pendiente' : 'borrador',
+      });
+      if (via === 'borrador') {
+        expect(orden.materialesInicioSinStock).toBe(false);
+        await ordenes.cambiarEstado(auth, orden.id, { estado: 'pendiente' });
+      }
+      expect(
+        await db.ordenTrabajo.findUnique({ where: { id: orden.id } }),
+      ).toMatchObject({
+        materialesInicioSinStock: true,
+        materialesControlados: false,
+        total: orden.total,
+      });
+      expect(
+        (await reservas.consultar(auth.tenantId, orden.id)).control
+          .inicioSinStock,
+      ).toBe(true);
+      expect((await compras.necesidades(auth)).total).toBe(0);
+      expect(
+        await db.necesidadMaterialOt.count({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toBe(0);
+      expect(
+        await db.reservaMaterialOt.count({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toBe(0);
+      expect(
+        await db.stockMateriaPrimaVariante.findMany({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toEqual(stockAntes);
+      expect(
+        await db.movimientoStockMateriaPrima.count({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toBe(movimientosAntes);
+      await reservas.guardarInicio(auth, {
+        activo: false,
+        version: activado.version,
+      });
+      expect(await inicioSinStock(db, auth.tenantId, orden.id)).toBe(true);
+      expect(await inicioSinStock(db, auth.tenantId)).toBe(false);
+      await db.$transaction((tx) =>
+        reservas.sincronizarOrdenTx(tx, auth.tenantId, orden.id),
+      );
+      const lectura = await reservas.consultar(auth.tenantId, orden.id);
+      await expect(
+        reservas.ejecutar(auth, orden.id, {
+          clave: randomUUID(),
+          revision: lectura.revision,
+          accion: 'reservar',
+        }),
+      ).rejects.toThrow('modo de inicio');
+      await expect(
+        ordenes.create(auth, { ...payload, idempotencyKey: randomUUID() }),
+      ).rejects.toThrow('Sólo stock disponible');
+      expect(
+        await db.eventoSistema.count({
+          where: { tenantId: auth.tenantId, tipo: 'inventario.modo_inicio' },
+        }),
+      ).toBe(2);
+    },
+  );
+
+  it('omite únicamente los gates materiales al emitir un borrador', async () => {
+    await reservas.guardarInicio(auth, { activo: true, version: 1 });
+    const orden = await ordenes.create(auth, {
+      ...payload,
+      estado: 'borrador',
+    });
+    const item = await db.ordenTrabajoItem.findFirstOrThrow({
+      where: { tenantId: auth.tenantId, ordenId: orden.id },
+    });
+    const paso = await db.ordenTrabajoItemPaso.create({
+      data: {
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        itemId: item.id,
+        indice: 0,
+        nombre: 'Control',
+        familiaCodigo: 'trabajo_manual',
+        categoriaFamilia: 'produccion',
+      },
+    });
+    await db.ordenTrabajoPasoGate.createMany({
+      data: ['MATERIAL', 'CALIDAD'].map((tipo) => ({
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        pasoId: paso.id,
+        tipo,
+      })),
+    });
+    await ordenes.cambiarEstado(auth, orden.id, { estado: 'pendiente' });
+    const gates = await db.ordenTrabajoPasoGate.findMany({
+      where: { pasoId: paso.id },
+    });
+    expect(gates.find((g) => g.tipo === 'MATERIAL')).toMatchObject({
+      estado: 'OMITIDO_INICIO',
+      resueltoEl: null,
+      resueltoPorId: null,
+    });
+    expect(gates.find((g) => g.tipo === 'CALIDAD')).toMatchObject({
+      estado: 'PENDIENTE',
+    });
+    await expect(
+      ordenes.resolverGatePaso(auth, paso.id, {
+        tipo: 'MATERIAL',
+        estado: 'CUMPLIDO',
+      }),
+    ).rejects.toThrow('modo de inicio');
+  });
+
+  it('el modo de inicio no libera reservas de OTs anteriores y controla versiones', async () => {
+    const anterior = await ordenes.create(auth, payload);
+    await reservas.guardarInicio(auth, { activo: true, version: 1 });
+    await expect(
+      reservas.guardarInicio(auth, { activo: false, version: 1 }),
+    ).rejects.toThrow('configuración cambió');
+    expect(await inicioSinStock(db, auth.tenantId, anterior.id)).toBe(false);
+    await db.$transaction((tx) =>
+      reservas.sincronizarOrdenTx(tx, auth.tenantId, anterior.id),
+    );
+    expect(
+      (await reservas.consultar(auth.tenantId, anterior.id)).control
+        .materiales[0].reservada,
+    ).toBe(10);
+    expect(
+      await db.ordenTrabajo.findUnique({ where: { id: anterior.id } }),
+    ).toMatchObject({ materialesInicioSinStock: false });
+  });
+
+  it('previsión en modo de inicio no inventa disponibilidad ni espera proveedores', async () => {
+    const consulta = {
+      materiales: [
+        { varianteId, cantidad: 15, unidad: 'hoja', consumible: false },
+      ],
+      pendientes: 0,
+    };
+    const antes = await prevision.consultar(auth.tenantId, consulta);
+    expect(antes.estado).toBe('por_confirmar');
+    const modo = await reservas.guardarInicio(auth, {
+      activo: true,
+      version: 1,
+    });
+    const durante = await prevision.consultar(auth.tenantId, consulta);
+    expect(durante).toMatchObject({
+      estado: 'inicio_sin_stock',
+      materiales: [],
+      modoReserva: null,
+    });
+    expect(durante.disponibleDesde).toBeTruthy();
+    await reservas.guardarInicio(auth, {
+      activo: false,
+      version: modo.version,
+    });
+    expect((await prevision.consultar(auth.tenantId, consulta)).estado).toBe(
+      'por_confirmar',
+    );
+    const ajena = randomUUID();
+    await expect(
+      inicioSinStock(db, ajena, (await ordenes.create(auth, payload)).id),
+    ).rejects.toThrow('no encontrada');
+  });
 
   const prepararConversion = async (cantidad = 2) => {
     simularPlan(2);

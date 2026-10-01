@@ -27,6 +27,15 @@ describe('gates operativos de producción', () => {
     ).toEqual([]);
   });
 
+  it('omitir inventario nunca omite el control de calidad', () => {
+    expect(
+      gatesOperativosPendientes([
+        { tipo: 'MATERIAL', estado: 'OMITIDO_INICIO' },
+        { tipo: 'CALIDAD', estado: 'OMITIDO_INICIO' },
+      ]),
+    ).toEqual([{ tipo: 'CALIDAD', estado: 'OMITIDO_INICIO' }]);
+  });
+
   it('confirma el gate y deja una auditoría sobre la OT', async () => {
     const update = jest.fn().mockResolvedValue({
       id: 'gate',

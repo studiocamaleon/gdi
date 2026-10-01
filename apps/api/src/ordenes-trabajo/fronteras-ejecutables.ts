@@ -1,10 +1,11 @@
+import { gateOperativoCumplido } from './gate-operativo-cumplido';
 type PasoFronteraDAG = {
   id: string;
   indice: number;
   nodoClave?: string | null;
   estado: string;
   dependenciasEntrantes?: Array<{ predecesorPasoId: string }>;
-  gatesOperativos?: Array<{ estado: string }>;
+  gatesOperativos?: Array<{ tipo?: string; estado: string }>;
 };
 
 /**
@@ -26,14 +27,14 @@ export function fronterasEjecutablesDAG<T extends PasoFronteraDAG>(
       .sort((a, b) => a.indice - b.indice)
       .find((paso) => paso.estado !== 'hecho');
     return primero &&
-      (primero.gatesOperativos ?? []).every((g) => g.estado === 'CUMPLIDO')
+      (primero.gatesOperativos ?? []).every(gateOperativoCumplido)
       ? [primero]
       : [];
   }
   return pasosItem.filter(
     (paso) =>
       paso.estado !== 'hecho' &&
-      (paso.gatesOperativos ?? []).every((g) => g.estado === 'CUMPLIDO') &&
+      (paso.gatesOperativos ?? []).every(gateOperativoCumplido) &&
       (paso.dependenciasEntrantes ?? []).every(
         (dependencia) =>
           estadoPorId.get(dependencia.predecesorPasoId) === 'hecho',

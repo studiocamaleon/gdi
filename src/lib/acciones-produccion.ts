@@ -1,3 +1,4 @@
+import { gateOperativoCumplido } from "../../apps/api/src/ordenes-trabajo/gate-operativo-cumplido";
 import type { TableroPasoAccion, TableroPasoData } from "./tablero-produccion";
 import { tiempoMedidoValido } from "../../apps/api/src/ordenes-trabajo/ordenes-trabajo.types";
 
@@ -12,7 +13,7 @@ export type PasoControlProduccion = Pick<
   | "tiempoAcumuladoMin"
   | "tramoAbierto"
 > & {
-  gatesOperativos?: Array<{ estado: string }>;
+  gatesOperativos?: Array<{ tipo?: string; estado: string }>;
 };
 export type OpcionesAccionProduccion = {
   motivo?: string;
@@ -39,7 +40,7 @@ export function accionesDisponiblesProduccion({
   if (!canManage || paso.tipoEjecucion === "tercerizado") return [];
   if (
     paso.estado === "pendiente" &&
-    (paso.gatesOperativos ?? []).some((g) => g.estado !== "CUMPLIDO")
+    (paso.gatesOperativos ?? []).some((g) => !gateOperativoCumplido(g))
   )
     return [];
   if (paso.estado === "hecho")

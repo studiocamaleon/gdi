@@ -28,6 +28,8 @@ import {
 } from './ejecucion-pasos-atomica';
 import { nombreLoteProduccion } from '../planificacion-entregas/materializar-lotes-entrega';
 import { PrevisionMaterialesService } from '../inventario/prevision-materiales.service';
+import { DETALLE_INICIO_SIN_STOCK } from '../inventario/inicio-sin-stock';
+import { gateOperativoCumplido } from './gate-operativo-cumplido';
 import { recalcularFechasConversion } from './fechas-entrega-conversion';
 import {
   calcularProgreso,
@@ -714,7 +716,7 @@ export function progresoPonderadoPasos(
 export function gatesOperativosPendientes(
   gates: Array<{ tipo: string; estado: string }>,
 ) {
-  return gates.filter((gate) => gate.estado !== 'CUMPLIDO');
+  return gates.filter((gate) => !gateOperativoCumplido(gate));
 }
 
 /**
@@ -5214,8 +5216,22 @@ export class OrdenesTrabajoService {
         );
       });
       if (gatesOperativos.length > 0) {
+        const sinStock = new Set(
+          (await tx.ordenTrabajo.findMany({
+            where: {
+              tenantId,
+              id: { in: [...new Set(gatesOperativos.map((g) => g.ordenId))] },
+              materialesInicioSinStock: true,
+            },
+            select: { id: true },
+          })).map((o) => o.id),
+        );
         await tx.ordenTrabajoPasoGate.createMany({
-          data: gatesOperativos,
+          data: gatesOperativos.map((g) =>
+            g.tipo === 'MATERIAL' && sinStock.has(g.ordenId)
+              ? { ...g, estado: 'OMITIDO_INICIO', detalle: DETALLE_INICIO_SIN_STOCK }
+              : g,
+          ),
           skipDuplicates: true,
         });
       }
@@ -7808,6 +7824,10 @@ export class OrdenesTrabajoService {
           'Ese paso no exige la condición operativa indicada.',
         );
       }
+      if (gate.estado === 'OMITIDO_INICIO')
+        throw new ConflictException(
+          'Esta OT se emitió en modo de inicio sin stock. El requisito de material queda identificado como omitido.',
+        );
       const cumplido = payload.estado === 'CUMPLIDO';
       const actualizado = await tx.ordenTrabajoPasoGate.update({
         where: { id: gate.id },

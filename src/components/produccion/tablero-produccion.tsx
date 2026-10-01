@@ -295,22 +295,23 @@ export function GatesOperativos({
   return (
     <div className="ds-terc">
       {gates.map((gate) => {
-        const cumplido = gate.estado === "CUMPLIDO";
+        const omitido = gate.tipo === "MATERIAL" && gate.estado === "OMITIDO_INICIO";
+        const cumplido = gate.estado === "CUMPLIDO" || omitido;
         const etiqueta = gate.tipo === "MATERIAL" ? "Material" : "Calidad";
         return (
           <React.Fragment key={gate.id}>
             <span
               className={`dst-badge ${cumplido ? "recibido" : "pendiente"}`}
             >
-              {cumplido ? "✓ " : ""}
-              {etiqueta}
+              {omitido ? "" : cumplido ? "✓ " : ""}
+              {omitido ? "Material · modo de inicio" : etiqueta}
             </span>
             <span className="dst-info">
-              {cumplido
+              {omitido ? "Stock sin verificar; no bloquea esta OT" : cumplido
                 ? `Confirmado${gate.resueltoPorNombre ? ` por ${gate.resueltoPorNombre}` : ""}`
                 : "Pendiente: bloquea la ejecución"}
             </span>
-            {canSupervise ? (
+            {canSupervise && !omitido ? (
               <Button
                 type="button"
                 variant="outline"
