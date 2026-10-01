@@ -45,3 +45,13 @@ it('no hace ninguna solicitud SSR si falta el secreto del canal de producción',
   await expect(apiRequest('/auth/me')).rejects.toThrow();
   expect(fetch).not.toHaveBeenCalled();
 });
+it('el navegador usa el proxy y nunca adjunta los secretos exclusivos del servidor', async () => {
+  vi.stubGlobal('window', {});
+  const fetch = vi.fn().mockResolvedValue(new Response('{}'));
+  vi.stubGlobal('fetch', fetch);
+  await apiRequest('/auth/me');
+  const [url, init] = fetch.mock.calls[0];
+  expect(url).toBe('/api/backend/auth/me');
+  expect(init.headers.has('x-grafoprint-web-token')).toBe(false);
+  expect(init.headers.has('Authorization')).toBe(false);
+});

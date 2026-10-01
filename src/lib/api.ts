@@ -48,10 +48,14 @@ export async function apiRequest<T>(
 
   const canalPrivado = typeof window === "undefined" &&
     (process.env.STAGING_PRIVATE === "true" || process.env.GRAFO_DEPLOY_ENV === "production");
-  if (canalPrivado) {
-    const { headers: requestHeaders } = await import("next/headers");
-    const { cabecerasBackendStaging } = await import("./staging-access");
-    cabecerasBackendStaging(await requestHeaders(), headers);
+  // Mantener la condición de servidor explícita: Next elimina este bloque
+  // del bundle del navegador, incluidos los módulos exclusivos de Node.
+  if (typeof window === "undefined") {
+    if (canalPrivado) {
+      const { headers: requestHeaders } = await import("next/headers");
+      const { cabecerasBackendStaging } = await import("./staging-access");
+      cabecerasBackendStaging(await requestHeaders(), headers);
+    }
   }
 
   let response: Response;
