@@ -1,5 +1,5 @@
 "use client";
-import { Autocomplete, SearchField, ListBox } from "@heroui/react";
+import { Autocomplete, SearchField, ListBox, useFilter } from "@heroui/react";
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import focus from "@/components/design-system/field-focus.module.css";
 export type OpcionAsignacion = {
@@ -32,6 +32,7 @@ export function EstacionAsignacionSelect({
 }) {
   const scope = useDesignScope();
   const themeClass = useDesignTheme();
+  const { contains } = useFilter({ sensitivity: "base" });
   return (
     <Autocomplete
       aria-label={ariaLabel}
@@ -54,7 +55,7 @@ export function EstacionAsignacionSelect({
         <Autocomplete.Indicator />
       </Autocomplete.Trigger>
       <Autocomplete.Popover {...scope} className={themeClass}>
-        <Autocomplete.Filter>
+        <Autocomplete.Filter filter={contains}>
           <SearchField aria-label={placeholderBusqueda} className="px-2 pt-2">
             <SearchField.Group>
               <SearchField.SearchIcon />
