@@ -1,6 +1,6 @@
 # Certificado ARCA de la plataforma
 
-Implementación desplegada el 01/10/2026. Certificado real guardado cifrado mediante Plataforma con MFA y consulta WSFE de producción verificada, sin emisión. El alta fiscal de la primera empresa sigue pendiente; consultar [validación de producción](../deploy/produccion/VALIDACION.md).
+Implementación desplegada el 01/10/2026. Certificado real guardado cifrado mediante Plataforma con MFA y consulta WSFE de producción verificada, sin emisión. El titular completó los datos fiscales de la primera empresa y autorizó activar su integración tras verificar el punto de venta. Datos fiscales muestra el ambiente obtenido de la API; consultar [validación de producción](../deploy/produccion/VALIDACION.md). Queda pendiente comprobar el primer comprobante comercial legítimo cuando corresponda.
 
 ## Qué cambia
 

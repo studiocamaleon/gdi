@@ -1,6 +1,18 @@
 # Validación de producción
 
+## Activación fiscal y aviso de ambiente — 01/10/2026, 06:35–06:52 UTC
+
+- El titular completó los datos fiscales y el punto de venta de webservices de la primera empresa. Se verificó la autorización mediante consulta WSFE y, con su confirmación expresa, se activó la integración. La interfaz confirmó `Conectada` y ambiente `Producción`. No se emitieron facturas en esta revisión.
+- El aviso de homologación en Datos fiscales era un texto fijo incorrecto. La página ahora consulta el ambiente a la API: distingue producción, homologación, modalidad manual y ambiente no confirmado. No deduce el ambiente fiscal de `NODE_ENV`.
+- Web actualizada a `d9e255a3f8fe2fde6049c860ff13de9b84885d7e`, imagen `registry.fly.io/grafoprint-production-web@sha256:5960f782e6d8fa734edae518bb0b44b83f099955c4dfc6f28851658b6eb606db`. API, ambos workers, PDF y copiador conservan las imágenes del despliegue inicial. Sin migraciones ni cambio de tamaños.
+- Validación: 13 pruebas dirigidas, lint, compilación remota con tipos y comprobación de privilegios del contenedor aprobados. GitHub confirmó `http`, `containers` y `npm`. Tras desplegar, HTTPS de web/API y base correctos; Chrome mostró `ARCA · Producción`, proveedor automático y PV activo, con los datos guardados intactos.
+- Fuentes cifradas de la revisión web bajo custodia B2; se actualizó el inventario del copiador con la imagen exacta y las fuentes de web/backend. El constructor remoto temporal se retiró al terminar. Docker local y los otros proyectos no se reiniciaron.
+- Copia posterior completada a las 06:50:59 UTC: comprobante remoto auténtico y manifiesto descifrado con la llave custodiada; se comprobaron la nueva imagen, ambas revisiones fuente y un archivo respaldado. Esta comprobación no repitió la restauración SQL; el último ensayo SQL es el de las 06:00 descrito abajo.
+- Continúa pendiente el recorrido funcional de negocio y la comprobación del primer comprobante comercial legítimo cuando corresponda. La activación fiscal y estas consultas no equivalen a emitir y validar un comprobante.
+
 ## Alta inicial y acceso definitivo — 01/10/2026, 06:17–06:22 UTC
+
+**Registro histórico; la configuración y activación fiscal se completaron en la sección superior.**
 
 - El titular ingresó a Plataforma en `app.grafoprint.com.ar` con su cuenta y MFA. Se creó la primera empresa desde la interfaz normal: plan Founder, suscripción activa/manual, sin importar datos locales.
 - Se envió una única invitación al correo autorizado. La aplicación confirmó aceptación por el proveedor y Resend confirmó `Delivered`; el titular la aceptó y eligió personalmente su contraseña. No se copiaron el enlace de activación ni la contraseña al registro público.
