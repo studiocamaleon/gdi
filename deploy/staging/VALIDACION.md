@@ -1,4 +1,16 @@
-# Validación de staging — historial de septiembre de 2026
+# Validación de staging — historial
+
+## Límites de soporte y lectura DXF — 01/10/2026, 00:10 UTC
+
+API y los dos workers ejecutan `f992d30c5ed18931596e4f8ef899e7b7f4fad01d`, imagen `registry.fly.io/grafoprint-staging-api@sha256:1ba9851de529095532fc10b23333c2cd02bae22c591d0d076bc16844a23d24af`. Web/PDF conservan `5cb1a5248` y el copiador `6d2c51a15`. Las seis máquinas están activas, conservan sus tamaños y API/web responden 200. Se retiró el builder temporal. No se modificó producción.
+
+- Las sesiones de soporte pueden diagnosticar integraciones, pero no ejecutar nueve acciones de configuración/envío de notificaciones y WhatsApp. Pasaron 24 casos nuevos en 19 rutas con sesiones, guards, plan y SQL reales; 137 casos en ocho suites de regresión. Los proveedores de mensajería se sustituyeron: no hubo envíos reales.
+- El lector DXF comprueba tamaño y complejidad antes de expandir bloques o interpolar curvas. Los ensayos aislados reprodujeron referencias circulares y trabajo excesivo; después se rechazan sin expandir. Pasaron 37 casos nuevos dentro de 80 en seis suites, tipos y lint. Se conservaron medidas y fabricación de dibujos válidos. El primer lote de fabricación necesitó seleccionar el intérprete CAD local existente; luego aprobó sin cambiar aserciones.
+- La imagen final con Node 24.21.0 pasó tres rechazos DXF, un SVG válido y comprobación de las nueve protecciones de soporte en un proceso sin red. CI de esa revisión aprobó [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36793251602), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36793251591), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36793251470), [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36793246880) y Vercel Preview. Los intentos iniciales de construcción clásica no resolvieron la arquitectura; la compilación correcta usó BuildKit remoto.
+- El postflight de sólo lectura conservó los mismos IDs/recuentos en las seis tablas comprobadas, las 299 migraciones y cero cruces en 270 relaciones entre empresas. Sin migraciones nuevas.
+- La configuración del copiador registra las cuatro imágenes activas y tres fuentes exactas. La copia `49d8c66f-a1eb-40c2-a2fb-ab1be65da336`, completada a las 00:08:48 UTC, pasó firma, descifrado e integridad de base, 13 archivos y fuentes a las 00:10:43 UTC. El monitor recibió el éxito real. También terminó la copia horaria de las 00:00 UTC.
+
+Esta comprobación de la nueva copia no repitió su importación SQL: la última restauración funcional completa sigue siendo la del 30/09 a las 21:12 UTC. Continúan la cobertura restante, el correo de recuperación y las condiciones del futuro entorno de producción. No acredita auditoría integral, resistencia a toda carga ni conmutación completa entre proveedores. PR #10 en borrador, sin fusionar #8/#9/#10.
 
 ## Copiador seguro, versiones custodiadas y copia comprobada — 30/09/2026, 23:14 UTC
 

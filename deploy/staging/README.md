@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 30/09/2026, 23:14 UTC.** Base `main` en `7e58b0735`, con los PR #2–#7 integrados y protección por PR/pruebas. Staging ejecuta API/workers, web y PDF de `5cb1a5248`, y copiador de `6d2c51a15`, con 299 migraciones. Incluye las correcciones de los PR #8/#9, todavía sin fusionar. La nueva copia de las 23:12 UTC pasó firma, descifrado e integridad; la última restauración SQL/API aislada completa es la de las 21:12 UTC. Versiones, evidencia y límites en [VALIDACION.md](./VALIDACION.md). Producción sigue pendiente.
+> **Estado vigente: 01/10/2026, 00:10 UTC.** Base `main` en `7e58b0735`, con los PR #2–#7 integrados y protección por PR/pruebas. API y workers ejecutan `f992d30c5`; web/PDF, `5cb1a5248`; copiador, `6d2c51a15`, con 299 migraciones. Incluye las correcciones de los PR #8/#9, todavía sin fusionar. La copia de las 00:08 UTC pasó firma, descifrado e integridad de datos y fuentes desplegadas; la última restauración SQL/API aislada completa es la del 30/09 a las 21:12 UTC. Versiones, evidencia y límites en [VALIDACION.md](./VALIDACION.md). Producción sigue pendiente.
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
