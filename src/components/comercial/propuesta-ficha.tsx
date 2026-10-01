@@ -327,6 +327,7 @@ import { ResumenBar, OrdenSaveActions } from "./orden-resumen-financiero";
 import { OrdenFinancialActions } from "./orden-financial-actions";
 import { OrdenDatosSections } from "./orden-datos-sections";
 import { ClienteLista } from "./cliente-selector-orden";
+import { permiteAtajoDePagina } from "@/lib/atajos-pagina";
 import { useClientesOrden } from "./use-clientes-orden";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
@@ -7212,21 +7213,8 @@ function PropuestaFichaContenido({
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!puedeModificarProductos || event.defaultPrevented || event.repeat)
+      if (!puedeModificarProductos || !permiteAtajoDePagina(event))
         return;
-      const target = event.target as HTMLElement | null;
-      const isEditableTarget =
-        target?.closest("input, textarea, select, [contenteditable='true']") !=
-        null;
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.shiftKey ||
-        isEditableTarget
-      ) {
-        return;
-      }
       const key = event.key.toLowerCase();
       // P = agregar producto · C = centro de copiado (si el módulo está activo).
       if (key !== "p" && key !== "c") return;
