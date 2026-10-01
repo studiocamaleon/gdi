@@ -1,135 +1,152 @@
 # Permisos por vista y cajas asignadas
 
-Revisión del 01/10/2026. **Diseño pendiente de implementación.** Este documento
-no habilita permisos nuevos ni cambia los accesos existentes.
+Actualizado el 01/10/2026. Implementado en la rama
+`codex/permisos-cajas-interfaz`, en revisión local. **Todavía no publicado en
+staging ni producción.** La app local habitual conserva su versión anterior;
+la revisión visual de este lote usa componentes reales y datos ficticios en
+una página separada.
 
-La primera corrección local sólo alinea el nombre «Centro de análisis» en el
-editor, mejora la presentación de lugares del equipo y retenciones, y explica
-los requisitos que impiden inicializar Centro de Copiado.
+## Cómo se configura
 
-## Qué debe poder configurar la empresa
+El **rol** define qué pantallas y acciones puede usar una persona. La ficha de
+esa **persona en la empresa** define sobre qué cajas puede trabajar. Son dos
+controles complementarios; contratar una función no la habilita para todos.
 
-El rol define qué pantallas y acciones puede usar una persona. La ficha de esa
-persona define sobre qué cajas puede trabajar. Tener una función en el plan
-no concede acceso a todos los usuarios.
+En Configuración → Usuarios y roles, el editor permite desplegar cada sección
+y elegir **Sin acceso / Ver / Gestionar** por vista. Los informes sólo tienen
+Sin acceso / Ver. Los botones de la sección son un atajo para aplicar el mismo
+nivel a sus vistas; las combinaciones distintas se muestran como Personalizado.
 
-Cada sección del editor de roles se podrá desplegar para elegir **Sin acceso,
-Ver o Gestionar** por pantalla. El control de toda la sección sirve como atajo;
-cuando sus pantallas tienen permisos distintos, muestra «Personalizado».
-Guardar un grupo personalizado no debe conservar una autorización global que
-anule las restricciones elegidas.
-
-| Sección | Vistas que hay que separar |
+| Sección | Vistas independientes |
 | --- | --- |
-| Comercial | Crear orden / propuesta, presupuestos, campañas, órdenes de trabajo, Centro de Copiado |
+| Comercial | Presupuestos, campañas, órdenes de trabajo y creación, Centro de Copiado |
 | CRM | Clientes, cupones, fidelización |
 | Registros | Proveedores, empleados |
 | Costos | Centros de costo, maquinaria, nodos, flujos, catálogo, cargos directos |
-| Producción | Operación diaria, planificación, colas de trabajo, estaciones |
+| Producción | Operación diaria, planificación, colas, estaciones |
 | Administración | Tesorería, cuentas por cobrar, cuentas por pagar, egresos, gastos fijos, comprobantes, facturación |
-| Inventario | Materiales, stock, compras y abastecimiento, movimientos |
-| Centro de análisis | Resumen ejecutivo, comercial, embudo, clientes, producción, salud del ETA, equipo, finanzas, ventas y producto |
-| Configuración | Empresa, usuarios y roles, datos fiscales, medios de pago, impuestos, comisiones, Centro de Copiado, impresoras, almacenamiento e integraciones |
+| Inventario | Materiales, stock, compras, movimientos |
+| Centro de análisis | Resumen, comercial, embudo, clientes, producción, salud del ETA, equipo, finanzas, ventas y producto |
+| Configuración | Empresa, usuarios y roles, datos fiscales, medios de pago, impuestos, comisiones, Centro de Copiado, impresoras, almacenamiento, integraciones, suscripción |
 
-En informes de sólo lectura alcanza con Sin acceso / Ver. En Crear propuesta,
-la acción es crear/cotizar; no ofrecer un «Ver» que de hecho permita guardar.
-Configurar Centro de Copiado debe seguir separado de usarlo en el mostrador.
+Decisión confirmada: **quien crea órdenes puede ver el listado completo de
+órdenes de su empresa**. Elegir Gestionar en «Órdenes de trabajo y creación»
+habilita ambas cosas. Elegir Ver conserva la consulta, sin habilitar creación.
+Los presupuestos siguen separados; convertir uno en orden exige gestionar
+presupuestos y órdenes.
 
-Los permisos especiales siguen separados: ver costos y márgenes, autorizar
-descuentos, anular, cobrar, facturar, manejar comisiones y administrar usuarios.
-Conceder una pantalla no debe conceder automáticamente esas acciones. Por
-ejemplo, un vendedor puede cotizar sin recibir costos internos, y acceder al
-Centro de análisis no implica ver el resumen de gerencia.
+Las acciones especiales conservan su permiso: ver márgenes, aprobar descuentos,
+anular, ejecutar producción, registrar arqueos y transferir, entre otras.
+Mostrar una vista no concede todas sus acciones. Gestionar Tesorería incluye
+arqueos y transferencias; para un cajero basta Ver Tesorería más las dos
+acciones concretas. Configurar Centro de Copiado y atender el mostrador son
+permisos distintos.
 
-## Cajas por persona
+Las consultas auxiliares permiten elegir clientes y productos al cotizar sin
+abrir sus pantallas de administración. El catálogo para cotizar conserva
+medidas, opciones y cantidades, excluyendo importes internos y configuración
+de ganancias. Los datos fiscales necesarios para emitir comprobantes pueden
+leerse desde ese recorrido sin permitir modificar la configuración fiscal.
 
-Decisión confirmada: se eligen **las cajas de trabajo y también los destinos
-permitidos para transferir**. Ejemplo ficticio:
+## Ejemplo: vendedor de mostrador
 
-| Asignación | Lo que permite |
-| --- | --- |
-| Operar Caja mostrador | Ver su saldo y movimientos; hacer arqueos si el rol lo permite. |
-| Transferir a Caja fuerte | Elegirla como destino y registrar la entrega desde Caja mostrador. |
-| Sin acceso a Caja administración | No listar la caja, consultar su saldo ni operar sobre ella. |
+1. Darle acceso a las vistas comerciales que necesite.
+2. Habilitar Ver en Tesorería y las acciones Registrar arqueos y Transferir.
+3. En su ficha, abrir **Cajas y cuentas de trabajo** y elegir **Sólo las asignadas**.
+4. Marcar **Caja mostrador** en Cuentas que puede operar.
+5. Marcar **Caja fuerte** en Destinos de transferencia.
+6. Si debe cobrar ventas, habilitar además la acción de cobro correspondiente.
 
-La autorización de destino expone únicamente los datos indispensables para
-identificarlo (nombre y moneda). No permite consultar saldo o movimientos,
-retirar dinero desde ese destino ni invertir la transferencia.
+Así puede consultar el saldo y los movimientos de Mostrador, registrar su
+conteo y transferir a Fuerte. De Fuerte sólo obtiene nombre y moneda: no su
+saldo, movimientos ni la posibilidad de retirar dinero. Se pueden autorizar
+varias cuentas y destinos; una lista vacía significa **ninguno**.
 
-Separar las acciones «Ver caja», «Registrar arqueo» y «Transferir». Un arqueo
-debe conservar siempre usuario, fecha/hora, saldo esperado, importe contado,
-diferencia y observación, incluso cuando no hay diferencia. Registrar el conteo
-no debe conceder también un permiso genérico para ajustes arbitrarios.
+Las asignaciones son por empresa, se comprueban nuevamente en cada operación y
+sus cambios quedan auditados. Sólo quien administra Usuarios puede cambiarlas.
+Los usuarios existentes conservan el alcance completo hasta que se les asigne
+una restricción; no se limita automáticamente a todos los vendedores.
 
-La política tiene que ser explícita: acceso completo de tesorería o cuentas
-asignadas. En el modo asignado, una lista vacía significa **ninguna cuenta**.
-Las asignaciones pertenecen a la persona dentro de una empresa; nunca se
-heredan al cambiar de empresa. Los destinos inactivos dejan de estar disponibles.
+Los resúmenes y saldos respetan las cuentas operables. Los recibos, órdenes de
+pago y sus archivos también validan el alcance. En una orden o egreso se
+mantiene el importe comercial pagado en otras cuentas para no inventar deuda,
+pero se oculta la cuenta ajena y se bloquea su comprobante de pago.
 
-El alcance también se aplica a resúmenes, totales, movimientos, exportaciones,
-selectores y consultas directas. Un total de todas las cajas revelaría datos
-que la persona no puede consultar por separado. Los métodos de pago y sus
-cuentas de acreditación necesitan una política compatible para que limitar la
-caja no habilite destinos por una vía distinta ni impida un cobro autorizado.
+Un medio de pago puede usarse con una cuenta operable elegida por el usuario;
+un destino predeterminado no asignado no se muestra como autorización. Editar
+el catálogo compartido de medios requiere su permiso de gestión y alcance
+completo de cuentas. También se reserva al acceso completo la administración
+general de cuentas, ajustes manuales, conciliación, valores y reversas. La
+transferencia y el arqueo no conceden esas facultades.
 
-## Implementación y comprobación
+## Arqueo diario y reintentos
 
-1. Inventariar las páginas, botones y consultas compartidas de cada sección.
-   Separar consultas auxiliares del cotizador de la administración del catálogo.
-2. Agregar el catálogo de permisos por vista y convertir los roles existentes
-   conservando su acceso efectivo. La conversión debe ser versionada, repetible
-   sin duplicar y revisable antes de tocar un entorno con datos.
-3. Aplicar los mismos permisos en la API, las páginas y la navegación; ocultar
-   un enlace por sí solo no es un control de acceso.
-4. Agregar asignaciones de cuentas por membresía, acciones de caja y destinos.
-   Validar las relaciones con la empresa y auditar cambios de asignación.
-5. Incorporar el registro de arqueos y el recorrido de transferencias con
-   validación transaccional, prevención de duplicados y auditoría.
-6. Probar con dos empresas ficticias: administrador, vendedor limitado y otro
-   vendedor. Comprobar accesos permitidos y rechazos por URL directa, cambios de
-   identificador, exportaciones, reintentos y permisos revocados.
-7. Revisar en local, actualizar staging con el conjunto completo y comprobar
-   el recorrido real de mostrador. Producción se actualiza después de esa revisión.
+Cada arqueo registra fecha, responsable, saldo esperado, importe contado,
+diferencia y observaciones. Un conteo exacto también queda guardado, sin crear
+un ajuste de dinero. La pantalla permite consultar los últimos 50 conteos de
+la cuenta.
 
-Las pruebas deben confirmar que habilitar sólo presupuestos no abre campañas,
-que un reporte restringido no aparece en otras respuestas y que transferir a
-una caja no permite después leerla o usarla como origen. También deben cubrir
-un arqueo exacto, uno con diferencia y el reintento de la misma operación.
+Arqueos y transferencias tienen una identificación de operación. Repetir la
+misma solicitud devuelve su resultado sin duplicarla; reutilizarla con otro
+importe, cuenta o responsable se rechaza. Las comprobaciones y movimientos
+se realizan dentro de una transacción para evitar resultados parciales.
+
+## Compatibilidad y migración técnica
+
+- Los permisos anteriores de sección se interpretan como sus vistas actuales.
+  No se reescriben masivamente los roles guardados.
+- Al guardar desde el editor nuevo, se persisten las vistas explícitas con el
+  marcador `acceso.por_vista`. Se rechaza mezclarlas con permisos globales que
+  pudieran reabrir vistas deshabilitadas.
+- API, navegación, páginas y botones utilizan el catálogo por vista. Un enlace
+  oculto no sustituye las comprobaciones de la API.
+- La migración `20261001220000_permisos_cuentas_usuario` agrega las asignaciones
+  a la membresía y la identificación única de arqueos. Es aditiva: no borra ni
+  repuebla datos. Durante esta revisión se aplicó únicamente a la base de tests.
+- El catálogo compartido de vistas del navegador y API tiene una prueba que
+  exige mantener ambas copias iguales.
 
 ## Centro de Copiado
 
-Inicializar el módulo requiere una impresora de plantilla IMPRESORA_LASER,
-activa y con configuración LISTA, y al menos un material de papel en hojas con
-una variante activa. También necesita el catálogo comercial del sistema.
+Requiere una impresora activa de plantilla IMPRESORA_LASER, con configuración
+LISTA, y papel en hojas con al menos una variante activa. También necesita el
+catálogo comercial del sistema. La inicialización se detiene antes de guardar
+si falta alguno de esos requisitos; la pantalla explica qué preparar.
 
-La corrección local detiene inicialización, reparación y guardado antes de
-persistir configuración cuando la provisión indica que faltan requisitos.
-La pantalla explica la preparación y enlaza Maquinaria y Materiales.
+La revisión de producción detectó que todavía faltaban máquinas y materiales.
+La migración del catálogo es otro trabajo. Después de incorporarlo hay que
+comprobar perfiles, precios del papel, tarifas, formatos y terminaciones, y
+cotizar un documento antes de dar por listo el módulo.
 
-Después de incorporar el catálogo, comprobar máquinas y perfiles, precios de
-papel, tarifas de centros, formatos y terminaciones. Finalmente cotizar un
-documento sin emitir una venta: inicializar el módulo no garantiza por sí solo
-que cada combinación productiva esté lista.
+## Verificación y siguiente recorrido
 
-## Rama y publicación
+Comprobación local: **500 pruebas de API en 34 suites y 57 de interfaz en 9
+archivos aprobadas**. Se probaron permisos permitidos y denegados, separación entre empresas,
+transferencias con destinos limitados, revocaciones, arqueos sin diferencia,
+reintentos y concurrencia. También importes de cobros distribuidos entre
+cuentas, archivos de recibos y consultas auxiliares del cotizador. Los casos
+utilizan empresas ficticias en una base exclusiva de tests; no emiten facturas,
+correos ni operaciones contra proveedores reales.
 
-`codex/permisos-cajas-interfaz` parte de `d96309d52` y depende del PR #13,
-que conserva las correcciones de primer acceso y el motor ya desplegado. No se
-mezcla con el paquete de datos de la migración. No se actualizó staging ni
-producción durante este relevamiento.
+La revisión visual comprobó la edición de una vista sin habilitar sus hermanas
+y la selección independiente de cuentas operables y destinos. Se actualizaron
+además las presentaciones de lugares del equipo y retenciones.
 
-## Comprobaciones de esta primera tanda
+Antes de publicar el conjunto:
 
-- API: 28 pruebas aprobadas entre requisitos de inicialización y permisos
-  existentes. La prueba de requisitos utiliza una empresa ficticia vacía y
-  confirma que no se escribe configuración ni auditoría de éxito al faltar
-  impresora, papel, variante activa o categoría.
-- Interfaz: 22 pruebas aprobadas de API de Centro de Copiado y navegación por
-  permisos; análisis de tipos de los componentes afectados y lint sin errores.
-- Revisión visual de los componentes reales en una página local aislada, con
-  datos ficticios: resumen de cupo, agregado y eliminación de retenciones,
-  alícuota y desplegado/plegado de vigencia conservando la fecha.
-- Sin clases globales nuevas. No se ejecutó una compilación completa de
-  producción ni se desplegaron estos cambios. La vista local habitual conserva
-  su versión; la revisión visual aislada evita incorporar dependencias de
-  retenciones que todavía no están en ese checkout.
+1. Completar la compilación integral en remoto y los controles del PR. Las
+   revisiones de tipos locales cubren los archivos afectados; la compilación
+   integral de la API excede la memoria asignada a su proceso en esta Mac.
+2. Probar con sesión real en el entorno de revisión un administrador y un
+   vendedor restringido: crear una orden, registrar un cobro en Mostrador,
+   arquear y transferir a Fuerte, comprobando que Fuerte sigue sin abrirse.
+3. Revisar una combinación de sólo presupuestos, otra de un único informe y
+   los formularios compartidos de los demás módulos. La vista aislada no
+   sustituye este recorrido integrado.
+4. Actualizar staging con el lote completo y registrar versión y resultado en
+   `deploy/staging/VALIDACION.md`. Producción se actualiza después de aprobar
+   esa revisión, con su respaldo y migraciones correspondientes.
+
+La rama parte de `d96309d52` y depende del PR #13. Mantener declarada esa
+relación, ajustar la base cuando se integre y no mezclar estos cambios con la
+migración de datos del catálogo.
