@@ -343,11 +343,15 @@ export function CentroCopiadoConfigView() {
       await cargarRemoto();
       toast.success("Centro de Copiado inicializado.");
     } catch (error) {
-      toast.error(
+      const mensaje =
         error instanceof Error
           ? error.message
-          : "No se pudo inicializar el módulo.",
-      );
+          : "No se pudo inicializar el módulo.";
+      setErrorCarga({
+        mensaje,
+        status: error instanceof ApiError ? error.status : 409,
+      });
+      toast.error(mensaje);
     } finally {
       setInicializando(false);
     }
@@ -617,7 +621,32 @@ export function CentroCopiadoConfigView() {
                     ? "El Centro de Copiado necesita configuración"
                     : "No se pudo cargar el Centro de Copiado"}
               </AlertTitle>
-              <AlertDescription>{errorCarga.mensaje}</AlertDescription>
+              <AlertDescription>
+                <p>{errorCarga.mensaje}</p>
+                {requiereInicio && (
+                  <div className="flex flex-col gap-3 pt-2">
+                    <p>
+                      Para empezar necesitás una impresora láser lista y activa,
+                      y un papel en hojas con una variante activa. Después podés
+                      inicializar el módulo y configurar precios y terminaciones.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <Link
+                        className="underline underline-offset-4"
+                        href="/costos/maquinaria"
+                      >
+                        Revisar maquinaria
+                      </Link>
+                      <Link
+                        className="underline underline-offset-4"
+                        href="/inventario/materias-primas"
+                      >
+                        Revisar materiales
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </AlertDescription>
               {!porPlan ? (
                 <AlertAction>
                   <Button
