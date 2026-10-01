@@ -33,6 +33,10 @@ import { hashTokenMcp } from '../credencial-mcp.util';
 import type { CurrentAuth } from '../auth.types';
 import { RegistroService } from '../../registro/registro.service';
 import { TenantProvisioningService } from '../../provisionamiento/tenant-provisioning.service';
+import { TenantsController } from '../../tenants/tenants.controller';
+import { TenantsService } from '../../tenants/tenants.service';
+import { ArchivosService } from '../../archivos/archivos.service';
+import { DatosEmpresaService } from '../../tenants/datos-empresa.service';
 
 /** Dos aplicaciones HTTP con servicios separados sobre la misma base real.
  * Las rutas de sonda sólo permiten observar la autorización; las operaciones
@@ -207,9 +211,12 @@ describe('Revocación efectiva entre instancias de la API', () => {
         }),
       );
       const module = await Test.createTestingModule({
-        controllers: [SondaController, AuthController],
+        controllers: [SondaController, AuthController, TenantsController],
         providers: [
           AuthGuard,
+          TenantsService,
+          { provide: ArchivosService, useValue: {} },
+          { provide: DatosEmpresaService, useValue: {} },
           { provide: PrismaService, useValue: prisma },
           { provide: JwtService, useValue: jwt },
           { provide: SessionCacheService, useValue: cache },
@@ -857,27 +864,61 @@ describe('Revocación efectiva entre instancias de la API', () => {
     },
   );
 
-  it('una clave provisoria permite elegir la propia, pero no operar en la empresa', async () => {
-    await acceder(1, auth).expect(200);
-    await prisma.user.update({
-      where: { id: auth.userId },
-      data: { debeCambiarPassword: true },
-    });
-    await acceder(1, auth).expect(403);
-    const contexto = await acceder(1, auth, '/auth/me').expect(200);
-    expect(
-      (contexto.body as { currentUser: { debeCambiarPassword: boolean } })
-        .currentUser.debeCambiarPassword,
-    ).toBe(true);
-    const cambio = await request(apps[0].getHttpServer())
-      .post('/auth/password')
-      .set('Authorization', `Bearer ${bearer(auth)}`)
-      .send({ actual: password, nueva: 'Clave personal ficticia 456' })
-      .expect(201);
-    await acceder(1, cambio.headers['x-grafoprint-sesion-renovada']).expect(
-      200,
-    );
-  });
+  it.each(['ADMINISTRADOR', 'OPERADOR'] as const)(
+    'una clave provisoria permite al %s leer su sesión y elegir la propia, pero no operar en la empresa',
+    async (rol) => {
+      await acceder(1, auth).expect(200);
+      await prisma.membership.update({
+        where: { id: auth.membershipId },
+        data: { rol, rolId: null },
+      });
+      await prisma.user.update({
+        where: { id: auth.userId },
+        data: { debeCambiarPassword: true },
+      });
+      await acceder(1, auth).expect(403);
+      const login = await request(apps[0].getHttpServer())
+        .post('/auth/login')
+        .send({ email: auth.email, password })
+        .expect(201);
+      const token = (login.body as { accessToken: string }).accessToken;
+      await request(apps[1].getHttpServer())
+        .get('/tenants/current')
+        .expect(401);
+      for (const ruta of ['/auth/me', '/tenants/current']) {
+        const contexto = await acceder(1, token, ruta).expect(200);
+        expect(contexto.body).toMatchObject({
+          currentUser: { debeCambiarPassword: true },
+        });
+      }
+      // Sólo el contexto mínimo de sesión queda disponible. No habilitar el
+      // controlador completo: datos de la empresa y cambio de tenant siguen cerrados.
+      await acceder(1, token, '/tenants/empresa').expect(403);
+      await request(apps[1].getHttpServer())
+        .post('/tenants/switch')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ tenantId: auth.tenantId })
+        .expect(403);
+      await acceder(1, token).expect(403);
+      const cambio = await request(apps[0].getHttpServer())
+        .post('/auth/password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ actual: password, nueva: 'Clave personal ficticia 456' })
+        .expect(201);
+      const renovado = cambio.headers['x-grafoprint-sesion-renovada'];
+      await acceder(1, token, '/tenants/current').expect(401);
+      const contexto = await acceder(1, renovado, '/tenants/current').expect(
+        200,
+      );
+      expect(contexto.body).toMatchObject({
+        currentUser: { debeCambiarPassword: false },
+      });
+      await acceder(1, renovado).expect(200);
+      await acceder(1, renovado, '/sonda/administracion').expect(
+        rol === 'ADMINISTRADOR' ? 200 : 403,
+      );
+    },
+  );
 
   it('se puede cerrar una sesión pendiente de elegir clave personal', async () => {
     await prisma.user.update({

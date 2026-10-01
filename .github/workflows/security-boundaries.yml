@@ -77,6 +77,11 @@ jobs:
         # No requieren seed, cuentas reales ni acceso a proveedores externos.
         run: |
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/auth/__tests__/revocacion-multi-instancia.integration.spec.ts \
+            src/usuarios/__tests__/crear-usuario.spec.ts \
+            src/usuarios/__tests__/password.spec.ts \
+            src/motor-universal/__tests__/impresion-corte-area-compartida.spec.ts \
+            src/motor-universal/__tests__/nesting-compuesto-shadow.spec.ts \
             src/auth/__tests__/modulos-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
             src/administracion/__tests__/medios-pago-retenciones.integration.spec.ts \
