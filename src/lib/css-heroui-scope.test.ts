@@ -6,6 +6,22 @@ const require = createRequire(import.meta.url);
 const scope = require("../../scripts/postcss-heroui-scope.cjs");
 
 describe("aislamiento de HeroUI durante la migración", () => {
+  it("conserva el scroll de los descendientes cuando producción aplana el CSS del portal", async () => {
+    const css = `@layer components.heroui {
+      .autocomplete__popover [data-slot="list-box"] {max-height:320px; min-height:0; overflow-y:auto}
+      .autocomplete__popover[data-placement="top"] > [data-slot="search-field"] {flex-shrink:0}
+      .select__popover:is(.compact, .large) [role="option"] {padding:8px}
+      .list-box-item::before {content:""}
+    }`;
+    const result = await postcss([scope()]).process(css, { from: undefined });
+    expect(result.css).toContain(':scope:is(.autocomplete__popover) [data-slot="list-box"]');
+    expect(result.css).toContain(':scope:is(.autocomplete__popover[data-placement="top"]) > [data-slot="search-field"]');
+    expect(result.css).toContain(':scope:is(.select__popover:is(.compact, .large)) [role="option"]');
+    expect(result.css).toContain(':scope:is(.list-box-item)::before');
+    expect(result.css).not.toContain(':scope:is(.autocomplete__popover [data-slot="list-box"])');
+    expect(result.css).toContain('overflow-y:auto');
+  });
+
   it("acota sólo la capa del proveedor, incluye raíces portaleadas y conserva nesting y animaciones", async () => {
     const css = `.button {color:red} @layer components.heroui {
       .button { color:blue; &:hover {color:green} }
