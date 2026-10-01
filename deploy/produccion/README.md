@@ -2,6 +2,8 @@
 
 Estado al 01/10/2026: infraestructura desplegada y primera recuperación de base, archivo y código comprobada; administrador con clave personal y MFA, certificado ARCA cifrado y consulta WSFE de producción verificada. HTTPS, origen web definitivo y acceso de la primera empresa comprobados; invitación entregada y aceptada, Founder manual activo, sin importar datos locales. La configuración fiscal de esa empresa está guardada y la integración de producción quedó activa con autorización del titular, sin emitir comprobantes. **Todavía falta completar el recorrido funcional de negocio y comprobar el primer comprobante comercial legítimo cuando corresponda.** Consultar el registro vigente en [VALIDACION.md](VALIDACION.md). La web comercial permanece en Vercel. La aplicación y sus servicios usan Fly; cada entorno tiene bases, depósitos y credenciales propias.
 
+La publicación del 01/10/2026 a las 20:21 UTC ejecuta `2fee01704` en API, workers, web y PDF, con 302 migraciones. Permisos por vista y cajas asignadas probados en local y staging antes de promover las mismas imágenes. Respaldo posterior de las 20:19 UTC con firma y manifiesto verificados; detalle y límites en [VALIDACION.md](VALIDACION.md).
+
 ## Alcance del primer lanzamiento
 
 Empresa nueva, sin importar configuraciones ni historial local. Alta mediante Plataforma, plan privado/manual e invitación individual. Inbox y registro público deshabilitados. Paddle live se configura por separado; no activar ventas hasta validar su cuenta, catálogo, precios y webhooks. La facturación fiscal usa [ARCA de Plataforma](../../docs/fiscal-arca-plataforma.md), con certificado real cargado por administración con MFA.

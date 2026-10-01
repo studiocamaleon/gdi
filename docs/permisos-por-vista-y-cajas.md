@@ -1,10 +1,11 @@
 # Permisos por vista y cajas asignadas
 
-Actualizado el 01/10/2026. Implementado en la rama
-`codex/permisos-cajas-interfaz`, en revisión local. **Todavía no publicado en
-staging ni producción.** La app local habitual conserva su versión anterior;
-la revisión visual de este lote usa componentes reales y datos ficticios en
-una página separada.
+Actualizado el 01/10/2026. **Publicado en staging y producción**, revisión
+`2fee01704`, PR #14 sobre #13 pendiente de fusión. Se comprobó primero con API,
+web, sesión real y base local de tests; después se repitió el recorrido en
+staging. La app local habitual conserva su rama anterior. Evidencia en
+[staging](../deploy/staging/VALIDACION.md) y
+[producción](../deploy/produccion/VALIDACION.md).
 
 ## Cómo se configura
 
@@ -102,7 +103,7 @@ se realizan dentro de una transacción para evitar resultados parciales.
   oculto no sustituye las comprobaciones de la API.
 - La migración `20261001220000_permisos_cuentas_usuario` agrega las asignaciones
   a la membresía y la identificación única de arqueos. Es aditiva: no borra ni
-  repuebla datos. Durante esta revisión se aplicó únicamente a la base de tests.
+  repuebla datos. Se aplicó primero en tests y después en staging y producción.
 - El catálogo compartido de vistas del navegador y API tiene una prueba que
   exige mantener ambas copias iguales.
 
@@ -132,20 +133,18 @@ La revisión visual comprobó la edición de una vista sin habilitar sus hermana
 y la selección independiente de cuentas operables y destinos. Se actualizaron
 además las presentaciones de lugares del equipo y retenciones.
 
-Antes de publicar el conjunto:
+Recorrido integrado completado: administrador y vendedor con caja limitada,
+creación de orden, cobro, consulta de Pagos y recibo PDF, arqueo exacto y
+transferencia con reintento. Los roles de sólo presupuestos y de un único
+informe respetaron sus límites. Staging pasó 46 comprobaciones HTTP; la misma
+imagen se publicó en producción y se verificaron sesión, pantallas, datos y
+salud. La cotización del ensayo es sintética y de precio conocido; el catálogo
+industrial se comprobará al migrarlo.
 
-1. Completar la compilación integral en remoto y los controles del PR. Las
-   revisiones de tipos locales cubren los archivos afectados; la compilación
-   integral de la API excede la memoria asignada a su proceso en esta Mac.
-2. Probar con sesión real en el entorno de revisión un administrador y un
-   vendedor restringido: crear una orden, registrar un cobro en Mostrador,
-   arquear y transferir a Fuerte, comprobando que Fuerte sigue sin abrirse.
-3. Revisar una combinación de sólo presupuestos, otra de un único informe y
-   los formularios compartidos de los demás módulos. La vista aislada no
-   sustituye este recorrido integrado.
-4. Actualizar staging con el lote completo y registrar versión y resultado en
-   `deploy/staging/VALIDACION.md`. Producción se actualiza después de aprobar
-   esa revisión, con su respaldo y migraciones correspondientes.
+Los datos ficticios del ensayo fueron retirados. Las asignaciones de usuarios
+reales no se modificaron. Los respaldos posteriores incluyen la versión
+publicada; su firma y manifiesto se verificaron sin repetir la restauración
+SQL completa.
 
 La rama parte de `d96309d52` y depende del PR #13. Mantener declarada esa
 relación, ajustar la base cuando se integre y no mezclar estos cambios con la
