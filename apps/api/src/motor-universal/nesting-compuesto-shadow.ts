@@ -384,6 +384,10 @@ function candidatoDesdePaso(args: {
     componenteCodigo: componente.codigo,
     pasoClave: paso.configPasoId,
   };
+  if (nesting?.visualConfig?.restriccionCortePosterior) {
+    return { exclusion: { ...baseExclusion, codigo: 'CONFIGURACION_INCOMPLETA',
+      motivo: 'Se conserva el acomodo común de impresión y corte; reagrupar sólo la impresión podría exceder el área de la cortadora.' } };
+  }
   const esPliego =
     nesting?.unidad === 'pliegos' &&
     ['grid-2d-single', 'grid-2d-multi'].includes(nesting.algorithm) &&
