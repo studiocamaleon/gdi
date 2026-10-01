@@ -50,10 +50,10 @@ export function DocumentosImpresionProvider({
   tenantId: string;
   children: ReactNode;
 }) {
-  const comercial = usePuede("comercial.gestionar"),
+  const comercial = usePuede("comercial.ordenes.gestionar"),
     produccion = usePuede("produccion.ejecutar");
-  const verProduccion = usePuede("produccion.ver"),
-    verComercial = usePuede("comercial.ver");
+  const verProduccion = usePuede("produccion.tablero.ver"),
+    verComercial = usePuede("comercial.ordenes.ver");
   const puedeVer = verProduccion || verComercial;
   const puedeImprimir = comercial || produccion;
   const [abierto, setAbierto] = useState(false);

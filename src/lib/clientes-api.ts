@@ -30,12 +30,12 @@ function buildClientesPath(params: ClientesQuery = {}) {
   return `/clientes?${searchParams.toString()}`;
 }
 
-export async function listClientes(params: ClientesQuery = {}) {
-  return apiRequest<ClientesListResponse>(buildClientesPath(params));
+export async function listClientes(params: ClientesQuery = {}, opcionesComerciales = false) {
+  return apiRequest<ClientesListResponse>(opcionesComerciales ? buildClientesPath(params).replace("/clientes?", "/clientes/opciones-comerciales?") : buildClientesPath(params));
 }
 
-export async function getClientes(params: ClientesQuery = {}) {
-  const res = await listClientes(params);
+export async function getClientes(params: ClientesQuery = {}, opcionesComerciales = false) {
+  const res = await listClientes(params, opcionesComerciales);
   return res.data;
 }
 

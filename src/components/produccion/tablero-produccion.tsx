@@ -1293,7 +1293,7 @@ export function TableroProduccion({
   const designScope = useDesignScope();
   const { zonaHoraria } = useConfigRegional();
   const puede = usePuedeFn();
-  const puedeVerOrden = puede("produccion.ver") || puede("comercial.ver") || puede("administracion.ver") || puede("administracion.gestionar");
+  const puedeVerOrden = puede("produccion.tablero.ver") || puede("comercial.ordenes.ver") || puede("administracion.comprobantes.ver") || puede("administracion.comprobantes.gestionar");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [avisoFinalizacion, setAvisoFinalizacion] = React.useState<AvisoFinalizacionOrden | null>(null);
   const avisarFinalizacion = React.useCallback((aviso: AvisoFinalizacionOrden) => {

@@ -78,12 +78,15 @@ export async function listProductos(
  */
 export async function getProductos(
   activo?: boolean,
+  paraCotizacion = false,
 ): Promise<ProductoListItem[]> {
   const limit = 200;
   const all: ProductoListItem[] = [];
   let page = 1;
   for (;;) {
-    const res = await listProductos({ page, limit, activo });
+    const res = paraCotizacion
+      ? await apiRequest<ProductosListResponse>(buildProductosPath({page,limit,activo}).replace("/productos-servicios/productos", "/productos-servicios/cotizacion-productos"))
+      : await listProductos({ page, limit, activo });
     all.push(...res.data);
     if (page >= res.pages || res.data.length === 0) break;
     page += 1;
@@ -97,8 +100,8 @@ export async function getProductos(
     : all;
 }
 
-export async function getProductoById(id: string): Promise<ProductoDetalle> {
-  return apiRequest<ProductoDetalle>(`/productos-servicios/productos/${id}`);
+export async function getProductoById(id: string, paraCotizacion = false): Promise<ProductoDetalle> {
+  return apiRequest<ProductoDetalle>(`/productos-servicios/${paraCotizacion ? "cotizacion-productos" : "productos"}/${id}`);
 }
 
 export interface ProductoRecetaMaterial {
@@ -1243,10 +1246,11 @@ export async function eliminarPasoTenant(id: string): Promise<void> {
 
 export async function getCargosDirectosCatalogo(
   soloActivos = true,
+  paraCotizacion = false,
 ): Promise<CargoDirectoCatalogo[]> {
   const qs = soloActivos ? "" : "?soloActivos=false";
   return apiRequest<CargoDirectoCatalogo[]>(
-    `/productos-servicios/cargos-directos${qs}`,
+    `/productos-servicios/${paraCotizacion ? "cotizacion-cargos" : "cargos-directos"}${qs}`,
   );
 }
 

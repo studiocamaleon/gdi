@@ -141,7 +141,7 @@ export function TabPrecioCompleto({
   pricingCompuestoSection,
 }: Props) {
   const conReglas = useCapacidad("reglas_precio");
-  const permisoPrecios = usePuede("costos.gestionar");
+  const permisoPrecios = usePuede("costos.catalogo.gestionar");
   const puedeReglas = reglaGeneralEditable && conReglas && permisoPrecios;
   const productoVisual = useProductoVisual();
   const [impuestosState, setImpuestosState] =
@@ -678,7 +678,7 @@ function SeccionComisiones({
 export function PreciosEspecialesClientesCard(
   props: React.ComponentProps<typeof PreciosEspecialesClientesContenido>,
 ) {
-  const puedeVer = usePuede("costos.ver");
+  const puedeVer = usePuede("costos.catalogo.ver");
   return puedeVer ? <PreciosEspecialesClientesContenido {...props} /> : null;
 }
 
@@ -694,7 +694,7 @@ function PreciosEspecialesClientesContenido({
   descripcion?: string;
 }) {
   const incluida = useCapacidad("precios_especiales");
-  const permisoGestion = usePuede("costos.gestionar");
+  const permisoGestion = usePuede("costos.catalogo.gestionar");
   const puedeGestionar = incluida && permisoGestion;
   const [items, setItems] = React.useState<PrecioEspecialClienteItem[]>([]);
   const [clientes, setClientes] = React.useState<ClienteDetalle[]>([]);

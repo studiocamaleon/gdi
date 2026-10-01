@@ -2,7 +2,7 @@ import { Suspense } from "react";
 
 import { ReportesShell } from "@/components/panel/reportes-shell";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
-import { tienePermiso } from "@/lib/permisos-server";
+import { tieneSeccion } from "@/lib/permisos-server";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 /**
@@ -18,7 +18,7 @@ export default async function ReportesLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!(await tienePermiso("reportes.ver"))) {
+  if (!(await tieneSeccion("reportes"))) {
     return <SinPermiso modulo="Reportes" />;
   }
 

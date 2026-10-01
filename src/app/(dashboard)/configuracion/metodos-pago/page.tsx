@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MetodosPagoPage() {
   if (!(await tieneCapacidad("cobros"))) return <FuncionNoIncluida />;
-  if (!(await tienePermiso("administracion.configurar"))) {
+  if (!(await tienePermiso("configuracion.metodos.ver"))) {
     return <SinPermiso modulo="Métodos de pago" />;
   }
 

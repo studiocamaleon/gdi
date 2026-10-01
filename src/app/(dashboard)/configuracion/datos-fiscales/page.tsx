@@ -8,7 +8,7 @@ import { getAfip } from "@/lib/integraciones-api";
 export const dynamic = "force-dynamic";
 
 export default async function DatosFiscalesPage() {
-  if (!(await tienePermiso("administracion.configurar"))) {
+  if (!(await tienePermiso("configuracion.fiscal.ver"))) {
     return <SinPermiso modulo="Datos fiscales" />;
   }
 

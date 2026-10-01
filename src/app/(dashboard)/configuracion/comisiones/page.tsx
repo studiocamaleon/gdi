@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ComisionesCatalogoPage() {
   // Mismo permiso que guarda el API del catálogo (@Permiso 'costos.ver').
-  if (!(await tienePermiso("costos.ver"))) {
+  if (!(await tienePermiso("configuracion.comisiones.ver"))) {
     return <SinPermiso modulo="Comisiones" />;
   }
   const items = await getComisionesCatalogo(false);

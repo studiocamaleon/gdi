@@ -1,5 +1,6 @@
 "use client";
 
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { CheckIcon, ExternalLinkIcon, SaveIcon } from "lucide-react";
@@ -172,7 +173,10 @@ export function OrdenSaveActions({
   const conCotizacion = useCapacidad("cotizacion");
   const conOrdenes = useCapacidad("ordenes");
   const conPresupuestos = useCapacidad("presupuestos");
-  const disponible = conCotizacion && (tipo === "orden" ? conOrdenes : conPresupuestos);
+  const permisoOrdenes = usePuede("comercial.ordenes.gestionar");
+  const permisoPresupuestos = usePuede("comercial.presupuestos.gestionar");
+  const autorizado = tipo === "orden" ? permisoOrdenes : permisoPresupuestos;
+  const disponible = autorizado && conCotizacion && (tipo === "orden" ? conOrdenes : conPresupuestos);
   return (
     <div className={resumenBar.saveActions}>
       {tipo === "orden" && (
@@ -200,7 +204,7 @@ export function OrdenSaveActions({
           operacionPendiente
         }
         title={
-          !disponible ? "Esta operación no está incluida en el plan actual." :
+          !autorizado ? "Tu rol no permite esta operación." : !disponible ? "Esta operación no está incluida en el plan actual." :
           !clienteSeleccionado ? "Seleccioná un cliente para emitir" : undefined
         }
         onPress={tipo === "orden" ? onEmitir : onEmitirPresupuesto}

@@ -616,7 +616,7 @@ export function MateriaPrimaFicha({
   maquinas,
 }: MateriaPrimaFichaProps) {
   const conMateriales = useCapacidad("materiales");
-  const permisoGestionar = usePuede("inventario.gestionar");
+  const permisoGestionar = usePuede("inventario.materiales.gestionar");
   const puedeGestionar = conMateriales && permisoGestionar;
   const { moneda } = useConfigRegional();
   const themeClass = useDesignTheme();

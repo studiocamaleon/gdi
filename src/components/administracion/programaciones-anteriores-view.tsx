@@ -26,7 +26,7 @@ export function ProgramacionesAnterioresView(props: {
   );
   const capacidad = useCapacidad("gastos_recurrentes");
   const cuentas = useCapacidad("cuentas_pagar");
-  const permiso = usePuede("administracion.gestionar");
+  const permiso = usePuede("administracion.gastos.gestionar");
   const { moneda } = useConfigRegional();
   const scope = useDesignScope();
   const theme = useDesignTheme();

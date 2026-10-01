@@ -1,4 +1,5 @@
 import type { CurrentUser } from "@/lib/auth";
+import { expandirVistas, type PermisoVista } from "./permisos-vistas";
 
 /**
  * Permisos del lado del navegador: sirven para no mostrar lo que el API va a
@@ -26,6 +27,10 @@ export const MODULOS = [
 export type ModuloClave = (typeof MODULOS)[number];
 
 export type PermisoClave =
+  | "acceso.por_vista"
+  | "tesoreria.arquear"
+  | "tesoreria.transferir"
+  | PermisoVista
   | "inbox.atender"
   | `${ModuloClave}.ver`
   | `${ModuloClave}.gestionar`
@@ -62,7 +67,7 @@ export type PermisoClave =
 export function permisosDe(user: CurrentUser | null | undefined): Set<string> | null {
   const lista = user?.tenantActual?.permisos;
   if (!lista) return null;
-  return new Set(lista);
+  return expandirVistas(lista);
 }
 
 export function puede(

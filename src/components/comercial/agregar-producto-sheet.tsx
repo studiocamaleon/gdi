@@ -1466,6 +1466,7 @@ function mapSlotMaterial(
                 sku: v.sku,
                 nombreVariante: v.nombreVariante,
                 precioReferencia: v.precioReferencia,
+                precioCargado: v.precioCargado,
                 atributosVarianteJson: (v.atributosVarianteJson ??
                   null) as Record<string, unknown> | null,
               },
@@ -1502,7 +1503,7 @@ function mapSlotMaterial(
             colorLabel: getVariantColorLabel(
               item.variante.atributosVarianteJson,
             ),
-            missingPrice: Number(item.variante.precioReferencia ?? 0) <= 0,
+            missingPrice: item.variante.precioCargado === undefined ? Number(item.variante.precioReferencia ?? 0) <= 0 : !item.variante.precioCargado,
             sello: getSelloModelDeVariante(
               item.variante.atributosVarianteJson,
               display.label,
@@ -9758,7 +9759,7 @@ export function AgregarProductoSheet({
         setLoadingProductId(baseProduct.id);
         try {
           detalle = augmentDetalleConPasosExtras(
-            await getProductoById(baseProduct.id),
+            await getProductoById(baseProduct.id, true),
           );
           nextProduct = mapProductoReal(detalle);
         } catch {
@@ -9844,7 +9845,7 @@ export function AgregarProductoSheet({
       setLoadingProductId(picked.id);
       try {
         detalle = augmentDetalleConPasosExtras(
-          await getProductoById(picked.id),
+          await getProductoById(picked.id, true),
         );
         next = mapProductoReal(detalle);
       } catch {

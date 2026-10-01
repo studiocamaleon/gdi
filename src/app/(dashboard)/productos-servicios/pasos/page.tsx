@@ -4,6 +4,6 @@ import { PasosFamiliasView } from "@/components/productos-servicios/pasos-famili
 export const dynamic = "force-dynamic";
 
 export default async function PasosProduccionPage() {
-  const puedeGestionar = await puedeConfigurar("procesos", "costos.gestionar");
+  const puedeGestionar = await puedeConfigurar("procesos", "costos.nodos.gestionar");
   return <PasosFamiliasView puedeGestionar={puedeGestionar} />;
 }

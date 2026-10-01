@@ -172,7 +172,7 @@ export function TipoCambioPanel({
 
 export function TipoCambioEmpresa() {
   const conPrecios = useCapacidad("reglas_precio");
-  const puedeGestionar = usePuede("costos.gestionar") && conPrecios;
+  const puedeGestionar = usePuede("costos.catalogo.gestionar") && conPrecios;
   const { moneda } = useConfigRegional();
   const [config, setConfig] = React.useState<Awaited<
     ReturnType<typeof getTipoCambioConfig>

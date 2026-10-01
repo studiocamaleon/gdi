@@ -69,7 +69,7 @@ export function FacturacionView({
   const fmt = (n: number) => formatearMoneda(n, moneda);
   const scope = useDesignScope();
   const theme = useDesignTheme();
-  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeGestionar = usePuede("administracion.facturacion.gestionar");
   const [q, setQ] = React.useState("");
   const [sel, setSel] = React.useState<Set<string>>(() => new Set());
   const [modo, setModo] = React.useState<"por_orden" | "agrupada">("por_orden");

@@ -21,3 +21,12 @@ export async function tienePermiso(permiso: PermisoClave): Promise<boolean> {
     return true;
   }
 }
+
+/** Sólo para la puerta de una sección; cada página/API exige su vista. */
+export async function tieneSeccion(seccion: string): Promise<boolean> {
+  try {
+    const { currentUser } = await getCurrentUserCached();
+    const permisos = permisosDe(currentUser);
+    return permisos === null || [...permisos].some(p => p.startsWith(`${seccion}.`) && p.endsWith('.ver'));
+  } catch { return false; }
+}

@@ -18,7 +18,7 @@ export default function RutasPage() {
 async function RutasPageContent() {
   const [rutas, puedeGestionar] = await Promise.all([
     getRutas({ incluirInactivas: true }),
-    puedeConfigurar("procesos", "costos.gestionar"),
+    puedeConfigurar("procesos", "costos.flujos.gestionar"),
   ]);
   return <RutasTable initialRutas={rutas} puedeGestionar={puedeGestionar} />;
 }

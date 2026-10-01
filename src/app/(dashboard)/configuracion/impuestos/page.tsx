@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ImpuestosCatalogoPage() {
   // Mismo permiso que guarda el API del catálogo (@Permiso 'costos.ver').
-  if (!(await tienePermiso("costos.ver"))) {
+  if (!(await tienePermiso("configuracion.impuestos.ver"))) {
     return <SinPermiso modulo="Impuestos" />;
   }
   const items = await getImpuestosCatalogo(false); // incluye inactivos

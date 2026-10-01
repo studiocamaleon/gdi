@@ -97,7 +97,7 @@ export function ComprobantesView({
 }) {
   const scope = useDesignScope();
   const theme = useDesignTheme();
-  const permisoGestionar = usePuede("administracion.gestionar");
+  const permisoGestionar = usePuede("administracion.comprobantes.gestionar");
   const fiscalDisponible = useCapacidad("fiscal_argentina");
   const puedeGestionar = permisoGestionar && fiscalDisponible;
   const [q, setQ] = React.useState("");

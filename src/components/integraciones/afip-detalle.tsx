@@ -32,7 +32,7 @@ export function AfipDetalle({
   const [verificando, setVerificando] = React.useState(false);
   const [cambiando, setCambiando] = React.useState(false);
 
-  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeGestionar = usePuede("configuracion.fiscal.gestionar");
   const puedeVerificar = puedeGestionar && datos.puedeOperarAfip;
   const enCurso = React.useRef(false);
   const refrescar = async () => {

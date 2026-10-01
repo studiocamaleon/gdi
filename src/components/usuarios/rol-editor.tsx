@@ -10,17 +10,23 @@ import {
   type RolDelTenant,
 } from "@/lib/usuarios-api";
 
-/** Lo que se guarda por módulo. `ver` implica leer; `gestionar` arrastra `ver`. */
-type Nivel = "ninguno" | "ver" | "gestionar";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import { ChevronDownIcon } from "lucide-react";
+import {
+  nivelesDesde,
+  permisosDesdeNiveles,
+  vistasDelModulo,
+  type NivelAcceso as Nivel,
+} from "@/lib/roles-vistas";
+import styles from "./rol-editor.module.css";
+import { expandirVistas } from "@/lib/permisos-vistas";
 
-/**
- * El editor de un rol: una matriz de módulos por nivel de acceso.
- *
- * Tres opciones por módulo y no cuatro casillas de CRUD. La matriz completa
- * (ver/crear/editar/eliminar × 8 módulos) da 32 tildes que nadie termina de
- * leer, y en una imprenta de seis personas no existe "puede crear clientes pero
- * no editarlos". Ver docs/usuarios-roles-permisos-diseno.md
- */
 export function RolEditor({
   rol,
   catalogo,
@@ -39,8 +45,12 @@ export function RolEditor({
     nivelesDesde(rol?.permisos ?? [], catalogo),
   );
   const [transversales, setTransversales] = React.useState<Set<string>>(
-    () => new Set((rol?.permisos ?? []).filter((p) => p.includes("."))
-      .filter((p) => catalogo.transversales.some((t) => t.clave === p))),
+    () =>
+      new Set(
+        [...expandirVistas(rol?.permisos ?? [])]
+          .filter((p) => p.includes("."))
+          .filter((p) => catalogo.transversales.some((t) => t.clave === p)),
+      ),
   );
   const [guardando, setGuardando] = React.useState(false);
 
@@ -48,13 +58,8 @@ export function RolEditor({
   const bloqueadoElNombre = rol?.esDelSistema ?? false;
 
   const guardar = async () => {
-    const permisos = [
-      ...Object.entries(niveles).flatMap(([modulo, nivel]) =>
-        nivel === "ninguno" ? [] : [`${modulo}.${nivel}`],
-      ),
-      ...transversales,
-    ];
-    if (permisos.length === 0) {
+    const permisos = permisosDesdeNiveles(niveles, transversales);
+    if (permisos.length <= 1) {
       toast.error("Un rol sin permisos no le sirve a nadie.");
       return;
     }
@@ -78,7 +83,9 @@ export function RolEditor({
       await onGuardado();
       onCerrar();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar el rol.");
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo guardar el rol.",
+      );
     } finally {
       setGuardando(false);
     }
@@ -122,42 +129,65 @@ export function RolEditor({
         </label>
       </div>
 
-      <div className="usr-matriz">
-        {catalogo.modulos.map((m) => (
-          <div
-            className={`usr-mod${m.enElPlan ? "" : " fuera"}`}
-            key={m.clave}
-          >
-            <div className="usr-mod-txt">
-              <div className="usr-mod-nm">
-                {m.label}
-                {!m.enElPlan && (
-                  <span
-                    className="int-pill"
-                    title="Tu plan no incluye este módulo. Podés dejarlo configurado: cuando lo actives, el rol ya está listo."
-                  >
-                    NO INCLUIDO EN TU PLAN
+      <div className={styles.secciones}>
+        {catalogo.modulos.map((m) => {
+          const vistas = vistasDelModulo(m);
+          const permitidas = vistas.filter(
+            (v) => niveles[v.clave] !== "ninguno",
+          ).length;
+          const comunes = new Set(vistas.map((v) => niveles[v.clave]));
+          const nivel = comunes.size === 1 ? [...comunes][0] : undefined;
+          return (
+            <Collapsible key={m.clave} className={styles.seccion}>
+              <div className={styles.cabecera}>
+                <CollapsibleTrigger className={styles.desplegar}>
+                  <ChevronDownIcon aria-hidden />
+                  <span>
+                    <strong>{m.label}</strong>
+                    <small>
+                      {permitidas} de {vistas.length} vistas habilitadas
+                      {nivel === undefined ? " · Personalizado" : ""}
+                    </small>
                   </span>
-                )}
-              </div>
-              <div className="usr-mod-desc">{m.descripcion}</div>
-            </div>
-            <div className="usr-niveles">
-              {(["ninguno", "ver", "gestionar"] as const).map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={`usr-nivel${niveles[m.clave] === n ? " on" : ""}`}
-                  onClick={() =>
-                    setNiveles((prev) => ({ ...prev, [m.clave]: n }))
+                </CollapsibleTrigger>
+                {!m.enElPlan && <Badge variant="outline">Fuera del plan</Badge>}
+                <SelectorNivel
+                  label={`Toda la sección ${m.label}`}
+                  valor={nivel}
+                  gestion={vistas.some((v) => v.permiteGestion)}
+                  onChange={(n) =>
+                    setNiveles((prev) => ({
+                      ...prev,
+                      ...Object.fromEntries(
+                        vistas.map((v) => [
+                          v.clave,
+                          n === "gestionar" && !v.permiteGestion ? "ver" : n,
+                        ]),
+                      ),
+                    }))
                   }
-                >
-                  {n === "ninguno" ? "Sin acceso" : n === "ver" ? "Ver" : "Editar"}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+                />
+              </div>
+              <CollapsibleContent>
+                <div className={styles.vistas}>
+                  {vistas.map((v) => (
+                    <div className={styles.fila} key={v.clave}>
+                      <span>{v.label}</span>
+                      <SelectorNivel
+                        label={v.label}
+                        valor={niveles[v.clave]}
+                        gestion={v.permiteGestion}
+                        onChange={(n) =>
+                          setNiveles((prev) => ({ ...prev, [v.clave]: n }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
       </div>
 
       <div className="int-section-intro" style={{ marginTop: 20 }}>
@@ -218,21 +248,32 @@ export function RolEditor({
   );
 }
 
-/**
- * Los permisos guardados, leídos como niveles. Un `gestionar` gana sobre su
- * `ver` —el backend guarda uno solo, pero un rol viejo podría traer los dos—.
- */
-function nivelesDesde(
-  permisos: string[],
-  catalogo: CatalogoPermisos,
-): Record<string, Nivel> {
-  const out: Record<string, Nivel> = {};
-  for (const m of catalogo.modulos) {
-    out[m.clave] = permisos.includes(`${m.clave}.gestionar`)
-      ? "gestionar"
-      : permisos.includes(`${m.clave}.ver`)
-        ? "ver"
-        : "ninguno";
-  }
-  return out;
+function SelectorNivel({
+  label,
+  valor,
+  gestion,
+  onChange,
+}: {
+  label: string;
+  valor?: Nivel;
+  gestion: boolean;
+  onChange: (n: Nivel) => void;
+}) {
+  return (
+    <ToggleGroup
+      variant="outline"
+      size="sm"
+      aria-label={label}
+      value={valor ? [valor] : []}
+      onValueChange={(v) => {
+        if (v[0]) onChange(v[0] as Nivel);
+      }}
+    >
+      <ToggleGroupItem value="ninguno">Sin acceso</ToggleGroupItem>
+      <ToggleGroupItem value="ver">Ver</ToggleGroupItem>
+      {gestion && (
+        <ToggleGroupItem value="gestionar">Gestionar</ToggleGroupItem>
+      )}
+    </ToggleGroup>
+  );
 }

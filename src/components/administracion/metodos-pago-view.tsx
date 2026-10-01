@@ -583,7 +583,7 @@ export function MetodosPagoView({
   const [metodos, setMetodos] = React.useState(initialMetodos);
   const [cuentas, setCuentas] = React.useState(initialCuentas);
   const conValores = useCapacidad("valores");
-  const puedeCrearCuenta = usePuede("administracion.gestionar");
+  const puedeCrearCuenta = usePuede("administracion.tesoreria.gestionar");
   const { moneda } = useConfigRegional();
   const [nuevaCuenta, setNuevaCuenta] = React.useState(false);
   const [guardandoCuenta, setGuardandoCuenta] = React.useState(false);

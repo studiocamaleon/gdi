@@ -56,7 +56,7 @@ async function ProductosServiciosPageContent({
     }),
     getCatalogoComercial(),
     getProductos(),
-    puedeConfigurar("productos", "costos.gestionar"),
+    puedeConfigurar("productos", "costos.catalogo.gestionar"),
   ]);
   return (
     <DesignSystemProvider theme="brand" appearance="light">

@@ -823,6 +823,8 @@ export type RetencionLinea = {
 };
 
 export type Cobro = {
+  /** El recibo de una cuenta no asignada sólo se muestra como resumen de la venta. */
+  puedeAbrirRecibo?: boolean;
   id: string;
   fecha: string;
   ordenId: string | null;

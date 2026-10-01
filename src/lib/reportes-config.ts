@@ -46,7 +46,7 @@ export const REPORTES: Reporte[] = [
     descripcion: "Ventas, rentabilidad, punto de equilibrio y alertas clave.",
     categoria: "Ejecutivo",
     Icon: LayoutGridIcon,
-    permiso: "reportes.ver_resumen",
+
   },
   {
     href: "/reportes/comercial",
@@ -112,10 +112,11 @@ export function reportesVisibles(
   puede: (permiso: PermisoClave) => boolean,
   funciones?: Record<string, boolean>,
 ): Reporte[] {
-  if (!puede("reportes.ver")) return [];
+
   return REPORTES.filter((reporte) => {
     const clave = capacidadDeRuta(reporte.href);
     return (
+      puede(`reportes.${reporte.href.split("/").at(-1)!.replaceAll("-", "_")}.ver` as PermisoClave) &&
       (!reporte.permiso || puede(reporte.permiso)) &&
       (!funciones || !clave || funciones[clave] === true)
     );

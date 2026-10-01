@@ -301,8 +301,8 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const conCuentasCobrar = useCapacidad("cuentas_cobrar");
   const scope = useDesignScope();
   const theme = useDesignTheme();
-  const puedeAjustarPuntos = usePuede("crm.configurar_fidelizacion");
-  const puedeConsultarPuntos = usePuede("crm.ver");
+  const puedeAjustarPuntos = usePuede("crm.fidelizacion.gestionar");
+  const puedeConsultarPuntos = usePuede("crm.fidelizacion.ver");
   const router = useRouter();
   const { fechaHora } = useFecha();
   const [isSaving, startSaving] = React.useTransition();

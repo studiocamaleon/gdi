@@ -22,9 +22,9 @@ export default async function CampanasPage({
   };
   const [campanas, clientes, empleados, canManage] = await Promise.all([
     listarCampanas({ limit: 100, clienteId }).catch(() => empty),
-    getClientes({ limit: 200 }).catch(() => []),
+    getClientes({ limit: 200 }, true).catch(() => []),
     getEmpleados().catch(() => []),
-    puedeConfigurar("proyectos", "comercial.gestionar"),
+    puedeConfigurar("proyectos", "comercial.campanas.gestionar"),
   ]);
   return (
     <CampanasView

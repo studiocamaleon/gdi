@@ -1,4 +1,5 @@
 "use client";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import {
   ConfiguracionPage,
@@ -131,6 +132,7 @@ function dinero(valor: number) {
 }
 
 export function CentroCopiadoConfigView() {
+  const puedeGestionar = usePuede("configuracion.copiado.gestionar");
   const conTerminaciones = useCapacidad("terminaciones_copiado");
   const [cfg, setCfg] = React.useState<CentroCopiadoConfig | null>(null);
   const [salud, setSalud] = React.useState<SaludCentroCopiado | null>(null);
@@ -337,6 +339,7 @@ export function CentroCopiadoConfigView() {
   }, [hayCambios]);
 
   const inicializar = async () => {
+    if (!puedeGestionar) return;
     setInicializando(true);
     try {
       cargarFormulario(await inicializarCentroCopiado());
@@ -357,6 +360,7 @@ export function CentroCopiadoConfigView() {
     }
   };
   const reparar = async () => {
+    if (!puedeGestionar) return;
     setReparando(true);
     try {
       setSalud(await repararCentroCopiado());
@@ -430,6 +434,7 @@ export function CentroCopiadoConfigView() {
     });
 
   const guardar = async () => {
+    if (!puedeGestionar) return;
     if (!cfg) return;
     if (!papeles.size || !tamanos.size) {
       toast.error("Elegí al menos un papel y un tamaño para ofrecer.");
@@ -647,7 +652,7 @@ export function CentroCopiadoConfigView() {
                   </div>
                 )}
               </AlertDescription>
-              {!porPlan ? (
+              {!porPlan && (!requiereInicio || puedeGestionar) ? (
                 <AlertAction>
                   <Button
                     size="sm"
@@ -702,11 +707,11 @@ export function CentroCopiadoConfigView() {
                 Descartar
               </Button>
             )}
-            <GuardarConfiguracion
+            {puedeGestionar && <GuardarConfiguracion
               cambios={cantidadCambios}
               guardando={guardando}
               onGuardar={() => void guardar()}
-            />
+            />}
           </>
         }
       />
@@ -769,7 +774,7 @@ export function CentroCopiadoConfigView() {
                   Abrir costos de materiales
                 </Button>
               ) : null}
-              {salud.puedeReparar ? (
+              {puedeGestionar && salud.puedeReparar ? (
                 <Button
                   variant="outline"
                   loading={reparando}

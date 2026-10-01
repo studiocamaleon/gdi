@@ -22,7 +22,7 @@ export default function BibliotecaMateriasPrimasPage() {
 
 async function BibliotecaMateriasPrimasPageContent() {
   if (!(await tieneCapacidad("materiales"))) return <FuncionNoIncluida />;
-  if (!(await puedeConfigurar("materiales", "inventario.gestionar")))
+  if (!(await puedeConfigurar("materiales", "inventario.materiales.gestionar")))
     return <SinPermiso modulo="Materiales" />;
   const items = await getBibliotecaMateriasPrimas();
 

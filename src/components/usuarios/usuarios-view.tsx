@@ -4,6 +4,8 @@ import {
   ConfiguracionHeader,
 } from "@/components/configuracion/configuracion-workspace";
 
+import { CuentasUsuario } from "./cuentas-usuario";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { CupoEquipo } from "./cupo-equipo";
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -70,6 +72,8 @@ export function UsuariosView({
   empleados: EmpleadoOpcion[];
   historial: EventoAcceso[];
 }) {
+  const puedeGestionar = usePuede("configuracion.usuarios.gestionar");
+  const [cuentasDe, setCuentasDe] = React.useState<UsuarioDelTenant | null>(null);
   const { fechaHoraCorta } = useFecha();
   const [datos, setDatos] = React.useState(inicial);
   const [roles, setRoles] = React.useState(rolesIniciales);
@@ -179,7 +183,7 @@ export function UsuariosView({
         titulo="Usuarios"
         descripcion="Administrá los accesos, roles y la seguridad de tu equipo."
         acciones={
-          tab === "usuarios" && (
+          tab === "usuarios" && puedeGestionar && (
             <button
               className="btn primary"
               onClick={() => setInvitando(true)}
@@ -278,7 +282,7 @@ export function UsuariosView({
                 <select
                   className="usr-rol"
                   value={u.rolId ?? ""}
-                  disabled={u.esYo || !u.activa || guardando === u.id}
+                  disabled={!puedeGestionar || u.esYo || !u.activa || guardando === u.id}
                   onChange={(e) => void cambiarRol(u, e.target.value)}
                   title={
                     u.esYo
@@ -297,13 +301,14 @@ export function UsuariosView({
                 </select>
 
                 <div className="usr-acciones">
+                  {puedeGestionar && <button className="btn ghost" onClick={() => setCuentasDe(u)}>Cajas y cuentas</button>}
                   {/* Vale para los dos casos: al que nunca entró se le DA una
                   clave (si el link no le llegó o no lo abre) y al que la
                   olvidó se le RESTABLECE. Es la misma operación. */}
                   {u.activa ? (
                     <button
                       className="btn ghost"
-                      disabled={guardando === u.id}
+                      disabled={!puedeGestionar || guardando === u.id}
                       onClick={() => void restablecer(u)}
                       title="Le genera una clave para dictarle. La cambia al entrar."
                     >
@@ -315,7 +320,7 @@ export function UsuariosView({
                   {u.activa ? (
                     <button
                       className="btn ghost"
-                      disabled={u.esYo || guardando === u.id}
+                      disabled={!puedeGestionar || u.esYo || guardando === u.id}
                       onClick={() => setADesactivar(u)}
                     >
                       Quitar acceso
@@ -323,7 +328,7 @@ export function UsuariosView({
                   ) : (
                     <button
                       className="btn ghost"
-                      disabled={guardando === u.id}
+                      disabled={!puedeGestionar || guardando === u.id}
                       onClick={() => void cambiarAcceso(u, true)}
                     >
                       Devolver acceso
@@ -357,7 +362,7 @@ export function UsuariosView({
               <button
                 className="btn ghost"
                 onClick={() => setEditando({ rol: null })}
-                disabled={!catalogo}
+                disabled={!puedeGestionar || !catalogo}
                 title={
                   catalogo
                     ? undefined
@@ -391,13 +396,13 @@ export function UsuariosView({
                 <div className="usr-acciones">
                   <button
                     className="btn ghost"
-                    disabled={!catalogo}
+                    disabled={!puedeGestionar || !catalogo}
                     onClick={() => setEditando({ rol: r })}
                   >
                     {r.esDelSistema ? "Ajustar permisos" : "Editar"}
                   </button>
                   {!r.esDelSistema && (
-                    <button className="btn ghost" onClick={() => setABorrar(r)}>
+                    <button className="btn ghost" disabled={!puedeGestionar} onClick={() => setABorrar(r)}>
                       Eliminar
                     </button>
                   )}
@@ -503,6 +508,7 @@ export function UsuariosView({
         </div>
       )}
 
+      {cuentasDe && <CuentasUsuario key={cuentasDe.id} usuario={cuentasDe} onCerrar={() => setCuentasDe(null)} onGuardado={recargar} />}
       <ConfirmacionDestructiva
         open={aDesactivar !== null}
         onOpenChange={(abierto) => {

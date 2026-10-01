@@ -25,7 +25,7 @@ export function MaterialesOrdenControl({
   data: MaterialesOrden;
   onChanged: () => void;
 }) {
-  const canManage = usePuede("inventario.gestionar");
+  const canManage = usePuede("inventario.stock.gestionar");
   const conCompras = useCapacidad("compras");
   const conReservas = useCapacidad("reservas");
   const conExistencias = useCapacidad("existencias");

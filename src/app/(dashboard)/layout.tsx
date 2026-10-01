@@ -1,3 +1,4 @@
+import { AccesoPorVista } from "@/components/navigation/acceso-por-vista";
 import { redirect } from "next/navigation";
 
 import { ApiError } from "@/lib/api";
@@ -85,7 +86,7 @@ export default async function DashboardLayout({
                       className="gp-main flex flex-1"
                       style={{ minHeight: 0, overflowY: "auto" }}
                     >
-                      <AccesoPorPlan>{children}</AccesoPorPlan>
+                      <AccesoPorPlan><AccesoPorVista>{children}</AccesoPorVista></AccesoPorPlan>
                     </main>
                   </SidebarInset>
                   <PasosEnCursoWidget />

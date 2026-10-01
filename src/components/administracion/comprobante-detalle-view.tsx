@@ -155,7 +155,7 @@ export function ComprobanteDetalleView({
 
   const scope = useDesignScope();
   const theme = useDesignTheme();
-  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeGestionar = usePuede("administracion.comprobantes.gestionar");
   const [tab, setTab] = React.useState("datos");
   const tabs = [
     {

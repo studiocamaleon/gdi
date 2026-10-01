@@ -15,7 +15,7 @@ export default function Page() {
 async function Content() {
   const [response, canManage] = await Promise.all([
     listClientes({ page: 1, limit: 25 }),
-    puedeConfigurar("clientes", "crm.gestionar"),
+    puedeConfigurar("clientes", "crm.clientes.gestionar"),
   ]);
   return (
     <DesignSystemProvider theme="brand" appearance="light">

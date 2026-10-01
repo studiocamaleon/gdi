@@ -655,7 +655,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
 
         {/* El plan y la facturación son configuración: el operario no tiene por
           qué ver cuánto paga la imprenta ni entrar a cambiarlo. */}
-        {puede(currentUser, "configuracion.ver") ? (
+        {puede(currentUser, "configuracion.suscripcion.ver") ? (
           <Link
             href="/suscripcion"
             className={s.plan}

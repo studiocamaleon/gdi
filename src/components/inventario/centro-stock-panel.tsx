@@ -128,7 +128,7 @@ export function CentroStockPanel({
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const conExistencias = useCapacidad("existencias");
-  const permisoGestionar = usePuede("inventario.gestionar");
+  const permisoGestionar = usePuede("inventario.stock.gestionar");
   const canManage = conExistencias && permisoGestionar;
   const query = useInventoryQuery();
   const { result, loading, error, refresh } = useStockPage({

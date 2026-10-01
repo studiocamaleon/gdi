@@ -8,6 +8,7 @@ export default async function TesoreriaPage() {
   return (
     <TesoreriaView
       initialCuentas={data.cuentas}
+      accesoRestringido={data.accesoRestringido ?? false}
       initialKpis={data.kpis}
       monedaLocal={data.monedaLocal}
     />

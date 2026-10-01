@@ -80,7 +80,7 @@ export function PerfilesImpresionPanel({
   etiquetas?: ReactNode;
   etiquetaConfigurada?: boolean;
 }) {
-  const gestionar = usePuede("configuracion.gestionar");
+  const gestionar = usePuede("configuracion.impresoras.gestionar");
   const operar = usePuede("produccion.ejecutar") || gestionar;
   const [datos, setDatos] = useState<ConfiguracionPerfiles | null>(null);
   const [error, setError] = useState("");
