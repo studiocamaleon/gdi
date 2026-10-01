@@ -1,5 +1,14 @@
 # Desarrollo local
 
+## Impresión rígida y corte — comprobación local del 01/10/2026
+
+- Rama de desarrollo: `codex/layout-impresion-laser`, basada en `b7d4842e2`. Conserva la base de seguridad ya desplegada; depende del PR #12 todavía sin integrar. Un futuro PR debe declarar esa dependencia y ajustar su base cuando se integre.
+- La API del worktree `meta-cloud-base` ejecuta la corrección en `codex/local-layout-impresion-laser`, manteniendo su configuración local. Sin cambios de migraciones, datos maestros, credenciales, workers ni tareas programadas. Sin despliegue en staging o producción.
+- La impresión sobre placa considera antes del acomodo los cortes activos que usan el mismo material, incluidos extras y selección comercial de máquina. Mantiene las dimensiones físicas de la placa, las posiciones compartidas y el costeo del tramo realmente impreso.
+- Cuando estos límites cambian el acomodo, se conserva el cálculo individual de los componentes: la consolidación no puede volver a acomodar solamente la impresión. Si el corte no agrega restricciones, siguen vigentes las optimizaciones anteriores.
+- Comprobación: 128 pruebas en siete suites y revisión de tipos de los seis archivos modificados. La verificación global de tipos excedió el límite de memoria local; completarla en CI antes de desplegar. No se aumentó memoria de Docker ni se reinició.
+- Prueba visible: acrílico de 3 mm, nueve piezas de 400 × 400 mm, impresión CMYK y láser con área 1300 × 1000 mm y salida abierta en Y. Cotiza y muestra dos placas completas de 1220 × 1220 mm, seis piezas y tres piezas, conservando 220 mm sin cortes. Quedó en el formulario local, sin guardar ni emitir una OT.
+
 ## Acuerdo de trabajo
 
 Desarrollar y probar en esta Mac. Acumular un grupo manejable de cambios relacionados, revisarlo mediante PR y actualizar staging para la prueba final del conjunto. No hacer un despliegue cloud por cada ajuste visual o corrección pequeña. Los commits pueden seguir siendo pequeños e independientes.
