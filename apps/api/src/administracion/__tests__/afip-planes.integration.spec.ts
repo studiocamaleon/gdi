@@ -61,6 +61,8 @@ async function preparar(c: Contexto, indice = 0) {
   const provider = {
     disponible: true,
     environment: 'dev',
+    representanteCuit: () =>
+      Promise.resolve(process.env.AFIP_REPRESENTANTE_CUIT?.trim() || null),
     verificarDelegacion,
   } as unknown as AfipSdkProvider;
   const svc = new AfipIntegracionService(

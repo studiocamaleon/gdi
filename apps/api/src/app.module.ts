@@ -102,6 +102,8 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
           'req.body.codigo',
           'req.body.token',
           'req.body.password',
+          'req.body.certificado',
+          'req.body.clavePrivada',
           'req.body.actual',
           'req.body.nueva',
           'res.headers["x-grafoprint-sesion-renovada"]',

@@ -74,10 +74,11 @@ export class SecretosService implements OnModuleInit {
     return this.clave !== null;
   }
 
-  cifrar(texto: string): SecretoCifrado {
+  cifrar(texto: string, contexto?: string): SecretoCifrado {
     const clave = this.exigirClave();
     const iv = randomBytes(IV_BYTES);
     const cipher = createCipheriv(ALGORITMO, clave, iv);
+    if (contexto) cipher.setAAD(Buffer.from(contexto, 'utf8'));
     const ct = Buffer.concat([cipher.update(texto, 'utf8'), cipher.final()]);
     return {
       v: VERSION_ACTUAL,
@@ -91,7 +92,7 @@ export class SecretosService implements OnModuleInit {
    * Descifra. Lanza si el sobre fue manipulado (el tag de GCM no valida) o si
    * la clave cambió — las dos cosas son fallas que hay que ver, no tragar.
    */
-  descifrar(sobre: SecretoCifrado): string {
+  descifrar(sobre: SecretoCifrado, contexto?: string): string {
     const clave = this.exigirClave();
     if (sobre.v !== VERSION_ACTUAL) {
       throw new Error(
@@ -103,6 +104,7 @@ export class SecretosService implements OnModuleInit {
       clave,
       Buffer.from(sobre.iv, 'base64'),
     );
+    if (contexto) decipher.setAAD(Buffer.from(contexto, 'utf8'));
     decipher.setAuthTag(Buffer.from(sobre.tag, 'base64'));
     return Buffer.concat([
       decipher.update(Buffer.from(sobre.ct, 'base64')),
