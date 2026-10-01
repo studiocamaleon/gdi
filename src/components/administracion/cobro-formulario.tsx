@@ -31,15 +31,8 @@ import type { CrearCobroPayload } from "@/lib/administracion-api";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
 import { MoneyInput } from "@/components/ui/money-input";
+import { Input } from "@/components/ui/input";
 
-const JURISDICCIONES = [
-  "CABA",
-  "Buenos Aires",
-  "Córdoba",
-  "Santa Fe",
-  "Mendoza",
-  "Nacional (ARCA)",
-];
 const BANCOS = [
   "Banco Galicia",
   "Banco Nación",
@@ -227,7 +220,7 @@ export function CobroFormulario({
       {
         agente: "cliente",
         regimen: RETENCION_REGIMENES[0],
-        jurisdiccion: JURISDICCIONES[0],
+        jurisdiccion: "",
         base: monto,
         alicuota: "",
         monto: "",
@@ -658,7 +651,7 @@ export function CobroFormulario({
                         value={r.regimen}
                         onChange={(e) => setRet(i, "regimen", e.target.value)}
                       >
-                        {RETENCION_REGIMENES.map((x) => (
+                        {[...RETENCION_REGIMENES, "otro"].map((x) => (
                           <option key={x} value={x}>
                             {RETENCION_REGIMEN_LABELS[x]}
                           </option>
@@ -667,16 +660,15 @@ export function CobroFormulario({
                     </div>
                     <div className="arc-field sm" style={{ marginBottom: 0 }}>
                       <label>Jurisdicción</label>
-                      <select
+                      <Input
+                        aria-label={`Jurisdicción de retención ${i + 1}`}
                         value={r.jurisdiccion}
+                        maxLength={60}
+                        placeholder="Ej. Santa Cruz"
                         onChange={(e) =>
                           setRet(i, "jurisdiccion", e.target.value)
                         }
-                      >
-                        {JURISDICCIONES.map((x) => (
-                          <option key={x}>{x}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
                   </div>
                   <div className="arc-frow3" style={{ marginBottom: 10 }}>
