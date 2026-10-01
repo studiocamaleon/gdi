@@ -3,6 +3,7 @@ import { RolSistema } from '@prisma/client';
 import { ArchivosService } from '../archivos/archivos.service';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Roles } from '../auth/roles.decorator';
+import { PermitirClaveProvisoria } from '../auth/clave-provisoria.decorator';
 import { Permiso, SoloAutenticado } from '../auth/permiso.decorator';
 import { SwitchTenantDto } from '../auth/dto/switch-tenant.dto';
 import { DefinirLogoTenantDto } from './dto/logo-tenant.dto';
@@ -76,6 +77,9 @@ export class TenantsController {
   }
 
   @Get('current')
+  // La web necesita leer debeCambiarPassword para mostrar «Elegí tu clave».
+  // La excepción no alcanza al resto de las operaciones de la empresa.
+  @PermitirClaveProvisoria()
   getCurrent(@CurrentSession() auth: CurrentAuth) {
     return this.tenantsService.getCurrent(auth);
   }
