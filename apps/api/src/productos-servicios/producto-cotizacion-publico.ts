@@ -21,7 +21,7 @@ nivelCodigo modoCalculo modosActivacionSoportados plazoProveedorDias tercerizado
 fuenteCostoTercerizado`.split(/\s+/),
 );
 const JSON_COMERCIALES = new Set(
-  `atributosComercialesJson medidasPredefinidasJson personalizacionesJson
+  `atributosComercialesJson atributosSchemaJson medidasPredefinidasJson personalizacionesJson
 reglaAutoSeleccionJson condicionActivacionJson mecanismoCantidadConfigJson paramsPasoJson
 parametrosTecnicosJson capacidadesAvanzadasJson detalleJson atributosVarianteJson valoresJson`.split(
     /\s+/,

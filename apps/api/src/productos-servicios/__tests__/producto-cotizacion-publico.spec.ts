@@ -1,5 +1,25 @@
 import { productoParaCotizacion } from '../producto-cotizacion-publico';
 describe('Catálogo auxiliar de cotización sin acceso al modelador', () => {
+  it('conserva el esquema comercial para el selector sin publicar importes privados', () => {
+    const producto = productoParaCotizacion({
+      subcategoriaComercial: {
+        codigo: 'papel',
+        atributosSchemaJson: [{
+          key: 'acabado', label: 'Acabado', tipo: 'select', visible: true, orden: 10,
+          opciones: [{ value: 'mate', label: 'Mate', costo: 500 }],
+          precio: 900,
+        }],
+        costoPrivado: 700,
+      },
+    }) as any;
+    expect(producto.subcategoriaComercial).toEqual({
+      codigo: 'papel',
+      atributosSchemaJson: [{
+        key: 'acabado', label: 'Acabado', tipo: 'select', visible: true, orden: 10,
+        opciones: [{ value: 'mate', label: 'Mate' }],
+      }],
+    });
+  });
   it('no publica columnas futuras ni configuración de ganancias', () => {
     const p = productoParaCotizacion({
       id: 'producto-ficticio',
