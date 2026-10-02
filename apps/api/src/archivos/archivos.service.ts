@@ -66,6 +66,7 @@ const CAMPO_POR_SCOPE: Record<ArchivoScope, keyof Archivo | null> = {
   COBRO: 'cobroId',
   EGRESO: 'egresoId',
   PRODUCTO: 'productoId',
+  DISENO_COTIZACION: 'productoId',
   PROVEEDOR: 'proveedorId',
 };
 
@@ -172,6 +173,11 @@ export class ArchivosService {
       throw new BadRequestException(
         'El logo tiene que ser PNG, JPG, WEBP o SVG.',
       );
+    }
+
+    if (dto.scope === ArchivoScope.DISENO_COTIZACION &&
+      (!["svg", "dxf"].includes(ext) || dto.bytes > 524288 || dto.publico)) {
+      throw new BadRequestException("El diseño debe ser un SVG o DXF privado de hasta 512 KB.");
     }
 
     await this.verificarEntidad(dto.scope, dto.entidadId ?? null);
@@ -294,10 +300,13 @@ export class ArchivosService {
     }
 
     const ext = extensionDe(archivo.nombreOriginal);
-    if (meta.bytes > this.maxBytes) {
+    if (meta.bytes > this.maxBytes ||
+      (archivo.scope === ArchivoScope.DISENO_COTIZACION && meta.bytes > 524288)) {
       await this.cancelarPendiente(auth.tenantId, archivo.id);
       throw new BadRequestException(
-        `El archivo subido supera el máximo de ${Math.round(this.maxBytes / 1024 / 1024)} MB.`,
+        archivo.scope === ArchivoScope.DISENO_COTIZACION
+          ? 'El diseño subido supera el máximo de 512 KB.'
+          : `El archivo subido supera el máximo de ${Math.round(this.maxBytes / 1024 / 1024)} MB.`,
       );
     }
     if (meta.contentType && !mimeCoherente(ext, meta.contentType)) {
@@ -865,7 +874,10 @@ export class ArchivosService {
   // ── Edición y borrado ────────────────────────────────────────────────
 
   async actualizar(id: string, dto: ActualizarArchivoDto): Promise<ArchivoDto> {
-    await this.buscarPropio(id);
+    const archivo = await this.buscarPropio(id);
+    if (archivo.scope === ArchivoScope.DISENO_COTIZACION && dto.publico) {
+      throw new BadRequestException("Los diseños de cotización son privados.");
+    }
     const actualizado = await this.prisma.archivo.update({
       where: { id },
       data: {
@@ -1309,6 +1321,7 @@ export class ArchivosService {
           return this.prisma.comprobante.findFirst(where);
         case ArchivoScope.COBRO:
           return this.prisma.cobro.findFirst(where);
+        case ArchivoScope.DISENO_COTIZACION:
         case ArchivoScope.PRODUCTO:
           return this.prisma.producto.findFirst(where);
         case ArchivoScope.PROVEEDOR:

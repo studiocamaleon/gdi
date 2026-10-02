@@ -405,6 +405,8 @@ enum ArchivoScope {
   COMPROBANTE
   COBRO
   PRODUCTO
+  /// Diseños de una venta; referencia al producto sin editar su catálogo.
+  DISENO_COTIZACION
   PROVEEDOR
   /// La factura del proveedor escaneada, colgada del egreso.
   EGRESO

@@ -13,7 +13,10 @@ import { TenantContextInterceptor } from '../../common/interceptors/tenant-conte
 import { PrismaService } from '../../prisma/prisma.service';
 import { ArchivosController } from '../archivos.controller';
 import { ArchivosService } from '../archivos.service';
-import type { StorageDriver } from '../storage/storage.driver';
+import { STORAGE_DRIVER, type StorageDriver } from '../storage/storage.driver';
+import { ExportarFabricacionController } from '../../productos-servicios/geometrias/exportar-fabricacion.controller';
+import { GeometriasProductoController } from '../../productos-servicios/geometrias/geometrias-producto.controller';
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 
 /** HTTP, JWT, sesiones, permisos y PostgreSQL reales; sólo el storage y los
  * eventos externos están simulados. No inicia workers ni usa otras empresas. */
@@ -49,6 +52,7 @@ describe('Archivos: permisos del módulo y aislamiento por HTTP', () => {
         ]),
       ),
     ),
+    leer: jest.fn<Promise<Buffer>, [string]>(),
     borrar: jest.fn(() => Promise.resolve()),
     abortarMultipart: jest.fn(() => Promise.resolve()),
   };
@@ -61,6 +65,7 @@ describe('Archivos: permisos del módulo y aislamiento por HTTP', () => {
   );
   let app: INestApplication<Server>;
   let baseLocalValidada = false;
+  let productoId: string;
   let clienteId: string;
   let cotizacionId: string;
   let ordenId: string;
@@ -242,6 +247,7 @@ describe('Archivos: permisos del módulo y aislamiento por HTTP', () => {
         subcategoriaComercialId: subcategoriaId,
       },
     });
+    productoId = producto.id;
     const proveedor = await prisma.proveedor.create({
       data: {
         tenantId,
@@ -262,6 +268,7 @@ describe('Archivos: permisos del módulo y aislamiento por HTTP', () => {
       COBRO: { cobroId: cobro.id },
       EGRESO: { egresoId: egreso.id },
       PRODUCTO: { productoId: producto.id },
+      DISENO_COTIZACION: { productoId: producto.id },
       PROVEEDOR: { proveedorId: proveedor.id },
       TENANT_BRANDING: {},
       INBOX: {},
@@ -302,14 +309,18 @@ describe('Archivos: permisos del módulo y aislamiento por HTTP', () => {
       'administracion.cobrar',
       'produccion.ver',
     ]);
+    for (const permiso of ['comercial.ordenes.gestionar', 'comercial.presupuestos.gestionar', 'comercial.ordenes.ver', 'costos.catalogo.gestionar'])
+      await usuario(permiso, ['acceso.por_vista', permiso]);
     await usuario('admin', todosLosPermisos());
     await usuario('sin-permisos', []);
     await usuario('inbox', ['inbox.atender']);
     await usuario('otra-empresa', todosLosPermisos(), tenantIds[1]);
     const modulo = await Test.createTestingModule({
-      controllers: [ArchivosController],
+      controllers: [ArchivosController, GeometriasProductoController, ExportarFabricacionController],
       providers: [
         { provide: ArchivosService, useValue: service },
+        { provide: STORAGE_DRIVER, useValue: storage },
+        { provide: CapacidadesEmpresaService, useValue: { exigirTodas: jest.fn(async () => undefined), exigir: jest.fn(async () => undefined) } },
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
@@ -358,6 +369,56 @@ describe('Archivos: permisos del módulo y aislamiento por HTTP', () => {
       .auth(tokens[actor], { type: 'bearer' })
       .send(body);
 
+  const svg = Buffer.from('<svg viewBox="0 0 100 80"><path d="M0 0 H100 V80 H0 Z"/></svg>');
+  const cargaDiseno = () => ({ scope: 'DISENO_COTIZACION', entidadId: productoId,
+    nombre: 'pieza.svg', mimeType: 'image/svg+xml', bytes: svg.length });
+  it.each(['comercial.ordenes.gestionar', 'comercial.presupuestos.gestionar'])(
+    '%s sube, confirma e interpreta un SVG sin modificar el catálogo', async (actor) => {
+      const antes = await prisma.producto.findUniqueOrThrow({ where: { id: productoId } });
+      const inicio = await post('/archivos/iniciar', actor, cargaDiseno()).expect(201);
+      const { archivoId } = inicio.body;
+      storage.cabecera.mockResolvedValueOnce({ bytes: svg.length, contentType: 'image/svg+xml' });
+      storage.leerCabecera.mockResolvedValueOnce(svg);
+      await post(`/archivos/${archivoId}/confirmar`, actor).expect(201);
+      storage.leer.mockResolvedValue(svg);
+      const prefijo = `/productos-servicios/productos/${productoId}/geometrias`;
+      const inspeccion = await post(`${prefijo}/inspeccionar`, actor, { archivoId }).expect(201);
+      const interpretacion = await post(`${prefijo}/interpretaciones`, actor, {
+        archivoId, exteriorId: inspeccion.body.sugeridaId, unidad: 'mm', cerrarExterior: false, operaciones: [],
+      }).expect(201);
+      expect(interpretacion.body.anchoFinalMm).toBe(100);
+      const geometriaIds = [interpretacion.body.procedencia.geometriaId];
+      await post('/productos-servicios/geometrias/capas-fabricacion', actor, { geometriaIds }).expect(201);
+      await post('/productos-servicios/geometrias/capas-fabricacion', 'costos.catalogo.gestionar', { geometriaIds }).expect(400);
+      await post('/productos-servicios/geometrias/capas-fabricacion', 'otra-empresa', { geometriaIds }).expect(400);
+      expect(interpretacion.body.procedencia.archivoId).toBe(archivoId);
+      await get(`/archivos/${archivoId}/contenido`, actor).expect(302);
+      expect(await prisma.producto.findUniqueOrThrow({ where: { id: productoId } })).toEqual(antes);
+      await post('/archivos/iniciar', actor, { ...cargaDiseno(), scope: 'PRODUCTO' }).expect(403);
+      await post(`${prefijo}/inspeccionar`, 'costos.catalogo.gestionar', { archivoId }).expect(403);
+      await post(`${prefijo}/inspeccionar`, 'otra-empresa', { archivoId }).expect(400);
+      await get(`/archivos/${archivoId}/contenido`, 'otra-empresa').expect(404);
+      await request(app.getHttpServer()).patch(`/archivos/${archivoId}`)
+        .auth(tokens[actor], { type: 'bearer' }).send({ publico: true }).expect(400);
+    },
+  );
+  it('un lector comercial no carga ni interpreta diseños', async () => {
+    await post('/archivos/iniciar', 'comercial.ordenes.ver', cargaDiseno()).expect(403);
+    await post(`/productos-servicios/productos/${productoId}/geometrias/inspeccionar`,
+      'comercial.ordenes.ver', { archivoId: archivos.get('DISENO_COTIZACION') }).expect(403);
+  });
+  it.each([
+    { nombre: 'foto.png', mimeType: 'image/png' }, { bytes: 524289 }, { publico: true },
+  ])('el acceso para cotizar no permite archivos fuera de su alcance: %j', async (cambio) => {
+    await post('/archivos/iniciar', 'comercial.ordenes.gestionar', { ...cargaDiseno(), ...cambio }).expect(400);
+    expect(storage.firmarSubida).not.toHaveBeenCalled();
+  });
+  it('comprueba el tamaño real aunque se declare un SVG pequeño', async () => {
+    const inicio = await post('/archivos/iniciar', 'comercial.ordenes.gestionar', cargaDiseno()).expect(201);
+    storage.cabecera.mockResolvedValueOnce({ bytes: 524289, contentType: 'image/svg+xml' });
+    await post(`/archivos/${inicio.body.archivoId}/confirmar`, 'comercial.ordenes.gestionar').expect(400);
+    expect(await prisma.archivo.findFirst({ where: { id: inicio.body.archivoId, estado: 'LISTO' } })).toBeNull();
+  });
   it('exige autenticación incluso para el logo', async () => {
     await request(app.getHttpServer())
       .get(`/archivos/${archivos.get('TENANT_BRANDING')}/contenido`)

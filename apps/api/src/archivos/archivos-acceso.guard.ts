@@ -66,8 +66,12 @@ const PERMISOS: Record<
     escribir: ['administracion.cobrar.gestionar', 'administracion.cobrar'],
   },
   EGRESO: {
-    leer: ['administracion.egresos.ver'],
+    leer: ['administracion.egresos.ver', 'administracion.pagar.ver'],
     escribir: ['administracion.egresos.gestionar'],
+  },
+  DISENO_COTIZACION: {
+    leer: ["comercial.ordenes.ver", "comercial.presupuestos.ver", "produccion.tablero.ver"],
+    escribir: ["comercial.ordenes.gestionar", "comercial.presupuestos.gestionar"],
   },
   PRODUCTO: {
     leer: [
