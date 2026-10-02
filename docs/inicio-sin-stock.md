@@ -47,5 +47,11 @@ El modo no sustituye la carga del inventario real, la configuración de máquina
 - No crea reservas, necesidades de compras ni movimientos. Las órdenes anteriores conservan sus reservas; desactivar el modo no afecta retroactivamente a las emitidas con él.
 - Producción real en la base de prueba: permite completar al satisfacer calidad, manteniendo omitida la condición material. También conserva el modo al reemplazar lotes pendientes y regenerar pasos.
 - Interfaz: activación y desactivación comprobadas en Chrome usando los componentes reales con datos ficticios. El vendedor ve el aviso sin poder cambiarlo. Se probó escribir C y P en el selector real de clientes; sólo funcionan como atajos fuera de los controles.
-- Tipos completos del API y tipos de los 13 archivos de la web modificados: correctos. La revisión global de tipos de toda la web agotó el límite local de 2 GB; queda para la compilación remota antes de publicar.
-- La aplicación local habitual conserva su rama y sus procesos; esta comprobación usa una vista aislada. No se desplegó en staging ni producción y no se activó el modo en una empresa real.
+- Tipos completos del API y tipos de los 13 archivos de la web modificados: correctos. La revisión global de tipos de toda la web agotó el límite local de 2 GB; se resolvió con las compilaciones completas remotas aprobadas antes de publicar.
+- La aplicación local habitual conserva su rama y sus procesos; esta comprobación usa una vista aislada. Al cerrar esta comprobación local todavía no se había desplegado; la publicación posterior se registra abajo.
+
+## Publicación del 02/10/2026
+
+La revisión `debada9153` quedó publicada en staging y producción, con API, ambos workers y web coordinados y 303 migraciones. CI completo aprobado y 28 comprobaciones HTTP en staging con empresas ficticias; emisión directa y desde borrador, avance con calidad, permisos, aislamiento y conservación del inventario. Se comprobó el botón y el buscador de clientes en Chrome en ambos entornos.
+
+Grafica Corporearte conserva el modo **desactivado**. Para comenzar a usarlo, su administrador debe activarlo desde Stock. Se verificaron copias posteriores con la fuente e imágenes exactas. El PR #16 sigue separado de sus dependencias: desplegar no equivale a fusionarlo. Detalle operativo y límites en `deploy/staging/VALIDACION.md` y `deploy/produccion/VALIDACION.md`.
