@@ -1,3 +1,4 @@
+import { gateOperativoCumplido } from "../../apps/api/src/ordenes-trabajo/gate-operativo-cumplido";
 import {
   codigoVisibleItem,
   nombreTrabajoTablero,
@@ -111,7 +112,7 @@ function motivosEspera(
     );
   }
   for (const gate of paso.gatesOperativos ?? []) {
-    if (gate.estado !== "CUMPLIDO")
+    if (!gateOperativoCumplido(gate))
       motivos.push(
         gate.detalle ||
           (gate.tipo === "MATERIAL"

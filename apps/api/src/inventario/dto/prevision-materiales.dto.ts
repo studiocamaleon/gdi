@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -23,6 +24,7 @@ export class MaterialPrevisionDto {
   @IsBoolean() consumible: boolean;
 }
 export class PrevisionMaterialesDto {
+  @IsOptional() @IsUUID() ordenId?: string;
   @IsArray()
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })

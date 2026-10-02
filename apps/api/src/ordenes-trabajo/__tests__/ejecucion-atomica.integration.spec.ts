@@ -220,6 +220,52 @@ it('si el último trabajo falla por material, revierte pasos, eventos y finaliza
   await verificarSinCambios(trabajos);
 });
 
+it('permite completar una OT de inicio sin stock, pero mantiene la calidad pendiente', async () => {
+  const trabajo = await crearTrabajo();
+  await db.ordenTrabajo.update({
+    where: { id: trabajo.ordenId },
+    data: { materialesInicioSinStock: true },
+  });
+  await db.ordenTrabajoPasoGate.createMany({
+    data: [
+      {
+        tenantId,
+        ordenId: trabajo.ordenId,
+        pasoId: trabajo.pasoId,
+        tipo: 'MATERIAL',
+        estado: 'OMITIDO_INICIO',
+      },
+      {
+        tenantId,
+        ordenId: trabajo.ordenId,
+        pasoId: trabajo.pasoId,
+        tipo: 'CALIDAD',
+        estado: 'PENDIENTE',
+      },
+    ],
+  });
+  await expect(
+    ordenes.accionesPasos(auth, [completar(trabajo)]),
+  ).rejects.toThrow(/calidad/);
+  await verificarSinCambios([trabajo]);
+  await ordenes.resolverGatePaso(auth, trabajo.pasoId, {
+    tipo: 'CALIDAD',
+    estado: 'CUMPLIDO',
+  });
+  await ordenes.accionesPasos(auth, [completar(trabajo)]);
+  expect(
+    await db.ordenTrabajo.findUnique({ where: { id: trabajo.ordenId } }),
+  ).toMatchObject({ estado: 'finalizada', materialesInicioSinStock: true });
+  expect(
+    await db.movimientoStockMateriaPrima.count({ where: { tenantId } }),
+  ).toBe(0);
+  expect(
+    await db.necesidadMaterialOt.count({
+      where: { tenantId, ordenId: trabajo.ordenId },
+    }),
+  ).toBe(0);
+});
+
 it('mantiene el bloqueo por dependencias y revierte el grupo completo', async () => {
   const trabajos = [await crearTrabajo(), await crearTrabajo()];
   const t = trabajos[1];

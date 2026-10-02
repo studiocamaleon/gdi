@@ -79,7 +79,7 @@ export type TableroPasoData = {
   gatesOperativos?: Array<{
     id: string;
     tipo: "MATERIAL" | "CALIDAD";
-    estado: "PENDIENTE" | "CUMPLIDO";
+    estado: "PENDIENTE" | "CUMPLIDO" | "OMITIDO_INICIO";
     detalle: string | null;
     resueltoEl: string | null;
     resueltoPorNombre: string | null;

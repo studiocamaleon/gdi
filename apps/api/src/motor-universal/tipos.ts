@@ -1166,7 +1166,7 @@ export interface NestingCostingPreview {
 export interface MaterialEjecutado {
   seleccionStock?: {
     politica: string;
-    estado: 'disponible' | 'requiere_reposicion';
+    estado: 'disponible' | 'requiere_reposicion' | 'sin_verificar_inicio';
     alternativas: Array<{ id: string; libre: number; necesario: number | null; unidad: string | null; alcanza: boolean }>;
   };
   /** Unidades y conversiones vigentes al cotizar; abastecimiento no relee el catálogo. */

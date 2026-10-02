@@ -13,6 +13,7 @@ export async function leerMaterialesOrden(
       id: true,
       estado: true,
       materialesControlados: true,
+      materialesInicioSinStock: true,
       materialesRevision: true,
       items: {
         where: { tenantId },

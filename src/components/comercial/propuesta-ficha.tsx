@@ -327,6 +327,8 @@ import { ResumenBar, OrdenSaveActions } from "./orden-resumen-financiero";
 import { OrdenFinancialActions } from "./orden-financial-actions";
 import { OrdenDatosSections } from "./orden-datos-sections";
 import { ClienteLista } from "./cliente-selector-orden";
+import { permiteAtajoDePagina } from "@/lib/atajos-pagina";
+import { ModoInicioInventario } from "@/components/inventario/modo-inicio-inventario";
 import { useClientesOrden } from "./use-clientes-orden";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
@@ -1836,7 +1838,7 @@ function MaterialesPasoTable({
                 <td>
                   <strong>{getMaterialCosteoLabel(material)}</strong>
                   {material.seleccionStock ? <div className={itemCostStyles["cost-stock-note"]}>
-                    {material.seleccionStock.estado === "disponible" ? "Elegido con stock disponible al cotizar" : "Requiere reposición"}
+                    {material.seleccionStock.estado === "sin_verificar_inicio" ? "Modo de inicio · stock sin verificar" : material.seleccionStock.estado === "disponible" ? "Elegido con stock disponible al cotizar" : "Requiere reposición"}
                   </div> : null}
                 </td>
                 <td>
@@ -5268,7 +5270,7 @@ function PropuestaFichaContenido({
   );
   const materialesFaltantesCount = conPrevisionMateriales && previsionMateriales.data
     ? previsionMateriales.data.materiales.filter((m) => (m.faltante ?? 0) > 0).length
-    : materialesOrden.data?.control?.habilitado
+    : materialesOrden.data?.control?.habilitado && !materialesOrden.data.control.inicioSinStock
       ? materialesOrden.data.control.materiales.filter((m) => !m.excluida && (m.faltante ?? 0) > 0).length
       : 0;
   const [colasTaller, setColasTaller] = React.useState<Awaited<
@@ -7212,21 +7214,8 @@ function PropuestaFichaContenido({
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!puedeModificarProductos || event.defaultPrevented || event.repeat)
+      if (!puedeModificarProductos || !permiteAtajoDePagina(event))
         return;
-      const target = event.target as HTMLElement | null;
-      const isEditableTarget =
-        target?.closest("input, textarea, select, [contenteditable='true']") !=
-        null;
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.shiftKey ||
-        isEditableTarget
-      ) {
-        return;
-      }
       const key = event.key.toLowerCase();
       // P = agregar producto · C = centro de copiado (si el módulo está activo).
       if (key !== "p" && key !== "c") return;
@@ -7431,6 +7420,7 @@ function PropuestaFichaContenido({
             incompleto.
           </div>
         ) : null}
+        {cotizando && <ModoInicioInventario />}
         <HeroTabs
           selectedKey={tab}
           onSelectionChange={(key) => setTab(String(key) as OrdenTab)}

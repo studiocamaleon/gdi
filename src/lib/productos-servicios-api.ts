@@ -2006,7 +2006,7 @@ export interface OperacionInternaCosteadaInput {
     materialNombre: string;
     materialSku: string;
     materialDisplayName: string;
-    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" };
+    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" | "sin_verificar_inicio" };
     materiaPrimaNombre?: string | null;
     materiaPrimaTemplateId?: string | null;
     materiaPrimaTipoTecnico?: string | null;
@@ -2262,7 +2262,7 @@ export interface CotizarResponse {
           materialNombre: string;
           materialSku: string;
           materialDisplayName: string;
-    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" };
+    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" | "sin_verificar_inicio" };
           cantidad: number;
           unidad: string;
           precioUnitario: number;
@@ -2451,7 +2451,7 @@ export interface CotizarResponse {
         materialNombre: string;
         materialSku: string;
         materialDisplayName: string;
-    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" };
+    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" | "sin_verificar_inicio" };
         materiaPrimaNombre?: string | null;
         materiaPrimaTemplateId?: string | null;
         materiaPrimaTipoTecnico?: string | null;

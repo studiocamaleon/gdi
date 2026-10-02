@@ -1,6 +1,7 @@
 import { textoErrorLog } from '../common/log-seguro';
 import { insertarPasosExtrasEnSecuencia, ordenarPasosConExtras } from '../productos-servicios/orden-pasos-producto';
 import { contextoStockCotizacion, DisponibilidadCotizacion } from './disponibilidad-materiales';
+import { inicioSinStock } from '../inventario/inicio-sin-stock';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   capacidadesJobCopiado,
@@ -823,6 +824,7 @@ export class MotorUniversalService {
       input.tenantId,
       input.contextoMateriales,
       input.ordenTrabajoId,
+      await inicioSinStock(this.prisma, input.tenantId, input.ordenTrabajoId),
     );
     return contextoStockCotizacion.run(stock, async () => {
       const resultado = await this.cotizarInterno(input, opciones);
@@ -4302,6 +4304,16 @@ export class MotorUniversalService {
           this.getEleccionMaterialComercial(slot, jobContext, paso)
         )
           continue;
+        if (stock.inicioSinStock) {
+          // Conserva la política en el cálculo guardado: si se apaga el modo
+          // antes de emitir, se vuelve a comprobar el stock estricto.
+          decisiones.set(slot.slotCodigo, {
+            politica,
+            estado: 'sin_verificar_inicio',
+            alternativas: [],
+          });
+          continue;
+        }
         if (
           !(await this.capacidadesPlan.puedeOperar(
             tenantId,

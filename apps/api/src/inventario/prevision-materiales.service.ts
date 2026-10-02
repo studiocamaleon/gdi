@@ -9,6 +9,7 @@ import { comprasPorNecesidad } from '../compras/cobertura-compra';
 import { estimarReposicion, fechaCivil } from '../compras/plazos-compra';
 import { reservasPorSaldo } from './stock-reservas';
 import { normalizeMaterialUnit } from './material-units';
+import { inicioSinStock } from './inicio-sin-stock';
 import type { PrevisionMaterialesDto } from './dto/prevision-materiales.dto';
 const D = (n: Prisma.Decimal.Value) => new Prisma.Decimal(n);
 const pos = (n: Prisma.Decimal) => Prisma.Decimal.max(0, n);
@@ -77,6 +78,15 @@ export class PrevisionMaterialesService {
               : ('AL_EMITIR' as const)
             : null,
       };
+      if (await inicioSinStock(tx, tenantId, dto.ordenId))
+        return {
+          ...base,
+          modoReserva: null,
+          estado: 'inicio_sin_stock' as const,
+          disponibleDesde: hoy,
+          materiales: [] as MaterialPrevisto[],
+          pendientes: dto.pendientes,
+        };
       if (!incluida)
         return {
           ...base,

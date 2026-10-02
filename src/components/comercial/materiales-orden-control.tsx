@@ -120,6 +120,17 @@ export function MaterialesOrdenControl({
       (m.pendiente ?? 0) > 0 &&
       m.libre > 0,
   );
+  if (control.inicioSinStock)
+    return (
+      <section className={styles.control} aria-label="Inventario en modo de inicio">
+        <h3>Emitida en modo de inicio sin stock</h3>
+        <p>
+          Los materiales y sus costos siguen en el detalle del trabajo. Esta OT
+          no requiere compras ni registra reservas o consumos. Conserva este modo
+          aunque la empresa active el control normal.
+        </p>
+      </section>
+    );
   return (
     <div className={styles.control}>
       <div className={styles.controlHeading}>

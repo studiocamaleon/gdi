@@ -8,6 +8,7 @@ export type PrevisionMateriales = {
   estado:
     | "no_incluido"
     | "sin_control"
+    | "inicio_sin_stock"
     | "disponible"
     | "requiere_compra"
     | "por_confirmar";

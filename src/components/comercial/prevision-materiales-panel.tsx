@@ -29,13 +29,15 @@ export function PrevisionMaterialesPanel({
     ? "Consultando materiales…"
     : error
       ? "Disponibilidad sin verificar"
-      : data?.estado === "sin_control"
-        ? "Stock sin control activo"
-        : data?.estado === "disponible"
-          ? "Materiales disponibles"
-          : data?.estado === "por_confirmar"
-            ? "Entrega por confirmar"
-            : "Requiere abastecimiento";
+      : data?.estado === "inicio_sin_stock"
+        ? "Modo de inicio · stock sin verificar"
+        : data?.estado === "sin_control"
+          ? "Stock sin control activo"
+          : data?.estado === "disponible"
+            ? "Materiales disponibles"
+            : data?.estado === "por_confirmar"
+              ? "Entrega por confirmar"
+              : "Requiere abastecimiento";
   return (
     <section className={styles.panel} aria-label="Materiales antes de emitir">
       <div className={styles.header}>
@@ -48,17 +50,19 @@ export function PrevisionMaterialesPanel({
             {error ||
               (loading
                 ? "La fecha sugerida se actualizará al terminar la consulta."
-                : data?.estado === "sin_control"
-                  ? "La fecha se calcula sólo con la producción. Activá el control en Stock para verificar materiales."
-                  : data?.estado === "disponible"
-                    ? data.modoReserva === "AL_EMITIR"
-                      ? "El stock libre alcanza para esta cotización. Se volverá a verificar y reservar al emitir."
-                      : data.modoReserva === "MANUAL"
-                        ? "El stock libre alcanza para esta cotización. El control de esta empresa usa reservas manuales."
-                        : "El stock libre alcanza para esta cotización. Esta consulta no reserva materiales."
-                    : data?.estado === "por_confirmar"
-                      ? "Podés cotizar. Antes de comprometer la entrega, confirmá la reposición de los faltantes."
-                      : `Materiales previstos para el ${fecha(data?.disponibleDesde ?? "")}. ${entregasDistribuidas ? "Revisá las fechas de las entregas distribuidas teniendo en cuenta esta reposición." : "La entrega sugerida incluye esta espera y la producción."}`)}
+                : data?.estado === "inicio_sin_stock"
+                  ? "Podés cotizar y emitir. La fecha considera el taller, sin esperar compras. Los costos de materiales se mantienen; no se reservan ni descuentan existencias."
+                  : data?.estado === "sin_control"
+                    ? "La fecha se calcula sólo con la producción. Activá el control en Stock para verificar materiales."
+                    : data?.estado === "disponible"
+                      ? data.modoReserva === "AL_EMITIR"
+                        ? "El stock libre alcanza para esta cotización. Se volverá a verificar y reservar al emitir."
+                        : data.modoReserva === "MANUAL"
+                          ? "El stock libre alcanza para esta cotización. El control de esta empresa usa reservas manuales."
+                          : "El stock libre alcanza para esta cotización. Esta consulta no reserva materiales."
+                      : data?.estado === "por_confirmar"
+                        ? "Podés cotizar. Antes de comprometer la entrega, confirmá la reposición de los faltantes."
+                        : `Materiales previstos para el ${fecha(data?.disponibleDesde ?? "")}. ${entregasDistribuidas ? "Revisá las fechas de las entregas distribuidas teniendo en cuenta esta reposición." : "La entrega sugerida incluye esta espera y la producción."}`)}
           </p>
         </div>
         <ActionButton
@@ -70,73 +74,77 @@ export function PrevisionMaterialesPanel({
           Actualizar
         </ActionButton>
       </div>
-      {data && data.estado !== "sin_control" && (
-        <details className={styles.calculation} open={expandido}>
-          <summary>
-            {data.materiales.length} materiales · Ver disponibilidad y
-            reposición
-          </summary>
-          <div className={styles.stockTableWrap}>
-            <table className={styles.stockTable}>
-              <thead>
-                <tr>
-                  <th>Material</th>
-                  <th>Necesario</th>
-                  <th>Libre hoy</th>
-                  <th>Faltante</th>
-                  <th>Reposición prevista</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.materiales.map((m) => (
-                  <tr key={m.varianteId}>
-                    <td>
-                      <strong>{m.nombre}</strong>
-                      {m.motivo && <small>{m.motivo}</small>}
-                    </td>
-                    <td>
-                      {numero(m.necesario)} {stockUnitLabel(m.unidad ?? "")}
-                    </td>
-                    <td>{numero(m.libre)}</td>
-                    <td>{numero(m.faltante)}</td>
-                    <td>
-                      {!m.fuentes.length
-                        ? m.revisar
-                          ? "Por confirmar"
-                          : "Disponible"
-                        : m.fuentes.map((f, i) => (
-                            <div key={i}>
-                              {numero(f.cantidad)} ·{" "}
-                              {f.fecha ? fecha(f.fecha) : "Fecha por confirmar"}
-                              <small>
-                                {f.compraNumero
-                                  ? `OC ${f.compraNumero} · `
-                                  : ""}
-                                {f.proveedor ?? "Proveedor por definir"} ·{" "}
-                                {f.tipo === "compra_confirmada"
-                                  ? "Fecha confirmada"
-                                  : f.tipo === "plazo_proveedor"
-                                    ? "Plazo habitual"
-                                    : f.tipo === "compra_estimada"
-                                      ? "Fecha estimada"
-                                      : "Revisar reposición"}
-                              </small>
-                            </div>
-                          ))}
-                    </td>
+      {data &&
+        data.estado !== "sin_control" &&
+        data.estado !== "inicio_sin_stock" && (
+          <details className={styles.calculation} open={expandido}>
+            <summary>
+              {data.materiales.length} materiales · Ver disponibilidad y
+              reposición
+            </summary>
+            <div className={styles.stockTableWrap}>
+              <table className={styles.stockTable}>
+                <thead>
+                  <tr>
+                    <th>Material</th>
+                    <th>Necesario</th>
+                    <th>Libre hoy</th>
+                    <th>Faltante</th>
+                    <th>Reposición prevista</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {data.pendientes > 0 && (
-            <p className={styles.footer}>
-              {data.pendientes} partes del cálculo requieren revisar sus
-              materiales.
-            </p>
-          )}
-        </details>
-      )}
+                </thead>
+                <tbody>
+                  {data.materiales.map((m) => (
+                    <tr key={m.varianteId}>
+                      <td>
+                        <strong>{m.nombre}</strong>
+                        {m.motivo && <small>{m.motivo}</small>}
+                      </td>
+                      <td>
+                        {numero(m.necesario)} {stockUnitLabel(m.unidad ?? "")}
+                      </td>
+                      <td>{numero(m.libre)}</td>
+                      <td>{numero(m.faltante)}</td>
+                      <td>
+                        {!m.fuentes.length
+                          ? m.revisar
+                            ? "Por confirmar"
+                            : "Disponible"
+                          : m.fuentes.map((f, i) => (
+                              <div key={i}>
+                                {numero(f.cantidad)} ·{" "}
+                                {f.fecha
+                                  ? fecha(f.fecha)
+                                  : "Fecha por confirmar"}
+                                <small>
+                                  {f.compraNumero
+                                    ? `OC ${f.compraNumero} · `
+                                    : ""}
+                                  {f.proveedor ?? "Proveedor por definir"} ·{" "}
+                                  {f.tipo === "compra_confirmada"
+                                    ? "Fecha confirmada"
+                                    : f.tipo === "plazo_proveedor"
+                                      ? "Plazo habitual"
+                                      : f.tipo === "compra_estimada"
+                                        ? "Fecha estimada"
+                                        : "Revisar reposición"}
+                                </small>
+                              </div>
+                            ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {data.pendientes > 0 && (
+              <p className={styles.footer}>
+                {data.pendientes} partes del cálculo requieren revisar sus
+                materiales.
+              </p>
+            )}
+          </details>
+        )}
       {data && ["requiere_compra", "por_confirmar"].includes(data.estado) && (
         <p className={styles.footer}>
           Supone solicitar el faltante hoy ({fecha(data.fechaPedidoSupuesto)}).
