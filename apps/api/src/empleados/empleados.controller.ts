@@ -36,6 +36,7 @@ export class EmpleadosController {
     return this.empleadosService.findAll(auth, pagination);
   }
 
+  @Permiso('registros.empleados.ver', 'comercial.campanas.ver', 'configuracion.usuarios.ver')
   @Get('opciones')
   opciones(@CurrentSession() auth: CurrentAuth) {
     return this.empleadosService.opciones(auth);

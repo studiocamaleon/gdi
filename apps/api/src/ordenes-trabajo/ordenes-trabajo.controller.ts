@@ -148,7 +148,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Dataset del Tablero de producción (antes de :id: "tablero" no es un id). */
-  @Permiso("produccion.tablero.ver")
+  @Permiso("produccion.tablero.ver", "produccion.planificacion.ver", "produccion.estaciones.ver")
   @Get('tablero')
   tablero(@CurrentSession() auth: CurrentAuth, @Query() query: TableroQueryDto) {
     return this.ordenesTrabajoService.tablero(auth, query.vista === 'activos');

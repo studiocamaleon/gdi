@@ -37,6 +37,7 @@ export class ProveedoresController {
     return this.proveedoresService.findAll(auth, pagination);
   }
 
+  @Permiso('registros.proveedores.ver', 'inventario.materiales.ver', 'administracion.egresos.ver', 'administracion.pagar.ver', 'administracion.gastos.ver', 'costos.catalogo.ver')
   @Get('opciones')
   opciones(@CurrentSession() auth: CurrentAuth) {
     return this.proveedoresService.opciones(auth);

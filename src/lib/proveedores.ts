@@ -70,7 +70,7 @@ export type ProveedorOpcion = {
   condicionPagoDias: number | null;
   reposicionDias?: number | null;
   reposicionTipo?: "HABILES" | "CORRIDOS";
-  cbuAlias: string | null;
+  cbuAlias?: string | null;
 };
 
 export type ProveedorPayload = {

@@ -26,6 +26,7 @@ import { Permiso } from '../auth/permiso.decorator';
 export class InventarioStockController {
   constructor(private readonly inventarioService: InventarioService) {}
 
+  @Permiso('inventario.stock.ver', 'inventario.movimientos.ver', 'inventario.compras.ver')
   @Get('almacenes')
   getAlmacenes(@CurrentSession() auth: CurrentAuth) {
     return this.inventarioService.findAllAlmacenes(auth);
@@ -56,6 +57,7 @@ export class InventarioStockController {
     return this.inventarioService.toggleAlmacen(auth, id);
   }
 
+  @Permiso('inventario.stock.ver', 'inventario.movimientos.ver', 'inventario.compras.ver')
   @Get('almacenes/:almacenId/ubicaciones')
   getUbicaciones(
     @CurrentSession() auth: CurrentAuth,
@@ -93,7 +95,7 @@ export class InventarioStockController {
     return this.inventarioService.toggleUbicacion(auth, id);
   }
 
-  @Permiso("inventario.movimientos.gestionar")
+  @Permiso("inventario.movimientos.gestionar", "inventario.stock.gestionar")
   @Post('movimientos')
   registrarMovimiento(
     @CurrentSession() auth: CurrentAuth,
@@ -102,7 +104,7 @@ export class InventarioStockController {
     return this.inventarioService.registrarMovimiento(auth, payload);
   }
 
-  @Permiso("inventario.movimientos.gestionar")
+  @Permiso("inventario.movimientos.gestionar", "inventario.stock.gestionar")
   @Post('movimientos/transferencia')
   registrarTransferencia(
     @CurrentSession() auth: CurrentAuth,

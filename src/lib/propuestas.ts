@@ -187,5 +187,5 @@ export function calcularResumen(items: PropuestaItem[]): PropuestaResumen {
 }
 
 export function calcularCostoTotal(item: PropuestaItem) {
-  return item.cotizacion.costos.total;
+  return item.cotizacion.costos?.total ?? null;
 }

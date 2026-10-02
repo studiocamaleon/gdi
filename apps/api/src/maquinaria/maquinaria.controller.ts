@@ -31,6 +31,12 @@ export class MaquinariaController {
     return this.maquinariaService.findAll(auth, pagination);
   }
 
+  @Permiso('costos.maquinaria.ver', 'inventario.materiales.ver')
+  @Get('opciones')
+  opciones(@CurrentSession() auth: CurrentAuth) {
+    return this.maquinariaService.opciones(auth);
+  }
+
   @Get(':id')
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.maquinariaService.findOne(auth, id);

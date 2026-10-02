@@ -65,7 +65,7 @@ export class ExportarFabricacionDto {
 }
 
 @Controller('productos-servicios/geometrias')
-@Permiso("comercial.ordenes.ver", "produccion.tablero.ver", "costos.catalogo.ver")
+@Permiso("comercial.ordenes.ver", "comercial.presupuestos.ver", "produccion.tablero.ver", "costos.catalogo.ver")
 export class ExportarFabricacionController {
   constructor(
     private readonly prisma: PrismaService,
@@ -102,7 +102,12 @@ export class ExportarFabricacionController {
     await this.capacidades.exigir(auth.tenantId, 'exportacion_fabricacion');
     const ids = [...new Set(dto.geometriaIds)];
     const guardadas = await this.prisma.geometriaProducto.findMany({
-      where: { tenantId: auth.tenantId, id: { in: ids } },
+      where: { tenantId: auth.tenantId, id: { in: ids },
+        ...(!auth.permisos?.has('comercial.ordenes.ver') &&
+            !auth.permisos?.has('comercial.presupuestos.ver') &&
+            !auth.permisos?.has('produccion.tablero.ver')
+          ? { archivo: { scope: { not: 'DISENO_COTIZACION' as const } } } : {}),
+      },
       include: { archivo: true },
     });
     if (guardadas.length !== ids.length)
@@ -163,7 +168,12 @@ export class ExportarFabricacionController {
         );
     }
     const guardadas = await this.prisma.geometriaProducto.findMany({
-      where: { tenantId: auth.tenantId, id: { in: ids } },
+      where: { tenantId: auth.tenantId, id: { in: ids },
+        ...(!auth.permisos?.has('comercial.ordenes.ver') &&
+            !auth.permisos?.has('comercial.presupuestos.ver') &&
+            !auth.permisos?.has('produccion.tablero.ver')
+          ? { archivo: { scope: { not: 'DISENO_COTIZACION' as const } } } : {}),
+      },
       include: { archivo: true },
     });
     if (guardadas.length !== ids.length)

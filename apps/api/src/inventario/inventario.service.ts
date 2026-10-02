@@ -128,6 +128,31 @@ export class InventarioService {
     );
   }
 
+  async opcionesStock(auth: CurrentAuth, pagination: PaginationDto) {
+    const where = { tenantId: auth.tenantId };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.materiaPrima.findMany({
+        where, orderBy: { nombre: 'asc' }, skip: pagination.skip, take: pagination.limit,
+        select: {
+          id: true, nombre: true, codigo: true, activo: true, templateId: true,
+          unidadStock: true, unidadCompra: true, unidadUso: true,
+          variantes: { orderBy: { createdAt: 'asc' }, select: {
+            id: true, sku: true, nombreVariante: true, activo: true, atributosVarianteJson: true,
+            unidadStock: true, unidadCompra: true, unidadUso: true, unidadPrecio: true,
+            equivalenciaCompra: true, equivalenciasJson: true, precioReferencia: true, moneda: true,
+          } },
+        },
+      }), this.prisma.materiaPrima.count({ where }),
+    ]);
+    return paginatedResponse(items.map((m) => ({ ...m, variantes: m.variantes.map((v) => {
+      const { atributosVarianteJson, equivalenciasJson, ...variante } = v;
+      return { ...variante, nombreVariante: v.nombreVariante ?? '', moneda: v.moneda ?? 'ARS',
+        atributosVariante: atributosVarianteJson, equivalencias: readMaterialEquivalences(equivalenciasJson),
+        precioReferencia: v.precioReferencia == null ? null : Number(v.precioReferencia),
+        equivalenciaCompra: v.equivalenciaCompra == null ? null : Number(v.equivalenciaCompra) };
+    }) })), total, pagination);
+  }
+
   async findMateriaPrima(auth: CurrentAuth, id: string) {
     const item = await this.findMateriaPrimaOrThrow(auth, id, this.prisma);
     return this.toResponse(item);

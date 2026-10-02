@@ -68,6 +68,8 @@ type Props = {
   seleccionPagable: boolean;
   totalSeleccion: number;
   puedeGestionar: boolean;
+  puedeCrear: boolean;
+  puedeVerEgresos: boolean;
   cargando: boolean;
   error: string | null;
   onReintentar: () => void;
@@ -118,7 +120,7 @@ export function CuentasPagarWorkspace(p: Props) {
           Limpiar búsqueda
         </ActionButton>
       ) : (
-        p.puedeGestionar && (
+        p.puedeCrear && (
           <ActionButton variant="outline" onPress={p.onAlta}>
             <PlusIcon aria-hidden /> Registrar obligación
           </ActionButton>
@@ -141,10 +143,10 @@ export function CuentasPagarWorkspace(p: Props) {
           </p>
         </div>
         <div className={styles.actions}>
-          <ActionLink href="/administracion/egresos" variant="outline">
+          {p.puedeVerEgresos && <ActionLink href="/administracion/egresos" variant="outline">
             Ver registro de egresos <ArrowUpRightIcon aria-hidden />
-          </ActionLink>
-          {p.puedeGestionar && (
+          </ActionLink>}
+          {p.puedeCrear && (
             <ActionButton onPress={p.onAlta}>
               <PlusIcon aria-hidden /> Registrar obligación
             </ActionButton>

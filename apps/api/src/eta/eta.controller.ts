@@ -12,11 +12,17 @@ export class EtaController {
   constructor(private readonly eta: EtaService) {}
 
   /** Contexto y reloj del servidor para la previsión comercial. No reserva capacidad. */
+  @Permiso('produccion.planificacion.ver', 'comercial.ordenes.ver', 'comercial.presupuestos.ver')
   @Get('contexto-prevision')
   async contextoPrevision(@CurrentSession() auth: CurrentAuth) {
     const contexto = await this.eta.contextoSimulacion(auth.tenantId);
     return {
       ...contexto,
+      // La previsión necesita ocupación y dependencias, no la identidad comercial
+      // de los trabajos que ya están en el taller.
+      items: auth.permisos?.has('produccion.planificacion.ver')
+        ? contexto.items
+        : contexto.items.map((item) => ({ ...item, nombre: 'Trabajo programado', ordenNumero: '' })),
       ahora: contexto.ahora.toISOString(),
       medianas: [...contexto.medianas],
       noLaborables: [...contexto.noLaborables],

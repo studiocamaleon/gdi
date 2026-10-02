@@ -57,6 +57,7 @@ import {
 } from './precio/pricing-compuesto';
 import { motivosCambioEntreSnapshots } from './estado-publicacion-receta';
 import { leerGeometriasComerciales } from './geometrias-comerciales';
+import { configuracionComponenteParaCotizacion } from './producto-cotizacion-publico';
 
 type AutorReceta = Pick<CurrentAuth, 'tenantId'> &
   Partial<Pick<CurrentAuth, 'userId' | 'email' | 'impersonacion'>>;
@@ -462,6 +463,39 @@ export class RecetasProductoService {
       ...(await this.obtenerRevision(auth.tenantId, id)),
       publicacionAutomatica,
     };
+  }
+
+  async obtenerParaCotizacion(auth: AutorReceta, productoId: string) {
+    const producto = await this.prisma.producto.findFirst({
+      where: { id: productoId, tenantId: auth.tenantId, activo: true },
+      select: { id: true },
+    });
+    if (!producto) throw new NotFoundException('Producto no encontrado');
+    const recetas = await this.prisma.productoReceta.findMany({
+      where: {
+        tenantId: auth.tenantId, productoId, activo: true,
+        rutaAlternativa: { activo: true },
+        revisionPublicada: { estado: EstadoProductoRecetaRevision.PUBLICADA },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        rutaAlternativa: { select: { id: true } },
+        revisionPublicada: { select: { componentes: {
+          orderBy: { orden: 'asc' },
+          select: { id: true, codigo: true, nombre: true, formula: true, cantidad: true, configuracionJson: true },
+        } } },
+      },
+    });
+    return recetas.map((receta) => ({
+      rutaAlternativa: receta.rutaAlternativa,
+      revisionPublicada: receta.revisionPublicada ? {
+        componentes: receta.revisionPublicada.componentes.map((componente) => ({
+          ...componente,
+          cantidad: Number(componente.cantidad),
+          configuracionJson: configuracionComponenteParaCotizacion(componente.configuracionJson),
+        })),
+      } : null,
+    }));
   }
 
   async obtener(auth: AutorReceta, productoId: string) {

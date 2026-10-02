@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { IntegracionesView, MensajesTab } from "./integraciones-view";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
+import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { getLogNotificaciones, resolverAviso } from "@/lib/integraciones-api";
 import type { LineaLog } from "@/lib/integraciones";
 
@@ -98,6 +99,28 @@ const boton = (texto: string) =>
   [...container.querySelectorAll("button")].find(
     (b) => b.textContent === texto,
   )!;
+
+it("lectura de Integraciones muestra estados sin abrir credenciales ni la ficha fiscal", async () => {
+  await act(async () => root.render(
+    <PermisosProvider permisos={["acceso.por_vista", "configuracion.integraciones.ver"]}>
+      <IntegracionesView inicial={{ integraciones: [], cifradoDisponible: true }} />
+    </PermisosProvider>,
+  ));
+  expect(container.querySelector('.int-card[role="button"]')).toBeNull();
+  expect(container.querySelector('.int-card .cta')).toBeNull();
+  expect(boton("Historial de avisos")).toBeDefined();
+});
+
+it("gestionar Integraciones no concede implícitamente acceso a configuración fiscal", async () => {
+  await act(async () => root.render(
+    <PermisosProvider permisos={["acceso.por_vista", "configuracion.integraciones.gestionar"]}>
+      <IntegracionesView inicial={{ integraciones: [], cifradoDisponible: true }} />
+    </PermisosProvider>,
+  ));
+  const fiscal = [...container.querySelectorAll('.int-card')].find(c => c.textContent?.includes('ARCA'))!;
+  expect(fiscal).toBeDefined();
+  expect(fiscal.getAttribute('role')).toBeNull();
+});
 
 it("conserva acceso al historial aunque los dos canales estén fuera del plan", async () => {
   await act(async () =>

@@ -400,7 +400,7 @@ function getCotizacionNeto(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioNetoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -408,7 +408,7 @@ function getCotizacionTotal(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioBrutoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -416,7 +416,7 @@ function getCotizacionUnitario(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioBrutoUnitario ??
     cotizacion.precio?.precioUnitario ??
-    cotizacion.costos.unitario
+    (cotizacion.costos?.unitario ?? 0)
   );
 }
 
@@ -3890,7 +3890,8 @@ export function OrdenProductoDetalle({
     React.useState<VistaFabricacionItem | null>(null);
   const [briefAbierto, setBriefAbierto] = React.useState(false);
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
-  const costo = calcularCostoTotal(item);
+  const verMargenes = usePuede("finanzas.ver_margenes");
+  const costo = verMargenes ? calcularCostoTotal(item) : null;
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
   const optionalMaterialDetails = React.useMemo(
     () =>
@@ -3936,7 +3937,7 @@ export function OrdenProductoDetalle({
               label={`Detalle de ${item.productoNombre}`}
               items={[
                 { id: "specs", label: "Especificaciones", icon: <SlidersHorizontalIcon /> },
-                { id: "costos", label: "Costos", icon: <CircleDollarSignIcon /> },
+                ...(verMargenes && costo !== null ? [{ id: "costos", label: "Costos", icon: <CircleDollarSignIcon /> }] : []),
                 { id: "produccion", label: "Flujo de producción", icon: <FactoryIcon /> },
                 { id: "aprovechamiento", label: "Aprovechamiento", icon: <Grid2X2Icon /> },
               ]}
@@ -4194,14 +4195,14 @@ export function OrdenProductoDetalle({
             </div>
           </HeroTabs.Panel>
 
-          <HeroTabs.Panel id="costos" className={itemStyles.panel}>
+          {verMargenes && costo !== null ? <HeroTabs.Panel id="costos" className={itemStyles.panel}>
             <CostosItemView
               item={item}
               costo={costo}
               calculoPendiente={calculoPendiente}
               sinComprobante={sinComprobante}
             />
-          </HeroTabs.Panel>
+          </HeroTabs.Panel> : null}
 
           {(["produccion", "aprovechamiento"] as const).map((vista) => (
             <HeroTabs.Panel key={vista} id={vista} className={itemStyles.panel}>
@@ -4644,13 +4645,13 @@ function rehidratarOrdenItem(
     unidadMedida === "libros" ? cantidadLibrosCentroCopiado(jobContext) : null;
   const cantidadVisible = cantidadLibros ?? producto.cantidad;
 
-  const costosVacios = {
+  const costosHistoricos = snap?.costoTotal != null ? {
     tiempoTotal: 0,
     materialesTotal: 0,
     cargosDirectosTotal: 0,
     total: snap?.costoTotal ?? 0,
     unitario: snap?.costoUnitario ?? 0,
-  } as CotizacionPropuestaSnapshot["costos"];
+  } : undefined;
 
   const impuestosSnapshot = snap?.precioSnapshots.impuestos;
   const comisionesSnapshot = snap?.precioSnapshots.comisiones;
@@ -4703,8 +4704,8 @@ function rehidratarOrdenItem(
     (netoUnit * comisionesNetoPct) / 100 +
     (brutoUnit * comisionesBrutoPct) / 100;
   const precioBaseUnit = netoUnit - costosInternosUnit - comisionesUnit;
-  const costoUnit = snap?.costoUnitario ?? 0;
-  const margenEfectivoPct =
+  const costoUnit = snap?.costoUnitario;
+  const margenEfectivoPct = costoUnit == null ? undefined :
     netoUnit > 0 ? ((precioBaseUnit - costoUnit) / netoUnit) * 100 : 0;
   const totalImpuestosUnit =
     Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
@@ -4730,7 +4731,7 @@ function rehidratarOrdenItem(
       (resumen?.ejecucion
         ?.minimoComercialAplicado as CotizacionPropuestaSnapshot["minimoComercialAplicado"]) ??
       null,
-    costos: resumen?.ejecucion?.costos ?? costosVacios,
+    costos: resumen?.ejecucion?.costos ?? costosHistoricos,
     pasos: trazabilidad?.pasos ?? [],
     // La cotización persiste el árbol completo de componentes dentro de la
     // trazabilidad. Rehidratar sólo los pasos del producto raíz conservaba el
@@ -4891,6 +4892,14 @@ function PropuestaFichaContenido({
   const conCotizacion = useCapacidad("cotizacion");
   const permisoOrdenes = usePuede("comercial.ordenes.gestionar");
   const permisoPresupuestos = usePuede("comercial.presupuestos.gestionar");
+  const permisoCobrar = usePuede("administracion.cobrar");
+  const permisoGestionarCobros = usePuede("administracion.cobrar.gestionar");
+  const puedeRegistrarCobros = permisoCobrar || permisoGestionarCobros;
+  const puedeVerOrdenes = usePuede("comercial.ordenes.ver");
+  const puedeVerCobros = usePuede("administracion.cobrar.ver");
+  const mostrarPagos = orden ? puedeVerOrdenes || puedeVerCobros : puedeRegistrarCobros;
+  const puedeVerProduccion = usePuede("produccion.tablero.ver");
+  const puedeVerComprobantes = usePuede("administracion.comprobantes.ver");
   const conOrdenes = useCapacidad("ordenes");
   const conPresupuestos = useCapacidad("presupuestos");
   const conCobros = useCapacidad("cobros");
@@ -5066,8 +5075,10 @@ function PropuestaFichaContenido({
     React.useState(0);
   const [fidelizacionCanjeMonto, setFidelizacionCanjeMonto] = React.useState(0);
   const costosFidelizacion = React.useMemo(
-    () => consolidarCostosOrden(items, cargosOrden),
-    [items, cargosOrden],
+    () => verMargenes && items.every((item) => item.cotizacion.costos)
+      ? consolidarCostosOrden(items, cargosOrden)
+      : null,
+    [items, cargosOrden, verMargenes],
   );
   const totalPropuestaAntesCanje = React.useMemo(() => {
     const r = calcularResumenOrden(items, cargosOrden);
@@ -7435,7 +7446,8 @@ function PropuestaFichaContenido({
                 verMargenes={verMargenes}
                 count={items.length}
                 historialCount={orden ? orden.eventosTotal : undefined}
-                comprobantesCount={orden ? 0 : undefined}
+                comprobantesCount={orden && puedeVerComprobantes ? 0 : undefined}
+                mostrarPagos={mostrarPagos}
                 mostrarMateriales={puedeVerMateriales && (Boolean(orden) || conPrevisionMateriales)}
                 materialesFaltantesCount={materialesFaltantesCount}
                 archivosCount={archivosCount}
@@ -8174,7 +8186,7 @@ function PropuestaFichaContenido({
                     fechaEstimada={fechaEstimada}
                     readOnly={modoOrden}
                     editarFecha={itemsEnEdicion}
-                    prepararCorte={modoOrden && puedeEditarOrden && persistedItemIds.has(item.id)}
+                    prepararCorte={modoOrden && puedeEditarOrden && puedeVerProduccion && persistedItemIds.has(item.id)}
                     onDistribucionGuardada={
                       orden ? () => {
                         void getOrdenTrabajo(orden.id).then((actualizada) => {
@@ -8261,14 +8273,14 @@ function PropuestaFichaContenido({
                 ) : null}
               </>
             ) : null}
-            {tab === "pagos" ? (
+            {tab === "pagos" && mostrarPagos ? (
               orden ? (
                 <div className="otd-page" style={{ padding: 0 }}>
                   <PagosTab
                     pago={orden.pago}
                     total={orden.total}
                     ordenId={orden.id}
-                    puedeCobrar={orden.estado !== "borrador" && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
+                    puedeCobrar={puedeRegistrarCobros && orden.estado !== "borrador" && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
                     soloLectura={!puedeEditarOrden}
                     sinComprobante={
                       orden.tratamientoFiscal === "SIN_COMPROBANTE"
@@ -8293,7 +8305,7 @@ function PropuestaFichaContenido({
                 </div>
               )
             ) : null}
-            {tab === "comprobantes" && orden ? (
+            {tab === "comprobantes" && orden && puedeVerComprobantes ? (
               <div className="otd-page" style={{ padding: 0 }}>
                 <ComprobantesOrdenTab
                   ordenId={orden.id}
@@ -8325,7 +8337,7 @@ function PropuestaFichaContenido({
                 />
               )
             ) : null}
-            {tab === "costos" ? (
+            {tab === "costos" && verMargenes ? (
               <CostosOrdenTab
                 items={items}
                 cargosOrden={cargosOrden}
@@ -8385,10 +8397,10 @@ function PropuestaFichaContenido({
                     </div>
                   </div>
                 ) : null}
-                {!modoOrden && conFidelizacion ? (
+                {!modoOrden && conFidelizacion && permisoOrdenes ? (
                   <FidelizacionCotizador
                     clienteId={clienteId}
-                    margen={costosFidelizacion.margenMonto}
+                    margen={costosFidelizacion?.margenMonto}
                     total={totalPropuestaAntesCanje}
                     moneda={moneda}
                     value={fidelizacionCanjePuntos}

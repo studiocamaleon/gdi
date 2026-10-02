@@ -4,7 +4,7 @@ import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { CentroStockPanel } from "@/components/inventario/centro-stock-panel";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getAlmacenes } from "@/lib/inventario-stock-api";
-import { getMateriasPrimas } from "@/lib/materias-primas-api";
+import { getMateriasPrimasStock } from "@/lib/materias-primas-api";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export default function CentroStockPage() {
 async function CentroStockPageContent() {
   const [almacenes, materiasPrimas] = await Promise.all([
     getAlmacenes(),
-    getMateriasPrimas(),
+    getMateriasPrimasStock(),
   ]);
 
   return (

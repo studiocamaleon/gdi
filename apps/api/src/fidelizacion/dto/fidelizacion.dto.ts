@@ -25,7 +25,7 @@ export class AjustarPuntosDto {
 }
 
 export class SimularFidelizacionDto {
-  @IsNumber() margen: number;
+  @IsOptional() @IsNumber() margen?: number;
   @IsNumber() @Min(0) total: number;
   @IsOptional() @IsInt() @Min(0) canjePuntos?: number;
 }

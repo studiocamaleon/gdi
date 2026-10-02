@@ -133,3 +133,21 @@ it.each(["PREFERIR_DISPONIBLES", "SOLO_DISPONIBLES"] as const)(
     expect(recomendada()?.textContent).toContain("1,37 m");
   },
 );
+
+it("agrega la cotización sin costos que recibe un vendedor y conserva el precio de venta", async () => {
+  const p = producto("PREFERIR_DISPONIBLES");
+  api.producto.mockResolvedValue(p);
+  const { costos: _privados, ...publica } = calculo;
+  api.cotizar.mockResolvedValue({ exitoso: true, cotizacion: { ...publica, cargosDirectosCotizacion: [] }, errores: [] });
+  const agregar = vi.fn();
+  await act(async () => root.render(<AgregarProductoSheet open onOpenChange={vi.fn()} productos={[p]} fechaEntregaDefault="2026-09-30" onAddItem={agregar} />));
+  await act(async () => el.querySelector<HTMLButtonElement>('button[role="option"]')!.click());
+  await avanzarCalculo();
+  expect(boton("Guardar y agregar otro").disabled).toBe(false);
+  await act(async () => boton("Guardar y agregar otro").click());
+  expect(agregar).toHaveBeenCalledTimes(1);
+  const item = agregar.mock.calls[0][0];
+  expect(item.total).toBe(150);
+  expect(item.cotizacion).not.toHaveProperty("costos");
+  expect(el.textContent).not.toContain("NaN");
+});

@@ -77,7 +77,10 @@ export class ProductosService {
     const fuentes = leerGeometriasComerciales(atributos).fuentes;
     const ids = fuentes.flatMap(f => f.predeterminada ? [f.predeterminada.procedencia.geometriaId] : []);
     if (!ids.length) return;
-    const guardadas = await this.prisma.geometriaProducto.findMany({ where: { tenantId, id: { in: ids } } });
+    // Los diseños de un trabajo no se convierten en originales del catálogo.
+    const guardadas = await this.prisma.geometriaProducto.findMany({
+      where: { tenantId, id: { in: ids }, archivo: { scope: 'PRODUCTO' } },
+    });
     const raw = (atributos as { geometriasComerciales: { fuentes: Array<Record<string, unknown>> } }).geometriasComerciales;
     for (const fuente of fuentes) {
       if (!fuente.predeterminada) continue;

@@ -123,7 +123,7 @@ function getCotizacionTotalBruto(cotizacion: CotizacionItem) {
   return (
     cotizacion.desglosePrecio?.precioBrutoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -297,24 +297,26 @@ export function calcularCostoItem(
   // y no es ingreso).
   const margenPct = precioNeto > 0 ? (margenMonto / precioNeto) * 100 : 0;
 
+  const costos = item.cotizacion.costos;
+  if (!costos) throw new Error("Los costos de esta cotización no están disponibles.");
   const desgloseComponentes = getDesgloseComponentes(item.cotizacion);
   const materialesTotal =
-    item.cotizacion.costos.materialesTotal + desgloseComponentes.materiales;
+    costos.materialesTotal + desgloseComponentes.materiales;
   const tercerizadoTotal =
-    (item.cotizacion.costos.tercerizadoTotal ?? 0) +
+    (costos.tercerizadoTotal ?? 0) +
     desgloseComponentes.tercerizado;
   const componentesFabricadosTotal =
-    item.cotizacion.costos.componentesFabricadosTotal ?? 0;
+    costos.componentesFabricadosTotal ?? 0;
   const cargosTotal =
-    item.cotizacion.costos.cargosDirectosTotal + desgloseComponentes.cargos;
-  const cargosSinMargenTotal = item.cotizacion.costos.cargosSinMargenTotal ?? 0;
+    costos.cargosDirectosTotal + desgloseComponentes.cargos;
+  const cargosSinMargenTotal = costos.cargosSinMargenTotal ?? 0;
   // Tiempo extra (preparación, traslados): son horas de un centro, no un
   // desembolso. Por eso tiene fila propia y NO entra en los costos variables:
   // la contribución tiene que cubrirlo, igual que al resto del tiempo.
   const tiempoTotal =
-    item.cotizacion.costos.tiempoTotal + desgloseComponentes.tiempo;
+    costos.tiempoTotal + desgloseComponentes.tiempo;
   const tiempoExtraTotal =
-    (item.cotizacion.costos.tiempoExtraTotal ?? 0) +
+    (costos.tiempoExtraTotal ?? 0) +
     desgloseComponentes.tiempoExtra;
 
   // ── Cascada del precio: cada fila suma hacia abajo hasta el precio de venta.
@@ -564,7 +566,7 @@ export function consolidarCostosOrden(
     nombre: item.productoNombre,
     cantidad: item.cantidad,
     unidad: item.unidadMedida,
-    desglose: calcularCostoItem(item, item.cotizacion.costos.total),
+    desglose: calcularCostoItem(item, item.cotizacion.costos?.total ?? 0),
     sinCostear: itemSinCostear(item),
   }));
   const costeadas = lineas.filter((linea) => !linea.sinCostear);

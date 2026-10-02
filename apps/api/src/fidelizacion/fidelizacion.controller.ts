@@ -50,17 +50,23 @@ export class FidelizacionController {
   @RequiereCapacidad('fidelizacion')
   @Permiso("comercial.ordenes.gestionar")
   @Post('clientes/:clienteId/simular')
-  simular(
+  async simular(
     @CurrentSession() auth: CurrentAuth,
     @Param('clienteId') clienteId: string,
     @Body() dto: SimularFidelizacionDto,
   ) {
-    return this.service.simular(
+    const conoceMargen = auth.permisos?.has("finanzas.ver_margenes") && dto.margen != null;
+    const { snapshot: _configuracionPrivada, ...resultado } = await this.service.simular(
       auth.tenantId,
       clienteId,
-      dto.margen,
+      conoceMargen ? dto.margen! : 0,
       dto.total,
       dto.canjePuntos,
     );
+    // El canje depende del saldo y la venta. No necesita exponer ni inventar
+    // costos: la acumulación definitiva se calcula en el servidor al emitir.
+    return conoceMargen ? resultado : {
+      ...resultado, puntosEstimados: null, puntosEstimadosMonto: null,
+    };
   }
 }

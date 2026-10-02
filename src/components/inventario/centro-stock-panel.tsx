@@ -36,7 +36,7 @@ import type {
   OrigenMovimientoStockMateriaPrima,
   StockMateriaPrimaItem,
 } from "@/lib/inventario-stock";
-import type { MateriaPrima } from "@/lib/materias-primas";
+import type { MateriaPrimaStock } from "@/lib/materias-primas";
 import {
   getMateriaPrimaVarianteLabel,
   getVarianteDisplayName,
@@ -85,7 +85,7 @@ import styles from "./centro-stock.module.css";
 
 type CentroStockPanelProps = {
   initialAlmacenes: AlmacenMateriaPrima[];
-  materiasPrimas: MateriaPrima[];
+  materiasPrimas: MateriaPrimaStock[];
 };
 
 const ORIGEN_ITEMS: Array<{ value: OrigenMovimientoStockMateriaPrima; label: string }> = [
@@ -130,6 +130,7 @@ export function CentroStockPanel({
   const theme = useDesignTheme();
   const conExistencias = useCapacidad("existencias");
   const permisoGestionar = usePuede("inventario.stock.gestionar");
+  const permisoEditarMaterial = usePuede("inventario.materiales.gestionar");
   const canManage = conExistencias && permisoGestionar;
   const query = useInventoryQuery();
   const { result, loading, error, refresh } = useStockPage({
@@ -259,6 +260,7 @@ export function CentroStockPanel({
             maxDimensiones: 5,
           }),
           puedeActualizarReferencia:
+            permisoEditarMaterial &&
             (!variante.moneda || variante.moneda === moneda.codigo) &&
             (variante.unidadPrecio ??
               variante.unidadCompra ??
@@ -271,7 +273,7 @@ export function CentroStockPanel({
     }
 
     return map;
-  }, [materiasPrimas, moneda.codigo]);
+  }, [materiasPrimas, moneda.codigo, permisoEditarMaterial]);
 
   const unidadesMovimiento = rowSelected
     ? varianteMetaById.get(rowSelected.varianteId)?.unidades

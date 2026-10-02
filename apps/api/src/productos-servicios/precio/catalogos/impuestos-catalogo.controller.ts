@@ -38,6 +38,7 @@ function tenantId(req: RequestWithAuth): string {
 export class ImpuestosCatalogoController {
   constructor(private readonly service: ImpuestosCatalogoService) {}
 
+  @Permiso('configuracion.impuestos.ver', 'costos.catalogo.ver')
   @Get()
   async listar(
     @Req() req: RequestWithAuth,

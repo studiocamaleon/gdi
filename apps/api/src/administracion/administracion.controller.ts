@@ -687,7 +687,7 @@ export class AdministracionController {
 
   // El formulario de cobro los necesita para pintarse, así que quien puede
   // cobrar tiene que poder leerlos aunque no vea el resto de administración.
-  @Permiso("configuracion.metodos.ver", "administracion.cobrar.ver", "administracion.cobrar")
+  @Permiso("configuracion.metodos.ver", "administracion.cobrar.ver", "administracion.cobrar", "administracion.egresos.ver", "administracion.pagar.ver")
   @Get('metodos-pago')
   findAllMetodos(@CurrentSession() auth: CurrentAuth) {
     return this.metodosPagoService.findAll(auth);
@@ -725,7 +725,7 @@ export class AdministracionController {
   }
 
   /** Idem métodos de pago: es la cuenta a la que entra lo que se cobra. */
-  @Permiso("administracion.tesoreria.ver", "administracion.cobrar.ver", "administracion.pagar.ver", "configuracion.metodos.ver", "administracion.cobrar")
+  @Permiso("administracion.tesoreria.ver", "administracion.cobrar.ver", "administracion.pagar.ver", "configuracion.metodos.ver", "administracion.cobrar", "administracion.egresos.ver")
   @Get('cuentas')
   listarCuentas(@CurrentSession() auth: CurrentAuth) {
     return this.metodosPagoService.listarCuentas(auth);

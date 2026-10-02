@@ -3213,7 +3213,7 @@ function getCotizacionNeto(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioNetoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -3221,7 +3221,7 @@ function getCotizacionTotal(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioBrutoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -3229,7 +3229,7 @@ function getCotizacionUnitario(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioBrutoUnitario ??
     cotizacion.precio?.precioUnitario ??
-    cotizacion.costos.unitario
+    (cotizacion.costos?.unitario ?? 0)
   );
 }
 
@@ -3256,10 +3256,11 @@ function getCotizacionImpuestos(cotizacion: CotizacionExitosa) {
 }
 
 function getCotizacionMargen(cotizacion: CotizacionExitosa) {
+  if (!cotizacion.costos) return null;
   if (cotizacion.desglosePrecio)
     return cotizacion.desglosePrecio.margenEfectivoPct;
   const neto = getCotizacionNeto(cotizacion);
-  return neto > 0 ? ((neto - cotizacion.costos.total) / neto) * 100 : 0;
+  return neto > 0 ? ((neto - (cotizacion.costos?.total ?? 0)) / neto) * 100 : 0;
 }
 
 function labelPrecioUnitario(unidad: string) {
@@ -9471,15 +9472,15 @@ function ApConfigStep({
                   <div className="m-head">
                     <span>Margen bruto</span>
                     <span
-                      className={`m-val ${getCotizacionMargen(cotizacionExitosa) < 25 ? "warn" : ""}`}
+                      className={`m-val ${(getCotizacionMargen(cotizacionExitosa) ?? 100) < 25 ? "warn" : ""}`}
                     >
-                      {getCotizacionMargen(cotizacionExitosa).toFixed(1)}%
+                      {getCotizacionMargen(cotizacionExitosa)?.toFixed(1) ?? "—"}%
                     </span>
                   </div>
                   <div className="m-track">
                     <span
                       style={{
-                        width: `${Math.min(100, Math.max(0, getCotizacionMargen(cotizacionExitosa)))}%`,
+                        width: `${Math.min(100, Math.max(0, getCotizacionMargen(cotizacionExitosa) ?? 0))}%`,
                       }}
                     />
                   </div>

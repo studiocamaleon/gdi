@@ -32,3 +32,17 @@ it.each(["egresos", "cuentas-por-pagar"] as const)("%s conserva registros y no a
   expect(botones).not.toMatch(/Registrar egreso|Registrar factura|Pagar selección|Anular/);
   if (modo === "egresos") expect(html).toContain('href="/administracion/programaciones"');
 });
+
+it("gestionar pagos permite pagar pero no ofrece crear ni editar egresos", () => {
+  const html = renderToStaticMarkup(<DesignSystemProvider theme="brand" appearance="light">
+    <PermisosProvider permisos={["acceso.por_vista", "administracion.pagar.gestionar"]}>
+      <CapacidadesProvider capacidades={{ funciones: { cuentas_pagar: true } }}>
+        <EgresosView modo="cuentas-por-pagar" initialEgresos={[egreso]} initialResumen={null} categorias={[]} proveedores={[]} metodosPago={[]} cuentas={[]} altaInicial />
+      </CapacidadesProvider>
+    </PermisosProvider>
+  </DesignSystemProvider>);
+  expect(html).toContain("Factura conservada");
+  expect(html).not.toContain("Registrar obligación");
+  expect(html).not.toContain('href="/administracion/egresos"');
+  expect(html).not.toContain('role="dialog"');
+});
