@@ -22,7 +22,7 @@ export function FidelizacionCotizador({
   onSimulation,
 }: {
   clienteId: string;
-  margen: number;
+  margen?: number;
   total: number;
   moneda: Moneda;
   value: number;
@@ -57,12 +57,14 @@ export function FidelizacionCotizador({
       ),
     ),
   );
-  const puntosQueSuma = value > 0 ? 0 : sim.puntosEstimados;
-  const montoQueSuma = value > 0 ? 0 : sim.puntosEstimadosMonto;
+  const puntosQueSuma = value > 0 ? 0 : (sim.puntosEstimados ?? 0);
+  const montoQueSuma = value > 0 ? 0 : (sim.puntosEstimadosMonto ?? 0);
   const descripcionAcumulacion =
     value > 0
       ? "Esta orden no suma puntos al canjear"
-      : sim.acumulacionActiva && puntosQueSuma > 0
+      : sim.puntosEstimados === null
+        ? "Los puntos a sumar se calculan al emitir la orden"
+        : sim.acumulacionActiva && puntosQueSuma > 0
         ? `Suma +${puntosQueSuma} ptos al completar y cobrar`
         : "Esta orden no suma puntos";
   return (
@@ -85,9 +87,7 @@ export function FidelizacionCotizador({
                   : "sin saldo todavía"}
               </h2>
               <p className="text-xs text-muted-foreground">
-                {tieneSaldo
-                  ? descripcionAcumulacion
-                  : "Esta orden es la primera que acumula"}
+                {descripcionAcumulacion}
               </p>
             </div>
           </div>

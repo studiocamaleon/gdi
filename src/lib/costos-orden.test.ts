@@ -292,7 +292,7 @@ describe("consolidarCostosOrden", () => {
   it("no inventa un bucket BOM cuando un snapshot viejo no trae su naturaleza", () => {
     const compuesto = item();
     compuesto.cotizacion.costos = {
-      ...compuesto.cotizacion.costos,
+      ...compuesto.cotizacion.costos!,
       tiempoTotal: 100,
       materialesTotal: 100,
       componentesFabricadosTotal: 200,
@@ -313,7 +313,7 @@ describe("consolidarCostosOrden", () => {
   it("clasifica materiales y centros de los componentes en los buckets normales", () => {
     const compuesto = item();
     compuesto.cotizacion.costos = {
-      ...compuesto.cotizacion.costos,
+      ...compuesto.cotizacion.costos!,
       componentesFabricadosTotal: 100,
       total: 500,
       unitario: 500,
@@ -382,7 +382,7 @@ describe("consolidarCostosOrden", () => {
   it("separa materia prima propia del costo de proveedor en un componente tercerizado", () => {
     const compuesto = item();
     compuesto.cotizacion.costos = {
-      ...compuesto.cotizacion.costos,
+      ...compuesto.cotizacion.costos!,
       componentesFabricadosTotal: 100,
       total: 500,
       unitario: 500,
@@ -442,7 +442,7 @@ describe("consolidarCostosOrden", () => {
   it("incluye los centros de costo de las recetas hijas", () => {
     const compuesto = item();
     compuesto.cotizacion.costos = {
-      ...compuesto.cotizacion.costos,
+      ...compuesto.cotizacion.costos!,
       componentesFabricadosTotal: 60,
       total: 460,
       unitario: 460,

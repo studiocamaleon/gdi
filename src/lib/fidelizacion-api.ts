@@ -67,15 +67,15 @@ export type FidelizacionSimulacion = {
   acumulacionActiva: boolean;
   saldoDisponible: number;
   saldoDisponibleMonto: number;
-  puntosEstimados: number;
-  puntosEstimadosMonto: number;
+  puntosEstimados: number | null;
+  puntosEstimadosMonto: number | null;
   maximoCanjeable: number;
   canjePuntos: number;
   canjeMonto: number;
 };
 export const simularFidelizacion = (
   clienteId: string,
-  payload: { margen: number; total: number; canjePuntos: number },
+  payload: { margen?: number; total: number; canjePuntos: number },
 ) =>
   apiRequest<FidelizacionSimulacion>(
     `/fidelizacion/clientes/${clienteId}/simular`,

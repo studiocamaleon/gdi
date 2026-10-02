@@ -2158,7 +2158,8 @@ export interface CotizarResponse {
       unidadLabel: string;
       politica: MinimoComercialPolitica;
     } | null;
-    costos: {
+    /** Ausente cuando el usuario no puede consultar costos y márgenes. */
+    costos?: {
       tiempoTotal: number;
       /**
        * Bloques de tiempo extra de los pasos (preparación, traslados). Opcional:
