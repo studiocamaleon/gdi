@@ -1,6 +1,6 @@
 # Recorridos con permisos por vista
 
-Revisión del 02/10/2026. Estado: correcciones y pruebas locales; pendiente el ensayo en staging. Este documento no certifica un despliegue ni una revisión visual de todas las pantallas.
+Revisión del 02/10/2026, 22:00 UTC. Correcciones comprobadas en local, publicadas y verificadas en staging, y promovidas a producción con las mismas imágenes. Código de ejecución: `088f92576ceb7bcbb4fbc73c53198c5f92ded19f`, PR #17. Esta cobertura no equivale a revisar visualmente todas las pantallas ni todas las combinaciones de permisos.
 
 ## Regla de funcionamiento
 
@@ -44,23 +44,28 @@ La matriz de consultas no reemplaza las pruebas HTTP ni asegura todas las combin
 
 ## Evidencia local
 
-- 441 pruebas de API en 21 suites y 70 pruebas de aplicación en 10 archivos, contando una sola vez las comprobaciones repetidas durante las correcciones.
+- 443 pruebas de API en 22 suites y 71 pruebas de aplicación en 11 archivos, contando una sola vez las comprobaciones repetidas durante las correcciones.
 - Se reprodujo el fallo al agregar una cotización sin costos con la implementación anterior; la misma prueba pasa con la corrección. Se prueban los permisos de órdenes y presupuestos por separado.
 - Ensayo HTTP completo de SVG con usuarios y empresas ficticios: inicio, confirmación, inspección, interpretación y lectura; rechazo de modificación del catálogo, otro tenant, archivos públicos, formatos ajenos y exceso de tamaño.
 - Pruebas de consultas auxiliares, perfiles de lectura y botones de gestión. Las pruebas de interfaz bloquean los servicios externos.
 - Pruebas HTTP de aislamiento de inventario, egresos, costos/maquinaria, proveedores/empleados/compras, archivos y tesorería; mantienen las restricciones entre empresas y cajas.
 - Comprobación de tipos de la aplicación, del código de ejecución de la API y de las pruebas nuevas/modificadas de autorización: aprobadas. El chequeo global de la API que incluye todas las pruebas históricas informa 142 diagnósticos ya presentes en la base; no agrega diagnósticos respecto de esa base. No se considera ese chequeo global aprobado.
-- Migraciones aplicadas únicamente a la base local aislada de pruebas. Sin seeds, resets ni modificaciones de roles o documentos reales.
+- Ensayo funcional local con seis perfiles ficticios: 71 comprobaciones HTTP de cotización → OT → reapertura, SVG y DXF completos, lectura, producción y caja limitada. Otras 8 comprueban recetas publicadas, exclusión de borradores/precios y rechazos de acceso.
+- Chrome: vendedor equivalente al perfil reportado, cotización simple y SVG, guardado de OT, reapertura de especificaciones y reemplazo por DXF, sin errores de permisos ni costos visibles. El lector CAD del ensayo local se configuró con el entorno Python ya existente.
+- Las compilaciones remotas de API y web incluyen comprobación de tipos. Se detuvieron dos chequeos locales duplicados por consumo de memoria; no se cuentan como aprobados.
+- Sin seeds, resets ni modificaciones de roles o documentos reales. Los datos ficticios locales fueron retirados al terminar.
 
-## Publicación y ensayo pendiente
+## Publicación y verificación
 
 La rama `codex/recorridos-permisos-comerciales` parte de `codex/inicio-sin-stock` (PR #16), porque esa cadena contiene el editor granular y la versión publicada. No fusionar la cadena como parte de esta corrección. Al integrar su base, ajustar el PR hacia `main`.
 
-1. Revisar el conjunto y desplegar primero en staging según su procedimiento habitual.
-2. Aplicar las dos migraciones aditivas: creación del ámbito `DISENO_COTIZACION` y actualización de su vínculo con productos. Publicar API compatible antes de habilitar el cliente nuevo. No se reescriben archivos existentes.
-3. Con un perfil ficticio equivalente al comercial de diseño, sin costos ni gestión de catálogo: cotizar, agregar, guardar y reabrir una OT; repetir con SVG y DXF. Comprobar que el precio permanece y no aparece un error de permisos.
-4. Comprobar un perfil de presupuestos, uno sólo de lectura, uno de producción y uno administrativo restringido a una caja. Revisar selectores, botones y ausencia de datos no concedidos.
-5. Registrar versión y resultado en `deploy/staging/VALIDACION.md`. Sólo después preparar la promoción autorizada a producción.
+- Se aplicaron las dos migraciones aditivas en ambos entornos: ámbito `DISENO_COTIZACION` y vínculo con productos; 305 migraciones. API compatible antes de publicar la web. No se reescribieron archivos existentes.
+- Staging: 79 comprobaciones HTTP con seis perfiles ficticios, incluyendo cotizar → agregar → guardar → reabrir, SVG/DXF, recetas publicadas, lectura, producción y caja limitada. Rechazos de catálogo, costos, otra empresa y cajas no autorizadas conservados.
+- Navegador de staging: vendedor sin costos ni gestión de catálogo, carga de SVG de 100 × 80 mm, cotización por $1.500, guardado, recarga, reapertura y nuevo guardado de especificaciones. Precio y geometría conservados sin error de permisos. El DXF se comprobó por HTTP en staging y también en la interfaz local.
+- Los datos, archivos y usuarios sintéticos se retiraron al finalizar; los conteos originales de staging se recuperaron.
+- Producción: mismas imágenes comprobadas en staging, salud web/API, rechazos anónimos, rol de base sin DDL y apertura del formulario/catálogo desde navegador. No se cambiaron permisos del usuario reportado, no se guardaron órdenes ni se emitieron comprobantes reales durante la comprobación.
+- Compilaciones remotas completas de API/web con tipos, CI HTTP y contenedores aprobados para la revisión de ejecución. Servicios conservan sus tamaños; builder temporal retirado. Fuentes cifradas custodiadas e inventarios de recuperación actualizados.
+- Copias posteriores de ambos entornos: firma, huella, descifrado del manifiesto y presencia de código/imágenes comprobados. No se repitió una restauración SQL completa en esta publicación. Versiones y evidencia: [staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md).
 
 Si fuera necesario revertir la interfaz, conservar las migraciones aditivas y los diseños ya guardados. No borrar archivos ni eliminar valores del enum para hacer rollback; la API que los atienda debe reconocer el nuevo ámbito.
 
