@@ -268,7 +268,7 @@ export class ProductosServiciosController {
     await this.service.eliminarProducto(tenantId, id);
   }
 
-  @Permiso("costos.flujos.ver")
+  @Permiso("costos.flujos.ver", "costos.catalogo.ver")
   @Get('rutas')
   async listarRutas(
     @Req() req: RequestWithAuth,
@@ -434,7 +434,7 @@ export class ProductosServiciosController {
     return this.service.upsertConfigPaso(tenantId, rutaAltId, dto);
   }
 
-  @Permiso("costos.nodos.ver", "comercial.ordenes.ver", "comercial.presupuestos.ver")
+  @Permiso("costos.nodos.ver", "costos.flujos.ver", "costos.catalogo.ver", "comercial.ordenes.ver", "comercial.presupuestos.ver")
   @Get('familias')
   listarFamilias(@Req() req: RequestWithAuth) {
     const tenantId = req.auth?.tenantId;
@@ -521,6 +521,7 @@ export class ProductosServiciosController {
     return this.pasosTenant.eliminar(tenantId, id);
   }
 
+  @Permiso('costos.catalogo.ver', 'costos.nodos.ver')
   @Get('lookups-config-paso')
   async listarLookupsConfigPaso(@Req() req: RequestWithAuth) {
     const tenantId = req.auth?.tenantId;
@@ -528,6 +529,7 @@ export class ProductosServiciosController {
     return this.service.listarLookupsConfigPaso(tenantId);
   }
 
+  @Permiso('costos.catalogo.ver', 'costos.nodos.ver')
   @Get('materias-primas/buscar')
   async buscarMateriasPrimas(
     @Req() req: RequestWithAuth,
@@ -565,7 +567,7 @@ export class ProductosServiciosController {
     return productoParaCotizacion(await this.service.listarCargosDirectos(req.auth!.tenantId,true));
   }
 
-  @Permiso("costos.cargos.ver")
+  @Permiso("costos.cargos.ver", "costos.catalogo.ver")
   @Get('cargos-directos')
   async listarCargosDirectos(
     @Req() req: RequestWithAuth,

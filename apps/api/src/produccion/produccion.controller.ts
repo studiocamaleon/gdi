@@ -22,6 +22,7 @@ import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 export class ProduccionController {
   constructor(private readonly service: ProduccionService) {}
 
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'produccion.planificacion.ver')
   @Get('estaciones')
   findEstaciones(@CurrentSession() auth: CurrentAuth) {
     return this.service.findEstaciones(auth.tenantId);
@@ -45,6 +46,7 @@ export class ProduccionController {
    * Mediana histórica de duración real por familia (fallback de la cola en
    * horas del tablero). Ver docs/capacidad-estaciones-diseno.md D6.
    */
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'produccion.planificacion.ver')
   @Get('duraciones-familias')
   findDuracionesFamilias(@CurrentSession() auth: CurrentAuth) {
     return this.service.findDuracionesFamilias(auth.tenantId);
@@ -54,6 +56,7 @@ export class ProduccionController {
    * Estructura del bastidor de un ítem (cartelería), para el visor 3D del tab
    * de Producción. Sale del snapshot del ítem: es lo cotizado, con overrides.
    */
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'comercial.ordenes.ver')
   @Get('estructura-bastidor/:itemId')
   estructuraBastidor(
     @CurrentSession() auth: CurrentAuth,
@@ -64,6 +67,7 @@ export class ProduccionController {
 
   // ── Configuración de producción (margen de la ETA sugerida) ───────────
 
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'produccion.planificacion.ver')
   @Get('configuracion')
   getConfiguracion(@CurrentSession() auth: CurrentAuth) {
     return this.service.getConfiguracion(auth.tenantId);
@@ -81,6 +85,7 @@ export class ProduccionController {
 
   // ── Días no laborables (feriados y cierres del taller) ────────────────
 
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'produccion.planificacion.ver')
   @Get('dias-no-laborables')
   findDiasNoLaborables(@CurrentSession() auth: CurrentAuth) {
     return this.service.findDiasNoLaborables(auth.tenantId);

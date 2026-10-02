@@ -8,6 +8,7 @@ import type {
 } from "@/lib/biblioteca-materias-primas";
 import type {
   MateriaPrima,
+  MateriaPrimaStock,
   MateriaPrimaPayload,
   UnidadMateriaPrima,
   UpdateVariantePrecioReferenciaPayload,
@@ -151,4 +152,27 @@ export async function updateVariantePrecioReferencia(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export async function getMateriasPrimasStock(): Promise<MateriaPrimaStock[]> {
+  const all: MateriaPrimaStock[] = [];
+  for (let page = 1; ; page++) {
+    const res = await apiRequest<{ data: MateriaPrimaStock[]; pages: number }>(
+      `/inventario/materias-primas/opciones-stock?page=${page}&limit=200`,
+    );
+    all.push(...res.data);
+    if (page >= res.pages || res.data.length === 0) return all;
+  }
+}
+
+/** Materiales técnicos para consumibles/perfiles; no incluye proveedores. */
+export async function getMateriasPrimasMaquinaria(): Promise<MateriaPrima[]> {
+  const all: MateriaPrima[] = [];
+  for (let page = 1; ; page++) {
+    const res = await apiRequest<MateriasPrimasListResponse>(
+      `/inventario/materias-primas/opciones-maquinaria?page=${page}&limit=200`,
+    );
+    all.push(...res.data);
+    if (page >= res.pages || res.data.length === 0) return all;
+  }
 }

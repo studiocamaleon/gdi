@@ -4,6 +4,7 @@ import type { EstadoMetaPiloto } from '@/lib/meta-piloto-api';
 import { MetaRecepcionCard } from './meta-recepcion-card';
 import type { RecepcionMeta } from '@/lib/meta-recepcion-api';
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
   ConfiguracionPage,
@@ -245,6 +246,8 @@ export function IntegracionesView({
   mcp?: { inicial: CredencialMcp[]; mcpUrl: string };
 }) {
   const conWati = useCapacidad("whatsapp_automatico");
+  const puedeGestionar = usePuede("configuracion.integraciones.gestionar");
+  const puedeVerFiscal = usePuede("configuracion.fiscal.ver");
   const [datos, setDatos] = React.useState(inicial);
   const [abierta, setAbierta] = React.useState<ProveedorIntegracion | null>(
     null,
@@ -271,6 +274,7 @@ export function IntegracionesView({
   // AFIP se carga on-demand al abrir (la lista no trae su detalle enriquecido);
   // el resto abre directo por estado.
   const abrir = React.useCallback((p: ProveedorIntegracion) => {
+    if (p === "AFIP" ? !puedeVerFiscal : !puedeGestionar) return;
     if (p !== "AFIP") {
       setAbierta(p);
       return;
@@ -283,7 +287,7 @@ export function IntegracionesView({
       .catch(() => {
         // El botón sigue disponible; no rompemos la grilla por esto.
       });
-  }, []);
+  }, [puedeVerFiscal, puedeGestionar]);
 
   const recargar = React.useCallback(async () => {
     try {
@@ -396,6 +400,7 @@ export function IntegracionesView({
                 (i) => i.proveedor === c.proveedor,
               )}
               onAbrir={abrir}
+              puedeAbrir={c.proveedor === "AFIP" ? puedeVerFiscal : puedeGestionar}
             />
           ))}
         </Seccion>
@@ -410,6 +415,7 @@ export function IntegracionesView({
               (i) => i.proveedor === c.proveedor,
             )}
             onAbrir={abrir}
+            puedeAbrir={c.proveedor === "AFIP" ? puedeVerFiscal : puedeGestionar}
           />
         ))}
       </Seccion>
@@ -451,12 +457,15 @@ function Card({
   item,
   integracion,
   onAbrir,
+  puedeAbrir,
 }: {
   item: CatalogoItem;
   integracion?: Integracion;
   onAbrir: (p: ProveedorIntegracion) => void;
+  puedeAbrir: boolean;
 }) {
   const { fechaNumerica } = useFecha();
+  const interactiva = item.disponible && puedeAbrir;
   const estado = integracion?.estado ?? "DESCONECTADA";
   const clase = item.disponible
     ? estado === "CONECTADA"
@@ -467,11 +476,11 @@ function Card({
   return (
     <div
       className={`int-card ${clase}`}
-      onClick={() => item.disponible && onAbrir(item.proveedor)}
-      role={item.disponible ? "button" : undefined}
-      tabIndex={item.disponible ? 0 : undefined}
+      onClick={() => interactiva && onAbrir(item.proveedor)}
+      role={interactiva ? "button" : undefined}
+      tabIndex={interactiva ? 0 : undefined}
       onKeyDown={(e) => {
-        if (item.disponible && (e.key === "Enter" || e.key === " ")) {
+        if (interactiva && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onAbrir(item.proveedor);
         }
@@ -503,7 +512,7 @@ function Card({
             ? `Desde el ${fechaNumerica(integracion.conectadaEl)}`
             : ETIQUETA_ESTADO[estado]}
         </span>
-        {item.disponible && (
+        {interactiva && (
           <span className="cta">
             {estado === "CONECTADA" ? "Administrar" : "Conectar"}
             <Ico.Arr />

@@ -4,7 +4,7 @@ import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { MovimientosKardexPanel } from "@/components/inventario/movimientos-kardex-panel";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getAlmacenes } from "@/lib/inventario-stock-api";
-import { getMateriasPrimas } from "@/lib/materias-primas-api";
+import { getMateriasPrimasStock } from "@/lib/materias-primas-api";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export default function MovimientosKardexPage() {
 
 async function MovimientosKardexPageContent() {
   const [materiasPrimas, almacenes] = await Promise.all([
-    getMateriasPrimas(),
+    getMateriasPrimasStock(),
     getAlmacenes(),
   ]);
 

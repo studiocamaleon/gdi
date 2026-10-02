@@ -38,6 +38,36 @@ export class InventarioController {
     });
   }
 
+  /** Opciones físicas y unidades para stock/Kardex, sin proveedores ni fichas. */
+  @Permiso('inventario.stock.ver', 'inventario.movimientos.ver')
+  @Get('opciones-stock')
+  opcionesStock(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: ListMateriasPrimasQueryDto,
+  ) {
+    return this.inventarioService.opcionesStock(auth, query);
+  }
+
+  @Permiso('costos.maquinaria.ver')
+  @Get('opciones-maquinaria')
+  async opcionesMaquinaria(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: ListMateriasPrimasQueryDto,
+  ) {
+    const pagina = await this.inventarioService.findAllMateriasPrimas(auth, {
+      pagination: query,
+    });
+    return {
+      ...pagina,
+      data: pagina.data.map((material) => ({
+        ...material,
+        variantes: material.variantes.map(
+          ({ proveedorReferenciaId: _id, proveedorReferenciaNombre: _nombre, ...variante }) => variante,
+        ),
+      })),
+    };
+  }
+
   @Get('biblioteca')
   listarBiblioteca(@CurrentSession() auth: CurrentAuth) {
     return this.bibliotecaService.listar(auth);

@@ -34,6 +34,7 @@ function tenantId(req: RequestWithAuth): string {
 export class ComisionesCatalogoController {
   constructor(private readonly service: ComisionesCatalogoService) {}
 
+  @Permiso('configuracion.comisiones.ver', 'costos.catalogo.ver')
   @Get()
   async listar(
     @Req() req: RequestWithAuth,

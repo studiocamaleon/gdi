@@ -48,6 +48,7 @@ export class ClientesController {
     return this.clientesService.findAll(auth, query);
   }
 
+  @Permiso('crm.clientes.ver', 'comercial.ordenes.ver', 'comercial.presupuestos.ver')
   @Get('por-documento/:documento')
   porDocumento(
     @CurrentSession() auth: CurrentAuth,

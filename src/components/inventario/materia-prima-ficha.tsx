@@ -130,7 +130,7 @@ type FormState = {
 type MateriaPrimaFichaProps = {
   materiaPrima: MateriaPrima;
   proveedores: ProveedorOpcion[];
-  maquinas: MaquinaResumen[];
+  maquinas: Pick<MaquinaResumen, "id" | "nombre">[];
 };
 
 /**

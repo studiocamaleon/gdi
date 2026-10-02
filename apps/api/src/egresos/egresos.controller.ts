@@ -115,6 +115,7 @@ export class EgresosController {
 
   // ── Categorías ─────────────────────────────────────────────────────────
 
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver', 'administracion.gastos.ver')
   @Get('categorias')
   categorias(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.categorias(auth);
@@ -157,6 +158,7 @@ export class EgresosController {
   // ── Resumen ────────────────────────────────────────────────────────────
 
   /** Los números de la cabecera: qué hay que pagar, qué está vencido. */
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver')
   @Get('resumen')
   resumen(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.resumen(auth);
@@ -171,6 +173,7 @@ export class EgresosController {
 
   /** Los cheques de terceros que están en cartera, para poder endosarlos. */
   @RequiereCapacidades('cuentas_pagar', 'valores')
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver')
   @Get('valores-en-cartera')
   valoresEnCartera(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.valoresEnCartera(auth);
@@ -257,6 +260,7 @@ export class EgresosController {
 
   // ── Egresos ────────────────────────────────────────────────────────────
 
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver')
   @Get()
   listar(
     @CurrentSession() auth: CurrentAuth,
@@ -276,7 +280,8 @@ export class EgresosController {
       desde,
       hasta,
       eje,
-      soloPendientes,
+      // Pagar sólo consulta deudas pendientes; no abre el registro completo.
+      soloPendientes: auth.permisos?.has('administracion.egresos.ver') ? soloPendientes : 'true',
       texto,
     });
   }
@@ -288,6 +293,7 @@ export class EgresosController {
     return this.egresos.crear(auth, body);
   }
 
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver')
   @Get(':id/pagos')
   pagosDeEgreso(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.egresos.pagosDeEgreso(auth, id);

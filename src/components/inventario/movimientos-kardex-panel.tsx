@@ -16,7 +16,7 @@ import { useInventoryQuery } from "./use-inventory-query";
 import { useInventoryPage } from "./use-stock-page";
 import { InventoryVariantPicker } from "./inventory-variant-picker";
 import { SelectField } from "@/components/design-system/select-field";
-import type { MateriaPrima } from "@/lib/materias-primas";
+import type { MateriaPrimaStock } from "@/lib/materias-primas";
 import { getMateriaPrimaVarianteLabel } from "@/lib/materias-primas-variantes-display";
 import { Card, Chip, Spinner } from "@heroui/react";
 import {
@@ -38,7 +38,7 @@ import styles from "./movimientos-kardex.module.css";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type HistorialPanelProps = {
-  materiasPrimas: MateriaPrima[];
+  materiasPrimas: MateriaPrimaStock[];
   almacenes: AlmacenMateriaPrima[];
 };
 

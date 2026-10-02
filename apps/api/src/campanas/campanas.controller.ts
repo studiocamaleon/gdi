@@ -43,6 +43,7 @@ export class CampanasController {
   }
 
   @RequiereCapacidad('proyectos')
+  @Permiso('comercial.campanas.ver', 'comercial.ordenes.ver', 'comercial.presupuestos.ver')
   @Get('opciones')
   opciones(
     @CurrentSession() auth: CurrentAuth,
