@@ -4,7 +4,7 @@ import { PackageOpen } from "lucide-react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/design-system/action-button";
 import { FormDialog } from "@/components/design-system/form-dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AvisoInicioInventario } from "./aviso-inicio-inventario";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import {
   getInicioInventario,
@@ -89,15 +89,7 @@ export function ModoInicioInventario({
         </ActionButton>
       )}
       {!configuracion && data?.activo && (
-        <Alert role="status">
-          <PackageOpen />
-          <AlertTitle>Modo de inicio · stock sin verificar</AlertTitle>
-          <AlertDescription>
-            Podés cotizar, emitir y producir mientras cargás el inventario. Se
-            mantienen los costos; las nuevas órdenes no generan reservas ni
-            consumos. Se desactiva desde Inventario → Stock → Modo de inicio.
-          </AlertDescription>
-        </Alert>
+        <AvisoInicioInventario />
       )}
       <FormDialog
         isOpen={open}

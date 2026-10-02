@@ -822,3 +822,5 @@
   cursor: default;
   opacity: 0.65;
 }
+
+.ordenDocumento { display: flex; flex-direction: column; gap: 2px; }

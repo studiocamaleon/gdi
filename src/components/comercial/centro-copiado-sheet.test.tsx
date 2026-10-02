@@ -686,3 +686,44 @@ it("una terminación guardada se conserva y bloquea la recotización sin esa fun
     true,
   );
 });
+
+it("permite crear un tomo sin anilladora, cambiar el orden y conserva los rangos al cotizar", async () => {
+  await montarCarga();
+  await cargarPdfs([
+    [a4, a4, a4],
+    [a4, a4],
+  ]);
+  await rango("1,3", 0);
+  const seleccionar = el.querySelectorAll<HTMLInputElement>(
+    'input[aria-label^="Seleccionar archivo-"]',
+  );
+  expect(seleccionar).toHaveLength(2);
+  await act(async () => {
+    seleccionar[0].click();
+    seleccionar[1].click();
+  });
+  const crear = Array.from(el.querySelectorAll("button")).find(
+    (b) => b.textContent === "Crear tomo (2)",
+  )!;
+  expect(crear.disabled).toBe(false);
+  await act(async () => crear.click());
+  expect(el.textContent).toContain("Ver PDF del tomo");
+  await act(async () =>
+    el
+      .querySelector<HTMLButtonElement>('[aria-label="Subir archivo-2.pdf"]')!
+      .click(),
+  );
+  await avanzar();
+  const dto = mocks.cotizar.mock.calls.at(-1)![0];
+  expect(dto.documentos.map((d: { nombre: string }) => d.nombre)).toEqual([
+    "archivo-2.pdf",
+    "archivo-1.pdf",
+  ]);
+  expect(dto.documentos[1]).toMatchObject({
+    paginas: 2,
+    paginasOriginales: 3,
+    rangoPaginas: "1,3",
+  });
+  expect(dto.grupos).toHaveLength(1);
+  expect(dto.grupos[0].terminaciones).toEqual([]);
+});

@@ -38,6 +38,7 @@ import { dataCotizacionItemTomo } from './persistencia-tomo';
 import {
   calcularHojas,
   construirSegmento,
+  preparacionesPorDocumento,
   resolverVariantePapel,
   variantesCubre,
   pliegoDeDoc,
@@ -1973,6 +1974,11 @@ export class CentroCopiadoService {
     await this.validarOperacion(tenantId, dto, ctx);
     const gruposById = new Map((dto.grupos ?? []).map((g) => [g.id, g]));
 
+    const preparaciones = preparacionesPorDocumento(
+      dto.documentos as DocumentoInput[],
+      ctx,
+    );
+
     // Un documento agrupado usa los `juegos` del tomo como copias efectivas.
     const documentos = await Promise.all(
       dto.documentos.map((doc) => {
@@ -1983,7 +1989,7 @@ export class CentroCopiadoService {
         return this.cotizarDocumento(
           tenantId,
           doc as DocumentoInput,
-          ctx,
+          { ...ctx, cobraSetup: preparaciones.get(doc.id) ?? ctx.cobraSetup },
           copias,
           periodo,
           dto.clienteId,
@@ -2669,9 +2675,15 @@ export class CentroCopiadoService {
       ? terminaciones.join(', ')
       : 'Ninguna';
 
+    const preparaciones = preparacionesPorDocumento(docs, ctx);
     const segs = await Promise.all(
       docs.map(async (doc) => {
-        const prep = this.prepararDoc(doc, ctx, grupo, grupoCargaId);
+        const prep = this.prepararDoc(
+          doc,
+          { ...ctx, cobraSetup: preparaciones.get(doc.id) ?? ctx.cobraSetup },
+          grupo,
+          grupoCargaId,
+        );
         if (!prep.jobContext)
           return { doc, prep, cot: null, error: prep.error };
         const r = await this.motor.cotizar({
