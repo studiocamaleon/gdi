@@ -19,7 +19,7 @@ import {
   medirSvgFabricacion,
   normalizarFuenteVectorial,
   type FormatoFuenteVectorial,
-  type ProductoRecetaRevision,
+  type RevisionRecetaCotizacion,
   type CotizarResponse,
 } from "@/lib/productos-servicios-api";
 import { agruparPiezasCotizacion } from "@/lib/piezas-cotizacion";
@@ -187,7 +187,7 @@ export function GeometriasVectorialesCotizacion({
   configuracion: ConfiguracionGeometriasComerciales;
   values: Record<string, FuenteVectorialCotizada>;
   ocultarFuenteId?: string | null;
-  componentes?: ProductoRecetaRevision["componentes"];
+  componentes?: RevisionRecetaCotizacion["componentes"];
   cantidad?: number;
   calculados?: NonNullable<
     CotizarResponse["cotizacion"]

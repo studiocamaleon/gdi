@@ -15,6 +15,7 @@ Los selectores compartidos entregan sólo los datos que necesita la tarea. Elegi
 | Cotizar, agregar productos y reabrir una OT | La pantalla admite respuestas sin costos ni márgenes. Conserva el precio de venta y no inventa costos cero. |
 | Fidelización desde la orden | Se puede consultar el canje sin conocer el margen. La acumulación definitiva se calcula en el servidor al emitir. |
 | SVG/DXF de una cotización | Se guarda como diseño privado del trabajo, separado del original del catálogo. Subirlo no modifica el producto. |
+| Productos compuestos al cotizar | Se leen los parámetros de la receta publicada, sin exigir acceso al catálogo ni exponer borradores, costos o reglas de precios. |
 | Campañas y configuración de usuarios | El selector de empleados funciona con el permiso de su propia vista. |
 | Catálogo, nodos, maquinaria y materiales | Se habilitan las consultas auxiliares necesarias, conservando protegidas las fichas y modificaciones de otros módulos. |
 | Stock y movimientos | Se consultan depósitos, ubicaciones y variantes sin requerir la administración de materiales. Modificar su precio de referencia sigue requiriendo ese permiso. |
@@ -25,7 +26,7 @@ Los selectores compartidos entregan sólo los datos que necesita la tarea. Elegi
 
 ## Cobertura del catálogo de vistas
 
-La prueba `apps/api/src/auth/__tests__/recorridos-vistas.spec.ts` enumera las **50 vistas** del editor y falla si se agrega una vista sin registrar su recorrido. Cubre 122 consultas principales y auxiliares con acceso de lectura, y rechaza las operaciones de gestión de los controladores examinados. Usa los guards reales de roles y permisos.
+La prueba `apps/api/src/auth/__tests__/recorridos-vistas.spec.ts` enumera las **50 vistas** del editor y falla si se agrega una vista sin registrar su recorrido. Cubre 124 consultas principales y auxiliares con acceso de lectura, y rechaza las operaciones de gestión de los controladores examinados. Usa los guards reales de roles y permisos.
 
 | Grupo | Vistas incluidas |
 | --- | --- |

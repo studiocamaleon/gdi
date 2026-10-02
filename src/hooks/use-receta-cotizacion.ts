@@ -1,8 +1,8 @@
 "use client";
 import * as React from "react";
 import {
-  getRecetasProducto,
-  type ProductoReceta,
+  getRecetasCotizacionProducto,
+  type RecetaCotizacion,
 } from "@/lib/productos-servicios-api";
 
 export function useRecetaCotizacion(
@@ -11,12 +11,12 @@ export function useRecetaCotizacion(
 ) {
   const [datos, setDatos] = React.useState<{
     productoId: string;
-    recetas: ProductoReceta[];
+    recetas: RecetaCotizacion[];
   }>();
   React.useEffect(() => {
     if (!productoId || !rutaAlternativaId) return;
     let activo = true;
-    void getRecetasProducto(productoId)
+    void getRecetasCotizacionProducto(productoId)
       .then((recetas) => {
         if (activo) setDatos({ productoId, recetas });
       })

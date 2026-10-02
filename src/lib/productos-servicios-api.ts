@@ -659,6 +659,17 @@ export function getRecetasProducto(id: string): Promise<ProductoReceta[]> {
   );
 }
 
+export type RevisionRecetaCotizacion = {
+  componentes: Array<Pick<ProductoRecetaRevision['componentes'][number], 'id' | 'codigo' | 'nombre' | 'formula' | 'cantidad' | 'configuracionJson'>>;
+};
+export type RecetaCotizacion = {
+  rutaAlternativa: { id: string };
+  revisionPublicada: RevisionRecetaCotizacion | null;
+};
+export function getRecetasCotizacionProducto(id: string): Promise<RecetaCotizacion[]> {
+  return apiRequest<RecetaCotizacion[]>(`/productos-servicios/cotizacion-productos/${id}/recetas`);
+}
+
 export function getEstadoPublicacionProducto(
   id: string,
 ): Promise<EstadoPublicacionProducto> {

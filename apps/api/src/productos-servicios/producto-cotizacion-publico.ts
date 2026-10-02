@@ -49,7 +49,7 @@ const CONFIG_CARGO = new Set([
   'descripcion',
 ]);
 const FINANCIEROS =
-  /^(cost|price|amount|fee|unitPrice|basePrice|margin|coste|precio|tarifa|comision|rentabilidad|ganancia|utilidad|markup|margenPct|margenBruto|margenNeto|margenAplicado|margenMin|aplicaMargen|importe|monto|valorHora|porcentajeMargen)/i;
+  /^(cost|price|pricing|amount|fee|unitPrice|basePrice|margin|coste|precio|tarifa|comision|rentabilidad|ganancia|utilidad|markup|margenPct|margenBruto|margenNeto|margenAplicado|margenMin|aplicaMargen|importe|monto|valorHora|porcentajeMargen)/i;
 function objeto(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v)
     ? (v as Record<string, unknown>)
@@ -66,6 +66,13 @@ function jsonComercial(v: unknown): unknown {
       )
       .map(([k, x]) => [k, jsonComercial(x)]),
   );
+}
+/** Sólo el contrato de configuración comercial de los componentes publicados. */
+export function configuracionComponenteParaCotizacion(v: unknown): unknown {
+  const campos = new Set(['version', 'bindings', 'piezas', 'piezasEditables', 'repeticion']);
+  return v == null ? null : jsonComercial(Object.fromEntries(
+    Object.entries(objeto(v)).filter(([k]) => campos.has(k)),
+  ));
 }
 export function productoParaCotizacion(valor: unknown): unknown {
   if (Array.isArray(valor)) return valor.map(productoParaCotizacion);

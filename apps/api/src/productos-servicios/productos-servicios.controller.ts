@@ -91,6 +91,15 @@ export class ProductosServiciosController {
     return this.recetas.obtener(auth, id);
   }
 
+  @Permiso('comercial.ordenes.ver', 'comercial.presupuestos.ver')
+  @Get('cotizacion-productos/:id/recetas')
+  recetasCotizacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.recetas.obtenerParaCotizacion(auth, id);
+  }
+
   @Get('productos/:id/receta/estado-publicacion')
   obtenerEstadoPublicacionReceta(
     @CurrentSession() auth: CurrentAuth,
