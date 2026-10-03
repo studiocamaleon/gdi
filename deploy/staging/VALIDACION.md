@@ -889,3 +889,11 @@ Copia posterior **`5e84a7c3-f258-4cc5-a06a-f475f8bd1cd1`**, completada **2026-10
 Para desactivar la captura, establecer `SENTRY_ENABLED=false` y reiniciar los servicios afectados. Para revertir el lote completo, conservar la base y usar API/workers `e11e431b3` (digest `sha256:bc61b4374bc023f0660554ba52936468e05e93b3db32fbfc940977da7036d6a6`) y web `061a75873` (digest `sha256:adf8dfd9f5b386b6cea2bd785c4cad2fa4fd465303ab3edbd7a948d49d2d3b9f`). No eliminar datos ni revertir migraciones.
 
 Mapas de código fuente desactivados en esta primera etapa. No equivale a monitoreo completo de disponibilidad, rendimiento, errores absorbidos por integraciones ni a una prueba de caída de producción. Ver [alcance y operación](../../docs/monitoreo-sentry.md).
+
+## 03/10/2026 — Recuperación del acceso de empresa
+
+Chrome reproducía `/login → /plataforma → /backoffice`: la cookie de una sesión de Plataforma rechazada por API conservaba un JWT vigente por reloj. La consola enviaba al acceso de staff sin limpiar esa cookie y el enlace «Acceso de empresa» repetía el recorrido. Abrir la salida existente `/salir` eliminó la cookie y permitió mostrar el formulario completo de empresa en staging. No se cambiaron contraseñas, permisos, protección de staging ni datos de la empresa.
+
+Corrección preparada en `codex/acceso-empresa-sesion`, dependiente del PR #20: ante un 401, la consola pasa por la salida antes de regresar a su propio acceso. «Acceso de empresa» usa una navegación completa por `/salir`, sin precarga. La salida sólo permite los dos destinos internos previstos. Pasaron 57 pruebas locales de redirecciones, limpieza de sesión, formulario y protección de staging, además del lint enfocado. Un 403 conserva el rechazo por permisos y un fallo 503 no cierra la sesión.
+
+**El acceso del navegador quedó recuperado; el cambio de código todavía no está desplegado.** La versión publicada continúa siendo `b030b6ab7`. Preparado para el siguiente lote de staging; producción sin cambios.
