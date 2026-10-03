@@ -212,3 +212,34 @@ Copia posterior **`7321d039-de37-425b-b582-e68382776fdc`**, completada **2026-10
 Antes de migrar se verificó la copia de `2026-10-02T21:00:51.150Z`. Las migraciones y publicación conservaron datos y configuración de la empresa existente.
 
 Esta cobertura no asegura todas las combinaciones posibles de permisos, planes o rutas industriales. Ver [alcance detallado](../../docs/permisos-recorridos-validacion.md). Para revertir la interfaz, conservar las migraciones y archivos creados; la API debe seguir reconociendo `DISENO_COTIZACION`. No eliminar valores del enum ni diseños para revertir código.
+
+## 02/10/2026 (Argentina) — Tomos PDF y avisos de la OT (PR #18)
+
+Código de ejecución **`e11e431b368353fb12fd52fb6768c2ffbfa661b2`**, dependiente del PR #17. Publicación solicitada por Lucas, primero en staging y después en producción con las mismas imágenes por digest. Sin fusionar la cadena de PR ni cambiar la web comercial.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:bc61b4374bc023f0660554ba52936468e05e93b3db32fbfc940977da7036d6a6` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:5e4c38bf4eb45b2cb4b845e66bf05a48ac02c99384970a612b11c8ec3e6eb971` |
+
+PDF conserva `2fee01704` y su imagen anterior. **305 migraciones, sin cambios de esquema**; una máquina por servicio, mismos tamaños. Fuentes de ejecución cifradas con 31 días de protección y referencias anteriores conservadas para recuperación. No se recalculan cotizaciones históricas.
+
+### Comprobaciones del lote
+
+- 72 pruebas de API y 32 de interfaz/lógica, sin contar repeticiones. [CI de contenedores y tipos](https://github.com/studiocamaleon/gdi/actions/runs/37076522073) y [CI HTTP y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37076521960) aprobados para la revisión exacta publicada. Compilaciones remotas completas; Docker y otros proyectos locales intactos.
+- Ensayo HTTP en staging con una empresa y un operador ficticios, máquina láser, papel y tóner de importes conocidos. Dos PDF de cinco páginas, rangos `1,3,5` y `2`, doble faz, diez juegos. El motor mantiene 40 carillas y 30 hojas; preparación de 10 a 5 minutos, precio de $2.339,10 a $1.505,70. Sueltos conservan dos preparaciones. Vista previa y guardado devuelven el mismo precio.
+- Cotización, creación de borrador, subida privada de ambos originales y reapertura mediante los endpoints normales. Chrome abre **Ver PDF del tomo** desde Archivos de la OT guardada: **6 páginas y 2 reversos en blanco**; originales agrupados y conservados. No se imprimió físicamente ni se emitió una OT real.
+- Chrome: nueva orden sin aviso superior ni widget del Asistente; aviso de inicio visible al abrir Materiales, con estilo Grafo. El modo sólo se activó para la empresa ficticia.
+- Datos, usuario y objetos ficticios retirados de staging; recuentos iniciales recuperados. Evidencia detallada y capturas fuera de Git. No hay datos ni credenciales privados en este registro.
+
+### Uso y reversión
+
+Ver [guía de tomos](../../docs/tomos-pdf-y-avisos.md). Crear el tomo, ordenar originales, indicar rangos y juegos, y pulsar **Ver PDF del tomo**. Los juegos se indican al imprimir: el PDF contiene uno. Papel/color/tamaño distintos pueden requerir preparaciones separadas; no se unifican simple y doble faz en un mismo archivo.
+
+La reversión de código puede usar los digests del registro anterior, conservando los originales y cotizaciones guardadas. Volver a cotizar con la versión anterior recupera su regla de preparación por documento; evitar hacerlo sin evaluar ese cambio de precio. No hace falta revertir migraciones.
+
+### Cierre de la publicación
+
+Salud web/API 200, API directa protegida 403 y BFF sin sesión 401; seis máquinas iniciadas y tamaños conservados. Builder temporal retirado. Copia posterior **`37db0712-10bd-4ee6-999a-f5b552431c65`**, completada **2026-10-03T00:00:20.774Z**, con 305 migraciones y 2 archivos: firma, huellas, descifrado de manifiesto, código exacto e imágenes desplegadas comprobados. El copiador terminó el ciclo automático y notificó éxito. No se repitió una restauración SQL completa en esta publicación.
+
+Producción conservó recuentos de empresas, clientes, cobros, medios y movimientos, rol de aplicación sin DDL y configuración de inicio existente. Chrome abrió la nueva orden y Centro de copiado con una sesión de permisos limitados; Asistente oculto por defecto. No se guardaron datos comerciales, facturas, cobros ni envíos de prueba. Se acotó el inventario de fuentes activas para mantenerlo dentro del máximo de diez artefactos; las versiones históricas continúan protegidas en B2 y referenciadas por sus manifiestos anteriores.

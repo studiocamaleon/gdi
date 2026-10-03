@@ -27,8 +27,8 @@ La edición mantiene la procedencia de cada documento. Si se divide un tomo guar
 
 ## Validación y publicación
 
-Rama `codex/tomos-pdf-y-avisos`, dependiente del PR #17 (`codex/recorridos-permisos-comerciales`). No fusiona esa cadena ni modifica staging o producción.
+Rama `codex/tomos-pdf-y-avisos`, dependiente del PR #17 (`codex/recorridos-permisos-comerciales`). Publicada por pedido de Lucas en staging y producción; no fusiona la cadena de PR. Revisiones, imágenes y verificaciones en los registros de despliegue.
 
 Pruebas locales: cinco suites de API (72 comprobaciones) y cuatro de interfaz/lógica del navegador (32 comprobaciones). Incluyen selección de rangos, orden, blancos y rotación, archivos inválidos, límites, lectura privada, nombres ambiguos, precio de cinco originales en uno y diez juegos, cambios de configuración, asistente oculto y continuidad de impresión. Revisión visual en Chrome con PDF ficticios y el componente real del Centro de copiado. Sin emitir documentos reales ni imprimir físicamente.
 
-La revisión global de tipos excedió la memoria local. La compilación completa con tipos se comprueba en el ejecutor remoto del PR; hasta que termine no debe considerarse aprobada. La vista local de revisión usa precios ilustrativos; los cálculos se comprueban mediante las pruebas de API.
+La revisión global de tipos excedió la memoria local. La compilación completa con tipos y los dos flujos de CI pasaron en el ejecutor remoto para `e11e431b3`. La vista local de revisión usa precios ilustrativos; además de las pruebas API se verificó el motor real, guardado, reapertura y vista PDF en staging con datos ficticios.
