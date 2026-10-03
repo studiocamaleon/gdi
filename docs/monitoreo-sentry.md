@@ -25,7 +25,9 @@ Cuenta creada mediante GitHub, proyectos web/API creados y filtros de privacidad
 
 Pruebas locales: eliminación de datos sensibles en el evento, rechazo de destinos de telemetría ajenos, separación entre empresas concurrentes usando el SDK real con transporte simulado, y clasificación HTTP 4xx/5xx en el filtro del API. La integración está separada de la publicación de «Deshacer tomo» y permanece sin activar en los servicios desplegados.
 
-Pendiente antes de activación: compilación global remota, recorrido cloud completo, recepción efectiva del correo, elección/verificación de la dirección operativa de avisos y vista de incidentes en Plataforma. El alta con GitHub heredó el correo de esa cuenta; no asumir que los avisos llegan al correo de soporte.
+La compilación global remota de API, web y PDF y el ensayo HTTP/aislamiento pasaron para `5732f90be`: [contenedores y tipos](https://github.com/studiocamaleon/gdi/actions/runs/37093778131), [permisos y separación](https://github.com/studiocamaleon/gdi/actions/runs/37093778147).
+
+Pendiente antes de activación: recorrido cloud completo, recepción efectiva del correo y elección/verificación de la dirección operativa de avisos. El resumen de incidentes en Plataforma también queda pendiente. El alta con GitHub heredó el correo de esa cuenta; no asumir que los avisos llegan al correo de soporte.
 
 Los mapas de código fuente están desactivados en esta primera etapa. Para que Sentry traduzca las líneas compiladas del navegador a los archivos originales, preparar una credencial de compilación limitada, subir los mapas en el builder y retirarlos de la imagen pública. Esa credencial no debe quedar en variables del navegador, argumentos de Docker ni secretos de ejecución. También faltan el ensayo de alertas por aumento de errores, los trabajos de integraciones que manejan errores internamente y las métricas de disponibilidad/latencia.
 
