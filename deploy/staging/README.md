@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 03/10/2026, 00:03 UTC (02/10 en Argentina).** API, ambos workers y web `e11e431b3` (PR #18); PDF conserva `2fee01704`. Tomos PDF, preparación compartida y avisos de OT comprobados primero en staging y publicados en producción. 305 migraciones, sin cambios de esquema ni tamaños. Copias posteriores con firma y manifiesto verificados; alcance y límites en [VALIDACION.md](./VALIDACION.md).
+> **Estado vigente: 03/10/2026, 03:43 UTC.** Web `061a75873` (Deshacer tomo, PR #19); API y ambos workers conservan `e11e431b3` (PR #18), PDF `2fee01704`. Deshacer tomo comprobado de principio a fin en staging y publicado en producción. 305 migraciones, sin cambios de esquema ni tamaños. Firma y manifiesto de copia posterior verificados; alcance en [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 

@@ -2,6 +2,23 @@ import { describe, expect, it } from "vitest";
 import { serializarCotizacion } from "./fuentes-geometria-transporte";
 
 describe("transporte de fuentes guardadas", () => {
+  it("permite guardar dos documentos separados sin enviar marcas internas de la previsión", () => {
+    const materiales = [
+      { varianteId: "papel", cantidad: 14, unidad: "HOJA", consumible: false },
+      { varianteId: "toner", cantidad: 2, unidad: "GR", consumible: true },
+      { varianteId: "pendiente", cantidad: null, unidad: null, revisar: true },
+    ];
+    const request = { contextoMateriales: materiales, jobContext: { cantidad: 7 } };
+    const body = JSON.parse(serializarCotizacion(request));
+    expect(body.contextoMateriales).toEqual([
+      { varianteId: "papel", cantidad: 14, unidad: "HOJA" },
+      { varianteId: "toner", cantidad: 2, unidad: "GR" },
+      { varianteId: "pendiente", cantidad: null, unidad: null },
+    ]);
+    expect(body.jobContext.cantidad).toBe(7);
+    expect(request.contextoMateriales).toBe(materiales);
+    expect(materiales[1].consumible).toBe(true);
+  });
   const fuente = {
     schemaVersion: 2,
     nombreArchivo: "estante.dxf",

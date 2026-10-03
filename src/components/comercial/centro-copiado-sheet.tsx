@@ -22,6 +22,7 @@ import {
   Plus,
   Trash2,
   Layers,
+  Ungroup,
   Printer,
   SlidersHorizontal,
 } from "lucide-react";
@@ -1065,8 +1066,11 @@ function CentroCopiadoContenido({
   };
 
   const desagrupar = (gid: string) => {
+    const juegos = grupos[gid]?.juegos ?? 1;
     setDocs((prev) =>
-      prev.map((d) => (d.grupoId === gid ? { ...d, grupoId: null } : d)),
+      prev.map((d) =>
+        d.grupoId === gid ? { ...d, grupoId: null, copias: juegos } : d,
+      ),
     );
     setGrupos((prev) => {
       const n = { ...prev };
@@ -2429,12 +2433,13 @@ function CentroCopiadoContenido({
                                       </span>
                                       <ActionButton
                                         type="button"
-                                        variant="tertiary"
-                                        isIconOnly
+                                        variant="outline"
                                         onPress={() => desagrupar(gid)}
-                                        aria-label="Desagrupar tomo"
+                                        isDisabled={guardando || leyendo}
+                                        title="Se conservan los archivos, rangos y juegos. El precio se recalcula por documento."
                                       >
-                                        <Trash2 data-icon="inline-start" />
+                                        <Ungroup data-icon="inline-start" />
+                                        Deshacer tomo
                                       </ActionButton>
                                     </div>
                                     <TomoPdfPreview
