@@ -1,5 +1,7 @@
 "use client";
 
+import { useReportarError } from "@/hooks/use-reportar-error";
+
 import { AlertCircleIcon, RefreshCwIcon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,7 +10,14 @@ import styles from "@/components/administracion/tesoreria-view.module.css";
 
 import { Button } from "@/components/ui/button";
 
-export default function TesoreriaError({ reset }: { reset: () => void }) {
+export default function TesoreriaError({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  useReportarError(error);
   const scope = useLegacyDesignScope();
   return (
     <main

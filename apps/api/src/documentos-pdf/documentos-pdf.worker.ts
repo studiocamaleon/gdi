@@ -1,3 +1,4 @@
+import { reportarFallo } from '../common/observabilidad';
 import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
@@ -77,6 +78,9 @@ export class DocumentosPdfWorker
       removeOnComplete: { age: 86400, count: 1000 },
       removeOnFail: { age: 7 * 86400, count: 2000 },
     });
+    this.worker.on('error', (error) =>
+      reportarFallo(error, { operacion: 'cola', cola: 'documentos-pdf' }),
+    );
     this.worker.on('error', () =>
       this.logger.warn('Conexión del worker PDF interrumpida; se reintentará.'),
     );
@@ -332,6 +336,12 @@ export class DocumentosPdfWorker
           'code' in respuesta &&
           respuesta.code === 'CAPACIDAD_NO_DISPONIBLE';
         const cuota = error instanceof ForbiddenException && !sinCapacidad;
+        if (!cuota && (permanente || agotado))
+          reportarFallo(error, {
+            operacion: 'cola',
+            cola: 'documentos-pdf',
+            tenant_id: tenantId,
+          });
         await this.prisma.documentoPdf.updateMany({
           where: {
             id: documentoId,

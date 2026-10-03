@@ -1,3 +1,4 @@
+import { reportarFallo } from '../../common/observabilidad';
 import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
@@ -151,6 +152,12 @@ export class GeometriaWorker
       });
     });
     worker.on('failed', (job, error) => {
+      if (!error.message.includes('cancelado'))
+        reportarFallo(error, {
+          operacion: 'cola',
+          cola: 'geometria',
+          tenant_id: job?.data.tenantId,
+        });
       if (job?.id)
         void this.capacidad
           .cancelar(job.id)
@@ -176,6 +183,7 @@ export class GeometriaWorker
       else this.logger.error(detail);
     });
     worker.on('error', (error) => {
+      reportarFallo(error, { operacion: 'cola', cola: 'geometria' });
       this.logger.error({
         event: 'worker_connection_error',
         queue: worker.name,

@@ -90,6 +90,8 @@ RUN python3 -m pip install --no-cache-dir --only-binary=:all: --require-hashes -
     && /opt/grafoprint-python/bin/python -c "import compas_nest, scipy, ezdxf"
 COPY --from=inbox-ffmpeg /opt/inbox-ffmpeg/bin/ffmpeg /opt/inbox-ffmpeg/bin/ffprobe /usr/local/bin/
 COPY --from=inbox-ffmpeg /tmp/ffmpeg/COPYING.LGPLv2.1 /tmp/ffmpeg/LICENSE.md /usr/local/share/licenses/ffmpeg/
+ARG GRAFO_RELEASE
+ENV GRAFO_RELEASE=$GRAFO_RELEASE
 ENV NODE_ENV=production PORT=3001 HOST=:: \
     OPENNEST_PYTHON=/opt/grafoprint-python/bin/python \
     DXF_PYTHON=/opt/grafoprint-python/bin/python \
@@ -137,6 +139,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 FROM base AS web
+ARG GRAFO_RELEASE
+ENV GRAFO_RELEASE=$GRAFO_RELEASE
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=web-production-deps --chown=node:node /app ./
 # Reponer también las dependencias compartidas de la arquitectura final.

@@ -1,3 +1,5 @@
+import './instrument';
+import { reportarFallo, cerrarMonitoreo } from '../common/observabilidad';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WorkerModule } from './worker.module';
@@ -12,7 +14,9 @@ async function bootstrap(): Promise<void> {
   );
 }
 
-void bootstrap().catch((error: unknown) => {
+void bootstrap().catch(async (error: unknown) => {
+  reportarFallo(error, { operacion: 'inicio' });
+  await cerrarMonitoreo();
   Logger.error(textoErrorLog(error), 'WorkerBootstrap');
   process.exitCode = 1;
 });

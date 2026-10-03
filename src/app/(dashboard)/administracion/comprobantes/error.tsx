@@ -1,5 +1,7 @@
 "use client";
 
+import { useReportarError } from "@/hooks/use-reportar-error";
+
 import { AlertCircleIcon, RefreshCwIcon } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
@@ -16,7 +18,14 @@ import {
 import listPage from "@/components/design-system/list-page.module.css";
 import styles from "@/components/administracion/comprobantes.module.css";
 
-export default function ComprobantesError({ reset }: { reset: () => void }) {
+export default function ComprobantesError({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  useReportarError(error);
   const scope = useDesignScope();
   const theme = useDesignTheme();
   return (

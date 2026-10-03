@@ -47,6 +47,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@paddle/paddle-node-sdk": "^3.8.0",
     "@prisma/client": "^6.19.3",
+    "@sentry/nestjs": "11.4.0",
     "@types/json-logic-js": "^2.0.8",
     "bcryptjs": "^3.0.3",
     "bullmq": "6.3.4",

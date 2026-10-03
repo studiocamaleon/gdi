@@ -1,3 +1,4 @@
+import { reportarFallo } from '../common/observabilidad';
 import { textoErrorLog } from '../common/log-seguro';
 import {
   Injectable,
@@ -39,6 +40,16 @@ export class PlanificacionEntregasWorker
         concurrency: limiteEntero(process.env.WORKER_DELIVERY_CONCURRENCY, 1),
         name: `delivery-plans-${process.pid}`,
       },
+    );
+    this.worker.on('failed', (job, error) =>
+      reportarFallo(error, {
+        operacion: 'cola',
+        cola: 'planificacion',
+        tenant_id: job?.data.tenantId,
+      }),
+    );
+    this.worker.on('error', (error) =>
+      reportarFallo(error, { operacion: 'cola', cola: 'planificacion' }),
     );
     this.worker.on('error', (e) => this.logger.error(textoErrorLog(e)));
     this.worker.on('failed', (job, e) =>
