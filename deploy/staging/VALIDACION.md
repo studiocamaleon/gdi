@@ -860,3 +860,32 @@ La reversión de código puede usar los digests del registro anterior, conservan
 Salud web/API 200, API directa protegida 403 y BFF sin sesión 401; seis máquinas iniciadas y tamaños conservados. Builder temporal retirado. Copia posterior **`1d96303b-6208-45a0-9237-cc19d4478672`**, completada **2026-10-03T00:01:12.874Z**, con 305 migraciones y 13 archivos: firma, huellas, descifrado de manifiesto, código exacto e imágenes desplegadas comprobados. El copiador terminó el ciclo automático y notificó éxito. No se repitió una restauración SQL completa en esta publicación.
 
 Los intentos automáticos de las 23:01, 23:34, 23:42 y 23:54 UTC fallaron. Hubo además consultas B2 intermitentes que vencieron desde la Mac; no se demostró que todos los intentos tuvieran la misma causa. Una copia aislada a las 23:46 UTC fue verificada antes del despliegue. El ciclo horario de las 00:00 UTC volvió a completar con el servicio normal y el inventario actualizado, después de retirar las fixtures. No se redujeron retención, validación TLS ni controles de origen. Diagnóstico temporal retirado.
+
+
+## 03/10/2026 — Sentry y monitor de Plataforma (PR #20)
+
+Revisión de ejecución **`b030b6ab7a471bf41e55ff6f460a928c4b808b63`**, dependiente del PR #19. Publicación autorizada, comprobada primero en staging y promovida a producción conservando los digests. No se fusionaron PR ni se modificó la web comercial.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:804ae5218e78591c8629317eca1609998232e61c0a998d613ca7fabd0ea4839d` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:0d7ea346a5ee7da29931281f1e0f8f094b31d7f7145c63f246a2c265e8e02d42` |
+
+Gotenberg conserva su imagen `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`. **305 migraciones, ninguna nueva**. Seis máquinas iniciadas, mismos tamaños y controles de salud; web/API 200, API privada directa 403 y BFF sin sesión 401. Constructor temporal retirado, sin reiniciar Docker ni otros proyectos locales.
+
+### Recorrido comprobado
+
+- 36 pruebas enfocadas (28 backend, 8 interfaz), tipos y lint de los cambios. [CI de contenedores y tipos](https://github.com/studiocamaleon/gdi/actions/runs/37096268431), [HTTP y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37096268425) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37096268400) aprobados para la revisión exacta.
+- Recepción de eventos ficticios desde API y navegador al pulsar **Probar monitoreo** en el panel. Eventos de transporte desde los contenedores de worker, worker PDF y Next servidor aceptados por Sentry, con servicio, entorno y versión correctos. No se hizo caer un proceso ni se provocó un fallo de una cola real para este ensayo.
+- **Plataforma → Errores del sistema** muestra los grupos de ensayo, filtra entorno/estado/período y los incorpora automáticamente sin recargar. El acceso de lectura de Sentry es únicamente `event:read`; la API proyecta campos permitidos y no expone la credencial. Los ensayos se excluyen por defecto. Si falta el conteo del período, se muestra «—».
+- Sesión personal de Plataforma y MFA obligatorios. Usuario de empresa rechazado en el monitor. En staging se verificó además el recorrido HTTP con un administrador ficticio y MFA; al finalizar se revocaron sus sesiones y permisos, conservando la auditoría. No se crearon accesos de ensayo en producción.
+- Filtrado de datos sensibles e IP en Sentry; sin formularios, conversaciones, archivos, cookies, logs, Replay ni transacciones. Las pruebas locales cubren aislamiento y minimización; la vista recibida y el ensayo del emisor servidor corroboraron los datos técnicos permitidos.
+- Dirección operativa de avisos verificada por el titular y configurada para los dos proyectos. Las reglas de alta prioridad notifican a un miembro explícito, sin depender de asignados sugeridos ni actividad reciente. Se solicitó una notificación de prueba por proyecto; Sentry confirmó «Notification fired!» para API. La recepción en la casilla tras cambiar el destinatario queda pendiente de confirmación del titular; no confundir envío con entrega.
+
+### Copia y reversión
+
+Copia posterior **`5e84a7c3-f258-4cc5-a06a-f475f8bd1cd1`**, completada **2026-10-03T05:05:17.738Z**, con 305 migraciones y 13 archivos. Firma, huellas, descifrado del manifiesto, fuentes exactas cifradas con protección de 31 días e imágenes vigentes comprobados. No se repitió una restauración SQL completa. Evidencias y secretos fuera de Git.
+
+Para desactivar la captura, establecer `SENTRY_ENABLED=false` y reiniciar los servicios afectados. Para revertir el lote completo, conservar la base y usar API/workers `e11e431b3` (digest `sha256:bc61b4374bc023f0660554ba52936468e05e93b3db32fbfc940977da7036d6a6`) y web `061a75873` (digest `sha256:adf8dfd9f5b386b6cea2bd785c4cad2fa4fd465303ab3edbd7a948d49d2d3b9f`). No eliminar datos ni revertir migraciones.
+
+Mapas de código fuente desactivados en esta primera etapa. No equivale a monitoreo completo de disponibilidad, rendimiento, errores absorbidos por integraciones ni a una prueba de caída de producción. Ver [alcance y operación](../../docs/monitoreo-sentry.md).
