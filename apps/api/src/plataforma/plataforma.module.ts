@@ -32,6 +32,8 @@ import { PlanesAsignacionController } from './planes/planes-asignacion.controlle
 import { PlanesVersionesController } from './planes/planes-versiones.controller';
 import { PlanesComparacionService } from './planes/planes-comparacion.service';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
+import { IncidentesController } from './incidentes.controller';
+import { IncidentesService } from './incidentes.service';
 
 /**
  * Control plane (etapa A): la consola de la Plataforma, sólo lectura.
@@ -48,6 +50,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
     CapacidadesEmpresaModule,
   ],
   controllers: [
+    IncidentesController,
     FiscalPlataformaController,
     ContratacionesPlataformaController,
     PlanesOfertasController,
@@ -59,6 +62,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
     SuscripcionesPlataformaController,
   ],
   providers: [
+    IncidentesService,
     InvitacionesEmpresaService,
     ContratacionesPlataformaService,
     ConsultaContratacionService,

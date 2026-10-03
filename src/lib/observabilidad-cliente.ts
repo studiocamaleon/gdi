@@ -64,6 +64,18 @@ export async function reportarErrorVista(error: unknown) {
 }
 
 const recientes = new Map<string, number>();
+export async function reportarPruebaCliente(): Promise<boolean> {
+  if (!(await iniciarMonitoreoCliente())) return false;
+  try {
+    Sentry.captureException(new Error("Ensayo ficticio del navegador"), {
+      tags: { operacion: "prueba", area: "plataforma" },
+    });
+    return await Sentry.flush(2000);
+  } catch {
+    return false;
+  }
+}
+
 export async function reportarErrorApi(path: string, status: number) {
   if (status < 500 || !(await iniciarMonitoreoCliente())) return;
   const area = areaMonitoreo(path),

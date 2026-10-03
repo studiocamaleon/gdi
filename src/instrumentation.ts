@@ -10,7 +10,10 @@ export const onRequestError: Instrumentation.onRequestError = async (
   _request,
   context,
 ) => {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const { reportarErrorServidor } = await import("./sentry.server.config");
-  reportarErrorServidor(error, context.routePath);
+  // Mantener la importación dentro de la rama: Next también compila este
+  // archivo para edge, donde las integraciones de procesos Node no existen.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { reportarErrorServidor } = await import("./sentry.server.config");
+    reportarErrorServidor(error, context.routePath);
+  }
 };

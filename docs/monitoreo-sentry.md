@@ -33,6 +33,16 @@ Los mapas de código fuente están desactivados en esta primera etapa. Para que 
 
 ## Cuando llegue un aviso
 
+### Panel en Plataforma
+
+**Plataforma → Errores del sistema** consulta los incidentes con actualización automática cada minuto mientras la pestaña está visible. Permite elegir entorno, período, estado e inclusión de ensayos. Muestra hasta 50 incidentes recientes, prioridad, repeticiones del período cuando Sentry las proporciona y acceso al detalle. Una consulta fallida se indica como tal, conservando la última lectura disponible; nunca se interpreta como cero errores.
+
+La API necesita `SENTRY_READ_TOKEN` con permiso `event:read` y `SENTRY_ORG=grafoprint`. Este token sólo va en el almacén privado y en los secretos de **API**, nunca en Next, el navegador, los workers ni los argumentos de compilación. La consulta usa un destino fijo de Sentry US, dos proyectos conocidos, tiempo límite y caché de 30 segundos. Las respuestas se reconstruyen para no reenviar asignaciones, correos ni contenido arbitrario del proveedor.
+
+La lectura exige sesión personal de Plataforma, usuario activo y MFA completo. El rol de empresa no habilita el monitor. **Probar monitoreo** requiere administrador de Plataforma y admite un envío por minuto: genera errores ficticios en API y navegador, sin provocar una caída ni modificar datos. Se distingue la solicitud enviada de la recepción confirmada en el listado. Los ensayos quedan fuera de la vista normal.
+
+Pruebas locales del panel: validación de filtros, proyección sin datos privados, separación de entornos, caché, falla del proveedor, estados visibles y recorrido HTTP de permisos. La activación y sus evidencias cloud se registran por entorno en los documentos de validación.
+
 1. Revisar entorno, versión, área y empresas afectadas. Distinguir una prueba marcada `operacion=prueba` de un incidente real.
 2. Reproducir con datos ficticios, preparar la corrección en una rama y agregar una prueba del problema.
 3. Probar localmente y en staging; publicar el conjunto comprobado y observar si el incidente reaparece.

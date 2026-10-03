@@ -15,6 +15,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { EmpresasView } from "./empresas-view";
 import { CrearEmpresaDialog } from "./crear-empresa-dialog";
 import { EquipoView } from "./equipo-view";
+import { IncidentesView } from "./incidentes-view";
 import { FiscalArcaView } from "./fiscal-arca-view";
 import { SuscripcionesView } from "./suscripciones-view";
 import { PlanesView, type SalidaPlanes } from "./planes-view";
@@ -77,6 +78,7 @@ import {
  */
 
 type Vista =
+  | "incidentes"
   | "observabilidad"
   | "negocio"
   | "tenants"
@@ -94,6 +96,7 @@ const NAV: Array<{
     grupo: "Plataforma",
     items: [
       { k: "observabilidad", label: "Observabilidad", ic: "gauge" },
+      { k: "incidentes", label: "Errores del sistema", ic: "alert" },
       { k: "negocio", label: "Negocio", ic: "chart" },
       { k: "tenants", label: "Empresas", ic: "building" },
       { k: "suscripciones", label: "Suscripciones", ic: "card" },
@@ -111,6 +114,7 @@ const NAV: Array<{
 ];
 
 const TITULOS: Record<Vista, { crumb: string; title: string }> = {
+  incidentes: { crumb: "Plataforma", title: "Errores del sistema" },
   fiscal: { crumb: "Operaciones", title: "Facturación ARCA" },
   suscripciones: { crumb: "Plataforma", title: "Suscripciones y cobros" },
   equipo: { crumb: "Operaciones", title: "Equipo y acceso" },
@@ -121,6 +125,8 @@ const TITULOS: Record<Vista, { crumb: string; title: string }> = {
   impersonacion: { crumb: "Operaciones", title: "Impersonación y auditoría" },
 };
 const DESCRIPCIONES: Record<Vista, string> = {
+  incidentes:
+    "Incidentes y seguimiento técnico de Grafo, conectados con Sentry.",
   fiscal: "Certificado y acceso fiscal de la plataforma.",
   suscripciones:
     "Estado comercial, acceso y diagnóstico de la sincronización con Paddle.",
@@ -337,6 +343,9 @@ export function ConsolaPlataformaView({
                 </ActionButton>
               ) : null}
             </div>
+          ) : null}
+          {vista === "incidentes" ? (
+            <IncidentesView ambiente={ambiente} esAdmin={esAdmin} />
           ) : null}
           {vista === "negocio" ? <Negocio /> : null}
           {vista === "fiscal" ? <FiscalArcaView esAdmin={esAdmin} /> : null}
@@ -1394,7 +1403,9 @@ function Planes({ esAdmin }: { esAdmin: boolean }) {
       </div>
     );
 
-  const vinculados = planes.filter((p) => p.comercialVersionado ? p.ofertaActualId : p.paddlePriceId).length;
+  const vinculados = planes.filter((p) =>
+    p.comercialVersionado ? p.ofertaActualId : p.paddlePriceId,
+  ).length;
 
   return (
     <div className="cpl-page cpl-planes">
