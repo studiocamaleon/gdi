@@ -83,6 +83,33 @@ export const maquinaParaColor = (
     ? (ctx.maquinaColorId ?? ctx.maquinaBnId)
     : (ctx.maquinaBnId ?? ctx.maquinaColorId);
 
+/** Una preparación por tirada consecutiva del tomo, nunca por PDF ni copia.
+ * Cambiar papel, formato, máquina, color o caras inicia otra preparación.
+ * Los documentos sueltos y los tomos distintos conservan su propio setup.
+ */
+export function preparacionesPorDocumento(
+  docs: DocumentoInput[],
+  ctx: PlantillaContexto,
+): Map<string, boolean> {
+  const anteriores = new Map<string, string>();
+  return new Map(
+    docs.map((doc) => {
+      const clave = JSON.stringify([
+        maquinaParaColor(ctx, doc.color),
+        doc.papelMateriaPrimaId,
+        doc.gramaje ?? null,
+        doc.tamanoAnchoMm,
+        doc.tamanoAltoMm,
+        doc.color,
+        doc.faz,
+      ]);
+      const preparar = !doc.grupoId || anteriores.get(doc.grupoId) !== clave;
+      if (doc.grupoId) anteriores.set(doc.grupoId, clave);
+      return [doc.id, ctx.cobraSetup && preparar];
+    }),
+  );
+}
+
 export function calcularHojas(
   paginas: number,
   copias: number,

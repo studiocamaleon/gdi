@@ -1,4 +1,5 @@
 "use client";
+import { AvisoInicioInventario } from "../inventario/aviso-inicio-inventario";
 import { PackageSearch, RefreshCw } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { stockUnitLabel } from "@/components/inventario/stock-conversion-fields";
@@ -25,6 +26,8 @@ export function PrevisionMaterialesPanel({
   expandido?: boolean;
 }) {
   if (data?.estado === "no_incluido" && !error) return null;
+  if (data?.estado === "inicio_sin_stock" && !error && !loading)
+    return <AvisoInicioInventario />;
   const titulo = loading
     ? "Consultando materiales…"
     : error

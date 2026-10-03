@@ -1,3 +1,4 @@
+import { agregarPaginasTomo } from '../common/tomo-pdf';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -521,15 +522,9 @@ export class DocumentosOrdenService {
       );
       orientacionesPaginas.push(...orientaciones);
       if (extraerPaginas) {
-        const paginas = await unido.copyPages(pdf, indices);
-        paginas.forEach((p) => unido.addPage(p));
-        // Cada original empieza en un frente y cada juego mantiene su orden.
-        if (doc.archivos.length > 1 && doc.faz === 2 && seleccion.paginas % 2)
-          unido.addPage(
-            orientaciones.at(-1) === 'horizontal'
-              ? [841.89, 595.276]
-              : [595.276, 841.89],
-          );
+        await agregarPaginasTomo(
+          unido, pdf, indices, doc.archivos.length > 1 && doc.faz === 2,
+        );
       }
     }
     const contenido = salidaCad

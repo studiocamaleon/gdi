@@ -1,5 +1,7 @@
 "use client";
 
+import { TomoPdfPreview } from "../comercial/tomo-pdf-preview";
+import type { metaCentroCopiado } from "@/lib/centro-copiado-api";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -131,8 +133,10 @@ export function ArchivosOrdenTab({
   soloLectura = false,
   onTotalCambio,
   estadoDocumental,
+  tomos = {},
 }: {
   ordenId: string;
+  tomos?: Record<string, ReturnType<typeof metaCentroCopiado>>;
   estadoDocumental?: EstadoDocumentalOrden | null;
   soloLectura?: boolean;
   /** Para que la pestaña muestre el contador real. */
@@ -140,8 +144,12 @@ export function ArchivosOrdenTab({
 }) {
   const conArte = useCapacidad("aprobacion_arte");
   const [data, setData] = React.useState<ArchivosDeOrden | null>(null);
-  const [documentalActual, setDocumentalActual] = React.useState(estadoDocumental);
-  React.useEffect(() => setDocumentalActual(estadoDocumental), [estadoDocumental]);
+  const [documentalActual, setDocumentalActual] =
+    React.useState(estadoDocumental);
+  React.useEffect(
+    () => setDocumentalActual(estadoDocumental),
+    [estadoDocumental],
+  );
   const [cargando, setCargando] = React.useState(true);
   const [token, setToken] = React.useState(0);
   const recargar = React.useCallback(() => setToken((n) => n + 1), []);
@@ -205,7 +213,15 @@ export function ArchivosOrdenTab({
         <div className="otd-noprod">No se pudieron cargar los archivos.</div>
       ) : (
         <div className="arch-tab">
-          <DesarrolloDocumentalOrden ordenId={ordenId} archivos={[...data.documento, ...data.items.flatMap(item => item.archivos)]} soloLectura={soloLectura} onCambioDocumental={setDocumentalActual} />
+          <DesarrolloDocumentalOrden
+            ordenId={ordenId}
+            archivos={[
+              ...data.documento,
+              ...data.items.flatMap((item) => item.archivos),
+            ]}
+            soloLectura={soloLectura}
+            onCambioDocumental={setDocumentalActual}
+          />
           <div className="arch-bloque">
             <div className="arch-bloque-head">
               <span className="t">Archivos de la orden</span>
@@ -245,17 +261,42 @@ export function ArchivosOrdenTab({
                 ) : null}
                 <span className="s">Arte de producción de este producto</span>
               </div>
-              <ArchivoUploader
-                scope="ORDEN_ITEM"
-                entidadId={item.itemId}
-                archivos={item.archivos}
-                onCambio={(a) => setItem(item.itemId, a)}
-                soloLectura={soloLectura}
-                permitirPublico
-              calcularHash={conArte}
-                titulo="Arrastrá el arte de este producto"
-                vacio="Sin arte cargado. Producción va a llegar a este paso sin el archivo."
-              />
+              {tomos[item.itemId]?.esTomo && (
+                <TomoPdfPreview
+                  nombre={tomos[item.itemId]?.tomoNombre || item.nombre}
+                  configuracionMixta={
+                    new Set(
+                      (tomos[item.itemId]?.segmentos ?? []).map(
+                        (s) =>
+                          `${s.papelMateriaPrimaId}|${s.gramaje}|${s.tamano}|${s.color}|${s.faz}`,
+                      ),
+                    ).size > 1
+                  }
+                  segmentos={(tomos[item.itemId]?.segmentos ?? []).map((s) => ({
+                    ...s,
+                    nombre: s.nombre || s.archivoNombre || "Documento",
+                    origenItemIds: [item.itemId],
+                  }))}
+                />
+              )}
+              <details open={tomos[item.itemId]?.esTomo ? undefined : true}>
+                {tomos[item.itemId]?.esTomo && (
+                  <summary>
+                    Originales del tomo · {item.archivos.length} archivos
+                  </summary>
+                )}
+                <ArchivoUploader
+                  scope="ORDEN_ITEM"
+                  entidadId={item.itemId}
+                  archivos={item.archivos}
+                  onCambio={(a) => setItem(item.itemId, a)}
+                  soloLectura={soloLectura}
+                  permitirPublico
+                  calcularHash={conArte}
+                  titulo="Arrastrá el arte de este producto"
+                  vacio="Sin arte cargado. Producción va a llegar a este paso sin el archivo."
+                />
+              </details>
             </div>
           ))}
         </div>

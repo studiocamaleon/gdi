@@ -7431,7 +7431,6 @@ function PropuestaFichaContenido({
             incompleto.
           </div>
         ) : null}
-        {cotizando && <ModoInicioInventario />}
         <HeroTabs
           selectedKey={tab}
           onSelectionChange={(key) => setTab(String(key) as OrdenTab)}
@@ -8251,6 +8250,9 @@ function PropuestaFichaContenido({
             ) : null}
             {tab === "materiales" && puedeVerMateriales ? (
               <>
+                {cotizando && (!conPrevisionMateriales || !items.length) && (
+                  <ModoInicioInventario />
+                )}
                 {conPrevisionMateriales && items.length > 0 && (
                   <PrevisionMaterialesPanel
                     data={previsionMateriales.data}
@@ -8324,6 +8326,10 @@ function PropuestaFichaContenido({
                 <ArchivosOrdenTab
                   ordenId={orden.id}
                   estadoDocumental={initialDocumentos}
+                  tomos={Object.fromEntries(orden.productos.map((p) => [
+                    p.id,
+                    metaCentroCopiado(p.snapshot?.jobContext as Record<string, unknown> | undefined),
+                  ]))}
                   soloLectura={!puedeEditarOrden}
                   onTotalCambio={setArchivosCount}
                 />
@@ -8588,6 +8594,7 @@ function PropuestaFichaContenido({
           open={copiadoOpen && puedeModificarProductos}
           clienteId={clienteId || null}
           editItems={copiadoEditItems}
+          persistedItemIds={persistedItemIds}
           onOpenChange={(open) => {
             if (open && !permisoProductosRef.current) return;
             setCopiadoOpen(open);
@@ -8600,18 +8607,10 @@ function PropuestaFichaContenido({
             const cargaEditada = copiadoEditItems?.length
               ? cargaDeItem(copiadoEditItems[0])
               : null;
-            const nuevosConHerencia = cargaEditada
-              ? nuevos.map((nuevo, indice) => ({
-                  ...nuevo,
-                  archivosOrigenItemIds: copiadoEditItems!
-                    .filter(
-                      (_, origenIndice) =>
-                        Math.min(origenIndice, nuevos.length - 1) === indice,
-                    )
-                    .map((origen) => origen.id)
-                    .filter((id) => persistedItemIds.has(id)),
-                }))
-              : nuevos;
+            const nuevosConHerencia = nuevos.map((nuevo) => ({
+              ...nuevo,
+              archivosOrigenItemIds: nuevo.archivosOrigenItemIds?.filter((id) => persistedItemIds.has(id)),
+            }));
             setItems((current) => {
               const base = cargaEditada
                 ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
