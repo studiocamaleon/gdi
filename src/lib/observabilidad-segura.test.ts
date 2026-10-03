@@ -123,6 +123,9 @@ describe("privacidad de incidentes", () => {
       configurarMonitoreo({ ...env, STAGING_PRIVATE: "true" })?.environment,
     ).toBe("staging");
     expect(
+      configurarMonitoreo({ ...env, GRAFO_DEPLOY_ENV: "staging" })?.environment,
+    ).toBe("staging");
+    expect(
       configurarMonitoreo({ ...env, GRAFO_DEPLOY_ENV: "production" })
         ?.environment,
     ).toBe("production");

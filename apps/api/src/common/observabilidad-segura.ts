@@ -12,7 +12,7 @@ export function configurarMonitoreo(
   const environment =
     env.GRAFO_DEPLOY_ENV === 'production'
       ? 'production'
-      : env.STAGING_PRIVATE === 'true'
+      : env.STAGING_PRIVATE === 'true' || env.GRAFO_DEPLOY_ENV === 'staging'
         ? 'staging'
         : null;
   if (!environment || !env.SENTRY_DSN) return null;
