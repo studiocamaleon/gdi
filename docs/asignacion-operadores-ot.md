@@ -39,4 +39,12 @@ Rama `codex/asignacion-operadores`, basada en `codex/permisos-transversales`: de
 - Interfaz: apertura bajo demanda, revisión obligatoria antes de aplicar, rechazo de selección obsoleta y controles deshabilitados sin edición. Chrome: selección de apoyo, comparación de fechas, aplicación en memoria y menús Imprimir/Seguimiento con sus acciones.
 - Catálogo visual local: `/dev/diseno/operadores`, protegido para no existir fuera de desarrollo. Sus botones y personas son ficticios; no imprime ni modifica una empresa.
 
-Pendiente antes de publicar: revisión del conjunto, validación en staging y autorización de producción. Compilar imágenes de producción en remoto; no reiniciar ni ampliar Docker.
+## Publicación — 05/10/2026
+
+Revisión `583725508` publicada primero en staging y después en producción con autorización del titular y las mismas imágenes por digest. CI de HTTP/aislamiento y contenedores aprobado; las compilaciones adicionales se hicieron en Fly con tipos habilitados.
+
+Pasaron 24 comprobaciones HTTP/SSR con usuarios y empresa ficticios: modalidad habitual/apoyo, guardar/reabrir/emitir, permisos y separación entre empresas, rollback por habilitación retirada, reasignación posterior conservada y reparto automático sin apoyo ni doble ocupación. Las filas ficticias fueron retiradas.
+
+Chrome: menús Imprimir/Seguimiento, apertura del QR y configuración habitual/apoyo comprobados en staging; estaciones y selector comprobados también en Corporearte, sin guardar cambios. Los integrantes existentes conservan el modo habitual: para ofrecer a otra persona como alternativa, agregarla a la estación como **De apoyo**.
+
+Ambos entornos tienen 306 migraciones y mantienen los tamaños anteriores. Salud y versión de los cuatro procesos comprobadas, Sentry activo y copias posteriores verificadas con fuentes cifradas bajo custodia. No se repitió una restauración SQL completa. No se fusionaron los PR ni se modificó la web comercial. Detalles, imágenes y reversión: [staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md).

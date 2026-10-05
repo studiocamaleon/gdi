@@ -302,3 +302,35 @@ Copia previa `455005f0-7a7b-4aca-8d80-56a6a16c901c`, completada a las **20:01:03
 ### Reversión
 
 Para revertir sólo este lote, conservar la base y usar la revisión anterior `b030b6ab7a471bf41e55ff6f460a928c4b808b63`: API/workers `sha256:804ae5218e78591c8629317eca1609998232e61c0a998d613ca7fabd0ea4839d` y web `sha256:0d7ea346a5ee7da29931281f1e0f8f094b31d7f7145c63f246a2c265e8e02d42`. Esto vuelve a introducir el bloqueo del cobro delegado. No revertir migraciones ni borrar operaciones comerciales.
+
+## 05/10/2026, 22:40 UTC — Operadores habituales/de apoyo y acciones de la OT (PR #23)
+
+Revisión de ejecución **`5837255089303538b7ec9cbe7f20d03c3b4ca5a7`**, dependiente del PR #22. Despliegue solicitado por el titular: staging, comprobación y promoción de las mismas imágenes a producción. Sin fusionar la cadena de PR ni modificar Vercel. Los commits documentales posteriores no cambian la revisión ejecutada.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:5a3b4b141345b67be3d97dd7cc6eca3d19a392ef8a344c933ae775dbd326e92e` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:e6baa8cb022b4d7483b52718411383a9fd6b54f721aeaf6f321a96dbb92fa137` |
+
+Gotenberg conserva `2fee01704` y `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`. Se mantienen las seis máquinas y sus tamaños. Salud web/API 200, API directa privada 403 y BFF sin sesión 401; versión ejecutada y configuración de Sentry comprobadas. Constructor remoto temporal retirado; Docker y los otros proyectos locales intactos.
+
+### Migración y alcance
+
+- **306 migraciones**: aplicada una sola vez `20261005220000_personal_habitual_apoyo`, mediante el migrador separado, sin seeds ni resets. Agrega el modo de personal por estación (habitual por defecto) y la elección de personal en el ítem de OT. Permisos de lectura del rol de ejecución comprobados, sin DDL.
+- Las personas existentes siguen como habituales. Agregar un apoyo a otra estación no cambia su horario ni concede permisos de usuario. No se modificó el personal de las empresas operativas durante las pruebas.
+- Elección previa por paso raíz: revisar disponibilidad, guardar/reabrir y emitir. Validación de nuevo al emitir y rollback si dejó de ser posible. La reasignación posterior no es reemplazada por la elección antigua del borrador.
+- Menús únicos **Imprimir** y **Seguimiento**, conservando condiciones y permisos de documentos, etiqueta, historial, enlace y QR. Componentes/lotes y pasos iniciados mantienen los límites documentados en [la guía](../../docs/asignacion-operadores-ot.md).
+
+### Comprobaciones
+
+- **122 pruebas locales** (85 de motor/ETA/interfaz y 37 de integración con PostgreSQL), tipos completos de API/web y revisión visual local aprobadas previamente.
+- CI del SHA desplegado: [HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37380181309/job/111999845353) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37380180950/job/111999844284), ambos correctos. Compilaciones completas remotas adicionales con tipos habilitados.
+- **24 comprobaciones HTTP/SSR en staging** con empresa y usuarios ficticios: alta de estación habitual/apoyo, revisión, guardar/reabrir/emitir, rechazo sin supervisión y de cotización ajena, operador inválido, rollback por habilitación retirada, transferencia conservada al leer el tablero, reparto automático sin apoyo y ausencia de doble ocupación del habitual.
+- Chrome en staging: desplegables Imprimir y Seguimiento, apertura del QR, configuración de Centro de copiado y opciones Habitual/De apoyo. Se cerró la configuración sin guardar; no se ejecutaron impresiones físicas.
+- Datos y accesos ficticios retirados por sus identificadores; recuentos operativos de staging conservados. Producción recibió únicamente la migración y las imágenes; no se crearon órdenes, cobros, facturas ni comunicaciones de prueba allí. Se comprobó además en Chrome la pantalla de estaciones y el selector Habitual/De apoyo de Corporearte, cerrando sin guardar.
+
+### Respaldo y reversión
+
+Copia previa `613d7a1d-3f9d-4f3b-9a54-6292c105f7f0`, completada **2026-10-05T22:00:55.290Z**. Copia posterior **`888682dd-1cc5-4f1a-ada8-86016468d773`**, completada **2026-10-05T22:38:46.052Z**, con 306 migraciones y 20 archivos. Firma, huella y descifrado del manifiesto, revisión exacta y referencias de imágenes/fuentes comprobados. Fuentes cifradas y protegidas por 31 días. No se repitió una restauración SQL completa. Evidencias y accesos fuera de Git.
+
+Para revertir este lote, mantener las columnas nuevas y volver a API/workers `sha256:b0a3b812577cb52b709b3ce5f286ce6232f6d9d6eaf90b3d7c0b7422f983fd85` y web `sha256:dd3c8eee47dca7f638d1822d5efb4279143aeee2b70174babccf6b81008a0c69` (`0d0b70509`). No borrar datos ni revertir migraciones. La versión anterior no distingue apoyos y podría incluirlos en el reparto automático: revisar las habilitaciones creadas después del despliegue antes de volver atrás.
