@@ -2,8 +2,6 @@ import { notFound } from "next/navigation";
 
 import { PresupuestoDetalleView } from "@/components/comercial/presupuesto-detalle-view";
 import { ApiError } from "@/lib/api";
-import type { MembershipRole } from "@/lib/auth";
-import { getCurrentUserCached } from "@/lib/auth-server";
 import { getPresupuesto } from "@/lib/presupuestos-api";
 
 export const dynamic = "force-dynamic";
@@ -23,15 +21,5 @@ export default async function PresupuestoDetallePage({
     throw error;
   }
 
-  // El rol decide si se ven las acciones de aprobación interna.
-  // Ante la duda, el más restrictivo.
-  let rol: MembershipRole = "operador";
-  try {
-    const current = await getCurrentUserCached();
-    rol = current.currentUser.tenantActual.rol;
-  } catch {
-    /* queda operador */
-  }
-
-  return <PresupuestoDetalleView inicial={detalle} rol={rol} />;
+  return <PresupuestoDetalleView inicial={detalle} />;
 }

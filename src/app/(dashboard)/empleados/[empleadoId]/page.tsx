@@ -39,7 +39,7 @@ async function EmpleadoDetallePageContent({
   const { empleadoId } = await params;
   const [empleado, canManage, canViewCommissions] = await Promise.all([
     getEmpleadoById(empleadoId),
-    puedeConfigurar("empleados", "registros.gestionar_empleados"),
+    puedeConfigurar("empleados", "registros.empleados.gestionar"),
     tienePermiso("registros.ver_comisiones"),
   ]);
 

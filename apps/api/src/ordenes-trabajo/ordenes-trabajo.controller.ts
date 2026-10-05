@@ -154,20 +154,20 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.tablero(auth, query.vista === 'activos');
   }
 
-  @Permiso("produccion.tablero.ver")
+  @Permiso("produccion.tablero.ver", "produccion.estaciones.ver")
   @Get('tablero/terminados')
   tableroTerminados(@CurrentSession() auth: CurrentAuth, @Query() query: TableroTerminadosQueryDto) {
     return this.ordenesTrabajoService.tableroTerminados(auth, query);
   }
 
-  @Permiso("produccion.tablero.ver")
+  @Permiso("produccion.tablero.ver", "produccion.estaciones.ver")
   @Get('tablero/items/:itemId')
   tableroItem(@CurrentSession() auth: CurrentAuth, @Param('itemId', ParseUUIDPipe) itemId: string) {
     return this.ordenesTrabajoService.consultarItemTablero(auth, itemId);
   }
 
   /** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */
-  @Permiso("produccion.tablero.ver")
+  @Permiso("produccion.tablero.ver", "produccion.estaciones.ver")
   @Get('tablero/mis-tramos')
   misTramos(@CurrentSession() auth: CurrentAuth) {
     return this.ordenesTrabajoService.misTramosAbiertos(auth);
@@ -175,7 +175,7 @@ export class OrdenesTrabajoController {
 
   /** Pausa automática por inactividad (D13): sin respuesta al countdown. */
   @Permiso("produccion.ejecutar", "produccion.supervisar")
-  @RequiereVista("produccion.tablero.ver")
+  @RequiereVista("produccion.tablero.ver", "produccion.estaciones.ver")
   @Patch('tablero/pasos/:pasoId/auto-pausa')
   autoPausa(
     @CurrentSession() auth: CurrentAuth,
@@ -186,7 +186,7 @@ export class OrdenesTrabajoController {
 
   /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
   @Permiso("produccion.ejecutar", "produccion.supervisar")
-  @RequiereVista("produccion.tablero.ver")
+  @RequiereVista("produccion.tablero.ver", "produccion.estaciones.ver")
   @Patch('tablero/pasos/:pasoId/mesa')
   mesaPaso(
     @CurrentSession() auth: CurrentAuth,
@@ -198,7 +198,7 @@ export class OrdenesTrabajoController {
 
   /** Panel de Compras: avanzar el estado de una compra tercerizada (F2). */
   @Permiso("produccion.supervisar")
-  @RequiereVista("produccion.tablero.ver")
+  @RequiereVista("produccion.tablero.ver", "produccion.estaciones.ver")
   @Patch('tablero/pasos/:pasoId/compra')
   avanzarCompra(
     @CurrentSession() auth: CurrentAuth,
@@ -214,7 +214,7 @@ export class OrdenesTrabajoController {
 
   /** Resolver/reabrir una condición operativa de material o calidad. */
   @Permiso("produccion.supervisar")
-  @RequiereVista("produccion.tablero.ver")
+  @RequiereVista("produccion.tablero.ver", "produccion.estaciones.ver")
   @Patch('tablero/pasos/:pasoId/gate')
   resolverGatePaso(
     @CurrentSession() auth: CurrentAuth,
@@ -326,7 +326,7 @@ export class OrdenesTrabajoController {
   }
 
   @Permiso("produccion.ejecutar", "produccion.supervisar")
-  @RequiereVista("comercial.ordenes.ver", "produccion.tablero.ver")
+  @RequiereVista("comercial.ordenes.ver", "produccion.tablero.ver", "produccion.estaciones.ver", "produccion.colas.ver")
   @Patch(':id/items/:itemId/pasos/:pasoId')
   accionPaso(
     @CurrentSession() auth: CurrentAuth,

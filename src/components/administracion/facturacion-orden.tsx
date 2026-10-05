@@ -330,7 +330,11 @@ export function ComprobantesOrdenTab({
   );
   // Anular es otro permiso que facturar: emitir y deshacer no son lo mismo.
   const fiscalDisponible = useCapacidad("fiscal_argentina");
-  const puedeAnular = usePuede("administracion.anular");
+  const permisoAnular = usePuede("administracion.anular");
+  const permisoVerCobros = usePuede("administracion.cobrar.ver");
+  const puedeAnularCobro = permisoAnular && permisoVerCobros;
+  const permisoVerFacturacion = usePuede("administracion.facturacion.ver");
+  const puedeAnular = permisoAnular && permisoVerFacturacion;
   // El botón Facturar sólo aparece con la integración AFIP activa. null =
   // todavía no sabemos, así que no se muestra ni el botón ni el aviso.
   const [facturacionActiva, setFacturacionActiva] = React.useState<
@@ -587,7 +591,7 @@ export function ComprobantesOrdenTab({
                   {formatMonedaOrden(montoCobroEnOrden(c), moneda)}
                 </span>
                 <span className="fo-comp-acc">
-                  {!soloLectura && puedeAnular && c.puedeAbrirRecibo !== false ? (
+                  {!soloLectura && puedeAnularCobro && c.puedeAbrirRecibo !== false ? (
                     <button
                       type="button"
                       className="fo-nc-btn"
@@ -633,7 +637,7 @@ export function ComprobantesOrdenTab({
       ) : null}
 
       <ConfirmacionDestructiva
-        open={!soloLectura && cobroParaAnular !== null}
+        open={!soloLectura && puedeAnularCobro && cobroParaAnular !== null}
         onOpenChange={(open) => {
           if (!open) setCobroParaAnular(null);
         }}
@@ -652,7 +656,7 @@ export function ComprobantesOrdenTab({
         }}
         accionLabel="Anular cobro"
         onConfirmar={async (motivo) => {
-          if (soloLectura || !cobroParaAnular) return;
+          if (soloLectura || !puedeAnularCobro || !cobroParaAnular) return;
           try {
             await anularCobro(cobroParaAnular.id, {
               motivo,
@@ -672,7 +676,7 @@ export function ComprobantesOrdenTab({
       />
 
       <ConfirmacionDestructiva
-        open={!soloLectura && ncPara !== null}
+        open={!soloLectura && puedeAnular && ncPara !== null}
         onOpenChange={(open) => {
           if (!open) setNcPara(null);
         }}
@@ -691,7 +695,7 @@ export function ComprobantesOrdenTab({
         }}
         accionLabel="Emitir nota de crédito"
         onConfirmar={async (motivo) => {
-          if (soloLectura || !ncPara) return;
+          if (soloLectura || !puedeAnular || !ncPara) return;
           try {
             const nc = await notaCreditoOrden(ordenId, {
               comprobanteOrigenId: ncPara.id,

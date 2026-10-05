@@ -61,7 +61,6 @@ import {
   useConfigRegional,
   useFecha,
 } from "@/components/navigation/config-regional-provider";
-import type { MembershipRole } from "@/lib/auth";
 import { nombreCanalVenta } from "@/lib/canales-venta";
 import { fechaConDia } from "@/lib/fecha";
 import { claveFechaEnZona } from "@/lib/zona";
@@ -103,7 +102,6 @@ type Tab = "productos" | "conversion" | "historial";
 
 type PresupuestoDetalleViewProps = {
   inicial: PresupuestoDetalle;
-  rol: MembershipRole;
 };
 export function PresupuestoDetalleView(props: PresupuestoDetalleViewProps) {
   return (
@@ -115,7 +113,6 @@ export function PresupuestoDetalleView(props: PresupuestoDetalleViewProps) {
 
 function PresupuestoDetalleContent({
   inicial,
-  rol,
 }: PresupuestoDetalleViewProps) {
   const puedeEnviar = usePuede("comercial.presupuestos.gestionar");
   const conPresupuestos = useCapacidad("presupuestos");
@@ -168,7 +165,9 @@ function PresupuestoDetalleContent({
       ),
   );
 
-  const puedeAprobar = puedeEnviar && (rol === "administrador" || rol === "supervisor");
+  const permisoAprobar = usePuede("comercial.aprobar_descuento");
+  const permisoVerPresupuesto = usePuede("comercial.presupuestos.ver");
+  const puedeAprobar = permisoAprobar && permisoVerPresupuesto;
   const id = d.id;
 
   const cargar = React.useCallback(async () => {
@@ -735,7 +734,7 @@ function AccionesEstado({
   const puedeCrearOrden = usePuede("comercial.ordenes.gestionar");
   const conEta = useCapacidad("eta_capacidad");
   const conEnlace = useCapacidad("aprobacion_presupuestos");
-  if (!puedeEnviar) return null;
+  if (!puedeEnviar && !(d.estado === "pendiente_aprobacion" && puedeAprobar)) return null;
   if (d.estado === "convertido") {
     return (
       <div className={s.actionBar} data-tone="success">
@@ -810,7 +809,7 @@ function AccionesEstado({
           </div>
         ) : (
           <span className={s.actionDescription}>
-            Lo tiene que resolver un administrador.
+            Lo tiene que resolver alguien con permiso de aprobación.
           </span>
         )}
       </div>

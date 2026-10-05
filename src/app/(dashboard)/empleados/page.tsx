@@ -18,7 +18,7 @@ export default function EmpleadosPage() {
 async function EmpleadosPageContent() {
   const [response, canManage] = await Promise.all([
     listEmpleados({ page: 1, limit: 25 }),
-    puedeConfigurar("empleados", "registros.gestionar_empleados"),
+    puedeConfigurar("empleados", "registros.empleados.gestionar"),
   ]);
 
   return <EmpleadosTable initialResponse={response} canManage={canManage} />;

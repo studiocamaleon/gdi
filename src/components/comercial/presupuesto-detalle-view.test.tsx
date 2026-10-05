@@ -4,6 +4,7 @@ import type { MembershipRole } from "@/lib/auth";
 import type { PresupuestoDetalle } from "@/lib/presupuestos-api";
 import { PresupuestoDetalleView } from "./presupuesto-detalle-view";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
+import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { OrdenSaveActions } from "./orden-resumen-financiero";
 import { funcionesCompatibles } from "@/lib/capacidades";
 
@@ -72,7 +73,9 @@ const render = (
   rol: MembershipRole = "operador",
 ) =>
   renderToStaticMarkup(
-    <PresupuestoDetalleView inicial={{ ...inicial, ...overrides }} rol={rol} />,
+    <PermisosProvider permisos={["acceso.por_vista", "comercial.presupuestos.gestionar", "comercial.ordenes.gestionar", ...(rol === "operador" ? [] : ["comercial.aprobar_descuento"])]}>
+      <PresupuestoDetalleView inicial={{ ...inicial, ...overrides }} />
+    </PermisosProvider>,
   );
 const button = (html: string, label: string) =>
   [...html.matchAll(/<button\b[^>]*>[\s\S]*?<\/button>/g)].find(([markup]) =>
@@ -86,7 +89,7 @@ describe("acciones y datos de la ficha de presupuesto", () => {
         ...funcionesCompatibles, presupuestos: false, ordenes: false,
         aprobacion_presupuestos: false, documentos_pdf: false,
       } }}>
-        <PresupuestoDetalleView inicial={{ ...inicial, ...props }} rol="administrador" />
+        <PresupuestoDetalleView inicial={{ ...inicial, ...props }} />
       </CapacidadesProvider>,
     );
 
@@ -171,7 +174,7 @@ describe("acciones y datos de la ficha de presupuesto", () => {
     },
   );
 
-  it("la aprobación interna sólo ofrece acciones a administrador y supervisor", () => {
+  it("la aprobación interna respeta los permisos de los roles predefinidos", () => {
     const pendiente: Partial<PresupuestoDetalle> = {
       estado: "pendiente_aprobacion",
       aprobacionMotivos: [
@@ -228,5 +231,24 @@ describe("acciones y datos de la ficha de presupuesto", () => {
       expect(button(html, "Enviar al cliente")).toBeUndefined();
       expect(button(html, "Convertir en orden")).toBeUndefined();
     }
+  });
+});
+
+
+describe("aprobación con permisos personalizados", () => {
+  const ficha = (permisos: string[]) => renderToStaticMarkup(
+    <PermisosProvider permisos={["acceso.por_vista", ...permisos]}>
+      <PresupuestoDetalleView inicial={{ ...inicial, estado: "pendiente_aprobacion" }} />
+    </PermisosProvider>,
+  );
+  it("un operador puede aprobar con lectura y aprobación delegada, sin gestionar presupuestos", () => {
+    const html = ficha(["comercial.presupuestos.ver", "comercial.aprobar_descuento"]);
+    expect(button(html, "Aprobar y enviar")).toBeDefined();
+    expect(button(html, "Devolver")).toBeDefined();
+  });
+  it("un supervisor sin el permiso no puede aprobar aunque gestione presupuestos", () => {
+    const html = ficha(["comercial.presupuestos.gestionar"]);
+    expect(button(html, "Aprobar y enviar")).toBeUndefined();
+    expect(button(html, "Devolver")).toBeUndefined();
   });
 });

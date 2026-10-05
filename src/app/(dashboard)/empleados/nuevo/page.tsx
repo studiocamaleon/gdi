@@ -20,7 +20,7 @@ const EmpleadoFicha = dynamicImport(
 export default async function NuevoEmpleadoPage() {
   if (!(await tieneCapacidad("empleados"))) return <FuncionNoIncluida />;
   const [canManage, canViewCommissions] = await Promise.all([
-    puedeConfigurar("empleados", "registros.gestionar_empleados"),
+    puedeConfigurar("empleados", "registros.empleados.gestionar"),
     tienePermiso("registros.ver_comisiones"),
   ]);
   if (!canManage) return <SinPermiso modulo="Empleados" />;

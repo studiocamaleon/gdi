@@ -85,6 +85,9 @@ jobs:
             src/auth/__tests__/modulos-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/permisos-vistas.spec.ts \
+            src/auth/__tests__/transversales-recorridos.spec.ts \
+            src/presupuestos/__tests__/aprobacion-permisos.spec.ts \
+            src/empleados/__tests__/empleados-integridad.spec.ts \
             src/usuarios/__tests__/roles.spec.ts \
             src/administracion/__tests__/metodos-cajas.spec.ts \
             src/administracion/__tests__/cajas-consultas-compartidas.spec.ts \

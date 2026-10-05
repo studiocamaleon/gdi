@@ -835,9 +835,8 @@ export class PresupuestosService {
 
   // ── Enviar: borrador → enviado (habilita el link público) ──────────
   // F2: al PRIMER envío se evalúan las reglas de aprobación. Si disparan
-  // y el actor es OPERADOR, el presupuesto queda BLOQUEADO en
-  // pendiente_aprobacion (sin token público). SUPERVISOR/ADMIN están
-  // exentos: envían igual y el evento registra que asumieron el envío.
+  // sin permiso de aprobación, queda pendiente (sin token público).
+  // Sólo el permiso explícito permite asumir el envío; el nombre del rol no.
   async enviar(auth: CurrentAuth, id: string, opciones: { notificarWhatsapp?: boolean } = {}) {
     const c = await this.exigir(id, ['borrador', 'enviado']);
     if (!c.clienteId) {
@@ -853,7 +852,7 @@ export class PresupuestosService {
       );
       if (motivos.length > 0) {
         const detalleMotivos = motivos.map((m) => m.detalle).join(' ');
-        if (auth.role === 'OPERADOR') {
+        if (!auth.permisos?.has('comercial.aprobar_descuento')) {
           await this.prisma.cotizacion.update({
             where: { id },
             data: {
@@ -869,12 +868,12 @@ export class PresupuestosService {
           });
           await this.evento(auth, id, {
             tipo: 'aprobacion_solicitada',
-            descripcion: `Requiere aprobación de un supervisor antes de enviarse: ${detalleMotivos}`,
+            descripcion: `Requiere aprobación autorizada antes de enviarse: ${detalleMotivos}`,
             datosJson: { motivos },
           });
           return this.detalle(auth, id);
         }
-        // Exento por rol: envía igual, pero queda dicho.
+        // Aprobación delegada: envía y deja trazabilidad de la autorización.
         await this.prisma.cotizacion.update({
           where: { id },
           data: {
@@ -883,7 +882,7 @@ export class PresupuestosService {
         });
         await this.evento(auth, id, {
           tipo: 'envio_asumido',
-          descripcion: `Las reglas de aprobación dispararon y el envío fue asumido por su rol: ${detalleMotivos}`,
+          descripcion: `Las reglas de aprobación dispararon y el envío fue asumido con permiso de aprobación: ${detalleMotivos}`,
           datosJson: { motivos, rol: auth.role },
         });
       }
