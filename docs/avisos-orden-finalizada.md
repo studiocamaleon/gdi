@@ -56,7 +56,7 @@ desarrollo.
 
 ## Verificación
 
-Se comprobaron 169 casos locales entre catálogo, finalización atómica,
+Se comprobaron 170 casos locales entre catálogo, finalización atómica,
 notificaciones y planes, aislamiento HTTP, reservas de despacho, horarios,
 permisos de lectura, historial y menús. Usan datos ficticios y una base local de
 pruebas; no envían mensajes reales.

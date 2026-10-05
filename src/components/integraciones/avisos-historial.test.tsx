@@ -11,6 +11,11 @@ import {
   reintentarAviso,
 } from "@/lib/integraciones-api";
 import type { LineaLog } from "@/lib/integraciones";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
 
 vi.mock("@/lib/integraciones-api", async (original) => ({
   ...(await original<typeof import("@/lib/integraciones-api")>()),
@@ -259,3 +264,35 @@ it.each([false, true])(
     expect(boton("Reintentar envío")).toBeUndefined();
   },
 );
+
+it("muestra el rechazo del reintento y refresca el historial sin repetir el envío", async () => {
+  vi.mocked(getLogNotificaciones)
+    .mockResolvedValueOnce([
+      { ...fila("fallida"), versionReintento: "a".repeat(64) },
+    ])
+    .mockResolvedValueOnce([fila("enviada")]);
+  vi.mocked(reintentarAviso).mockRejectedValueOnce(
+    new Error("El aviso cambió. Actualizá el historial."),
+  );
+  await act(async () =>
+    root.render(
+      <CapacidadesProvider
+        capacidades={{ funciones: { identidad: true, whatsapp_automatico: true } }}
+      >
+        <MensajesTab puedeResolver />
+      </CapacidadesProvider>,
+    ),
+  );
+  await act(async () => boton("Reintentar envío").click());
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[role="dialog"] button')!.click(),
+  );
+  expect(toast.error).toHaveBeenCalledWith(
+    "El aviso cambió. Actualizá el historial.",
+  );
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(reintentarAviso).toHaveBeenCalledTimes(1);
+  expect(getLogNotificaciones).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(boton("Reintentar envío")).toBeUndefined();
+});

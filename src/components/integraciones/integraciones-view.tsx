@@ -1832,12 +1832,20 @@ export function MensajesTab({
         accionLabel="Reintentar envío"
         onConfirmar={async () => {
           if (!reintento?.versionReintento) return;
-          await reintentarAviso(reintento.id, reintento.versionReintento);
-          setReintento(null);
-          toast.success(
-            "Reintento solicitado. Consultá el resultado en el historial.",
-          );
-          await cargar();
+          try {
+            await reintentarAviso(reintento.id, reintento.versionReintento);
+            setReintento(null);
+            toast.success(
+              "Reintento solicitado. Consultá el resultado en el historial.",
+            );
+            await cargar();
+          } catch (e) {
+            toast.error(
+              e instanceof Error ? e.message : "No se pudo reintentar el aviso.",
+            );
+            setReintento(null);
+            await cargar();
+          }
         }}
       />
 
