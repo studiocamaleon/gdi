@@ -2517,6 +2517,8 @@ model PasoTenant {
 
 /// Empleado habilitado para trabajar en una estación (N:M).
 model EstacionEmpleado {
+  /// Habitual participa del reparto; apoyo sólo por elección explícita.
+  asignacionAutomatica Boolean @default(true)
   id         String   @id @default(uuid()) @db.Uuid
   tenantId   String   @db.Uuid
   estacionId String   @db.Uuid
@@ -4132,6 +4134,8 @@ model OrdenTrabajo {
 }
 
 model OrdenTrabajoItem {
+  /// Elección de operadores en el borrador, ligada a la cotización congelada.
+  personalPrevistoJson Json?
   /// Agrupador comercial: sus lotes ejecutan el trabajo, nunca la ruta del total.
   contieneLotesEntrega Boolean @default(false)
   loteEntregaId String? @db.Uuid

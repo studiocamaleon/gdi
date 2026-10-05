@@ -20,6 +20,7 @@ import {
   CambiarEstadoOrdenTrabajoDto,
   CancelarOrdenTrabajoDto,
   CrearOrdenTrabajoDto,
+  RevisarPersonalOrdenDto,
   CrearOrdenTrabajoItemDto,
   EditarOrdenTrabajoDto,
   EditarOrdenTrabajoLoteDto,
@@ -60,6 +61,13 @@ export class OrdenesTrabajoController {
     private readonly entrega: EntregaService,
     private readonly materiales: MaterialesOrdenService,
   ) {}
+
+  @Permiso('produccion.supervisar')
+  @RequiereVista('comercial.ordenes.ver')
+  @Post('personal-previsto/revisar')
+  revisarPersonal(@CurrentSession() auth: CurrentAuth, @Body() body: RevisarPersonalOrdenDto) {
+    return this.ordenesTrabajoService.revisarPersonalPrevisto(auth, body.items);
+  }
 
   /**
    * Seguimiento PÚBLICO por link privado (sin sesión). El token único ES la

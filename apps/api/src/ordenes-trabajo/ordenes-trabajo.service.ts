@@ -1,4 +1,19 @@
 import { textoErrorLog } from '../common/log-seguro';
+import {
+  contextoPersonalDePasos,
+  eleccionesDePersonal,
+  eleccionesCanonicas,
+  leerPersonalPrevisto,
+  validarEleccionesPersonal,
+  type PersonalPrevisto,
+} from './personal-previsto';
+import { leerAsignacionManual } from '../produccion/asignacion-manual';
+import type { RevisarPersonalItemDto } from './dto/crear-orden-trabajo.dto';
+import { simularFlujo as simularPersonal } from '../eta/motor/flujo-produccion';
+import type {
+  TableroItemData as ItemPersonal,
+  TableroPasoData as PasoPersonal,
+} from '../eta/motor/tablero-tipos';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { ReservasMaterialService } from '../inventario/reservas-material.service';
 import {
@@ -831,6 +846,275 @@ export class OrdenesTrabajoService {
         });
     }
     await this.reservasMaterial?.sincronizarOrdenTx(tx, tenantId, raiz.ordenId);
+  }
+
+  /** Proyección operativa de la cotización; nunca devuelve costos ni legajos. */
+  private async fotoPersonalCotizado(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    cotizacionItemId: string,
+  ) {
+    const snapshot = await tx.cotizacionItem.findFirst({
+      where: { id: cotizacionItemId, tenantId },
+      select: { trazabilidadJson: true, snapshotJson: true },
+    });
+    if (!snapshot)
+      throw new NotFoundException('No se encontró la cotización del producto.');
+    const raiz = snapshot.snapshotJson as {
+      receta?: { bom?: Prisma.JsonValue };
+    } | null;
+    const grafo = grafoDesdeSnapshotReceta(raiz?.receta?.bom);
+    const filas = this.pasosDesdeTrazabilidad(
+      tenantId,
+      '@previa',
+      cotizacionItemId,
+      snapshot.trazabilidadJson,
+      new Map(),
+      grafo,
+    );
+    const efectivo = grafo
+      ? reducirGrafoAClaves(grafo, new Set(filas.map((f) => f.nodoClave)))
+      : null;
+    const pasos: PasoPersonal[] = filas.map((fila, index) => ({
+      ...fila,
+      id: `${cotizacionItemId}/${fila.nodoClave}`,
+      estado: 'pendiente',
+      iniciadoEl: null,
+      demandaHumana: fila.demandaHumanaJson,
+      requiereMaquina: !admitePasoSinMaquina(fila.familiaCodigo),
+      predecesorPasoIds: efectivo
+        ? efectivo.aristas
+            .filter((a) => a.haciaClave === fila.nodoClave)
+            .map((a) => `${cotizacionItemId}/${a.desdeClave}`)
+        : index
+          ? [`${cotizacionItemId}/${filas[index - 1].nodoClave}`]
+          : [],
+    }));
+    const traza = snapshot.trazabilidadJson as {
+      componentesFabricados?: unknown[];
+      lotesNestingCompuesto?: unknown[];
+    } | null;
+    return {
+      pasos,
+      compuesta:
+        !!traza?.componentesFabricados?.length ||
+        !!traza?.lotesNestingCompuesto?.length,
+    };
+  }
+
+  async revisarPersonalPrevisto(
+    auth: CurrentAuth,
+    items: RevisarPersonalItemDto[],
+  ) {
+    if (!auth.permisos?.has('produccion.supervisar'))
+      throw new ForbiddenException(
+        'Necesitás permiso de supervisión para asignar operadores.',
+      );
+    await this.capacidades.exigir(auth.tenantId, 'asignacion_automatica');
+    if (new Set(items.map((i) => i.cotizacionItemId)).size !== items.length)
+      throw new BadRequestException('Hay cotizaciones repetidas.');
+    return this.prisma.$transaction(
+      async (tx) => {
+        const entrada = await this.eta.contextoSimulacion(
+          auth.tenantId,
+          tx,
+          false,
+          'asignacion_automatica',
+        );
+        const [personal, maquinas] = await Promise.all([
+          tx.empleado.findMany({
+            where: { tenantId: auth.tenantId, activo: true },
+            select: { id: true, nombreCompleto: true },
+          }),
+          tx.maquina.findMany({
+            where: { tenantId: auth.tenantId },
+            select: { id: true, nombre: true },
+          }),
+        ]);
+        const nombres = new Map(personal.map((e) => [e.id, e.nombreCompleto]));
+        const nombresMaquinas = new Map(maquinas.map((e) => [e.id, e.nombre]));
+        const fotos = [];
+        for (const item of items) {
+          if (
+            item.ordenItemId &&
+            !(await tx.ordenTrabajoItem.findFirst({
+              where: {
+                id: item.ordenItemId,
+                tenantId: auth.tenantId,
+                parentItemId: null,
+                orden: { estado: 'borrador' },
+              },
+              select: { id: true },
+            }))
+          )
+            throw new BadRequestException(
+              'Sólo se puede preparar el personal de un borrador propio.',
+            );
+          const foto = await this.fotoPersonalCotizado(
+            tx,
+            auth.tenantId,
+            item.cotizacionItemId,
+          );
+          const contexto = contextoPersonalDePasos(
+            foto.pasos,
+            entrada.estaciones,
+            entrada.tiempoEntrePasosMin,
+            nombres,
+            nombresMaquinas,
+          );
+          validarEleccionesPersonal(contexto, item.asignacionesPersonal ?? []);
+          fotos.push({ item, ...foto, contexto });
+        }
+        const escenarios: ItemPersonal[] = fotos.map((f) => ({
+          id: f.item.cotizacionItemId,
+          ordenId: '@previa',
+          ordenNumero: 'PREVIA',
+          ordenEstado: 'pendiente',
+          fechaEntrega: null,
+          sinRuta: false,
+          pasos: f.pasos.map((p) => {
+            const eleccion = f.item.asignacionesPersonal?.find(
+              (e) => e.nodoClave === p.nodoClave,
+            );
+            return {
+              ...p,
+              personalFijo: eleccion
+                ? { empleadoIds: eleccion.empleadoIds }
+                : undefined,
+            };
+          }),
+        }));
+        const antes = simularPersonal({
+          ...entrada,
+          items: [
+            ...entrada.items,
+            ...escenarios.map((i) => ({
+              ...i,
+              pasos: i.pasos.map((p) => ({ ...p, personalFijo: undefined })),
+            })),
+          ],
+        });
+        const despues = simularPersonal({
+          ...entrada,
+          items: [...entrada.items, ...escenarios],
+        });
+        return {
+          zona: entrada.zona,
+          items: fotos.map((f) => ({
+            cotizacionItemId: f.item.cotizacionItemId,
+            pasos: f.contexto.map((p) => {
+              const id = `${f.item.cotizacionItemId}/${p.nodoClave}`;
+              return {
+                ...p,
+                finAutomatico: f.compuesta
+                  ? null
+                  : (antes.traza
+                      .find((t) => t.pasoId === id)
+                      ?.fin.toISOString() ?? null),
+                finElegido: f.compuesta
+                  ? null
+                  : (despues.traza
+                      .find((t) => t.pasoId === id)
+                      ?.fin.toISOString() ?? null),
+              };
+            }),
+            aviso: f.compuesta
+              ? 'La fecha completa depende también de los componentes fabricados; se comprobará al emitir.'
+              : null,
+          })),
+        };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        timeout: 30_000,
+      },
+    );
+  }
+
+  /** Omisión conserva la decisión; cambiarla exige supervisión, incluso al guardar por API. */
+  private async prepararPersonalPrevisto(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    item: CrearOrdenTrabajoItemDto,
+    previo?: { personalPrevistoJson: unknown; cotizacionItemId: string | null },
+    permiteCambiar = true,
+  ): Promise<Prisma.InputJsonValue | undefined> {
+    const anterior = leerPersonalPrevisto(previo?.personalPrevistoJson);
+    const elecciones =
+      item.asignacionesPersonal ?? eleccionesDePersonal(anterior);
+    const cambia =
+      eleccionesCanonicas(elecciones) !==
+      eleccionesCanonicas(eleccionesDePersonal(anterior));
+    if (cambia && !auth.permisos?.has('produccion.supervisar'))
+      throw new ForbiddenException(
+        'Necesitás permiso de supervisión para cambiar los operadores.',
+      );
+    if (cambia && !permiteCambiar)
+      throw new ConflictException(
+        'La orden ya está emitida. Cambiá los operadores desde la asignación del paso en Producción.',
+      );
+    // Una OT emitida se valida con la decisión vigente de cada paso, que puede
+    // haber sido reasignada después de la elección original del borrador.
+    if (!permiteCambiar && anterior)
+      return {
+        ...anterior,
+        cotizacionItemId: item.cotizacionItemId,
+      } as unknown as Prisma.InputJsonValue;
+    if (!elecciones.length)
+      return item.asignacionesPersonal !== undefined
+        ? { version: 1, cotizacionItemId: item.cotizacionItemId, pasos: [] }
+        : undefined;
+    if (item.planEntrega)
+      throw new BadRequestException(
+        'Asigná el personal de los lotes desde Producción, después de emitir.',
+      );
+    await this.capacidades.exigir(auth.tenantId, 'asignacion_automatica', tx);
+    const entrada = await this.eta.contextoSimulacion(
+      auth.tenantId,
+      tx,
+      false,
+      'asignacion_automatica',
+    );
+    const foto = await this.fotoPersonalCotizado(
+      tx,
+      auth.tenantId,
+      item.cotizacionItemId,
+    );
+    validarEleccionesPersonal(
+      contextoPersonalDePasos(
+        foto.pasos,
+        entrada.estaciones,
+        entrada.tiempoEntrePasosMin,
+        new Map(),
+        new Map(),
+      ),
+      elecciones,
+    );
+    const resultado: PersonalPrevisto = {
+      version: 1,
+      cotizacionItemId: item.cotizacionItemId,
+      pasos: elecciones.map((e) => {
+        const conservada = anterior?.pasos.find(
+          (p) =>
+            p.nodoClave === e.nodoClave &&
+            eleccionesCanonicas([
+              { nodoClave: p.nodoClave, empleadoIds: p.asignacion.empleadoIds },
+            ]) === eleccionesCanonicas([e]),
+        );
+        return {
+          nodoClave: e.nodoClave,
+          asignacion: conservada?.asignacion ?? {
+            version: 1,
+            revision: randomUUID(),
+            empleadoIds: [...e.empleadoIds].sort(),
+            asignadoEl: new Date().toISOString(),
+            usuarioId: auth.impersonacion?.actorUserId ?? auth.userId,
+            usuarioNombre: auth.impersonacion?.actorNombre ?? auth.email,
+          },
+        };
+      }),
+    };
+    return resultado as unknown as Prisma.InputJsonValue;
   }
 
   async prepararRecorridosDeItems(
@@ -1724,6 +2008,8 @@ export class OrdenesTrabajoService {
           'cotizacion',
         ]);
         await this.exigirCuponesEnEscritura(tx, auth, items);
+        const personalPorCotizacion = new Map<string, Prisma.InputJsonValue | undefined>();
+        for (const item of items) personalPorCotizacion.set(item.cotizacionItemId, await this.prepararPersonalPrevisto(tx, auth, item));
         await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, fidelizacion);
         if (tienePlanEntrega)
           await this.capacidades.exigirOperacionTx(
@@ -1811,6 +2097,7 @@ export class OrdenesTrabajoService {
                 recetaHuella: (item as ItemAutorizado).recetaHuella ?? null,
                 recetaSnapshotJson:
                   (item as ItemAutorizado).recetaSnapshotJson ?? undefined,
+                personalPrevistoJson: personalPorCotizacion.get(item.cotizacionItemId),
                 codigo: item.codigo,
                 nombre: item.nombre,
                 familia: item.familia,
@@ -2491,6 +2778,7 @@ export class OrdenesTrabajoService {
                 parentItemId: true,
                 cotizacionItemId: true,
                 cantidad: true,
+                personalPrevistoJson: true,
               },
             });
             if (previo.parentItemId)
@@ -2507,7 +2795,7 @@ export class OrdenesTrabajoService {
               );
             const actualizado = await tx.ordenTrabajoItem.update({
               where: { id: item.id },
-              data: { ...this.buildItemData(item), ordenIndice },
+              data: { ...this.buildItemData(item), personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item, previo, estado === 'borrador'), ordenIndice },
             });
             materializables.push({
               id: actualizado.id,
@@ -2521,6 +2809,7 @@ export class OrdenesTrabajoService {
                 tenantId: auth.tenantId,
                 ordenId: orden.id,
                 ...this.buildItemData(item),
+                personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item),
                 ordenIndice,
               },
             });
@@ -3641,6 +3930,7 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           ...this.buildItemData(item),
+          personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item),
           ordenIndice: (ultimo._max.ordenIndice ?? -1) + 1,
         },
       });
@@ -3822,7 +4112,7 @@ export class OrdenesTrabajoService {
         );
       await tx.ordenTrabajoItem.update({
         where: { id: existente.id },
-        data: this.buildItemData(item),
+        data: { ...this.buildItemData(item), personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item, existente, orden.estado === 'borrador') },
       });
       // Emitida: el item pudo cambiar de snapshot/ruta → pasos de nuevo.
       // No hay ejecución que pisar: ejecutar promueve a `produccion`, y ahí
@@ -5036,12 +5326,15 @@ export class OrdenesTrabajoService {
         loteEntregaId: true,
         recetaSnapshotJson: true,
         trazabilidadSnapshotJson: true,
+        personalPrevistoJson: true,
         planEntrega: { select: { alternativaElegidaId: true } },
       },
     });
     for (const i of actuales.filter(
       (i) => i.contieneLotesEntrega || i.planEntrega?.alternativaElegidaId,
     )) {
+      if (leerPersonalPrevisto(i.personalPrevistoJson)?.pasos.length)
+        throw new ConflictException('Quitá la asignación previa del producto antes de distribuirlo en lotes; luego asigná sus operadores desde Producción.');
       await validarReprogramacionAlEmitir(tx, this.eta, tenantId, i.id);
       // Una revisión en preparación no reemplaza los lotes ya adoptados.
       // Sólo sincronizarLotesEntrega aplica explícitamente una nueva elección.
@@ -5064,6 +5357,8 @@ export class OrdenesTrabajoService {
         !i.planEntrega?.alternativaElegidaId &&
         (i.cotizacionItemId || i.loteEntregaId),
     );
+    const personalAnterior = conSnapshot.length
+      ? await tx.ordenTrabajoItemPaso.findMany({ where: { tenantId, itemId: { in: conSnapshot.map(i => i.id) } }, select: { itemId: true, nodoClave: true, asignacionManualJson: true } }) : [];
     if (opts?.reemplazar && conSnapshot.length > 0) {
       await tx.ordenTrabajoItemPaso.deleteMany({
         where: { tenantId, itemId: { in: conSnapshot.map((item) => item.id) } },
@@ -5139,7 +5434,38 @@ export class OrdenesTrabajoService {
         return [item.id, filas] as const;
       }),
     );
-    const data = [...dataPorItem.values()].flat();
+    const data = [...dataPorItem.values()].flat().map(fila => ({ ...fila, asignacionManualJson: undefined as Prisma.InputJsonValue | undefined }));
+    const requierePersonal = conSnapshot.some(item =>
+      (opts?.reemplazar || !personalAnterior.some(p => p.itemId === item.id)) &&
+      (leerPersonalPrevisto(item.personalPrevistoJson)?.pasos.length || personalAnterior.some(p => p.itemId === item.id && p.asignacionManualJson)));
+    const entradaPersonal = requierePersonal
+      ? await this.eta.contextoSimulacion(tenantId, tx, false, 'asignacion_automatica') : null;
+    if (entradaPersonal) {
+      for (const item of conSnapshot) {
+        // Una lectura del tablero no debe revalidar ni reescribir decisiones ya materializadas.
+        if (!opts?.reemplazar && personalAnterior.some(p => p.itemId === item.id)) continue;
+        const prevista = leerPersonalPrevisto(item.personalPrevistoJson);
+        if (prevista?.pasos.length && prevista.cotizacionItemId !== item.cotizacionItemId)
+          throw new ConflictException('La cotización cambió. Revisá los operadores antes de emitir.');
+        const filas = data.filter(f => f.itemId === item.id);
+        const selecciones = filas.flatMap(fila => {
+          const anterior = personalAnterior.find(p => p.itemId === item.id && p.nodoClave === fila.nodoClave);
+          const guardada = anterior ? anterior.asignacionManualJson : prevista?.pasos.find(p => p.nodoClave === fila.nodoClave)?.asignacion;
+          if (!guardada) return [];
+          const manual = leerAsignacionManual(guardada);
+          if (!manual) throw new ConflictException('La asignación de personal guardada no es válida.');
+          fila.asignacionManualJson = manual as unknown as Prisma.InputJsonValue;
+          return [{ nodoClave: fila.nodoClave, empleadoIds: manual.empleadoIds }];
+        });
+        const decisionesVigentes = personalAnterior.some(p => p.itemId === item.id)
+          ? personalAnterior.filter(p => p.itemId === item.id && p.asignacionManualJson)
+          : prevista?.pasos ?? [];
+        if (decisionesVigentes.some(p => !filas.some(f => f.nodoClave === p.nodoClave)))
+          throw new ConflictException('Cambió un paso con operador elegido. Revisá la asignación.');
+        const pasos = filas.map(f => ({ ...f, id: f.nodoClave, estado: 'pendiente' as const, iniciadoEl: null, demandaHumana: f.demandaHumanaJson }));
+        validarEleccionesPersonal(contextoPersonalDePasos(pasos, entradaPersonal.estaciones, entradaPersonal.tiempoEntrePasosMin, new Map(), new Map()), selecciones);
+      }
+    }
     if (data.length > 0) {
       // skipDuplicates = ON CONFLICT DO NOTHING contra el único
       // (itemId, indice): si dos materializaciones corren a la vez, el
@@ -5265,6 +5591,16 @@ export class OrdenesTrabajoService {
           conSnapshot.map((item) => [item.id, trazabilidadPorId.get(item.id)]),
         ),
       );
+      if (data.some(f => f.asignacionManualJson)) {
+        const entrada = await this.eta.contextoSimulacion(tenantId, tx, false, 'asignacion_automatica');
+        const plan = simularPersonal(entrada);
+        for (const fila of data.filter(f => f.asignacionManualJson)) {
+          const paso = pasosPersistidos.find(p => p.itemId === fila.itemId && p.nodoClave === fila.nodoClave);
+          const trazado = plan.traza.find(p => p.pasoId === paso?.id);
+          if (!trazado || trazado.parcial)
+            throw new ConflictException('No hay una fecha realizable para el personal elegido. Revisá operadores, horarios y dependencias antes de emitir.');
+        }
+      }
     }
   }
 
@@ -8391,6 +8727,7 @@ export class OrdenesTrabajoService {
           return {
             id: item.id,
             cotizacionItemId: item.cotizacionItemId,
+            asignacionesPersonal: eleccionesDePersonal(item.personalPrevistoJson),
             // Descuento comercial persistido (F1): para rehidratar la ficha con el
             // mismo descuento que aplicó el vendedor. Ver descuentos-diseno.md §10.
             descuentoTipo: itemDescuento.descuentoTipo ?? null,

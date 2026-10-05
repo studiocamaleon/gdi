@@ -367,6 +367,7 @@ export function simularFlujo({
         ? (estacion.empleados ?? []).map((e) => ({
             id: e.id,
             activo: e.activo,
+            asignacionAutomatica: e.asignacionAutomatica,
             calendario: e.calendario ?? null,
           }))
         : undefined,
@@ -401,9 +402,14 @@ export function simularFlujo({
     const base = (resuelta && registros.get(resuelta.id)) || sinEstacion;
     const ids = paso.personalFijo?.empleadoIds;
     // La agenda aceptada y la proyección deben reservar el mismo personal fijo.
-    return ids && base.empleados !== undefined
-      ? { ...base, empleados: base.empleados.filter((e) => ids.includes(e.id)) }
-      : base;
+    if (base.empleados === undefined) return base;
+    const requeridos = [paso.personalFijo?.obligatorioId, paso.personalFijo?.preferidoId];
+    return {
+      ...base,
+      empleados: base.empleados.filter((e) => ids
+        ? ids.includes(e.id)
+        : e.asignacionAutomatica !== false || requeridos.includes(e.id)),
+    };
   };
 
   // La unidad del scheduler deja de ser "el próximo índice de un item" y pasa

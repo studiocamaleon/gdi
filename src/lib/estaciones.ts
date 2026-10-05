@@ -276,6 +276,7 @@ export function etiquetaDias(dias: number): string {
 }
 
 export type EstacionEmpleadoRef = {
+  asignacionAutomatica?: boolean;
   activo?: boolean;
   calendario?: CalendarioEstacion | null;
   id: string;
@@ -305,6 +306,7 @@ export type EquipoProduccion = {
 };
 
 export type PersonaProduccion = {
+  asignacionAutomatica?: boolean;
   id: string;
   activo?: boolean;
   calendario: CalendarioEstacion | null;
@@ -368,6 +370,7 @@ export type EstacionPayload = {
   /** Reemplazo completo de las listas. */
   familias: string[];
   empleadoIds: string[];
+  empleadoApoyoIds?: string[];
   maquinaIds: string[];
   /** Reglas de captura nuevas (tecnología / paso). */
   reglas?: ReglaEstacion[];
@@ -398,6 +401,7 @@ export function createEmptyEstacion(): EstacionPayload {
     calendario: calendarioDefault(),
     familias: [],
     empleadoIds: [],
+    empleadoApoyoIds: [],
     maquinaIds: [],
     reglas: [],
   };
