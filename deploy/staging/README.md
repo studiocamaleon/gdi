@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 03/10/2026, 05:15 UTC.** API, ambos workers y web `b030b6ab7` (PR #20): Sentry activo y panel «Errores del sistema» comprobado en Plataforma. PDF conserva `2fee01704`; 305 migraciones, sin cambios de esquema ni tamaños. Copias posteriores verificadas. Ver [VALIDACION.md](./VALIDACION.md) y [monitoreo](../../docs/monitoreo-sentry.md).
+> **Estado vigente: 05/10/2026, 21:06 UTC.** API, ambos workers y web `0d0b70509` (PR #22): cobros delegados y permisos transversales corregidos; recorrido HTTP/SSR comprobado con perfiles ficticios. Sentry sigue activo. PDF conserva `2fee01704`; 305 migraciones, ninguna nueva, mismos tamaños. Copia posterior con firma, manifiesto y versión comprobados; sin repetir la restauración SQL. Ver [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 

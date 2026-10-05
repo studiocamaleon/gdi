@@ -272,3 +272,33 @@ Copia posterior **`c6e8193e-bf2f-4d77-a1a9-2f5379139314`**, completada **2026-10
 Para desactivar la captura, establecer `SENTRY_ENABLED=false` y reiniciar los servicios afectados. Para revertir el lote completo, conservar la base y usar API/workers `e11e431b3` (digest `sha256:bc61b4374bc023f0660554ba52936468e05e93b3db32fbfc940977da7036d6a6`) y web `061a75873` (digest `sha256:adf8dfd9f5b386b6cea2bd785c4cad2fa4fd465303ab3edbd7a948d49d2d3b9f`). No eliminar datos ni revertir migraciones.
 
 Mapas de código fuente desactivados en esta primera etapa. No equivale a monitoreo completo de disponibilidad, rendimiento, errores absorbidos por integraciones ni a una prueba de caída de producción. Ver [alcance y operación](../../docs/monitoreo-sentry.md).
+
+## 05/10/2026, 21:06 UTC — Cobros delegados y permisos transversales (PR #22)
+
+Revisión de ejecución **`0d0b70509c706c6c33875ef5e8a35890ad03107f`**, dependiente del PR #20. Publicación solicitada por el titular, primero en staging y después en producción con las mismas imágenes por digest. No se fusionaron PR ni se modificó Vercel. Los commits documentales posteriores no cambian la revisión ejecutada.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:b0a3b812577cb52b709b3ce5f286ce6232f6d9d6eaf90b3d7c0b7422f983fd85` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:dd3c8eee47dca7f638d1822d5efb4279143aeee2b70174babccf6b81008a0c69` |
+
+Gotenberg conserva `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`. **305 migraciones, ninguna nueva**; una máquina por servicio, seis iniciadas y mismos tamaños. Salud web/API 200, API privada directa 403 y BFF sin sesión 401. Constructor temporal de esta publicación retirado; Docker y otros proyectos locales intactos.
+
+### Corrección y comprobaciones
+
+- Cobrar desde una OT ya no exige entrar a Administración. Conserva los permisos de consulta del trabajo y del cliente, limita las cuentas a las asignadas y evita consultar deuda general sin autorización. El saldo usa el importe aplicado a la OT, aunque el recibo se reparta.
+- Aprobación de presupuestos, gestión de empleados/comisiones, ejecución desde Estaciones/Colas y acciones de anulación se alinearon con los permisos extra y las vistas correspondientes. La matriz contrasta las 11 opciones actuales de «Aparte de los módulos» con autorización y rechazo en API.
+- Regresión local: 234 pruebas de API y 116 de interfaz; ensayo HTTP con base desechable: 19. Ejecuciones enfocadas posteriores: 43 API y 42 interfaz, con solapamiento respecto de las anteriores. Tras corregir una declaración de tipo faltante, 39 pruebas de interfaz/navegación correctas.
+- Compilaciones completas de backend y web en Fly, **con comprobación de tipos habilitada**. Los trabajos de GitHub de [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37371713733) y [HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37371713729) no consiguieron un ejecutor alojado y se cancelaron. **No se declaran aprobados**. La publicación se comprobó mediante builds remotos y ensayos directos; no se fusionó el PR.
+
+- Promoción realizada tras las 20 comprobaciones HTTP/SSR en staging con un perfil cobrador sin acceso general a Administración. El ensayo generó y retiró un cobro ficticio y su PDF, sin operaciones de prueba en producción.
+- Alcance del usuario afectado verificado en una transacción de sólo lectura: permiso de cobro activo y exactamente las dos cuentas elegidas por el titular, sin destinos de transferencia. La asignación se guardó desde la configuración autorizada, sin ampliar otros permisos.
+- Recuentos de empresas, clientes, cobros, métodos de pago y movimientos conservados entre controles. Rol de aplicación sin DDL y configuración de inicio existente conservados. No se emitieron facturas, cobros ni comunicaciones reales de prueba.
+
+### Respaldo
+
+Copia previa `455005f0-7a7b-4aca-8d80-56a6a16c901c`, completada a las **20:01:03.183 UTC**. Copia posterior **`cad76e49-9e12-458e-87e3-7bde11650253`**, completada **2026-10-05T21:05:13.897Z**, con 305 migraciones y 11 archivos. Firma, huellas y descifrado del manifiesto, revisión exacta e inventario de imágenes comprobados. Fuentes cifradas protegidas durante 31 días; referencias históricas conservadas. **No se repitió una restauración SQL completa**. Evidencia y accesos fuera de Git.
+
+### Reversión
+
+Para revertir sólo este lote, conservar la base y usar la revisión anterior `b030b6ab7a471bf41e55ff6f460a928c4b808b63`: API/workers `sha256:804ae5218e78591c8629317eca1609998232e61c0a998d613ca7fabd0ea4839d` y web `sha256:0d7ea346a5ee7da29931281f1e0f8f094b31d7f7145c63f246a2c265e8e02d42`. Esto vuelve a introducir el bloqueo del cobro delegado. No revertir migraciones ni borrar operaciones comerciales.
