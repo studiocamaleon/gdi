@@ -47,6 +47,7 @@ import {
   cambiarEventoNotificacion,
   getLogNotificaciones,
   resolverAviso,
+  reintentarAviso,
   getNotificaciones,
   guardarConfigNotificaciones,
   type AfipIntegracion,
@@ -1490,7 +1491,8 @@ function NotificacionesTab() {
         <h3>Qué se avisa</h3>
         <p>
           Los textos los escribe y mantiene Grafo. Acá elegís cuáles de tus
-          clientes reciben.
+          clientes reciben. Si activás la variante con QR de una orden lista,
+          se usa en lugar del aviso sin imagen: se envía un solo mensaje.
         </p>
       </div>
       <div className="int-tpl-list" style={{ marginBottom: 26 }}>
@@ -1593,6 +1595,8 @@ export function MensajesTab({
   puedeResolver?: boolean;
 }) {
   const operativa = useCapacidad("identidad");
+  const conEnvios = useCapacidad("whatsapp_automatico");
+  const [reintento, setReintento] = React.useState<LineaLog | null>(null);
   const [resolucion, setResolucion] = React.useState<{
     fila: LineaLog;
     accion: "descartar" | "confirmar_enviada";
@@ -1775,6 +1779,14 @@ export function MensajesTab({
                     "web_incierta",
                   ].includes(l.estado) && (
                     <div className="flex flex-wrap justify-end gap-2">
+                      {l.versionReintento && conEnvios && (
+                        <ActionButton
+                          variant="outline"
+                          onPress={() => setReintento(l)}
+                        >
+                          Reintentar envío
+                        </ActionButton>
+                      )}
                       {estadoMensaje(l.estado) === "incierta" && (
                         <ActionButton
                           variant="outline"
@@ -1803,6 +1815,31 @@ export function MensajesTab({
           ))
         )}
       </div>
+
+      <ConfirmacionDestructiva
+        apariencia="heroui"
+        open={reintento !== null}
+        onOpenChange={(open) => {
+          if (!open) setReintento(null);
+        }}
+        titulo="Reintentar envío"
+        descripcion={
+          reintento
+            ? `${reintento.titulo} · ${reintento.cliente ?? "Cliente"} · ${reintento.telefono}. Se intentará enviar nuevamente el mensaje original, respetando tus horarios de envío. Revisá antes la causa del fallo y que la información del aviso siga vigente.`
+            : ""
+        }
+        requiereTipear={false}
+        accionLabel="Reintentar envío"
+        onConfirmar={async () => {
+          if (!reintento?.versionReintento) return;
+          await reintentarAviso(reintento.id, reintento.versionReintento);
+          setReintento(null);
+          toast.success(
+            "Reintento solicitado. Consultá el resultado en el historial.",
+          );
+          await cargar();
+        }}
+      />
 
       <ConfirmacionDestructiva
         apariencia="heroui"

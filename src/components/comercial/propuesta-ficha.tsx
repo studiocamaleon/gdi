@@ -7716,17 +7716,19 @@ function PropuestaFichaContenido({
                         </HeroButton>
                       ) : null}
                       {puedeAbrirEntrega ? (
-                        <Button
-                          size="lg"
-                          onClick={() => setEntregaManualOpen(true)}
-                          disabled={guardandoEdicion || cancelando || cambiosSinGuardar > 0}
+                        <HeroButton
+                          size="sm"
+                          variant="primary"
+                          onPress={() => setEntregaManualOpen(true)}
+                          aria-label="Registrar la entrega al cliente"
+                          isDisabled={guardandoEdicion || cancelando || cambiosSinGuardar > 0}
                           title={cambiosSinGuardar > 0
                             ? "Guardá o descartá los cambios antes de entregar"
                             : "Registrar la entrega al cliente"}
                         >
-                          <PackageCheckIcon data-icon="inline-start" />
+                          <PackageCheckIcon />
                           Entregar
-                        </Button>
+                        </HeroButton>
                       ) : null}
                       <OrdenAccionesMenus
                         documentos={colasImpresion && orden && items.some(item => metaCentroCopiado(item.jobContext)) && !["borrador", "cancelada"].includes(orden.estado)

@@ -82,6 +82,13 @@ export async function getLogNotificaciones(limite = 100): Promise<LineaLog[]> {
   );
 }
 
+export function reintentarAviso(id: string, version: string) {
+  return apiRequest(`/integraciones/notificaciones/${id}/reintentar`, {
+    method: "POST",
+    body: JSON.stringify({ version }),
+  });
+}
+
 export function resolverAviso(
   id: string,
   data: {

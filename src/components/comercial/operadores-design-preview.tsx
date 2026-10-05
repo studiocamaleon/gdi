@@ -1,4 +1,5 @@
 "use client";
+import { Edit3, PackageCheck } from "lucide-react";
 import { useState } from "react";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import theme from "@/components/design-system/brand-workspace-theme.module.css";
@@ -53,6 +54,18 @@ export function OperadoresDesignPreview() {
             </div>
             <ActionButton variant="ghost" onPress={() => setDark((v) => !v)}>
               Cambiar apariencia
+            </ActionButton>
+            <ActionButton
+              onPress={() => setMensaje("Edición elegida (muestra)")}
+            >
+              <Edit3 />
+              Editar orden
+            </ActionButton>
+            <ActionButton
+              onPress={() => setMensaje("Entrega elegida (muestra)")}
+            >
+              <PackageCheck />
+              Entregar
             </ActionButton>
             <OrdenAccionesMenus
               documentos={() => setMensaje("Documentos elegidos (muestra)")}

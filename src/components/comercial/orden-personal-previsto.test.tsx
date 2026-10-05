@@ -44,6 +44,7 @@ const resultado = {
 };
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  vi.stubGlobal("CSS", { escape: (value: string) => value });
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -135,4 +136,41 @@ it("sin acciones de impresión conserva un solo acceso a Seguimiento", async () 
   expect(
     document.querySelectorAll('button[aria-label="Seguimiento"]'),
   ).toHaveLength(1);
+});
+
+it("los menús conservan las opciones y ejecutan una sola acción", async () => {
+  const documentos = vi.fn(),
+    etiqueta = vi.fn(),
+    historial = vi.fn(),
+    seguimiento = vi.fn(),
+    qr = vi.fn();
+  await act(async () =>
+    root.render(
+      <OrdenAccionesMenus
+        documentos={documentos}
+        etiqueta={etiqueta}
+        historial={historial}
+        seguimiento={seguimiento}
+        qr={qr}
+        impresionDirecta
+      />,
+    ),
+  );
+  await click("Imprimir");
+  expect(document.body.textContent).toContain("Imprimir documentos");
+  expect(document.body.textContent).toContain("Imprimir etiqueta");
+  expect(document.body.textContent).toContain("Historial de impresión");
+  const elegir = async (texto: string) =>
+    act(async () =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((e) => e.textContent?.trim() === texto)!
+        .click(),
+    );
+  await elegir("Imprimir etiqueta");
+  expect(etiqueta).toHaveBeenCalledOnce();
+  expect(documentos).not.toHaveBeenCalled();
+  await click("Seguimiento");
+  await elegir("Ver QR de retiro");
+  expect(qr).toHaveBeenCalledOnce();
+  expect(seguimiento).not.toHaveBeenCalled();
 });

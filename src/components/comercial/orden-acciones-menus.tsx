@@ -10,15 +10,12 @@ import {
   Tag,
   ExternalLink,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useLegacyDesignScope } from "@/components/design-system/appearance";
+import { Dropdown } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 
 export function OrdenAccionesMenus({
   documentos,
@@ -37,51 +34,58 @@ export function OrdenAccionesMenus({
   copiado?: boolean;
   impresionDirecta?: boolean;
 }) {
-  const tema = useLegacyDesignScope();
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   return (
     <>
       {(documentos || etiqueta || historial) && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="outline" size="sm" />}
-            aria-label="Imprimir"
-          >
+        <Dropdown>
+          <ActionButton variant="outline" size="sm" aria-label="Imprimir">
             <Printer data-icon="inline-start" /> Imprimir{" "}
             <ChevronDown data-icon="inline-end" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            {...tema}
-            className={`${tema.className ?? ""} min-w-56`}
-            align="end"
+          </ActionButton>
+          <Dropdown.Popover
+            {...scope}
+            className={`${theme} min-w-56`}
+            placement="bottom end"
           >
-            <DropdownMenuGroup>
+            <Dropdown.Menu aria-label="Opciones de la orden">
               {documentos && (
-                <DropdownMenuItem onClick={documentos}>
+                <Dropdown.Item
+                  id="documentos"
+                  textValue="Imprimir documentos"
+                  onAction={documentos}
+                >
                   <Printer /> Imprimir documentos
-                </DropdownMenuItem>
+                </Dropdown.Item>
               )}
               {etiqueta && (
-                <DropdownMenuItem onClick={etiqueta}>
+                <Dropdown.Item
+                  id="etiqueta"
+                  textValue="Etiqueta"
+                  onAction={etiqueta}
+                >
                   <Tag />{" "}
                   {impresionDirecta
                     ? "Imprimir etiqueta"
                     : "Descargar etiqueta"}
-                </DropdownMenuItem>
+                </Dropdown.Item>
               )}
               {historial && (
-                <DropdownMenuItem onClick={historial}>
+                <Dropdown.Item
+                  id="historial"
+                  textValue="Historial de impresión"
+                  onAction={historial}
+                >
                   <History /> Historial de impresión
-                </DropdownMenuItem>
+                </Dropdown.Item>
               )}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
       )}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<Button variant="outline" size="sm" />}
-          aria-label="Seguimiento"
-        >
+      <Dropdown>
+        <ActionButton variant="outline" size="sm" aria-label="Seguimiento">
           {copiado ? (
             <Check data-icon="inline-start" />
           ) : (
@@ -89,24 +93,28 @@ export function OrdenAccionesMenus({
           )}
           {copiado ? "Enlace copiado" : "Seguimiento"}{" "}
           <ChevronDown data-icon="inline-end" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          {...tema}
-          className={`${tema.className ?? ""} min-w-56`}
-          align="end"
+        </ActionButton>
+        <Dropdown.Popover
+          {...scope}
+          className={`${theme} min-w-56`}
+          placement="bottom end"
         >
-          <DropdownMenuGroup>
+          <Dropdown.Menu aria-label="Opciones de la orden">
             {seguimiento && (
-              <DropdownMenuItem onClick={seguimiento}>
+              <Dropdown.Item
+                id="seguimiento"
+                textValue="Copiar enlace de seguimiento"
+                onAction={seguimiento}
+              >
                 <Copy /> Copiar enlace de seguimiento
-              </DropdownMenuItem>
+              </Dropdown.Item>
             )}
-            <DropdownMenuItem onClick={qr}>
+            <Dropdown.Item id="qr" textValue="Ver QR de retiro" onAction={qr}>
               <QrCode /> Ver QR de retiro
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            </Dropdown.Item>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
     </>
   );
 }
