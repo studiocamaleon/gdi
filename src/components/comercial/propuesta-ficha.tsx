@@ -81,6 +81,8 @@ import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-
 import { vincularFuentesFabricacion } from "@/lib/fabricacion-export";
 
 import * as React from "react";
+import { OrdenPersonalPrevisto } from "./orden-personal-previsto";
+import { OrdenAccionesMenus } from "./orden-acciones-menus";
 import issued from "./orden-issued.module.css";
 import { OrdenSectionHeading } from "./orden-section-heading";
 import { PlanificacionEntregas } from "./planificacion-entregas";
@@ -4499,6 +4501,7 @@ function itemToOrdenItemPayload(
   const descuento = item.cotizacion.desglosePrecio?.descuento;
   return {
     cotizacionItemId,
+    ...(item.asignacionesPersonal !== undefined ? { asignacionesPersonal: item.asignacionesPersonal } : {}),
     fechaEntrega: item.fechaEntrega || undefined,
     ...(planEntrega ? { planEntrega } : {}),
     descuentoTipo: item.descuentoInput?.tipo ?? null,
@@ -4785,6 +4788,7 @@ function rehidratarOrdenItem(
     // sólo para órdenes previas al campo.
     id: producto.id ?? `ot-item-${index}`,
     cotizacionItemId: producto.cotizacionItemId ?? undefined,
+    asignacionesPersonal: producto.asignacionesPersonal,
     fechaEntrega: producto.fechaEntrega ?? undefined,
     distribucionEntregas: producto.distribucionEntregas,
     productoNombre: producto.nombre,
@@ -5021,6 +5025,8 @@ function PropuestaFichaContenido({
   const puedeImprimirEtiqueta = usePuede("produccion.tablero.ver");
   const puedeVerMaterialesComercial = usePuede("comercial.ordenes.ver");
   const puedeEjecutarProduccion = usePuede("produccion.ejecutar");
+  const puedeAsignarPersonal = usePuede("produccion.supervisar");
+  const conAsignacionPersonal = useCapacidad("asignacion_automatica");
   const puedeVerMateriales =
     puedeImprimirEtiqueta || puedeVerMaterialesComercial;
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
@@ -5317,7 +5323,7 @@ function PropuestaFichaContenido({
     if (!conDemoraSistema || !colasTaller || items.length === 0) return null;
     const nuevos = items.map((item) =>
       condicionarPorMateriales(
-        itemHipoteticoDesdeCotizacion(item.id, item.cotizacion),
+        itemHipoteticoDesdeCotizacion(item.id, item.cotizacion, item.asignacionesPersonal),
         previsionMateriales.data,
         previsionMateriales.error,
       ),
@@ -7722,60 +7728,18 @@ function PropuestaFichaContenido({
                           Entregar
                         </Button>
                       ) : null}
-                      {colasImpresion &&
-                        orden &&
-                        items.some((item) =>
-                          metaCentroCopiado(item.jobContext),
-                        ) &&
-                        !["borrador", "cancelada"].includes(orden.estado) && (
-                          <HeroButton
-                            variant="tertiary"
-                            onPress={() => impresionDocumentos.abrir(orden.id)}
-                          >
-                            <PrinterIcon />
-                            Impresión de documentos
-                          </HeroButton>
-                        )}
-                      {orden?.tieneHistorialImpresion && (puedeVerMateriales || puedeEjecutarProduccion) && (
-                        <HeroButton variant="tertiary" onPress={() => setHistorialImpresionOpen(true)}>
-                          <PrinterIcon />Historial de impresión
-                        </HeroButton>
-                      )}
-                      {(impresionDirecta || conEtiquetasPdf) && puedeImprimirEtiqueta &&
-                        orden &&
-                        !["borrador", "cancelada"].includes(orden.estado) && (
-                          <HeroButton
-                            variant="tertiary"
-                            onPress={() => setEtiquetaOpen(true)}
-                          >
-                            <PrinterIcon />
-                            {impresionDirecta
-                              ? "Imprimir etiqueta"
-                              : "Descargar etiqueta"}
-                          </HeroButton>
-                        )}
-                      {publicToken ? (
-                        <HeroButton
-                          type="button"
-                          variant="tertiary"
-                          size="sm"
-                          onPress={compartirSeguimiento}
-                          title="Copiar el link público de seguimiento para el cliente"
-                        >
-                          {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
-                          {trackCopiado ? "Copiado" : "Seguimiento"}
-                        </HeroButton>
-                      ) : null}
-                      <HeroButton
-                        type="button"
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => setQrRetiroOpen(true)}
-                        title="QR que el cliente presenta para retirar el trabajo"
-                      >
-                        <QrCodeIcon />
-                        QR
-                      </HeroButton>
+                      <OrdenAccionesMenus
+                        documentos={colasImpresion && orden && items.some(item => metaCentroCopiado(item.jobContext)) && !["borrador", "cancelada"].includes(orden.estado)
+                          ? () => impresionDocumentos.abrir(orden.id) : undefined}
+                        etiqueta={(impresionDirecta || conEtiquetasPdf) && puedeImprimirEtiqueta && orden && !["borrador", "cancelada"].includes(orden.estado)
+                          ? () => setEtiquetaOpen(true) : undefined}
+                        historial={orden?.tieneHistorialImpresion && (puedeVerMateriales || puedeEjecutarProduccion)
+                          ? () => setHistorialImpresionOpen(true) : undefined}
+                        seguimiento={publicToken ? compartirSeguimiento : undefined}
+                        qr={() => setQrRetiroOpen(true)}
+                        copiado={trackCopiado}
+                        impresionDirecta={impresionDirecta}
+                      />
                     </div>
                   ) : null}
                 </div>
@@ -8233,7 +8197,27 @@ function PropuestaFichaContenido({
             )}
 
             {tab === "produccion" ? (
-              orden?.produccionControlada === false ? (
+              (!orden || orden.estado === "borrador") && ordenTipo === "orden" && puedeAsignarPersonal && conAsignacionPersonal ? (
+                <OrdenPersonalPrevisto
+                  productos={items.map(item => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId: item.cotizacionItemId, asignacionesPersonal: item.asignacionesPersonal }))}
+                  disabled={!puedeEditarOrden}
+                  preparar={async () => {
+                    const originales = itemsRef.current;
+                    const { itemsConSnapshot } = await persistirSnapshotsItems();
+                    if (originales.length !== itemsRef.current.length || originales.some(previo => !itemsRef.current.some(actual => actual.id === previo.id && actual.cotizacion === previo.cotizacion && actual.jobContext === previo.jobContext && actual.cotizacionItemId === previo.cotizacionItemId)))
+                      throw new Error("Los productos cambiaron mientras se preparaban los operadores. Volvé a intentar.");
+                    if (itemsConSnapshot.some(i => i.planEntrega || i.item.distribucionEntregas)) throw new Error("Los operadores de productos divididos en lotes se asignan desde Producción después de emitir.");
+                    const ids = new Map(itemsConSnapshot.map(i => [i.item.id, i.cotizacionItemId]));
+                    setItems(actual => actual.map(item => ({ ...item, cotizacionItemId: ids.get(item.id) ?? item.cotizacionItemId })));
+                    return itemsConSnapshot.map(({ item, cotizacionItemId }) => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId,
+                      ordenItemId: orden?.productos.some(p => p.id === item.id) ? item.id : undefined, asignacionesPersonal: item.asignacionesPersonal }));
+                  }}
+                  onChange={elecciones => {
+                    setItems(actual => actual.map(item => elecciones.has(item.id) ? { ...item, asignacionesPersonal: elecciones.get(item.id) } : item));
+                    setEditadosIds(actual => new Set([...actual, ...elecciones.keys()]));
+                  }}
+                />
+              ) : orden?.produccionControlada === false ? (
                 <EmptyTab title="Seguimiento manual" description="Esta orden se emitió sin tablero de tareas. Verificá el trabajo antes de confirmar su entrega desde el mostrador." />
               ) : orden ? (
                 <ProduccionOrdenTab
@@ -8542,6 +8526,8 @@ function PropuestaFichaContenido({
           }}
           onSaveItem={(item) => {
             if (!permisoProductosRef.current) return false;
+            // Recalcular dimensiones o precios conserva la decisión de personal.
+            item = { ...item, asignacionesPersonal: items.find(candidate => candidate.id === item.id)?.asignacionesPersonal };
             // El sheet recotiza SIN descuento: si la línea tenía uno, se reaplica
             // sobre la nueva config (recotización) para no perderlo.
             const descuentoPrevio =
@@ -8607,6 +8593,8 @@ function PropuestaFichaContenido({
             const cargaEditada = copiadoEditItems?.length
               ? cargaDeItem(copiadoEditItems[0])
               : null;
+            if (copiadoEditItems?.some(item => item.asignacionesPersonal?.length))
+              toast.info("Se reconstruyeron los trabajos de copiado. Elegí nuevamente sus operadores en Producción antes de emitir.");
             const nuevosConHerencia = nuevos.map((nuevo) => ({
               ...nuevo,
               archivosOrigenItemIds: nuevo.archivosOrigenItemIds?.filter((id) => persistedItemIds.has(id)),

@@ -26,6 +26,7 @@ export type PasoProduccionPropuesta = {
 };
 
 export type PropuestaItem = {
+  asignacionesPersonal?: import("../../apps/api/src/ordenes-trabajo/personal-previsto.contrato").EleccionPersonal[];
   id: string;
   cotizacionItemId?: string;
   productoNombre: string;

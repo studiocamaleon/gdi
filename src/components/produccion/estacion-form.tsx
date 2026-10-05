@@ -11,6 +11,7 @@ import {
   TrashIcon,
   UserRound,
 } from "lucide-react";
+import { SelectField } from "@/components/design-system/select-field";
 import { ActionButton } from "@/components/design-system/action-button";
 import { FormSheet } from "@/components/design-system/form-sheet";
 import { CalendarioEditor, diasInvalidos } from "./calendario-editor";
@@ -521,6 +522,7 @@ export function StationForm({
               ]),
             ].filter((c) => familias.some((f) => f.codigo === c)),
           empleadoIds: initial.empleados.map((entry) => entry.id),
+          empleadoApoyoIds: initial.empleados.filter(e => e.asignacionAutomatica === false).map(e => e.id),
           maquinaIds: initial.maquinas.map((entry) => entry.id),
           reglas: [],
         }
@@ -541,7 +543,7 @@ export function StationForm({
       const next = new Set(current[key]);
       if (next.has(val)) next.delete(val);
       else next.add(val);
-      return { ...current, [key]: [...next] };
+      return { ...current, [key]: [...next], ...(key === "empleadoIds" ? { empleadoApoyoIds: (current.empleadoApoyoIds ?? []).filter(id => next.has(id)) } : {}) };
     });
   };
   const [horarios, setHorarios] = React.useState<
@@ -890,10 +892,10 @@ export function StationForm({
               </label>
             </div>
             <p className={cx("help")}>
-              La capacidad depende de las personas disponibles y de los
-              operarios que necesita cada paso. El horario de cada persona se
-              comparte entre todas sus estaciones. Para registrar trabajo siguen
-              necesitando usuario vinculado y permiso de ejecución.
+              El personal habitual participa del reparto automático. El de apoyo
+              puede elegirse para un paso concreto, aunque trabaje habitualmente
+              en otra estación. Los horarios y las reservas se comparten entre
+              estaciones; registrar trabajo requiere usuario y permiso de ejecución.
             </p>
             <EstacionAsignaciones
               titulo="Personal asignado"
@@ -909,6 +911,16 @@ export function StationForm({
               }))}
               vacio="Agregá al personal que trabaja en esta estación y configurá sus horarios."
               acciones={(id) => (
+                <>
+                <SelectField
+                  aria-label={`Participación de ${nombreEmpleado(id)}`}
+                  value={(draft.empleadoApoyoIds ?? []).includes(id) ? "apoyo" : "habitual"}
+                  disabled={saving || !conEquipos}
+                  options={[{ value: "habitual", label: "Habitual" }, { value: "apoyo", label: "De apoyo" }]}
+                  onChange={(value) => update({ empleadoApoyoIds: value === "apoyo"
+                    ? [...new Set([...(draft.empleadoApoyoIds ?? []), id])]
+                    : (draft.empleadoApoyoIds ?? []).filter(e => e !== id) })}
+                />
                 <ActionButton
                   variant="outline"
                   isIconOnly
@@ -918,6 +930,7 @@ export function StationForm({
                 >
                   <CalendarDays />
                 </ActionButton>
+                </>
               )}
               onQuitar={(id) => toggleLista("empleadoIds", id)}
               disabled={saving || !conEquipos}

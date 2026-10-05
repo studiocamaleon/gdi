@@ -186,6 +186,7 @@ export type OrdenTrabajoItemSnapshot = {
 
 /** Producto (item) de la OT — proyección del snapshot de CotizacionItem. */
 export type OrdenTrabajoProducto = {
+  asignacionesPersonal?: import("../../apps/api/src/ordenes-trabajo/personal-previsto.contrato").EleccionPersonal[];
   fechaEntrega?: string | null;
   distribucionEntregas?: import("./planificacion-entregas").ResumenDistribucion | null;
   /** Id del OrdenTrabajoItem persistido (para editar/quitar). */
