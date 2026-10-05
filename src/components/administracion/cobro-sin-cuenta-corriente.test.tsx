@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-import RegistrarCobroPage from "@/app/(dashboard)/administracion/cobros/nuevo/page";
+import RegistrarCobroPage from "@/app/(dashboard)/(cobros)/administracion/cobros/nuevo/page";
 import { RegistrarCobroView } from "./registrar-cobro-view";
 import { CapacidadesProvider } from "../navigation/capacidades-provider";
 import { capacidadDeRuta } from "@/lib/capacidades";
@@ -23,6 +23,7 @@ vi.mock("@/lib/clientes-api", () => ({ getClienteById: mocks.cliente }));
 vi.mock("@/lib/capacidades-server", () => ({
   tieneCapacidad: mocks.capacidad,
 }));
+vi.mock("@/lib/permisos-server", () => ({ tienePermiso: async () => true }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   notFound: () => {

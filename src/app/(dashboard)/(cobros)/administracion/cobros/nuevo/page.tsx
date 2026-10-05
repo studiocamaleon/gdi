@@ -1,3 +1,5 @@
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
 import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -27,6 +29,23 @@ export default async function RegistrarCobroPage({
   searchParams: Promise<{ ordenId?: string; clienteId?: string }>;
 }) {
   const { ordenId, clienteId } = await searchParams;
+  const [puedeCobrar, puedeGestionar] = await Promise.all([
+    tienePermiso("administracion.cobrar"),
+    tienePermiso("administracion.cobrar.gestionar"),
+  ]);
+  if (!puedeCobrar && !puedeGestionar)
+    return <SinPermiso modulo="registrar cobros" />;
+  // Esta operación tiene una puerta propia: cobrar desde una OT no exige
+  // habilitar Cuentas por cobrar, Tesorería ni la sección Administración.
+  if (ordenId && !(await tienePermiso("comercial.ordenes.ver")))
+    return <SinPermiso modulo="la orden de trabajo" />;
+  if (
+    !ordenId &&
+    clienteId &&
+    !(await tienePermiso("crm.clientes.ver")) &&
+    !(await tienePermiso("administracion.cobrar.ver"))
+  )
+    return <SinPermiso modulo="el cliente" />;
   const conCobros = await tieneCapacidad("cobros");
   if (!conCobros && !ordenId) return <FuncionNoIncluida />;
 
@@ -60,10 +79,16 @@ export default async function RegistrarCobroPage({
         clienteNombre: detalle.clienteNombre,
         resumen: detalle.resumen,
         total: detalle.total,
-        cobradoBruto: cobros.reduce((s, c) => s + c.montoBruto, 0),
+        cobradoBruto: cobros.reduce(
+          (s, c) => s + (c.montoAplicadoOrden ?? c.montoBruto),
+          0,
+        ),
       };
     } else if (clienteId) {
-      if (await tieneCapacidad("cuentas_cobrar")) {
+      if (
+        (await tieneCapacidad("cuentas_cobrar")) &&
+        (await tienePermiso("administracion.cobrar.ver"))
+      ) {
         const cc = await getCuentaCorriente(clienteId);
         contexto = {
           tipo: "cliente",

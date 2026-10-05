@@ -13,6 +13,11 @@ import { AdministracionController } from '../../administracion/administracion.co
 import { MetodosPagoService } from '../../administracion/metodos-pago.service';
 import { UsuariosService } from '../../usuarios/usuarios.service';
 import { UsuariosController } from '../../usuarios/usuarios.controller';
+import { CobrosService } from '../../administracion/cobros.service';
+import { FacturacionOrdenesService } from '../../administracion/facturacion-ordenes.service';
+import { RecibosService } from '../../administracion/recibos.service';
+import { EnlacesPublicosService } from '../../enlaces-publicos/enlaces-publicos.service';
+import { FidelizacionService } from '../../fidelizacion/fidelizacion.service';
 import { TesoreriaService } from '../../administracion/tesoreria.service';
 import { ConfiguracionFiscalService } from '../../administracion/configuracion-fiscal.service';
 import { ImputacionesService } from '../../administracion/imputaciones.service';
@@ -152,6 +157,7 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
       ['gestor', ['administracion.ver', 'administracion.gestionar', 'configuracion.usuarios.gestionar']],
       ['lector', ['administracion.ver']],
       ['sin-permisos', []],
+      ['cobrador', ['acceso.por_vista', 'comercial.ordenes.gestionar', 'administracion.cobrar']],
       ['cajero', ['acceso.por_vista', 'administracion.tesoreria.ver', 'tesoreria.arquear', 'tesoreria.transferir']],
     ] as const) {
       const user = await prisma.user.create({
@@ -173,9 +179,9 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
           userId: user.id,
           rol: 'ADMINISTRADOR',
           rolId: rol.id,
-          cuentasRestringidas: actor === 'cajero',
-          cuentasOperablesIds: actor === 'cajero' ? [cuentas[0][0]] : [],
-          cuentasDestinoIds: actor === 'cajero' ? [cuentas[0][1]] : [],
+          cuentasRestringidas: ['cajero', 'cobrador'].includes(actor),
+          cuentasOperablesIds: ['cajero', 'cobrador'].includes(actor) ? [cuentas[0][0]] : [],
+          cuentasDestinoIds: ['cajero', 'cobrador'].includes(actor) ? [cuentas[0][1]] : [],
         },
       });
       const sesion = await prisma.authSession.create({
@@ -195,7 +201,13 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
         role: 'ADMINISTRADOR',
       });
     }
+    const recibosReales = new RecibosService(prisma, noUsado as never, new EnlacesPublicosService(prisma, capacidades), noUsado as never, noUsado as never, capacidades);
+    // PDF y avisos son trabajos externos: este ensayo verifica el asiento, el
+    // número y el enlace del recibo, sin enviar nada ni usar almacenamiento cloud.
+    jest.spyOn(recibosReales, 'materializarPdfEnSegundoPlano').mockImplementation(() => undefined);
     const reales = new Map<unknown, unknown>([
+      [RecibosService, recibosReales],
+      [CobrosService, new CobrosService(prisma, new FacturacionOrdenesService(prisma), recibosReales, { avisar: async () => undefined } as never, new FidelizacionService(prisma, capacidades), capacidades)],
       [MetodosPagoService, new MetodosPagoService(prisma, capacidades)],
       [
         TesoreriaService,
@@ -570,6 +582,29 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
     await request(app.getHttpServer()).put(ruta).set('Authorization',`Bearer ${tokens.gestor}`).send(body).expect(200);
     expect(await prisma.eventoAcceso.count({where:{tenantId:tenants[0],usuarioAfectadoId:miembro.userId,tipo:'cuentas_asignadas'}})).toBe(1);
   });
+  it('cobrar desde una OT funciona sin Administración y conserva restricciones, saldo y recibo', async () => {
+    const orden = await prisma.ordenTrabajo.create({ data: { tenantId: tenants[0], numero: 'OT-Cobro-ficticio', estado: 'pendiente', total: 1000 } });
+    const otraOrden = await prisma.ordenTrabajo.create({ data: { tenantId: tenants[1], numero: 'OT-Otra-empresa', estado: 'pendiente', total: 1000 } });
+    const payload = { ordenId: orden.id, fecha: '2026-10-05', metodoPagoId: metodos[0], cuentaDestinoId: cuentas[0][0], montoBruto: 100, comisionPctAplicada: 0, idempotencyKey: randomUUID() };
+    const antes = await saldos();
+    for (const cambios of [{ cuentaDestinoId: cuentas[0][1] }, { cuentaDestinoId: cuentas[1][0] }])
+      await http('post', 'cobros', 'cobrador').send({ ...payload, ...cambios }).expect(403);
+    await http('post', 'cobros', 'cobrador').send({ ...payload, ordenId: otraOrden.id }).expect(404);
+    await http('post', 'cobros', 'sin-permisos').send(payload).expect(403);
+    expect(await saldos()).toEqual(antes);
+    const { body: creado } = await http('post', 'cobros', 'cobrador').send(payload).expect(201);
+    expect(creado.numeroRecibo).toMatch(/^REC-/);
+    const reintento = await http('post', 'cobros', 'cobrador').send(payload).expect(201);
+    expect(reintento.body.id).toBe(creado.id);
+    expect(Number((await prisma.ordenTrabajo.findUniqueOrThrow({ where: { id: orden.id } })).cobradoTotal)).toBe(100);
+    const lista = await http('get', `cobros?ordenId=${orden.id}`, 'cobrador').expect(200);
+    expect(lista.body).toEqual(expect.arrayContaining([expect.objectContaining({ id: creado.id, montoAplicadoOrden: 100 })]));
+    const recibo = await http('get', `cobros/${creado.id}/recibo/enlace`, 'cobrador').expect(200);
+    expect(recibo.body.url).toBeTruthy();
+    for (const ruta of ['cobros', 'deudores', 'tesoreria', 'configuracion-fiscal']) await http('get', ruta, 'cobrador').expect(403);
+    await http('delete', `cobros/${creado.id}`, 'cobrador').send({ motivo: 'Prueba sin autorización' }).expect(403);
+  });
+
   it('revocar las cuentas toma efecto en la misma sesión y una lista vacía no abre todo', async () => {
     const miembro = await prisma.membership.findFirstOrThrow({ where: { tenantId: tenants[0], rolDelTenant: { nombre: 'cajero' } } });
     await prisma.membership.update({ where: { id: miembro.id }, data: { cuentasOperablesIds: [], cuentasDestinoIds: [] } });

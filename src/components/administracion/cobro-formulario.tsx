@@ -456,7 +456,7 @@ export function CobroFormulario({
                 disabled={cuentasCompatibles.length === 0}
               >
                 {cuentasCompatibles.length === 0 ? (
-                  <option value="">No hay cuentas en {moneda.codigo}</option>
+                  <option value="">Sin cuentas disponibles en {moneda.codigo}</option>
                 ) : null}
                 {cuentasCompatibles.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -466,8 +466,7 @@ export function CobroFormulario({
               </select>
               {cuentasCompatibles.length === 0 ? (
                 <p className="mt-2 text-sm text-destructive">
-                  Creá o activá una cuenta en {moneda.codigo} antes de registrar
-                  el cobro.
+                  No tenés una cuenta disponible en {moneda.codigo}. Pedí al administrador que revise las cuentas activas y las asignadas a tu usuario.
                 </p>
               ) : null}
             </div>
