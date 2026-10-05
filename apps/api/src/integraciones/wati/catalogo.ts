@@ -299,10 +299,9 @@ Si ya lo abonaste, puede que todavía no lo hayamos registrado.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: false,
-    // Sin `cableado`: el envío se conecta recién cuando esta plantilla esté
-    // aprobada por Meta. Hasta entonces "orden lista" sigue saliendo por
-    // grafo_orden_lista_v2 (sin imagen). No prender las dos a la vez cuando se
-    // cablee: son el mismo momento y duplicarían el aviso.
+    cableado: true,
+    // Optativa: se activa por empresa y reemplaza a la variante de texto.
+    // El despacho verifica la aprobación vigente antes de cada envío.
     requiereLocalAbierto: true,
     // El QR va de header de imagen. `v1` y no `v2` como el resto: este código
     // nunca se sometió a Meta, así que su nombre no está quemado (ver D2).
@@ -329,8 +328,8 @@ Si preferís, también podés retirarla dándonos el número de tu orden.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: false,
-    // Igual que orden_lista_qr, pero con la línea del saldo: es el par con-saldo
-    // del momento "listo". Al cablear, reemplaza a orden_lista_con_saldo.
+    cableado: true,
+    // Mismo momento que orden_lista_con_saldo; se prefiere QR si está activo.
     requiereLocalAbierto: true,
     encabezado: { tipo: 'IMAGE' },
     cuerpo: `Hola {{1}}, tu orden {{2}} ya está lista. 📦

@@ -1,3 +1,5 @@
+import { NotificacionesOrdenesService } from '../notificaciones-ordenes.service';
+import { versionReintento } from '../reintento';
 import { ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
@@ -577,4 +579,251 @@ describe('Avisos: contrato, cierre y resultados inciertos', () => {
         reservaToken: nuevoToken,
       });
     }));
+});
+
+describe('Aviso de orden finalizada y reintento manual', () => {
+  it.each([false, true])(
+    'finalización con saldo=%s respeta texto activo y permite elegir QR sin duplicar',
+    (conSaldo) =>
+      conPlanesAsignados(prisma, async (c) => {
+        const x = await preparar(c);
+        const orden = await c.tx.ordenTrabajo.create({
+          data: {
+            tenantId: x.tenantId,
+            numero: 'OT-PRUEBA-1',
+            estado: 'finalizada',
+            clienteId: x.cliente.id,
+            total: 100,
+            cobradoTotal: conSaldo ? 40 : 100,
+            publicToken: randomUUID(),
+          },
+        });
+        const servicio = new NotificacionesOrdenesService(c.db, x.cola);
+        const texto = conSaldo ? 'orden_lista_con_saldo' : 'orden_lista';
+        const qr = conSaldo ? 'orden_lista_con_saldo_qr' : 'orden_lista_qr';
+        await x.dentro(() => servicio.sincronizar(orden.id));
+        const aviso = await c.tx.notificacionWhatsapp.findFirstOrThrow({
+          where: { tenantId: x.tenantId },
+        });
+        expect(aviso.evento).toBe(texto);
+        expect(aviso.parametros).toEqual(
+          conSaldo
+            ? ['Cliente sintético', 'OT-PRUEBA-1', '60,00', expect.any(String)]
+            : ['Cliente sintético', 'OT-PRUEBA-1', expect.any(String)],
+        );
+        await c.tx.notificacionEvento.create({
+          data: { tenantId: x.tenantId, evento: qr, activo: true },
+        });
+        await x.dentro(() => servicio.sincronizar(orden.id));
+        expect(
+          await c.tx.notificacionWhatsapp.count({
+            where: { tenantId: x.tenantId },
+          }),
+        ).toBe(1);
+        const segunda = await c.tx.ordenTrabajo.create({
+          data: {
+            tenantId: x.tenantId,
+            numero: 'OT-PRUEBA-2',
+            estado: 'finalizada',
+            clienteId: x.cliente.id,
+            total: 100,
+            cobradoTotal: conSaldo ? 40 : 100,
+            publicToken: randomUUID(),
+          },
+        });
+        await x.dentro(() => servicio.sincronizar(segunda.id));
+        const avisoQr = await c.tx.notificacionWhatsapp.findFirstOrThrow({
+          where: { tenantId: x.tenantId, ordenId: segunda.id },
+        });
+        expect(avisoQr.evento).toBe(qr);
+        expect(avisoQr.plantilla).toBe(`grafo_${qr}_v1`);
+        // Cerrar de nuevo después de un cobro tampoco cambia el aviso existente.
+        await c.tx.ordenTrabajo.update({
+          where: { id: segunda.id },
+          data: { cobradoTotal: conSaldo ? 100 : 0 },
+        });
+        await x.dentro(() => servicio.sincronizar(segunda.id));
+        expect(
+          await c.tx.notificacionWhatsapp.count({
+            where: { tenantId: x.tenantId, ordenId: segunda.id },
+          }),
+        ).toBe(1);
+      }),
+  );
+
+  it('apagados explícitos se respetan y la UI ofrece las dos variantes QR', () =>
+    conPlanesAsignados(prisma, async (c) => {
+      const x = await preparar(c);
+      await c.tx.notificacionEvento.createMany({
+        data: ['orden_lista', 'orden_lista_con_saldo'].map((evento) => ({
+          tenantId: x.tenantId,
+          evento,
+          activo: false,
+        })),
+      });
+      const orden = await c.tx.ordenTrabajo.create({
+        data: {
+          tenantId: x.tenantId,
+          numero: 'OT-APAGADA',
+          estado: 'finalizada',
+          clienteId: x.cliente.id,
+          publicToken: randomUUID(),
+          total: 100,
+          cobradoTotal: 100,
+        },
+      });
+      await x.dentro(() =>
+        new NotificacionesOrdenesService(c.db, x.cola).sincronizar(orden.id),
+      );
+      expect(
+        await c.tx.notificacionWhatsapp.count({
+          where: { tenantId: x.tenantId },
+        }),
+      ).toBe(0);
+      const catalogo = await x.dentro(() => x.cola.eventos());
+      for (const nombre of ['orden_lista_qr', 'orden_lista_con_saldo_qr'])
+        expect(catalogo.find((e) => e.evento === nombre)).toMatchObject({
+          cableado: true,
+          activo: false,
+        });
+    }));
+
+  it('reintenta la misma fila, conserva intentos y rechaza un segundo clic o una versión antigua', () =>
+    conPlanesAsignados(prisma, async (c) => {
+      const x = await preparar(c),
+        id = await x.nueva();
+      await c.tx.integracionTenant.create({
+        data: { tenantId: x.tenantId, proveedor: 'WATI', estado: 'CONECTADA' },
+      });
+      const anterior = await c.tx.notificacionWhatsapp.update({
+        where: { id },
+        data: {
+          estado: 'fallida',
+          intentos: 4,
+          reservaToken: randomUUID(),
+          motivo: 'Créditos insuficientes',
+        },
+      });
+      x.despachar.mockClear();
+      const dto = { version: versionReintento(anterior) };
+      await x.dentro(() => x.cola.reintentar(x.auth, id, dto));
+      expect(await x.leer(id)).toMatchObject({
+        estado: 'pendiente',
+        intentos: 4,
+        telefono: anterior.telefono,
+        plantilla: anterior.plantilla,
+        claveUnica: anterior.claveUnica,
+        parametros: anterior.parametros,
+      });
+      expect(x.despachar).toHaveBeenCalledTimes(1);
+      await expect(
+        x.dentro(() => x.cola.reintentar(x.auth, id, dto)),
+      ).rejects.toMatchObject({ status: 409 });
+      await c.tx.notificacionWhatsapp.update({
+        where: { id },
+        data: { estado: 'fallida', intentos: 5, reservaToken: randomUUID() },
+      });
+      await expect(
+        x.dentro(() => x.cola.reintentar(x.auth, id, dto)),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(
+        await c.tx.eventoSistema.count({
+          where: {
+            tenantId: x.tenantId,
+            tipo: 'aviso.reintento',
+            entidadId: id,
+          },
+        }),
+      ).toBe(1);
+      expect(x.wati.enviarPlantilla).not.toHaveBeenCalled();
+    }));
+
+  it.each([
+    'enviada',
+    'enviando',
+    'wati_incierta',
+    'web_incierta',
+    'pendiente',
+    'descartada',
+  ])('rechaza reenvío en estado %s', (estado) =>
+    conPlanesAsignados(prisma, async (c) => {
+      const x = await preparar(c),
+        id = await x.nueva();
+      const n = await c.tx.notificacionWhatsapp.update({
+        where: { id },
+        data: { estado },
+      });
+      await expect(
+        x.dentro(() =>
+          x.cola.reintentar(x.auth, id, { version: versionReintento(n) }),
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+    }),
+  );
+
+  it.each([
+    'pausado',
+    'evento',
+    'cliente',
+    'plan',
+    'otra empresa',
+    'impersonación',
+    'otro canal',
+  ])('no reintenta si cambió %s', (escenario) =>
+    conPlanesAsignados(prisma, async (c) => {
+      const x = await preparar(c),
+        id = await x.nueva();
+      const n = await c.tx.notificacionWhatsapp.update({
+        where: { id },
+        data: { estado: 'fallida' },
+      });
+      if (escenario === 'pausado')
+        await c.tx.configuracionNotificaciones.update({
+          where: { tenantId: x.tenantId },
+          data: { pausado: true },
+        });
+      if (escenario === 'evento')
+        await c.tx.notificacionEvento.create({
+          data: {
+            tenantId: x.tenantId,
+            evento: 'orden_recibida',
+            activo: false,
+          },
+        });
+      if (escenario === 'cliente')
+        await c.tx.cliente.update({
+          where: { id: x.cliente.id },
+          data: { aceptaWhatsapp: false },
+        });
+      if (escenario === 'plan')
+        await c.tx.suscripcion.update({
+          where: { tenantId: x.tenantId },
+          data: { planVersionId: c.versiones[0].id },
+        });
+      if (escenario === 'otro canal')
+        await c.tx.notificacionWhatsapp.update({
+          where: { id },
+          data: { canal: 'META_WHATSAPP' },
+        });
+      x.despachar.mockClear();
+      const auth =
+        escenario === 'otra empresa'
+          ? { ...x.auth, tenantId: c.tenantId }
+          : escenario === 'impersonación'
+            ? {
+                ...x.auth,
+                impersonacion: {
+                  actorUserId: x.auth.userId,
+                } as CurrentAuth['impersonacion'],
+              }
+            : x.auth;
+      await expect(
+        x.dentro(() =>
+          x.cola.reintentar(auth, id, { version: versionReintento(n) }),
+        ),
+      ).rejects.toBeDefined();
+      expect(x.despachar).not.toHaveBeenCalled();
+      expect((await x.leer(id)).estado).toBe('fallida');
+    }),
+  );
 });

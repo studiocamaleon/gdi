@@ -15,6 +15,7 @@ import {
   CambiarConfigDto,
   CambiarEventoDto,
   ResolverAvisoDto,
+  ReintentarAvisoDto,
 } from './notificaciones.dto';
 import { CurrentSession } from '../../auth/current-auth.decorator';
 import type { CurrentAuth } from '../../auth/auth.types';
@@ -31,7 +32,7 @@ import { ProhibidoImpersonando } from '../../auth/prohibido-impersonando.decorat
  * ADMINISTRADOR — encender un evento le manda WhatsApps a todos los clientes
  * desde el número oficial de la empresa.
  */
-@Permiso("configuracion.integraciones.ver")
+@Permiso('configuracion.integraciones.ver')
 @Controller('integraciones/notificaciones')
 export class NotificacionesController {
   constructor(private readonly service: NotificacionesService) {}
@@ -53,7 +54,7 @@ export class NotificacionesController {
   }
 
   @Post(':id/resolver')
-  @Permiso("configuracion.integraciones.gestionar")
+  @Permiso('configuracion.integraciones.gestionar')
   @Roles(RolSistema.ADMINISTRADOR)
   resolver(
     @CurrentSession() auth: CurrentAuth,
@@ -63,8 +64,20 @@ export class NotificacionesController {
     return this.service.resolver(auth, id, dto);
   }
 
+  @Post(':id/reintentar')
   @ProhibidoImpersonando()
-  @Permiso("configuracion.integraciones.gestionar")
+  @Permiso('configuracion.integraciones.gestionar')
+  @Roles(RolSistema.ADMINISTRADOR)
+  reintentar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReintentarAvisoDto,
+  ) {
+    return this.service.reintentar(auth, id, dto);
+  }
+
+  @ProhibidoImpersonando()
+  @Permiso('configuracion.integraciones.gestionar')
   @Put('configuracion')
   @Roles(RolSistema.ADMINISTRADOR)
   cambiarConfiguracion(@Body() dto: CambiarConfigDto) {
@@ -72,7 +85,7 @@ export class NotificacionesController {
   }
 
   @ProhibidoImpersonando()
-  @Permiso("configuracion.integraciones.gestionar")
+  @Permiso('configuracion.integraciones.gestionar')
   @Put('eventos/:evento')
   @Roles(RolSistema.ADMINISTRADOR)
   cambiarEvento(

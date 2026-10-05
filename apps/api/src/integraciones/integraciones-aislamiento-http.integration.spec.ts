@@ -448,6 +448,19 @@ describe('Integraciones: aislamiento y límites de soporte por HTTP', () => {
       }),
     ]);
 
+  it('reintento HTTP exige sesión, gestión, pertenencia y un fallo confirmado; soporte no puede enviar', async () => {
+    const ruta = `/integraciones/notificaciones/${avisos[0].incierta}/reintentar`;
+    const body = { version: 'a'.repeat(64) };
+    await request(app.getHttpServer()).post(ruta).send(body).expect(401);
+    for (const actor of ['lector', 'ninguno', 'soporte'])
+      await http({metodo:'post',ruta,body},actor).expect(403);
+    await http({metodo:'post',ruta,body},'ajeno').expect(404);
+    await http({metodo:'post',ruta,body}).expect(409);
+    await http({metodo:'post',ruta,body:{...body,tenantId:tenants[1]}}).expect(400);
+    await http({metodo:'post',ruta,body:{version:'inválida'}}).expect(400);
+    expect(wati.enviarPlantilla).not.toHaveBeenCalled();
+  });
+
   it('exige sesión y permisos efectivos en las 19 rutas', async () => {
     expect(rutas()).toHaveLength(19);
     for (const r of rutas()) {

@@ -159,10 +159,10 @@ describe('plantillas del QR de retiro', () => {
     }
   });
 
-  it('ninguna arranca prendida: el envío se cablea con la aprobación', () => {
+  it('las dos están disponibles y se activan por empresa', () => {
     for (const qr of qrs) {
       expect(qr.activoPorDefecto).toBe(false);
-      expect(qr.cableado).toBeFalsy();
+      expect(qr.cableado).toBe(true);
     }
   });
 
