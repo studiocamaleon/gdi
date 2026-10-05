@@ -35,6 +35,7 @@ export type PermisoClave =
   | `${ModuloClave}.ver`
   | `${ModuloClave}.gestionar`
   | "finanzas.ver_margenes"
+  | "comercial.aprobar_descuento"
   | "crm.configurar_fidelizacion"
   // El Resumen ejecutivo se separa del resto de Reportes: es la lectura del
   // dueño (facturación, margen, punto de equilibrio, alertas) y de fábrica lo
