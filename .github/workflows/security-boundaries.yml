@@ -95,6 +95,8 @@ jobs:
             src/administracion/__tests__/tesoreria-operativa.spec.ts \
             src/archivos/__tests__/cajas-recibos.spec.ts \
             src/productos-servicios/__tests__/producto-cotizacion-publico.spec.ts \
+            src/ordenes-trabajo/__tests__/descuento-posterior.spec.ts \
+            src/ordenes-trabajo/__tests__/descuento-posterior.integration.spec.ts \
             src/centro-copiado/__tests__/inicializacion-requisitos.spec.ts \
             src/administracion/__tests__/medios-pago-retenciones.integration.spec.ts \
             src/auth/__tests__/comercial-relaciones-http.integration.spec.ts \

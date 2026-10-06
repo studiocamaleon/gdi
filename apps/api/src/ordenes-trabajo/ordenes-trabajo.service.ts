@@ -1,3 +1,10 @@
+import { DescuentoOrdenDto } from './dto/descuento-orden.dto';
+import {
+  netoListaPersistido,
+  descontarLineaPersistida,
+  validarAjustePosterior,
+  validarTotalCobrado,
+} from './descuento-posterior';
 import { textoErrorLog } from '../common/log-seguro';
 import {
   contextoPersonalDePasos,
@@ -2647,7 +2654,9 @@ export class OrdenesTrabajoService {
       if (
         orden.cotizacionId &&
         snapshots.some(
-          (snapshot) => snapshot.cotizacionId !== orden.cotizacionId,
+          (snapshot) =>
+            snapshot.cotizacionId !== orden.cotizacionId &&
+            !historicosSinCambio.has(snapshot.id),
         )
       ) {
         if (!payload.tipoCambioId)
@@ -3334,6 +3343,321 @@ export class OrdenesTrabajoService {
         },
       });
     });
+    return this.findOne(auth, id);
+  }
+
+  /** Cambia únicamente el precio acordado. Conserva materiales, archivos, pasos y tiempos. */
+  async aplicarDescuentoOrden(
+    auth: CurrentAuth,
+    id: string,
+    dto: DescuentoOrdenDto,
+  ) {
+    if (dto.modo === 'manual' && (!dto.tipo || dto.valor == null))
+      throw new BadRequestException('Indicá el tipo y el valor del descuento.');
+    if (dto.modo === 'cupon' && !dto.codigo?.trim())
+      throw new BadRequestException('Ingresá el código del cupón.');
+    await this.prisma.$transaction(
+      async (tx) => {
+        await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+          'ordenes',
+        ]);
+        const bloqueadas = await tx.$queryRaw<
+          Array<{ id: string }>
+        >`SELECT "id" FROM "OrdenTrabajo" WHERE "id" = ${id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+        if (!bloqueadas.length)
+          throw new NotFoundException('No se encontró la orden de trabajo.');
+        const orden = await tx.ordenTrabajo.findFirstOrThrow({
+          where: { id, tenantId: auth.tenantId },
+          include: {
+            items: {
+              where: { parentItemId: null },
+              include: {
+                cotizacionItem: {
+                  include: {
+                    producto: {
+                      include: {
+                        subcategoriaComercial: { include: { categoria: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+        const comprobante = await tx.comprobante.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            tipo: 'factura',
+            estado: { notIn: ['rechazado', 'anulado'] },
+            OR: [{ ordenId: id }, { ordenes: { some: { ordenId: id } } }],
+          },
+          select: { id: true },
+        });
+        validarAjustePosterior(
+          orden,
+          dto.expectedVersion,
+          Boolean(comprobante),
+        );
+        if (!orden.items.length)
+          throw new BadRequestException('La orden no tiene productos.');
+        if (orden.items.some((i) => !i.cotizacionItem))
+          throw new BadRequestException(
+            'Algún producto no tiene su cotización histórica. Revisalo antes de cambiar el precio.',
+          );
+        const regional = await regionalDelTenant(tx, auth.tenantId);
+        const dec =
+          regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+        const contexto = {
+          ahora: new Date(),
+          zonaHoraria: regional.zonaHoraria,
+          clienteId: orden.clienteId,
+          items: orden.items.map((i) => ({
+            key: i.id,
+            neto: netoListaPersistido(i),
+            productoId: i.cotizacionItem!.productoId,
+            productoCodigo: i.codigo,
+            categoriaCodigo:
+              i.cotizacionItem!.producto.subcategoriaComercial.categoria.codigo,
+            subcategoriaCodigo:
+              i.cotizacionItem!.producto.subcategoriaComercial.codigo,
+          })),
+        };
+        let cupon: Awaited<ReturnType<typeof tx.cupon.findFirst>> = null;
+        let plan: Array<{
+          key: string;
+          tipo: 'PORCENTAJE' | 'MONTO';
+          valor: number;
+        }> = [];
+        if (dto.modo === 'cupon') {
+          await this.capacidades.exigirOperacionTx(
+            tx,
+            auth.tenantId,
+            ['cupones'],
+            ['cupones'],
+          );
+          cupon = await tx.cupon.findFirst({
+            where: {
+              tenantId: auth.tenantId,
+              codigo: { equals: dto.codigo!.trim(), mode: 'insensitive' },
+            },
+          });
+          if (!cupon) throw new BadRequestException('El cupón no existe.');
+          await tx.$queryRaw`SELECT "id" FROM "Cupon" WHERE "id"=${cupon.id}::uuid AND "tenantId"=${auth.tenantId}::uuid FOR UPDATE`;
+          cupon = await tx.cupon.findUniqueOrThrow({ where: { id: cupon.id } });
+          const uso = await tx.cuponRedencion.findFirst({
+            where: {
+              tenantId: auth.tenantId,
+              ordenId: id,
+              cuponId: cupon.id,
+              estado: { not: 'LIBERADA' },
+            },
+          });
+          const evaluacion = evaluarCupon(
+            {
+              ...cupon,
+              valor: Number(cupon.valor),
+              montoMinimo:
+                cupon.montoMinimo == null ? null : Number(cupon.montoMinimo),
+              vigenciaDesde:
+                cupon.vigenciaDesde?.toISOString().slice(0, 10) ?? null,
+              vigenciaHasta:
+                cupon.vigenciaHasta?.toISOString().slice(0, 10) ?? null,
+              usoCount: Math.max(0, cupon.usoCount - (uso ? 1 : 0)),
+            },
+            contexto,
+          );
+          if (!evaluacion.ok) throw new BadRequestException(evaluacion.motivo);
+          plan = planDescuentoCupon(
+            { tipo: cupon.tipo, valor: Number(cupon.valor) },
+            contexto.items,
+            evaluacion.alcanzadas,
+            dec,
+          );
+          if (!plan.length)
+            throw new BadRequestException(
+              'El cupón no alcanza productos con importe.',
+            );
+        } else if (dto.modo === 'manual') {
+          plan = planDescuentoCupon(
+            { tipo: dto.tipo!, valor: dto.valor! },
+            contexto.items,
+            contexto.items.map((i) => i.key),
+            dec,
+          );
+          if (dto.tipo === 'PORCENTAJE' && dto.valor! > 100)
+            throw new BadRequestException(
+              'El porcentaje no puede superar 100.',
+            );
+        }
+        const porId = new Map(plan.map((p) => [p.key, p]));
+        const proyeccion = orden.items.map((item) => {
+          const seleccion = porId.get(item.id);
+          // Cupón reemplaza solamente las líneas alcanzadas; quitar/manual, toda la OT.
+          if (dto.modo === 'cupon' && !seleccion)
+            return { ...item, cambio: false };
+          return {
+            ...item,
+            ...descontarLineaPersistida(
+              {
+                ...item,
+                impuestosSnapshotJson:
+                  item.cotizacionItem!.impuestosSnapshotJson,
+              },
+              seleccion ?? null,
+              dec,
+            ),
+            descuentoCuponId: cupon?.id ?? null,
+            cambio: true,
+          };
+        });
+        if (orden.estado !== 'borrador')
+          await this.exigirDescuentoEmitible(
+            auth,
+            proyeccion.filter((i) => !i.descuentoCuponId),
+          );
+        const subtotal = proyeccion.reduce((s, i) => s + Number(i.subtotal), 0);
+        const impuestos =
+          orden.tratamientoFiscal === 'SIN_COMPROBANTE'
+            ? 0
+            : proyeccion.reduce((s, i) => s + Number(i.impuestos), 0);
+        const cargos = recalcularCargosPorSubtotal(
+          orden.cargosDirectosJson,
+          subtotal,
+          dec,
+        );
+        const cargosDirectos = montoCargosPorTratamiento(
+          cargos,
+          orden.tratamientoFiscal === 'SIN_COMPROBANTE'
+            ? 'SIN_COMPROBANTE'
+            : 'FISCAL',
+          Number(orden.cargosDirectos),
+        );
+        const total = new Prisma.Decimal(
+          subtotal +
+            impuestos +
+            cargosDirectos -
+            Number(orden.fidelizacionCanjeMonto),
+        )
+          .toDecimalPlaces(dec)
+          .toNumber();
+        if (total < 0)
+          throw new ConflictException(
+            'El descuento supera el importe disponible después del canje de puntos.',
+          );
+        validarTotalCobrado(total, orden.cobradoTotal);
+        const revision = await tx.cotizacion.create({
+          data: {
+            tenantId: auth.tenantId,
+            clienteId: orden.clienteId,
+            notificarWhatsapp: false,
+          },
+        });
+        for (const item of proyeccion.filter((i) => i.cambio)) {
+          const {
+            id: origenId,
+            createdAt,
+            updatedAt,
+            producto,
+            ...origen
+          } = item.cotizacionItem!;
+          const resumen = origen.snapshotJson as Record<string, unknown>;
+          const cantidad =
+            Number(
+              (resumen?.ejecucion as { cantidadComercialPricing?: number })
+                ?.cantidadComercialPricing ?? origen.cantidad,
+            ) || 1;
+          // Revisión nueva: el presupuesto/snapshot original nunca se modifica.
+          const nuevo = await tx.cotizacionItem.create({
+            data: {
+              ...origen,
+              cotizacionId: revision.id,
+              trazabilidadJson: origen.trazabilidadJson ?? Prisma.DbNull,
+              precioConfigSnapshotJson:
+                origen.precioConfigSnapshotJson ?? Prisma.DbNull,
+              impuestosSnapshotJson:
+                origen.impuestosSnapshotJson ?? Prisma.DbNull,
+              comisionesSnapshotJson:
+                origen.comisionesSnapshotJson ?? Prisma.DbNull,
+              precioEspecialClienteSnapshotJson:
+                origen.precioEspecialClienteSnapshotJson ?? Prisma.DbNull,
+              snapshotJson: {
+                ...resumen,
+                ajusteComercial: {
+                  origenId,
+                  ordenId: id,
+                  fecha: new Date().toISOString(),
+                  actorId: auth.userId,
+                },
+              },
+              precioNetoUnitario: Number(item.subtotal) / cantidad,
+              precioNetoTotal: item.subtotal,
+              impuestosPorFueraTotal: item.impuestos,
+              precioUnitario: Number(item.total) / cantidad,
+              precioTotal: item.total,
+              descuentoTipo: item.descuentoTipo,
+              descuentoValor: item.descuentoValor,
+              descuentoMonto: item.descuentoMonto,
+            } as Prisma.CotizacionItemUncheckedCreateInput,
+          });
+          await tx.ordenTrabajoItem.update({
+            where: { id: item.id },
+            data: {
+              cotizacionItemId: nuevo.id,
+              subtotal: item.subtotal,
+              impuestos: item.impuestos,
+              total: item.total,
+              descuentoTipo: item.descuentoTipo,
+              descuentoValor: item.descuentoValor,
+              descuentoMonto: item.descuentoMonto,
+              descuentoCuponId: item.descuentoCuponId,
+            },
+          });
+        }
+        if (orden.estado !== 'borrador')
+          await this.reconciliarCupones(tx, auth, id, proyeccion);
+        await tx.ordenTrabajo.update({
+          where: { id },
+          data: {
+            subtotal,
+            impuestos,
+            cargosDirectos,
+            cargosDirectosJson: cargos as never,
+            total,
+            descuentoTotal: proyeccion.reduce(
+              (s, i) => s + Number(i.descuentoMonto ?? 0),
+              0,
+            ),
+            updatedAt: new Date(),
+          },
+        });
+        await tx.ordenTrabajoEvento.create({
+          data: {
+            tenantId: auth.tenantId,
+            ordenId: id,
+            tipo: 'descuento',
+            descripcion:
+              dto.modo === 'cupon'
+                ? `Cupón ${cupon!.codigo} aplicado`
+                : dto.modo === 'quitar'
+                  ? 'Descuento quitado'
+                  : 'Descuento comercial aplicado',
+            usuarioId: auth.userId,
+            usuarioNombre: firmaActor(auth, auth.email ?? 'Usuario'),
+            origen: 'usuario',
+            datosJson: {
+              modo: dto.modo,
+              totalAnterior: Number(orden.total),
+              totalNuevo: total,
+              tipo: dto.tipo ?? null,
+              valor: dto.valor ?? null,
+              cuponId: cupon?.id ?? null,
+            },
+          },
+        });
+      },
+      { timeout: 30000 },
+    );
     return this.findOne(auth, id);
   }
 
@@ -5128,7 +5452,9 @@ export class OrdenesTrabajoService {
 
     const nuevas = items.filter(
       (item) =>
-        item.descuentoCuponId && !actualesPorCupon.has(item.descuentoCuponId),
+        item.descuentoCuponId &&
+        (!actualesPorCupon.has(item.descuentoCuponId) ||
+          actualesPorCupon.get(item.descuentoCuponId)?.estado === 'LIBERADA'),
     );
     if (nuevas.length > 0) {
       await this.redimirCupones(tx, auth, ordenId, nuevas);

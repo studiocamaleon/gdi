@@ -1,3 +1,4 @@
+import { DescuentoOrdenDto } from './dto/descuento-orden.dto';
 import {
   Body,
   Controller,
@@ -300,6 +301,17 @@ export class OrdenesTrabajoController {
       id,
       payload.tratamientoFiscal,
     );
+  }
+
+  @Permiso("comercial.ordenes.gestionar")
+  @RequiereVista("comercial.ordenes.ver")
+  @Patch(':id/descuento')
+  aplicarDescuento(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: DescuentoOrdenDto,
+  ) {
+    return this.ordenesTrabajoService.aplicarDescuentoOrden(auth, id, payload);
   }
 
   @Permiso("comercial.ordenes.gestionar")
