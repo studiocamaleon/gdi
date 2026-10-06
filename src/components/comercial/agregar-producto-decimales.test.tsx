@@ -9,7 +9,7 @@ import {
   DEFAULT_MOTOR_CONFIG,
 } from "./agregar-producto-sheet";
 
-const api = vi.hoisted(() => ({ cotizar: vi.fn(), producto: vi.fn() }));
+const api = vi.hoisted(() => ({ cotizar: vi.fn(), producto: vi.fn(), familias: vi.fn() }));
 vi.mock("./tipo-cambio-documento", () => ({
   useMotorConTipoCambio: () => ({
     cotizar: api.cotizar,
@@ -19,7 +19,7 @@ vi.mock("./tipo-cambio-documento", () => ({
 vi.mock("@/lib/productos-servicios-api", async (original) => ({
   ...(await original<typeof import("@/lib/productos-servicios-api")>()),
   getProductoById: api.producto,
-  getCatalogoFamilias: async () => ({ familias: [] }),
+  getCatalogoFamilias: api.familias,
 }));
 vi.mock("@/components/navigation/permisos-provider", () => ({
   usePuede: () => false,
@@ -103,6 +103,7 @@ const calculo = {
 let el: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  api.familias.mockResolvedValue({ familias: [] });
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.useFakeTimers();
   vi.stubGlobal(
@@ -171,6 +172,42 @@ async function escribir(texto: string) {
 }
 const boton = (nombre: string) => [...el.querySelectorAll<HTMLButtonElement>("button")]
   .find(b => b.textContent?.trim() === nombre)!;
+
+it.each(["OBLIGATORIO", "OPCIONAL"])(
+  "el bastidor %s conserva una sola orientación y envía el valor elegido al motor",
+  async (modoActivacion) => {
+    const p = lineal("estructura_bastidor");
+    const paso = p.rutasAlternativas[0].configPasos[0];
+    paso.modoActivacion = modoActivacion;
+    paso.nombreVisible = "Armar estructura";
+    api.familias.mockResolvedValue({ familias: [{
+      codigo: "estructura_bastidor",
+      paramsPasoSchema: [{
+        campo: "orientacionPerfil", etiqueta: "Cara del perfil hacia el frente",
+        tipo: "enum", valoresPermitidos: ["ancho_al_frente", "alto_al_frente"],
+        default: "ancho_al_frente", expuestoAlComercial: true,
+      }],
+    }] });
+    await abrir(p);
+    if (modoActivacion === "OPCIONAL") {
+      const activar = [...el.querySelectorAll<HTMLButtonElement>("button")]
+        .find(b => b.textContent?.includes("Armar estructura"))!;
+      await act(async () => activar.click());
+      await avanzarCalculo();
+    }
+    const opciones = () => [...el.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+      .filter(b => b.getAttribute("aria-label")?.includes("Cara del perfil hacia el frente"));
+    expect(opciones()).toHaveLength(2);
+    expect(opciones().map(b => b.getAttribute("aria-checked"))).toEqual(["true", "false"]);
+    await act(async () => opciones()[1].click());
+    await act(async () => opciones()[1].click());
+    expect(opciones().map(b => b.getAttribute("aria-checked"))).toEqual(["false", "true"]);
+    expect(el.textContent).not.toContain("Elegí al menos uno");
+    await avanzarCalculo();
+    expect(api.cotizar.mock.lastCall?.[0].jobContext.configPasoRuntime[paso.id])
+      .toEqual({ orientacionPerfil: "alto_al_frente" });
+  },
+);
 
 it.each(["plotter_corte", "impresion_por_area", "corte_manual"])(
   "%s permite escribir 0,5 metro paso a paso y preserva la fracción al cotizar", async (familia) => {

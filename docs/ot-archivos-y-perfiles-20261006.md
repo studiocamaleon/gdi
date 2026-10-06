@@ -47,6 +47,11 @@ OT persistida). Esta preparación no publica staging ni producción.
   las dimensiones del bastidor. La traza separa metros de piezas, metros de barras
   y sobrantes. Los materiales que comparten la plantilla histórica, como
   anclajes, pueden conservar una descripción no rectangular.
+- El recorrido visual en staging detectó que el editor comercial trataba los
+  parámetros `enum` como múltiples opciones. Se corrigió tanto en pasos
+  obligatorios como opcionales: la orientación precarga su valor, permite una
+  sola elección y envía al motor una cadena. Dos pruebas reprodujeron el fallo;
+  con la corrección pasan 37 pruebas de controles y parámetros comerciales.
 - La biblioteca instala estas unidades sólo para nuevas variantes de caño; no se
   ejecuta el instalador ni se reemplazan variantes existentes durante la migración.
 

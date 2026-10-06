@@ -6858,6 +6858,21 @@ function ApConfigStep({
       ? campo.etiqueta
       : `${paso.nombre} · ${campo.etiqueta}`;
 
+    if (campo.tipo === "enum") {
+      return (
+        <div className="ap-spec ap-spec-wide" key={key}>
+          <label>{label}</label>
+          {renderSegmentedControl(
+            label,
+            typeof valor === "string" ? valor : "",
+            campo.valoresPermitidos.map((value) => ({ value, label: etiquetaValorParam(value) })),
+            (value) => setParamComercial(paso.configPasoId, campo.campo, value),
+            true,
+          )}
+        </div>
+      );
+    }
+
     if (campo.tipo === "multi-enum") {
       const seleccion = Array.isArray(valor) ? valor.map(String) : [];
       return (
@@ -6956,6 +6971,21 @@ function ApConfigStep({
             const elegido = motorConfig.paramsComercial?.[paso.configPasoId];
             const valor = valorEfectivoCampo(campo, elegido);
             const rowKey = `plan-${paso.configPasoId}-${campo.campo}`;
+
+            if (campo.tipo === "enum") {
+              return (
+                <div className={plS.prow} key={rowKey}>
+                  <span className={plS.plabel}>{campo.etiqueta}</span>
+                  {renderSegmentedControl(
+                    campo.etiqueta,
+                    typeof valor === "string" ? valor : "",
+                    campo.valoresPermitidos.map((value) => ({ value, label: etiquetaValorParam(value) })),
+                    (value) => setParamComercial(paso.configPasoId, campo.campo, value),
+                    true,
+                  )}
+                </div>
+              );
+            }
 
             if (campo.tipo === "number") {
               return (
