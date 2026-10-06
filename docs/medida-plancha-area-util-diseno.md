@@ -1,11 +1,38 @@
 # Medida "Plancha completa" — el área útil del pliego como medida derivada
 
-**Estado**: diseño en revisión — sin implementar
+**Estado**: medida derivada implementada; documento de diseño original conservado abajo.
 **Fecha**: 2026-08-15
 **Disparador**: producto "Papel adhesivo / sticker troquelado". Para vender
 "1 plancha" hubo que inventar a mano la medida 27×40 (el área útil del SRA3
 325×500 menos márgenes), porque poner 325×500 como medida de la pieza hace
 fallar el nesting ("no entra en la hoja" por los márgenes no imprimibles).
+
+---
+
+## Corrección del catálogo comercial — 06/10/2026
+
+El filtro incorporado al separar los permisos de cotización y modelado usaba
+`margin` como prefijo de datos financieros. También eliminaba
+`paramsPasoJson.nestingConfig.margins`, que contiene los bordes físicos del
+pliego. El motor conservaba esos bordes, pero la medida mostrada al comercial
+caía en los márgenes de la máquina: las dos cuentas dejaban de coincidir.
+
+La corrección permite exclusivamente lados numéricos conocidos dentro de
+`nestingConfig.margins`. Continúa eliminando costos, ganancias y campos
+económicos anidados. No cambia los permisos, las medidas fijas ni la
+configuración guardada de los productos.
+
+La regresión reproduce un pliego ficticio de 325 × 500 mm: antes se enviaba
+una pieza de 312 × 487; después se deriva 270,4 × 428,2 y el motor acomoda una
+plancha por pliego. Se comprueba el recorrido filtro → cálculo de medida del
+frontend → nesting del motor, además de la privacidad de los importes.
+
+Implementación local en `codex/plancha-area-util`, desde `632deea0a` de
+`codex/avisos-orden-finalizada` (dependencia del PR #24). No depende de la
+mejora local de niveles/perfiles; se pueden integrar en el siguiente lote.
+Validación: 37 pruebas de filtro, paridad y configuración de nesting.
+Pendiente publicar y comprobar el recorrido visible en staging; esta
+investigación sólo consultó su configuración, sin guardar cambios ni emitir OT.
 
 ---
 
