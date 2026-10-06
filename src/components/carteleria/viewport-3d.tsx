@@ -34,6 +34,7 @@ function buildSign(
   const { width: W, height: H, depth: D } = vista;
   const isFront = vista.tipoCartel === "frontlight";
   const prof = vista.perfilLadoM;
+  const profDepth = vista.perfilProfundidadM ?? prof;
   const M = SIGN_MOODS[mood];
 
   const groups: Groups = {};
@@ -53,10 +54,10 @@ function buildSign(
   function beam(length: number, axis: "x" | "y" | "z", color: number) {
     const dims: [number, number, number] =
       axis === "x"
-        ? [length, prof, prof]
+        ? [length, prof, profDepth]
         : axis === "y"
-          ? [prof, length, prof]
-          : [prof, prof, length];
+          ? [prof, length, profDepth]
+          : [prof, profDepth, length];
     const g = new THREE.BoxGeometry(...dims);
     const mat = new THREE.MeshStandardMaterial({
       color,
@@ -69,113 +70,38 @@ function buildSign(
     return m;
   }
 
-  /* ── Marco ── */
+  const innerH = Math.max(0, H - 2 * prof);
+  const innerW = Math.max(0, W - 2 * prof);
+  const innerD = Math.max(0, D - 2 * profDepth);
+  const edgeX = (W - prof) / 2, edgeY = (H - prof) / 2;
+  const edgeZ = isFront ? 0 : (D - profDepth) / 2;
+  function place(group: THREE.Group, length: number, axis: "x" | "y" | "z", x: number, y: number, z: number, color: number) {
+    if (length <= 0) return;
+    const bar = beam(length, axis, color);
+    bar.position.set(x, y, z);
+    group.add(bar);
+  }
   const frameGroup = new THREE.Group();
   groups.frame = frameGroup;
   parent.add(frameGroup);
-
-  if (isFront) {
-    [H / 2, -H / 2].forEach((y) => {
-      const b = beam(W, "x", steelColor);
-      b.position.set(0, y, 0);
-      frameGroup.add(b);
-    });
-    [-W / 2, W / 2].forEach((x) => {
-      const b = beam(H, "y", steelColor);
-      b.position.set(x, 0, 0);
-      frameGroup.add(b);
-    });
-  } else {
-    (
-      [
-        [H / 2, D / 2],
-        [H / 2, -D / 2],
-        [-H / 2, D / 2],
-        [-H / 2, -D / 2],
-      ] as const
-    ).forEach(([y, z]) => {
-      const b = beam(W, "x", steelColor);
-      b.position.set(0, y, z);
-      frameGroup.add(b);
-    });
-    (
-      [
-        [-W / 2, D / 2],
-        [W / 2, D / 2],
-        [-W / 2, -D / 2],
-        [W / 2, -D / 2],
-      ] as const
-    ).forEach(([x, z]) => {
-      const b = beam(H, "y", steelColor);
-      b.position.set(x, 0, z);
-      frameGroup.add(b);
-    });
-    (
-      [
-        [-W / 2, H / 2],
-        [W / 2, H / 2],
-        [-W / 2, -H / 2],
-        [W / 2, -H / 2],
-      ] as const
-    ).forEach(([x, y]) => {
-      const b = beam(D, "z", steelColor);
-      b.position.set(x, y, 0);
-      frameGroup.add(b);
-    });
+  for (const z of isFront ? [0] : [edgeZ, -edgeZ]) {
+    for (const y of [edgeY, -edgeY]) place(frameGroup, W, "x", 0, y, z, steelColor);
+    for (const x of [edgeX, -edgeX]) place(frameGroup, innerH, "y", x, 0, z, steelColor);
   }
-
-  /* ── Refuerzos verticales ── */
-  if (metricas.refuerzosV > 0) {
-    const g = new THREE.Group();
-    groups["reinforce-v"] = g;
-    parent.add(g);
-    const cols = metricas.refuerzosV;
-    for (let i = 1; i <= cols; i++) {
-      const x = -W / 2 + (W * i) / (cols + 1);
-      if (isFront) {
-        const b2 = beam(H, "y", reinforceCol);
-        b2.position.set(x, 0, 0);
-        g.add(b2);
-      } else {
-        // sólo al dorso — el frente va libre para no marcar la lona
-        const b2 = beam(H, "y", reinforceCol);
-        b2.position.set(x, 0, -D / 2);
-        g.add(b2);
-        const c1 = beam(D, "z", reinforceCol);
-        c1.position.set(x, H / 2, 0);
-        g.add(c1);
-        const c2 = beam(D, "z", reinforceCol);
-        c2.position.set(x, -H / 2, 0);
-        g.add(c2);
-      }
-    }
-  }
-
-  /* ── Refuerzos horizontales ── */
-  if (metricas.refuerzosH > 0) {
-    const g = new THREE.Group();
-    groups["reinforce-h"] = g;
-    parent.add(g);
-    const rows = metricas.refuerzosH;
-    for (let i = 1; i <= rows; i++) {
-      const y = -H / 2 + (H * i) / (rows + 1);
-      if (isFront) {
-        const b1 = beam(W, "x", reinforceCol);
-        b1.position.set(0, y, 0);
-        g.add(b1);
-      } else {
-        // sólo al dorso — el frente va libre para no marcar la lona — y dos
-        // conectores cortos a los extremos, igual que los verticales.
-        const b1 = beam(W, "x", reinforceCol);
-        b1.position.set(0, y, -D / 2);
-        g.add(b1);
-        const c1 = beam(D, "z", reinforceCol);
-        c1.position.set(-W / 2, y, 0);
-        g.add(c1);
-        const c2 = beam(D, "z", reinforceCol);
-        c2.position.set(W / 2, y, 0);
-        g.add(c2);
-      }
+  if (!isFront) for (const x of [edgeX, -edgeX]) for (const y of [edgeY, -edgeY])
+    place(frameGroup, innerD, "z", x, y, 0, steelColor);
+  for (const direction of ["v", "h"] as const) {
+    const count = direction === "v" ? metricas.refuerzosV : metricas.refuerzosH;
+    if (!count) continue;
+    const group = new THREE.Group();
+    groups[`reinforce-${direction}`] = group;
+    parent.add(group);
+    for (let i = 1; i <= count; i++) {
+      const x = direction === "v" ? -W / 2 + W * i / (count + 1) : 0;
+      const y = direction === "h" ? -H / 2 + H * i / (count + 1) : 0;
+      place(group, direction === "v" ? innerH : innerW, direction === "v" ? "y" : "x", x, y, -edgeZ, reinforceCol);
+      if (!isFront) for (const edge of [-1, 1])
+        place(group, innerD, "z", direction === "v" ? x : edge * edgeX, direction === "h" ? y : edge * edgeY, 0, reinforceCol);
     }
   }
 

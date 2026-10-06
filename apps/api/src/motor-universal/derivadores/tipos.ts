@@ -22,6 +22,7 @@
 import type { JobContext } from '../tipos';
 
 export interface ResultadoDerivador {
+  diagnostico?: { codigo: string; mensaje: string; sugerencia: string };
   /**
    * Magnitudes derivadas, por nombre camelCase (mlTotal, puntosSoldadura,
    * modulos, cableMl…). La familia mapea estas claves a su cantidad de paso

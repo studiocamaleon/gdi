@@ -11,6 +11,7 @@ export type UnitCode =
   | 'placa'
   | 'pliego'
   | 'resma'
+  | 'barra'
   | 'rollo'
   | 'pieza'
   | 'par'
@@ -39,6 +40,7 @@ export const CANONICAL_UNITS: Record<
   // Alias legado: inventario debe guardar y mostrar "hoja"; se conserva para convertir datos antiguos.
   pliego: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   resma: { dimension: 'count', baseCode: 'unidad', factorToBase: 500 },
+  barra: { dimension: 'count', baseCode: 'barra', factorToBase: 1 },
   rollo: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   pieza: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   par: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },

@@ -1,3 +1,4 @@
+import { normalizarPerfilEstructural } from '../inventario/perfil-estructural';
 /**
  * Biblioteca instalable de cartelería — materiales del feature
  * (docs/carteleria-biblioteca-materiales.md).
@@ -33,6 +34,7 @@ type MateriaDef = {
   subfamilia: string;
   templateId: string;
   unidadStock: string;
+  unidadUso?: string;
   variantes: VarianteDef[];
 };
 
@@ -181,7 +183,8 @@ export const BIBLIOTECA_CARTELERIA: MateriaDef[] = [
     familia: 'METAL_ESTRUCTURA',
     subfamilia: 'PERFIL_ESTRUCTURAL',
     templateId: 'perfil_estructural_v1',
-    unidadStock: 'METRO_LINEAL',
+    unidadStock: 'BARRA',
+    unidadUso: 'METRO_LINEAL',
     variantes: [
       { sku: 'CART-PERFIL-2020', nombre: 'Caño 20×20×1,2 · barra 6 m', attrs: { seccion: '20×20 mm', espesor: 1.2, material: 'Acero', desarrolloSeccion: 0.08, largoBarra: 6 } },
       { sku: 'CART-PERFIL-3030', nombre: 'Caño 30×30×1,6 · barra 6 m', attrs: { seccion: '30×30 mm', espesor: 1.6, material: 'Acero', desarrolloSeccion: 0.12, largoBarra: 6 } },
@@ -297,6 +300,7 @@ export async function instalarBibliotecaCarteleria(
           templateId: def.templateId,
           unidadStock: def.unidadStock as never,
           unidadCompra: def.unidadStock as never,
+          unidadUso: (def.unidadUso ?? def.unidadStock) as never,
           atributosTecnicosJson: {},
         },
         select: { id: true },
@@ -318,7 +322,8 @@ export async function instalarBibliotecaCarteleria(
           nombreVariante: variante.nombre,
           precioReferencia: variante.precioReferencia ?? null,
           moneda: variante.precioReferencia != null ? 'ARS' : null,
-          atributosVarianteJson: variante.attrs as never,
+          atributosVarianteJson: (def.templateId === 'perfil_estructural_v1' ? normalizarPerfilEstructural(variante.attrs) : variante.attrs) as never,
+          ...(def.unidadStock === 'BARRA' ? { unidadStock: 'BARRA' as const, unidadCompra: 'BARRA' as const, unidadUso: 'METRO_LINEAL' as const, unidadPrecio: 'BARRA' as const } : {}),
         },
       });
       variantesCreadas++;

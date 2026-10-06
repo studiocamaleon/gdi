@@ -1,3 +1,5 @@
+import { errorPerfilEstructural } from '../../inventario/perfil-estructural';
+import { calcularBarrasNecesarias } from '../estructura-bastidor';
 /**
  * Catálogo de derivadores geométricos (docs/derivadores-geometricos-diseno.md §3.2).
  *
@@ -51,9 +53,17 @@ const bastidor_rectangular: Derivador = (jobContext, params, materialPrincipal) 
   const parametros = parsearParamsEstructuraBastidor(params);
   // El lado del caño sale de la variante elegida en `perfil_estructural`
   // (seccion "20×20 mm"): las barras interiores se cortan descontándolo.
+  const errorPerfil = materialPrincipal ? errorPerfilEstructural(materialPrincipal, true) : null;
+  if (errorPerfil) return { magnitudes: {} as Record<string, number>, diagnostico: {
+    codigo: 'perfil_estructural_invalido', mensaje: errorPerfil,
+    sugerencia: 'Completá la sección y el espesor de pared en la variante del material.',
+  } };
   const perfil = parsearPerfilEstructural(materialPrincipal);
   const resultado = calcularEstructuraBastidor(jobContext, parametros, perfil);
   if (!resultado) return null;
+  if (resultado.interiorAnchoM <= 0 || resultado.interiorAltoM <= 0 || (parametros.tipoBastidor === 'doble' && resultado.profundidadM <= 2 * resultado.perfilProfundidadM))
+    return { magnitudes: {} as Record<string, number>, diagnostico: { codigo: 'perfil_no_cabe_en_bastidor', mensaje: 'La sección del caño no deja espacio interior para ese bastidor.', sugerencia: 'Revisá la orientación del perfil o aumentá las medidas del bastidor.' } };
+
   // La geometría es de UN bastidor; los consumos escalan por unidades y el
   // despiece se repite (la herrería corta todas las barras juntas: el
   // packing 1D aprovecha sobrantes entre carteles).
@@ -61,6 +71,13 @@ const bastidor_rectangular: Derivador = (jobContext, params, materialPrincipal) 
   const despieceTotalMm = Array.from({ length: unidades }, () =>
     resultado.despieceMm,
   ).flat();
+  const largoBarraM = Number(String(materialPrincipal?.largoBarra ?? 0).replace(',', '.'));
+  const barras = largoBarraM > 0 ? calcularBarrasNecesarias(despieceTotalMm, largoBarraM * 1000) : null;
+  if (largoBarraM > 0 && !barras) return { magnitudes: {} as Record<string, number>, diagnostico: {
+    codigo: 'perfil_barra_insuficiente',
+    mensaje: `Una pieza del bastidor no entra en la barra de ${largoBarraM} m, considerando el corte.`,
+    sugerencia: 'Elegí una barra más larga o revisá las medidas del bastidor. No se suponen uniones entre retazos.',
+  } };
   return {
     magnitudes: {
       mlTotal: resultado.mlTotal * unidades,
@@ -111,6 +128,8 @@ const bastidor_rectangular: Derivador = (jobContext, params, materialPrincipal) 
         altoM: resultado.altoM,
         profundidadM: resultado.profundidadM,
         perfilLadoM: resultado.perfilLadoM,
+        perfilProfundidadM: resultado.perfilProfundidadM,
+        ...(barras ? { barras: { cantidad: barras.barras, largoM: largoBarraM, metrosUtiles: resultado.mlTotal * unidades, metrosComerciales: barras.barras * largoBarraM, sobranteM: barras.sobranteMm / 1000 } } : {}),
         sepRefuerzoVcm: parametros.sepRefuerzoVcm,
         sepRefuerzoHcm: parametros.sepRefuerzoHcm,
         refuerzosV: resultado.refuerzosV,

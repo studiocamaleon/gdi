@@ -20,6 +20,7 @@ export type UnitCode =
   | "placa"
   | "pliego"
   | "resma"
+  | "barra"
   | "rollo"
   | "pieza"
   | "par"
@@ -61,6 +62,7 @@ export const UNIT_DEFINITIONS: Record<UnitCode, UnitDefinition> = {
   placa: { code: "placa", label: "Placa", symbol: "placa", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   pliego: { code: "pliego", label: "Hoja", symbol: "hoja", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   resma: { code: "resma", label: "Resma", symbol: "resma", dimension: "count", factorToBase: 500, baseCode: "unidad" },
+  barra: { code: "barra", label: "Barra", symbol: "barra", dimension: "count", factorToBase: 1, baseCode: "barra" },
   rollo: { code: "rollo", label: "Rollo", symbol: "rollo", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   pieza: { code: "pieza", label: "Pieza", symbol: "pz", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   par: { code: "par", label: "Par", symbol: "par", dimension: "count", factorToBase: 1, baseCode: "unidad" },

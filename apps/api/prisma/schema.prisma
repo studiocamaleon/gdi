@@ -370,6 +370,7 @@ enum UnidadMateriaPrima {
   GRAMO
   PIEZA
   PAR
+  BARRA
 }
 
 enum TipoMovimientoStockMateriaPrima {

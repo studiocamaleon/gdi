@@ -153,6 +153,7 @@ export function MateriasPrimasPanel({
       tipoTecnico: template.tipoTecnico,
       templateId: template.id,
       unidadStock: template.unidadStock,
+      unidadUso: template.unidadUso ?? template.unidadStock,
       unidadCompra: template.unidadCompra,
       esConsumible: getMateriaPrimaTemplateAvailability(template.id)
         .esConsumible,

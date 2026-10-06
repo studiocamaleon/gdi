@@ -905,6 +905,8 @@ export interface EstructuraBastidorEjecutada {
   /** Lado del caño usado en el despiece (el visor dibuja con este grosor).
    *  Ausente en snapshots anteriores al fix del espesor. */
   perfilLadoM?: number;
+  perfilProfundidadM?: number;
+  barras?: { cantidad: number; largoM: number; metrosUtiles: number; metrosComerciales: number; sobranteM: number };
   /** Separación efectiva de refuerzos (cm). El visor dibuja con la misma
    *  fórmula que el motor, así que recompone los MISMOS refuerzos. */
   sepRefuerzoVcm: number;

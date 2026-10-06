@@ -1412,15 +1412,15 @@ export class MotorUniversalService {
       if (derivadorDecl && ejecucion.activado) {
         const derivacion =
           derivacionesDelJobContext(jobContext)[paso.configPasoId];
-        if (!derivacion) {
+        if (!derivacion || derivacion.diagnostico) {
           errores.push({
-            codigo: derivadorDecl.codigoSinDatos ?? 'derivador_sin_datos',
+            codigo: derivacion?.diagnostico?.codigo ?? derivadorDecl.codigoSinDatos ?? 'derivador_sin_datos',
             severidad: 'ERROR',
             rutaPasoId: paso.rutaPasoId,
             rutaPasoOrden: paso.rutaPasoOrden,
             familiaCodigo: paso.familiaCodigo,
-            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" ${derivadorDecl.mensajeSinDatos}`,
-            sugerencia: derivadorDecl.sugerenciaSinDatos,
+            mensaje: derivacion?.diagnostico?.mensaje ?? `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" ${derivadorDecl.mensajeSinDatos}`,
+            sugerencia: derivacion?.diagnostico?.sugerencia ?? derivadorDecl.sugerenciaSinDatos,
           });
         } else {
           // Traza para el visor de nesting (ojales): las posiciones salen del
@@ -1941,15 +1941,15 @@ export class MotorUniversalService {
         if (derivadorDecl && ejecucion.activado) {
           const derivacion =
             derivacionesDelJobContext(contextoPaso)[paso.configPasoId];
-          if (!derivacion) {
+          if (!derivacion || derivacion.diagnostico) {
             errores.push({
-              codigo: derivadorDecl.codigoSinDatos ?? 'derivador_sin_datos',
+              codigo: derivacion?.diagnostico?.codigo ?? derivadorDecl.codigoSinDatos ?? 'derivador_sin_datos',
               severidad: 'ERROR',
               rutaPasoId: paso.rutaPasoId,
               rutaPasoOrden: paso.rutaPasoOrden,
               familiaCodigo: paso.familiaCodigo,
-              mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" ${derivadorDecl.mensajeSinDatos}`,
-              sugerencia: derivadorDecl.sugerenciaSinDatos,
+              mensaje: derivacion?.diagnostico?.mensaje ?? `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" ${derivadorDecl.mensajeSinDatos}`,
+              sugerencia: derivacion?.diagnostico?.sugerencia ?? derivadorDecl.sugerenciaSinDatos,
             });
           } else {
             const layout = derivacion.traza?.ojalesLayout as
@@ -9492,6 +9492,8 @@ export class MotorUniversalService {
     jobContext: JobContext,
     materialResuelto?: {
       atributosVarianteJson?: Record<string, unknown> | null;
+      unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
     } | null,
   ): number | null {
     // Regla 2 del ejercicio (carteleria-pasos-revision.md §8): la magnitud
@@ -9520,19 +9522,23 @@ export class MotorUniversalService {
       derivacionesDelJobContext(jobContext)[paso.configPasoId] ?? null;
     // Sin derivación no hay geometría: 0 — el guard del bucle ya corta con
     // el diagnóstico declarado, nada se cobra en silencio.
-    if (!derivacion) return 0;
+    if (!derivacion || derivacion.diagnostico) return 0;
 
     const despiece = derivacion.despieces?.[slot.slotCodigo];
     if (despiece && despiece.length > 0) {
       const attrs = materialResuelto?.atributosVarianteJson ?? {};
-      const largoBarraMm = Number(attrs.largoBarra ?? 0) * 1000;
+      const largoBarraMm = Number(String(attrs.largoBarra ?? 0).replace(',', '.')) * 1000;
       if (largoBarraMm > 0) {
         const barras = calcularBarrasNecesarias(despiece, largoBarraMm);
-        if (barras) return barras.barras;
-        // Tramo más largo que la barra: no se puede cortar — 0 haría que el
-        // paso no cobre en silencio... mejor caer a la magnitud (ml) y que
-        // se vea el costo, con el diagnóstico fino como mejora futura.
-        return derivacion.magnitudes[decl.magnitudDerivada] ?? 0;
+        if (!barras) return Number.NaN; // El derivador explica el tramo imposible.
+        const unidadConsumo = unidadEfectivaDeFormula(slot.formula, materialResuelto?.unidadStock);
+        const conversion = materialUnitConversion(materialResuelto?.contextoUnidades ?? {
+          unidadStock: materialResuelto?.unidadStock ?? 'unidad',
+          unidadCompra: 'unidad',
+          templateId: 'perfil_estructural_v1', atributos: attrs,
+        }, 'unidad', unidadConsumo);
+        // El packing cuenta barras; el resultado debe expresarse en la unidad declarada.
+        return conversion.ok ? barras.barras * conversion.factor : Number.NaN;
       }
       if (decl.formulaForzada === 'por_unidad_productiva') {
         // Sin largoBarra el consumo sigue la fórmula normal (los ml YA son

@@ -1,3 +1,4 @@
+import { errorPerfilEstructural, normalizarPerfilEstructural } from './perfil-estructural';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   bloquearVariantesStock,
@@ -2009,6 +2010,10 @@ export class InventarioService {
       payload.unidadUso ?? unidadStock,
     );
     for (const variante of payload.variantes) {
+      if (payload.templateId === 'perfil_estructural_v1') {
+        const error = errorPerfilEstructural(variante.atributosVariante ?? {});
+        if (error) throw new BadRequestException(`${variante.sku}: ${error}`);
+      }
       const error = validateMaterialUnits({
         unidadStock: variante.unidadStock ?? unidadStock,
         unidadCompra: variante.unidadCompra ?? unidadCompra,
@@ -2022,6 +2027,7 @@ export class InventarioService {
     }
     const variantes = payload.variantes.map((variante) => ({
       ...variante,
+      atributosVariante: payload.templateId === 'perfil_estructural_v1' ? normalizarPerfilEstructural(variante.atributosVariante ?? {}) : variante.atributosVariante,
       sku: variante.sku.trim(),
       nombreVariante: variante.nombreVariante?.trim() || null,
       unidadStock: variante.unidadStock ?? null,

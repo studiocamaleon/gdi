@@ -47,6 +47,7 @@ const plurals: Record<string, string> = {
   placa: "placas",
   metro_lineal: "metros lineales",
   caja: "cajas",
+  barra: "barras",
   rollo: "rollos",
   resma: "resmas",
   pack: "packs",

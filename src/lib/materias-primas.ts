@@ -82,6 +82,7 @@ export type UnidadMateriaPrima =
   /** Alias legado aceptado desde datos antiguos; las altas nuevas usan "hoja". */
   | "pliego"
   | "resma"
+  | "barra"
   | "rollo"
   | "metro_lineal"
   | "m2"
@@ -279,6 +280,7 @@ export const unidadMateriaPrimaItems: Array<{
   { value: "hoja", label: "Hoja" },
   { value: "placa", label: "Placa" },
   { value: "resma", label: "Resma" },
+  { value: "barra", label: "Barra" },
   { value: "rollo", label: "Rollo" },
   { value: "metro_lineal", label: "Metro lineal" },
   { value: "m2", label: "M2" },
