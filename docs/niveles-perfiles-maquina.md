@@ -38,4 +38,4 @@ Vista de muestra: `/dev/diseno/niveles` (sólo en desarrollo). En esta sesión s
 
 Rama `codex/niveles-perfiles-maquina`, basada en `codex/avisos-orden-finalizada` (PR #24, base `632deea0a`) para conservar la versión de la aplicación ya publicada. Esta dependencia debe mantenerse explícita al abrir el PR y ajustarse después de integrar la base.
 
-Implementado y comprobado en local. Pendiente publicar y probar en staging con el guardado real de un producto ficticio y su orden; después evaluar producción. Esta tarea no modificó los datos ni desplegó esos entornos.
+Publicado el 06/10/2026 en staging y producción mediante el PR #25, revisión ejecutada `b89000446`. En staging se guardaron niveles de un producto ficticio y se comprobó que cada perfil cambia el costo y que los perfiles inválidos son rechazados. Los datos propios del ensayo se retiraron. No se modificaron configuraciones comerciales de producción para probarlo. Ver [validación de staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md).

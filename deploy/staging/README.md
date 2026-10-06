@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-06, 12:06 UTC.** API, ambos workers y web `8053bcf0e` (PR #24): avisos de OT finalizada según saldo y QR, reintento de fallos y botones uniformes. CI, 35 comprobaciones HTTP/SSR de staging y revisión visual aprobados. Sentry activo; 306 migraciones, ninguna nueva y mismos tamaños. Copia posterior con firma, manifiesto y versión comprobados, sin repetir restauración SQL. Ver [VALIDACION.md](./VALIDACION.md).
+> **Estado vigente: 2026-10-06, 17:30 UTC.** API, ambos workers y web `b89000446` (PR #25): perfiles de máquina por nivel, corrección del área útil de planchas y descuentos/cupones en órdenes creadas. 320 pruebas dirigidas, CI, 26 comprobaciones del recorrido en staging y revisión visual aprobados. Sentry activo; 306 migraciones, ninguna nueva y mismos tamaños. Copia posterior con firma, manifiesto y versión comprobados, sin repetir restauración SQL. Ver [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 

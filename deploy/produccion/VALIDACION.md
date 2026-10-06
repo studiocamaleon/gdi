@@ -362,3 +362,28 @@ Revisión ejecutada **`8053bcf0ee05c6d8575e967547fc2888b448e690`**, dependiente 
 Copia previa **`566fb271-31aa-4ee9-9065-bc268373cb68`**, completada **2026-10-06T11:00:56.985Z**. Copia posterior **`b1e5c7a9-9dd9-4ffc-98c7-369adb8c5302`**, completada **2026-10-06T12:10:36.982Z**, con 306 migraciones y 20 archivos. Firma, huella y descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes comprobados. Fuentes cifradas protegidas por 31 días. **No se repitió una restauración SQL completa**. Evidencia privada fuera de Git.
 
 Para revertir únicamente el código, conservar la base y volver a `5837255089303538b7ec9cbe7f20d03c3b4ca5a7`: API/workers `sha256:5a3b4b141345b67be3d97dd7cc6eca3d19a392ef8a344c933ae775dbd326e92e` y web `sha256:e6baa8cb022b4d7483b52718411383a9fd6b54f721aeaf6f321a96dbb92fa137`. Esto reintroduce la selección incorrecta de QR y quita el reintento. No borrar avisos ni operaciones y no revertir migraciones.
+## 06/10/2026, 17:34 UTC — Niveles, planchas y descuentos en OT (PR #25)
+
+Revisión ejecutada **`b89000446af1153ea720481c424a5eaad175a8f9`**, dependiente del PR #24. Publicación autorizada por el titular después de comprobar staging. Se promovieron las mismas imágenes por digest, sin recompilar para producción, fusionar PR ni modificar Vercel. Los commits documentales posteriores no cambian esta revisión ejecutada.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:006f62ffbbdc6456c37f72859c133f14d02146fcd7d55f4849e5c9e41ed9483f` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:a384f9677a0c2362db3179287f707fdd16ea11f9f75649e7398127dee96e8977` |
+
+**306 migraciones, ninguna nueva.** Se mantienen seis máquinas y sus tamaños, Gotenberg `2fee01704` y la imagen del copiador. Salud web/API 200, API directa privada 403 y BFF anónimo 401. Revisión y configuración de Sentry verificadas en los cuatro servicios actualizados; rol de aplicación sin DDL comprobado. Constructor temporal propio retirado. Docker y los demás proyectos locales permanecieron intactos.
+
+### Alcance y comprobaciones
+
+- Perfiles por máquina y nivel en pasos de ruta, opcionales y nodos propios, conservando las elecciones anteriores y las reglas por operación del procesamiento vectorial. Configuración de niveles manuales conservada. No se actualizan productos masivamente.
+- La plancha utiliza los márgenes físicos del pliego también cuando el usuario no puede ver costos. En staging, «Papel adhesivo / sticker troquelado» derivó 270,4 × 428,2 mm y cotizó correctamente una plancha por pliego.
+- Descuentos manuales y cupones desde la ficha de una OT existente, incluso finalizada. Sin cambiar sus pasos, costos, materiales o presupuesto original. Controles de facturación preparada/emitida, total cobrado, límites del operador, permisos, versión y usos del cupón; registro de autor e importes.
+- **320 pruebas dirigidas** aprobadas: 107 API de niveles/plancha, 72 web, 127 API de descuentos/órdenes/cupones, 10 con PostgreSQL aislado y 4 de interfaz de descuentos. [CI de permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37485067263) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37485066986) correctos para el SHA publicado; builds Fly con tipos habilitados.
+- **26 comprobaciones HTTP/SSR y de resultados en staging**, incluyendo privacidad de costos, guardado/cotización por perfil, plancha útil, aplicar/quitar/reaplicar cupones, invariantes de producción, permisos, aislamiento y rechazos financieros. Prueba visual sobre una OT ficticia: 10% ($1.210 → $1.089), quitar ($1.210), cupón del 15% ($1.028,50) y recarga con importe conservado. Datos propios del ensayo retirados.
+- Chrome en producción: listado y ficha de una OT existente, botones de descuento y cupón, apertura del diálogo y cancelación sin guardar, importe conservado. No se crearon órdenes ni se aplicaron descuentos, cupones, cobros o facturas ficticios en producción, ni se enviaron mensajes de ensayo.
+
+### Respaldo y reversión
+
+Copia previa **`2eb687ea-7df9-4263-a2a5-4c789123d451`**, completada **2026-10-06T17:01:02.684Z**. Copia posterior **`ba1675ee-f0e4-472e-986e-922c2376390d`**, completada **2026-10-06T17:33:31.233Z**, con 306 migraciones y 27 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes comprobados. Fuentes cifradas protegidas durante 31 días. **No se repitió una restauración SQL completa**. Evidencia y accesos fuera de Git.
+
+Para volver al código anterior, mantener la base y usar `8053bcf0ee05c6d8575e967547fc2888b448e690`: backend `sha256:9b7a956cb647b28440d449f9e61ac24f4413a0ca65ddebb1cba2e798850115a7`, web `sha256:61b249babbb53792f2f9d9597497bd47c5854fc7fcc45a5805786e5c535603c1`. Esto elimina el ajuste de descuentos de la ficha y reintroduce la falla de plancha. Las revisiones de precio ya guardadas se conservan; antes de recotizar productos con niveles nuevos, revisar su compatibilidad. No borrar operaciones ni revertir migraciones.

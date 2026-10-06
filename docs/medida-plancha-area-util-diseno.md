@@ -31,8 +31,11 @@ Implementación local en `codex/plancha-area-util`, desde `632deea0a` de
 `codex/avisos-orden-finalizada` (dependencia del PR #24). No depende de la
 mejora local de niveles/perfiles; se pueden integrar en el siguiente lote.
 Validación: 37 pruebas de filtro, paridad y configuración de nesting.
-Pendiente publicar y comprobar el recorrido visible en staging; esta
-investigación sólo consultó su configuración, sin guardar cambios ni emitir OT.
+Integrada al lote del PR #25 y publicada en staging y producción el
+06/10/2026, revisión `b89000446`. En staging se comprobó también en Chrome la
+plancha de 27,04 × 42,82 cm, con cotización correcta y opción de agregarla a la
+OT habilitada. El ensayo no cambió la configuración del producto ni emitió una
+orden. Ver los registros de validación de ambos entornos.
 
 ---
 
