@@ -952,3 +952,31 @@ Gotenberg conserva `2fee01704` y `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d
 Copia previa `14771b4e-bf05-4f2b-be5a-537d68d719fe`, completada **2026-10-05T22:00:58.721Z**. Copia posterior **`1b0fae1b-7763-4975-922c-c9aa02b25fb3`**, completada **2026-10-05T22:34:18.796Z**, con 306 migraciones y 24 archivos. Firma, huella y descifrado del manifiesto, revisión exacta y referencias de imágenes/fuentes comprobados. Fuentes cifradas y protegidas por 31 días. No se repitió una restauración SQL completa. Evidencias y accesos fuera de Git.
 
 Para revertir este lote, mantener las columnas nuevas y volver a API/workers `sha256:b0a3b812577cb52b709b3ce5f286ce6232f6d9d6eaf90b3d7c0b7422f983fd85` y web `sha256:dd3c8eee47dca7f638d1822d5efb4279143aeee2b70174babccf6b81008a0c69` (`0d0b70509`). No borrar datos ni revertir migraciones. La versión anterior no distingue apoyos y podría incluirlos en el reparto automático: revisar las habilitaciones creadas después del despliegue antes de volver atrás.
+
+
+## 2026-10-06, 12:06 UTC — Avisos de órdenes finalizadas, reintentos y botones (PR #24)
+
+Revisión ejecutada **`8053bcf0ee05c6d8575e967547fc2888b448e690`**, dependiente del PR #23. Publicación solicitada por el titular: staging, validación y promoción de las mismas imágenes a producción. Sin fusionar la cadena de PR ni modificar la web comercial de Vercel. Los commits documentales posteriores no cambian esta revisión de ejecución.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:9b7a956cb647b28440d449f9e61ac24f4413a0ca65ddebb1cba2e798850115a7` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:61b249babbb53792f2f9d9597497bd47c5854fc7fcc45a5805786e5c535603c1` |
+
+**306 migraciones; ninguna nueva.** Se conservan seis máquinas, sus tamaños, el PDF `2fee01704` (`sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`) y la imagen del copiador. Salud web/API 200, API directa privada 403 y BFF sin sesión 401. Revisión de ejecución y Sentry comprobados. Constructor temporal retirado al terminar; Docker y los otros proyectos locales intactos.
+
+### Alcance y comprobaciones
+
+- Finalizar el último paso genera la variante con/sin saldo que corresponda: QR si está habilitado; de lo contrario texto, si está habilitado. Las cuatro variantes comparten deduplicación. QR deja de figurar como pendiente de implementación y continúa siendo optativo.
+- Historial de avisos: reintento de fallos Wati confirmados, previa confirmación del destinatario, misma fila y contador de intentos conservado. Registro de autor, control de versión, permisos y aislamiento. Los estados inciertos requieren su resolución manual habitual.
+- Editar orden, Entregar, Imprimir y Seguimiento comparten componente Grafo y altura de 32 px; se conservan sus menús y acciones.
+- **170 pruebas locales** previamente aprobadas. CI del SHA publicado: [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37387179827/job/112023670720) y [HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37387180140/job/112023432421), ambos correctos. Builds remotos con tipos habilitados; la interrupción de transporte durante la primera subida se resolvió publicando la misma imagen compilada por SSH, sin modificar el código.
+- **35 comprobaciones HTTP/SSR en staging**: finalizar el último paso, las cuatro variantes, saldo parcial correcto, ambas opciones apagadas, reapertura sin duplicación, reintento válido, segundo clic rechazado, versión inválida, usuario sin permiso, otra empresa, anónimo y estado incierto. El ensayo usa cobros/órdenes ficticios y una integración sin credenciales externas; no envió mensajes.
+- Chrome: menús de impresión/seguimiento y QR de una OT existente; historial de avisos y confirmación del reintento sobre una fila ficticia, cancelada sin enviar. Datos y usuarios del ensayo retirados por identificadores, sin limpiar los datos persistentes de staging.
+- Producción: comprobación de lectura sobre una OT existente y de la configuración del canal. No se crearon operaciones comerciales ficticias, no se cambiaron las opciones de avisos y no se reenviaron mensajes históricos. La entrega real por Wati no fue ensayada en este despliegue y conserva las condiciones del proveedor, plantilla, consentimiento y horario.
+
+### Respaldo y reversión
+
+Copia previa **`852d9cbc-7826-4834-ae39-d880dd854f71`**, completada **2026-10-06T11:01:02.529Z**. Copia posterior **`707028a1-7319-475b-aefe-f410c4ec7e2b`**, completada **2026-10-06T12:05:48.482Z**, con 306 migraciones y 24 archivos. Firma, huella y descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes comprobados. Fuentes cifradas protegidas por 31 días. **No se repitió una restauración SQL completa**. Evidencia privada fuera de Git.
+
+Para revertir únicamente el código, conservar la base y volver a `5837255089303538b7ec9cbe7f20d03c3b4ca5a7`: API/workers `sha256:5a3b4b141345b67be3d97dd7cc6eca3d19a392ef8a344c933ae775dbd326e92e` y web `sha256:e6baa8cb022b4d7483b52718411383a9fd6b54f721aeaf6f321a96dbb92fa137`. Esto reintroduce la selección incorrecta de QR y quita el reintento. No borrar avisos ni operaciones y no revertir migraciones.

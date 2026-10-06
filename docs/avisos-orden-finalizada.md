@@ -2,9 +2,9 @@
 
 ## Alcance
 
-Corrección local de avisos automáticos por Wati y controles de la ficha de OT.
+Corrección de avisos automáticos por Wati y controles de la ficha de OT, publicada en staging y producción el 06/10/2026 con la revisión `8053bcf0e`.
 La rama `codex/avisos-orden-finalizada` depende de `codex/asignacion-operadores`
-(PR #23); no implica una publicación en staging o producción.
+(PR #23). La publicación no fusiona esos PR.
 
 ## Causa y comportamiento
 
@@ -33,7 +33,7 @@ mensaje al desplegar.
 
 ## Reintentar un aviso
 
-En Configuración → Integraciones → historial de mensajes, los administradores
+En Configuración → Integraciones → **Historial de avisos**, los administradores
 con permiso de gestionar la integración y con el servicio habilitado pueden
 elegir **Reintentar envío** en un aviso Wati fallido.
 
@@ -67,6 +67,4 @@ chequeo global de tipos se realizan en CI remoto: el intento de tipado local de
 la API excedió la memoria disponible y se interrumpió el de la web para evitar
 sobrecargar la Mac.
 
-Para publicar: comprobar el resultado del CI del PR, desplegar primero staging,
-validar la configuración y acordar por separado cualquier ensayo que envíe un
-mensaje real. Registrar la versión publicada en `deploy/staging/VALIDACION.md`.
+El CI remoto y las compilaciones con tipos aprobaron la revisión publicada. En staging pasaron 35 comprobaciones HTTP/SSR de finalización, variantes, saldo parcial, reintento, deduplicación, permisos y aislamiento, seguidas por una revisión visual. Producción recibió las mismas imágenes por digest. Se verificaron salud, versiones y copias posteriores en ambos entornos. No se enviaron mensajes reales ni se activaron avisos históricos. Consultar `deploy/staging/VALIDACION.md` y `deploy/produccion/VALIDACION.md` para evidencias y límites.
