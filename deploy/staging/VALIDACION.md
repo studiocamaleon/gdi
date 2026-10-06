@@ -1006,3 +1006,36 @@ Revisión ejecutada **`b89000446af1153ea720481c424a5eaad175a8f9`**, dependiente 
 Copia previa `9b7ba298-f525-4a49-958f-10b0f95b8a58`, completada **2026-10-06T15:01:03.428Z**. Copia posterior **`61d9fb55-663d-44c8-b2ef-5505be893ca1`**, completada **2026-10-06T17:29:16.218Z**, con 306 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta y referencias de imágenes/fuentes comprobados. Fuentes cifradas protegidas durante 31 días. **No se repitió una restauración SQL completa**. Evidencias y accesos fuera de Git. Constructor temporal propio retirado después de promover ambas imágenes al registro de producción.
 
 Para volver al código anterior, mantener la base y usar `8053bcf0ee05c6d8575e967547fc2888b448e690`: backend `sha256:9b7a956cb647b28440d449f9e61ac24f4413a0ca65ddebb1cba2e798850115a7`, web `sha256:61b249babbb53792f2f9d9597497bd47c5854fc7fcc45a5805786e5c535603c1`. Esto elimina el ajuste de descuentos de la ficha y reintroduce la falla de plancha. Las revisiones de precio ya guardadas se conservan; antes de recotizar productos con niveles nuevos, revisar su compatibilidad. No borrar operaciones ni revertir migraciones.
+
+
+## 06/10/2026, 22:03 UTC — OT, permisos del taller y caño estructural (PR #26)
+
+Revisión ejecutada **`a9c2d563dae051d704b18bf71974a7c75b7517e8`**, dependiente del PR #25. Publicación solicitada por el titular para comprobar el lote antes de promoverlo a producción. Compilaciones remotas con tipos habilitados; no se fusionó la cadena de PR ni se modificó Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:c137b072cffaab608d02b9235effee55a9057478e0f3bb5a34b5b5c6fed25bd2` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:53cd120b3a43979fcd5bd11e4bae38d794412c1afefc80da16e3e5400f364608` |
+
+**307 migraciones**: únicamente se agregó `20261006175000_unidad_barra`, sin seeds ni resets. Rol de ejecución sin DDL verificado. Se conservan seis máquinas y sus tamaños, Gotenberg y el copiador. Salud web/API 200, API privada directa 403 y BFF sin sesión 401. Los cuatro servicios actualizados informan la revisión esperada y Sentry configurado.
+
+### Alcance y recorrido comprobado
+
+- Caño estructural: largo comercial en metros, sección exterior en dos ejes y espesor de pared; unidad Barra para compra/stock y metro lineal para consumo. No se cambian automáticamente unidades, precios ni existencias de variantes existentes.
+- Bastidor doble de **2,40 × 1,20 × 0,18 m**, caño **40 × 40 × 1,6 mm** y barras de **6 m**: **17,12 m** de piezas, **3 barras / 18 m comerciales**, material ficticio de $18.000 y precio de venta de $40.800. Cotización, guardado, reapertura, emisión, reserva de tres barras y consumo de tres barras comprobados. Se ensayaron bastidor simple, cantidades, largo decimal, orientación 20 × 30, geometría del visor y compatibilidad del precio antiguo por metro. Piezas mayores que la barra y secciones incompatibles rechazadas.
+- Se detectó en el navegador que la orientación se enviaba como una lista. Se corrigió la elección única en pasos obligatorios y opcionales, con valor inicial y cadena enviada al motor. También se corrigió la compresión de la etiqueta. Reproducción local y 37 pruebas de controles/params aprobadas; 11 reejecutadas tras el ajuste visual, con solapamiento.
+- Vinilo por metro: cotizaciones de 0,5 y 0,25 m; coma decimal y campo vacío en la interfaz. Plancha de papel adhesivo 270,4 × 428,2 mm. Niveles con perfiles de 8 y 4 m²/h y precios distintos; unidades visibles en ambas opciones.
+- OT: copia del teléfono, ZIP de toda la orden y del trabajo abierto, nombres repetidos conservados, subidas incompletas/papelera excluidas y bytes descomprimidos comprobados. Descuento/cupón sólo en edición; cambios de importe sin modificar pasos y rechazo del lector sin autorización.
+- Operario: consulta materiales, actividad operativa y archivos. No aparece «Ver OT» y la URL directa devuelve la pantalla sin acceso. Listado/detalle comercial rechazados por la API; contrato operativo sin importes ni snapshots, aislamiento entre empresas comprobado.
+- **87 comprobaciones HTTP/SSR y de resultados del lote**, más revisión visual de los recorridos. Tras las correcciones se repitieron los rechazos de permisos y ambas orientaciones sobre la revisión final. Las suites locales anteriores están detalladas en `docs/ot-archivos-y-perfiles-20261006.md` y `docs/cotizacion-cantidades-decimales.md`.
+- CI del SHA final: [permisos y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37536433530) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37536433698), ambos aprobados.
+
+Dos empresas, seis usuarios y archivos ficticios retirados por identificadores, incluidos los objetos propios en R2. Se conservaron los recuentos originales: una empresa, dos clientes, siete OT, 31 pasos, seis empleados y cuatro movimientos de fondos. Ningún cobro/factura ni mensaje externo de ensayo. Evidencias privadas fuera de Git.
+
+### Respaldo y reversión
+
+Copia previa **`2e87060f-c885-4bb3-bcc3-760c06f4dbb3`**, completada **2026-10-06T21:01:00.559Z**. Copia posterior **`65bc7b93-49b9-40d4-9c44-01104cb4fe5e`**, completada **2026-10-06T22:02:29.461Z**, con 307 migraciones y 24 archivos. Firma, huella y descifrado del manifiesto, revisión e inventario de imágenes/fuentes comprobados. Fuentes cifradas protegidas 31 días. **No se repitió una restauración SQL completa**.
+
+La revisión anterior `b89000446` usa API/workers `sha256:006f62ffbbdc6456c37f72859c133f14d02146fcd7d55f4849e5c9e41ed9483f` y web `sha256:a384f9677a0c2362db3179287f707fdd16ea11f9f75649e7398127dee96e8977`. No revertir la base ni borrar operaciones. Antes de volver al código anterior, comprobar que no haya datos usando BARRA: esa versión no reconoce la unidad y reintroduce el acceso comercial indebido del operario. Priorizar una corrección hacia adelante.
+
+Constructor remoto temporal de esta publicación retirado después de promover las imágenes; otros recursos de compilación y proyectos locales intactos.

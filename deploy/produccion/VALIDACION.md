@@ -387,3 +387,32 @@ Revisión ejecutada **`b89000446af1153ea720481c424a5eaad175a8f9`**, dependiente 
 Copia previa **`2eb687ea-7df9-4263-a2a5-4c789123d451`**, completada **2026-10-06T17:01:02.684Z**. Copia posterior **`ba1675ee-f0e4-472e-986e-922c2376390d`**, completada **2026-10-06T17:33:31.233Z**, con 306 migraciones y 27 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes comprobados. Fuentes cifradas protegidas durante 31 días. **No se repitió una restauración SQL completa**. Evidencia y accesos fuera de Git.
 
 Para volver al código anterior, mantener la base y usar `8053bcf0ee05c6d8575e967547fc2888b448e690`: backend `sha256:9b7a956cb647b28440d449f9e61ac24f4413a0ca65ddebb1cba2e798850115a7`, web `sha256:61b249babbb53792f2f9d9597497bd47c5854fc7fcc45a5805786e5c535603c1`. Esto elimina el ajuste de descuentos de la ficha y reintroduce la falla de plancha. Las revisiones de precio ya guardadas se conservan; antes de recotizar productos con niveles nuevos, revisar su compatibilidad. No borrar operaciones ni revertir migraciones.
+
+
+## 06/10/2026, 22:09 UTC — OT, permisos del taller y caño estructural (PR #26)
+
+Revisión ejecutada **`a9c2d563dae051d704b18bf71974a7c75b7517e8`**, dependiente del PR #25. Publicación autorizada tras el recorrido en staging. Se promovieron las mismas imágenes por digest, sin recompilar para producción ni fusionar los PR. Los commits documentales posteriores no cambian la revisión ejecutada. Vercel permanece sin cambios.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:c137b072cffaab608d02b9235effee55a9057478e0f3bb5a34b5b5c6fed25bd2` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:53cd120b3a43979fcd5bd11e4bae38d794412c1afefc80da16e3e5400f364608` |
+
+**307 migraciones**: se agregó únicamente `20261006175000_unidad_barra`, mediante el migrador separado, sin seeds ni resets. Rol de aplicación sin DDL verificado. Se conservan seis máquinas y sus tamaños; Gotenberg y el copiador mantienen sus imágenes. Salud web/API 200, API privada directa 403 y BFF anónimo 401. Revisión exacta y Sentry configurado en los cuatro servicios actualizados. Constructor temporal propio retirado; Docker y los otros proyectos locales intactos.
+
+### Cambios y validación
+
+- OT: copiar el teléfono junto al cliente; ZIP de todos los adjuntos de la orden o del trabajo abierto en Operación diaria; descuento y cupón exigen «Editar orden». Conserva controles de facturación, cobros y concurrencia.
+- Operarios sin permiso comercial: sin «Ver OT», URL directa bloqueada y API comercial rechazada. El sheet usa una consulta operativa con contrato cerrado, sin precios, costos, snapshots o datos de cobros. Archivos y materiales siguen disponibles según sus permisos.
+- Caño estructural: largo de barra, ancho/alto exterior y espesor de pared separados. Compra/stock en Barra y consumo en metros, con conversión correcta del despiece a costos, reservas y consumo. Orientación única de perfiles rectangulares en pasos obligatorios y opcionales; presentación de su etiqueta corregida durante el ensayo.
+- Cantidades de 0,5 / 0,25 metros en el cotizador; velocidades y unidades coherentes en niveles con perfil de máquina. No se modifican masivamente productos ni la configuración de materiales existentes.
+- **87 comprobaciones HTTP/SSR y de resultados del lote en staging**, con datos ficticios: bastidores simples/dobles, dimensiones y cantidades, barra de largo decimal, perfiles 20 × 30, geometría, compatibilidad de costos antiguos, rechazos de piezas inviables, emisión, reserva/consumo, permisos, ZIP y descuentos. Bastidor ficticio 2,40 × 1,20 × 0,18 m: 17,12 m de piezas, tres barras de 6 m y precio de venta de $40.800; agregado desde el navegador comprobado. Pruebas locales y detalles en [el registro de staging](../staging/VALIDACION.md).
+- CI del SHA ejecutado: [permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37536433530) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37536433698), ambos correctos; builds remotos con tipos habilitados.
+- Chrome en producción: ficha de Caño estructural, cuatro variantes y nuevos campos visibles, sin cambios pendientes de guardar. Sus unidades existentes continúan en metros lineales; no se eligió Barra ni se alteraron precios. OT existente: copia de teléfono disponible, descuento/cupón deshabilitados fuera de edición, descarga conjunta deshabilitada al no tener adjuntos. No se guardaron órdenes, descuentos, movimientos ni configuraciones ficticias en producción, ni se emitieron comprobantes o mensajes externos.
+- Recuentos operativos antes/después iguales: 1 empresa, 771 clientes, 19 OT, 48 pasos, 8 cobros, 9 métodos de pago, 7 movimientos y 6 empleados. Los datos/objetos ficticios de staging fueron retirados por sus identificadores.
+
+### Respaldo y reversión
+
+Copia previa **`9dcc0310-5c39-46fa-970e-0fd3c9893997`**, completada **2026-10-06T22:01:10.707Z**. Copia posterior **`888c15b3-dbee-4eb0-ad84-005ba1c0782a`**, completada **2026-10-06T22:08:10.743Z**, con 307 migraciones y 39 archivos. Firma, huella y descifrado del manifiesto, revisión e inventario de imágenes/fuentes comprobados. Fuentes cifradas protegidas durante 31 días. **No se repitió una restauración SQL completa**. Evidencia privada fuera de Git.
+
+La revisión anterior `b89000446` usa API/workers `sha256:006f62ffbbdc6456c37f72859c133f14d02146fcd7d55f4849e5c9e41ed9483f` y web `sha256:a384f9677a0c2362db3179287f707fdd16ea11f9f75649e7398127dee96e8977`. Conservar la base y comprobar que no existan registros utilizando BARRA antes de volver atrás: la versión anterior no reconoce esa unidad y reintroduce el acceso comercial indebido del operario. Priorizar una corrección hacia adelante; no borrar operaciones ni revertir migraciones.

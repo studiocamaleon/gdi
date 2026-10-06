@@ -1,6 +1,6 @@
 # Cantidades decimales en el cotizador
 
-## Corrección — 06/10/2026, pendiente de publicar
+## Corrección — 06/10/2026, publicada en staging y producción
 
 El control compartido de cantidad usaba un campo numérico nativo y convertía
 su texto en cada pulsación. Podía perder la coma o el punto antes de completar
@@ -33,5 +33,7 @@ aviso del mínimo. No se alteran precios, existencias ni configuración comercia
   archivos nuevos y revisión del diff sin errores.
 
 Pruebas de interfaz con datos ficticios y API simulada, más validación real de
-DTO y funciones del motor. No se guardaron órdenes reales ni se desplegó esta
-corrección. Se agrupa con el resumen de unidades de niveles pendiente del PR #25.
+DTO y funciones del motor. El recorrido posterior en staging cotizó el producto
+Vinilo de corte con 0,5 y 0,25 m y comprobó el campo con coma y vacío en el
+navegador. Publicado junto con el lote del PR #26, revisión `a9c2d563d`; no se
+guardaron órdenes de ensayo en producción. Ver [el registro de publicación](../deploy/produccion/VALIDACION.md).

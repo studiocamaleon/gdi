@@ -2,7 +2,10 @@
 
 Trabajo local en `codex/ot-archivos-perfiles`, basado en `6cb80c98b` de
 `codex/niveles-perfiles-maquina`. Depende del PR #25 (incluye los descuentos de
-OT persistida). Esta preparación no publica staging ni producción.
+OT persistida). Publicado en staging y producción el 06/10/2026 con la revisión
+`a9c2d563d`, luego del recorrido documentado en
+[staging](../deploy/staging/VALIDACION.md) y
+[producción](../deploy/produccion/VALIDACION.md).
 
 ## Orden de trabajo
 
@@ -69,7 +72,8 @@ OT persistida). Esta preparación no publica staging ni producción.
   retiró tras la comprobación; no se guardaron fichas ni se emitieron órdenes.
 - La descarga HTTP se comprobó descomprimiendo el ZIP y verificando sus bytes;
   storage e identidades fueron ficticios, sin consultar archivos de clientes.
-  Pendiente el recorrido integrado en staging cuando se publique el lote.
+  El recorrido integrado posterior en staging comprobó ZIP desde la OT y desde
+  Operación diaria, con descarga y bytes reales en una empresa ficticia.
 
 ## Acceso del taller y ficha comercial
 
@@ -94,4 +98,4 @@ OT persistida). Esta preparación no publica staging ni producción.
   URL directa; incluyen materiales/actividad/archivos y cambio entre productos.
 - Tipos de los ocho archivos productivos de esta corrección sin diagnósticos y
   lint web sin errores. No requiere migración de base de datos. Comprobado en
-  local; la publicación sigue pendiente junto con el resto del lote.
+  local y después en staging; incluido en la revisión publicada `a9c2d563d`.
