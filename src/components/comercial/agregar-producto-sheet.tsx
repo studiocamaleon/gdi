@@ -7,6 +7,7 @@ import catalogStyles from "./producto-catalogo.module.css";
 import { ProductoCatalogoGlyph } from "./producto-catalogo-glyph";
 import { ActionButton } from "@/components/design-system/action-button";
 import { MaterialAutomaticoStock } from "./material-automatico-stock";
+import { CantidadProductoInput } from "./cantidad-producto-input";
 import { MaterialSelectorRollo } from "./material-selector-rollo";
 import { crearGruposRollos } from "@/lib/selector-rollos";
 import { decisionesMaterialStock, hayDecisionMaterialStockPendiente } from "@/lib/seleccion-material-stock";
@@ -2428,12 +2429,6 @@ function formatMedidasCm(
   return profundidadMm && profundidadMm > 0
     ? `${formatCmFromMm(anchoMm)} x ${formatCmFromMm(altoMm)} x ${formatCmFromMm(profundidadMm)} cm`
     : `${formatCmFromMm(anchoMm)} x ${formatCmFromMm(altoMm)} cm`;
-}
-
-function parseDecimalInput(value: string) {
-  const normalized = value.trim().replace(",", ".");
-  const parsed = Number.parseFloat(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function getTextAttr(
@@ -5039,6 +5034,21 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
 }
 
 function getQtyFromItem(item: PropuestaItem) {
+  // En venta lineal directa, cantidad=1 es la pieza técnica (una franja del
+  // rollo), no los metros vendidos. Recuperar primero la medida comercial.
+  if (
+    item.unidadMedida === "metro_lineal" &&
+    item.jobContext?.modoCotizacionLineal === "directo"
+  ) {
+    for (const valor of [
+      item.jobContext.metrosLineales,
+      item.jobContext.cantidadComercial,
+      item.cantidad,
+    ]) {
+      const metros = Number(valor);
+      if (Number.isFinite(metros) && metros > 0) return metros;
+    }
+  }
   const ctxCantidad = Number(item.jobContext?.cantidad);
   if (Number.isFinite(ctxCantidad) && ctxCantidad > 0) return ctxCantidad;
   if (item.cotizacion.cantidadPedida && item.cotizacion.cantidadPedida > 0) {
@@ -7489,6 +7499,17 @@ function ApConfigStep({
   const unidadCantidadVisible = cuentaProductosVectoriales
     ? "u."
     : product.unidad;
+  const permiteCantidadDecimal =
+    !cuentaProductosVectoriales &&
+    ["ml", "m²", "m2"].includes(product.unidad.toLowerCase());
+  const pasoCantidad = permiteCantidadDecimal ? 0.1 : 1;
+  const ajustarCantidad = (direccion: number) =>
+    setCantidad(
+      Math.max(
+        cuentaProductosVectoriales ? 1 : 0,
+        Number((qty + direccion * pasoCantidad).toFixed(6)),
+      ),
+    );
   const renderCantidadCard = () => (
     <div className={seC.card}>
       <div className={seC.gh}>
@@ -7534,36 +7555,24 @@ function ApConfigStep({
             type="button"
             className="ap-qty-btn"
             aria-label="Disminuir cantidad"
-            onClick={() =>
-              setCantidad(Math.max(cuentaProductosVectoriales ? 1 : 0, qty - 1))
-            }
+            onClick={() => ajustarCantidad(-1)}
           >
             <MinusIcon />
           </button>
-          <input
-            type="number"
-            aria-label={
+          <CantidadProductoInput
+            ariaLabel={
               cuentaProductosVectoriales ? "Cantidad de productos" : "Cantidad"
             }
             value={qty}
-            step={
-              cuentaProductosVectoriales
-                ? 1
-                : product.unidad === "m²" || product.unidad === "ml"
-                  ? 0.1
-                  : 1
-            }
-            min={cuentaProductosVectoriales ? 1 : 0}
-            onChange={(event) =>
-              setCantidad(parseDecimalInput(event.target.value))
-            }
+            permiteDecimales={permiteCantidadDecimal}
+            onValueChange={setCantidad}
           />
           <span className="ap-qty-unit">{unidadCantidadVisible}</span>
           <button
             type="button"
             className="ap-qty-btn"
             aria-label="Aumentar cantidad"
-            onClick={() => setCantidad(qty + 1)}
+            onClick={() => ajustarCantidad(1)}
           >
             <PlusIcon />
           </button>
@@ -8192,6 +8201,12 @@ function ApConfigStep({
                       <label>Largo a cotizar</label>
                       {renderQuantityControl()}
                     </div>
+                    {minimoComercialStatus ? (
+                      <div className={`ap-minimum-alert ${minimoComercialStatus.kind === "blocked" ? "is-blocked" : "is-warning"}`}>
+                        <CircleAlertIcon />
+                        <span>{minimoComercialStatus.message}</span>
+                      </div>
+                    ) : null}
                     {infoRolloLineal?.anchoUtilCm ? (
                       <div className="ap-minimum-alert">
                         <Grid2X2Icon />
@@ -9914,6 +9929,13 @@ export function AgregarProductoSheet({
 
   const cotizarActual = React.useCallback(async () => {
     if (!product?.real || !product.id || !productoDetalle) return;
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setCotizacion(null);
+      setCotizacionError(null);
+      setCotizacionTrabajo(null);
+      setCotizando(false);
+      return;
+    }
     if (isBlockedByMaterialVisual) return;
     if (motorConfig.importandoPiezasVectoriales) return;
     const configParaCotizar = completarNombresPiezas(motorConfig);
@@ -10284,6 +10306,10 @@ export function AgregarProductoSheet({
   const addCurrent = React.useCallback(
     (keepOpen: boolean) => {
       if (!product) return;
+      if (!Number.isFinite(qty) || qty <= 0) {
+        toast.error("Ingresá una cantidad mayor a cero antes de guardar.");
+        return;
+      }
       if (isBlockedByMaterialVisual) {
         toast.error("Completá la selección del material y su variante antes de guardar.");
         return;
@@ -10650,6 +10676,7 @@ export function AgregarProductoSheet({
                   onPress={() => addCurrent(true)}
                   isDisabled={
                     briefEditorOpen ||
+                    qty <= 0 ||
                     nombresPiezasIncompletos ||
                     (product.real &&
                       (!cotizacionExitosa ||
@@ -10670,6 +10697,7 @@ export function AgregarProductoSheet({
                 onPress={() => addCurrent(false)}
                 isDisabled={
                   briefEditorOpen ||
+                  qty <= 0 ||
                   nombresPiezasIncompletos ||
                   (product.real &&
                     (!cotizacionExitosa ||

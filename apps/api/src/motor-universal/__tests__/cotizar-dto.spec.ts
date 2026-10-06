@@ -12,6 +12,18 @@ import {
 } from '../../productos-servicios/geometrias/interpretar-vector';
 
 describe('CotizarDto', () => {
+  it.each([0.25, 0.5, 1.75])('acepta %s metros lineales sin fraccionar la pieza técnica', async (metros) => {
+    const jobContext = {
+      cantidad: 1, modoCotizacionLineal: 'directo',
+      metrosLineales: metros, cantidadComercial: metros, cantidadComercialPricing: metros,
+      piezas: [{ cantidad: 1, anchoMm: 600, altoMm: metros * 1000 }],
+    };
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    const dto = await pipe.transform({ productoId: '22222222-2222-4222-8222-222222222222', jobContext }, { type: 'body', metatype: CotizarDto });
+    expect(dto.jobContext.metrosLineales).toBe(metros);
+    expect(dto.jobContext.piezas[0].altoMm).toBe(metros * 1000);
+  });
+
   it('acepta entradas de corte opcionales y enteras al estimar placas', async () => {
     const ctx = {cantidad: 50, modoCotizacionVectorial: 'placas', placasVectorialesManuales: 2, metrosCortePorPlacaVectorial: 15};
     const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
