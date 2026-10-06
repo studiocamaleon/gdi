@@ -118,6 +118,14 @@ export async function getOrdenTrabajo(
   return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}`);
 }
 
+export type { DetalleOperativoItem } from "../../apps/api/src/ordenes-trabajo/detalle-operativo";
+
+export async function getDetalleItemTablero(itemId: string) {
+  return apiRequest<import("../../apps/api/src/ordenes-trabajo/detalle-operativo").DetalleOperativoItem>(
+    `/ordenes-trabajo/tablero/items/${itemId}/detalle`,
+  );
+}
+
 export async function crearOrdenTrabajo(
   payload: CrearOrdenTrabajoPayload,
 ): Promise<OrdenTrabajoDetalle> {

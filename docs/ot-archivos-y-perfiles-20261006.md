@@ -65,3 +65,28 @@ OT persistida). Esta preparación no publica staging ni producción.
 - La descarga HTTP se comprobó descomprimiendo el ZIP y verificando sus bytes;
   storage e identidades fueron ficticios, sin consultar archivos de clientes.
   Pendiente el recorrido integrado en staging cuando se publique el lote.
+
+## Acceso del taller y ficha comercial
+
+- «Ver orden» en el detalle operativo y «Ver OT» al terminar exigen
+  `comercial.ordenes.ver`. El alcance compartido del tablero no concede ese
+  permiso. El listado y la ficha comprueban el permiso antes de cargar datos;
+  una sesión sin permisos confirmados o una revocación devuelve la vista sin
+  acceso, sin interrumpir la pantalla.
+- La API de listado/detalle comercial deja de admitir sólo el permiso de
+  producción. Conserva la lectura para comprobantes que usa el recorrido de
+  facturación. Esto no habilita la página comercial del usuario.
+- El sheet obtiene materiales, nota de producción y actividad operativa por
+  `GET /ordenes-trabajo/tablero/items/:itemId/detalle`. Selecciona explícitamente
+  empresa/trabajo, admite únicamente trabajos visibles en el tablero y devuelve
+  un contrato cerrado sin precios, costos, snapshots, datos de cobros, tokens ni
+  eventos comerciales. Los componentes fabricados pueden usar su propio
+  snapshot operativo. Los adjuntos conservan su consulta y sus permisos propios.
+- Se reprodujo primero el acceso indebido con una sesión ficticia y HTTP real
+  (200 donde se esperaba 403). Con la corrección pasan 30 pruebas de acceso a
+  módulos y separación de empresas, más 214 pruebas de permisos, ejecución y
+  archivos. Pasan 16 pruebas web sobre sheet, aviso de finalización, sesión y
+  URL directa; incluyen materiales/actividad/archivos y cambio entre productos.
+- Tipos de los ocho archivos productivos de esta corrección sin diagnósticos y
+  lint web sin errores. No requiere migración de base de datos. Comprobado en
+  local; la publicación sigue pendiente junto con el resto del lote.

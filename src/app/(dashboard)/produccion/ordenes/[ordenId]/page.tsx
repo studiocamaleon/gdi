@@ -1,3 +1,5 @@
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
 import { notFound } from "next/navigation";
 
 import { PropuestaFicha } from "@/components/comercial/propuesta-ficha";
@@ -18,6 +20,9 @@ export default async function OrdenTrabajoDetallePage({
   params: Promise<{ ordenId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (!(await tienePermiso("comercial.ordenes.ver", { exigirConfirmacion: true }))) {
+    return <SinPermiso modulo="Órdenes de trabajo" />;
+  }
   const { ordenId } = await params;
   const { emitida, convertida } = await searchParams;
 
@@ -25,6 +30,7 @@ export default async function OrdenTrabajoDetallePage({
   try {
     detalle = await getOrdenTrabajo(ordenId);
   } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return <SinPermiso modulo="Órdenes de trabajo" />;
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
   }

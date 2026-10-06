@@ -1,3 +1,5 @@
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
 import { OrdenesTrabajoView } from "@/components/produccion/ordenes-trabajo-view";
 import type {
   OrdenTrabajoEstado,
@@ -52,6 +54,9 @@ export default async function OrdenesTrabajoPage({
     page?: string;
   }>;
 }) {
+  if (!(await tienePermiso("comercial.ordenes.ver", { exigirConfirmacion: true }))) {
+    return <SinPermiso modulo="Órdenes de trabajo" />;
+  }
   const params = await searchParams;
   const q = params.q?.trim() || undefined;
   // Validado contra el enum: un estado inventado en la URL cae a undefined.
@@ -73,10 +78,8 @@ export default async function OrdenesTrabajoPage({
       limit: LIMIT,
     });
   } catch (error) {
-    errorCarga =
-      error instanceof ApiError && error.status === 403
-        ? "No tenés permisos para consultar las órdenes de trabajo."
-        : "No se pudieron cargar las órdenes de trabajo. Revisá la conexión e intentá nuevamente.";
+    if (error instanceof ApiError && error.status === 403) return <SinPermiso modulo="Órdenes de trabajo" />;
+    errorCarga = "No se pudieron cargar las órdenes de trabajo. Revisá la conexión e intentá nuevamente.";
     respuesta = {
       data: [],
       total: 0,

@@ -43,15 +43,9 @@ import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 
 /**
- * La orden de trabajo la miran los dos lados del mostrador, así que el
- * controller se parte por acción y no por módulo:
- *
- * - Leerla y ejecutarla es PRODUCCIÓN: el operario entra al tablero, toma su
- *   paso en la mesa y lo completa.
- * - Crearla, editarle los ítems y cambiarle el estado es COMERCIAL: es la
- *   venta, no el taller.
- *
- * Por eso la base es `produccion.ver` y cada método dice lo suyo.
+ * La ficha comercial requiere permisos de órdenes o comprobantes. El taller
+ * usa proyecciones operativas sin importes: ver producción no concede acceso
+ * a la venta, aunque ambas pantallas pertenezcan a la misma OT.
  */
 @OcultaMargenes()
 @Permiso("produccion.tablero.ver")
@@ -148,7 +142,7 @@ export class OrdenesTrabajoController {
   }
 
   @Get()
-  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver", "administracion.comprobantes.ver", "administracion.comprobantes.gestionar")
+  @Permiso("comercial.ordenes.ver", "administracion.comprobantes.ver", "administracion.comprobantes.gestionar")
   findAll(
     @CurrentSession() auth: CurrentAuth,
     @Query() query: OrdenesTrabajoQueryDto,
@@ -173,6 +167,16 @@ export class OrdenesTrabajoController {
   @Get('tablero/items/:itemId')
   tableroItem(@CurrentSession() auth: CurrentAuth, @Param('itemId', ParseUUIDPipe) itemId: string) {
     return this.ordenesTrabajoService.consultarItemTablero(auth, itemId);
+  }
+
+  /** Materiales, nota y actividad del trabajo; nunca la ficha comercial. */
+  @Permiso("produccion.tablero.ver", "produccion.estaciones.ver", "produccion.planificacion.ver")
+  @Get('tablero/items/:itemId/detalle')
+  detalleItemTablero(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+  ) {
+    return this.ordenesTrabajoService.detalleItemTablero(auth, itemId);
   }
 
   /** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */
@@ -234,7 +238,7 @@ export class OrdenesTrabajoController {
   }
 
   @Get(':id')
-  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver", "administracion.comprobantes.ver", "administracion.comprobantes.gestionar")
+  @Permiso("comercial.ordenes.ver", "administracion.comprobantes.ver", "administracion.comprobantes.gestionar")
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.ordenesTrabajoService.findOne(auth, id);
   }

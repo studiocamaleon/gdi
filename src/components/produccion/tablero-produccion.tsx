@@ -66,13 +66,10 @@ import {
 } from "@/lib/tablero-produccion";
 import { PasoAccionesProduccion } from "./paso-acciones";
 import {
-  getOrdenTrabajo,
+  getDetalleItemTablero,
+  type DetalleOperativoItem,
   getItemTablero,
 } from "@/lib/ordenes-trabajo-api";
-import type {
-  OrdenTrabajoDetalle,
-  OrdenTrabajoEvento,
-} from "@/lib/ordenes-trabajo";
 import {
   type Estacion,
 } from "@/lib/estaciones";
@@ -567,54 +564,6 @@ function DetailRuta({
 
 type MaterialRow = { nombre: string; cantidad: number; unidad: string };
 
-/** Nota de producción del item (jobContext.notasProduccion del snapshot). */
-function notaProduccionDeDetalle(
-  detalle: OrdenTrabajoDetalle,
-  itemId: string,
-): string | null {
-  const producto = detalle.productos.find((entry) => entry.id === itemId);
-  const jobContext = producto?.snapshot?.jobContext as
-    { notasProduccion?: unknown } | null | undefined;
-  const nota =
-    typeof jobContext?.notasProduccion === "string"
-      ? jobContext.notasProduccion.trim()
-      : "";
-  return nota || null;
-}
-
-/** Materiales estimados del item, desde la trazabilidad del snapshot. */
-function materialesDeDetalle(
-  detalle: OrdenTrabajoDetalle,
-  itemId: string,
-): MaterialRow[] {
-  const producto = detalle.productos.find((entry) => entry.id === itemId);
-  const trazabilidad = producto?.snapshot?.trazabilidad as
-    | {
-        pasos?: Array<{
-          activado?: boolean;
-          materiales?: Array<Record<string, unknown>>;
-        }>;
-      }
-    | null
-    | undefined;
-  if (!trazabilidad?.pasos) return [];
-  const rows: MaterialRow[] = [];
-  for (const paso of trazabilidad.pasos) {
-    if (!paso?.activado || !Array.isArray(paso.materiales)) continue;
-    for (const material of paso.materiales) {
-      rows.push({
-        nombre:
-          (material.materialDisplayName as string) ||
-          (material.materialNombre as string) ||
-          "Material",
-        cantidad: Number(material.cantidad ?? 0),
-        unidad: (material.unidad as string) || "",
-      });
-    }
-  }
-  return rows;
-}
-
 /**
  * El arte del item, al alcance de la mano en la mesa. Se carga recién al
  * abrir el tab: el tablero ya trae bastante payload y el operario abre los
@@ -737,7 +686,7 @@ function DetailActividad({
   eventos,
   cargando,
 }: {
-  eventos: OrdenTrabajoEvento[];
+  eventos: DetalleOperativoItem["eventos"];
   cargando: boolean;
 }) {
   if (cargando)
@@ -792,37 +741,37 @@ export function ItemDetailSheet({
   onClose: () => void;
 }) {
   const [tab, setTab] = React.useState("ruta");
-  const [detalle, setDetalle] = React.useState<OrdenTrabajoDetalle | null>(
+  const [detalle, setDetalle] = React.useState<DetalleOperativoItem | null>(
     null,
   );
   const [cargandoDetalle, setCargandoDetalle] = React.useState(false);
-  const ordenId = item?.data.ordenId;
+  const [errorDetalle, setErrorDetalle] = React.useState(false);
+  const itemId = item?.id;
+  const puede = usePuedeFn();
+  const puedeVerOrden = puede("comercial.ordenes.ver");
 
-  // Materiales y actividad viven en el detalle de la orden: se trae una vez
-  // al abrir el sheet (y se refresca si cambió la orden seleccionada).
+  // Sólo la proyección operativa; nunca descargar la ficha comercial al taller.
   React.useEffect(() => {
-    if (!ordenId) return;
-    if (alcance === "operario") {
-      setDetalle(null);
-      setCargandoDetalle(false);
-      return;
-    }
     let vigente = true;
-    setCargandoDetalle(true);
-    getOrdenTrabajo(ordenId)
-      .then((data) => {
-        if (vigente) setDetalle(data);
-      })
-      .catch(() => {
-        if (vigente) setDetalle(null);
-      })
-      .finally(() => {
-        if (vigente) setCargandoDetalle(false);
-      });
+    setDetalle(null);
+    setErrorDetalle(false);
+    setCargandoDetalle(Boolean(itemId));
+    if (itemId) {
+      getDetalleItemTablero(itemId)
+        .then((data) => {
+          if (vigente) setDetalle(data);
+        })
+        .catch(() => {
+          if (vigente) setErrorDetalle(true);
+        })
+        .finally(() => {
+          if (vigente) setCargandoDetalle(false);
+        });
+    }
     return () => {
       vigente = false;
     };
-  }, [alcance, ordenId]);
+  }, [itemId]);
 
   // Esc cierra el sheet (sólo mientras hay un item abierto).
   const abierto = Boolean(item);
@@ -840,10 +789,8 @@ export function ItemDetailSheet({
   const totalSteps = item.steps.length;
   const doneSteps = item.steps.filter((step) => step.status === "done").length;
   const currentStep = item.currentStep;
-  const materiales = detalle ? materialesDeDetalle(detalle, item.id) : [];
-  const notaProduccion = detalle
-    ? notaProduccionDeDetalle(detalle, item.id)
-    : null;
+  const materiales = detalle?.materiales ?? [];
+  const notaProduccion = detalle?.notaProduccion ?? null;
   const eventos = detalle?.eventos ?? [];
   const estimadoTotal = etiquetaDuracion(
     item.data.pasos.reduce(
@@ -1059,14 +1006,17 @@ export function ItemDetailSheet({
               onGate={onGate}
             />
           ) : null}
-          {tab === "materiales" ? (
+          {errorDetalle && (tab === "materiales" || tab === "actividad") ? (
+            <p role="alert">No se pudo cargar el detalle del trabajo. Volvé a abrirlo para intentar nuevamente.</p>
+          ) : null}
+          {tab === "materiales" && !errorDetalle ? (
             <DetailMateriales
               materiales={materiales}
               cargando={cargandoDetalle}
             />
           ) : null}
           {tab === "archivos" ? <DetailArchivos itemId={item.id} /> : null}
-          {tab === "actividad" ? (
+          {tab === "actividad" && !errorDetalle ? (
             <DetailActividad eventos={eventos} cargando={cargandoDetalle} />
           ) : null}
         </div>
@@ -1084,7 +1034,7 @@ export function ItemDetailSheet({
                 : item.statusLine}
           </div>
           <div className="spacer" />
-          {alcance !== "operario" ? (
+          {puedeVerOrden ? (
             <Link
               className="btn"
               href={`/produccion/ordenes/${item.data.ordenId}`}
@@ -1298,7 +1248,7 @@ export function TableroProduccion({
   const designScope = useDesignScope();
   const { zonaHoraria } = useConfigRegional();
   const puede = usePuedeFn();
-  const puedeVerOrden = puede("produccion.tablero.ver") || puede("comercial.ordenes.ver") || puede("administracion.comprobantes.ver") || puede("administracion.comprobantes.gestionar");
+  const puedeVerOrden = puede("comercial.ordenes.ver");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [avisoFinalizacion, setAvisoFinalizacion] = React.useState<AvisoFinalizacionOrden | null>(null);
   const avisarFinalizacion = React.useCallback((aviso: AvisoFinalizacionOrden) => {
@@ -1327,7 +1277,9 @@ export function TableroProduccion({
     setErrorConsulta(null);
     getItemTablero(selectedId).then(item => { if (vigente) setItemConsultado(item); })
       .catch(err => { if (vigente) setErrorConsulta(err instanceof Error ? err.message : "No se pudo abrir el trabajo."); });
-    return () => { vigente = false; };
+    return () => {
+      vigente = false;
+    };
   }, [selectedId, items, historicos, itemConsultado]);
   const router = useRouter();
   const searchParams = useSearchParams();

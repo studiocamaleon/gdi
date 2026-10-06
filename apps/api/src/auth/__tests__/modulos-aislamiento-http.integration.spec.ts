@@ -76,6 +76,10 @@ describe('Clientes, presupuestos y órdenes: acceso HTTP entre empresas', () => 
   const ordenesIds: string[] = [];
   const presupuestosIds: string[] = [];
   const contactosIds: string[] = [];
+  const trabajosIds: string[] = [];
+  const ordenesOperativasIds: string[] = [];
+  const categoriaId = randomUUID();
+  const subcategoriaId = randomUUID();
   const direccionesIds: string[] = [];
   const cuerposCliente: Array<{
     nombre: string;
@@ -131,6 +135,21 @@ describe('Clientes, presupuestos y órdenes: acceso HTTP entre empresas', () => 
       throw new Error('Requiere base local de test y aislamiento activo');
     baseLocalValidada = true;
     await prisma.$connect();
+    await prisma.productoCategoriaComercial.create({
+      data: {
+        id: categoriaId,
+        codigo: categoriaId,
+        nombre: 'QA producción',
+        subcategorias: {
+          create: {
+            id: subcategoriaId,
+            codigo: subcategoriaId,
+            nombre: 'QA trabajos',
+            atributosSchemaJson: {},
+          },
+        },
+      },
+    });
     for (const [indice, tenantId] of tenantIds.entries()) {
       await prisma.tenant.create({
         data: {
@@ -203,10 +222,120 @@ describe('Clientes, presupuestos y órdenes: acceso HTTP entre empresas', () => 
         ).id,
       );
     }
+    for (const [indice, tenantId] of tenantIds.entries()) {
+      const producto = await prisma.producto.create({
+        data: {
+          tenantId,
+          subcategoriaComercialId: subcategoriaId,
+          codigo: 'QA-OPERATIVO',
+          nombre: 'Trabajo ficticio',
+        },
+      });
+      const cotizado = await prisma.cotizacionItem.create({
+        data: {
+          tenantId,
+          cotizacionId: presupuestosIds[indice],
+          productoId: producto.id,
+          cantidad: 2,
+          jobContextJson: {
+            notasProduccion: 'Imprimir a dos caras',
+            precio: 1500,
+          },
+          snapshotJson: { datoComercial: 'NO-EXPONER', precio: 1500 },
+          costoTotal: 800,
+          precioTotal: 1500,
+          trazabilidadJson: {
+            costo: 800,
+            pasos: [
+              {
+                activado: true,
+                precio: 1500,
+                materiales: [
+                  {
+                    materialNombre: 'Papel ficticio',
+                    cantidad: 2,
+                    unidad: 'hojas',
+                    precio: 400,
+                  },
+                ],
+              },
+              {
+                activado: false,
+                materiales: [
+                  { materialNombre: 'Opcional inactivo', cantidad: 1 },
+                ],
+              },
+            ],
+          },
+        },
+      });
+      const orden = await prisma.ordenTrabajo.create({
+        data: {
+          tenantId,
+          clienteId: clientesIds[indice],
+          numero: `QA-TALLER-${indice}`,
+          estado: 'produccion',
+          produccionControlada: true,
+          total: 1500,
+          eventos: {
+            create: [
+              {
+                tenantId,
+                tipo: 'paso',
+                descripcion: 'Impresión iniciada',
+                usuarioNombre: 'Operador ficticio',
+                datosJson: { costo: 800 },
+              },
+              {
+                tenantId,
+                tipo: 'modificacion',
+                descripcion: 'Descuento de $300',
+                usuarioNombre: 'Vendedor ficticio',
+              },
+            ],
+          },
+          items: {
+            create: {
+              tenantId,
+              cotizacionItemId: cotizado.id,
+              codigo: 'QA-1',
+              nombre: 'Impresión ficticia',
+              familia: 'Impresión',
+              cantidad: 2,
+              cantidadUnidad: 'u',
+              subtotal: 1500,
+              impuestos: 0,
+              total: 1500,
+            },
+          },
+        },
+        include: { items: true },
+      });
+      ordenesOperativasIds.push(orden.id);
+      trabajosIds.push(orden.items[0].id);
+    }
     await usuario('admin', todosLosPermisos());
     await usuario('otro-admin', todosLosPermisos(), tenantIds[1]);
     await usuario('lector', ['crm.ver', 'comercial.ver', 'produccion.ver']);
     await usuario('operario', ['produccion.ver', 'produccion.ejecutar']);
+    await usuario('operario-granular', [
+      'acceso.por_vista',
+      'produccion.tablero.ver',
+      'produccion.ejecutar',
+    ]);
+    await usuario('estaciones', [
+      'acceso.por_vista',
+      'produccion.estaciones.ver',
+    ]);
+    await usuario('planificador', [
+      'acceso.por_vista',
+      'produccion.planificacion.ver',
+    ]);
+    await usuario('comercial', ['acceso.por_vista', 'comercial.ordenes.ver']);
+    await usuario('facturacion', [
+      'acceso.por_vista',
+      'administracion.comprobantes.ver',
+    ]);
     await usuario('sin-permisos', []);
     const modulo = await Test.createTestingModule({
       controllers: [
@@ -261,6 +390,12 @@ describe('Clientes, presupuestos y órdenes: acceso HTTP entre empresas', () => 
     await app?.close();
     await prisma.tenant.deleteMany({ where: { id: { in: tenantIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.productoSubcategoriaComercial.deleteMany({
+      where: { id: subcategoriaId },
+    });
+    await prisma.productoCategoriaComercial.deleteMany({
+      where: { id: categoriaId },
+    });
     await prisma.$disconnect();
   });
   const peticion = (
@@ -316,12 +451,13 @@ describe('Clientes, presupuestos y órdenes: acceso HTTP entre empresas', () => 
       }
     },
   );
-  it('operario consulta su OT, pero no clientes ni presupuestos', async () => {
+  it('operario no puede consultar la ficha comercial, su listado, clientes ni presupuestos', async () => {
     await peticion(
       'get',
       `/ordenes-trabajo/${ordenesIds[0]}`,
       'operario',
-    ).expect(200);
+    ).expect(403);
+    await peticion('get', '/ordenes-trabajo', 'operario').expect(403);
     await peticion('get', `/clientes/${clientesIds[0]}`, 'operario').expect(
       403,
     );
@@ -331,6 +467,97 @@ describe('Clientes, presupuestos y órdenes: acceso HTTP entre empresas', () => 
       'operario',
     ).expect(403);
   });
+  it.each(['operario-granular', 'estaciones', 'planificador'])(
+    '%s no obtiene ventas por URL, aunque sí consulta el trabajo operativo',
+    async (actor) => {
+      await peticion('get', '/ordenes-trabajo', actor).expect(403);
+      await peticion(
+        'get',
+        `/ordenes-trabajo/${ordenesOperativasIds[0]}`,
+        actor,
+      ).expect(403);
+      const { body } = await peticion(
+        'get',
+        `/ordenes-trabajo/tablero/items/${trabajosIds[0]}/detalle`,
+        actor,
+      ).expect(200);
+      expect(body).toEqual({
+        notaProduccion: 'Imprimir a dos caras',
+        materiales: [
+          { nombre: 'Papel ficticio', cantidad: 2, unidad: 'hojas' },
+        ],
+        eventos: [
+          {
+            fecha: expect.any(String),
+            tipo: 'paso',
+            descripcion: 'Impresión iniciada',
+            usuarioNombre: 'Operador ficticio',
+          },
+        ],
+      });
+    },
+  );
+  it('la proyección operativa tampoco incluye información comercial para administradores', async () => {
+    const r = await peticion(
+      'get',
+      `/ordenes-trabajo/tablero/items/${trabajosIds[0]}/detalle`,
+    ).expect(200);
+    for (const oculto of [
+      'precio',
+      'costo',
+      'total',
+      'snapshot',
+      'datosJson',
+      'Descuento',
+      'NO-EXPONER',
+    ]) {
+      expect(r.text).not.toContain(oculto);
+    }
+  });
+  it('el detalle operativo requiere sesión, vista y pertenencia a la empresa', async () => {
+    const ruta = `/ordenes-trabajo/tablero/items/${trabajosIds[0]}/detalle`;
+    await request(app.getHttpServer()).get(ruta).expect(401);
+    await peticion('get', ruta, 'sin-permisos').expect(403);
+    await peticion('get', ruta, 'comercial').expect(403);
+    await peticion('get', ruta, 'otro-admin').expect(404);
+    await peticion(
+      'get',
+      `/ordenes-trabajo/tablero/items/${trabajosIds[1]}/detalle`,
+      'operario',
+    )
+      .set('x-tenant-id', tenantIds[1])
+      .expect(404);
+  });
+  it('no abre por el detalle operativo trabajos fuera del tablero', async () => {
+    await prisma.ordenTrabajo.update({
+      where: { id: ordenesOperativasIds[0] },
+      data: { estado: 'borrador' },
+    });
+    try {
+      await peticion(
+        'get',
+        `/ordenes-trabajo/tablero/items/${trabajosIds[0]}/detalle`,
+        'operario',
+      ).expect(404);
+    } finally {
+      await prisma.ordenTrabajo.update({
+        where: { id: ordenesOperativasIds[0] },
+        data: { estado: 'produccion' },
+      });
+    }
+  });
+  it.each(['comercial', 'facturacion'])(
+    '%s conserva sus consultas comerciales',
+    async (actor) => {
+      await peticion('get', '/ordenes-trabajo', actor).expect(200);
+      const r = await peticion(
+        'get',
+        `/ordenes-trabajo/${ordenesIds[0]}`,
+        actor,
+      ).expect(200);
+      expect(r.body.total).toBe(10);
+    },
+  );
   it('leer clientes no permite crear, editar, desactivar ni borrar', async () => {
     const antes = await prisma.cliente.findUniqueOrThrow({
       where: { id: clientesIds[0] },

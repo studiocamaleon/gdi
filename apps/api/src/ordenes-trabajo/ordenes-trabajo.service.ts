@@ -1,3 +1,7 @@
+import {
+  materialesYNotaOperativos,
+  type DetalleOperativoItem,
+} from './detalle-operativo';
 import { DescuentoOrdenDto } from './dto/descuento-orden.dto';
 import {
   netoListaPersistido,
@@ -7051,6 +7055,55 @@ export class OrdenesTrabajoService {
     });
     if (!existe) throw new NotFoundException('No se encontró el trabajo.');
     return this.tableroItemActualizado(auth, itemId);
+  }
+
+  /** Proyección independiente de findOne: ni importes, ni snapshots, ni tokens. */
+  async detalleItemTablero(
+    auth: CurrentAuth,
+    itemId: string,
+  ): Promise<DetalleOperativoItem> {
+    const item = await this.prisma.ordenTrabajoItem.findFirst({
+      where: {
+        id: itemId,
+        tenantId: auth.tenantId,
+        contieneLotesEntrega: false,
+        orden: {
+          produccionControlada: true,
+          estado: { in: ['pendiente', 'produccion', 'finalizada', 'entregada'] },
+        },
+      },
+      select: {
+        jobContextSnapshotJson: true,
+        trazabilidadSnapshotJson: true,
+        cotizacionItem: { select: { jobContextJson: true, trazabilidadJson: true } },
+        orden: {
+          select: {
+            eventos: {
+              where: {
+                tenantId: auth.tenantId,
+                tipo: { in: ['paso', 'estado', 'emision'] },
+              },
+              select: { fecha: true, tipo: true, descripcion: true, usuarioNombre: true },
+              orderBy: { fecha: 'desc' },
+              take: 200,
+            },
+          },
+        },
+      },
+    });
+    if (!item) throw new NotFoundException('No se encontró el trabajo.');
+    return {
+      ...materialesYNotaOperativos(
+        item.jobContextSnapshotJson ?? item.cotizacionItem?.jobContextJson,
+        item.trazabilidadSnapshotJson ?? item.cotizacionItem?.trazabilidadJson,
+      ),
+      eventos: item.orden.eventos.map((evento) => ({
+        fecha: evento.fecha.toISOString(),
+        tipo: evento.tipo,
+        descripcion: evento.descripcion,
+        usuarioNombre: evento.usuarioNombre,
+      })),
+    };
   }
 
   /**
