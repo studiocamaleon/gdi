@@ -8,9 +8,8 @@
  * primero que declara el modelador en vez de estar cableado.
  *
  * El nivel es un DELTA sobre la base del paso: sólo pisa lo que declara. En v1
- * puede pisar el reloj del trabajo (ritmo o tiempo fijo), la dotación y los
- * minutos de los bloques de tiempo extra (por id). No toca materiales, máquina
- * ni el centro del paso — eso se puede abrir después; al revés no se vuelve.
+ * puede elegir el perfil de la máquina activa, el reloj del trabajo manual,
+ * la dotación y los bloques extra. No cambia la máquina, materiales ni centro.
  *
  * Ver docs/cargos-por-paso-analisis-y-plan.md §8.
  */
@@ -30,6 +29,8 @@ export function nivelPasoKey(configPasoId: string): string {
 export const NIVEL_PERSONALIZADO = '__personalizado__';
 
 export interface NivelPasoOverrides {
+  /** Perfil por máquina candidata. Ausente = conserva el perfil del paso. */
+  perfilesPorMaquina?: Record<string, string>;
   /** Ritmo propio del paso (unidades/hora) para este nivel. */
   productividadHora?: number;
   /** Reloj fijo del trabajo, en minutos. */
@@ -67,6 +68,14 @@ function numeroNoNegativo(value: unknown): number | undefined {
 function leerOverrides(raw: unknown): NivelPasoOverrides {
   const bruto = asRecord(raw);
   const overrides: NivelPasoOverrides = {};
+  const perfiles = Object.entries(asRecord(bruto.perfilesPorMaquina)).filter(
+    ([maquinaId, perfilId]) =>
+      maquinaId.trim() && typeof perfilId === 'string' && perfilId.trim(),
+  );
+  if (perfiles.length)
+    overrides.perfilesPorMaquina = Object.fromEntries(
+      perfiles.map(([id, perfil]) => [id.trim(), (perfil as string).trim()]),
+    );
   const productividad = numeroNoNegativo(bruto.productividadHora);
   if (productividad != null && productividad > 0) {
     overrides.productividadHora = productividad;
@@ -147,8 +156,23 @@ export function resolverNivelPaso(
     );
     if (match) return match;
   }
+  // Una cotización anterior a la unificación puede traer sólo el perfil.
+  // Sólo los niveles convertidos desde complejidad admiten esa equivalencia.
+  const perfilAnterior = jobContext?.[`perfilSeleccionado_${configPasoId}`];
+  const migrado =
+    typeof perfilAnterior === 'string' && !elegido
+      ? config.opciones.find(
+          (opcion) =>
+            opcion.codigo === `perfil_${perfilAnterior}` &&
+            Object.values(opcion.overrides.perfilesPorMaquina ?? {}).includes(
+              perfilAnterior,
+            ),
+        )
+      : null;
   return (
-    config.opciones.find((opcion) => opcion.esDefault) ?? config.opciones[0]
+    migrado ??
+    config.opciones.find((opcion) => opcion.esDefault) ??
+    config.opciones[0]
   );
 }
 
@@ -202,4 +226,22 @@ export function aplicarNivelAlPaso<
       ? { tiempoFijoOverrideMin: overrides.tiempoFijoMin }
       : {}),
   };
+}
+
+/** Se resuelve después de elegir la máquina; sus perfiles ya están acotados al tenant. */
+export function perfilIdDelNivel(
+  paso: {
+    paramsPasoJson: unknown;
+    configPasoId: string;
+    maquinaM1Id?: string | null;
+    maquina?: { id?: string } | null;
+  },
+  jobContext: Record<string, unknown> | null | undefined,
+): string | null {
+  const maquinaId = paso.maquina?.id ?? paso.maquinaM1Id;
+  if (!maquinaId) return null;
+  return (
+    resolverNivelPaso(paso.paramsPasoJson, paso.configPasoId, jobContext)
+      ?.overrides.perfilesPorMaquina?.[maquinaId] ?? null
+  );
 }

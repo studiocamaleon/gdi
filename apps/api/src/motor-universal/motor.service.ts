@@ -60,7 +60,7 @@ import type {
 } from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
 import { centrosDeTiemposExtra, leerTiemposExtra } from './tiempo-extra';
-import { aplicarNivelAlPaso, resolverNivelPaso } from './niveles-paso';
+import { aplicarNivelAlPaso, resolverNivelPaso, perfilIdDelNivel } from './niveles-paso';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
 import { resolverCostoTercerizado } from './tercerizado-costo';
 import { AplicarPrecioService } from '../productos-servicios/precio/aplicar-precio.service';
@@ -3865,9 +3865,41 @@ export class MotorUniversalService {
         }
       }
 
-      const perfilRaw =
-        ctx[`perfilSeleccionado_${paso.configPasoId}`] ??
-        ctx[`perfilSeleccionado_${paso.rutaPasoId}`];
+      const pasoActivo = this.resolverMaquinaM2(paso, jobContext);
+      const perfilNivelId = perfilIdDelNivel(pasoActivo, ctx);
+      if (perfilNivelId && this.evaluarActivacion(paso, jobContext).activado) {
+        const valido =
+          !usaProcesamientoCorte(pasoActivo) &&
+          this.filtrarPerfilesCompatibles(
+            pasoActivo.familiaCodigo,
+            pasoActivo.perfilesDisponibles,
+          ).some(
+            (p) =>
+              p.id === perfilNivelId &&
+              p.activo !== false &&
+              !(
+                p.detalleJson &&
+                typeof p.detalleJson === 'object' &&
+                'procesamientoCorteVersion' in p.detalleJson
+              ),
+          );
+        if (!valido)
+          errores.push(
+            this.errorSeleccionExplicita(
+              paso,
+              'perfil_nivel_invalido',
+              'El perfil del nivel no está disponible para esta máquina y modalidad. Revisá Niveles del paso.',
+              {
+                perfilId: perfilNivelId,
+                maquinaId: pasoActivo.maquina?.id ?? null,
+              },
+            ),
+          );
+      }
+      const perfilRaw = perfilNivelId
+        ? null
+        : (ctx[`perfilSeleccionado_${paso.configPasoId}`] ??
+          ctx[`perfilSeleccionado_${paso.rutaPasoId}`]);
       const perfilId =
         typeof perfilRaw === 'string' && perfilRaw.trim()
           ? perfilRaw.trim()
@@ -10198,6 +10230,8 @@ export class MotorUniversalService {
    * F.2.4 / G-M8 — Selección automática de perfil dentro de la máquina M-1.
    *
    * Estrategia (en orden):
+   *  0. Perfil del nivel para la máquina activa; luego selección comercial
+   *     explícita anterior. Un perfil del nivel inválido detiene la cotización.
    *  1. **Regla declarativa** (G-M8): cada perfil puede declarar
    *     `detalleJson.reglaSeleccion: JsonLogic`. El motor evalúa la regla
    *     contra el JobContext y elige el PRIMER perfil activo cuya regla
@@ -10224,6 +10258,28 @@ export class MotorUniversalService {
       paso.familiaCodigo,
       paso.perfilesDisponibles?.filter(p => !(p.detalleJson && typeof p.detalleJson === 'object' && 'procesamientoCorteVersion' in p.detalleJson)),
     );
+    const perfilNivelId = perfilIdDelNivel(
+      paso,
+      jobContext as Record<string, unknown>,
+    );
+    if (perfilNivelId) {
+      const elegido = perfilesDisponibles.find(
+        (p) => p.id === perfilNivelId && p.activo !== false,
+      );
+      if (!elegido)
+        throw new MotorCotizacionError(
+          'perfil_nivel_invalido',
+          'El perfil del nivel elegido no está activo o no pertenece a la máquina de este paso.',
+          'Revisá el perfil asignado en Niveles antes de volver a cotizar.',
+          {
+            configPasoId: paso.configPasoId,
+            maquinaId: paso.maquina?.id ?? paso.maquinaM1Id,
+            perfilId: perfilNivelId,
+          },
+        );
+      // Incluso si es el default: un nivel explícito evita la autoselección posterior.
+      return { ...elegido, productivityUnit: elegido.productivityUnit ?? null };
+    }
     if (perfilesDisponibles.length <= 1) {
       return null; // no hay alternativas, mantener default
     }

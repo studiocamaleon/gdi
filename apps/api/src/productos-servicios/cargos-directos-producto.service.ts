@@ -1,3 +1,4 @@
+import { validarPerfilesNiveles } from './validar-perfiles-niveles';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -664,6 +665,14 @@ export class CargosDirectosProductoService {
       : (dto.centroCostoId ?? base.centroCostoId ?? null);
 
     this.validarReglaPasoExtra(modoActivacion, condicionActivacionJson);
+    await validarPerfilesNiveles(this.prisma, tenantId, dto.familiaCodigo, {
+      maquinaM1Id,
+      maquinasCandidatas: base.maquinasCandidatas,
+      paramsPasoJson:
+        dto.paramsPasoJson !== undefined
+          ? dto.paramsPasoJson
+          : base.paramsPasoJson,
+    });
 
     // Validar las FK efectivas (incluidas las heredadas) para no materializar
     // referencias inactivas o pertenecientes a otro tenant.
@@ -815,6 +824,19 @@ export class CargosDirectosProductoService {
       dto.paramsPasoJson !== undefined
         ? dto.paramsPasoJson
         : existente.paramsPasoJson;
+    await validarPerfilesNiveles(
+      this.prisma,
+      tenantId,
+      existente.familiaCodigo,
+      {
+        maquinaM1Id: maquinaEfectiva,
+        maquinasCandidatas:
+          dto.configMaquinasCandidatasJson !== undefined
+            ? dto.configMaquinasCandidatasJson
+            : existente.configMaquinasCandidatasJson,
+        paramsPasoJson: paramsPasoJsonEfectivo,
+      },
+    );
     if (
       dto.configCargosDirectosJson !== undefined ||
       dto.paramsPasoJson !== undefined
