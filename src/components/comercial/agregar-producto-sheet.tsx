@@ -6974,7 +6974,7 @@ function ApConfigStep({
 
             if (campo.tipo === "enum") {
               return (
-                <div className={plS.prow} key={rowKey}>
+                <div className={`${plS.prow} ${plS.choiceRow}`} key={rowKey}>
                   <span className={plS.plabel}>{campo.etiqueta}</span>
                   {renderSegmentedControl(
                     campo.etiqueta,
