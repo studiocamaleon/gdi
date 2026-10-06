@@ -50,29 +50,61 @@ const CONFIG_CARGO = new Set([
 ]);
 const FINANCIEROS =
   /^(cost|price|pricing|amount|fee|unitPrice|basePrice|margin|coste|precio|tarifa|comision|rentabilidad|ganancia|utilidad|markup|margenPct|margenBruto|margenNeto|margenAplicado|margenMin|aplicaMargen|importe|monto|valorHora|porcentajeMargen)/i;
+// `margin` también encuentra `margins`: sólo esta ruta técnica contiene
+// bordes físicos, no ganancias. No abrir el JSON completo como excepción.
+const LADOS_MARGEN_FISICO = new Set(
+  'leftMm rightMm topMm bottomMm startMm endMm izq izquierdo der derecho sup inf inicio fin'.split(
+    ' ',
+  ),
+);
 function objeto(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v)
     ? (v as Record<string, unknown>)
     : {};
 }
 /** JSON técnico/comercial: conserva medidas físicas, nunca valores económicos. */
-function jsonComercial(v: unknown): unknown {
-  if (Array.isArray(v)) return v.map(jsonComercial);
+function jsonComercial(v: unknown, clavePadre?: string): unknown {
+  if (Array.isArray(v)) return v.map((x) => jsonComercial(x, clavePadre));
   if (v === null || typeof v !== 'object') return v;
   return Object.fromEntries(
     Object.entries(objeto(v))
       .filter(
-        ([k]) => !FINANCIEROS.test(k) && k !== 'margen' && k !== 'proveedorId',
+        ([k]) =>
+          (clavePadre === 'nestingConfig' && k === 'margins') ||
+          (!FINANCIEROS.test(k) && k !== 'margen' && k !== 'proveedorId'),
       )
-      .map(([k, x]) => [k, jsonComercial(x)]),
+      .map(([k, x]) => [
+        k,
+        clavePadre === 'nestingConfig' && k === 'margins'
+          ? Object.fromEntries(
+              Object.entries(objeto(x)).filter(
+                ([lado, valor]) =>
+                  LADOS_MARGEN_FISICO.has(lado) &&
+                  (typeof valor === 'number' ||
+                    (typeof valor === 'string' && valor.trim() !== '')) &&
+                  Number.isFinite(Number(valor)),
+              ),
+            )
+          : jsonComercial(x, k),
+      ]),
   );
 }
 /** Sólo el contrato de configuración comercial de los componentes publicados. */
 export function configuracionComponenteParaCotizacion(v: unknown): unknown {
-  const campos = new Set(['version', 'bindings', 'piezas', 'piezasEditables', 'repeticion']);
-  return v == null ? null : jsonComercial(Object.fromEntries(
-    Object.entries(objeto(v)).filter(([k]) => campos.has(k)),
-  ));
+  const campos = new Set([
+    'version',
+    'bindings',
+    'piezas',
+    'piezasEditables',
+    'repeticion',
+  ]);
+  return v == null
+    ? null
+    : jsonComercial(
+        Object.fromEntries(
+          Object.entries(objeto(v)).filter(([k]) => campos.has(k)),
+        ),
+      );
 }
 export function productoParaCotizacion(valor: unknown): unknown {
   if (Array.isArray(valor)) return valor.map(productoParaCotizacion);
