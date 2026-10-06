@@ -327,6 +327,7 @@ import {
 import { OrdenCuponField } from "./orden-cupon-field";
 import { ResumenBar, OrdenSaveActions } from "./orden-resumen-financiero";
 import { OrdenFinancialActions } from "./orden-financial-actions";
+import { DescuentosOrdenCreada } from "./descuentos-orden-creada";
 import { OrdenDatosSections } from "./orden-datos-sections";
 import { ClienteLista } from "./cliente-selector-orden";
 import { permiteAtajoDePagina } from "@/lib/atajos-pagina";
@@ -7492,6 +7493,25 @@ function PropuestaFichaContenido({
                   editable={puedeModificarProductos}
                   onAplicar={aplicarTipoCambio}
                 />
+                {orden && permisoOrdenes && conOrdenes &&
+                  orden.estado !== "cancelada" && (
+                    <DescuentosOrdenCreada
+                      orden={orden}
+                      items={items}
+                      conCupones={conCupones}
+                      sinComprobante={sinComprobante}
+                      togglingFiscal={togglingFiscal}
+                      onToggleTratamientoFiscal={
+                        puedeToggleFiscal ? toggleTratamientoFiscal : undefined
+                      }
+                      bloqueado={editandoOrden || guardandoEdicion ||
+                        cambiosSinGuardar > 0 || togglingFiscal || cancelando}
+                      onActualizada={(actualizada) => {
+                        setOrden(actualizada);
+                        setItems(actualizada.productos.map(rehidratarOrdenItem));
+                      }}
+                    />
+                  )}
                 <OrdenFinancialActions
                   empty={items.length === 0}
                   emitiendo={emitiendo || emitiendoPresupuesto}
@@ -7515,7 +7535,8 @@ function PropuestaFichaContenido({
                   cuponFieldId="orden-cupon"
                   operacionPendiente={cuponValidando || descuentoAplicando}
                   onToggleTratamientoFiscal={
-                    puedeToggleFiscal ? toggleTratamientoFiscal : undefined
+                    puedeToggleFiscal && !(orden && permisoOrdenes && conOrdenes)
+                      ? toggleTratamientoFiscal : undefined
                   }
                   togglingFiscal={togglingFiscal}
                 />

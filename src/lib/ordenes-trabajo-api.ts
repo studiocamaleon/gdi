@@ -392,3 +392,18 @@ export async function cambiarEstadoOrdenTrabajo(
     body: JSON.stringify(payload),
   });
 }
+
+export type DescuentoOrdenPayload = {
+  expectedVersion: string;
+  modo: "manual" | "cupon" | "quitar";
+  tipo?: "PORCENTAJE" | "MONTO";
+  valor?: number;
+  codigo?: string;
+};
+
+export function aplicarDescuentoOrden(id: string, payload: DescuentoOrdenPayload) {
+  return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}/descuento`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
