@@ -69,7 +69,6 @@ const CENSO: Record<string, string[]> = {
   maquina: [
     "maquina.maquina",
     "maquina.perfil",
-    "maquina.complejidad",
     "maquina.candidatas",
     "maquina.cobertura",
     "maquina.modo_color",

@@ -55,7 +55,9 @@ describe("leerNivelesPaso — fidelidad para el editor", () => {
 
   it("null con menos de dos opciones: un solo nivel no es una decisión", () => {
     expect(
-      leerNivelesPaso({ niveles: { opciones: [{ codigo: "a", nombre: "A" }] } }),
+      leerNivelesPaso({
+        niveles: { opciones: [{ codigo: "a", nombre: "A" }] },
+      }),
     ).toBeNull();
   });
 });
@@ -164,7 +166,10 @@ describe("patchTiemposExtra — borrar un bloque limpia los niveles", () => {
           codigo: "a",
           nombre: "A",
           esDefault: true,
-          overrides: { dotacion: 2, tiemposExtraMin: { prep: 10, traslado: 0 } },
+          overrides: {
+            dotacion: 2,
+            tiemposExtraMin: { prep: 10, traslado: 0 },
+          },
         },
         {
           codigo: "b",
@@ -182,7 +187,10 @@ describe("patchTiemposExtra — borrar un bloque limpia los niveles", () => {
       niveles: { opciones: Array<Record<string, never>> };
     };
     const opciones = patch.niveles.opciones as unknown as Array<{
-      overrides: { tiemposExtraMin?: Record<string, number>; dotacion?: number };
+      overrides: {
+        tiemposExtraMin?: Record<string, number>;
+        dotacion?: number;
+      };
     }>;
     expect(opciones[0].overrides.tiemposExtraMin).toEqual({ prep: 10 });
     // Sin bloques que pisar, la clave se va entera; el resto del nivel queda.
@@ -198,5 +206,31 @@ describe("patchTiemposExtra — borrar un bloque limpia los niveles", () => {
   it("sin niveles declarados no inventa la clave", () => {
     const patch = patchTiemposExtra([], { tiemposExtra: [] });
     expect("niveles" in patch).toBe(false);
+  });
+});
+
+describe("perfiles por nivel", () => {
+  it("conserva perfiles al editar otro campo del nivel", () => {
+    const niveles = leerNivelesPaso({
+      niveles: {
+        opciones: [
+          {
+            codigo: "a",
+            overrides: {
+              perfilesPorMaquina: { plotter: "simple" },
+              tiempoFijoMin: 5,
+            },
+          },
+          {
+            codigo: "b",
+            overrides: { perfilesPorMaquina: { plotter: "complejo" } },
+          },
+        ],
+      },
+    })!;
+    expect(
+      leerNivelesPaso({ niveles: { ...niveles, etiqueta: "Elegí corte" } })
+        ?.opciones[0].overrides,
+    ).toEqual({ tiempoFijoMin: 5, perfilesPorMaquina: { plotter: "simple" } });
   });
 });

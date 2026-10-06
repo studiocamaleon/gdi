@@ -10,6 +10,8 @@
  */
 
 export interface NivelPasoOverrides {
+  /** Perfil por máquina candidata. Ausente = conserva el perfil del paso. */
+  perfilesPorMaquina?: Record<string, string>;
   productividadHora?: number;
   tiempoFijoMin?: number;
   dotacion?: number;
@@ -59,6 +61,14 @@ function numeroNoNegativo(value: unknown): number | undefined {
 function leerOverrides(raw: unknown): NivelPasoOverrides {
   const bruto = asRecord(raw);
   const overrides: NivelPasoOverrides = {};
+  const perfiles = Object.entries(asRecord(bruto.perfilesPorMaquina)).filter(
+    ([maquinaId, perfilId]) =>
+      maquinaId.trim() && typeof perfilId === "string" && perfilId.trim(),
+  );
+  if (perfiles.length)
+    overrides.perfilesPorMaquina = Object.fromEntries(
+      perfiles.map(([id, perfil]) => [id.trim(), (perfil as string).trim()]),
+    );
   const productividad = numeroNoNegativo(bruto.productividadHora);
   if (productividad != null && productividad > 0) {
     overrides.productividadHora = productividad;
@@ -127,12 +137,23 @@ export function nombreNivel(nivel: NivelPasoOpcion): string {
 export function nivelEfectivo(
   config: NivelesPasoConfig,
   elegido: string | null | undefined,
+  perfilAnterior?: string | null,
 ): NivelPasoOpcion {
   const match = elegido
     ? config.opciones.find((opcion) => opcion.codigo === elegido)
-    : null;
+    : perfilAnterior
+      ? config.opciones.find(
+          (opcion) =>
+            opcion.codigo === `perfil_${perfilAnterior}` &&
+            Object.values(opcion.overrides.perfilesPorMaquina ?? {}).includes(
+              perfilAnterior,
+            ),
+        )
+      : null;
   return (
-    match ?? config.opciones.find((opcion) => opcion.esDefault) ?? config.opciones[0]
+    match ??
+    config.opciones.find((opcion) => opcion.esDefault) ??
+    config.opciones[0]
   );
 }
 
@@ -193,4 +214,47 @@ export function describirNivel(
     );
   }
   return partes.length > 0 ? partes.join(" · ") : null;
+}
+
+export interface MaquinaParaNiveles {
+  id: string;
+  nombre: string;
+  perfilDefaultId?: string | null;
+  perfiles: Array<{
+    id: string;
+    nombre: string;
+    productivityValue?: number | string | null;
+    productivityUnit?: string | null;
+  }>;
+}
+
+/** Adaptación en memoria de la complejidad antigua. Se persiste al editar,
+ * sin cambiar rutas ni órdenes existentes durante la lectura. */
+export function nivelesDesdePerfiles(
+  maquina: MaquinaParaNiveles,
+  expuestos?: unknown,
+  etiqueta = "¿Qué nivel?",
+): NivelesPasoConfig | null {
+  const perfiles = maquina.perfiles.filter(
+    (p) =>
+      !Array.isArray(expuestos) ||
+      expuestos.includes(p.id) ||
+      p.id === maquina.perfilDefaultId,
+  );
+  if (perfiles.length < 2) return null;
+  const ordenados = [...perfiles].sort(
+    (a, b) =>
+      Number(b.productivityValue ?? 0) - Number(a.productivityValue ?? 0),
+  );
+  return {
+    etiqueta,
+    opciones: ordenados.map((p, index) => ({
+      codigo: `perfil_${p.id}`,
+      nombre: p.nombre,
+      esDefault: maquina.perfilDefaultId
+        ? p.id === maquina.perfilDefaultId
+        : index === 0,
+      overrides: { perfilesPorMaquina: { [maquina.id]: p.id } },
+    })),
+  };
 }

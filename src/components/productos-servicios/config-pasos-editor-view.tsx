@@ -146,6 +146,7 @@ import { PasoExtraEditor } from "@/components/productos-servicios/paso-extra-edi
 import { ParamsFamiliaFields } from "@/components/productos-servicios/params-familia-fields";
 import { EfectosPasoFields } from "@/components/productos-servicios/efectos-paso-fields";
 import { TiemposExtraPasoFields } from "@/components/productos-servicios/tiempos-extra-paso-fields";
+import { nivelesDesdePerfiles } from "@/lib/niveles-paso";
 import { NivelesPasoFields } from "@/components/productos-servicios/niveles-paso-fields";
 import { CostosDirectosPasoPanel } from "@/components/productos-servicios/costos-directos-paso-panel";
 import { leerNivelesPaso } from "@/lib/niveles-paso";
@@ -14061,10 +14062,56 @@ function SeccionesEsquemaPaso({
             );
           }
           if (id === "niveles-paso") {
-            // Un paso, varias variantes que elige el comercial.
+            const candidatas = cfg.maquinasCandidatas?.length
+              ? cfg.maquinasCandidatas.map((c) => ({
+                  id: c.maquinaId,
+                  perfilDefaultId: c.perfilDefaultId,
+                }))
+              : cfg.maquinaM1Id
+                ? [{ id: cfg.maquinaM1Id, perfilDefaultId: cfg.perfilM1Id }]
+                : [];
+            const maquinas = candidatas.flatMap((c) => {
+              const m = lookups.maquinas.find((m) => m.id === c.id);
+              return m
+                ? [
+                    {
+                      id: m.id,
+                      nombre: m.nombre,
+                      perfilDefaultId: c.perfilDefaultId,
+                      perfiles: m.perfilesOperativos.filter(
+                        (p) =>
+                          perfilCompatibleConFamilia(familia, p) &&
+                          !asRecord(p.detalleJson).procesamientoCorteVersion,
+                      ),
+                    },
+                  ]
+                : [];
+            });
+            const params = asRecord(cfg.paramsPasoJson);
+            const esPlotter =
+              familia?.codigo === "plotter_corte" ||
+              maquinaSel?.plantilla.toUpperCase() === "PLOTTER_DE_CORTE";
+            const anteriores =
+              esPlotter && maquinas.length === 1 && params.cotizarOperacionesVectoriales !== true
+                ? nivelesDesdePerfiles(
+                    maquinas[0],
+                    params.perfilesExpuestosComercial,
+                    "¿Qué nivel de corte?",
+                  )
+                : null;
             return (
               <NivelesPasoFields
-                params={asRecord(cfg.paramsPasoJson)}
+                params={params}
+                maquinas={maquinas}
+                tiempoDeMaquina={
+                  cfg.modoTiempo === "T-3" ||
+                  (familia?.modosTiempoSoportados?.length === 1 &&
+                    familia.modosTiempoSoportados[0] === "T-3")
+                }
+                nivelesAnteriores={anteriores}
+                perfilesPorOperacion={
+                  params.cotizarOperacionesVectoriales === true
+                }
                 dotacionDelPaso={cfg.dotacionOperarios ?? 1}
                 onChange={(patch) => onParams(pasoActual.id, patch)}
               />

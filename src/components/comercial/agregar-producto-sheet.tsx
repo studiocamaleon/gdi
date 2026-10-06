@@ -1727,34 +1727,6 @@ type ComplejidadCorteComercial = {
   opciones: Array<{ perfilId: string; nombre: string }>;
 };
 
-/** Letra grande = corte fácil (formas grandes), letra chica = corte complejo
- *  (detalle intrincado). Mismo rol visual que los cuadraditos del modo de
- *  color: se entiende sin leer. */
-function complejidadCorteGlyph(rank: number, total: number) {
-  const sizes = total <= 2 ? [20, 11] : [20, 15, 10];
-  const size = sizes[Math.min(rank, sizes.length - 1)] ?? 10;
-  const y = 13 + size * 0.36;
-  return (
-    <svg
-      className="ap-sheet-ico"
-      viewBox="0 0 26 26"
-      fill="none"
-      aria-hidden="true"
-    >
-      <text
-        x="13"
-        y={y}
-        textAnchor="middle"
-        fontSize={size}
-        fontWeight={800}
-        fill="#14141a"
-      >
-        A
-      </text>
-    </svg>
-  );
-}
-
 function getComplejidadCorte(
   ruta: RutaAlternativaDetalle | null,
   motorConfig: Pick<MotorConfigState, "seleccionMaquina">,
@@ -1765,10 +1737,11 @@ function getComplejidadCorte(
       .filter(isExecutableConfigPaso)
       .filter(includeConfig)
       .map((config): ComplejidadCorteComercial | null => {
-        if (config.rutaPaso.familiaCodigo !== "plotter_corte") return null;
         const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+        if (leerNivelesPaso(params) || params.nivelesUnificados === true) return null;
         const candidata = getActiveCandidateForConfig(config, motorConfig);
         const maquina = candidata?.maquina ?? config.maquinaM1;
+        if (config.rutaPaso.familiaCodigo !== "plotter_corte" && maquina?.plantilla?.toUpperCase() !== "PLOTTER_DE_CORTE") return null;
         const perfiles = (maquina?.perfilesOperativos ?? []).filter(
           (perfil) =>
             perfil.activo !== false &&
@@ -2056,6 +2029,8 @@ function getModosColorComercial(
  * excluyente, como el modo de color. Ver docs/cargos-por-paso-analisis-y-plan.md §8.
  */
 type NivelComercial = {
+  /** Compatibilidad con cotizaciones anteriores a niveles unificados. */
+  perfilAnterior?: boolean;
   configPasoId: string;
   nombreVisible: string | null;
   familiaCodigo: string;
@@ -3906,6 +3881,7 @@ export function buildJobContext(
     const elegido = nivelEfectivo(
       item.config,
       config.seleccionNivel[item.configPasoId],
+      config.seleccionPerfil[item.configPasoId],
     );
     ctx[nivelPasoKey(item.configPasoId)] = elegido.codigo;
   }
@@ -7122,7 +7098,10 @@ function ApConfigStep({
       item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
     const elegido = nivelEfectivo(
       item.config,
-      motorConfig.seleccionNivel[item.configPasoId],
+      item.perfilAnterior
+        ? `perfil_${motorConfig.seleccionPerfil[item.configPasoId] || item.config.opciones.find((o) => o.esDefault)?.codigo.replace("perfil_", "") || ""}`
+        : motorConfig.seleccionNivel[item.configPasoId],
+      motorConfig.seleccionPerfil[item.configPasoId],
     );
     // El fallback vive acá y no en el lector: si el lector normalizara, el
     // editor no dejaría escribir un espacio (ver src/lib/niveles-paso.ts).
@@ -7139,13 +7118,20 @@ function ApConfigStep({
             : (describirNivel(opcion, item.base) ?? undefined),
       })),
       (codigo) =>
-        setMotorConfig((current) => ({
-          ...current,
-          seleccionNivel: {
-            ...current.seleccionNivel,
-            [item.configPasoId]: codigo,
-          },
-        })),
+        item.perfilAnterior
+          ? setPerfil(item.configPasoId, codigo.replace("perfil_", ""))
+          : setMotorConfig((current) => ({
+              ...current,
+              seleccionNivel: {
+                ...current.seleccionNivel,
+                [item.configPasoId]: codigo,
+              },
+              // El nivel unificado reemplaza la elección anterior de complejidad.
+              seleccionPerfil: {
+                ...current.seleccionPerfil,
+                [item.configPasoId]: "",
+              },
+            })),
     );
     if (opts?.sinTarjeta) {
       return (
@@ -7166,50 +7152,28 @@ function ApConfigStep({
       </div>
     );
   };
+  // Las configuraciones antiguas usan el mismo control, conservando su payload.
   const renderComplejidadField = (
     item: ComplejidadCorteComercial,
     opts?: { sinTarjeta?: boolean },
-  ) => {
-    const nombrePaso =
-      item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
-    const value =
-      motorConfig.seleccionPerfil[item.configPasoId] || item.defaultId || "";
-    const control = renderChoiceCards(
-      "Complejidad del corte",
-      value,
-      item.opciones.map((opcion, indice) => ({
-        value: opcion.perfilId,
-        label: opcion.nombre,
-        desc: opcion.perfilId === item.defaultId ? "por defecto" : undefined,
-        glyph: complejidadCorteGlyph(indice, item.opciones.length),
-      })),
-      // Elegir el default = sin override (el motor resuelve solo); cualquier
-      // otro nivel viaja como perfilSeleccionado_<paso>.
-      (next) =>
-        setPerfil(item.configPasoId, next === item.defaultId ? "" : next),
-      { columns: item.opciones.length <= 2 ? 2 : 3, layout: "row" },
+  ) =>
+    renderNivelField(
+      {
+        ...item,
+        perfilAnterior: true,
+        base: {},
+        config: {
+          etiqueta: "¿Qué nivel de corte?",
+          opciones: item.opciones.map((opcion) => ({
+            codigo: `perfil_${opcion.perfilId}`,
+            nombre: opcion.nombre,
+            esDefault: opcion.perfilId === item.defaultId,
+            overrides: {},
+          })),
+        },
+      },
+      opts,
     );
-    if (opts?.sinTarjeta) {
-      return (
-        <div key={`complejidad-${item.configPasoId}`}>
-          <span className={seC.sub} title={nombrePaso}>
-            Complejidad del corte
-          </span>
-          {control}
-        </div>
-      );
-    }
-    return (
-      <div className={seC.card} key={`complejidad-${item.configPasoId}`}>
-        <div className={seC.gh} title={nombrePaso}>
-          {complejidadesPrincipales.length === 1
-            ? "Complejidad del corte"
-            : `${nombrePaso} · complejidad`}
-        </div>
-        <div className={seC.body}>{control}</div>
-      </div>
-    );
-  };
   // El bloque de copias (tipo de copia + hojas por talonario) se muestra si el
   // producto es de subcategoría "talonarios" O si su ruta realmente usa
   // `tipoCopia` (algún talonario está en otra subcategoría, ej. papelería).
