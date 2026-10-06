@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import {
@@ -249,6 +250,17 @@ export class R2Driver implements StorageDriver {
       );
       if (!r.Body) return null;
       return Buffer.from(await r.Body.transformToByteArray());
+    } catch (error) {
+      if (esNoEncontrado(error)) return null;
+      throw error;
+    }
+  }
+
+  async abrirLectura(key: string): Promise<Readable | null> {
+    try {
+      const result = await this.cliente.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+      if (!result.Body) return null;
+      return result.Body as Readable;
     } catch (error) {
       if (esNoEncontrado(error)) return null;
       throw error;

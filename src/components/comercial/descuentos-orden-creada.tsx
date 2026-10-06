@@ -18,32 +18,40 @@ export function DescuentosOrdenCreada({
   items,
   conCupones,
   bloqueado,
+  editando = false,
   sinComprobante = false,
   togglingFiscal = false,
   onToggleTratamientoFiscal,
   onActualizada,
+  onPendienteChange,
 }: {
   orden: OrdenTrabajoDetalle;
   items: PropuestaItem[];
   conCupones: boolean;
   bloqueado: boolean;
+  editando?: boolean;
   sinComprobante?: boolean;
   togglingFiscal?: boolean;
   onToggleTratamientoFiscal?: () => void;
   onActualizada: (orden: OrdenTrabajoDetalle) => void;
+  onPendienteChange?: (pendiente: boolean) => void;
 }) {
   const [manual, setManual] = React.useState(false);
   const [cupon, setCupon] = React.useState(false);
   const [pendiente, setPendiente] = React.useState(false);
   const enCurso = React.useRef(false);
   const facturada = (orden.facturadoTotal ?? 0) > 0;
-  const impedido = bloqueado || facturada || orden.estado === "cancelada";
+  const impedido = !editando || bloqueado || facturada || orden.estado === "cancelada";
+  React.useEffect(() => {
+    if (impedido) { setManual(false); setCupon(false); }
+  }, [impedido]);
   async function aplicar(
     payload: Omit<DescuentoOrdenPayload, "expectedVersion">,
   ) {
     if (impedido || enCurso.current) return false;
     enCurso.current = true;
     setPendiente(true);
+    onPendienteChange?.(true);
     try {
       const actualizada = await aplicarDescuentoOrden(orden.id, {
         ...payload,
@@ -66,6 +74,7 @@ export function DescuentosOrdenCreada({
     } finally {
       enCurso.current = false;
       setPendiente(false);
+      onPendienteChange?.(false);
     }
   }
   return (
@@ -87,7 +96,7 @@ export function DescuentosOrdenCreada({
           su precio.
         </p>
       )}
-      {cupon && (
+      {cupon && !impedido && (
         <OrdenCuponField
           id="cupon-orden-creada"
           isDisabled={pendiente || impedido}
@@ -95,7 +104,7 @@ export function DescuentosOrdenCreada({
         />
       )}
       <DescuentoOrdenDialog
-        target={manual ? { scope: "orden", itemId: null } : null}
+        target={manual && !impedido ? { scope: "orden", itemId: null } : null}
         items={items}
         aplicando={pendiente}
         onClose={() => setManual(false)}

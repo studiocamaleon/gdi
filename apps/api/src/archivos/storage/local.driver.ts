@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import {
   Injectable,
   Logger,
@@ -189,6 +190,17 @@ export class LocalDriver implements StorageDriver {
       return null;
     } finally {
       await file?.close();
+    }
+  }
+
+  async abrirLectura(key: string): Promise<Readable | null> {
+    const ruta = this.rutaDe(key);
+    try {
+      const file = await open(ruta, 'r');
+      return file.createReadStream({ autoClose: true, highWaterMark: 64 * 1024 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
     }
   }
 

@@ -41,6 +41,7 @@ describe('Las claves locales sólo identifican objetos dentro del storage', () =
     'rechaza lectura, escritura y borrado fuera de la raíz: %s',
     async (key) => {
       expect(await driver.leer(key)).toBeNull();
+      await expect(driver.abrirLectura(key)).rejects.toThrow('fuera de rango');
       expect(await driver.leerCabecera(key, 8)).toBeNull();
       expect(await driver.cabecera(key)).toBeNull();
       await expect(driver.escribir(key, Buffer.from('cambio'))).rejects.toThrow(
@@ -85,6 +86,10 @@ describe('Las claves locales sólo identifican objetos dentro del storage', () =
       contentType: null,
     });
     expect(await driver.leer(key)).toEqual(contenido);
+    const stream = await driver.abrirLectura(key);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks)).toEqual(contenido);
     expect(await driver.leerCabecera(key, 4)).toEqual(Buffer.from('%PDF'));
     await expect(
       driver.escribir(key, Buffer.from('reemplazo'), { soloCrear: true }),

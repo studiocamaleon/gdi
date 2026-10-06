@@ -1,4 +1,5 @@
 "use client";
+import { DescargarArchivosButton } from "@/components/archivos/descargar-archivos-button";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { asignacionPermiteEjecutar } from "@/lib/acciones-produccion";
 import { filtrarTrabajos, metricasTrabajos, opcionesEstacionesTablero, type FiltrosTrabajo } from "@/lib/tablero-lista";
@@ -656,6 +657,9 @@ function DetailArchivos({ itemId }: { itemId: string }) {
   }
   return (
     <div className="arch-lista" style={{ marginTop: 0 }}>
+      <div className="flex justify-end pb-3">
+        <DescargarArchivosButton tipo="item" id={itemId} />
+      </div>
       {archivos.map((a) => (
         <a
           key={a.id}

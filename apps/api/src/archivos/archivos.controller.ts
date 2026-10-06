@@ -1,8 +1,10 @@
+import { pipeline } from 'node:stream/promises';
 import {
   Body,
   Controller,
   Delete,
   Get,
+  Logger,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -34,6 +36,7 @@ import { AccesoArchivo, ArchivosAccesoGuard } from './archivos-acceso.guard';
 @UseGuards(ArchivosAccesoGuard)
 @Controller('archivos')
 export class ArchivosController {
+  private readonly logger = new Logger(ArchivosController.name);
   constructor(private readonly service: ArchivosService) {}
 
   @Get()
@@ -51,6 +54,32 @@ export class ArchivosController {
   @AccesoArchivo({ origen: 'orden', accion: 'leer' })
   deOrden(@Param('ordenId', ParseUUIDPipe) ordenId: string) {
     return this.service.deOrden(ordenId);
+  }
+
+  @Get('de-orden/:ordenId/zip')
+  @AccesoArchivo({ origen: 'orden', accion: 'leer' })
+  async zipOrden(@CurrentSession() auth: CurrentAuth, @Param('ordenId', ParseUUIDPipe) id: string, @Query('comprobar') comprobar: string | undefined, @Res() res: Response) {
+    return this.enviarZip(auth.tenantId, { ordenId: id }, comprobar, res);
+  }
+
+  @Get('de-item/:itemId/zip')
+  @AccesoArchivo({ origen: 'orden', accion: 'leer' })
+  async zipItem(@CurrentSession() auth: CurrentAuth, @Param('itemId', ParseUUIDPipe) id: string, @Query('comprobar') comprobar: string | undefined, @Res() res: Response) {
+    return this.enviarZip(auth.tenantId, { itemId: id }, comprobar, res);
+  }
+
+  private async enviarZip(tenantId: string, destino: { ordenId: string } | { itemId: string }, comprobar: string | undefined, res: Response) {
+    const paquete = await this.service.prepararDescargaZip(tenantId, destino);
+    res.setHeader('Cache-Control', 'private, no-store');
+    if (comprobar === '1') { res.json({ cantidad: paquete.cantidad }); return; }
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `attachment; filename="archivos.zip"; filename*=UTF-8''${encodeURIComponent(paquete.nombre)}`);
+    try { await pipeline(paquete.stream(), res); }
+    catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) this.logger.error('No se pudo completar la descarga ZIP de archivos.');
+      if (!res.destroyed) res.destroy(error instanceof Error ? error : undefined);
+    }
   }
 
   /** Cuánto espacio ocupa el tenant y en qué. */

@@ -1469,6 +1469,7 @@ export class OrdenesTrabajoService {
       where: { id, tenantId: auth.tenantId },
       include: {
         ...LIST_INCLUDE,
+        cliente: { select: { nombre: true, telefonoCodigo: true, telefonoNumero: true } },
         _count: {
           select: {
             items: { where: { parentItemId: null } },
@@ -1577,7 +1578,12 @@ export class OrdenesTrabajoService {
       auth.tenantId,
       orden.items.map((i) => i.id),
     );
-    const detalle = this.toDetalle({ ...orden, publicToken });
+    const detalle = {
+      ...this.toDetalle({ ...orden, publicToken }),
+      clienteTelefono: orden.cliente?.telefonoNumero?.trim()
+        ? [orden.cliente.telefonoCodigo, orden.cliente.telefonoNumero].filter(Boolean).join(' ').trim()
+        : null,
+    };
     // Independiente de la capacidad actual y del límite de 200 eventos del
     // timeline: el acceso a impresiones anteriores sobrevive a un cambio de plan.
     const impresionRegistrada = await this.prisma.ordenTrabajoEvento.findFirst({

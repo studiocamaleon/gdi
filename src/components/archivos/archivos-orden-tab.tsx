@@ -1,5 +1,6 @@
 "use client";
 
+import { DescargarArchivosButton } from "./descargar-archivos-button";
 import { TomoPdfPreview } from "../comercial/tomo-pdf-preview";
 import type { metaCentroCopiado } from "@/lib/centro-copiado-api";
 import * as React from "react";
@@ -213,6 +214,9 @@ export function ArchivosOrdenTab({
         <div className="otd-noprod">No se pudieron cargar los archivos.</div>
       ) : (
         <div className="arch-tab">
+          <div className="flex justify-end">
+            <DescargarArchivosButton tipo="orden" id={ordenId} disabled={!data.documento.length && !data.items.some((i) => i.archivos.length)} />
+          </div>
           <DesarrolloDocumentalOrden
             ordenId={ordenId}
             archivos={[

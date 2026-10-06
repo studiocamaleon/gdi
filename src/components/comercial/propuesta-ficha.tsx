@@ -327,6 +327,7 @@ import {
 import { OrdenCuponField } from "./orden-cupon-field";
 import { ResumenBar, OrdenSaveActions } from "./orden-resumen-financiero";
 import { OrdenFinancialActions } from "./orden-financial-actions";
+import { CopiarTelefonoCliente } from "./copiar-telefono-cliente";
 import { DescuentosOrdenCreada } from "./descuentos-orden-creada";
 import { OrdenDatosSections } from "./orden-datos-sections";
 import { ClienteLista } from "./cliente-selector-orden";
@@ -4911,9 +4912,10 @@ function PropuestaFichaContenido({
   const modoOrden = Boolean(orden);
   const [editandoOrden, setEditandoOrden] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  const [precioOrdenPendiente, setPrecioOrdenPendiente] = React.useState(false);
   // Puerta de edición de los datos de la ficha. La entrega es una operación
   // independiente, con sus propios permisos y validación de estado.
-  const puedeEditarOrden = orden ? permisoOrdenes && editandoOrden && !guardandoEdicion && orden.estado !== "cancelada" : permisoOrdenes || permisoPresupuestos;
+  const puedeEditarOrden = orden ? permisoOrdenes && editandoOrden && !guardandoEdicion && !precioOrdenPendiente && orden.estado !== "cancelada" : permisoOrdenes || permisoPresupuestos;
   const permisoEdicionRef = React.useRef(puedeEditarOrden);
   React.useLayoutEffect(() => {
     permisoEdicionRef.current = puedeEditarOrden;
@@ -5945,7 +5947,7 @@ function PropuestaFichaContenido({
   }, []);
 
   const cancelarEdicion = React.useCallback(() => {
-    if (!orden || togglingFiscal || cancelando) return;
+    if (!orden || togglingFiscal || cancelando || precioOrdenPendiente) return;
     // Descarta TODO el staging: field-cards e items vuelven a lo persistido.
     setClienteId(orden.clienteId ?? "");
     setCanalVenta(orden.canalVenta ?? "");
@@ -5967,7 +5969,7 @@ function PropuestaFichaContenido({
     );
     setEditadosIds(new Set());
     setEditandoOrden(false);
-  }, [orden, togglingFiscal, cancelando, cambioDocumento]);
+  }, [orden, togglingFiscal, cancelando, cambioDocumento, precioOrdenPendiente]);
 
   /**
    * Commit atómico del staging. Los snapshots se recalculan primero y luego
@@ -7464,6 +7466,7 @@ function PropuestaFichaContenido({
             }
             summary={
               <OrdenSummaryDetails
+                clienteTelefono={orden?.clienteTelefono}
                 cliente={
                   orden?.clienteNombre ??
                   selectorClientes.options.find((c) => c.id === clienteId)
@@ -7504,7 +7507,9 @@ function PropuestaFichaContenido({
                       onToggleTratamientoFiscal={
                         puedeToggleFiscal ? toggleTratamientoFiscal : undefined
                       }
-                      bloqueado={editandoOrden || guardandoEdicion ||
+                      editando={editandoOrden}
+                      onPendienteChange={setPrecioOrdenPendiente}
+                      bloqueado={guardandoEdicion ||
                         cambiosSinGuardar > 0 || togglingFiscal || cancelando}
                       onActualizada={(actualizada) => {
                         setOrden(actualizada);
@@ -7659,7 +7664,7 @@ function PropuestaFichaContenido({
                             variant="tertiary"
                             size="sm"
                             onPress={cancelarEdicion}
-                            isDisabled={guardandoEdicion || togglingFiscal || cancelando || emitiendoBorrador}
+                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
                           >
                             Cancelar
                           </HeroButton>
@@ -7668,7 +7673,7 @@ function PropuestaFichaContenido({
                             variant="primary"
                             size="sm"
                             onPress={() => void guardarEdicion()}
-                            isDisabled={guardandoEdicion || togglingFiscal || cancelando || emitiendoBorrador}
+                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
                           >
                             <CheckIcon />
                             {guardandoEdicion
@@ -7864,8 +7869,9 @@ function PropuestaFichaContenido({
                           {...selectorClientes}
                         />
                       ) : (
-                        <div className="text-sm text-foreground">
+                        <div className="flex items-center gap-2 text-sm text-foreground">
                           <span>{orden?.clienteNombre}</span>
+                          <CopiarTelefonoCliente telefono={orden?.clienteTelefono} />
                         </div>
                       )}
                     </FieldCard>

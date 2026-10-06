@@ -253,6 +253,7 @@ export type OrdenTrabajoPago = {
  * del snapshot de `CotizacionItem` referenciado.
  */
 export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
+  clienteTelefono?: string | null;
   /** Incluye solicitudes aún no enviadas; independiente del plan vigente. */
   tieneHistorialImpresion?: boolean;
   produccionControlada?: boolean;

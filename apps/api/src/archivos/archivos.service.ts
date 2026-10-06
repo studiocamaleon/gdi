@@ -1,3 +1,4 @@
+import { crearZipStream, nombreSeguroZip, validarPaqueteZip } from './descarga-zip';
 import { textoErrorLog } from '../common/log-seguro';
 import {
   BadRequestException,
@@ -724,6 +725,47 @@ export class ArchivosService {
         archivos: porItem.get(i.id) ?? [],
       })),
     };
+  }
+
+  async prepararDescargaZip(tenantId: string, destino: { ordenId: string } | { itemId: string }) {
+    // Empresa explícita también fuera del interceptor (tests, futuros callers).
+    const ordenId = 'ordenId' in destino ? destino.ordenId : null;
+    let idsItems: string[];
+    let nombre: string;
+    if (ordenId) {
+      const orden = await this.prisma.ordenTrabajo.findFirst({
+        where: { id: ordenId, tenantId },
+        select: { numero: true, items: { where: { tenantId }, select: { id: true }, orderBy: { ordenIndice: 'asc' } } },
+      });
+      if (!orden) throw new NotFoundException('Orden no encontrada.');
+      idsItems = orden.items.map((i) => i.id);
+      nombre = nombreSeguroZip(orden.numero || ordenId);
+    } else {
+      const item = await this.prisma.ordenTrabajoItem.findFirst({
+        where: { id: (destino as { itemId: string }).itemId, tenantId },
+        select: { id: true, nombre: true },
+      });
+      if (!item) throw new NotFoundException('Trabajo no encontrado.');
+      idsItems = [item.id];
+      nombre = nombreSeguroZip(item.nombre);
+    }
+    const archivos = await this.prisma.archivo.findMany({
+      where: {
+        tenantId, estado: ArchivoEstado.LISTO, generado: false,
+        OR: [
+          ...(ordenId ? [{ ordenId, scope: ArchivoScope.ORDEN }] : []),
+          { ordenItemId: { in: idsItems }, scope: ArchivoScope.ORDEN_ITEM },
+        ],
+      },
+      select: { key: true, nombreOriginal: true, bytes: true, ordenItemId: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const entradas = archivos.map((a, i) => ({
+      key: a.key, bytes: Number(a.bytes),
+      nombre: `${a.ordenItemId ? 'producto-' + (idsItems.indexOf(a.ordenItemId) + 1) : 'orden'}/${String(i + 1).padStart(3, '0')}_${nombreSeguroZip(a.nombreOriginal)}`,
+    }));
+    validarPaqueteZip(entradas);
+    return { nombre: `archivos-${nombre}.zip`, cantidad: entradas.length, stream: () => crearZipStream(entradas, this.storage) };
   }
 
   /**

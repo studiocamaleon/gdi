@@ -68,7 +68,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   el.remove();
 });
-async function render(overrides = {}) {
+async function render(overrides = {}, editando = true) {
   await act(async () =>
     root.render(
       <DescuentosOrdenCreada
@@ -76,6 +76,7 @@ async function render(overrides = {}) {
         items={[{ id: "item" }] as any}
         conCupones
         bloqueado={false}
+        editando={editando}
         onActualizada={mocks.actualizar}
       />,
     ),
@@ -132,5 +133,16 @@ it("una orden facturada no permite iniciar el ajuste", async () => {
     true,
   );
   await click("Descuento");
+  expect(mocks.aplicar).not.toHaveBeenCalled();
+});
+
+it("fuera de Editar orden impide descuentos y cupones, incluso al salir con el diálogo abierto", async () => {
+  await render({}, false);
+  expect([...el.querySelectorAll("button")].every((b) => b.disabled)).toBe(true);
+  await render();
+  await click("Descuento");
+  expect(el.textContent).toContain("Aplicar");
+  await render({}, false);
+  expect(el.textContent).not.toContain("Aplicar");
   expect(mocks.aplicar).not.toHaveBeenCalled();
 });
