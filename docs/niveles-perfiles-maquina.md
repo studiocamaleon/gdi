@@ -39,3 +39,9 @@ Vista de muestra: `/dev/diseno/niveles` (sólo en desarrollo). En esta sesión s
 Rama `codex/niveles-perfiles-maquina`, basada en `codex/avisos-orden-finalizada` (PR #24, base `632deea0a`) para conservar la versión de la aplicación ya publicada. Esta dependencia debe mantenerse explícita al abrir el PR y ajustarse después de integrar la base.
 
 Publicado el 06/10/2026 en staging y producción mediante el PR #25, revisión ejecutada `b89000446`. En staging se guardaron niveles de un producto ficticio y se comprobó que cada perfil cambia el costo y que los perfiles inválidos son rechazados. Los datos propios del ensayo se retiraron. No se modificaron configuraciones comerciales de producción para probarlo. Ver [validación de staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md).
+
+### Corrección posterior del resumen comercial — pendiente de publicar
+
+El selector mostraba solamente `productividadHora` guardada en el nivel, sin unidad, y dejaba vacío el nivel que heredaba el perfil. Ahora ambos muestran la velocidad y unidad del perfil efectivo de la máquina elegida. En tiempo por máquina se ignora el ritmo manual residual, igual que al calcular; el trabajo manual muestra el ritmo del paso o su override con unidad. Sin datos suficientes se identifica el perfil y no se inventa una velocidad. El catálogo entrega también las unidades de perfiles de máquinas principales, candidatas y extras, manteniendo ocultos los costos.
+
+Validación dirigida: 37 pruebas de helper/interfaz y 6 de proyección comercial; tipos de los archivos modificados comprobados. Incluye perfiles heredados/seleccionados, unidades distintas de m²/h, corte con perfiles por operación, datos incompletos y conservación del formato al cambiar la selección. El chequeo global de tipos de API alcanzó el límite de memoria local y debe completarse en CI. Esta corrección posterior no modifica el cálculo ni ha sido desplegada todavía.

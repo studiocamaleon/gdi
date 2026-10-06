@@ -346,6 +346,7 @@ it.each(["ruta", "extra", "nodo-propio"])(
             nombre: "Simple",
             tipoPerfil: "CORTE",
             productivityValue: 8,
+            productivityUnit: "M2_H",
             activo: true,
           },
           {
@@ -353,6 +354,7 @@ it.each(["ruta", "extra", "nodo-propio"])(
             nombre: "Complejo",
             tipoPerfil: "CORTE",
             productivityValue: 4,
+            productivityUnit: "M2_H",
             activo: true,
           },
         ],
@@ -366,12 +368,12 @@ it.each(["ruta", "extra", "nodo-propio"])(
               codigo: "simple",
               nombre: "Simple",
               esDefault: true,
-              overrides: { perfilesPorMaquina: { plotter: "simple" } },
+              overrides: {}, // Hereda el perfil del paso, también debe mostrar ritmo.
             },
             {
               codigo: "complejo",
               nombre: "Complejo",
-              overrides: { perfilesPorMaquina: { plotter: "complejo" } },
+              overrides: { perfilesPorMaquina: { plotter: "complejo" }, productividadHora: 99 },
             },
           ],
         },
@@ -418,11 +420,16 @@ it.each(["ruta", "extra", "nodo-propio"])(
     await avanzarCalculo();
     const complejo = [
       ...el.querySelectorAll<HTMLButtonElement>("button"),
-    ].filter((b) => b.textContent === "Complejo");
+    ].filter((b) => b.getAttribute("aria-label") === "Nivel de troquelado: Complejo");
     expect(complejo).toHaveLength(1);
+    expect(complejo[0].textContent).toContain("4 m²/h");
+    expect(el.querySelector('[aria-label="Nivel de troquelado: Simple"]')?.textContent).toContain("8 m²/h");
+    expect(complejo[0].textContent).not.toContain("99");
     expect(el.textContent).not.toContain("Complejidad del corte");
     await act(async () => complejo[0].click());
     await avanzarCalculo();
+    expect(el.querySelector('[aria-label="Nivel de troquelado: Simple"]')?.textContent).toContain("8 m²/h");
+    expect(el.querySelector('[aria-label="Nivel de troquelado: Complejo"]')?.textContent).toContain("4 m²/h");
     expect(api.cotizar.mock.lastCall?.[0].jobContext.nivelPaso_troquelado).toBe(
       "complejo",
     );

@@ -210,6 +210,7 @@ export interface ConfigPasoDetalle {
       tipoPerfil?: string | null;
       /** Ordena los niveles de complejidad del corte (más m²/h = más fácil). */
       productivityValue?: number | string | null;
+      productivityUnit?: string | null;
       detalleJson?: Record<string, unknown> | null;
     }>;
     centroCostoPrincipalId?: string | null;

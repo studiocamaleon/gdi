@@ -1,5 +1,15 @@
 import { productoParaCotizacion } from '../producto-cotizacion-publico';
 describe('Catálogo auxiliar de cotización sin acceso al modelador', () => {
+  it('conserva velocidad y unidad del perfil sin costos para comparar niveles', () => {
+    const p = productoParaCotizacion({ maquinaM1: { perfilesOperativos: [
+      { id: 'medio', nombre: 'Medio corte', productivityValue: 10, productivityUnit: 'M2_H', costo: 900 },
+      { id: 'profundo', nombre: 'Corte profundo', productivityValue: 6, productivityUnit: 'M2_H', margen: 40 },
+    ] } }) as any;
+    expect(p.maquinaM1.perfilesOperativos).toEqual([
+      { id: 'medio', nombre: 'Medio corte', productivityValue: 10, productivityUnit: 'M2_H' },
+      { id: 'profundo', nombre: 'Corte profundo', productivityValue: 6, productivityUnit: 'M2_H' },
+    ]);
+  });
   it('conserva el esquema comercial para el selector sin publicar importes privados', () => {
     const producto = productoParaCotizacion({
       subcategoriaComercial: {

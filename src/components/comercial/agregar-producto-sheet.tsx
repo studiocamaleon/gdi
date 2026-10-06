@@ -1717,6 +1717,7 @@ function getPreferredCandidate(candidates: MaquinaCandidataComercial[]) {
  *  según el trabajo y eso viaja como override de perfil
  *  (`perfilSeleccionado_<configPasoId>`, que el motor ya valida). */
 type ComplejidadCorteComercial = {
+  base: BaseDelPaso;
   configPasoId: string;
   nombreVisible: string | null;
   familiaCodigo: string;
@@ -1791,6 +1792,13 @@ function getComplejidadCorte(
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion ?? "OBLIGATORIO",
           defaultId,
+          base: {
+            usaTiempoDeMaquina: true,
+            maquina: {
+              ...getMaquinaParaNivel(config, motorConfig)!,
+              perfilDefaultId: defaultId,
+            },
+          },
           opciones: opciones.map((perfil) => ({
             perfilId: perfil.id,
             nombre: perfil.nombre ?? "Perfil",
@@ -1811,6 +1819,23 @@ function getActiveCandidateForConfig(
     ? candidates.find((candidate) => candidate.maquinaId === selectedId)
     : null;
   return selected ?? getPreferredCandidate(candidates);
+}
+
+function getMaquinaParaNivel(
+  config: ConfigPasoDetalle,
+  motorConfig: Pick<MotorConfigState, "seleccionMaquina">,
+): BaseDelPaso["maquina"] {
+  const candidata = getActiveCandidateForConfig(config, motorConfig);
+  const maquina = candidata?.maquina ?? config.maquinaM1;
+  if (!maquina) return null;
+  return {
+    id: maquina.id,
+    nombre: maquina.nombre,
+    perfilDefaultId: candidata ? candidata.perfilDefaultId : config.perfilM1?.id,
+    perfiles: (maquina.perfilesOperativos ?? [])
+      .filter((perfil) => perfil.activo !== false)
+      .map((perfil) => ({ ...perfil, nombre: perfil.nombre ?? "Perfil" })),
+  };
 }
 
 // Los modos se listan de menos a más tinta: sin impresión → 1 tinta → CMYK →
@@ -2050,6 +2075,9 @@ function tienePasoTiempoManual(config: ConfigPasoDetalle): boolean {
 function getNivelesComercial(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+  motorConfig: Pick<MotorConfigState, "seleccionMaquina"> = {
+    seleccionMaquina: {},
+  },
 ): NivelComercial[] {
   return (
     ruta?.configPasos
@@ -2083,6 +2111,16 @@ function getNivelesComercial(
           modoActivacion: config.modoActivacion,
           config: { ...niveles, opciones },
           base: {
+            usaTiempoDeMaquina:
+              config.modoTiempo === "T-3" ||
+              config.rutaPaso.familiaCodigo === "corte_laser",
+            maquina: getMaquinaParaNivel(config, motorConfig),
+            perfilesPorOperacion: params.cotizarOperacionesVectoriales === true,
+            productividadHora: Number(params.productivityValue) || null,
+            unidadProductividad:
+              config.modoTiempo !== "T-2" ? null : typeof params.productivityUnit === "string"
+                ? params.productivityUnit
+                : "unidades_h",
             // Sin nivel aplicado: es el punto de partida contra el que cada
             // nivel se compara.
             tiempoFijoMin: getTiempoFijoDeclaradoMin(config, {}),
@@ -5567,8 +5605,10 @@ function ApConfigStep({
   // corren siempre van con los datos del producto; los de pasos opcionales,
   // dentro de la card del opcional activado.
   const nivelesComercialRuta = React.useMemo(
-    () => getNivelesComercial(rutaSel, includeVisibleConfig),
-    [rutaSel, includeVisibleConfig],
+    () => getNivelesComercial(rutaSel, includeVisibleConfig, {
+      seleccionMaquina: motorConfig.seleccionMaquina,
+    }),
+    [rutaSel, includeVisibleConfig, motorConfig.seleccionMaquina],
   );
   const nivelesPorConfigPaso = React.useMemo(
     () =>
@@ -7161,14 +7201,17 @@ function ApConfigStep({
       {
         ...item,
         perfilAnterior: true,
-        base: {},
         config: {
           etiqueta: "¿Qué nivel de corte?",
           opciones: item.opciones.map((opcion) => ({
             codigo: `perfil_${opcion.perfilId}`,
             nombre: opcion.nombre,
             esDefault: opcion.perfilId === item.defaultId,
-            overrides: {},
+            overrides: {
+              perfilesPorMaquina: item.base.maquina
+                ? { [item.base.maquina.id]: opcion.perfilId }
+                : undefined,
+            },
           })),
         },
       },

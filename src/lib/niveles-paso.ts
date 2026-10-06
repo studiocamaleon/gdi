@@ -159,6 +159,11 @@ export function nivelEfectivo(
 
 /** Lo que el paso vale cuando el nivel no pisa nada. */
 export interface BaseDelPaso {
+  usaTiempoDeMaquina?: boolean;
+  perfilesPorOperacion?: boolean;
+  maquina?: MaquinaParaNiveles | null;
+  productividadHora?: number | null;
+  unidadProductividad?: string | null;
   /** Minutos de trabajo declarados por el paso (T-1 / horas estimadas). */
   tiempoFijoMin?: number | null;
   /**
@@ -168,6 +173,29 @@ export interface BaseDelPaso {
    * borrados, que el motor ignora— y de menos los bloques que el nivel no pisa.
    */
   bloques?: Array<{ id: string; minutos: number }>;
+}
+
+/** La unidad pertenece al perfil/paso; nunca inferir m²/h sólo por ser corte. */
+export function describirProductividad(
+  valor: number | string | null | undefined,
+  unidad: string | null | undefined,
+): string | null {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero) || numero <= 0 || !unidad?.trim()) return null;
+  const unidades: Record<string, string> = {
+    hora: "trabajos/h", hoja: "hojas/h", copia: "copias/h",
+    ppm: "pág. A4-eq/min", a4_equiv: "A4-eq/h",
+    m2: "m²/h", m2_h: "m²/h", metro_lineal: "m/h", ml_h: "m/h",
+    piezas_h: "piezas/h", pieza: "piezas/h", unidades_h: "unid./h",
+    pliegos_h: "pliegos/h", ciclo: "ciclos/h", cortes_min: "cortes/min",
+    golpes_min: "golpes/min", pliegos_min: "pliegos/min", m_min: "m/min",
+    mm_s: "mm/s", mm_min: "mm/min", g_h: "g/h",
+  };
+  const etiqueta = unidades[unidad.trim().toLowerCase()] ??
+    (unidad.includes("/") ? unidad.trim() : null);
+  return etiqueta
+    ? `${numero.toLocaleString("es-AR", { maximumFractionDigits: 2 })} ${etiqueta}`
+    : null;
 }
 
 /**
@@ -205,8 +233,24 @@ export function describirNivel(
   if (trabajoMin != null && trabajoMin > 0) {
     partes.push(`${trabajoMin} min de trabajo`);
   }
-  if (overrides.productividadHora != null) {
-    partes.push(`${overrides.productividadHora}/h`);
+  if (base.usaTiempoDeMaquina) {
+    const maquina = base.maquina;
+    const perfilId = maquina
+      ? overrides.perfilesPorMaquina?.[maquina.id] ?? maquina.perfilDefaultId
+      : null;
+    const perfil = maquina?.perfiles.find((p) => p.id === perfilId);
+    // T-3 usa el perfil, no un override manual de productividad que haya
+    // quedado guardado antes de elegir este modo de tiempo.
+    partes.push(base.perfilesPorOperacion
+      ? "Ritmo según la operación"
+      : describirProductividad(perfil?.productivityValue, perfil?.productivityUnit) ??
+        (perfil ? `Perfil: ${perfil.nombre}` : "Perfil del paso"));
+  } else {
+    const ritmo = describirProductividad(
+      overrides.productividadHora ?? base.productividadHora,
+      base.unidadProductividad,
+    );
+    if (ritmo) partes.push(ritmo);
   }
   if (overrides.dotacion != null) {
     partes.push(

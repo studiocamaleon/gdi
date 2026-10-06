@@ -1300,6 +1300,7 @@ export class ProductosService {
                         // Ordena los niveles de complejidad del corte en el
                         // sheet (más m²/h = corte más fácil).
                         productivityValue: true,
+                        productivityUnit: true,
                         detalleJson: true,
                       },
                     },
@@ -1444,6 +1445,7 @@ export class ProductosService {
                             tipoPerfil: true,
                             // Ídem maquinaM1: niveles de complejidad del corte.
                             productivityValue: true,
+                            productivityUnit: true,
                             detalleJson: true,
                           },
                         },
@@ -1465,7 +1467,17 @@ export class ProductosService {
           orderBy: { ordenInterno: 'asc' },
           include: {
             maquinaM1: {
-              select: { id: true, codigo: true, nombre: true, plantilla: true },
+              select: {
+                id: true, codigo: true, nombre: true, plantilla: true,
+                perfilesOperativos: {
+                  where: { activo: true },
+                  select: {
+                    id: true, nombre: true, activo: true, tipoPerfil: true,
+                    productivityValue: true, productivityUnit: true,
+                    detalleJson: true,
+                  },
+                },
+              },
             },
             perfilM1: { select: { id: true, nombre: true } },
             centroCosto: {
@@ -1677,6 +1689,8 @@ export class ProductosService {
                   nombre: true,
                   activo: true,
                   tipoPerfil: true,
+                  productivityValue: true,
+                  productivityUnit: true,
                   detalleJson: true,
                 },
               },
