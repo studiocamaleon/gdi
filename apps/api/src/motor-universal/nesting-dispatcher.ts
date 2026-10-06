@@ -826,12 +826,22 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
       layout.substrates.some(s => s.kind === 'roll')) {
       return conservarRolloImpreso(paso, layout, materialResuelto, config);
     }
-    return runShelfRollo(
+    const resultado = runShelfRollo(
       paso,
       jobContext,
       materialResuelto,
       disablePanelizado(config),
     );
+    if (!resultado && (jobContext.piezas?.length ?? 0) > 0) {
+      // En rollo no se puede continuar con el fallback m²: el slot de
+      // sustrato consume metros lineales. El fallback sigue siendo válido
+      // para corte sobre hojas y pliegos heredados, resueltos arriba.
+      throw new MotorCotizacionError(
+        'corte_rollo_sin_layout',
+        'No se pudo acomodar el trabajo en el rollo del plotter. Revisá el ancho del material, las medidas y los márgenes de corte.',
+      );
+    }
+    return resultado;
   },
 
   /** Laminado en rollo sobre pliegos ya impresos. */
@@ -2353,7 +2363,12 @@ function runShelfRollo(
     marginEndMm: config.margins.endMm,
     separacionHorizontalMm: config.separationHMm,
     separacionVerticalMm: config.separationVMm,
-    permitirRotacion: config.allowRotation,
+    // Por metros se vende una franja, no una pieza que pueda girarse para
+    // intercambiar el ancho del rollo con el largo solicitado.
+    permitirRotacion:
+      jobContext.modoCotizacionLineal === 'directo'
+        ? false
+        : config.allowRotation,
     medidas: piezas.map((p, idx) => ({
       id: `pieza_${idx}`,
       cantidad: p.cantidad,
@@ -2467,7 +2482,7 @@ function runShelfRollo(
       pieceBleedMm: config.pieceBleedMm,
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
-      allowRotation: config.allowRotation,
+      allowRotation: baseShelfInput.permitirRotacion,
       substrateLabel: 'Rollo',
       panelizado: {
         enabled: result.panelizado,
