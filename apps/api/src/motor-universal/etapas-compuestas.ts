@@ -212,6 +212,7 @@ export function consolidarEtapasCompuestas(
         nombre: item.nombreVisible ?? item.familiaCodigo,
         familiaCodigo: item.familiaCodigo,
         activada: item.activado,
+        esOpcional: item.esOpcional,
         duracionMin: item.tiempo?.totalMin ?? 0,
         costoTotal: item.costoTotal,
         configPasoId: item.configPasoId,

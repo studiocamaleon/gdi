@@ -1,3 +1,4 @@
+import { validarMargenOpcionales } from './margen-opcionales';
 import { BadRequestException } from '@nestjs/common';
 import type { PrecioConfig } from './aplicar-precio.types';
 
@@ -176,6 +177,7 @@ export function validarPoliticaPricingComponente(
       `La política de pricing de "${componenteNombre}" no tiene un formato válido.`,
     );
   }
+  validarMargenOpcionales(pricing.precioConfigOverride);
   if (
     pricing.modo === 'OVERRIDE' &&
     !esPrecioConfig(pricing.precioConfigOverride)
@@ -219,6 +221,8 @@ export function congelarPoliticaPricingComponente(args: {
         : `El override de "${args.componenteNombre}" no tiene una regla de precio válida.`,
     );
   }
+
+  validarMargenOpcionales(precioConfigSnapshot);
 
   return {
     ...configuracion,

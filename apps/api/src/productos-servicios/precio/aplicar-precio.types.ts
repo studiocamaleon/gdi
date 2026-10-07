@@ -57,11 +57,16 @@ export interface DetallePorMargen {
   marginPct: number;
   minimumMarginPct?: number;
 }
-export interface DetallePrecioFijo {
+interface MargenOpcionalesPrecioFijo {
+  /** Margen sobre el neto del opcional; 0 cuando todavía no fue configurado. */
+  margenOpcionalesPct?: number;
+}
+export interface DetallePrecioFijo extends MargenOpcionalesPrecioFijo {
   price: number;
   minimumPrice?: number;
 }
-export interface DetallePrecioFijoParaMargenMinimo {
+export interface DetallePrecioFijoParaMargenMinimo
+  extends MargenOpcionalesPrecioFijo {
   price: number;
   minimumPrice?: number;
   minimumMarginPct: number;
@@ -69,10 +74,10 @@ export interface DetallePrecioFijoParaMargenMinimo {
 export interface DetalleMargenVariable {
   tiers: TramoRangoMargen[];
 }
-export interface DetalleVariablePorCantidad {
+export interface DetalleVariablePorCantidad extends MargenOpcionalesPrecioFijo {
   tiers: TramoRangoPrecio[];
 }
-export interface DetalleFijadoPorCantidad {
+export interface DetalleFijadoPorCantidad extends MargenOpcionalesPrecioFijo {
   tiers: TramoCantidadExactaPrecio[];
 }
 export interface DetalleFijoConMargenVariable {
@@ -133,7 +138,15 @@ export interface DescuentoPrecio {
   valor: number;
 }
 
+/** Partición de costos de pasos; los incluidos ya están dentro del precio fijo. */
+export interface CostosPasosPrecio {
+  opcionales: number;
+  opcionalesSinMargen: number;
+  incluidosSinMargen: number;
+}
+
 export interface AplicarPrecioInput {
+  costosPasosUnitarios?: CostosPasosPrecio;
   /** Costo unitario comercial del producto, ya devuelto por el motor universal. */
   costoUnitario: number;
   /** Porción del costo que se recupera sin margen, pero con gross-up de impuestos internos y comisiones. */
@@ -219,6 +232,7 @@ export interface AplicarPrecioOutput {
 }
 
 export interface BloquePrecioCompuestoInput {
+  costosPasosTotales?: CostosPasosPrecio;
   codigo: string;
   nombre: string;
   costoTotal: number;

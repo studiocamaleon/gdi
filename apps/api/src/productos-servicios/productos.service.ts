@@ -1,3 +1,4 @@
+import { validarMargenOpcionales } from './precio/margen-opcionales';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -249,6 +250,7 @@ export class ProductosService {
       await this.capacidades.exigir(tenantId, 'reglas_precio');
     await this.exigirCambiosGeometria(tenantId, dto.atributosComercialesJson);
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
+    validarMargenOpcionales(dto.precioConfigJson);
     validarGeometriasComerciales(dto.atributosComercialesJson);
     await this.hidratarGeometrias(tenantId, dto.atributosComercialesJson);
     const subcategoriaComercial = await this.assertSubcategoriaComercial(
@@ -358,6 +360,7 @@ export class ProductosService {
   ) {
     await this.capacidades.exigir(tenantId, 'productos');
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
+    validarMargenOpcionales(dto.precioConfigJson);
     validarGeometriasComerciales(dto.atributosComercialesJson);
     const existente = await this.prisma.producto.findFirst({
       where: { id, tenantId },
