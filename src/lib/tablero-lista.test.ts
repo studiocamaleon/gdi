@@ -855,6 +855,12 @@ describe("actualizaciones visibles de la Lista", () => {
     expect(campos(version(actual), version({ ...actual, qtyLabel: "2 unidades" }))).toEqual(["cantidad"]);
     expect(campos(version(actual), version({ ...actual, progressPct: 25 }))).toEqual(["avance"]);
   });
+  it("actualiza la entrega y la condición compartida sólo en sus propias celdas", () => {
+    const antes = trabajo({ fechaEntrega: "2026-10-10" });
+    const despues = trabajo({ fechaEntrega: "2026-10-12" });
+    expect(campos(version(antes), version(despues))).toEqual(["entrega"]);
+    expect(campos(version(), version(trabajo({}, [paso({ ejecucionPorEquipo: true })])))).toEqual(["personal"]);
+  });
   it("un cambio del responsable de una dependencia sólo anima la celda En espera", () => {
     const item = trabajo();
     const espera = { pasoId: "previo", detalle: "Corte", texto: "Ana", tercerizado: false };

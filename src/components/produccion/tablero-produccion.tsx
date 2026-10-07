@@ -471,7 +471,8 @@ function DetailRuta({
               </div>
 
               {paso.asignacionPersonal && <div className={toolbar.assignment}>
-                <span>Personal asignado · {paso.asignacionPersonal.personas.map(p => p.nombre).join(" · ") || "Sin asignar"}</span>
+                <span>{paso.ejecucionPorEquipo ? "Personal previsto" : "Personal asignado"} · {paso.asignacionPersonal.personas.map(p => p.nombre).join(" · ") || "Sin asignar"}</span>
+                {paso.ejecucionPorEquipo && <span>Puede hacerlo el equipo de la estación</span>}
                 {paso.asignacionPersonal.conflicto && <span role="status" className={toolbar.assignmentConflict}>{paso.asignacionPersonal.conflicto}</span>}
               </div>}
 

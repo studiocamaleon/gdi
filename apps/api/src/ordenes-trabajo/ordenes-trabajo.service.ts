@@ -35,6 +35,7 @@ import { proyectarPlanReferencia } from '../produccion/plan-referencia-paso';
 import {
   leerAsignacionPersonal,
   proyectarAsignacionPersonal,
+  ejecucionCompartidaPorEquipo,
   personalFijoDelPaso,
 } from '../produccion/asignacion-personal';
 import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
@@ -7622,6 +7623,7 @@ export class OrdenesTrabajoService {
           modoRegistro: true,
           mesaUsuarioId: true,
           asignacionPersonalJson: true,
+          asignacionManualJson: true,
           iniciadoEl: true,
           iniciadoPorId: true,
           duracionEstimadaMin: true,
@@ -7679,10 +7681,13 @@ export class OrdenesTrabajoService {
     }
     const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
     const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
+    const manual = leerAsignacionManual(paso.asignacionManualJson);
     const asignado =
       !!actor &&
-      !asignacion?.conflicto &&
-      asignacion?.personas.some((p) => p.empleadoId === actor.id);
+      (paso.asignacionManualJson
+        ? !!manual?.empleadoIds.includes(actor.id)
+        : !asignacion?.conflicto &&
+          asignacion?.personas.some((p) => p.empleadoId === actor.id));
     if (
       (payload.accion === 'desbloquear' || payload.accion === 'reabrir') &&
       !supervisa
@@ -7693,9 +7698,15 @@ export class OrdenesTrabajoService {
     }
     if (!supervisa) {
       await this.validarEjecucionEnEstacion(auth, paso, tx);
+      if (paso.asignacionManualJson && !asignado) {
+        throw new ForbiddenException(
+          'Este paso tiene una asignación manual a otra persona. Consultá al supervisor.',
+        );
+      }
       if (
         paso.mesaUsuarioId !== auth.userId &&
         !asignado &&
+        !ejecucionCompartidaPorEquipo(paso) &&
         !paso.tramos.some(
           (tramo) => tramo.usuarioId === auth.userId && !tramo.finEl,
         )
@@ -8962,6 +8973,7 @@ export class OrdenesTrabajoService {
           paso.asignacionPersonalJson,
           viewerUserId,
         ),
+        ejecucionPorEquipo: ejecucionCompartidaPorEquipo(paso),
         mesaEsMia: paso.mesaUsuarioId === viewerUserId,
         mesaUsuarioNombre: paso.mesaUsuario
           ? paso.mesaUsuario.nombreCompleto || paso.mesaUsuario.email

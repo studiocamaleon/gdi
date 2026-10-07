@@ -190,3 +190,12 @@ it("habilita a asignados con reparto válido y conserva el control del tramo rea
     }),
   ).toBe(true);
 });
+
+it("permite actuar en una previsión compartida sin ser la persona prevista, pero no en la manual", () => {
+  const paso = {
+    mesaEsMia: false, tramoAbierto: null,
+    asignacionPersonal: { origen: "automatica" as const, personas: [], franjas: [], esMia: false, conflicto: null },
+  };
+  expect(asignacionPermiteEjecutar({ ...paso, ejecucionPorEquipo: true })).toBe(true);
+  expect(asignacionPermiteEjecutar({ ...paso, ejecucionPorEquipo: false, asignacionPersonal: { ...paso.asignacionPersonal, origen: "manual" } })).toBe(false);
+});
