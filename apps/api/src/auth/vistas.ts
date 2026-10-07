@@ -423,6 +423,7 @@ export function expandirVistas(permisos: Iterable<string>): Set<string> {
     out.add('produccion.supervisar');
     out.add('produccion.configurar');
   }
+  if (out.has('crm.aprobar_altas')) out.add('crm.clientes.ver');
   if (out.has('acceso.por_vista')) return out;
   for (const v of VISTAS) {
     if (out.has(`${v.clave}.gestionar`)) out.add(`${v.clave}.ver`);

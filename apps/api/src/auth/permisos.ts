@@ -86,6 +86,11 @@ export type ModuloClave = (typeof MODULOS)[number]['clave'];
  * que poder cotizar sin ver cuánto gana la imprenta en cada renglón.
  */
 export const PERMISOS_TRANSVERSALES = [
+  {
+    clave: 'crm.aprobar_altas',
+    label: 'Revisar altas de clientes',
+    descripcion: 'Compartir el enlace de registro y aprobar, vincular o rechazar solicitudes. Incluye lectura de clientes para comprobar duplicados.',
+  },
   { clave: 'tesoreria.arquear', label: 'Registrar arqueos de caja', descripcion: 'Contar y cerrar las cajas asignadas. Registra el conteo, incluso sin diferencia.' },
   { clave: 'tesoreria.transferir', label: 'Transferir entre cuentas autorizadas', descripcion: 'Mover fondos desde las cuentas de trabajo hacia los destinos autorizados.' },
   {
