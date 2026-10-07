@@ -145,6 +145,7 @@ export interface ProductoDetalle extends Omit<
   "rutasAlternativas"
 > {
   rutasAlternativas: RutaAlternativaDetalle[];
+  rutasInactivas?: Array<{ id: string; nombre: string }>;
   pasosExtras: PasoExtra[];
   cargosDirectosCotizacion: CargoCotizacionDetalle[];
 }

@@ -1511,8 +1511,14 @@ export class ProductosService {
       tenantId,
       producto.pasosExtras,
     );
+    const rutasInactivas = await this.prisma.productoRutaAlternativa.findMany({
+      where: { tenantId, productoId: id, activo: false },
+      select: { id: true, nombre: true },
+      orderBy: [{ orden: 'asc' }, { id: 'asc' }],
+    });
     return {
       ...producto,
+      rutasInactivas,
       rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
         ...rutaAlt,
         ruta: {

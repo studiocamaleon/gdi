@@ -16,6 +16,7 @@ import {
   useDesignTheme,
 } from "@/components/design-system/appearance";
 import listStyles from "@/components/design-system/list-page.module.css";
+import { FlujosInactivos } from "./flujos-inactivos";
 import { PiezasArchivosProducto } from "./piezas-archivos-producto";
 import * as React from "react";
 import Link from "next/link";
@@ -89,7 +90,6 @@ import {
   crearProductoRutaAlt,
   desasociarCargoCotizacion,
   duplicarProductoRutaAlt,
-  eliminarProductoRutaAlt,
   getCatalogoComercial,
   guardarBorradorReceta,
   type EstadoDependenciaReceta,
@@ -2185,7 +2185,7 @@ function RutasTab({
                           }
                         >
                           <Trash2Icon />
-                          Quitar del producto
+                          Desactivar flujo
                         </Dropdown.Item>
                       </Dropdown.Section>
                     </Dropdown.Menu>
@@ -2220,6 +2220,7 @@ function RutasTab({
               Todavía no hay flujos de producción configurados.
             </div>
           )}
+          <FlujosInactivos flujos={producto.rutasInactivas ?? []} onCambio={() => router.refresh()} />
         </section>
 
         {rutaSeleccionada ? (
@@ -2475,16 +2476,16 @@ function RutasTab({
         onOpenChange={(open) => {
           if (!open) setRutaAQuitar(null);
         }}
-        titulo="Quitar ruta de producción"
-        descripcion={`¿Quitar la ruta "${rutaAQuitar?.nombre ?? ""}" de este producto?`}
+        titulo="Desactivar flujo de producción"
+        descripcion={`El flujo "${rutaAQuitar?.nombre ?? ""}" dejará de ofrecerse para nuevas cotizaciones. Sus configuraciones y órdenes anteriores se conservan; podés reactivarlo después.`}
         nombreItem={rutaAQuitar?.nombre}
         requiereTipear={false}
-        accionLabel="Quitar ruta"
+        accionLabel="Desactivar flujo"
         onConfirmar={async () => {
           if (!rutaAQuitar) return;
           try {
-            await eliminarProductoRutaAlt(rutaAQuitar.id);
-            toast.success("Ruta quitada del producto");
+            await actualizarProductoRutaAlt(rutaAQuitar.id, { activo: false });
+            toast.success("Flujo desactivado. El historial se conserva.");
             router.refresh();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Error");

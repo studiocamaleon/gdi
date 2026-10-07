@@ -2,6 +2,7 @@ import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empre
 import { randomUUID } from 'node:crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { RecetasProductoService } from '../recetas-producto.service';
+import { ProductoRutasService } from '../producto-rutas.service';
 import { ProductosService } from '../productos.service';
 import { ProductoValidacionService } from '../producto-validacion.service';
 import { serviciosRecorridoF4 } from '../../../test/soporte-recorridos-f4';
@@ -445,3 +446,32 @@ it('mantiene versiones y edición de productos simples sin habilitar componentes
     true,
   );
 });
+
+ it('desactivar un flujo publicado preserva revisiones, elige otra preferida y permite reactivarlo', async () => {
+  await escenario(async (tx, recetas, crear, tenantId) => {
+    const producto = await crear('flujo-original');
+    const { prisma } = serviciosRecorridoF4(tx);
+    const rutas = new ProductoRutasService(prisma as never, {} as never);
+    const productos = new ProductosService(prisma as never);
+    await recetas.sincronizarPublicaciones({ tenantId }, [producto.id]);
+    const receta = await tx.productoReceta.findFirstOrThrow({ where: { tenantId, rutaAlternativaId: producto.ruta }, include: { revisionPublicada: true } });
+    const original = await tx.productoRutaAlternativa.findUniqueOrThrow({ where: { id: producto.ruta } });
+    const nueva = await tx.productoRutaAlternativa.create({ data: {
+      tenantId, productoId: producto.id, rutaId: original.rutaId, rutaVersion: original.rutaVersion, nombre: 'Reemplazo', esPreferida: false,
+    } });
+    const otro = await tx.tenant.create({ data: { nombre: 'Otra empresa ficticia', slug: randomUUID() } });
+    await expect(rutas.eliminarProductoRutaAlternativa(otro.id, producto.ruta)).rejects.toThrow('no encontrado');
+    await rutas.eliminarProductoRutaAlternativa(tenantId, producto.ruta);
+    expect(await tx.productoRutaAlternativa.findUniqueOrThrow({ where: { id: producto.ruta } })).toMatchObject({ activo: false, esPreferida: false });
+    expect(await tx.productoReceta.findUniqueOrThrow({ where: { id: receta.id } })).toMatchObject({ activo: false, revisionPublicadaId: receta.revisionPublicadaId });
+    expect(await tx.productoRecetaRevision.findUniqueOrThrow({ where: { id: receta.revisionPublicadaId! } })).toEqual(receta.revisionPublicada);
+    expect(await tx.productoRutaAlternativa.findUniqueOrThrow({ where: { id: nueva.id } })).toMatchObject({ esPreferida: true });
+    const vista = await productos.obtenerProducto(tenantId, producto.id);
+    expect(vista.rutasAlternativas.map(r => r.id)).toEqual([nueva.id]);
+    expect(vista.rutasInactivas).toEqual([{ id: producto.ruta, nombre: original.nombre }]);
+    await expect(rutas.actualizarProductoRutaAlternativa(tenantId, producto.ruta, { esPreferida: true })).rejects.toThrow('Activá');
+    await rutas.actualizarProductoRutaAlternativa(tenantId, producto.ruta, { activo: true });
+    expect(await tx.productoReceta.findUniqueOrThrow({ where: { id: receta.id } })).toMatchObject({ activo: true });
+    expect((await productos.obtenerProducto(tenantId, producto.id)).rutasInactivas).toEqual([]);
+  });
+ });
