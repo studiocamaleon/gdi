@@ -11,6 +11,7 @@ export type NotificacionInterna = {
   id: string;
   leidaEl: string | null;
   createdAt: string;
+  lecturas: { id: string; nombre: string; leidaEl: string }[];
   evento: {
     id: string;
     tipo: string;
