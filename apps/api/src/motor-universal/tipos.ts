@@ -686,6 +686,8 @@ export interface OperacionIncorporacionCosteada {
 }
 
 export interface PasoEjecutado {
+  /** Opcional según la configuración efectiva, incluso si se activó por dependencia. */
+  esOpcional?: boolean;
   requiereMaquina?: boolean;
   plantillaCodigo?: string | null;
   rutaPasoId: string;
@@ -867,6 +869,7 @@ export interface PasoEjecutado {
  * independiente en la OT.
  */
 export interface OperacionInternaCosteada {
+  esOpcional?: boolean;
   codigo: string;
   nombre: string;
   familiaCodigo: string;

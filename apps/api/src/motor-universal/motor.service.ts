@@ -1,3 +1,8 @@
+import {
+  costosPasosPrecio,
+  escalarCostosPasos,
+} from '../productos-servicios/precio/costos-pasos-precio';
+import type { CostosPasosPrecio } from '../productos-servicios/precio/aplicar-precio.types';
 import { textoErrorLog } from '../common/log-seguro';
 import { insertarPasosExtrasEnSecuencia, ordenarPasosConExtras } from '../productos-servicios/orden-pasos-producto';
 import { contextoStockCotizacion, DisponibilidadCotizacion } from './disponibilidad-materiales';
@@ -232,7 +237,7 @@ import {
   leerPoliticaPricingComponente,
 } from '../productos-servicios/precio/pricing-compuesto';
 
-const MOTOR_CONTRACT_VERSION = 'motor-universal-v5';
+const MOTOR_CONTRACT_VERSION = 'motor-universal-v6';
 
 function hashCotizacionInput(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -1342,6 +1347,7 @@ export class MotorUniversalService {
           requeridoPorNombre: arrastrado.requeridoPorNombre,
         };
       }
+      ejecucion.esOpcional = paso.modoActivacion === 'OPCIONAL';
       pasosEjecutados.push(ejecucion);
 
       // Si este paso generó errores, marcar para no seguir
@@ -1889,6 +1895,7 @@ export class MotorUniversalService {
         }
         const trazaPre = mutacionesPrePasada.get(paso.rutaPasoId);
         if (trazaPre) ejecucion.mutacionAplicada = trazaPre;
+        ejecucion.esOpcional = paso.modoActivacion === 'OPCIONAL';
         pasosEjecutados.push(ejecucion);
 
         if (
@@ -2361,6 +2368,17 @@ export class MotorUniversalService {
         clienteId: input.clienteId ?? undefined,
         costoUnitario: cotizacion.costos.unitario,
         costoSinMargenUnitario,
+        costosPasosUnitarios: escalarCostosPasos(
+          costosPasosPrecio(pasosOperativos, componentesFabricados),
+          this.resolverCostoUnitarioComercial(
+            1,
+            minimoComercialContext.base === 'pliegos_impresos'
+              ? minimoComercialContext.cantidadReal
+              : cantidadComercialReal,
+            cantidadComercialPricing,
+          ),
+        ),
+        costosPasosPropiosTotales: costosPasosPrecio(pasosOperativos),
         cantidad: cantidadComercialPricing,
         descuento: input.descuento ?? null,
         desgloseCostosPricingCompuesto,
@@ -3003,6 +3021,8 @@ export class MotorUniversalService {
     clienteId?: string;
     costoUnitario: number;
     costoSinMargenUnitario: number;
+    costosPasosUnitarios?: CostosPasosPrecio;
+    costosPasosPropiosTotales?: CostosPasosPrecio;
     cantidad: number;
     descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
     desgloseCostosPricingCompuesto?: NonNullable<
@@ -3219,6 +3239,24 @@ export class MotorUniversalService {
         );
       }, 0) ?? 0;
 
+    const costosPasosGeneral = {
+      ...(args.costosPasosPropiosTotales ?? {
+        opcionales: 0,
+        opcionalesSinMargen: 0,
+        incluidosSinMargen: 0,
+      }),
+    };
+    for (const componente of asignacion?.componentes ?? []) {
+      if (!componente.incluidoEnBloqueGeneral) continue;
+      const costeado = componentesPorCodigo.get(componente.codigo);
+      const costos = costosPasosPrecio(
+        costeado?.pasos ?? [],
+        costeado?.componentes,
+      );
+      costosPasosGeneral.opcionales += costos.opcionales;
+      costosPasosGeneral.opcionalesSinMargen += costos.opcionalesSinMargen;
+      costosPasosGeneral.incluidosSinMargen += costos.incluidosSinMargen;
+    }
     const outCompuesto = usarPricingCompuesto
       ? this.aplicarPrecio.aplicarCompuesto({
           costoTotal:
@@ -3234,6 +3272,7 @@ export class MotorUniversalService {
           bloques: [
             {
               codigo: 'GENERAL',
+              costosPasosTotales: costosPasosGeneral,
               nombre: 'Trabajo propio y componentes heredados',
               costoTotal: asignacion?.bloqueGeneral.costoTotal ?? 0,
               costoSinMargenTotal:
@@ -3253,6 +3292,10 @@ export class MotorUniversalService {
                 }
                 return {
                   codigo: componente.codigo,
+                  costosPasosTotales: costosPasosPrecio(
+                    costeado?.pasos ?? [],
+                    costeado?.componentes,
+                  ),
                   nombre: componente.nombre,
                   costoTotal: componente.costoTotal,
                   costoSinMargenTotal: costeado?.costoSinMargenTotal ?? 0,
@@ -3268,6 +3311,7 @@ export class MotorUniversalService {
       this.aplicarPrecio.aplicar({
         costoUnitario: args.costoUnitario,
         costoSinMargenUnitario: args.costoSinMargenUnitario,
+        costosPasosUnitarios: args.costosPasosUnitarios,
         cantidad: args.cantidad,
         precioConfig: precioConfigEfectivo,
         impuestos: impuestosSnapshot,
