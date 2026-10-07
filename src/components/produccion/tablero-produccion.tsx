@@ -564,76 +564,51 @@ function DetailRuta({
 
 type MaterialRow = { nombre: string; cantidad: number; unidad: string };
 
-/**
- * El arte del item, al alcance de la mano en la mesa. Se carga recién al
- * abrir el tab: el tablero ya trae bastante payload y el operario abre los
- * archivos de un item por vez, no de los cuarenta.
- *
- * Es de sólo lectura a propósito — desde el tablero se consume el arte, no se
- * administra. Subir y borrar viven en la ficha de la orden.
- */
-function DetailArchivos({ itemId }: { itemId: string }) {
-  const [archivos, setArchivos] = React.useState<Archivo[] | null>(null);
+/** Adjuntos compartidos de la OT y arte exclusivo del trabajo abierto. */
+export function DetailArchivos({ itemId, ordenId }: { itemId: string; ordenId: string }) {
+  const [datos, setDatos] = React.useState<{ itemId: string; ordenId: string; generales: Archivo[]; propios: Archivo[] } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let vivo = true;
-    setArchivos(null);
+    setDatos(null);
     setError(null);
-    listarArchivos("ORDEN_ITEM", itemId)
-      .then((r) => {
-        if (vivo) setArchivos(r);
-      })
-      .catch((e: unknown) => {
-        if (vivo) {
-          setError(e instanceof Error ? e.message : "No se pudieron cargar.");
-        }
-      });
-    return () => {
-      vivo = false;
-    };
-  }, [itemId]);
+    Promise.all([listarArchivos("ORDEN", ordenId), listarArchivos("ORDEN_ITEM", itemId)])
+      .then(([generales, propios]) => { if (vivo) setDatos({ itemId, ordenId, generales, propios }); })
+      .catch((e: unknown) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudieron cargar los archivos."); });
+    return () => { vivo = false; };
+  }, [itemId, ordenId]);
 
-  if (error) return <div className="detail-route-empty">{error}</div>;
-  if (!archivos)
+  if (error) return <div className="detail-route-empty" role="alert">{error}</div>;
+  if (!datos || datos.itemId !== itemId || datos.ordenId !== ordenId)
     return <div className="detail-route-empty">Cargando archivos…</div>;
-  if (archivos.length === 0) {
-    return (
-      <div className="detail-route-empty">
-        Este item no tiene arte cargado. Se sube desde la ficha de la orden.
-      </div>
-    );
-  }
   return (
-    <div className="arch-lista" style={{ marginTop: 0 }}>
-      <div className="flex justify-end pb-3">
-        <DescargarArchivosButton tipo="item" id={itemId} />
+    <div className="flex flex-col gap-5">
+      <div className="flex justify-end">
+        <DescargarArchivosButton tipo="item" id={itemId} disabled={!datos.generales.length && !datos.propios.length} />
       </div>
-      {archivos.map((a) => (
-        <a
-          key={a.id}
-          className="arch-row"
-          href={urlDeArchivo(a.id)}
-          target="_blank"
-          rel="noreferrer"
-          style={{ textDecoration: "none", color: "inherit" }}
-        >
-          <span className="arch-ico">
-            {a.esImagen ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={urlDeArchivo(a.id)} alt="" />
-            ) : (
-              <FileTextIcon />
-            )}
-          </span>
-          <div className="arch-nom">
-            <b>{a.nombre}</b>
-            <span>
-              {formatBytes(a.bytes)}
-              {a.subidoPor ? ` · ${a.subidoPor}` : ""}
-            </span>
-          </div>
-        </a>
+      {[
+        { titulo: "Archivos generales", archivos: datos.generales, vacio: "La orden no tiene archivos generales." },
+        { titulo: "Archivos del ítem", archivos: datos.propios, vacio: "Este ítem no tiene archivos propios." },
+      ].map(({ titulo, archivos, vacio }) => (
+        <section key={titulo} aria-label={titulo}>
+          <h3 className="mb-2 text-sm font-semibold">{titulo} <span className="text-muted-foreground">({archivos.length})</span></h3>
+          {archivos.length ? (
+            <div className="arch-lista" style={{ marginTop: 0 }}>
+              {archivos.map((a) => (
+                <a key={a.id} className="arch-row" href={urlDeArchivo(a.id)} target="_blank" rel="noreferrer" style={{ textDecoration: "none", color: "inherit" }}>
+                  <span className="arch-ico">
+                    {a.esImagen ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={urlDeArchivo(a.id)} alt="" />
+                    ) : <FileTextIcon />}
+                  </span>
+                  <div className="arch-nom"><b>{a.nombre}</b><span>{formatBytes(a.bytes)}{a.subidoPor ? ` · ${a.subidoPor}` : ""}</span></div>
+                </a>
+              ))}
+            </div>
+          ) : <p className="detail-route-empty">{vacio}</p>}
+        </section>
       ))}
     </div>
   );
@@ -1015,7 +990,7 @@ export function ItemDetailSheet({
               cargando={cargandoDetalle}
             />
           ) : null}
-          {tab === "archivos" ? <DetailArchivos itemId={item.id} /> : null}
+          {tab === "archivos" ? <DetailArchivos key={item.id} itemId={item.id} ordenId={item.data.ordenId} /> : null}
           {tab === "actividad" && !errorDetalle ? (
             <DetailActividad eventos={eventos} cargando={cargandoDetalle} />
           ) : null}

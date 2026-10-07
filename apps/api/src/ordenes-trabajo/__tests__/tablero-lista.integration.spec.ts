@@ -1,3 +1,4 @@
+import { ArchivosService } from '../../archivos/archivos.service';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
@@ -22,13 +23,13 @@ const auth = {
 } as CurrentAuth;
 // Se prueba la consulta real; conciliación/backfill tienen sus propias suites.
 const service = Object.assign(
-  Object.create(OrdenesTrabajoService.prototype) as OrdenesTrabajoService,
+  Object.create(OrdenesTrabajoService.prototype),
   {
     prisma: db,
     reconciliarTramosVencidos: jest.fn().mockResolvedValue(undefined),
     backfillPasosTablero: jest.fn().mockResolvedValue(undefined),
   },
-);
+) as OrdenesTrabajoService;
 let ordenId: string,
   activoId: string,
   terminadoId: string,
@@ -292,4 +293,24 @@ it('proyecta la referencia del paso sin descargar su historial y conserva los fi
   );
   expect(item.pasos.find((p) => p.id === pasoHecho)!.planReferencia).toBeNull();
   expect(JSON.stringify(data)).not.toContain('historial');
+});
+
+it('cuenta y descarga los generales en cada ítem sin incluir archivos hermanos ni de otra OT', async () => {
+  const archivos = new ArchivosService(db as never, {} as never, {} as never);
+  const general = await db.archivo.create({ data: { tenantId, scope: 'ORDEN', ordenId, key: randomUUID(), nombreOriginal: 'General.pdf', mimeType: 'application/pdf', estado: 'LISTO', bytes: 100 } });
+  const propio = await db.archivo.create({ data: { tenantId, scope: 'ORDEN_ITEM', ordenItemId: activoId, key: randomUUID(), nombreOriginal: 'Arte activo.pdf', mimeType: 'application/pdf', estado: 'LISTO', bytes: 100 } });
+  await db.archivo.create({ data: { tenantId, scope: 'ORDEN_ITEM', ordenItemId: terminadoId, key: randomUUID(), nombreOriginal: 'Arte terminado.pdf', mimeType: 'application/pdf', estado: 'LISTO', bytes: 100 } });
+  await db.archivo.create({ data: { tenantId, scope: 'ORDEN', ordenId, key: randomUUID(), nombreOriginal: 'Factura del sistema.pdf', mimeType: 'application/pdf', generado: true, estado: 'LISTO', bytes: 100 } });
+  const activos = await service.tablero(auth);
+  expect(activos.items.find(i => i.id === activoId)?.archivosCount).toBe(2);
+  expect(activos.items.find(i => i.id === sinRutaId)?.archivosCount).toBe(1);
+  expect((await service.consultarItemTablero(auth, activoId)).archivosCount).toBe(2);
+  const terminados = await service.tableroTerminados(auth, { page: 1, limit: 25 });
+  expect(terminados.items.find(i => i.id === terminadoId)?.archivosCount).toBe(2);
+  const consulta = jest.spyOn(db.archivo, 'findMany');
+  await archivos.prepararDescargaZip(tenantId, { itemId: activoId });
+  const seleccion = await consulta.mock.results[0].value;
+  expect(seleccion.map((a: { key: string }) => a.key).sort()).toEqual([general.key, propio.key].sort());
+  await expect(archivos.prepararDescargaZip(otroTenant, { itemId: activoId })).rejects.toThrow('no encontrado');
+  consulta.mockRestore();
 });

@@ -22,7 +22,7 @@ const prisma = {
     findFirst: jest.fn(({ where }) =>
       Promise.resolve(
         where.tenantId === 'empresa-a' && where.id === id
-          ? { id, nombre: 'Trabajo ficticio' }
+          ? { id, ordenId: id, nombre: 'Trabajo ficticio' }
           : null,
       ),
     ),

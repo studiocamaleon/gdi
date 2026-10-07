@@ -1,8 +1,21 @@
-import { ArchivoEstado, type Prisma } from '@prisma/client';
+import { ArchivoEstado, ArchivoScope, type Prisma } from '@prisma/client';
 import {
   loteTableroSelect,
   dependenciaTableroSelect,
 } from './tablero-contexto-lote';
+
+/** Generales de la OT visibles en cada trabajo, sin documentos del sistema. */
+export const archivosGeneralesTableroCount = {
+  select: {
+    archivos: {
+      where: {
+        scope: ArchivoScope.ORDEN,
+        estado: ArchivoEstado.LISTO,
+        generado: false,
+      },
+    },
+  },
+} satisfies Prisma.OrdenTrabajoCountOutputTypeDefaultArgs;
 
 /** Proyección compartida de filas activas y páginas del historial. */
 export const itemTableroInclude = {
@@ -23,7 +36,9 @@ export const itemTableroInclude = {
   // con el número, no la lista. Traer las filas para contarlas
   // sería N+1 disfrazado.
   _count: {
-    select: { archivos: { where: { estado: ArchivoEstado.LISTO } } },
+    select: {
+      archivos: { where: { estado: ArchivoEstado.LISTO, generado: false } },
+    },
   },
   pasos: {
     orderBy: { indice: 'asc' as const },

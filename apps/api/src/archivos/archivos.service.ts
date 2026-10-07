@@ -729,7 +729,7 @@ export class ArchivosService {
 
   async prepararDescargaZip(tenantId: string, destino: { ordenId: string } | { itemId: string }) {
     // Empresa explícita también fuera del interceptor (tests, futuros callers).
-    const ordenId = 'ordenId' in destino ? destino.ordenId : null;
+    let ordenId = 'ordenId' in destino ? destino.ordenId : null;
     let idsItems: string[];
     let nombre: string;
     if (ordenId) {
@@ -743,10 +743,11 @@ export class ArchivosService {
     } else {
       const item = await this.prisma.ordenTrabajoItem.findFirst({
         where: { id: (destino as { itemId: string }).itemId, tenantId },
-        select: { id: true, nombre: true },
+        select: { id: true, nombre: true, ordenId: true },
       });
       if (!item) throw new NotFoundException('Trabajo no encontrado.');
       idsItems = [item.id];
+      ordenId = item.ordenId;
       nombre = nombreSeguroZip(item.nombre);
     }
     const archivos = await this.prisma.archivo.findMany({

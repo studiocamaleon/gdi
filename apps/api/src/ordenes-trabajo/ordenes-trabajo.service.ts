@@ -40,6 +40,7 @@ import {
 import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
 import {
   itemTableroInclude,
+  archivosGeneralesTableroCount,
   itemActivoTablero,
   itemTerminadoTablero,
 } from './tablero-consultas';
@@ -6867,6 +6868,7 @@ export class OrdenesTrabajoService {
         ...(soloPendientes ? { items: { some: itemActivoTablero } } : {}),
       },
       include: {
+        _count: archivosGeneralesTableroCount,
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
         items: {
@@ -7016,6 +7018,7 @@ export class OrdenesTrabajoService {
         ...itemTableroInclude,
         orden: {
           include: {
+            _count: archivosGeneralesTableroCount,
             cliente: { select: { nombre: true } },
             vendedor: { select: { nombreCompleto: true } },
           },
@@ -7135,6 +7138,7 @@ export class OrdenesTrabajoService {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
       include: {
+        _count: archivosGeneralesTableroCount,
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
         items: {
@@ -7155,7 +7159,7 @@ export class OrdenesTrabajoService {
             // con el número, no la lista. Traer las filas para contarlas
             // sería N+1 disfrazado.
             _count: {
-              select: { archivos: { where: { estado: ArchivoEstado.LISTO } } },
+              select: { archivos: { where: { estado: ArchivoEstado.LISTO, generado: false } } },
             },
             pasos: {
               orderBy: { indice: 'asc' as const },
@@ -8251,6 +8255,7 @@ export class OrdenesTrabajoService {
     const item = await this.prisma.ordenTrabajoItem.findFirst({
       where: { id: itemId, tenantId: auth.tenantId },
       include: {
+        _count: itemTableroInclude._count,
         parentItem: { select: { id: true, nombre: true } },
         loteEntrega: { select: loteTableroSelect },
         cotizacionItem: {
@@ -8299,6 +8304,7 @@ export class OrdenesTrabajoService {
         },
         orden: {
           include: {
+            _count: archivosGeneralesTableroCount,
             cliente: { select: { nombre: true } },
             vendedor: { select: { nombreCompleto: true } },
           },
@@ -8668,6 +8674,7 @@ export class OrdenesTrabajoService {
   private toTableroItem(
     orden: {
       id: string;
+      _count?: { archivos: number };
       numero: string;
       estado: string;
       fechaEntrega: Date | null;
@@ -8816,7 +8823,7 @@ export class OrdenesTrabajoService {
       fechaEntrega:
         (item.fechaEntrega ?? orden.fechaEntrega)?.toISOString().slice(0, 10) ??
         null,
-      archivosCount: item._count?.archivos ?? 0,
+      archivosCount: (item._count?.archivos ?? 0) + (orden._count?.archivos ?? 0),
       // El operario necesita estas instrucciones antes de iniciar Diseño
       // gráfico. Se proyecta sólo el brief, no todo el jobContext comercial.
       briefDiseno: jobContext?.briefDiseno ?? null,

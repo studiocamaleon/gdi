@@ -89,7 +89,7 @@ function fixture() {
         .mockResolvedValue({ numero: 'OT-DEMO', items: [{ id: 'i1' }] }),
     },
     ordenTrabajoItem: {
-      findFirst: jest.fn().mockResolvedValue({ id: 'i1', nombre: 'Producto' }),
+      findFirst: jest.fn().mockResolvedValue({ id: 'i1', nombre: 'Producto', ordenId: 'ot1' }),
     },
     archivo: {
       findMany: jest.fn().mockResolvedValue([
@@ -145,13 +145,14 @@ it('limita el paquete a archivos listos de esa empresa y orden; conserva carpeta
   ]);
 });
 
-it('la descarga de operación diaria sólo incluye el item solicitado', async () => {
+it('la descarga de operación diaria incluye los generales y sólo el ítem solicitado', async () => {
   const { service, prisma } = fixture();
   await service.prepararDescargaZip('empresa-a', { itemId: 'i1' });
   expect(prisma.ordenTrabajoItem.findFirst).toHaveBeenCalledWith(
     expect.objectContaining({ where: { id: 'i1', tenantId: 'empresa-a' } }),
   );
   expect(prisma.archivo.findMany.mock.calls[0][0].where.OR).toEqual([
+    { ordenId: 'ot1', scope: 'ORDEN' },
     { ordenItemId: { in: ['i1'] }, scope: 'ORDEN_ITEM' },
   ]);
 });

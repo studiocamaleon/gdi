@@ -50,6 +50,7 @@ let root: Root;
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.clearAllMocks();
+  vi.mocked(listarArchivos).mockResolvedValue([]);
   vi.mocked(getDetalleItemTablero).mockImplementation(async (id) => ({
     materiales: [{ nombre: `Papel de ${id}`, cantidad: 2, unidad: "hojas" }],
     notaProduccion: "Imprimir a dos caras",
@@ -133,3 +134,27 @@ it("un fallo al cargar el detalle no se presenta como una lista vacía", async (
     "No se pudo cargar",
   );
 });
+
+ it("cada trabajo comparte los generales y conserva sólo sus propios archivos", async () => {
+  vi.mocked(listarArchivos).mockImplementation(async (scope, id) => [
+    { id: `${scope}-${id}`, nombre: scope === "ORDEN" ? "Instrucciones generales.pdf" : `Arte ${id}.pdf`, bytes: 100, esImagen: false } as never,
+  ]);
+  await montar(["produccion.tablero.ver"]);
+  await tab("Archivos");
+  expect(contenedor.querySelector('section[aria-label="Archivos generales"]')?.textContent).toContain("Instrucciones generales.pdf");
+  expect(contenedor.querySelector('section[aria-label="Archivos del ítem"]')?.textContent).toContain("Arte trabajo-1.pdf");
+  await montar(["produccion.tablero.ver"], "trabajo-2");
+  expect(contenedor.textContent).toContain("Instrucciones generales.pdf");
+  expect(contenedor.textContent).toContain("Arte trabajo-2.pdf");
+  expect(contenedor.textContent).not.toContain("Arte trabajo-1.pdf");
+  expect(listarArchivos).toHaveBeenCalledWith("ORDEN", "ot-ficticia");
+  expect(listarArchivos).toHaveBeenCalledWith("ORDEN_ITEM", "trabajo-2");
+  expect(getOrdenTrabajo).not.toHaveBeenCalled();
+ });
+ it("el error de carga de archivos generales no se disfraza de orden sin archivos", async () => {
+  vi.mocked(listarArchivos).mockRejectedValue(new Error("No se pudieron cargar los archivos"));
+  await montar(["produccion.tablero.ver"]);
+  await tab("Archivos");
+  expect(contenedor.querySelector('[role="alert"]')?.textContent).toContain("No se pudieron cargar");
+  expect(contenedor.textContent).not.toContain("La orden no tiene archivos generales");
+ });
