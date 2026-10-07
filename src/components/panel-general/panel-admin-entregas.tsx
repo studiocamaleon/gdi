@@ -89,7 +89,7 @@ const GRUPOS: { id: Riesgo; label: string; vacio: string; detalle: string }[] =
       id: "atrasada",
       label: "Atrasadas",
       vacio: "Entregas al día",
-      detalle: "No hay órdenes con una fecha de entrega vencida.",
+      detalle: "No hay órdenes sin terminar con una fecha de entrega vencida.",
     },
     {
       id: "proxima",
@@ -97,6 +97,12 @@ const GRUPOS: { id: Riesgo; label: string; vacio: string; detalle: string }[] =
       vacio: "Sin entregas próximas",
       detalle:
         "No hay órdenes comprometidas entre mañana y los próximos siete días.",
+    },
+    {
+      id: "lista",
+      label: "Para retirar",
+      vacio: "Sin órdenes para retirar",
+      detalle: "Las órdenes finalizadas pendientes de entrega aparecerán acá.",
     },
   ];
 
@@ -120,12 +126,14 @@ function ListaEntregas({
             ? entrega.progreso.porcentaje
             : entrega.progresoPct;
           const etapa =
-            entrega.pasoActual ??
-            (pct == null
-              ? "Sin ruta de producción"
-              : pct === 100
-                ? "Producción completada"
-                : "Sin etapa activa");
+            entrega.riesgo === "lista"
+              ? "Lista para retirar"
+              : (entrega.pasoActual ??
+                (pct == null
+                  ? "Sin ruta de producción"
+                  : pct === 100
+                    ? "Producción completada"
+                    : "Sin etapa activa"));
           return (
             <li key={entrega.id} className={s.delivery}>
               <div className={s.deliveryWork}>
@@ -146,31 +154,37 @@ function ListaEntregas({
               </div>
               <div className={s.deliveryDate} data-risk={entrega.riesgo}>
                 <span>
-                  {entrega.riesgo === "hoy"
-                    ? "Hoy"
-                    : entrega.riesgo === "atrasada"
-                      ? "Atrasada"
-                      : "Próxima"}
+                  {entrega.riesgo === "lista"
+                    ? "Para retirar"
+                    : entrega.riesgo === "hoy"
+                      ? "Hoy"
+                      : entrega.riesgo === "atrasada"
+                        ? "Atrasada"
+                        : "Próxima"}
                 </span>
-                <time dateTime={entrega.fechaEntrega}>
-                  {entrega.fechaEntrega
-                    .slice(0, 10)
-                    .split("-")
-                    .reverse()
-                    .join("/")}
-                </time>
+                {entrega.fechaEntrega ? (
+                  <time dateTime={entrega.fechaEntrega}>
+                    {entrega.fechaEntrega
+                      .slice(0, 10)
+                      .split("-")
+                      .reverse()
+                      .join("/")}
+                  </time>
+                ) : (
+                  <small>Sin fecha de entrega</small>
+                )}
               </div>
               <div className={s.deliveryStatus}>
                 <span className={s.stage}>
                   <Factory size={13} aria-hidden />
                   <span>
                     {etapa}
-                    {entrega.estacionActual && (
+                    {entrega.riesgo !== "lista" && entrega.estacionActual && (
                       <small> · {entrega.estacionActual}</small>
                     )}
                   </span>
                 </span>
-                <Avance entrega={entrega} />
+                {entrega.riesgo !== "lista" && <Avance entrega={entrega} />}
               </div>
             </li>
           );
@@ -216,12 +230,16 @@ export function Entregas({
           items={GRUPOS.map(({ id, label }) => ({
             id,
             label,
-            count: grupos[id].total,
+            count: grupos[id]?.total ?? 0,
           }))}
         />
         {GRUPOS.map(({ id, vacio, detalle }) => (
           <Tabs.Panel key={id} id={id} className={s.deliveryTab}>
-            <ListaEntregas {...grupos[id]} vacio={vacio} detalle={detalle} />
+            <ListaEntregas
+              {...(grupos[id] ?? { items: [], total: 0 })}
+              vacio={vacio}
+              detalle={detalle}
+            />
           </Tabs.Panel>
         ))}
       </Tabs>

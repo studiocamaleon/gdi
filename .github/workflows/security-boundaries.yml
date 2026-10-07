@@ -124,6 +124,7 @@ jobs:
             src/panel-general/__tests__/panel-actividad-entradas.spec.ts \
             src/panel-general/__tests__/panel-admin.spec.ts \
             src/panel-general/__tests__/panel-general.spec.ts \
+            src/panel-general/__tests__/entregas-estados.integration.spec.ts \
             src/gastos-fijos/__tests__/programacion.integration.spec.ts \
             src/integraciones/meta/meta-inbox.spec.ts \
             src/integraciones/meta/meta-inbox-general.integration.spec.ts \
