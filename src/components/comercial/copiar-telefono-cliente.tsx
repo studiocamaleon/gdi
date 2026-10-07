@@ -9,7 +9,9 @@ export function CopiarTelefonoCliente({
 }: {
   telefono?: string | null;
 }) {
-  if (!telefono?.trim()) return null;
+  if (!telefono?.trim()) {
+    return <span className="text-xs text-muted-foreground">Sin teléfono</span>;
+  }
   async function copiar() {
     try {
       await navigator.clipboard.writeText(telefono!.trim());

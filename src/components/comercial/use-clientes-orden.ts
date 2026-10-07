@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ClienteDetalle } from "@/lib/clientes";
+import type { ClienteOpcion } from "./cliente-selector-orden";
 import { listClientes } from "@/lib/clientes-api";
 
-function mergeClientes(current: ClienteDetalle[], incoming: ClienteDetalle[]) {
+function mergeClientes(current: ClienteOpcion[], incoming: ClienteOpcion[]) {
   return [
     ...new Map(
       [...current, ...incoming].map((cliente) => [cliente.id, cliente]),
@@ -13,13 +13,21 @@ function mergeClientes(current: ClienteDetalle[], incoming: ClienteDetalle[]) {
 }
 
 /** Consulta y caché local independientes del control visual. */
-export function useClientesOrden(initialClientes: ClienteDetalle[]) {
+export function useClientesOrden(
+  initialClientes: ClienteOpcion[],
+  clientePersistido?: ClienteOpcion | null,
+) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [remoteOptions, setRemoteOptions] = useState<ClienteDetalle[]>([]);
+  const [remoteOptions, setRemoteOptions] = useState<ClienteOpcion[]>([]);
   const options = useMemo(
-    () => mergeClientes(initialClientes, remoteOptions),
-    [initialClientes, remoteOptions],
+    // La página inicial y las búsquedas son parciales. El cliente de la OT
+    // tiene que estar en la colección aun si no aparece en esos resultados.
+    () => mergeClientes(
+      clientePersistido ? [clientePersistido] : [],
+      mergeClientes(initialClientes, remoteOptions),
+    ),
+    [initialClientes, remoteOptions, clientePersistido],
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

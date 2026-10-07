@@ -35,7 +35,7 @@ export function OrdenSummaryDetails({
             <dt>Cliente</dt>
             <dd className={s.client}>
               <span>{cliente || "Sin cliente asignado"}</span>
-              <CopiarTelefonoCliente telefono={clienteTelefono} />
+              {cliente && <CopiarTelefonoCliente telefono={clienteTelefono} />}
             </dd>
           </div>
         </div>

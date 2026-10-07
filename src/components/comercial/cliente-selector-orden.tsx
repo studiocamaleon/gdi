@@ -6,11 +6,11 @@ import type { ClienteDetalle } from "@/lib/clientes";
 import fieldFocus from "@/components/design-system/field-focus.module.css";
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 
-type ClienteOpcion = Pick<
+export type ClienteOpcion = Pick<
   ClienteDetalle,
   "id" | "nombre" | "razonSocial" | "email"
 > &
-  Partial<Pick<ClienteDetalle, "contacto">>;
+  Partial<Pick<ClienteDetalle, "contacto" | "telefonoCodigo" | "telefonoNumero">>;
 
 /** Vista accesible reutilizable; no conoce APIs ni permisos comerciales. */
 export function ClienteLista({

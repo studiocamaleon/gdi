@@ -5219,8 +5219,25 @@ function PropuestaFichaContenido({
         : [...initialClientes, ...clientesEscaneados],
     [initialClientes, clientesEscaneados],
   );
+  const clientePersistido = React.useMemo(
+    () => orden?.clienteId ? {
+      id: orden.clienteId,
+      nombre: orden.clienteNombre,
+      razonSocial: "",
+      email: "",
+      telefonoCodigo: "",
+      telefonoNumero: orden.clienteTelefono ?? "",
+    } : null,
+    [orden?.clienteId, orden?.clienteNombre, orden?.clienteTelefono],
+  );
   // La caché sobrevive al cierre del panel de datos en móvil.
-  const selectorClientes = useClientesOrden(clientesDisponibles);
+  const selectorClientes = useClientesOrden(clientesDisponibles, clientePersistido);
+  const clienteSeleccionado = selectorClientes.options.find((c) => c.id === clienteId);
+  const telefonoCliente = clienteId === orden?.clienteId
+    ? orden?.clienteTelefono
+    : clienteSeleccionado?.telefonoNumero?.trim()
+      ? [clienteSeleccionado.telefonoCodigo, clienteSeleccionado.telefonoNumero].filter(Boolean).join(" ").trim()
+      : null;
   const [canalVenta, setCanalVenta] = React.useState(orden?.canalVenta ?? "");
   const datosOrdenRef = React.useRef<OrdenWorkspaceHandle>(null);
   const canalSelectorId = React.useId();
@@ -7466,12 +7483,8 @@ function PropuestaFichaContenido({
             }
             summary={
               <OrdenSummaryDetails
-                clienteTelefono={orden?.clienteTelefono}
-                cliente={
-                  orden?.clienteNombre ??
-                  selectorClientes.options.find((c) => c.id === clienteId)
-                    ?.nombre
-                }
+                clienteTelefono={telefonoCliente}
+                cliente={clienteSeleccionado?.nombre}
                 campana={
                   campanasCliente.find((c) => c.id === proyectoCampanaId)
                     ?.nombre ??
@@ -7862,18 +7875,20 @@ function PropuestaFichaContenido({
                   }
                   cliente={
                     <FieldCard label="Cliente" icon={<UserIcon />}>
-                      {campoEditable("clienteId") ? (
-                        <ClienteLista
-                          value={clienteId}
-                          onChange={setClienteId}
-                          {...selectorClientes}
-                        />
-                      ) : (
-                        <div className="flex items-center gap-2 text-sm text-foreground">
-                          <span>{orden?.clienteNombre}</span>
-                          <CopiarTelefonoCliente telefono={orden?.clienteTelefono} />
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 text-sm text-foreground">
+                        {campoEditable("clienteId") ? (
+                          <div className="min-w-0 flex-1">
+                            <ClienteLista
+                              value={clienteId}
+                              onChange={setClienteId}
+                              {...selectorClientes}
+                            />
+                          </div>
+                        ) : (
+                          <span>{clienteSeleccionado?.nombre ?? "Sin cliente"}</span>
+                        )}
+                        {clienteId && <CopiarTelefonoCliente telefono={telefonoCliente} />}
+                      </div>
                     </FieldCard>
                   }
                   campana={conProyectos ? (
