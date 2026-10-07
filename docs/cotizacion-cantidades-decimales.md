@@ -38,7 +38,7 @@ Vinilo de corte con 0,5 y 0,25 m y comprobó el campo con coma y vacío en el
 navegador. Publicado junto con el lote del PR #26, revisión `a9c2d563d`; no se
 guardaron órdenes de ensayo en producción. Ver [el registro de publicación](../deploy/produccion/VALIDACION.md).
 
-## Corrección adicional del precio por largo — 06/10/2026, sólo local
+## Corrección adicional del precio por largo — 06/10/2026, publicada
 
 La prueba anterior verificaba la cantidad comercial, pero no comparaba el
 consumo ni el precio de distintas fracciones. Se detectó un segundo problema
@@ -64,8 +64,15 @@ el precio de medio metro puede superar la mitad del precio de un metro.
   no entran.
 - Comparación adicional del motor local contra la configuración vigente,
   usando una transacción de sólo lectura. Sin guardar órdenes ni cambiar datos.
-- Revisión de tipos focalizada en los tres archivos TypeScript del cambio.
-  La revisión global con límite de 1,5 GB no terminó por falta de memoria;
-  la compilación completa queda para el proceso remoto previo al despliegue.
+- Compilaciones completas de API/web con tipos habilitados aprobadas en Fly
+  remoto y CI; la revisión global anterior en la Mac se había interrumpido por
+  falta de memoria.
+- HTTP real en staging: 0,25 / 0,5 / 1 / 1,5 / 2 m consumen respectivamente
+  0,27 / 0,52 / 1,02 / 1,52 / 2,02 m, con precios crecientes.
+- Navegador en producción: 0,5 m y 1 m dieron importes distintos y crecientes.
+  Se cerró el configurador sin agregar productos ni guardar una orden.
 
-Esta corrección del motor todavía no está publicada en staging ni producción.
+Publicada junto con la corrección del cliente de la OT, revisión
+`53087e81c82d093876132a26f25af0b7533c038c`, la noche del 06/10/2026 en Argentina
+(07/10 UTC). Las mismas imágenes comprobadas en staging se promovieron a
+producción. Ver los registros de validación de ambos entornos.

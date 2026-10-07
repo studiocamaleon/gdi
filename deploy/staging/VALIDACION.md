@@ -1039,3 +1039,29 @@ Copia previa **`2e87060f-c885-4bb3-bcc3-760c06f4dbb3`**, completada **2026-10-06
 La revisión anterior `b89000446` usa API/workers `sha256:006f62ffbbdc6456c37f72859c133f14d02146fcd7d55f4849e5c9e41ed9483f` y web `sha256:a384f9677a0c2362db3179287f707fdd16ea11f9f75649e7398127dee96e8977`. No revertir la base ni borrar operaciones. Antes de volver al código anterior, comprobar que no haya datos usando BARRA: esa versión no reconoce la unidad y reintroduce el acceso comercial indebido del operario. Priorizar una corrección hacia adelante.
 
 Constructor remoto temporal de esta publicación retirado después de promover las imágenes; otros recursos de compilación y proyectos locales intactos.
+
+
+## 07/10/2026, 00:36 UTC — Cliente de OT y precio de vinilo por metro (PR #26)
+
+Revisión ejecutada **`53087e81c82d093876132a26f25af0b7533c038c`** (noche del 06/10 en Argentina). Correcciones agrupadas a pedido del titular: local, staging y promoción a producción de las mismas imágenes por digest. No se fusionaron PR ni se modificó Vercel. Los commits documentales posteriores no cambian esta revisión de ejecución.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:c2c7d1367060a051cdad6a24fafa33f7d7271aac8d19445bd82fd920499959e1` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:655b0becaa9507786368ac4aa088fc4d278773ac67821753e99fc56d556cdb93` |
+
+**307 migraciones, ninguna nueva.** Se conservan seis máquinas, sus tamaños, Gotenberg y la imagen del copiador. Salud web/API 200, API privada directa 403 y BFF anónimo 401. Revisión exacta y Sentry configurado comprobados en los cuatro servicios actualizados. Constructor temporal propio retirado al terminar; no se compiló en Docker local ni se alteraron otros proyectos.
+
+### Correcciones y comprobaciones
+
+- El selector inicial contiene 30 clientes. Ahora incorpora el cliente persistido de la OT aunque quede fuera de esa página, combina la búsqueda sin duplicados y conserva su nombre/teléfono en lectura y edición. Copiar no exige editar; si falta el número se muestra «Sin teléfono».
+- Vinilo por metro directo: no gira la franja ni aplica demasía implícita derivada de separación entre piezas. Respeta demasía explícita y márgenes físicos; rechaza un corte en rollo sin layout válido antes de confundir área con metros. Mantiene preparación fija y mínimos comerciales explícitos.
+- **172 pruebas API en ocho suites y 10 web en dos suites**, lint y diff correctos. Compilaciones completas API/web remotas con tipos habilitados. [CI de HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37549718127) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37549718140), aprobados para la revisión ejecutada.
+- **25 comprobaciones HTTP/SSR y de resultados finales en staging**: cliente fuera de página, teléfono completo, guardar otro dato sin perder cliente/importe, lector sin escritura, operario rechazado y aislamiento entre empresas. Cotizaciones reales de 0,25 / 0,5 / 1 / 1,5 / 2 m con consumo 0,27 / 0,52 / 1,02 / 1,52 / 2,02 m y precios crecientes. Once controles API previos se solapan con esta pasada; no se suman como pruebas únicas.
+- Chrome en staging: reproducido el selector vacío antes del cambio; luego conserva el cliente fuera de la primera página, permite buscar y cambiar, actualiza nombre/teléfono en el resumen y recupera el original al cancelar. Guardar otro dato conservó cliente e importe. Copia completa al portapapeles comprobada desde lectura, con aviso «Teléfono copiado». Usuarios, roles, órdenes y empresas ficticios retirados por sus identificadores.
+
+### Respaldo y reversión
+
+Copia previa **`05157525-93f5-407e-bb03-d85e94ff3586`**, completada **2026-10-07T00:01:28.477Z**. Copia posterior **`549df210-77be-48aa-b6a3-cd30c2d3f0bf`**, completada **2026-10-07T00:36:02.642Z**, con 307 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de fuentes/imágenes comprobados. Fuente cifrada protegida durante 31 días. **No se repitió una restauración SQL completa**. Evidencias y accesos privados fuera de Git.
+
+Para volver a `a9c2d563dae051d704b18bf71974a7c75b7517e8`, conservar la base: API/workers `sha256:c137b072cffaab608d02b9235effee55a9057478e0f3bb5a34b5b5c6fed25bd2`, web `sha256:53cd120b3a43979fcd5bd11e4bae38d794412c1afefc80da16e3e5400f364608`. Reintroduce ambos defectos; no borrar datos ni revertir migraciones. Priorizar una corrección hacia adelante.

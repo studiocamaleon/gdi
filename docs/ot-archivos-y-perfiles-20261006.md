@@ -3,7 +3,8 @@
 Trabajo local en `codex/ot-archivos-perfiles`, basado en `6cb80c98b` de
 `codex/niveles-perfiles-maquina`. Depende del PR #25 (incluye los descuentos de
 OT persistida). Publicado en staging y producción el 06/10/2026 con la revisión
-`a9c2d563d`, luego del recorrido documentado en
+`a9c2d563d`, actualizado a `53087e81c` la misma noche (07/10 UTC) con las
+correcciones del cliente y del precio por metro, luego del recorrido documentado en
 [staging](../deploy/staging/VALIDACION.md) y
 [producción](../deploy/produccion/VALIDACION.md).
 
@@ -11,7 +12,8 @@ OT persistida). Publicado en staging y producción el 06/10/2026 con la revisió
 
 - El detalle de la OT entrega el teléfono completo del cliente y ofrece copiarlo
   junto a su nombre, tanto en Datos como en el resumen. No requiere abrir CRM;
-  conserva el permiso de lectura de la orden. Si falta el número, no hay botón.
+  conserva el permiso de lectura de la orden, sin requerir edición. Si falta
+  el número, muestra «Sin teléfono» en lugar del botón.
 - Descuento y cupón requieren «Editar orden». Al cancelar la edición se cierran
   los controles abiertos. El diálogo confirma y guarda el descuento mediante su
   operación específica; no recotiza los pasos de producción. Conserva los
@@ -26,6 +28,22 @@ OT persistida). Publicado en staging y producción el 06/10/2026 con la revisió
   valida acceso y tamaño antes de iniciar la descarga. ZIP secuencial desde R2 o
   disco, retransmitido por el BFF al navegador; no reúne todos los bytes en RAM.
   Límite: 500 archivos o 2 GiB. Un archivo faltante/incompleto aborta el paquete.
+
+### Cliente fuera de la primera página del selector
+
+El selector cargaba sólo 30 clientes y podía mostrar «Seleccionar cliente» al
+editar una OT cuyo cliente quedaba fuera de esa página, aunque la orden sí
+conservaba su identificador. Ahora incluye el cliente persistido y combina sus
+datos con los del listado y la búsqueda, sin duplicarlo. El resumen y el teléfono
+acompañan al cliente elegido durante la edición; cancelar recupera el original.
+
+Diez pruebas de interfaz con componentes reales cubren la selección fuera de
+página, fallo del listado, actualización de datos, copiar en lectura y ausencia
+de teléfono. En staging se comprobó además guardar otro dato sin perder el
+cliente, buscar/cambiar/cancelar y copiar el teléfono completo al portapapeles.
+HTTP/SSR comprobó lectores, editores, operarios y aislamiento entre empresas.
+En producción se verificó la OT reportada, entrando y saliendo de edición sin
+guardar. El cliente real de ese caso no tiene número cargado: no se agregó uno.
 
 ## Caño estructural
 
