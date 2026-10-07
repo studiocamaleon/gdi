@@ -442,3 +442,37 @@ Revisión ejecutada **`53087e81c82d093876132a26f25af0b7533c038c`** (noche del 06
 Copia previa **`0f1effb3-5100-4898-b551-f6405f67926d`**, completada **2026-10-07T00:01:06.529Z**. Copia posterior **`4c446cee-5612-45cb-9943-ecbf600fceb9`**, completada **2026-10-07T00:40:42.415Z**, con 307 migraciones y 40 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de fuentes/imágenes comprobados. Fuente cifrada protegida durante 31 días. **No se repitió una restauración SQL completa**. Evidencias y accesos privados fuera de Git.
 
 Para volver a `a9c2d563dae051d704b18bf71974a7c75b7517e8`, conservar la base: API/workers `sha256:c137b072cffaab608d02b9235effee55a9057478e0f3bb5a34b5b5c6fed25bd2`, web `sha256:53cd120b3a43979fcd5bd11e4bae38d794412c1afefc80da16e3e5400f364608`. Reintroduce ambos defectos; no borrar datos ni revertir migraciones. Priorizar una corrección hacia adelante.
+
+
+## 07/10/2026, 20:50 UTC — Facturar, flujos recuperables y archivos generales (PR #27)
+
+Publicación autorizada después de comprobar staging. **Backend `dd71567e38b81e573c0b9cba9a85020484d34624` y web `0e2e013d7e99aa0bc0390cc96ee5e9fe539f1ddd`**, promovidos desde las imágenes de staging por digest. El ajuste final es exclusivamente web: conserva los centavos del saldo fiscal. Los commits documentales posteriores no cambian las revisiones ejecutadas. No se fusionó la cadena de PR ni se modificó Vercel; #27 depende de #26.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:f3c54b59a098da9d6c9175b47bd2904f183ea95cecbb1bfbf44c80c445721b0c` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:fdeb342f2f47dacd3a7adc886932fc5f3f0411dc52c0af421ded49f40a33bee9` |
+
+**307 migraciones, ninguna nueva.** Seis máquinas con los tamaños originales. Gotenberg y el copiador conservan sus imágenes. Web/API 200, API privada directa 403 y BFF anónimo 401. Revisión exacta y Sentry configurado en API, ambos workers y web.
+
+### Funcionalidad y pruebas
+
+- Facturar aparece en la cabecera de una OT en lectura, bajo el permiso fiscal independiente de editar órdenes. Comprueba saldo actualizado y rechaza otra emisión si existe un comprobante en proceso o por verificar. Un usuario fiscal restringido sólo consulta comprobantes de la orden indicada, sin acceso al listado general.
+- El modal conserva los centavos al abrir y al usar 100%/50%. Se reprodujo el redondeo anterior en staging con $2.420,66 y se verificó el importe exacto, $1.210,33 al 50% y botón habilitado tras corregirlo. Tres casos locales fallaron antes de la corrección y pasaron después.
+- Los flujos se desactivan y recuperan sin borrar recetas ni versiones históricas. El flujo inactivo deja de ofrecerse al cotizar; se elige otra alternativa activa como preferida cuando corresponde.
+- Operación diaria presenta archivos generales de OT en todos sus ítems, separados de los archivos propios del trabajo. Contador y ZIP incluyen ambos grupos sin incorporar archivos de otro ítem. El operario continúa sin acceso comercial a la OT.
+- En staging: **35 comprobaciones HTTP/SSR y de resultados**, ocho fiscales repetidas después del ajuste decimal y recorrido Chrome con roles ficticios. Ensayados aislamiento entre empresas, 403 por permisos, revisiones intactas al desactivar/reactivar, ZIP con bytes correctos y separación de archivos en dos ítems. Datos y objetos de ambas rondas ficticias retirados; sin cobros, facturas ni mensajes externos.
+- Local: último lote de **161 pruebas API** más integración de publicación y aislamiento de productos; **41 pruebas web** finales, lint y compilaciones remotas con tipos habilitados. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37682561420) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37682561432), aprobados para la revisión web final.
+- Chrome en producción: apertura de Facturar sin entrar en edición, saldo con centavos y botón habilitado. Modal cerrado sin emitir. Menú «Desactivar flujo» comprobado en el producto existente, sin modificar sus rutas. No se crearon ensayos comerciales en producción.
+
+### Incidencia durante el reemplazo web
+
+Entre aproximadamente **20:41:26 y 20:47:24 UTC**, la máquina web de Fly quedó en `replacing`, reintentando descargar/preparar la imagen. El chequeo HTTP dio timeout y Fly registró ausencia de instancias saludables. El CLI no completó su espera; se interrumpió esa espera y se creó una instancia temporal del mismo tamaño para recuperar servicio. La máquina original terminó arrancando con el digest final y recuperó salud; se retiró la instancia temporal. Se verificaron nuevamente revisión, HTTP, controles privados y recorrido fiscal. El estado final conserva una sola máquina web y los seis servicios originales. No se restauró ni modificó manualmente la base por este incidente. Los registros operativos están fuera de Git.
+
+Constructor remoto propio retirado después de promover las imágenes. No se aumentaron tamaños permanentes ni se alteraron otros proyectos locales.
+
+### Respaldo y reversión
+
+Copia previa **`90714ae8-3787-4467-939a-b6267d3b1619`**, completada **2026-10-07T20:01:14.566Z**. Copia posterior al primer lote **`3d6a7d0a-c598-4c3c-9c4f-7f7c25a6f0c6`**, completada **2026-10-07T20:29:06.195Z**. Copia final **`90c1ebb5-732c-41f4-bff2-3823a7d62cce`**, completada **2026-10-07T20:49:48.053Z**, con 307 migraciones y 61 archivos. Firma, huella, descifrado del manifiesto, fuentes e imágenes finales verificados. Código cifrado y protegido durante 31 días. **No se repitió una restauración SQL completa**.
+
+Para volver al conjunto previo `53087e81c82d093876132a26f25af0b7533c038c`, mantener la base: backend `sha256:c2c7d1367060a051cdad6a24fafa33f7d7271aac8d19445bd82fd920499959e1`, web `sha256:655b0becaa9507786368ac4aa088fc4d278773ac67821753e99fc56d556cdb93`. Reintroduce los defectos de este lote y elimina el acceso a recuperar flujos. No borrar operaciones ni revertir migraciones; priorizar una corrección hacia adelante. La primera web de este lote (`d2ca245a…`) conserva el error de centavos y no debe usarse como solución definitiva.

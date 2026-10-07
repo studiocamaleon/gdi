@@ -1065,3 +1065,39 @@ Revisión ejecutada **`53087e81c82d093876132a26f25af0b7533c038c`** (noche del 06
 Copia previa **`05157525-93f5-407e-bb03-d85e94ff3586`**, completada **2026-10-07T00:01:28.477Z**. Copia posterior **`549df210-77be-48aa-b6a3-cd30c2d3f0bf`**, completada **2026-10-07T00:36:02.642Z**, con 307 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de fuentes/imágenes comprobados. Fuente cifrada protegida durante 31 días. **No se repitió una restauración SQL completa**. Evidencias y accesos privados fuera de Git.
 
 Para volver a `a9c2d563dae051d704b18bf71974a7c75b7517e8`, conservar la base: API/workers `sha256:c137b072cffaab608d02b9235effee55a9057478e0f3bb5a34b5b5c6fed25bd2`, web `sha256:53cd120b3a43979fcd5bd11e4bae38d794412c1afefc80da16e3e5400f364608`. Reintroduce ambos defectos; no borrar datos ni revertir migraciones. Priorizar una corrección hacia adelante.
+
+
+## 07/10/2026, 20:25 UTC — Facturar, flujos recuperables y archivos generales (PR #27)
+
+Revisión ejecutada **`dd71567e38b81e573c0b9cba9a85020484d34624`**, dependiente del PR #26. Publicación y promoción condicionada a las pruebas autorizadas por el titular. Los commits documentales posteriores no cambian la revisión ejecutada. No se fusionó ningún PR ni se modificó Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:f3c54b59a098da9d6c9175b47bd2904f183ea95cecbb1bfbf44c80c445721b0c` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:d2ca245a1dd8dc54afd2d7c1d7ff52376f10c93f9112bba788d136e3575ea3b2` |
+
+**307 migraciones, ninguna nueva.** Seis máquinas, tamaños originales y servicios PDF/copiador conservados. Web/API 200, API privada directa 403 y BFF anónimo 401; revisión exacta y Sentry configurado en los cuatro servicios actualizados. Compilaciones completas remotas con tipos habilitados, sin usar Docker local.
+
+### Recorrido verificado
+
+- **Facturar:** aparece en la cabecera de una OT sin entrar en edición. El usuario de prueba con permiso fiscal, pero sin editar órdenes, pudo abrir el modal con el saldo correcto de $2.420. El lector recibe 403 y no ve la acción; el acceso limitado a comprobantes exige la orden concreta. No se emitieron comprobantes.
+- **Flujos:** desactivar conserva la alternativa, la receta y sus revisiones, la retira de nuevas cotizaciones y permite reactivarla. Se comprobaron la elección de otra preferida, las dos rutas HTTP de desactivación, 403 por permisos y 404 entre empresas. En Chrome se desactivó y recuperó el flujo ficticio sin error de referencia.
+- **Archivos:** dos ítems con un archivo propio cada uno y un archivo general compartido. Ambos contadores muestran dos archivos; los ZIP contienen el general más el arte del propio ítem, nunca el del otro. Nombres y bytes descomprimidos comprobados. Chrome muestra las secciones «Archivos generales» y «Archivos del ítem» con el rol operario, sin enlace «Ver OT» ni acceso comercial por API.
+- **35 comprobaciones HTTP/SSR y de resultados** (8 fiscal, 10 flujos, 17 archivos), más el recorrido visual. Dos empresas, cinco usuarios, una OT y tres objetos R2 ficticios retirados por identificador; sin cobros, facturas ni comunicaciones externas.
+- Verificación local previa: último lote de 161 pruebas API en siete suites, pruebas web de facturación, lectura, permisos/archivos y flujos inactivos, publicación automática con base de ensayo y aislamiento HTTP de productos. Comprobación de tipos de archivos tocados sin errores. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37678423635) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37678423446), aprobados para el SHA ejecutado.
+
+### Respaldo y reversión
+
+Copia previa **`ae63b3f2-a8a3-498b-9da7-9f168e385395`**, completada **2026-10-07T19:00:58.018Z**. Posterior **`0700ec4d-e954-43a4-87f7-53fe05681487`**, completada **2026-10-07T20:23:59.016Z**, con 307 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes verificados. Fuentes cifradas y protegidas 31 días. **No se repitió una restauración SQL completa**. Evidencias y accesos fuera de Git.
+
+Reversión de código a `53087e81c82d093876132a26f25af0b7533c038c`: backend `sha256:c2c7d1367060a051cdad6a24fafa33f7d7271aac8d19445bd82fd920499959e1`, web `sha256:655b0becaa9507786368ac4aa088fc4d278773ac67821753e99fc56d556cdb93`. Conserva la base, pero reintroduce los tres defectos y quita la acción de recuperar flujos. No borrar datos ni revertir migraciones; priorizar una corrección hacia adelante.
+
+### 07/10/2026, 20:41 UTC — Ajuste final del importe fiscal con centavos
+
+En la comprobación posterior se detectó un redondeo anterior a pesos enteros en el modal fiscal. Podía bloquear la emisión si redondeaba por encima del saldo, o dejar centavos pendientes. Se reprodujo en staging con una OT ficticia de $2.420,66: proponía $2.421 y mostraba un exceso de saldo.
+
+**Web final `0e2e013d7e99aa0bc0390cc96ee5e9fe539f1ddd`**, imagen `registry.fly.io/grafoprint-staging-web@sha256:fdeb342f2f47dacd3a7adc886932fc5f3f0411dc52c0af421ded49f40a33bee9`. **Backend sin cambios: `dd71567e3`**, digest de la tabla anterior. El campo y el saldo mostrado conservan dos decimales; 100% y 50% calculan centavos, no pesos enteros.
+
+Tres casos de regresión fallaron antes de corregirlo y pasaron después. **41 pruebas web en cuatro suites**, lint y compilación remota completa aprobados. Ocho comprobaciones fiscales HTTP/SSR repetidas. En Chrome, sin permiso de editar la OT, se verificaron $2.420,66 iniciales, $1.210,33 al 50%, vuelta al total exacto y botón habilitado, sin pulsar emisión. Segunda empresa de ensayo y sus usuarios retirados, sin comprobantes ni cobros. [CI HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37682561420) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37682561432), aprobados para el SHA final.
+
+Salud y tamaños nuevamente comprobados, Sentry activo en web. Copia final **`8e1a35a1-7703-417e-b07a-e7b9b9e25785`**, completada **2026-10-07T20:41:37.499Z**, con 307 migraciones y 24 archivos. Firma, descifrado del manifiesto, ambas fuentes e imágenes finales verificados; sin repetir restauración SQL. Constructor temporal propio retirado después de promover las imágenes finales. Para reversión, usar el conjunto anterior documentado arriba; volver sólo a la primera web de este lote reintroduce el error de centavos.
