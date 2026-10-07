@@ -705,6 +705,7 @@ model Tenant {
   configuracionNotificaciones                      ConfiguracionNotificaciones?
   notificacionEventos                              NotificacionEvento[]
   notificacionesWhatsapp                           NotificacionWhatsapp[]
+  lecturasNotificaciones                           EventoSistemaLectura[]
   eventosSistema                                   EventoSistema[]
   notificacionesInternas                           NotificacionInterna[]
   enlacesPublicos                                  EnlacePublico[]
@@ -1085,6 +1086,7 @@ model User {
   aprobacionesAsignadas    SolicitudAprobacionDocumento[]        @relation("SolicitudAprobacionAsignada")
   decisionesDocumentales   DecisionAprobacionDocumentoRegistro[] @relation("DecisionAprobacionActor")
   liberacionesDocumentales ArchivoRevision[]                     @relation("ArchivoRevisionLiberadaPor")
+  lecturasNotificaciones   EventoSistemaLectura[]
   eventosSistemaActuados   EventoSistema[]                       @relation("EventoSistemaActor")
   notificacionesInternas   NotificacionInterna[]
 }
@@ -1209,6 +1211,7 @@ model EventoSistema {
   tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   actor          User?                 @relation("EventoSistemaActor", fields: [actorUserId], references: [id], onDelete: SetNull)
   notificaciones NotificacionInterna[]
+  lecturas       EventoSistemaLectura[]
 
   @@index([tenantId, id])
   @@index([tenantId, createdAt])
@@ -1225,13 +1228,32 @@ model NotificacionInterna {
   archivadaEl DateTime?
   createdAt   DateTime  @default(now())
 
-  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  evento EventoSistema @relation(fields: [eventoId], references: [id], onDelete: Cascade)
-  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  evento  EventoSistema         @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  user    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lectura EventoSistemaLectura?
 
   @@unique([eventoId, userId])
   @@index([tenantId, userId, archivadaEl, leidaEl, createdAt])
   @@index([tenantId, eventoId])
+}
+
+/// Primera lectura de cada destinatario. La firma sobrevive a renombres y bajas.
+model EventoSistemaLectura {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  eventoId       BigInt
+  notificacionId String?  @unique @db.Uuid
+  lectorUserId   String?  @db.Uuid
+  lectorNombre   String   @db.VarChar(200)
+  leidaEl        DateTime @default(now())
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  evento       EventoSistema       @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  notificacion NotificacionInterna? @relation(fields: [notificacionId], references: [id], onDelete: SetNull)
+  lector       User?               @relation(fields: [lectorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, eventoId, leidaEl])
 }
 
 /// Quién le cambió el acceso a quién, dentro de una empresa.

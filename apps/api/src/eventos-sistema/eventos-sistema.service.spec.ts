@@ -255,6 +255,7 @@ describe('EventosSistemaService', () => {
           mensaje: 'Paso completado.',
           href: '/produccion/ordenes/1',
           severidad: 'EXITO',
+          lecturas: [],
           createdAt: new Date('2026-08-29T22:00:00.000Z'),
         },
       },
@@ -271,6 +272,7 @@ describe('EventosSistemaService', () => {
           tenantId: auth.tenantId,
           userId: auth.userId,
           archivadaEl: null,
+          evento: { tenantId: auth.tenantId },
         },
         take: 100,
       }),
@@ -279,21 +281,26 @@ describe('EventosSistemaService', () => {
   });
 
   it('no permite marcar una notificación ajena como leída', async () => {
-    const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const updateManyAndReturn = jest.fn();
+    const tx = { notificacionInterna: { findFirst, updateManyAndReturn } };
     const service = new EventosSistemaService({
-      notificacionInterna: { updateMany },
+      $transaction: (fn: (db: typeof tx) => unknown) => fn(tx),
     } as never);
 
     await expect(
       service.marcarLeida(auth, 'ffffffff-ffff-4fff-afff-ffffffffffff'),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(updateMany).toHaveBeenCalledWith({
+    expect(findFirst).toHaveBeenCalledWith({
       where: {
         id: 'ffffffff-ffff-4fff-afff-ffffffffffff',
         tenantId: auth.tenantId,
         userId: auth.userId,
+        archivadaEl: null,
+        evento: { tenantId: auth.tenantId },
       },
-      data: { leidaEl: expect.any(Date) as unknown },
+      select: { id: true },
     });
+    expect(updateManyAndReturn).not.toHaveBeenCalled();
   });
 });

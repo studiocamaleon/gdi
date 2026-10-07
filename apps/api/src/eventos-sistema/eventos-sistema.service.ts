@@ -143,15 +143,31 @@ export class EventosSistemaService implements OnModuleDestroy {
         tenantId: auth.tenantId,
         userId: auth.userId,
         archivadaEl: null,
+        evento: { tenantId: auth.tenantId },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limite,
-      include: { evento: true },
+      include: {
+        evento: {
+          include: {
+            lecturas: {
+              where: { tenantId: auth.tenantId },
+              orderBy: [{ leidaEl: 'asc' }, { id: 'asc' }],
+              select: { id: true, lectorNombre: true, leidaEl: true },
+            },
+          },
+        },
+      },
     });
     return filas.map((fila) => ({
       id: fila.id,
       leidaEl: fila.leidaEl?.toISOString() ?? null,
       createdAt: fila.createdAt.toISOString(),
+      lecturas: fila.evento.lecturas.map((lectura) => ({
+        id: lectura.id,
+        nombre: lectura.lectorNombre,
+        leidaEl: lectura.leidaEl.toISOString(),
+      })),
       evento: {
         id: fila.evento.id.toString(),
         tipo: fila.evento.tipo,
@@ -171,6 +187,7 @@ export class EventosSistemaService implements OnModuleDestroy {
         tenantId: auth.tenantId,
         userId: auth.userId,
         archivadaEl: null,
+        evento: { tenantId: auth.tenantId },
         leidaEl: null,
       },
     });
@@ -178,26 +195,94 @@ export class EventosSistemaService implements OnModuleDestroy {
   }
 
   async marcarLeida(auth: CurrentAuth, id: string) {
-    const result = await this.prisma.notificacionInterna.updateMany({
-      where: { id, tenantId: auth.tenantId, userId: auth.userId },
-      data: { leidaEl: new Date() },
-    });
-    if (!result.count)
-      throw new NotFoundException('Notificación no encontrada.');
-    return { ok: true };
-  }
-
-  async marcarTodasLeidas(auth: CurrentAuth) {
-    const result = await this.prisma.notificacionInterna.updateMany({
-      where: {
+    return this.prisma.$transaction(async (tx) => {
+      const where = {
+        id,
         tenantId: auth.tenantId,
         userId: auth.userId,
         archivadaEl: null,
-        leidaEl: null,
-      },
-      data: { leidaEl: new Date() },
+        evento: { tenantId: auth.tenantId },
+      };
+      const existente = await tx.notificacionInterna.findFirst({
+        where,
+        select: { id: true },
+      });
+      if (!existente)
+        throw new NotFoundException('Notificación no encontrada.');
+      const leidaEl = new Date();
+      const nuevas = await tx.notificacionInterna.updateManyAndReturn({
+        where: { ...where, leidaEl: null },
+        data: { leidaEl },
+        select: { id: true, eventoId: true },
+      });
+      await this.registrarLecturas(tx, auth, nuevas, leidaEl);
+      return { ok: true };
     });
-    return { actualizadas: result.count };
+  }
+
+  async marcarTodasLeidas(auth: CurrentAuth) {
+    return this.prisma.$transaction(async (tx) => {
+      const leidaEl = new Date();
+      const nuevas = await tx.notificacionInterna.updateManyAndReturn({
+        where: {
+          tenantId: auth.tenantId,
+          userId: auth.userId,
+          archivadaEl: null,
+          leidaEl: null,
+          evento: { tenantId: auth.tenantId },
+        },
+        data: { leidaEl },
+        select: { id: true, eventoId: true },
+      });
+      await this.registrarLecturas(tx, auth, nuevas, leidaEl);
+      return { actualizadas: nuevas.length };
+    });
+  }
+
+  private async registrarLecturas(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    nuevas: Array<{ id: string; eventoId: bigint }>,
+    leidaEl: Date,
+  ) {
+    if (!nuevas.length) return;
+    const lectorUserId = auth.impersonacion?.actorUserId ?? auth.userId;
+    const user = await tx.user.findUnique({
+      where: { id: lectorUserId },
+      select: { nombreCompleto: true, email: true },
+    });
+    const nombre = firmaActor(
+      auth,
+      user?.nombreCompleto?.trim() || user?.email || auth.email,
+    );
+    const lectorNombre = (
+      auth.mcp ? `${nombre} · Asistente: ${auth.mcp.credencialNombre}` : nombre
+    ).slice(0, 200);
+    await tx.eventoSistemaLectura.createMany({
+      data: nuevas.map((fila) => ({
+        tenantId: auth.tenantId,
+        eventoId: fila.eventoId,
+        notificacionId: fila.id,
+        lectorUserId,
+        lectorNombre,
+        leidaEl,
+      })),
+    });
+    // Invalida las bandejas del equipo por el canal existente. No genera otro
+    // aviso ni publica nombres/identificadores de lectores en el stream general.
+    await this.publicar(
+      {
+        tenantId: auth.tenantId,
+        actorUserId: lectorUserId,
+        actorNombre: lectorNombre,
+        tipo: 'notificaciones.lectura_registrada',
+        entidadTipo: 'notificacion',
+        titulo: 'Lectura registrada',
+        mensaje: 'Se actualizó el registro de lectura.',
+        topicos: ['notificaciones'],
+      },
+      tx,
+    );
   }
 
   async cambiosDesde(auth: CurrentAuth, desde?: string) {
