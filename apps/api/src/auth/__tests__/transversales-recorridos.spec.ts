@@ -14,10 +14,14 @@ import { MetaInboxController } from '../../integraciones/meta/meta-inbox.control
 import { UsuariosService } from '../../usuarios/usuarios.service';
 import { EmpleadosController } from '../../empleados/empleados.controller';
 import { ReportesController } from '../../reportes/reportes.controller';
+import { SolicitudesAltaController } from '../../clientes/solicitudes-alta.controller';
 
 type Controlador = { prototype: object };
 type Caso = { vista?: string; rutas: [Controlador, string][] };
 const recorridos: Record<string, Caso> = {
+  'crm.aprobar_altas': {
+    rutas: ['enlace', 'habilitar', 'renovar', 'deshabilitar', 'listar', 'detalle', 'decidir'].map((m) => [SolicitudesAltaController, m]),
+  },
   'tesoreria.arquear': {
     vista: 'administracion.tesoreria.ver',
     rutas: [[AdministracionController, 'arqueo']],
