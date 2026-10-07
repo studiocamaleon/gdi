@@ -352,7 +352,8 @@
 .deliveryDate[data-risk="hoy"] > span {
   color: var(--accent-soft-foreground);
 }
-.deliveryDate time {
+.deliveryDate time,
+.deliveryDate small {
   color: var(--muted-text);
   font: 400 10px/1.4 var(--brand-mono);
 }

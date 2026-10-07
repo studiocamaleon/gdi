@@ -32,10 +32,10 @@ export type PanelGeneralEntrega = {
     progresoPct: number | null;
     progreso?: ProgresoProduccion;
   }>;
-  fechaEntrega: string;
+  fechaEntrega: string | null;
   progresoPct: number | null;
   progreso?: ProgresoProduccion;
-  riesgo: "atrasada" | "hoy" | "proxima";
+  riesgo: "atrasada" | "hoy" | "proxima" | "lista";
   pasoActual: string | null;
   estacionActual: string | null;
   href: string;

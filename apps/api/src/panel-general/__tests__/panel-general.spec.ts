@@ -105,8 +105,13 @@ describe('Panel General', () => {
       expect.objectContaining({
         where: {
           tenantId: 'tenant-a',
-          estado: { in: ['pendiente', 'produccion', 'finalizada'] },
-          fechaEntrega: { lte: new Date('2026-09-22T00:00:00Z') },
+          OR: [
+            {
+              estado: { in: ['pendiente', 'produccion'] },
+              fechaEntrega: { lte: new Date('2026-09-22T00:00:00Z') },
+            },
+            { estado: 'finalizada' },
+          ],
         },
       }),
     );
@@ -125,6 +130,7 @@ describe('Panel General', () => {
         hoy: { items: [], total: 0 },
         atrasada: { items: [], total: 0 },
         proxima: { items: [], total: 0 },
+        lista: { items: [], total: 0 },
       });
       expect(respuesta.kpis.map((kpi) => kpi.id)).toEqual([
         'entregas-hoy',
@@ -219,6 +225,7 @@ describe('Panel General', () => {
       hoy: { items: [], total: 0 },
       atrasada: { items: [], total: 0 },
       proxima: { items: [], total: 0 },
+      lista: { items: [], total: 0 },
     });
     expect(respuesta.taller).toBeNull();
     expect(respuesta.atencion[0]).toMatchObject({
