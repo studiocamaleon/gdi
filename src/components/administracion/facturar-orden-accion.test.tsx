@@ -45,6 +45,7 @@ async function montar({
   habilitada = true,
   capacidad = true,
   facturado = 0,
+  total = 1000,
 } = {}) {
   await act(async () =>
     root.render(
@@ -55,7 +56,7 @@ async function montar({
           <FacturarOrdenAccion
             ordenId="ot-ficticia"
             numero="OT-QA"
-            total={1000}
+            total={total}
             facturado={facturado}
             bloqueada={bloqueada}
             habilitada={habilitada}
@@ -76,6 +77,31 @@ it("ofrece Facturar en lectura con permiso fiscal, sin requerir editar OT ni emi
   expect(api.getComprobantes).toHaveBeenCalledWith({ ordenId: "ot-ficticia" });
   expect(el.querySelector('[role="dialog"]')).not.toBeNull();
   expect(api.facturarOrden).not.toHaveBeenCalled();
+});
+it.each([
+  { total: 1000.67, mitad: "500.34" },
+  { total: 0.49, mitad: "0.25" },
+  { total: 1000.01, mitad: "500.01" },
+])("conserva centavos al facturar y en los atajos: $total", async ({ total, mitad }) => {
+  await montar({ total });
+  await abrir();
+  const input = el.querySelector<HTMLInputElement>('input[type="number"]')!;
+  const boton = (texto: string) => Array.from(el.querySelectorAll<HTMLButtonElement>("button"))
+    .find((b) => b.textContent?.trim() === texto)!;
+  expect(input.value).toBe(String(total));
+  expect(input.step).toBe("0.01");
+  expect(boton("Emitir factura").disabled).toBe(false);
+  expect(el.textContent).not.toContain("No se puede facturar más que el saldo");
+  await act(async () => boton("50%").click());
+  expect(input.value).toBe(mitad);
+  await act(async () => boton("100% del saldo").click());
+  expect(input.value).toBe(String(total));
+  api.facturarOrden.mockResolvedValue({ estado: "emitido", numeroCompleto: "FICTICIA" });
+  await act(async () => boton("Emitir factura").click());
+  expect(api.facturarOrden).toHaveBeenCalledWith("ot-ficticia", {
+    monto: total,
+    concepto: "Trabajos de impresión — OT-QA",
+  });
 });
 it.each([
   { permisos: ["comercial.ordenes.gestionar"] },

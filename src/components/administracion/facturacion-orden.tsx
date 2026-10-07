@@ -33,6 +33,7 @@ import {
   reciboPdfUrl,
 } from "@/lib/administracion-api";
 import { formatFechaOrden, formatMonedaOrden } from "@/lib/ordenes-trabajo";
+import { formatearMoneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
@@ -220,9 +221,8 @@ export function FacturarOrdenModal({
   onFacturada: (comprobante: Comprobante) => void;
 }) {
   const { moneda } = useConfigRegional();
-  const [monto, setMonto] = React.useState(
-    String(Math.round(saldoSinFacturar)),
-  );
+  const saldoCentavos = Math.round(saldoSinFacturar * 100);
+  const [monto, setMonto] = React.useState(String(saldoCentavos / 100));
   const [concepto, setConcepto] = React.useState(
     `Trabajos de impresión — ${numero}`,
   );
@@ -274,8 +274,9 @@ export function FacturarOrdenModal({
           </button>
           <h2>Facturar {numero}</h2>
           <div className="s">
-            Saldo sin facturar: {formatMonedaOrden(saldoSinFacturar, moneda)} ·
-            la factura queda vinculada a la orden
+            Saldo sin facturar:{" "}
+            {formatearMoneda(saldoSinFacturar, moneda, { decimales: 2 })} · la
+            factura queda vinculada a la orden
           </div>
         </div>
         <div className="acc-modal-body">
@@ -287,6 +288,8 @@ export function FacturarOrdenModal({
                   <span className="cf-cur">{moneda.simbolo}</span>
                   <input
                     type="number"
+                    step="0.01"
+                    min="0.01"
                     value={monto}
                     onChange={(e) => setMonto(e.target.value)}
                     placeholder="0"
@@ -298,7 +301,7 @@ export function FacturarOrdenModal({
                     className="cf-max"
                     type="button"
                     onClick={() =>
-                      setMonto(String(Math.round(saldoSinFacturar)))
+                      setMonto(String(saldoCentavos / 100))
                     }
                   >
                     100% del saldo
@@ -307,7 +310,7 @@ export function FacturarOrdenModal({
                     className="cf-max"
                     type="button"
                     onClick={() =>
-                      setMonto(String(Math.round(saldoSinFacturar / 2)))
+                      setMonto(String(Math.round(saldoCentavos / 2) / 100))
                     }
                   >
                     50%
