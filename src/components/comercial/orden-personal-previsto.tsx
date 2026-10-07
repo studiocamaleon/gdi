@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Checkbox, Label } from "@heroui/react";
-import { UsersRound, ArrowRight, RotateCcw } from "lucide-react";
+import { UsersRound, ArrowRight, RotateCcw, Factory, Info } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { SelectField } from "@/components/design-system/select-field";
 import { apiRequest } from "@/lib/api";
@@ -171,12 +171,16 @@ export function OrdenPersonalPrevisto({
         <span className={s.icon}>
           <UsersRound aria-hidden />
         </span>
-        <div>
+        <div className={s.headerCopy}>
           <h3>Operadores del trabajo</h3>
           <p>
             {total
               ? `${total} ${total === 1 ? "paso" : "pasos"} con personal elegido`
               : "Asignación automática según horarios y carga de trabajo."}
+          </p>
+          <p className={s.help}>
+            Elegí quién hará cada paso antes de emitir. El resto sigue en
+            automático.
           </p>
         </div>
         <ActionButton
@@ -191,10 +195,6 @@ export function OrdenPersonalPrevisto({
               : "Elegir operadores"}
         </ActionButton>
       </header>
-      <p className={s.help}>
-        Podés elegir quién hará cada paso antes de emitir. El resto sigue en
-        automático. Los cambios se guardan con la orden.
-      </p>
       {error && (
         <p className={s.error} role="alert">
           {error}
@@ -218,95 +218,147 @@ export function OrdenPersonalPrevisto({
                 className={s.producto}
                 aria-label={producto.nombre}
               >
-                <h4>{producto.nombre}</h4>
-                {info?.aviso && <p className={s.help}>{info.aviso}</p>}
+                <div className={s.productoHeader}>
+                  <h4>{producto.nombre}</h4>
+                  <span>
+                    {info?.pasos.length ?? 0}{" "}
+                    {info?.pasos.length === 1 ? "paso" : "pasos"}
+                  </span>
+                </div>
+                {info?.aviso && (
+                  <p className={s.aviso}>
+                    <Info aria-hidden />
+                    {info.aviso}
+                  </p>
+                )}
                 {!info?.pasos.length && (
                   <p className={s.help}>
                     Este producto no tiene pasos para asignar.
                   </p>
                 )}
-                {info?.pasos.map((paso) => {
+                {!!info?.pasos.length && (
+                  <div className={s.columnas} aria-hidden="true">
+                    <span>Paso / estación</span>
+                    <span>Asignación de operadores</span>
+                  </div>
+                )}
+                {info?.pasos.map((paso, indice) => {
                   const seleccion =
                     borrador[producto.id]?.find(
                       (e) => e.nodoClave === paso.nodoClave,
                     )?.empleadoIds ?? [];
                   return (
                     <div className={s.paso} key={paso.nodoClave}>
-                      <div>
-                        <strong>{paso.nombre}</strong>
-                        <small>
-                          {[paso.estacion, paso.maquina]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </small>
+                      <div className={s.pasoIdentidad}>
+                        <span className={s.numero} aria-hidden="true">
+                          {String(indice + 1).padStart(2, "0")}
+                        </span>
+                        <div>
+                          <strong>{paso.nombre}</strong>
+                          <small>
+                            <Factory aria-hidden />
+                            {[paso.estacion, paso.maquina]
+                              .filter(Boolean)
+                              .join(" · ") || "Sin estación"}
+                          </small>
+                        </div>
                       </div>
-                      {paso.motivo ? (
-                        <span className={s.help}>{paso.motivo}</span>
-                      ) : paso.personasNecesarias === 1 ? (
-                        <SelectField
-                          aria-label={`Operador de ${producto.nombre}: ${paso.nombre}`}
-                          value={seleccion[0] ?? ""}
-                          disabled={busy || disabled}
-                          options={[
-                            {
-                              value: "",
-                              label: "Automático · personal habitual",
-                            },
-                            ...paso.candidatos.map((c) => ({
-                              value: c.id,
-                              label: `${c.nombre} · ${c.asignacionAutomatica ? "Habitual" : "Apoyo"}${c.tieneHorario ? "" : " · Sin horario"}`,
-                              disabled: !c.tieneHorario,
-                            })),
-                          ]}
-                          onChange={(id) =>
-                            elegir(producto.id, paso.nodoClave, id ? [id] : [])
-                          }
-                        />
-                      ) : (
-                        <fieldset className={s.personas}>
-                          <legend>
-                            Elegí {paso.personasNecesarias} personas o dejá
-                            automático
-                          </legend>
-                          {paso.candidatos.map((c) => (
-                            <Checkbox
-                              key={c.id}
-                              isSelected={seleccion.includes(c.id)}
-                              isDisabled={busy || disabled || !c.tieneHorario}
-                              onChange={(marcado) =>
-                                elegir(
-                                  producto.id,
-                                  paso.nodoClave,
-                                  marcado
-                                    ? [...seleccion, c.id]
-                                    : seleccion.filter((id) => id !== c.id),
-                                )
-                              }
-                            >
-                              <Checkbox.Control>
-                                <Checkbox.Indicator />
-                              </Checkbox.Control>
-                              <Checkbox.Content>
-                                <Label>
-                                  {c.nombre} ·{" "}
-                                  {c.asignacionAutomatica
-                                    ? "Habitual"
-                                    : "Apoyo"}
-                                </Label>
-                              </Checkbox.Content>
-                            </Checkbox>
-                          ))}
-                          <ActionButton
-                            variant="ghost"
-                            onPress={() =>
-                              elegir(producto.id, paso.nodoClave, [])
+                      <div className={s.asignacion}>
+                        {paso.motivo ? (
+                          <p className={s.motivo}>{paso.motivo}</p>
+                        ) : paso.personasNecesarias === 1 ? (
+                          <SelectField
+                            aria-label={`Operador de ${producto.nombre}: ${paso.nombre}`}
+                            value={seleccion[0] ?? ""}
+                            disabled={busy || disabled}
+                            options={[
+                              {
+                                value: "",
+                                label: "Automático · personal habitual",
+                              },
+                              ...paso.candidatos.map((c) => ({
+                                value: c.id,
+                                label: `${c.nombre} · ${c.asignacionAutomatica ? "Habitual" : "Apoyo"}${c.tieneHorario ? "" : " · Sin horario"}`,
+                                disabled: !c.tieneHorario,
+                              })),
+                            ]}
+                            onChange={(id) =>
+                              elegir(
+                                producto.id,
+                                paso.nodoClave,
+                                id ? [id] : [],
+                              )
                             }
-                            isDisabled={busy || disabled}
-                          >
-                            <RotateCcw /> Automático
-                          </ActionButton>
-                        </fieldset>
-                      )}
+                          />
+                        ) : (
+                          <fieldset className={s.personas}>
+                            <legend className="sr-only">
+                              Operadores de {producto.nombre}: {paso.nombre}
+                            </legend>
+                            <div className={s.equipoHeader}>
+                              <div>
+                                <strong>
+                                  Equipo de {paso.personasNecesarias} personas
+                                </strong>
+                                <span>
+                                  {seleccion.length
+                                    ? `${seleccion.length} de ${paso.personasNecesarias} elegidos`
+                                    : "Asignación automática"}
+                                </span>
+                              </div>
+                              <ActionButton
+                                variant="outline"
+                                onPress={() =>
+                                  elegir(producto.id, paso.nodoClave, [])
+                                }
+                                isDisabled={
+                                  busy || disabled || !seleccion.length
+                                }
+                              >
+                                <RotateCcw /> Automático
+                              </ActionButton>
+                            </div>
+                            <div className={s.candidatos}>
+                              {paso.candidatos.map((c) => (
+                                <Checkbox
+                                  key={c.id}
+                                  className={s.persona}
+                                  isSelected={seleccion.includes(c.id)}
+                                  isDisabled={
+                                    busy || disabled || !c.tieneHorario
+                                  }
+                                  onChange={(marcado) =>
+                                    elegir(
+                                      producto.id,
+                                      paso.nodoClave,
+                                      marcado
+                                        ? [...seleccion, c.id]
+                                        : seleccion.filter((id) => id !== c.id),
+                                    )
+                                  }
+                                >
+                                  <Checkbox.Content
+                                    className={s.personaContent}
+                                  >
+                                    <Checkbox.Control>
+                                      <Checkbox.Indicator />
+                                    </Checkbox.Control>
+                                    <Label className={s.personaLabel}>
+                                      <span>{c.nombre}</span>
+                                      <small>
+                                        {c.asignacionAutomatica
+                                          ? "Habitual"
+                                          : "Apoyo"}
+                                        {!c.tieneHorario && " · Sin horario"}
+                                      </small>
+                                    </Label>
+                                  </Checkbox.Content>
+                                </Checkbox>
+                              ))}
+                            </div>
+                          </fieldset>
+                        )}
+                      </div>
                       {revisado && !info.aviso && !paso.motivo && (
                         <p className={s.fecha}>
                           Automático: {fecha(paso.finAutomatico)}{" "}
@@ -321,32 +373,35 @@ export function OrdenPersonalPrevisto({
             );
           })}
           <footer className={s.footer}>
-            <ActionButton
-              variant="ghost"
-              onPress={() => setAbierto(false)}
-              isDisabled={busy}
-            >
-              Cancelar
-            </ActionButton>
-            <ActionButton
-              variant="outline"
-              onPress={() => void revisar()}
-              isDisabled={busy || disabled || !vigente}
-            >
-              Revisar disponibilidad
-            </ActionButton>
-            <ActionButton
-              onPress={() => {
-                if (!vigente) return;
-                onChange(
-                  new Map(cargados.map((p) => [p.id, borrador[p.id] ?? []])),
-                );
-                setAbierto(false);
-              }}
-              isDisabled={busy || disabled || !vigente || !revisado}
-            >
-              Aplicar elección
-            </ActionButton>
+            <p>La elección se guarda con la orden.</p>
+            <div className={s.footerActions}>
+              <ActionButton
+                variant="ghost"
+                onPress={() => setAbierto(false)}
+                isDisabled={busy}
+              >
+                Cancelar
+              </ActionButton>
+              <ActionButton
+                variant="outline"
+                onPress={() => void revisar()}
+                isDisabled={busy || disabled || !vigente}
+              >
+                Revisar disponibilidad
+              </ActionButton>
+              <ActionButton
+                onPress={() => {
+                  if (!vigente) return;
+                  onChange(
+                    new Map(cargados.map((p) => [p.id, borrador[p.id] ?? []])),
+                  );
+                  setAbierto(false);
+                }}
+                isDisabled={busy || disabled || !vigente || !revisado}
+              >
+                Aplicar elección
+              </ActionButton>
+            </div>
           </footer>
         </>
       )}
