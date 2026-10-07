@@ -77,6 +77,7 @@ import {
 type ClientesTableProps = {
   initialResponse: ClientesListResponse;
   canManage: boolean;
+  canApprove?: boolean;
 };
 
 function safeSpreadsheetCell(value: string) {
@@ -106,6 +107,7 @@ function buildCsv(clientes: ClienteDetalle[]) {
 export function ClientesTable({
   initialResponse,
   canManage,
+  canApprove = false,
 }: ClientesTableProps) {
   const scope = useDesignScope();
   const theme = useDesignTheme();
@@ -329,6 +331,11 @@ export function ClientesTable({
           </p>
         </div>
         <div className={styles.actions}>
+          {canApprove && (
+            <ActionLink href="/crm/clientes/solicitudes" variant="outline">
+              Solicitudes de alta
+            </ActionLink>
+          )}
           <input
             ref={fileInputRef}
             type="file"

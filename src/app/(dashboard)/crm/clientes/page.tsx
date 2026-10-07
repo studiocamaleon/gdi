@@ -1,3 +1,4 @@
+import { tienePermiso } from "@/lib/permisos-server";
 import { puedeConfigurar } from "@/lib/capacidades-server";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { Suspense } from "react";
@@ -13,13 +14,18 @@ export default function Page() {
   );
 }
 async function Content() {
-  const [response, canManage] = await Promise.all([
+  const [response, canManage, canApprove] = await Promise.all([
     listClientes({ page: 1, limit: 25 }),
     puedeConfigurar("clientes", "crm.clientes.gestionar"),
+    tienePermiso("crm.aprobar_altas", { exigirConfirmacion: true }),
   ]);
   return (
     <DesignSystemProvider theme="brand" appearance="light">
-      <ClientesTable initialResponse={response} canManage={canManage} />
+      <ClientesTable
+        initialResponse={response}
+        canManage={canManage}
+        canApprove={canApprove}
+      />
     </DesignSystemProvider>
   );
 }

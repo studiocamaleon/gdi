@@ -693,6 +693,7 @@ model NotificacionWhatsapp {
 }
 
 model Tenant {
+  solicitudesAltaCliente SolicitudAltaCliente[]
   tiposCambioCotizacion TipoCambioCotizacion[]
   planesEntregaItems PlanEntregaItem[]
   planesEntregaRevisiones PlanEntregaRevision[]
@@ -5932,6 +5933,7 @@ enum TipoEnlacePublico {
   ENCUESTA
   /// /a/ — decisión externa sobre una revisión documental.
   APROBACION_DOCUMENTAL
+  ALTA_CLIENTE
 }
 
 /// Credencial de TODO link público del sistema, en una sola tabla.
@@ -7353,4 +7355,30 @@ model CredencialFiscalPlataforma {
   revision       String   @db.Uuid
   materialCifrado Json
   actualizadoEl  DateTime @default(now()) @updatedAt
+}
+
+/// Solicitud pública: no concede acceso ni crea un cliente hasta su aprobación.
+model SolicitudAltaCliente {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  nombre String @db.VarChar(160)
+  documentoTipo String @db.VarChar(4)
+  documentoNumero String @db.VarChar(11)
+  condicionFiscal String @db.VarChar(30)
+  telefono String @db.VarChar(20)
+  direccion String @db.VarChar(200)
+  ciudad String @db.VarChar(120)
+  estado String @default("PENDIENTE") @db.VarChar(12)
+  /// Referencias históricas, sin cascada al borrar al cliente o al usuario.
+  clienteId String? @db.Uuid
+  resueltoPorId String? @db.Uuid
+  resueltoPorNombre String?
+  resueltoEl DateTime?
+  motivo String? @db.VarChar(500)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, estado, createdAt])
+  @@index([tenantId, documentoTipo, documentoNumero])
 }

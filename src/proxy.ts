@@ -37,7 +37,7 @@ const SALIDA_PATH = "/salir";
 // abiertas /panel, /produccion y /presupuestos del dashboard. La ruta pública
 // es exactamente prefijo + token, nada más.
 // Ver docs/enlaces-publicos-diseno.md
-const OPEN_PATH_RE = /^\/(?:[tpfrce]|track|presupuesto)\/[A-Za-z0-9_-]+\/?$/;
+const OPEN_PATH_RE = /^\/(?:[tpfrce]|track|presupuesto|alta-cliente)\/[A-Za-z0-9_-]+\/?$/;
 
 // El "home" de una sesión de plataforma: su consola. NO puede entrar a "/"
 // (el dashboard del tenant), que con esa sesión tira 401 → 500.

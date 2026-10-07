@@ -28,6 +28,7 @@ export type ModuloClave = (typeof MODULOS)[number];
 
 export type PermisoClave =
   | "acceso.por_vista"
+  | "crm.aprobar_altas"
   | "tesoreria.arquear"
   | "tesoreria.transferir"
   | PermisoVista
