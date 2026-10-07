@@ -48,3 +48,15 @@ Pasaron 24 comprobaciones HTTP/SSR con usuarios y empresa ficticios: modalidad h
 Chrome: menús Imprimir/Seguimiento, apertura del QR y configuración habitual/apoyo comprobados en staging; estaciones y selector comprobados también en Corporearte, sin guardar cambios. Los integrantes existentes conservan el modo habitual: para ofrecer a otra persona como alternativa, agregarla a la estación como **De apoyo**.
 
 Ambos entornos tienen 306 migraciones y mantienen los tamaños anteriores. Salud y versión de los cuatro procesos comprobadas, Sentry activo y copias posteriores verificadas con fuentes cifradas bajo custodia. No se repitió una restauración SQL completa. No se fusionaron los PR ni se modificó la web comercial. Detalles, imágenes y reversión: [staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md).
+
+## Trabajo compartido en Operación diaria — 07/10/2026
+
+La asignación automática es una previsión de quién atenderá el paso. Cualquier integrante activo, habitual o de apoyo, habilitado en esa estación y con permiso de ejecución puede iniciarlo o completarlo. El listado y el detalle distinguen **Personal previsto** de una asignación exclusiva. Los tramos conservan a quien los trabajó y la finalización registra a quien la confirmó; un relevo no reemplaza esos datos por el nombre previsto.
+
+Una asignación manual del supervisor sigue siendo exclusiva para las personas elegidas. Los trabajos tomados expresamente en **Mi mesa** conservan su funcionamiento; los pasos libres sin previsión requieren **Asignarme**. Compartir tareas no elimina precedencias, aprobaciones, controles de materiales, restricciones de empresa o permisos. Dos acciones simultáneas no duplican el inicio ni la finalización.
+
+La columna **Entrega** muestra la fecha comprometida del ítem (incluido su lote de entrega) y, si falta, la de la OT. Es independiente de **Previsto** y **Real**, que describen cuándo termina el paso. Si ninguna existe, se muestra **Sin fecha**. Se conserva el día de calendario en todas las zonas horarias.
+
+Este cambio no requiere migraciones ni modifica la dotación o los horarios configurados. Rama `codex/operacion-equipo-entrega`, basada en el PR #27 (`codex/ot-facturacion-flujos-archivos`), todavía pendiente de integración. Desarrollo y comprobación local; publicación por separado.
+
+Validación local: 75 pruebas de API (incluidos comandos sobre PostgreSQL aislado, colas, asignación manual y sincronización real de agenda) y 81 de interfaz aprobadas. Tipos completos de API y de los ocho archivos web modificados aprobados; el chequeo global de tipos web alcanzó el límite local de 2 GB, pendiente de CI antes de publicar. Chrome comprobado en claro y oscuro con una muestra ficticia; sin errores de ejecución. La muestra y su servidor temporal se retiraron. No se modificaron datos operativos ni se publicaron entornos.

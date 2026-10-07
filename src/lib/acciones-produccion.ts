@@ -86,6 +86,6 @@ export function chipsDeclarar(estimado: number | null): number[] {
 }
 
 /** La elegibilidad de estación y los permisos se comprueban por separado. */
-export function asignacionPermiteEjecutar(paso: Pick<TableroPasoData, "mesaEsMia" | "tramoAbierto" | "asignacionPersonal">) {
-  return paso.mesaEsMia || !!paso.tramoAbierto?.esMio || !!(paso.asignacionPersonal?.esMia && !paso.asignacionPersonal.conflicto);
+export function asignacionPermiteEjecutar(paso: Pick<TableroPasoData, "mesaEsMia" | "tramoAbierto" | "asignacionPersonal" | "ejecucionPorEquipo">) {
+  return paso.ejecucionPorEquipo === true || paso.mesaEsMia || !!paso.tramoAbierto?.esMio || !!(paso.asignacionPersonal?.esMia && !paso.asignacionPersonal.conflicto);
 }

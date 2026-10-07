@@ -15,6 +15,7 @@ const tenantId = randomUUID(),
   otroActorId = randomUUID();
 const maquinaId = randomUUID(),
   otraMaquina = randomUUID();
+let empleadoId: string, otroEmpleadoId: string;
 const { ordenes } = serviciosRecorridoF4(db);
 Object.assign(ordenes, {
   capturarEtaCierre: jest.fn(),
@@ -56,6 +57,20 @@ beforeAll(async () => {
       fechaIngreso: new Date(),
     },
   });
+  empleadoId = empleado.id;
+  const otroEmpleado = await db.empleado.create({
+    data: {
+      tenantId,
+      userId: otroActorId,
+      nombreCompleto: 'Compañera QA',
+      emailPrincipal: `${otroActorId}@invalid.test`,
+      telefonoCodigo: '+54',
+      telefonoNumero: '',
+      sector: 'Taller',
+      fechaIngreso: new Date(),
+    },
+  });
+  otroEmpleadoId = otroEmpleado.id;
   const planta = await db.planta.create({
     data: { tenantId, nombre: 'Taller', codigo: 'P' },
   });
@@ -77,8 +92,12 @@ beforeAll(async () => {
       },
     });
     if (id === maquinaId)
-      await db.estacionEmpleado.create({
-        data: { tenantId, estacionId: estacion.id, empleadoId: empleado.id },
+      await db.estacionEmpleado.createMany({
+        data: [empleado.id, otroEmpleado.id].map((empleadoId) => ({
+          tenantId,
+          estacionId: estacion.id,
+          empleadoId,
+        })),
       });
   }
 });
@@ -510,4 +529,241 @@ it('no acepta declaraciones duplicadas o de trabajos fuera de la selección', as
     ).rejects.toThrow('tiempos');
   }
   expect(await hechos([a.id])).toBe(0);
+});
+
+const companera = { ...auth, userId: otroActorId };
+async function automatico(
+  opciones: { cronometro?: boolean; maquina?: string } = {},
+) {
+  const paso = await trabajo(false, opciones.maquina);
+  return db.ordenTrabajoItemPaso.update({
+    where: { id: paso.id },
+    data: {
+      mesaUsuarioId: null,
+      modoRegistro: opciones.cronometro ? 'cronometro' : 'solo_completar',
+      asignacionPersonalJson: {
+        version: 1,
+        origen: 'automatica',
+        conflicto: null,
+        franjas: [],
+        personas: [{ empleadoId, usuarioId: actorId, nombre: 'Operador QA' }],
+      },
+    },
+  });
+}
+async function controlDe(id: string, quien = companera, estado = 'listos') {
+  const cola = await colas.listar(
+    tenantId,
+    maquinaId,
+    {
+      estado: estado as 'listos' | 'en_curso',
+      page: 1,
+      limit: 100,
+      q: '',
+    },
+    quien,
+  );
+  return cola.items.find((p) => p.id === id)?.control;
+}
+
+it('permite completar una previsión automática a otra integrante de la estación y registra su autoría', async () => {
+  const paso = await automatico();
+  expect(await controlDe(paso.id)).toMatchObject({
+    canManage: true,
+    puedeTomarMesa: false,
+  });
+  const tablero = await ordenes.tablero(companera);
+  expect(
+    tablero.items.find((i) => i.id === paso.itemId)?.pasos[0],
+  ).toMatchObject({
+    ejecucionPorEquipo: true,
+    asignacionPersonal: { esMia: false, origen: 'automatica' },
+  });
+  await controller.completar(companera, maquinaId, { pasoIds: [paso.id] });
+  expect(
+    await db.ordenTrabajoItemPaso.findUniqueOrThrow({ where: { id: paso.id } }),
+  ).toMatchObject({
+    estado: 'hecho',
+    completadoPorId: otroActorId,
+    completadoPorNombre: 'Compañera QA',
+  });
+});
+
+it('comparte el cronómetro sin duplicarlo y conserva quién inició, quién trabajó y quién terminó', async () => {
+  const paso = await automatico({ cronometro: true });
+  const inicio = await ordenes.accionPaso(
+    companera,
+    paso.ordenId,
+    paso.itemId,
+    paso.id,
+    { accion: 'iniciar' },
+  );
+  expect(inicio.pasos[0]).toMatchObject({
+    ejecucionPorEquipo: true,
+    iniciadoPorNombre: 'Compañera QA',
+  });
+  expect(await controlDe(paso.id, auth, 'en_curso')).toMatchObject({
+    canManage: true,
+  });
+  const tramo = await db.ordenTrabajoPasoTramo.findFirstOrThrow({
+    where: { pasoId: paso.id, finEl: null },
+  });
+  await db.ordenTrabajoPasoTramo.update({
+    where: { id: tramo.id },
+    data: { inicioEl: new Date(Date.now() - 5 * 60_000) },
+  });
+  await controller.completar(auth, maquinaId, { pasoIds: [paso.id] });
+  expect(
+    await db.ordenTrabajoItemPaso.findUniqueOrThrow({ where: { id: paso.id } }),
+  ).toMatchObject({
+    iniciadoPorId: otroActorId,
+    completadoPorId: actorId,
+    tiempoFuente: 'medido',
+    mesaUsuarioId: null,
+  });
+  expect(
+    await db.ordenTrabajoPasoTramo.findMany({ where: { pasoId: paso.id } }),
+  ).toEqual([
+    expect.objectContaining({
+      usuarioId: otroActorId,
+      finEl: expect.any(Date),
+    }),
+  ]);
+});
+
+it('respeta la asignación manual aunque todavía quede una previsión automática anterior', async () => {
+  const paso = await automatico();
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: paso.id },
+    data: {
+      asignacionManualJson: {
+        version: 1,
+        revision: randomUUID(),
+        empleadoIds: [otroEmpleadoId],
+        asignadoEl: new Date().toISOString(),
+        usuarioId: actorId,
+        usuarioNombre: 'Supervisor QA',
+      },
+    },
+  });
+  expect(await controlDe(paso.id, auth)).toMatchObject({
+    canManage: false,
+    puedeTomarMesa: false,
+  });
+  await expect(
+    controller.completar(auth, maquinaId, { pasoIds: [paso.id] }),
+  ).rejects.toThrow('asignación manual');
+  const tablero = await ordenes.tablero(auth);
+  expect(
+    tablero.items.find((i) => i.id === paso.itemId)?.pasos[0]
+      ?.ejecucionPorEquipo,
+  ).toBe(false);
+  expect(await controlDe(paso.id)).toMatchObject({ canManage: true });
+  await controller.completar(companera, maquinaId, { pasoIds: [paso.id] });
+  expect(await hechos([paso.id])).toBe(1);
+});
+
+it('el trabajo compartido sigue exigiendo permiso, empleado activo y pertenencia a la estación', async () => {
+  const paso = await automatico();
+  const sinPermiso = { ...companera, permisos: new Set(['produccion.ver']) };
+  expect(await controlDe(paso.id, sinPermiso)).toMatchObject({
+    canManage: false,
+  });
+  await expect(
+    controller.completar(sinPermiso, maquinaId, { pasoIds: [paso.id] }),
+  ).rejects.toThrow('permiso');
+  await db.empleado.update({
+    where: { id: otroEmpleadoId },
+    data: { activo: false },
+  });
+  try {
+    expect(await controlDe(paso.id)).toMatchObject({ canManage: false });
+    await expect(
+      controller.completar(companera, maquinaId, { pasoIds: [paso.id] }),
+    ).rejects.toThrow('empleado activo');
+  } finally {
+    await db.empleado.update({
+      where: { id: otroEmpleadoId },
+      data: { activo: true },
+    });
+  }
+  const otraEstacion = await automatico({ maquina: otraMaquina });
+  await expect(
+    controller.completar(companera, otraMaquina, {
+      pasoIds: [otraEstacion.id],
+    }),
+  ).rejects.toThrow('habilitado');
+  expect(await hechos([paso.id, otraEstacion.id])).toBe(0);
+});
+
+it('compartir no salta gates, precedencias ni una toma explícita en Mi mesa', async () => {
+  const paso = await automatico();
+  await db.ordenTrabajoPasoGate.create({
+    data: {
+      tenantId,
+      ordenId: paso.ordenId,
+      pasoId: paso.id,
+      tipo: 'MATERIAL',
+      estado: 'PENDIENTE',
+    },
+  });
+  await expect(
+    controller.completar(companera, maquinaId, { pasoIds: [paso.id] }),
+  ).rejects.toThrow('material');
+  const mesa = await automatico();
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: mesa.id },
+    data: { mesaUsuarioId: actorId },
+  });
+  expect(await controlDe(mesa.id)).toMatchObject({ canManage: false });
+  await expect(
+    controller.completar(companera, maquinaId, { pasoIds: [mesa.id] }),
+  ).rejects.toThrow('no está asignado a vos');
+  const conSucesor = await trabajo(true);
+  const siguiente = await db.ordenTrabajoItemPaso.findFirstOrThrow({
+    where: { itemId: conSucesor.itemId, indice: 1 },
+  });
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: siguiente.id },
+    data: {
+      mesaUsuarioId: null,
+      asignacionPersonalJson: paso.asignacionPersonalJson!,
+    },
+  });
+  await expect(
+    controller.completar(companera, maquinaId, { pasoIds: [siguiente.id] }),
+  ).rejects.toThrow('dependencias');
+  expect(await hechos([paso.id, mesa.id, siguiente.id])).toBe(0);
+});
+
+it('dos integrantes no pueden registrar dos veces la misma finalización', async () => {
+  const paso = await automatico();
+  const resultados = await Promise.allSettled(
+    [auth, companera].map((quien) =>
+      controller.completar(quien, maquinaId, { pasoIds: [paso.id] }),
+    ),
+  );
+  expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(
+    await db.ordenTrabajoEvento.count({
+      where: { ordenId: paso.ordenId, tipo: 'paso' },
+    }),
+  ).toBe(1);
+  expect(await hechos([paso.id])).toBe(1);
+});
+
+it('entrega conserva la fecha propia del ítem y usa la de la OT cuando no hay una propia', async () => {
+  const propia = await automatico(),
+    heredada = await automatico();
+  await db.ordenTrabajoItem.update({
+    where: { id: propia.itemId },
+    data: { fechaEntrega: new Date('2026-10-12') },
+  });
+  const tablero = await ordenes.tablero(companera);
+  expect(tablero.items.find((i) => i.id === propia.itemId)?.fechaEntrega).toBe(
+    '2026-10-12',
+  );
+  expect(
+    tablero.items.find((i) => i.id === heredada.itemId)?.fechaEntrega,
+  ).toBe('2026-10-01');
 });

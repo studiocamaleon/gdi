@@ -104,6 +104,20 @@ describe("presentación operativa de Estaciones", () => {
     const html = renderToStaticMarkup(<EstacionesOperativas {...base} estaciones={[]} items={[item]} />);
     expect(html).toContain(`href="/produccion/tablero?estacion=${key}&amp;vista=lista"`);
   });
+  it.each(["UTC", "America/Argentina/Rio_Gallegos"])("muestra la entrega sin desplazar el día en %s y distingue la previsión del equipo", (zona) => {
+    const item = buildItemView({ ...tarea.data, fechaEntrega: "2026-10-12", pasos: tarea.data.pasos.map(p => ({
+      ...p, ejecucionPorEquipo: true,
+      asignacionPersonal: { origen: "automatica" as const, personas: [{ empleadoId: "persona", nombre: "Ana" }], franjas: [], conflicto: null, esMia: false },
+    })) }, [estacion]);
+    const html = renderToStaticMarkup(<TableroLista items={[item]} estaciones={[estacion]} zona={zona} onOpen={() => {}} />);
+    expect(html).toContain('dateTime="2026-10-12"');
+    expect(html).toContain('12/10/2026');
+    expect(html).toContain('Entrega');
+    expect(html).toContain('Previsto · Puede hacerlo el equipo');
+    const sinFecha = renderToStaticMarkup(<TableroLista items={[tarea]} estaciones={[estacion]} zona={zona} onOpen={() => {}} />);
+    expect(sinFecha).toContain('Sin fecha');
+  });
+
   it("traslada Asignarme a Personal asignado, respetando el modo de lectura", () => {
     const render = (canManage: boolean) => renderToStaticMarkup(
       <TableroLista items={[tarea]} estaciones={[estacion]} zona="UTC" onOpen={() => {}}

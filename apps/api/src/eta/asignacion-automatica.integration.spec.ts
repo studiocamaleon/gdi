@@ -348,7 +348,7 @@ it('no consulta ni escribe los pasos de otra empresa, borradores o terminados', 
   expect(await eta.sincronizarAsignaciones(tenantId)).toBe(0);
 });
 
-it('un asignado ejecuta sin mesa y registra al actor real; otro empleado no puede apropiarse del paso', async () => {
+it('una persona del equipo ejecuta la previsión de otra y la agenda conserva al actor real', async () => {
   await eta.sincronizarAsignaciones(tenantId);
   const asignado = (await leer(pasos[0].id)).personas[0];
   const service = Object.assign(
@@ -371,17 +371,7 @@ it('un asignado ejecuta sin mesa y registra al actor real; otro empleado no pued
       permisos: new Set(['produccion.ver', 'produccion.ejecutar']),
     }) as CurrentAuth;
   const noAsignado = empleados.find((e) => e.id !== asignado.empleadoId)!;
-  await expect(
-    service.accionesPasos(auth(noAsignado.userId!), [
-      {
-        ordenId,
-        itemId: pasos[0].itemId,
-        pasoId: pasos[0].id,
-        payload: { accion: 'iniciar' },
-      },
-    ]),
-  ).rejects.toThrow('no está asignado');
-  await service.accionesPasos(auth(asignado.usuarioId!), [
+  await service.accionesPasos(auth(noAsignado.userId!), [
     {
       ordenId,
       itemId: pasos[0].itemId,
@@ -389,6 +379,16 @@ it('un asignado ejecuta sin mesa y registra al actor real; otro empleado no pued
       payload: { accion: 'iniciar' },
     },
   ]);
+  await expect(
+    service.accionesPasos(auth(asignado.usuarioId!), [
+      {
+        ordenId,
+        itemId: pasos[0].itemId,
+        pasoId: pasos[0].id,
+        payload: { accion: 'iniciar' },
+      },
+    ]),
+  ).rejects.toThrow('estado');
   const paso = await db.ordenTrabajoItemPaso.findUniqueOrThrow({
     where: { id: pasos[0].id },
     include: { tramos: true },
@@ -396,8 +396,11 @@ it('un asignado ejecuta sin mesa y registra al actor real; otro empleado no pued
   expect(paso.mesaUsuarioId).toBeNull();
   expect(paso.estado).toBe('en_curso');
   expect(paso.tramos).toHaveLength(1);
-  expect(paso.tramos[0].usuarioId).toBe(asignado.usuarioId);
-  expect(paso.iniciadoPorId).toBe(asignado.usuarioId);
+  expect(paso.tramos[0].usuarioId).toBe(noAsignado.userId);
+  expect(paso.iniciadoPorId).toBe(noAsignado.userId);
+  expect((await leer(paso.id)).personas.map((p) => p.empleadoId)).toContain(
+    noAsignado.id,
+  );
 });
 
 it('fija el fin de la operación sin separación; recalcular mueve la estimación, pero no el previsto', async () => {

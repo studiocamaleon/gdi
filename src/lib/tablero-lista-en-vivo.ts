@@ -5,7 +5,7 @@ import { estacionDelPasoVisible, operadoresDelTrabajo, type responsablesDeEspera
 import { cumplimientoPaso, finActualPaso, finPrevistoPaso } from "./tiempos-paso";
 import { calcularProgreso } from "./progreso-produccion";
 
-export type CampoLista = "trabajo" | "cantidad" | "paso" | "personal" | "estado" | "previsto" | "real" | "cumplimiento" | "avance";
+export type CampoLista = "trabajo" | "cantidad" | "entrega" | "paso" | "personal" | "estado" | "previsto" | "real" | "cumplimiento" | "avance";
 export type RevisionCeldas = Record<CampoLista, string>;
 export type CambiosCeldas = ReadonlyMap<string, ReadonlySet<CampoLista>>;
 
@@ -31,6 +31,7 @@ export function revisionCeldasEnVivo(
       ? [lote.nombre, lote.esProductoDelLote ? "Producto" : lote.productoNombre]
       : item.data.componenteDe?.nombre]),
     cantidad: JSON.stringify(item.qtyLabel),
+    entrega: JSON.stringify(item.data.fechaEntrega?.slice(0, 10) ?? null),
     paso: JSON.stringify([
       paso?.nombre ?? (item.finished ? "Completado" : item.sinRuta ? "Sin ruta" : "En espera"),
       !item.finished && estacionDelPasoVisible(item, estaciones),
@@ -39,7 +40,7 @@ export function revisionCeldasEnVivo(
     personal: JSON.stringify([
       operadores, !operadores.length && item.finished,
       paso?.asignacionPersonal?.personas.length ? paso.asignacionPersonal.origen : null,
-      paso?.asignacionPersonal?.conflicto, paso?.tramoAbierto?.usuarioNombre, accionManual, puedeReasignar,
+      paso?.asignacionPersonal?.conflicto, paso?.tramoAbierto?.usuarioNombre, accionManual, puedeReasignar, paso?.ejecucionPorEquipo,
     ]),
     estado: JSON.stringify([
       item.state, item.state === "ready" && cumplimiento.tipo === "demorado",

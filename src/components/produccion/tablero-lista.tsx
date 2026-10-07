@@ -19,6 +19,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
+import { formatFechaOrden } from "@/lib/ordenes-trabajo";
 import {
   agruparTrabajos,
   operadoresDelTrabajo,
@@ -67,6 +68,7 @@ type AtributosCampo = (campo: CampoLista) => {
 };
 
 const EXPLICACION_TIEMPOS: Record<string, string> = {
+  Entrega: "Fecha de entrega comprometida para este ítem. Si no tiene una fecha propia, usa la de la orden.",
   Previsto:
     "Fecha y hora en que este paso debería terminar según el plan de referencia. Se conserva al recalcular y cambia al aceptar una reprogramación.",
   Real: "Mientras el paso esté pendiente, muestra su finalización estimada con la situación actual del taller. Al completarse, muestra la fecha y hora registradas de finalización real.",
@@ -323,6 +325,13 @@ function FilaTrabajo({
         </div>
       </td>
       <td className={s.quantity} {...atributosCampo("cantidad")}><span>{item.qtyLabel}</span></td>
+      <td {...atributosCampo("entrega")}>
+        {item.data.fechaEntrega ? (
+          <time dateTime={item.data.fechaEntrega.slice(0, 10)} className={s.delivery}>
+            <strong>{formatFechaOrden(item.data.fechaEntrega)}</strong>
+          </time>
+        ) : <span className={s.secondary}>Sin fecha</span>}
+      </td>
       <td {...atributosCampo("paso")}>
         <div className={s.step}>
           <span className={s.stepName} title={step?.paso.nombre}>
@@ -379,7 +388,7 @@ function FilaTrabajo({
           <span className={s.secondary}>
             {step.paso.asignacionPersonal.origen === "manual"
               ? "Asignación manual"
-              : "Asignación automática"}
+              : step.paso.ejecucionPorEquipo ? "Previsto · Puede hacerlo el equipo" : "Asignación automática"}
           </span>
         ) : null}
         {step?.paso.tramoAbierto && (
@@ -439,6 +448,7 @@ function Columnas() {
       <colgroup>
         <col className={s.colJob} />
         <col className={s.colQuantity} />
+        <col className={s.colDelivery} />
         <col className={s.colStep} />
         <col className={s.colOperator} />
         <col className={s.colState} />
@@ -452,6 +462,7 @@ function Columnas() {
           {[
             "Trabajo",
             "Cantidad",
+            "Entrega",
             "Paso / Estación",
             "Personal asignado",
             "Estado",
@@ -570,7 +581,7 @@ function Grupo({
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={9} className={s.groupFooter}>
+                <td colSpan={10} className={s.groupFooter}>
                   {limite < grupo.items.length ? (
                     <ActionButton
                       variant="ghost"
