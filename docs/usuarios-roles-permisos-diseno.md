@@ -103,6 +103,28 @@ Otros dos candidatos del mismo tipo, para F3 y no antes:
 `comercial.aprobar_descuento` (por encima de un umbral) y
 `administracion.anular` (anular un cobro o descartar un comprobante).
 
+### Facturación con permisos por vista (2026-10-07)
+
+Los controladores y los servicios que crean, emiten y consultan el resultado
+fiscal deben usar el mismo alcance. No exigir `administracion.gestionar` a un
+rol que ya usa `acceso.por_vista`.
+
+| Permiso | Alcance fiscal |
+|---|---|
+| `administracion.facturacion.gestionar` | Facturas vinculadas a órdenes, individuales o por lote. No concede la gestión general de comprobantes. |
+| `administracion.comprobantes.gestionar` | Facturas y notas de débito desde Comprobantes. No concede notas de crédito. |
+| `administracion.anular` | Notas de crédito; el acceso al recorrido de una OT sigue requiriendo la vista de Facturación. |
+
+El permiso histórico de Administración conserva su compatibilidad mediante
+`expandirVistas`, sólo en roles anteriores a `acceso.por_vista`. El nombre
+«Administrador» por sí solo no sustituye los permisos efectivos del rol.
+
+Verificación local: 66 pruebas aprobadas, incluidas 17 por HTTP con usuarios,
+roles, comprobantes y órdenes ficticios en PostgreSQL. El proveedor fiscal se
+simula; se comprueban creación, emisión, consulta, lotes, notas de crédito y
+rechazos por permisos o referencias de otra empresa. La suite HTTP forma parte
+del control de permisos de CI. No requiere migración ni modifica los roles.
+
 ---
 
 ## 2. Los cinco roles predefinidos
