@@ -338,6 +338,18 @@
   background: var(--surface);
   padding: 0 10px;
 }
+.inputFrame {
+  border: 1px solid var(--border);
+}
+.inputFrame:focus-within {
+  border-color: var(--field-border-focus);
+  box-shadow: inset 0 0 0 1px var(--field-border-focus);
+}
+/* El foco pertenece al recuadro completo, incluido el sufijo de unidad. */
+.inputFrame input:is(:focus, :focus-visible, [data-focus-visible="true"]) {
+  outline: none;
+  box-shadow: none;
+}
 .editor textarea {
   border: 1px solid var(--border);
   border-radius: var(--field-radius);
