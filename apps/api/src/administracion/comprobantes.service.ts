@@ -1,5 +1,6 @@
 import { textoErrorLog } from '../common/log-seguro';
 import { EmisionFiscalService } from './emision-fiscal.service';
+import { puedeOperarComprobante } from './permisos-comprobantes';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -324,10 +325,10 @@ export class ComprobantesService {
    */
   async crear(auth: CurrentAuth, payload: CrearComprobanteDto) {
     if (
-      !auth.permisos?.has(
-        payload.tipo === 'nota_credito'
-          ? 'administracion.anular'
-          : 'administracion.gestionar',
+      !puedeOperarComprobante(
+        auth,
+        payload.tipo,
+        Boolean(payload.ordenId || payload.ordenes?.length),
       )
     )
       throw new ForbiddenException(

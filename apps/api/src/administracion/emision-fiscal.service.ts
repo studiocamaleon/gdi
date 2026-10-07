@@ -16,6 +16,7 @@ import { regionalDelTenant } from '../common/regional';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 import { ManualProvider } from './invoicing/manual.provider';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
+import { puedeOperarComprobante } from './permisos-comprobantes';
 import type {
   EmitirInput,
   EmitirResultado,
@@ -70,12 +71,12 @@ export class EmisionFiscalService {
       );
   }
 
-  private exigirPermiso(auth: CurrentAuth, tipo: string) {
-    const permiso =
-      tipo === 'nota_credito'
-        ? 'administracion.anular'
-        : 'administracion.gestionar';
-    if (!auth.permisos?.has(permiso))
+  private exigirPermiso(
+    auth: CurrentAuth,
+    tipo: string,
+    tieneOrdenes: boolean,
+  ) {
+    if (!puedeOperarComprobante(auth, tipo, tieneOrdenes))
       throw new ForbiddenException(
         'No tenés permiso para operar este comprobante.',
       );
@@ -91,10 +92,11 @@ export class EmisionFiscalService {
           include: {
             puntoVenta: true,
             comprobanteOrigen: { include: { puntoVenta: true } },
+            ordenes: { select: { ordenId: true }, take: 1 },
           },
         });
         if (!c) throw new NotFoundException('No se encontró el comprobante.');
-        this.exigirPermiso(auth, c.tipo);
+        this.exigirPermiso(auth, c.tipo, c.ordenes.length > 0);
         const anterior = await tx.comprobanteEmision.findFirst({
           where: { tenantId: auth.tenantId, comprobanteId: id },
           orderBy: [{ creadaEl: 'desc' }, { id: 'desc' }],
@@ -394,11 +396,19 @@ export class EmisionFiscalService {
       ]);
       const comprobante = await tx.comprobante.findFirst({
         where: { id, tenantId: auth.tenantId },
-        select: { id: true, tipo: true },
+        select: {
+          id: true,
+          tipo: true,
+          ordenes: { select: { ordenId: true }, take: 1 },
+        },
       });
       if (!comprobante)
         throw new NotFoundException('No se encontró el comprobante.');
-      this.exigirPermiso(auth, comprobante.tipo);
+      this.exigirPermiso(
+        auth,
+        comprobante.tipo,
+        comprobante.ordenes.length > 0,
+      );
       return tx.comprobanteEmision.findFirst({
         where: { tenantId: auth.tenantId, comprobanteId: id },
         orderBy: [{ creadaEl: 'desc' }, { id: 'desc' }],

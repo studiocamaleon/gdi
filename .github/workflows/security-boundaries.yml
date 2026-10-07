@@ -84,6 +84,8 @@ jobs:
             src/motor-universal/__tests__/nesting-compuesto-shadow.spec.ts \
             src/auth/__tests__/modulos-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
+            src/administracion/__tests__/facturacion-permisos-http.integration.spec.ts \
+            src/administracion/__tests__/permisos-comprobantes.spec.ts \
             src/auth/__tests__/permisos-vistas.spec.ts \
             src/auth/__tests__/transversales-recorridos.spec.ts \
             src/presupuestos/__tests__/aprobacion-permisos.spec.ts \
