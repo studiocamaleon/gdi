@@ -181,6 +181,7 @@ export class AdministracionController {
 
   // ── Comprobantes ─────────────────────────────────────────────────────
 
+  @Permiso("administracion.comprobantes.ver", "administracion.facturacion.gestionar")
   @Get('comprobantes')
   listarComprobantes(
     @CurrentSession() auth: CurrentAuth,
@@ -190,6 +191,10 @@ export class AdministracionController {
     @Query('ordenId') ordenId?: string,
     @Query('q') q?: string,
   ) {
+    // Emitir desde una OT necesita su saldo fiscal; no habilita el listado general.
+    if (!auth.permisos?.has("administracion.comprobantes.ver") && !ordenId) {
+      throw new ForbiddenException("Necesitás permiso de comprobantes para consultar el listado general.");
+    }
     return this.comprobantesService.listar(auth, {
       estado,
       tipo,

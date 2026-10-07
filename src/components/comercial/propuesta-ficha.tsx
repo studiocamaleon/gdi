@@ -201,7 +201,7 @@ import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiv
 import type { CobroDraft } from "@/components/administracion/cobro-formulario";
 import { PagosStagingTab } from "@/components/comercial/pagos-staging-tab";
 import { crearCobro } from "@/lib/administracion-api";
-import { ComprobantesOrdenTab } from "@/components/administracion/facturacion-orden";
+import { ComprobantesOrdenTab, FacturarOrdenAccion } from "@/components/administracion/facturacion-orden";
 import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
 import {
   EVENTO_ICONOS,
@@ -4906,6 +4906,7 @@ function PropuestaFichaContenido({
   const mostrarPagos = orden ? puedeVerOrdenes || puedeVerCobros : puedeRegistrarCobros;
   const puedeVerProduccion = usePuede("produccion.tablero.ver");
   const puedeVerComprobantes = usePuede("administracion.comprobantes.ver");
+  const [refrescosComprobantes, setRefrescosComprobantes] = React.useState(0);
   const conOrdenes = useCapacidad("ordenes");
   const conPresupuestos = useCapacidad("presupuestos");
   const conCobros = useCapacidad("cobros");
@@ -7646,7 +7647,8 @@ function PropuestaFichaContenido({
                     </p>
                   )}
                 </div>
-                <div className={workspaceStyles.identity}>
+                <div className={workspaceStyles.quickActions}>
+                  {orden && <FacturarOrdenAccion ordenId={orden.id} numero={orden.numero} total={orden.total} facturado={orden.facturadoTotal} descuentoTotal={orden.descuentoTotal} habilitada={!["borrador", "cancelada"].includes(orden.estado) && !sinComprobante} bloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando} onFacturada={() => { recargarOrden(); setRefrescosComprobantes((n) => n + 1); }} />}
                   {!modoOrden && puedeEditarOrden ? (
                     <OrdenSaveActions
                       operacionPendiente={cuponValidando || descuentoAplicando}
@@ -8343,9 +8345,11 @@ function PropuestaFichaContenido({
                   total={orden.total}
                   facturadoInicial={orden.facturadoTotal}
                   cobradoInicial={orden.cobradoTotal}
-                  puedeFacturar={orden.estado !== "borrador"}
+                  puedeFacturar={!["borrador", "cancelada"].includes(orden.estado) && !sinComprobante}
+                  facturacionBloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando}
+                  onFacturada={recargarOrden}
                   soloLectura={!puedeEditarOrden}
-                  recargarToken={0}
+                  recargarToken={refrescosComprobantes}
                 />
               </div>
             ) : null}
