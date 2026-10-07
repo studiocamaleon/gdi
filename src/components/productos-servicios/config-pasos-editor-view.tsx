@@ -11226,7 +11226,10 @@ function TiempoComercialDetalladoEditor({
     color: "var(--fg-2, #2c2c33)",
   };
   const minutos = (valor: unknown, campo: string, ancho = 112) => (
-    <div style={{ ...CAJA_EJE, width: ancho }}>
+    <div
+      className={nodeStyles.inputFrame}
+      style={{ ...CAJA_EJE, width: ancho }}
+    >
       <NativeInput
         value={readOptionalNumber(valor) ?? ""}
         inputMode="numeric"
@@ -11531,7 +11534,10 @@ function TiempoFijoValorEditor({
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ ...CAJA_EJE, width: 132 }}>
+      <div
+        className={nodeStyles.inputFrame}
+        style={{ ...CAJA_EJE, width: 132 }}
+      >
         <NativeInput
           value={valorMostrado}
           inputMode="decimal"
@@ -12946,7 +12952,6 @@ const CAJA_EJE: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   height: 34,
-  border: "1px solid var(--hairline, #e5e2db)",
   borderRadius: 7,
   background: "var(--surface, #fff)",
   padding: "0 9px",
@@ -13189,7 +13194,10 @@ function ControlGuiado({
       );
     }
     return (
-      <div style={{ ...CAJA_EJE, maxWidth: 200 }}>
+      <div
+        className={nodeStyles.inputFrame}
+        style={{ ...CAJA_EJE, maxWidth: 200 }}
+      >
         <NativeInput
           value={valor}
           inputMode="decimal"
