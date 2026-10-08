@@ -1023,6 +1023,14 @@ export class OrdenesTrabajoService {
   // ── Listado ──────────────────────────────────────────────────────────
 
   async findAll(auth: CurrentAuth, query: OrdenesTrabajoQueryDto) {
+    // Un borrador descartado conserva la auditoría, fuera del listado habitual.
+    const sinDescartados: Prisma.OrdenTrabajoWhereInput = {
+      OR: [
+        { estado: { not: ESTADO_CANCELADA } },
+        { estadoAlCancelar: null },
+        { estadoAlCancelar: { not: 'borrador' } },
+      ],
+    };
     const q = query.q?.trim();
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const hoyClave = claveFechaEnZona(new Date(), regional.zonaHoraria);
@@ -1040,7 +1048,12 @@ export class OrdenesTrabajoService {
       ...(query.proyectoCampanaId
         ? { proyectoCampanaId: query.proyectoCampanaId }
         : {}),
-      ...(query.estado ? { estado: query.estado } : {}),
+      ...(query.estado === 'descartada'
+        ? { estado: ESTADO_CANCELADA, estadoAlCancelar: 'borrador' }
+        : {
+            AND: [sinDescartados],
+            ...(query.estado ? { estado: query.estado } : {}),
+          }),
       ...(query.urgencia === 'atrasadas'
         ? {
             estado: { in: ['pendiente', 'produccion'] },
@@ -1078,6 +1091,7 @@ export class OrdenesTrabajoService {
       proximasEntregar,
       atrasadas,
       emitidasHoy,
+      descartados,
     ] = await this.prisma.$transaction([
       this.prisma.ordenTrabajo.findMany({
         where,
@@ -1092,7 +1106,7 @@ export class OrdenesTrabajoService {
       this.prisma.ordenTrabajo.count({ where }),
       this.prisma.ordenTrabajo.groupBy({
         by: ['estado'],
-        where: { tenantId: auth.tenantId },
+        where: { tenantId: auth.tenantId, AND: [sinDescartados] },
         orderBy: { estado: 'asc' },
         _count: { _all: true },
         _sum: { total: true },
@@ -1119,6 +1133,13 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           estado: { notIn: ['borrador', ESTADO_CANCELADA] },
           fechaEmision: { gte: hoy0, lt: manana0 },
+        },
+      }),
+      this.prisma.ordenTrabajo.count({
+        where: {
+          tenantId: auth.tenantId,
+          estado: ESTADO_CANCELADA,
+          estadoAlCancelar: 'borrador',
         },
       }),
     ]);
@@ -1157,6 +1178,7 @@ export class OrdenesTrabajoService {
         query,
       ),
       stats: {
+        descartados,
         porEstado: counts,
         totalOrdenes: Object.values(counts).reduce((a, b) => a + b, 0),
         activas: counts.pendiente + counts.produccion,
@@ -4394,7 +4416,10 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           tipo: 'cancelacion',
-          descripcion: `Orden cancelada (estaba ${ORDEN_TRABAJO_ESTADO_LABELS[desde].toLowerCase()}): ${motivo}`,
+          descripcion:
+            desde === 'borrador'
+              ? `Borrador descartado y archivado: ${motivo}`
+              : `Orden cancelada (estaba ${ORDEN_TRABAJO_ESTADO_LABELS[desde].toLowerCase()}): ${motivo}`,
           usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
           usuarioId: auth.userId,
           origen: 'usuario',
@@ -8242,6 +8267,8 @@ export class OrdenesTrabajoService {
       vendedorNombre: orden.vendedor?.nombreCompleto ?? '—',
       estado,
       creadaEl: orden.createdAt.toISOString(),
+      borradorDescartado:
+        estado === ESTADO_CANCELADA && orden.estadoAlCancelar === 'borrador',
       fechaEmision: orden.fechaEmision?.toISOString() ?? null,
       version: orden.updatedAt.toISOString(),
       fechaEntrega: orden.fechaEntrega

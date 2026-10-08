@@ -17,7 +17,7 @@ export class OrdenesTrabajoQueryDto extends PaginationDto {
   proyectoCampanaId?: string;
 
   @IsOptional()
-  @IsIn(ORDEN_TRABAJO_ESTADOS)
+  @IsIn([...ORDEN_TRABAJO_ESTADOS, 'descartada'])
   estado?: string;
 
   @IsOptional()

@@ -34,6 +34,7 @@ const ESTADOS_VALIDOS = new Set([
   "finalizada",
   "entregada",
   "cancelada",
+  "descartada",
 ]);
 
 /**
@@ -57,7 +58,7 @@ export default async function OrdenesTrabajoPage({
   // Validado contra el enum: un estado inventado en la URL cae a undefined.
   const estado =
     params.estado && ESTADOS_VALIDOS.has(params.estado)
-      ? (params.estado as OrdenTrabajoEstado)
+      ? (params.estado as OrdenTrabajoEstado | "descartada")
       : undefined;
   const page = Math.max(1, Number(params.page) || 1);
   const urgencia = params.urgencia === "atrasadas" ? "atrasadas" : undefined;

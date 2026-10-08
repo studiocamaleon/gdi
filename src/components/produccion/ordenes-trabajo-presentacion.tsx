@@ -10,11 +10,17 @@ import { ProgresoValor } from "./progreso-produccion";
 import s from "./ordenes-trabajo-view.module.css";
 
 /** Presentación del listado. No altera el badge que aún usan las fichas heredadas. */
-export function EstadoListado({ estado }: { estado: OrdenTrabajoEstado }) {
+export function EstadoListado({
+  estado,
+  borradorDescartado,
+}: {
+  estado: OrdenTrabajoEstado;
+  borradorDescartado?: boolean;
+}) {
   return (
     <Chip size="sm" variant="soft" className={s.state} data-estado={estado}>
       <span className={s.stateDot} aria-hidden />
-      {ORDEN_TRABAJO_ESTADOS[estado].label}
+      {borradorDescartado ? "Borrador descartado" : ORDEN_TRABAJO_ESTADOS[estado].label}
     </Chip>
   );
 }
