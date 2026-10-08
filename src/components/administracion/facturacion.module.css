@@ -601,3 +601,8 @@
     padding: 16px;
   }
 }
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

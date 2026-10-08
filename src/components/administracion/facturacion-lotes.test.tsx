@@ -56,16 +56,16 @@ it("recupera el lote al entrar y distingue factura emitida de envío confirmado"
   expect(el.textContent).toContain("Esperando confirmación de los envíos");
   expect(el.textContent).toContain("Factura emitida");
   expect(el.textContent).toContain("Aviso pendiente");
-  expect(el.querySelector("a")?.getAttribute("href")).toBe(
-    "/administracion/comprobantes/factura",
-  );
+  expect(
+    el
+      .querySelector('a[href="/administracion/comprobantes/factura"]')
+      ?.getAttribute("href"),
+  ).toBe("/administracion/comprobantes/factura");
   expect(document.querySelector('[role="dialog"]')).toBeNull();
-  const final = lote();
-  final.estado = "completado";
-  final.items[0].avisoEstado = "enviada";
-  api.listar.mockResolvedValue([final]);
+  api.listar.mockResolvedValue([]);
   await act(async () => vi.advanceTimersByTimeAsync(5_000));
-  expect(el.textContent).toContain("Facturas y envíos completados");
+  expect(el.textContent).not.toContain("OT-123");
+  expect(el.querySelector("#lotes-facturacion")).toBeNull();
   expect(api.refresh).toHaveBeenCalledTimes(1);
 });
 it("conserva el último avance si falla una consulta y recupera la conexión", async () => {
@@ -89,7 +89,7 @@ it("abre desde la campanita un lote anterior a los veinte más recientes", async
   window.history.replaceState({}, "", `/?lote=${anterior.id}`);
   api.listar.mockResolvedValue([]);
   api.obtener.mockResolvedValue(anterior);
-  await act(async () => root.render(<FacturacionLotes revision={0} />));
+  await act(async () => root.render(<FacturacionLotes historial />));
   expect(api.obtener).toHaveBeenCalledWith(anterior.id);
   expect(el.querySelector("details")?.open).toBe(true);
   expect(el.textContent).toContain("Terminado con observaciones");

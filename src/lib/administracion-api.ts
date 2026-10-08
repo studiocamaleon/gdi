@@ -640,8 +640,12 @@ export type LoteFacturacion = {
   }[];
 };
 
-export const listarLotesFacturacion = () =>
-  apiRequest<LoteFacturacion[]>("/administracion/facturacion/lotes");
+export const listarLotesFacturacion = (opciones: { activos?: boolean; cursor?: string } = {}) => {
+  const params = new URLSearchParams();
+  if (opciones.activos) params.set("activos", "true");
+  if (opciones.cursor) params.set("cursor", opciones.cursor);
+  return apiRequest<LoteFacturacion[]>(`/administracion/facturacion/lotes${params.size ? `?${params}` : ""}`);
+};
 
 export const obtenerLoteFacturacion = (id: string) =>
   apiRequest<LoteFacturacion>(`/administracion/facturacion/lotes/${encodeURIComponent(id)}`);

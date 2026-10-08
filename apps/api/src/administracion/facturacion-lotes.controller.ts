@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -29,10 +30,14 @@ export class FacturacionLotesController {
 
   @Permiso('administracion.facturacion.ver')
   @Get('lotes')
-  async listar(@CurrentSession() auth: CurrentAuth) {
-    return (await this.lotes.listar(auth)).map((lote) =>
-      this.lotes.presentar(lote),
-    );
+  async listar(
+    @CurrentSession() auth: CurrentAuth,
+    @Query('activos') activos?: string,
+    @Query('cursor', new ParseUUIDPipe({ optional: true })) cursor?: string,
+  ) {
+    return (
+      await this.lotes.listar(auth, { activos: activos === 'true', cursor })
+    ).map((lote) => this.lotes.presentar(lote));
   }
 
   @Permiso('administracion.facturacion.ver')

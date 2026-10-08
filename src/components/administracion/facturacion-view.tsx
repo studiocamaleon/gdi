@@ -242,9 +242,14 @@ export function FacturacionView({
             individual o en lote.
           </p>
         </div>
-        <ActionLink variant="outline" href="/administracion/comprobantes">
-          Ver comprobantes <ArrowUpRightIcon aria-hidden />
-        </ActionLink>
+        <div className={s.headerActions}>
+          <ActionLink variant="outline" href="/administracion/facturacion/lotes">
+            Historial de lotes
+          </ActionLink>
+          <ActionLink variant="outline" href="/administracion/comprobantes">
+            Ver comprobantes <ArrowUpRightIcon aria-hidden />
+          </ActionLink>
+        </div>
       </header>
       <FacturacionLotes revision={revisionLotes} />
 

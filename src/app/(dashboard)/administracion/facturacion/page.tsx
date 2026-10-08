@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { FacturacionView } from "@/components/administracion/facturacion-view";
 import { getFacturacionPendientes } from "@/lib/administracion-api";
 import {
@@ -13,6 +14,7 @@ export default async function FacturacionPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
+  if (typeof params.lote === "string" && /^[a-f0-9-]{36}$/i.test(params.lote)) redirect(`/administracion/facturacion/lotes?lote=${params.lote}`);
   const filtros: FiltrosFacturacion = {
     cobro:
       params.cobro === "cobradas_sin_facturar"

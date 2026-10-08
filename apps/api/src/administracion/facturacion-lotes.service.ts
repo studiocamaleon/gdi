@@ -212,12 +212,24 @@ export class FacturacionLotesService {
     };
   }
 
-  listar(auth: CurrentAuth) {
+  async listar(
+    auth: CurrentAuth,
+    opciones: { activos?: boolean; cursor?: string } = {},
+  ) {
+    // Un cursor también debe pertenecer al usuario y a su empresa.
+    if (opciones.cursor) await this.obtener(auth, opciones.cursor);
     return this.prisma.facturacionLote.findMany({
-      where: { tenantId: auth.tenantId, userId: auth.userId },
+      where: {
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        ...(opciones.activos
+          ? { estado: { in: ['pendiente', 'procesando', 'esperando_envios'] } }
+          : {}),
+      },
       include: incluirItems,
-      orderBy: { createdAt: 'desc' },
-      take: 20,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      ...(opciones.activos ? {} : { take: 20 }),
+      ...(opciones.cursor ? { cursor: { id: opciones.cursor }, skip: 1 } : {}),
     });
   }
 
@@ -647,7 +659,7 @@ export class FacturacionLotesService {
           mensaje: completo
             ? `Se emitieron ${emitidas} facturas y se confirmó el envío a los clientes.`
             : `Se emitieron ${emitidas} de ${items.length} facturas y se confirmó el envío de ${enviadas}. Revisá el detalle de las facturas y avisos que requieren atención.`,
-          href: `/administracion/facturacion?lote=${lote.id}`,
+          href: `/administracion/facturacion/lotes?lote=${lote.id}`,
           severidad: completo ? 'EXITO' : 'ADVERTENCIA',
           topicos: ['administracion.facturacion'],
           destinatariosUserId: [lote.userId],

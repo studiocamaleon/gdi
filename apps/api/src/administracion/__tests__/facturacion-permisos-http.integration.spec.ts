@@ -343,6 +343,8 @@ describe('Facturación con permisos por vista (HTTP)', () => {
       expect(res.body.items).toHaveLength(modo === 'agrupada' ? 1 : 2);
       expect(res.body.leaseToken).toBeUndefined();
       expect(res.body.solicitudJson).toBeUndefined();
+      const activos = await request(app.getHttpServer()).get('/administracion/facturacion/lotes?activos=true').auth(tokens.facturador, { type: 'bearer' }).expect(200);
+      expect(activos.body.map((l: { id: string }) => l.id)).toContain(res.body.id);
       expect(emitir.mock.calls.length).toBe(inicio);
       const repetido = await post('facturacion/lote', 'facturador').send(body).expect(202);
       expect(repetido.body.id).toBe(res.body.id);
@@ -357,9 +359,29 @@ describe('Facturación con permisos por vista (HTTP)', () => {
       expect(eventos).toHaveLength(1);
       expect(eventos[0].notificaciones.map(n => n.userId)).toEqual([final.userId]);
       expect(eventos[0].titulo).not.toContain('envíos completados');
+      expect(eventos[0].href).toBe(`/administracion/facturacion/lotes?lote=${res.body.id}`);
+      const activosFinal = await request(app.getHttpServer()).get('/administracion/facturacion/lotes?activos=true').auth(tokens.facturador, { type: 'bearer' }).expect(200);
+      expect(activosFinal.body.map((l: { id: string }) => l.id)).not.toContain(res.body.id);
+      const historial = await request(app.getHttpServer()).get('/administracion/facturacion/lotes').auth(tokens.facturador, { type: 'bearer' }).expect(200);
+      expect(historial.body.map((l: { id: string }) => l.id)).toContain(res.body.id);
+      await request(app.getHttpServer()).get(`/administracion/facturacion/lotes?cursor=${res.body.id}`).auth(tokens.administrador, { type: 'bearer' }).expect(404);
+      await request(app.getHttpServer()).get('/administracion/facturacion/lotes?cursor=invalido').auth(tokens.facturador, { type: 'bearer' }).expect(400);
       await request(app.getHttpServer()).get(`/administracion/facturacion/lotes/${res.body.id}`).auth(tokens.administrador, { type: 'bearer' }).expect(404);
     },
   );
+  it('pagina más de veinte lotes propios sin perder registros ni incluir otros usuarios', async () => {
+    const userId = jwt.verify<{ sub: string }>(tokens.facturador).sub;
+    const ids = Array.from({ length: 21 }, () => randomUUID());
+    await prisma.facturacionLote.createMany({ data: ids.map((id, i) => ({ id, tenantId: tenants[0], userId, claveSolicitud: randomUUID(), solicitudJson: {}, estado: 'completado', createdAt: new Date(Date.now() + 60_000 + i * 1000) })) });
+    try {
+      const primera = await request(app.getHttpServer()).get('/administracion/facturacion/lotes').auth(tokens.facturador, { type: 'bearer' }).expect(200);
+      expect(primera.body).toHaveLength(20);
+      const segunda = await request(app.getHttpServer()).get(`/administracion/facturacion/lotes?cursor=${primera.body[19].id}`).auth(tokens.facturador, { type: 'bearer' }).expect(200);
+      const encontrados = [...primera.body, ...segunda.body].map((l: { id: string }) => l.id);
+      expect(ids.every(id => encontrados.includes(id))).toBe(true);
+      expect(new Set(encontrados).size).toBe(encontrados.length);
+    } finally { await prisma.facturacionLote.deleteMany({ where: { id: { in: ids }, tenantId: tenants[0], userId } }); }
+  });
   it('espera confirmación del envío, sobrevive a recuperar el item y notifica éxito una sola vez', async () => {
     generarAviso = true;
     try {
