@@ -103,4 +103,12 @@ describe('descartar borradores de OT', () => {
         .estado,
     ).toBe('borrador');
   });
+  it('conserva los cobros registrados al descartar, sin emitir ni borrar comprobantes', async () => {
+    const orden = await db.ordenTrabajo.create({ data: { tenantId, estado: 'borrador', numero: referenciaBorrador(), cobradoTotal: 100 } });
+    const resultado = await descartar(orden.id);
+    expect(resultado.estado).toBe('cancelada');
+    expect(Number(resultado.cobradoTotal)).toBe(100);
+    expect(await db.comprobante.count({ where: { tenantId } })).toBe(0);
+  });
+
 });

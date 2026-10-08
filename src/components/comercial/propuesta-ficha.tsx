@@ -5657,12 +5657,12 @@ function PropuestaFichaContenido({
 
   const impactoCancelacion = React.useMemo(() => {
     if (!orden) return [];
-    const puntos = [
+    const puntos = orden.estado === "borrador" ? [] : [
       "Sale del tablero del taller y de la capacidad comprometida.",
       "Deja de contar como venta en el panel y los reportes.",
       "El link de seguimiento del cliente deja de funcionar.",
     ];
-    if (acreditaYCancela) {
+    if (acreditaYCancela && orden.estado !== "borrador") {
       puntos.unshift(
         `Se emite la nota de crédito de ${formatCurrency(orden.facturadoTotal, moneda)} facturados: la factura queda acreditada ante ARCA.`,
       );
@@ -8590,7 +8590,7 @@ function PropuestaFichaContenido({
               ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
               : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
           }
-          impacto={orden?.estado === "borrador" ? [] : impactoCancelacion}
+          impacto={impactoCancelacion}
           requiereTipear={false}
           motivo={orden?.estado === "borrador" ? undefined : {
             label: "¿Por qué se cancela? Queda en el historial de la orden.",
