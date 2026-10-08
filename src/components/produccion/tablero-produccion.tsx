@@ -1,6 +1,7 @@
 "use client";
 import { DescargarArchivosButton } from "@/components/archivos/descargar-archivos-button";
-import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { useCapacidad, useImpresionDirecta } from "@/components/navigation/capacidades-provider";
+import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
 import { asignacionPermiteEjecutar } from "@/lib/acciones-produccion";
 import { filtrarTrabajos, metricasTrabajos, opcionesEstacionesTablero, type FiltrosTrabajo } from "@/lib/tablero-lista";
 import { modoTableroEnUrl, urlTableroEstacion } from "@/lib/tablero-navegacion";
@@ -725,6 +726,18 @@ export function ItemDetailSheet({
   const itemId = item?.id;
   const puede = usePuedeFn();
   const puedeVerOrden = puede("comercial.ordenes.ver");
+  const conDescargaEtiqueta = useCapacidad("etiquetas_pdf");
+  const impresionDirecta = useImpresionDirecta();
+  const [etiquetaItemId, setEtiquetaItemId] = React.useState<string | null>(null);
+  const puedeEtiquetar =
+    (item?.data.ordenEstado === "finalizada" || item?.data.ordenEstado === "entregada") &&
+    (puede("produccion.tablero.ver") || puede("produccion.ejecutar")) &&
+    (conDescargaEtiqueta || impresionDirecta);
+  const etiquetaAbierta = etiquetaItemId === itemId && puedeEtiquetar;
+
+  React.useEffect(() => {
+    setEtiquetaItemId(null);
+  }, [itemId]);
 
   // Sólo la proyección operativa; nunca descargar la ficha comercial al taller.
   React.useEffect(() => {
@@ -749,16 +762,16 @@ export function ItemDetailSheet({
     };
   }, [itemId]);
 
-  // Esc cierra el sheet (sólo mientras hay un item abierto).
+  // El diálogo de etiqueta administra Escape mientras está abierto.
   const abierto = Boolean(item);
   React.useEffect(() => {
-    if (!abierto) return undefined;
+    if (!abierto || etiquetaAbierta) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [abierto, onClose]);
+  }, [abierto, etiquetaAbierta, onClose]);
 
   if (!item) return null;
 
@@ -1010,6 +1023,12 @@ export function ItemDetailSheet({
                 : item.statusLine}
           </div>
           <div className="spacer" />
+          {puedeEtiquetar ? (
+            <ActionButton variant="outline" onPress={() => setEtiquetaItemId(item.id)}>
+              <PrinterIcon aria-hidden="true" />
+              {impresionDirecta ? "Imprimir etiqueta" : "Descargar etiqueta"}
+            </ActionButton>
+          ) : null}
           {puedeVerOrden ? (
             <Link
               className="btn"
@@ -1020,6 +1039,12 @@ export function ItemDetailSheet({
           ) : null}
         </div>
       </aside>
+      {etiquetaAbierta ? (
+        <EtiquetaOrdenDialog
+          ordenId={item.data.ordenId}
+          onClose={() => setEtiquetaItemId(null)}
+        />
+      ) : null}
     </>
   );
 }
