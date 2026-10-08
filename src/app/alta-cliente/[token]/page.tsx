@@ -13,25 +13,22 @@ export default async function Page({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+  let datos: { empresa: string; paisCodigo: string } | null = null;
   try {
-    const { empresa, paisCodigo } = await apiRequest<{
-      empresa: string;
-      paisCodigo: string;
-    }>(`/registro-clientes/${encodeURIComponent(token)}`, undefined, {
-      auth: false,
-    });
-    return (
-      <RegistroClientePublico
-        token={token}
-        empresa={empresa}
-        paisCodigo={paisCodigo}
-      />
+    datos = await apiRequest<{ empresa: string; paisCodigo: string }>(
+      `/registro-clientes/${encodeURIComponent(token)}`,
+      undefined,
+      { auth: false },
     );
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404)
-      return (
-        <RegistroClientePublico token={token} empresa="" disponible={false} />
-      );
-    throw error;
+    if (!(error instanceof ApiError && error.status === 404)) throw error;
   }
+  return (
+    <RegistroClientePublico
+      token={token}
+      empresa={datos?.empresa ?? ""}
+      paisCodigo={datos?.paisCodigo}
+      disponible={Boolean(datos)}
+    />
+  );
 }
