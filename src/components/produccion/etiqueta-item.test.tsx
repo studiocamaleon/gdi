@@ -42,6 +42,7 @@ const trabajo = (estado = "finalizada", id = "item-a", ordenId = "ot-a") =>
       codigo: "PAPEL",
       nombre: "Impresión ficticia",
       clienteNombre: "Cliente ficticio",
+      vendedorNombre: "Comercial de prueba",
       cantidad: 2,
       cantidadUnidad: "u",
       specs: [],
