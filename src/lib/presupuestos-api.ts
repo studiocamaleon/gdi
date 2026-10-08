@@ -212,6 +212,11 @@ export type PresupuestoPublico = {
   subtotal: number;
   impuestos: number;
   cargosDirectos: number;
+  cargos?: Array<{
+    nombre: string;
+    descripcion: string | null;
+    total: number;
+  }>;
   total: number;
   /** Σ del descuento comercial de los items (0 = sin descuento). */
   descuentoTotal: number;

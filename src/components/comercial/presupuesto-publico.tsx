@@ -191,7 +191,7 @@ export function PresupuestoPublicoView({
           <SeccionPublica
             titulo="Detalle del trabajo"
             icon={FileTextIcon}
-            detalle={`${d.items.length} ${d.items.length === 1 ? "producto" : "productos"}`}
+            detalle={`${d.items.length} ${d.items.length === 1 ? "producto" : "productos"}${d.cargos?.length ? ` · ${d.cargos.length} ${d.cargos.length === 1 ? "cargo" : "cargos"}` : ""}`}
           >
             <div className={s.items}>
               {d.items.map((item, idx) => (
@@ -245,6 +245,30 @@ export function PresupuestoPublicoView({
                         ))}
                       </div>
                     </div>
+                  ) : null}
+                </article>
+              ))}
+              {d.cargos?.map((cargo, idx) => (
+                <article key={`cargo-${idx}`} className={s.item}>
+                  <div className={s.itemHead}>
+                    <span className={s.itemNumber}>
+                      {String(d.items.length + idx + 1).padStart(2, "0")}
+                    </span>
+                    <div className={s.itemIdentity}>
+                      <h3>{cargo.nombre}</h3>
+                      <p>Cargo adicional</p>
+                    </div>
+                    <div className={s.itemPrice}>
+                      <strong>{fmt(cargo.total)}</strong>
+                    </div>
+                  </div>
+                  {cargo.descripcion ? (
+                    <dl className={p.specs}>
+                      <div>
+                        <dt>Descripción</dt>
+                        <dd>{cargo.descripcion}</dd>
+                      </div>
+                    </dl>
                   ) : null}
                 </article>
               ))}

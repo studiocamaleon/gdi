@@ -129,6 +129,43 @@ describe('logo público de presupuestos', () => {
   });
 });
 
+describe('desglose público de cargos', () => {
+  it('expone los conceptos emitidos y sus totales sin notas ni configuración interna', async () => {
+    const { service, cotizacion } = escenario();
+    cotizacion.emisionJson = {
+      items: [],
+      cargosDirectos: 955900,
+      cargos: [
+        {
+          nombreSnapshot: 'Instalación',
+          descripcionSnapshot: 'Colocación en el local',
+          total: 955900,
+          montoNeto: 790000,
+          nota: 'Nota interna',
+          configSnapshot: { costo: 100 },
+        },
+      ],
+    } as typeof cotizacion.emisionJson;
+    const result = await service.publico('token');
+    expect(result.cargosDirectos).toBe(955900);
+    expect(result.cargos).toEqual([
+      {
+        nombre: 'Instalación',
+        descripcion: 'Colocación en el local',
+        total: 955900,
+      },
+    ]);
+  });
+
+  it('mantiene compatibles los presupuestos antiguos sin desglose', async () => {
+    const { service } = escenario();
+    await expect(service.publico('token')).resolves.toMatchObject({
+      cargosDirectos: 0,
+      cargos: [],
+    });
+  });
+});
+
 describe('decisión pública y buzón del equipo', () => {
   it.each(['aprobado', 'rechazado'] as const)(
     'guarda %s, su historial y el aviso para todos los usuarios activos en la misma transacción',
