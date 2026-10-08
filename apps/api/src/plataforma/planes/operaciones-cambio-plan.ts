@@ -63,6 +63,7 @@ export async function operacionesCambioPlan(
           tx.cotizacion.count({
             where: {
               tenantId,
+              versionVigente: true,
               estado: {
                 in: ['borrador', 'pendiente_aprobacion', 'enviado', 'aprobado'],
               },
@@ -290,6 +291,7 @@ export async function operacionesCambioPlan(
                   ordenItemId: null,
                   cotizacionItem: {
                     cotizacion: {
+                      versionVigente: true,
                       estado: {
                         in: [
                           'borrador',

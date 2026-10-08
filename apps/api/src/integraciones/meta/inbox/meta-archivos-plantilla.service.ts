@@ -163,7 +163,7 @@ export class MetaArchivosPlantillaService {
           is: {
             tenantId,
             clienteId,
-            numero: { not: null },
+            numero: { not: null }, versionVigente: true,
             fechaEnvio: { not: null },
             estado: { in: ['enviado', 'aprobado', 'convertido'] },
           },

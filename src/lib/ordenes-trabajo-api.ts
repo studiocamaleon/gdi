@@ -416,3 +416,7 @@ export function aplicarDescuentoOrden(id: string, payload: DescuentoOrdenPayload
     body: JSON.stringify(payload),
   });
 }
+
+export function descartarBorradorOrden(id: string) {
+  return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}/descartar`, { method: "POST" });
+}

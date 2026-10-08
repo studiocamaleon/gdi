@@ -374,6 +374,12 @@ export class OrdenesTrabajoController {
    * cuándo, por qué y con cuánto trabajo encima.
    */
   @Permiso("comercial.ordenes.gestionar")
+  @Post(':id/descartar')
+  descartarBorrador(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.ordenesTrabajoService.cancelar(auth, id, { motivo: 'Borrador descartado.', emitirNotaCredito: false }, true);
+  }
+
+  @Permiso("comercial.ordenes.gestionar")
   @Post(':id/cancelar')
   cancelar(
     @CurrentSession() auth: CurrentAuth,

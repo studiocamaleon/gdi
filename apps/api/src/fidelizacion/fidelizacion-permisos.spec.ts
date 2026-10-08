@@ -35,6 +35,7 @@ describe('Canje sin acceso a costos', () => {
       0,
       1000,
       5,
+      0,
     );
     expect(res).toEqual({
       puntosEstimados: null,

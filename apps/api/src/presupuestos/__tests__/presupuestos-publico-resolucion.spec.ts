@@ -256,6 +256,7 @@ describe('aprobación del cliente registrada por el comercial', () => {
         where: {
           id: 'pres-1',
           estado: 'enviado',
+          versionVigente: true,
           fechaValidez: { gte: expect.any(Date) },
         },
         data: expect.objectContaining({
@@ -309,7 +310,7 @@ describe('aprobación del cliente registrada por el comercial', () => {
     ).rejects.toThrow('está vencido');
     expect(tx.cotizacion.updateMany).toHaveBeenCalledTimes(1);
     expect(tx.cotizacion.updateMany).toHaveBeenCalledWith({
-      where: { id: 'pres-1', estado: 'enviado' },
+      where: { id: 'pres-1', tenantId: 'tenant-1', versionVigente: true, estado: 'enviado' },
       data: { estado: 'vencido' },
     });
     expect(prisma.cotizacionEvento.create).toHaveBeenCalledWith({

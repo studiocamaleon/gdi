@@ -75,6 +75,10 @@ export class CorreoPresupuestoService {
 
   async preparar(auth: CurrentAuth, id: string) {
     const p = await this.exigirAcceso(auth, id);
+    if (p.versionVigente === false || p.estado === 'descartado')
+      throw new ConflictException(
+        'Esta versión ya no admite envíos. Abrí el presupuesto vigente.',
+      );
     await this.exigirCapacidades(auth.tenantId);
     const [cfg, empresa, tenant] = await Promise.all([
       this.prisma.configuracionPresupuestos.findUnique({
@@ -89,14 +93,15 @@ export class CorreoPresupuestoService {
         select: { nombre: true },
       }),
     ]);
+    const numero = p.versionPresupuesto > 1 ? `${p.numero} · v${p.versionPresupuesto}` : p.numero!;
     const valores = {
       empresa: tenant.nombre,
-      presupuesto: p.numero!,
+      presupuesto: numero,
       cliente: p.cliente?.nombre ?? 'cliente',
     };
     return {
       empresa: tenant.nombre,
-      numero: p.numero!,
+      numero,
       para: p.cliente?.emailPrincipal ?? '',
       contactos: p.cliente?.contactos.filter((c) => c.email) ?? [],
       responderA: cfg?.correoResponderA ?? empresa?.email ?? '',
@@ -281,6 +286,7 @@ export class CorreoPresupuestoService {
             id,
             tenantId: auth.tenantId,
             estado: 'enviado',
+            versionVigente: true,
             publicToken,
             OR: [{ fechaValidez: null }, { fechaValidez: { gte: new Date() } }],
           },
@@ -311,7 +317,11 @@ export class CorreoPresupuestoService {
   }
 
   async reintentar(auth: CurrentAuth, id: string, correoId: string) {
-    await this.exigirAcceso(auth, id);
+    const p = await this.exigirAcceso(auth, id);
+    if (p.versionVigente === false || p.estado === 'descartado')
+      throw new ConflictException(
+        'Esta versión ya no admite envíos. Abrí el presupuesto vigente.',
+      );
     await this.exigirCapacidades(auth.tenantId);
     const correo = await this.prisma.correoPresupuesto.findFirst({
       where: { id: correoId, tenantId: auth.tenantId, cotizacionId: id },
@@ -395,6 +405,7 @@ export class CorreoPresupuestoService {
       });
       if (
         !p ||
+        p.versionVigente === false ||
         p.estado !== 'enviado' ||
         (p.fechaValidez && p.fechaValidez < ahora)
       )

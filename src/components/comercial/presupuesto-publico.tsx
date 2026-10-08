@@ -136,7 +136,7 @@ export function PresupuestoPublicoView({
           <div>
             <dt>Presupuesto</dt>
             <dd>
-              <code>{d.numero}</code>
+              <code>{d.numero}{(d.versionPresupuesto ?? 1) > 1 ? ` · v${d.versionPresupuesto}` : ""}</code>
             </dd>
           </div>
           <div>
@@ -152,7 +152,13 @@ export function PresupuestoPublicoView({
         </dl>
       </section>
 
-      {aprobado ? (
+      {d.estado === "reemplazado" ? (
+        <Alert role="status" className={p.notice}>
+          <Clock3Icon />
+          <AlertTitle>Esta es una versión anterior</AlertTitle>
+          <AlertDescription>Conservamos lo cotizado como referencia. Pedile a {d.negocio} el enlace de la nueva versión para aprobarla.</AlertDescription>
+        </Alert>
+      ) : aprobado ? (
         <Alert role="status" className={p.notice} data-tone="success">
           <CircleCheckIcon />
           <AlertTitle>Presupuesto aprobado</AlertTitle>
@@ -381,7 +387,7 @@ export function PresupuestoPublicoView({
             <dl className={s.confirmationSummary}>
               <div>
                 <dt>Presupuesto</dt>
-                <dd>{d.numero}</dd>
+                <dd>{d.numero}{(d.versionPresupuesto ?? 1) > 1 ? ` · v${d.versionPresupuesto}` : ""}</dd>
               </div>
               <div>
                 <dt>Total</dt>

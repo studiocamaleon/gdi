@@ -341,4 +341,11 @@ describe('correo de presupuestos (PostgreSQL de test, transporte simulado)', () 
     );
     expect(transporte.enviar).not.toHaveBeenCalled();
   });
+  it('una versión reemplazada no permite preparar ni reintentar envíos', async () => {
+    await prisma.cotizacion.update({ where: { id: cotizacionId }, data: { versionVigente: false } });
+    await expect(service.preparar(auth, cotizacionId)).rejects.toThrow('ya no admite envíos');
+    await expect(service.reintentar(auth, cotizacionId, randomUUID())).rejects.toThrow('ya no admite envíos');
+    expect(transporte.enviar).not.toHaveBeenCalled();
+  });
+
 });

@@ -87,7 +87,7 @@ export class EmbudoService {
     const cotizaciones = (await this.prisma.cotizacion.findMany({
       where: {
         tenantId,
-        numero: { not: null },
+        numero: { not: null }, versionVigente: true,
         fechaEnvio: { gte: rango.desde, lte: hasta },
       },
       select: {
@@ -123,7 +123,7 @@ export class EmbudoService {
 
     // 3) Pipeline abierto HOY (KPI, independiente de la cohorte del rango).
     const pipeline = await this.prisma.cotizacion.aggregate({
-      where: { tenantId, numero: { not: null }, estado: 'enviado' },
+      where: { tenantId, numero: { not: null }, versionVigente: true, estado: 'enviado' },
       _count: { _all: true },
       _sum: { subtotal: true },
     });
@@ -134,14 +134,14 @@ export class EmbudoService {
       this.prisma.cotizacion.count({
         where: {
           tenantId,
-          numero: { not: null },
+          numero: { not: null }, versionVigente: true,
           fechaEnvio: { gte: anterior.desde, lte: finDeDia(anterior) },
         },
       }),
       this.prisma.cotizacion.count({
         where: {
           tenantId,
-          numero: { not: null },
+          numero: { not: null }, versionVigente: true,
           estado: { in: ESTADOS_APROBADO },
           fechaEnvio: { gte: anterior.desde, lte: finDeDia(anterior) },
         },

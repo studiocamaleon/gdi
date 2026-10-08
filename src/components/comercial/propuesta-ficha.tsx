@@ -138,6 +138,7 @@ import { type NestingViewerInput } from "@/lib/productos-servicios-api";
 import {
   cambiarEstadoOrdenTrabajo,
   cancelarOrdenTrabajo,
+  descartarBorradorOrden,
   crearOrdenTrabajo,
   editarOrdenTrabajoLote,
   getOrdenTrabajo,
@@ -146,6 +147,8 @@ import {
 import {
   emitirPresupuesto,
   guardarBorradorPresupuesto,
+  crearVersionPresupuesto,
+  type PresupuestoEdicion,
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
 import { type ValidarCuponResultado } from "@/lib/cupones-api";
@@ -388,6 +391,7 @@ type PropuestaFichaProps = {
    */
   recienConvertida?: boolean;
   initialDocumentos?: EstadoDocumentalOrden | null;
+  presupuestoBase?: PresupuestoEdicion;
 };
 
 type InnerTab = "specs" | "costos" | "produccion" | "aprovechamiento";
@@ -4896,6 +4900,7 @@ function PropuestaFichaContenido({
   recienEmitida = false,
   recienConvertida = false,
   initialDocumentos = null,
+  presupuestoBase,
 }: PropuestaFichaProps) {
   const {
     cotizar,
@@ -5031,7 +5036,7 @@ function PropuestaFichaContenido({
     if (!recienConvertida) return;
     window.history.replaceState(null, "", window.location.pathname);
   }, [recienConvertida]);
-  const [tipo, setTipo] = React.useState<TipoPropuesta>(permisoOrdenes ? "orden_trabajo" : "presupuesto");
+  const [tipo, setTipo] = React.useState<TipoPropuesta>(presupuestoBase ? "presupuesto" : permisoOrdenes ? "orden_trabajo" : "presupuesto");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>(
     ordenProp ? "productos" : "datos",
@@ -5078,14 +5083,14 @@ function PropuestaFichaContenido({
   const [cancelando, setCancelando] = React.useState(false);
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
-    orden ? orden.productos.map(rehidratarOrdenItem) : [],
+    orden ? orden.productos.map(rehidratarOrdenItem) : presupuestoBase?.productos.map((producto, index) => ({ ...rehidratarOrdenItem(producto, index), cotizacionItemId: undefined })) ?? [],
   );
   const documentosCentroCopiado = items.filter(item => metaCentroCopiado(item.jobContext)).length;
 
-  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(() => cargosDeOrden(orden));
+  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(() => presupuestoBase?.cargos ?? cargosDeOrden(orden));
   const [fidelizacionCanjePuntos, setFidelizacionCanjePuntos] =
-    React.useState(0);
-  const [fidelizacionCanjeMonto, setFidelizacionCanjeMonto] = React.useState(0);
+    React.useState(presupuestoBase?.fidelizacionCanjePuntos ?? 0);
+  const [fidelizacionCanjeMonto, setFidelizacionCanjeMonto] = React.useState(presupuestoBase?.fidelizacionCanjeMonto ?? 0);
   const costosFidelizacion = React.useMemo(
     () => verMargenes && items.every((item) => item.cotizacion.costos)
       ? consolidarCostosOrden(items, cargosOrden)
@@ -5159,9 +5164,9 @@ function PropuestaFichaContenido({
     paso: PanelEditorPaso;
   } | null>(null);
   const [panelSaving, setPanelSaving] = React.useState(false);
-  const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? "");
+  const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? presupuestoBase?.clienteId ?? "");
   const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
-    orden?.proyectoCampana?.id ?? "",
+    orden?.proyectoCampana?.id ?? presupuestoBase?.proyectoCampanaId ?? "",
   );
   const [campanasCliente, setCampanasCliente] = React.useState<
     CampanaReferencia[]
@@ -5230,8 +5235,8 @@ function PropuestaFichaContenido({
       email: "",
       telefonoCodigo: "",
       telefonoNumero: orden.clienteTelefono ?? "",
-    } : null,
-    [orden?.clienteId, orden?.clienteNombre, orden?.clienteTelefono],
+    } : presupuestoBase?.cliente ?? null,
+    [orden?.clienteId, orden?.clienteNombre, orden?.clienteTelefono, presupuestoBase?.cliente],
   );
   // La caché sobrevive al cierre del panel de datos en móvil.
   const selectorClientes = useClientesOrden(clientesDisponibles, clientePersistido);
@@ -5241,7 +5246,7 @@ function PropuestaFichaContenido({
     : clienteSeleccionado?.telefonoNumero?.trim()
       ? [clienteSeleccionado.telefonoCodigo, clienteSeleccionado.telefonoNumero].filter(Boolean).join(" ").trim()
       : null;
-  const [canalVenta, setCanalVenta] = React.useState(orden?.canalVenta ?? "");
+  const [canalVenta, setCanalVenta] = React.useState(orden?.canalVenta ?? presupuestoBase?.canalVenta ?? "");
   const datosOrdenRef = React.useRef<OrdenWorkspaceHandle>(null);
   const canalSelectorId = React.useId();
   const [errorCanalVenta, setErrorCanalVenta] = React.useState(false);
@@ -5260,7 +5265,7 @@ function PropuestaFichaContenido({
     return false;
   }, [canalVenta, orden?.canalVenta, canalSelectorId]);
   const [fechaEstimada, setFechaEstimada] = React.useState(
-    () => orden?.fechaEntrega ?? offsetDate(7, zonaHoraria),
+    () => orden?.fechaEntrega ?? presupuestoBase?.fechaEntrega ?? offsetDate(7, zonaHoraria),
   );
   const creacionDefaultsRef = React.useRef({
     canalVenta,
@@ -5652,12 +5657,12 @@ function PropuestaFichaContenido({
 
   const impactoCancelacion = React.useMemo(() => {
     if (!orden) return [];
-    const puntos = [
+    const puntos = orden.estado === "borrador" ? [] : [
       "Sale del tablero del taller y de la capacidad comprometida.",
       "Deja de contar como venta en el panel y los reportes.",
       "El link de seguimiento del cliente deja de funcionar.",
     ];
-    if (acreditaYCancela) {
+    if (acreditaYCancela && orden.estado !== "borrador") {
       puntos.unshift(
         `Se emite la nota de crédito de ${formatCurrency(orden.facturadoTotal, moneda)} facturados: la factura queda acreditada ante ARCA.`,
       );
@@ -5681,13 +5686,14 @@ function PropuestaFichaContenido({
       if (!permisoEdicionRef.current || !orden || cancelando || cambiosSinGuardar > 0) return;
       setCancelando(true);
       try {
-        await cancelarOrdenTrabajo(orden.id, motivo, acreditaYCancela);
+        if (orden.estado === "borrador") await descartarBorradorOrden(orden.id);
+        else await cancelarOrdenTrabajo(orden.id, motivo, acreditaYCancela);
         setConfirmCancelar(false);
         setEditandoOrden(false);
         toast.success(
           acreditaYCancela
             ? `Orden ${orden.numero} cancelada y facturación acreditada.`
-            : `Orden ${orden.numero} cancelada.`,
+            : orden.estado === "borrador" ? "Borrador descartado." : `Orden ${orden.numero} cancelada.`,
         );
         router.refresh();
       } catch (error) {
@@ -6449,7 +6455,12 @@ function PropuestaFichaContenido({
       if (!cotizacionId) {
         throw new Error("No se pudo persistir la cotización del presupuesto.");
       }
-      const presupuesto = await emitirPresupuesto({
+      const guardar = presupuestoBase ? (payload: Parameters<typeof emitirPresupuesto>[0]) => crearVersionPresupuesto(presupuestoBase.id, { ...payload, revisionBaseActualizadaEl: presupuestoBase.actualizadaEl, enviar: true }) : emitirPresupuesto;
+      const presupuesto = await guardar({
+        validezDias: presupuestoBase?.validezDias,
+        observaciones: presupuestoBase?.observaciones ?? undefined,
+        senaSugeridaPct: presupuestoBase?.senaSugeridaPct,
+        vendedorEmpleadoId: presupuestoBase?.vendedorEmpleadoId ?? undefined,
         notificarWhatsapp: canal === "whatsapp",
         cotizacionId,
         clienteId,
@@ -6487,6 +6498,7 @@ function PropuestaFichaContenido({
       setEmitiendoPresupuesto(false);
     }
   }, [
+    presupuestoBase,
     conPresupuestos,
     conCotizacion,
     items,
@@ -6681,7 +6693,12 @@ function PropuestaFichaContenido({
       const fechaEntrega = fechaEntregaOrden();
       if (ordenTipo === "presupuesto") {
         if (!cotizacionId) throw new Error("No se pudo guardar la cotización del presupuesto.");
-        const presupuesto = await guardarBorradorPresupuesto({
+        const guardar = presupuestoBase ? (payload: Parameters<typeof emitirPresupuesto>[0]) => crearVersionPresupuesto(presupuestoBase.id, { ...payload, revisionBaseActualizadaEl: presupuestoBase.actualizadaEl }) : guardarBorradorPresupuesto;
+        const presupuesto = await guardar({
+          validezDias: presupuestoBase?.validezDias,
+          observaciones: presupuestoBase?.observaciones ?? undefined,
+          senaSugeridaPct: presupuestoBase?.senaSugeridaPct,
+          vendedorEmpleadoId: presupuestoBase?.vendedorEmpleadoId ?? undefined,
           cotizacionId, clienteId, canalVenta,
           proyectoCampanaId: proyectoCampanaId || undefined,
           fechaEntrega: fechaEntrega || undefined,
@@ -6746,6 +6763,7 @@ function PropuestaFichaContenido({
       setGuardandoBorrador(false);
     }
   }, [
+    presupuestoBase,
     conOrdenes,
     conPresupuestos,
     ordenTipo,
@@ -7638,7 +7656,7 @@ function PropuestaFichaContenido({
                     <Link href="/produccion/ordenes">Órdenes de trabajo</Link>
                     <ChevronRightIcon />
                     <span aria-current="page">
-                      {orden?.numero ?? "Nueva orden"}
+                      {orden?.numero ?? (presupuestoBase ? `${presupuestoBase.numero} · Nueva versión ${presupuestoBase.version + 1}` : "Nueva orden")}
                     </span>
                   </nav>
                   {orden ? (
@@ -7760,7 +7778,7 @@ function PropuestaFichaContenido({
                           }
                         >
                           <XCircleIcon />
-                          Cancelar orden
+                          {orden.estado === "borrador" ? "Descartar borrador" : "Cancelar orden"}
                         </HeroButton>
                       ) : null}
                       {puedeEditarOrden && orden.estado === "borrador" ? (
@@ -7868,16 +7886,17 @@ function PropuestaFichaContenido({
                   </div>
                 ) : null}
 
+                {presupuestoBase && <p className="text-sm text-muted-foreground">Estás preparando la versión {presupuestoBase.version + 1}. Al guardar, la anterior queda en el historial y deja de admitir aprobaciones. Los productos se vuelven a cotizar con la configuración vigente.</p>}
                 <OrdenDatosSections
                   tipo={
-                    !modoOrden && permisoOrdenes && permisoPresupuestos ? (
+                    !modoOrden && !presupuestoBase && permisoOrdenes && permisoPresupuestos ? (
                       <OrdenSegmented
                         value={ordenTipo}
                         onChange={(value) => setTipo(fromOrdenTipo(value))}
                       />
                     ) : (
                       <span className="text-sm font-medium">
-                        {!modoOrden && !permisoOrdenes ? "Presupuesto" : "Orden de trabajo"}
+                        {!modoOrden && (!permisoOrdenes || presupuestoBase) ? "Presupuesto" : "Orden de trabajo"}
                       </span>
                     )
                   }
@@ -7911,7 +7930,7 @@ function PropuestaFichaContenido({
                   cliente={
                     <FieldCard label="Cliente" icon={<UserIcon />}>
                       <div className="flex items-center gap-2 text-sm text-foreground">
-                        {campoEditable("clienteId") ? (
+                        {campoEditable("clienteId") && !presupuestoBase ? (
                           <div className="min-w-0 flex-1">
                             <ClienteLista
                               value={clienteId}
@@ -8471,6 +8490,7 @@ function PropuestaFichaContenido({
                 {!modoOrden && conFidelizacion && permisoOrdenes ? (
                   <FidelizacionCotizador
                     clienteId={clienteId}
+                    presupuestoBaseId={presupuestoBase?.id}
                     margen={costosFidelizacion?.margenMonto}
                     total={totalPropuestaAntesCanje}
                     moneda={moneda}
@@ -8563,20 +8583,21 @@ function PropuestaFichaContenido({
         <ConfirmacionDestructiva
           open={puedeEditarOrden && confirmCancelar}
           onOpenChange={setConfirmCancelar}
-          titulo={`Cancelar la orden ${orden?.numero ?? ""}`}
+          apariencia="heroui"
+          titulo={orden?.estado === "borrador" ? "Descartar borrador de OT" : `Cancelar la orden ${orden?.numero ?? ""}`}
           descripcion={
-            acreditaYCancela
+            orden?.estado === "borrador" ? "El borrador se retira de los pendientes. Su contenido y el autor del descarte quedan en el historial; no se asigna un número de OT." : acreditaYCancela
               ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
               : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
           }
           impacto={impactoCancelacion}
           requiereTipear={false}
-          motivo={{
+          motivo={orden?.estado === "borrador" ? undefined : {
             label: "¿Por qué se cancela? Queda en el historial de la orden.",
             placeholder:
               "Ej.: el cliente se arrepintió · error de carga · no aprobó el arte",
           }}
-          accionLabel="Cancelar la orden"
+          accionLabel={orden?.estado === "borrador" ? "Descartar borrador" : "Cancelar la orden"}
           onConfirmar={(motivo) => cancelarOrden(motivo)}
         />
 

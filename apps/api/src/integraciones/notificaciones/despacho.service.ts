@@ -119,6 +119,16 @@ export class DespachoService {
       where: { id, canal: 'WATI' },
     });
     if (!n) return { estado: 'nada' };
+    if (n.cotizacionId && !(await this.prisma.cotizacion.findFirst({
+      where: { id: n.cotizacionId, tenantId: n.tenantId, versionVigente: true, estado: { not: 'descartado' } },
+      select: { id: true },
+    }))) {
+      await this.prisma.notificacionWhatsapp.updateMany({
+        where: { id, tenantId: n.tenantId, estado: ESTADOS.pendiente },
+        data: { estado: ESTADOS.descartada, motivo: 'El presupuesto fue reemplazado o descartado.' },
+      });
+      return { estado: 'descartada', motivo: 'Presupuesto no vigente.' };
+    }
     const reserva = await this.prisma.$transaction(async (tx) => {
       await bloquearCupoUsuarios(tx, n.tenantId);
       if (

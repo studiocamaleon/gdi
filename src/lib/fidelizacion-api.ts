@@ -75,7 +75,7 @@ export type FidelizacionSimulacion = {
 };
 export const simularFidelizacion = (
   clienteId: string,
-  payload: { margen?: number; total: number; canjePuntos: number },
+  payload: { margen?: number; total: number; canjePuntos: number; presupuestoBaseId?: string },
 ) =>
   apiRequest<FidelizacionSimulacion>(
     `/fidelizacion/clientes/${clienteId}/simular`,

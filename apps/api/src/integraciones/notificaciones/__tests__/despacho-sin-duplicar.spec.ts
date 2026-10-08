@@ -221,4 +221,13 @@ describe('DespachoService — un hecho, un mensaje', () => {
     });
     expect(enviarPlantilla).not.toHaveBeenCalled();
   });
+  it('descarta un aviso pendiente de una versión reemplazada sin enviarlo a Wati', async () => {
+    const presupuesto = await prisma.cotizacion.create({ data: { tenantId, numero: `PRES-QA-${randomUUID()}`, estado: 'enviado', versionVigente: false } });
+    const id = await encolar();
+    await prisma.notificacionWhatsapp.update({ where: { id }, data: { cotizacionId: presupuesto.id, evento: 'presupuesto_enviado' } });
+    expect(await despachar(id, DENTRO_DE_VENTANA)).toMatchObject({ estado: 'descartada' });
+    expect(enviarPlantilla).not.toHaveBeenCalled();
+    expect((await prisma.notificacionWhatsapp.findUniqueOrThrow({ where: { id } })).estado).toBe(ESTADOS.descartada);
+  });
+
 });

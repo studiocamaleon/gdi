@@ -144,10 +144,11 @@ function PresupuestosContent({
     { k: "rechazado", label: "Rechazados" },
     { k: "vencido", label: "Vencidos" },
     { k: "convertido", label: "Convertidos" },
+    { k: "descartado", label: "Descartados" },
   ];
   const countChip = (k: PresupuestoEstado | "todos") =>
     k === "todos"
-      ? data.stats.reduce((s, estado) => s + estado.cantidad, 0)
+      ? data.stats.filter((estado) => estado.estado !== "descartado").reduce((s, estado) => s + estado.cantidad, 0)
       : statDe(k).cantidad;
 
   const filtroActivo = filtro !== "todos" || Boolean(busqueda.trim());
@@ -173,7 +174,9 @@ function PresupuestosContent({
     rechazado: CircleX,
     vencido: Clock3,
     convertido: ArrowRightLeft,
-  };
+    descartado: CircleX,
+    reemplazado: Layers3,
+  } satisfies Record<PresupuestoEstado | "todos", typeof Layers3>;
 
   return (
     <section
