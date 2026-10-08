@@ -2,7 +2,7 @@
 
 Estado al 01/10/2026: infraestructura desplegada y primera recuperación de base, archivo y código comprobada; administrador con clave personal y MFA, certificado ARCA cifrado y consulta WSFE de producción verificada. HTTPS, origen web definitivo y acceso de la primera empresa comprobados; invitación entregada y aceptada, Founder manual activo. Posteriormente se trasladó la configuración operativa local autorizada, sin historial comercial/fiscal ni stock; el informe detallado es privado. La configuración fiscal de esa empresa está guardada y la integración de producción quedó activa con autorización del titular, sin emitir comprobantes. **Los recorridos funcionales y las comprobaciones posteriores se registran por fecha en VALIDACION.md.** Consultar el registro vigente en [VALIDACION.md](VALIDACION.md). La web comercial permanece en Vercel. La aplicación y sus servicios usan Fly; cada entorno tiene bases, depósitos y credenciales propias.
 
-**Estado vigente: 2026-10-08, 21:40 UTC.** API y ambos workers ejecutan `7ff929fd7`; web conserva `f44aab780` (PR #48, dependiente de #47; sin fusionar). Se corrigió la comparación decimal que impedía recuperar ciertas facturas con cobros previos. Corrección validada en local, CI y staging; una factura pendiente real se recuperó con autorización operativa, conservando su número, CAE, PDF y una única imputación. Wati confirmó el aviso leído por el destinatario, con un único intento. Se conservan las mejoras de facturación durable/campanita, cargos y borradores. 312 migraciones, seis servicios saludables, recursos conservados y Sentry sin incidencias de esta revisión. Ver [VALIDACION.md](./VALIDACION.md).
+**Estado vigente: 2026-10-08, 21:48 UTC.** API y ambos workers ejecutan `7ff929fd7`; web conserva `f44aab780` (PR #48, dependiente de #47; sin fusionar). Se corrigió la comparación decimal que impedía recuperar ciertas facturas con cobros previos. Después del primer lote real se incorporó la credencial fiscal faltante al worker y se comprobó desde ese proceso una consulta ARCA de sólo lectura; los tres borradores fallidos no tenían número ni intento fiscal. Corrección validada en local, CI y staging; una factura pendiente real se recuperó con autorización operativa, conservando su número, CAE, PDF y una única imputación. Wati confirmó el aviso leído por el destinatario, con un único intento. Se conservan las mejoras de facturación durable/campanita, cargos y borradores. 312 migraciones, seis servicios saludables, recursos conservados y salud comprobada. El incidente posterior de Sentry y su corrección de configuración están registrados. Ver [VALIDACION.md](./VALIDACION.md).
 
 ## Alcance del primer lanzamiento
 
@@ -47,6 +47,18 @@ API y Next llevan `GRAFO_DEPLOY_ENV=production` y una credencial nueva `WEB_API_
 Next requiere además `WEB_ORIGIN=https://app.grafoprint.com.ar` para aceptar escrituras y crear sesiones desde ese origen exacto. Sin la variable responde 503; un origen distinto recibe 403. Durante la emisión inicial de TLS se habilitó temporalmente sólo el dominio propio de Fly, con HTTPS válido, para el alta del administrador. Al terminar, aplicar el origen definitivo del manifiesto y comprobar ambos rechazos. No agregar comodines ni aceptar cualquier Host.
 
 Sólo `GET/HEAD /api` es público en la API durante este primer lanzamiento. Webhooks Meta y Paddle están cerrados; abrirlos requiere una implementación opt-in con firmas verificadas y sus pruebas. No agregar `TRUST_PROXY` para saltarse el canal. La web pública debe recibir tráfico directamente de Fly, como se validó; si cambia el proxy del dominio, revisar la IP antes.
+
+## Comprobación fiscal del worker antes de habilitar lotes
+
+El worker general necesita `AFIPSDK_ACCESS_TOKEN`, el ambiente fiscal del manifiesto y `INTEGRACIONES_ENCRYPTION_KEY`, coherentes con la API del mismo entorno. La credencial del representante permanece cifrada en la base; no copiar credenciales entre entornos ni agregar el token al manifiesto o a Git. Guardar el secreto también en el inventario operativo privado `worker.env` para futuras restauraciones. El worker PDF no emite ante ARCA y no necesita ese token.
+
+Antes de habilitar facturación automática y después de actualizar/restaurar servicios, ejecutar desde la carpeta del repositorio:
+
+```sh
+FLYCTL_BIN=/ruta/al/flyctl node deploy/verificar-worker-fiscal.mjs produccion
+```
+
+El control compara ambiente y huellas en memoria, sin imprimir secretos ni huellas. Rechaza un token ausente/distinto y un cifrado incompatible aunque el proceso esté saludable. No sustituye comprobar una consulta fiscal de sólo lectura desde el worker, que verifica el certificado cifrado y el acceso efectivo a ARCA. El recorrido con proveedor manual de staging no prueba estas dependencias de producción. No usar una emisión fiscal real como prueba de salud.
 
 ## Registro y vuelta atrás
 

@@ -1255,3 +1255,10 @@ Se reprodujo que un importe `number` enviado como float8 podía quedar apenas po
 - [CI permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37846635083), [CI dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37846635030) y [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37846635084) aprobados.
 
 Fuente cifrada custodiada por 31 días e inventario actualizado. Copia posterior `85838584-71a8-45f8-9d15-81d52f506e90`, completada **2026-10-08T21:35:20.747Z**: 312 migraciones, 24 archivos, fuente y digest nuevos comprobados mediante firma y descifrado del manifiesto. El primer sondeo encontró aún la copia anterior; se verificó la nueva al terminar. **No se repitió restauración SQL.** Reversión disponible al digest API `7eb79bc7fc280a39eb7730b80f17f7b98ca36b2f97d17ee7c76f45fd3a9641ef`, que reintroduce este fallo decimal. Las evidencias privadas permanecen fuera de Git.
+
+
+## 2026-10-08, 21:48 UTC — Alcance del ensayo manual y control de configuración
+
+El incidente del primer lote fiscal real mostró una omisión que el proveedor manual no cubría: la API tenía la credencial del proveedor fiscal y el worker no. Se agregó `deploy/verificar-worker-fiscal.mjs`, con cinco pruebas que cubren token ausente/distinto, cifrado incompatible, ambiente incorrecto y el alcance explícito del modo manual. Las pruebas se incorporaron al CI de contenedores; el script se ejecuta contra Fly antes de habilitar facturación automática. No depende de secretos cloud en CI.
+
+Staging comprobado con `--permitir-manual`: API/worker en `dev`, sin proveedor automático configurado, salida `modo: manual, arcaValidada: false`. No se copiaron credenciales de producción ni se cambió staging. Las verificaciones manuales previas siguen siendo válidas para lógica de lotes, permisos, PDF y UI, **no como prueba de la integración fiscal efectiva del worker en producción**.

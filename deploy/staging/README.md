@@ -204,3 +204,8 @@ API y worker principal usan la configuración de Meta y la misma clave de cifrad
 La aplicación valida el encabezado `Origin` en las escrituras al BFF y en el alta o cierre de sesión. Staging usa `STAGING_WEB_ORIGIN`, ya declarado en `fly.web.toml`; el ensayo Compose usa `http://localhost:3100`. Los clientes de prueba que llamen a esas rutas deben enviar ese origen explícitamente.
 
 Al preparar producción, definir **`WEB_ORIGIN=https://app.grafoprint.com.ar`** en el servidor Next. Sin un origen configurado, las escrituras se rechazan en modo producción. Esta configuración no es un secreto ni debe llevar el prefijo `NEXT_PUBLIC`. Los webhooks entran directamente por la API y no utilizan este mecanismo.
+
+
+## Control fiscal del worker antes de publicar facturación automática
+
+Ejecutar `FLYCTL_BIN=/ruta/al/flyctl node deploy/verificar-worker-fiscal.mjs staging` cuando exista proveedor automático de homologación en API/worker. El script compara configuración fiscal y cifrado sin revelar secretos. Si el entorno usa exclusivamente proveedor manual, `--permitir-manual` registra explícitamente `arcaValidada: false`: ese recorrido no demuestra que producción tenga las credenciales fiscales necesarias en el worker. No trasladar secretos de producción a staging para obtener un resultado positivo. Antes de habilitar lotes en producción, exigir su control sin esa opción y una consulta ARCA de sólo lectura desde el proceso que realmente factura.

@@ -63,6 +63,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Comprobar el contrato de configuración fiscal del worker
+        run: node --test deploy/facturacion-worker-config.test.mjs
+
       - name: Preparar datos y claves desechables del ensayo
         run: |
           node deploy/staging/init-local-env.mjs

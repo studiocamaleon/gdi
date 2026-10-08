@@ -659,3 +659,21 @@ Reversión disponible a la imagen API `7eb79bc7fc280a39eb7730b80f17f7b98ca36b2f9
 
 
 Fuente exacta cifrada y protegida por 31 días; inventario de recuperación actualizado. Copia posterior `7b9f371d-cc58-4636-b657-f18b1c2160a5`, completada **2026-10-08T21:40:39.093Z**, con 312 migraciones y 104 archivos. Firma válida, manifiesto descifrado y fuente/digest backend nuevos comprobados. El primer sondeo encontró todavía la copia anterior; la nueva se comprobó al terminar. **No se repitió una restauración SQL completa.** Evidencia operativa privada fuera de Git.
+
+
+## 2026-10-08, 21:48 UTC — Credencial fiscal del worker tras el primer lote real
+
+El primer lote real de tres clientes terminó con observaciones. Sentry registró **tres ocurrencias** de [GRAFOPRINT-API-E](https://grafoprint.sentry.io/issues/7782051184/), entre 21:43:51 y 21:43:56 UTC, en `EmisionFiscalService.proveedor`, ejecutado por el worker. La causa fue `AFIPSDK_ACCESS_TOKEN` ausente en ese proceso; API sí lo tenía y ambos usaban ambiente `prod`. La clave de cifrado del worker estaba presente. Fue una omisión de configuración del despliegue, no un rechazo de ARCA ni un bloqueo de la API. El proveedor manual usado en staging no podía detectar la falta del secreto de producción.
+
+Se comprobó que los tres comprobantes asociados permanecían **borrador, sin número, CAE ni filas de ComprobanteEmision**. El fallo ocurrió antes de admitir/enviar una solicitud fiscal. El lote quedó cerrado con observaciones y su notificación personal registrada. No se reabrió, reintentó ni reemitió el lote durante este diagnóstico.
+
+Se incorporó únicamente el token fiscal de la misma API al worker existente, verificando previamente que su fuente operativa privada coincidiera con la API activa. Se conservó el resto de sus secretos y se actualizó `worker.env` privado. Reinicio normal del worker por actualización de secreto; no se recompiló ni cambió código de aplicación, esquema, tamaño, API, web, PDF o worker PDF. Runtime backend conserva `7ff929fd7`, web `f44aab780`.
+
+Comprobación posterior:
+
+- El nuevo control `deploy/verificar-worker-fiscal.mjs produccion` falló antes indicando el token ausente y pasó después en modo automático, con ambiente, token y cifrado coherentes con API. No imprime secretos ni huellas.
+- Desde **el worker**, `FECompConsultar` de un comprobante ya autorizado devolvió autorización coincidente con su solicitud congelada. Esto comprobó credencial SDK, descifrado del certificado de plataforma y acceso efectivo a ARCA desde el proceso que emite. Consulta de sólo lectura, sin persistir otro resultado ni enviar avisos.
+- Seis servicios saludables y tamaños conservados; API/web 200, acceso privado 403, BFF anónimo 401.
+- Cinco pruebas locales del control aprobadas e incorporadas al CI. Staging quedó explícitamente manual, `arcaValidada: false`, sin trasladar credenciales.
+
+Los tres borradores conservan sus accesos desde el lote para revisión y emisión autorizada. No crear otro comprobante sólo para superar el error ni considerar la consulta de lectura una prueba de emisión fiscal real en lote. Los identificadores y secretos operativos permanecen fuera de Git. Se exige este control y la consulta desde worker antes de habilitar o restaurar facturación automática en adelante.
