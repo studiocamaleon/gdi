@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
+import { normalizarTelefonoCliente } from '../common/telefono-cliente';
 import { cuitValido } from '../common/cuit';
 import { SolicitudAltaDto } from './dto/solicitud-alta.dto';
 
@@ -20,7 +21,7 @@ export function telefonoComparable(telefono: string) {
     telefono.replace(/\D/g, '')
   );
 }
-export function validarSolicitud(dto: SolicitudAltaDto) {
+export function validarSolicitud(dto: SolicitudAltaDto, pais = 'AR') {
   const documentoNumero = dto.documentoNumero.replace(/\D/g, '');
   if (
     dto.documentoTipo === 'CUIT'
@@ -33,8 +34,8 @@ export function validarSolicitud(dto: SolicitudAltaDto) {
     throw new BadRequestException(
       'Para esa condición fiscal necesitás ingresar CUIT/CUIL.',
     );
-  const telefono = parsePhoneNumberFromString(dto.telefono, 'AR');
-  if (!telefono?.isValid())
+  const telefono = normalizarTelefonoCliente('', dto.telefono, pais);
+  if (!telefono.ok || !telefono.telefonoNumero)
     throw new BadRequestException(
       'Ingresá un teléfono válido con código de área.',
     );
@@ -43,7 +44,7 @@ export function validarSolicitud(dto: SolicitudAltaDto) {
     documentoTipo: dto.documentoTipo,
     documentoNumero,
     condicionFiscal: dto.condicionFiscal,
-    telefono: String(telefono.number),
+    telefono: `+${telefono.telefonoCodigo}${telefono.telefonoNumero}`,
     direccion: dto.direccion,
     ciudad: dto.ciudad,
   };

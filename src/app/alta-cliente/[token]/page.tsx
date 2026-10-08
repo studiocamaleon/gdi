@@ -14,12 +14,19 @@ export default async function Page({
 }) {
   const { token } = await params;
   try {
-    const { empresa } = await apiRequest<{ empresa: string }>(
-      `/registro-clientes/${encodeURIComponent(token)}`,
-      undefined,
-      { auth: false },
+    const { empresa, paisCodigo } = await apiRequest<{
+      empresa: string;
+      paisCodigo: string;
+    }>(`/registro-clientes/${encodeURIComponent(token)}`, undefined, {
+      auth: false,
+    });
+    return (
+      <RegistroClientePublico
+        token={token}
+        empresa={empresa}
+        paisCodigo={paisCodigo}
+      />
     );
-    return <RegistroClientePublico token={token} empresa={empresa} />;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404)
       return (

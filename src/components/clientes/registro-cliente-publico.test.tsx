@@ -10,13 +10,7 @@ describe("Formulario público de cliente", () => {
         empresa="Imprenta ficticia"
       />,
     );
-    for (const name of [
-      "nombre",
-      "documentoNumero",
-      "telefono",
-      "direccion",
-      "ciudad",
-    ])
+    for (const name of ["nombre", "documentoNumero", "direccion", "ciudad"])
       expect(html).toMatch(
         new RegExp(
           `name="${name}"[^>]*required=""|required=""[^>]*name="${name}"`,
@@ -27,9 +21,22 @@ describe("Formulario público de cliente", () => {
     expect(html).toContain("CUIT / CUIL");
     expect(html).not.toContain('type="password"');
     expect(html).not.toContain('name="limiteCredito"');
+    expect(html).toContain('id="telefono-alta"');
+    expect(html).toContain("País del teléfono");
     expect(html).toContain('type="tel"');
     expect(html).toContain('inputMode="numeric"');
     expect(html).toContain('data-ui="heroui"');
+  });
+  it("inicia el selector con el país de la empresa", () => {
+    const html = renderToStaticMarkup(
+      <RegistroClientePublico
+        token="ficticio"
+        empresa="Ensayo"
+        paisCodigo="UY"
+      />,
+    );
+    expect(html).toContain("Uruguay");
+    expect(html).toContain("+598");
   });
   it("un enlace desactivado no ofrece el formulario ni el botón de envío", () => {
     const html = renderToStaticMarkup(

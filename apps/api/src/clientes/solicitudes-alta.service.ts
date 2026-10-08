@@ -8,10 +8,11 @@ import {
 } from '@nestjs/common';
 import { Prisma, SolicitudAltaCliente } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import { expandir, permisosDeRolBase } from '../auth/permisos';
 import { CurrentAuth } from '../auth/auth.types';
+import { normalizarTelefonoCliente } from '../common/telefono-cliente';
 import { firmaActor } from '../common/firma-actor';
 import { PrismaService } from '../prisma/prisma.service';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -94,12 +95,20 @@ export class SolicitudesAltaService {
       where: { id: link.tenantId },
       select: { nombre: true },
     });
-    return { empresa: tenant.nombre };
+    const regional = await this.prisma.datosEmpresa.findUnique({
+      where: { tenantId: link.tenantId },
+      select: { paisCodigo: true },
+    });
+    return { empresa: tenant.nombre, paisCodigo: regional?.paisCodigo ?? 'AR' };
   }
   async solicitar(token: string, dto: SolicitudAltaDto) {
-    const datos = validarSolicitud(dto);
     return this.prisma.$transaction(async (db) => {
       const link = await this.resolver(token, db);
+      const regional = await db.datosEmpresa.findUnique({
+        where: { tenantId: link.tenantId },
+        select: { paisCodigo: true },
+      });
+      const datos = validarSolicitud(dto, regional?.paisCodigo ?? 'AR');
       // Serializa envíos por enlace y espera cualquier revocación concurrente.
       await db.$queryRaw`SELECT "id" FROM "EnlacePublico" WHERE "id" = ${link.id}::uuid FOR UPDATE`;
       await this.resolver(token, db);
@@ -224,13 +233,17 @@ export class SolicitudesAltaService {
           (cliente.documentoNumero === dni ||
             (cliente.cuit && dniDeCuit(cliente.cuit) === dni))
         );
+      const normalizado = normalizarTelefonoCliente(
+        cliente.telefonoCodigo,
+        cliente.telefonoNumero,
+      );
       const telefono =
         !!cliente.telefonoNumero &&
-        telefonoComparable(
-          cliente.telefonoNumero.startsWith('+')
-            ? cliente.telefonoNumero
-            : `${cliente.telefonoCodigo} ${cliente.telefonoNumero}`,
-        ) === solicitud.telefono;
+        (normalizado.ok
+          ? `+${normalizado.telefonoCodigo}${normalizado.telefonoNumero}`
+          : telefonoComparable(
+              `${cliente.telefonoCodigo} ${cliente.telefonoNumero}`,
+            )) === solicitud.telefono;
       const nombre = [cliente.nombre, cliente.razonSocial].some(
         (n) =>
           !!n && nombreComparable(n) === nombreComparable(solicitud.nombre),
@@ -316,7 +329,7 @@ export class SolicitudesAltaService {
                     : dniDeCuit(solicitud.documentoNumero),
                 condicionFiscal: solicitud.condicionFiscal,
                 paisCodigo: 'AR',
-                telefonoCodigo: `+${telefono.countryCallingCode}`,
+                telefonoCodigo: telefono.countryCallingCode,
                 telefonoNumero: String(telefono.nationalNumber),
                 origenAlta: 'autoregistro',
                 direcciones: {

@@ -2,7 +2,9 @@
 
 ## Alcance
 
-El alta de clientes inicia el país del teléfono y el país del cliente con la configuración regional de la empresa. Editar un cliente conserva su teléfono. El selector permite buscar cualquier país o prefijo; el campo nacional muestra sólo dígitos y permite pegar un teléfono internacional con espacios, paréntesis o guiones. Un internacional válido cambia también el país del selector. Los contactos adicionales usan el mismo control.
+El formulario público de autoregistro (`/alta-cliente/:token`) usa el mismo selector buscable de país, inicia el teléfono con el país de la empresa del enlace y envía un único teléfono internacional canónico. La API vuelve a validar con metadatos completos antes de crear la solicitud. Al aprobar, se separan código y número y se comprueban coincidencias tanto con registros anteriores como con los nuevos. El resto de los datos fiscales del autoregistro conserva su alcance actual argentino.
+
+El alta interna de clientes inicia el país del teléfono y el país del cliente con la configuración regional de la empresa. Editar un cliente conserva su teléfono. El selector permite buscar cualquier país o prefijo; el campo nacional muestra sólo dígitos y permite pegar un teléfono internacional con espacios, paréntesis o guiones. Un internacional válido cambia también el país del selector. Los contactos adicionales usan el mismo control.
 
 Formulario y API comparten `apps/api/src/common/telefono-cliente.ts`, una función pura basada en los metadatos completos de libphonenumber-js. Se guardan el código internacional y el número nacional por separado. Un teléfono vacío sigue siendo opcional; uno incompleto o ambiguo impide guardar. Las importaciones y el alta rápida por documento también validan los teléfonos que incorporan. No se corrigen registros existentes en bloque ni se recortan repetidamente dígitos para obtener un número aparentemente válido.
 

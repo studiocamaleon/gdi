@@ -3,6 +3,8 @@ import { useState, type FormEvent } from "react";
 import { CheckCheck, ArrowRight, ShieldCheck } from "lucide-react";
 import { Input } from "@heroui/react";
 import { apiRequest } from "@/lib/api";
+import { TelefonoField } from "./telefono-field";
+import { normalizarTelefonoCliente } from "@/lib/telefono-cliente";
 import { condicionesAlta } from "@/lib/clientes-autoregistro-api";
 import { ActionButton } from "@/components/design-system/action-button";
 import { SelectField } from "@/components/design-system/select-field";
@@ -14,11 +16,18 @@ export function RegistroClientePublico({
   token,
   empresa,
   disponible = true,
+  paisCodigo = "AR",
 }: {
   token: string;
   empresa: string;
   disponible?: boolean;
+  paisCodigo?: string;
 }) {
+  const [telefonoCodigo, setTelefonoCodigo] = useState(
+    () => normalizarTelefonoCliente("", "", paisCodigo).telefonoCodigo ?? "54",
+  );
+  const [telefonoNumero, setTelefonoNumero] = useState("");
+  const [telefonoError, setTelefonoError] = useState<string>();
   const [tipo, setTipo] = useState("CUIT");
   const [condicion, setCondicion] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -31,6 +40,19 @@ export function RegistroClientePublico({
       setError("Seleccioná tu condición fiscal.");
       return;
     }
+    const telefono = normalizarTelefonoCliente(
+      telefonoCodigo,
+      telefonoNumero,
+      paisCodigo,
+    );
+    if (!telefono.ok || !telefono.telefonoNumero) {
+      setTelefonoError(
+        telefono.ok
+          ? "Ingresá tu teléfono completo con código de área."
+          : telefono.error,
+      );
+      return;
+    }
     const datos = Object.fromEntries(new FormData(event.currentTarget));
     setEnviando(true);
     setError("");
@@ -41,6 +63,7 @@ export function RegistroClientePublico({
           method: "POST",
           body: JSON.stringify({
             ...datos,
+            telefono: `+${telefono.telefonoCodigo}${telefono.telefonoNumero}`,
             documentoTipo: tipo,
             condicionFiscal: condicion,
           }),
@@ -151,21 +174,21 @@ export function RegistroClientePublico({
                   options={condicionesAlta}
                 />
               </div>
-              <label className={styles.campo} htmlFor="telefono-alta">
-                Teléfono con código de área
-                <Input
-                  id="telefono-alta"
-                  name="telefono"
-                  type="tel"
-                  required
-                  minLength={8}
-                  maxLength={30}
-                  autoComplete="tel"
-                  placeholder="+54 …"
-                  disabled={enviando}
-                />
-                <small>Incluí el código de país si no es de Argentina.</small>
-              </label>
+              <TelefonoField
+                id="telefono-alta"
+                label="Teléfono con código de área"
+                pais={paisCodigo}
+                codigo={telefonoCodigo}
+                numero={telefonoNumero}
+                onChange={(codigo, numero) => {
+                  setTelefonoCodigo(codigo);
+                  setTelefonoNumero(numero);
+                  setTelefonoError(undefined);
+                }}
+                required
+                disabled={enviando}
+                error={telefonoError}
+              />
               <div className={styles.separador}>
                 <span>Domicilio fiscal · Argentina</span>
               </div>

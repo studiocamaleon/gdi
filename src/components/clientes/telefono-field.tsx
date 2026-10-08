@@ -24,6 +24,7 @@ export function TelefonoField({
   onChange,
   disabled,
   error,
+  required,
 }: {
   id: string;
   label: string;
@@ -33,6 +34,7 @@ export function TelefonoField({
   onChange: (codigo: string, numero: string) => void;
   disabled?: boolean;
   error?: string;
+  required?: boolean;
 }) {
   const normalized = normalizarTelefonoCliente(codigo, numero, pais);
   const region =
@@ -99,6 +101,8 @@ export function TelefonoField({
         <Label htmlFor={id}>{label}</Label>
         <Input
           id={id}
+          type="tel"
+          required={required}
           className={focus.singleBorder}
           inputMode="numeric"
           autoComplete="tel-national"

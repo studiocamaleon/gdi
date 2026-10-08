@@ -210,13 +210,32 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
     const r = await request(app.getHttpServer())
       .get(`/registro-clientes/${enlaces[0]}`)
       .expect(200);
-    expect(r.body).toEqual({ empresa: 'Imprenta ficticia' });
+    expect(r.body).toEqual({ empresa: 'Imprenta ficticia', paisCodigo: 'AR' });
     await request(app.getHttpServer())
       .get('/registro-clientes/inexistente')
       .expect(404);
     await request(app.getHttpServer())
       .get('/solicitudes-alta-clientes')
       .expect(401);
+  });
+  it('usa el país de la empresa y guarda el teléfono internacional sin duplicarlo', async () => {
+    await prisma.datosEmpresa.create({
+      data: { tenantId: tenants[1], paisCodigo: 'UY' },
+    });
+    const info = await request(app.getHttpServer())
+      .get(`/registro-clientes/${enlaces[1]}`)
+      .expect(200);
+    expect(info.body).toEqual({
+      empresa: 'Imprenta ficticia',
+      paisCodigo: 'UY',
+    });
+    const solicitud = await pendiente({ telefono: '099 123-456' }, 1);
+    expect(solicitud.telefono).toBe('+59899123456');
+    await publica(
+      datos({ telefono: '54 +54 9 2966 45-6789' }),
+      enlaces[1],
+    ).expect(400);
+    await prisma.datosEmpresa.delete({ where: { tenantId: tenants[1] } });
   });
   it.each(['lector', 'gestor'])(
     'deniega a %s todos los accesos de revisión y configuración',
@@ -300,7 +319,7 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
       razonSocial: s.nombre,
       documentoNumero: s.documentoNumero,
       condicionFiscal: 'consumidor_final',
-      telefonoCodigo: '+1',
+      telefonoCodigo: '1',
       telefonoNumero: '2025550100',
       origenAlta: 'autoregistro',
       aceptaWhatsapp: null,
