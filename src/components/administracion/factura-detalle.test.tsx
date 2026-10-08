@@ -10,6 +10,7 @@ import type { OrdenFacturable } from "@/lib/administracion";
 const api = vi.hoisted(() => ({
   facturarOrden: vi.fn(),
   facturarLote: vi.fn(),
+  listarLotesFacturacion: vi.fn(async () => []),
 }));
 vi.mock("@/lib/administracion-api", () => api);
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -120,6 +121,7 @@ it("facturas agrupadas parten de resumen y permiten detalle completo antes de co
   expect(api.facturarLote).not.toHaveBeenCalled();
   await act(async () => button("Confirmar y emitir").click());
   expect(api.facturarLote).toHaveBeenCalledWith({
+    claveSolicitud: expect.any(String),
     ordenIds: ["ot-1", "ot-2"],
     modo: "agrupada",
     detalle: "items",

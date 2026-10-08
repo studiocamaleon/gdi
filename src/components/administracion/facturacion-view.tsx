@@ -19,14 +19,12 @@ import {
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import type {
-  OrdenFacturable,
-  ResultadoLoteFacturacion,
-} from "@/lib/administracion";
+import type { OrdenFacturable } from "@/lib/administracion";
 import {
   FacturaDetalleSelector,
   type DetalleFactura,
 } from "./factura-detalle-selector";
+import { FacturacionLotes } from "./facturacion-lotes";
 import { facturarLote } from "@/lib/administracion-api";
 import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
 import {
@@ -66,7 +64,6 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { FacturacionResultado } from "./facturacion-resultado";
 import {
   FacturacionConfirmacion,
   type LotePorConfirmar,
@@ -122,8 +119,8 @@ export function FacturacionView({
   const [confirmacion, setConfirmacion] =
     React.useState<LotePorConfirmar | null>(null);
   const emisionEnCurso = React.useRef(false);
-  const [resultado, setResultado] =
-    React.useState<ResultadoLoteFacturacion | null>(null);
+  const claveSolicitud = React.useRef<string | null>(null);
+  const [revisionLotes, setRevisionLotes] = React.useState(0);
 
   const data = initialOrdenes;
   const rows = React.useMemo(
@@ -174,6 +171,7 @@ export function FacturacionView({
       cargandoFiltros
     )
       return;
+    claveSolicitud.current = crypto.randomUUID();
     setConfirmacion({
       ordenes: seleccionadas.map(
         ({ ordenId, numero, clienteNombre, saldoSinFacturar }) => ({
@@ -204,26 +202,16 @@ export function FacturacionView({
     emisionEnCurso.current = true;
     setFacturando(true);
     try {
-      const res = await facturarLote({
+      await facturarLote({
+        claveSolicitud: claveSolicitud.current ?? (claveSolicitud.current = crypto.randomUUID()),
         ordenIds: confirmacion.ordenes.map((o) => o.ordenId),
         modo: modoFinal,
         detalle: confirmacion.detalle,
       });
       setConfirmacion(null);
-      setResultado(res);
-      const ok = res.resultados.filter((r) => r.ok).length;
-      const fail = res.resultados.length - ok;
-      if (fail === 0) {
-        toast.success(
-          modoFinal === "agrupada"
-            ? `Factura agrupada emitida para ${ok} órdenes.`
-            : `${ok} factura${ok === 1 ? "" : "s"} emitida${ok === 1 ? "" : "s"}.`,
-        );
-      } else {
-        toast.error(
-          `${fail} de ${res.resultados.length} no se pudieron facturar.`,
-        );
-      }
+      setSel(new Set());
+      setRevisionLotes(v => v + 1);
+      toast.success("Lote recibido. Podés seguir trabajando; te avisaremos en la campanita al terminar.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo facturar.");
     } finally {
@@ -232,11 +220,7 @@ export function FacturacionView({
     }
   };
 
-  const cerrarResultado = () => {
-    setResultado(null);
-    setSel(new Set());
-    router.refresh();
-  };
+
 
   const modoFinal = puedeAgrupar ? modo : "por_orden";
   const cantidadFacturas = modoFinal === "agrupada" ? 1 : seleccionadas.length;
@@ -262,6 +246,7 @@ export function FacturacionView({
           Ver comprobantes <ArrowUpRightIcon aria-hidden />
         </ActionLink>
       </header>
+      <FacturacionLotes revision={revisionLotes} />
 
       <div className={s.metrics} aria-label="Resumen de facturación">
         <div className={s.totalMetric}>
@@ -761,7 +746,7 @@ export function FacturacionView({
                   >
                     <ReceiptTextIcon aria-hidden />
                     {facturando
-                      ? "Emitiendo…"
+                      ? "Registrando…"
                       : cantidadFacturas === 1
                         ? "Emitir factura"
                         : `Emitir ${cantidadFacturas} facturas`}
@@ -769,7 +754,7 @@ export function FacturacionView({
                   </ActionButton>
                   <p aria-live="polite">
                     {facturando
-                      ? "Procesando el lote. El resultado se mostrará al terminar."
+                      ? "Registrando el lote para procesarlo en segundo plano."
                       : "Revisá el resumen y confirmá antes de emitir."}
                   </p>
                 </Card.Footer>
@@ -785,9 +770,6 @@ export function FacturacionView({
           onCancelar={cancelarEmision}
           onConfirmar={() => void facturar()}
         />
-      )}
-      {resultado && (
-        <FacturacionResultado resultado={resultado} onClose={cerrarResultado} />
       )}
     </section>
   );

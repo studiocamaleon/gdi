@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/administracion-api", () => ({
   getFacturacionPendientes: mocks.get,
   facturarLote: mocks.facturar,
+  listarLotesFacturacion: vi.fn(async () => []),
 }));
 const orden: OrdenFacturable = {
   ordenId: "ficticia",

@@ -149,12 +149,13 @@ export async function notaCreditoOrden(
 }
 
 export async function facturarLote(payload: {
+  claveSolicitud: string;
   ordenIds: string[];
   modo: "por_orden" | "agrupada";
   detalle?: "items" | "orden";
   puntoVentaId?: string;
-}): Promise<ResultadoLoteFacturacion> {
-  return apiRequest(`/administracion/facturacion/lote`, {
+}): Promise<LoteFacturacion> {
+  return apiRequest(`/administracion/facturacion/lotes`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -620,3 +621,27 @@ export function getDestinosTransferencia(): Promise<DestinoTransferencia[]> { re
 export function getArqueosCuenta(cuentaId: string): Promise<Array<{ id: string; actorNombre: string; createdAt: string; detalleJson: { esperado: number; contado: number; diferencia: number; moneda: string; notas: string | null } }>> {
   return apiRequest(`/administracion/cuentas/${encodeURIComponent(cuentaId)}/arqueos`);
 }
+
+
+export type LoteFacturacion = {
+  id: string;
+  estado: "pendiente" | "procesando" | "esperando_envios" | "completado" | "con_observaciones";
+  createdAt: string;
+  items: {
+    id: string;
+    ordenIds: string[];
+    numeros: string[];
+    estado: "pendiente" | "emitiendo" | "emitida" | "error" | "verificar";
+    comprobanteId: string | null;
+    error: string | null;
+    avisoEstado: "pendiente" | "enviada" | "omitida" | "fallida" | "verificar";
+    avisoDetalle: string | null;
+    pdfEstado: string;
+  }[];
+};
+
+export const listarLotesFacturacion = () =>
+  apiRequest<LoteFacturacion[]>("/administracion/facturacion/lotes");
+
+export const obtenerLoteFacturacion = (id: string) =>
+  apiRequest<LoteFacturacion>(`/administracion/facturacion/lotes/${encodeURIComponent(id)}`);
