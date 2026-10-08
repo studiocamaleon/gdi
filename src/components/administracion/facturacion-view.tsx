@@ -11,6 +11,7 @@ import {
   FilesIcon,
   InfoIcon,
   ListChecksIcon,
+  ListFilterIcon,
   ReceiptTextIcon,
   SearchXIcon,
   UsersRoundIcon,
@@ -22,7 +23,18 @@ import type {
   ResultadoLoteFacturacion,
 } from "@/lib/administracion";
 import { facturarLote } from "@/lib/administracion-api";
-import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
+import {
+  parametrosFacturacion,
+  type FiltrosFacturacion,
+} from "@/lib/facturacion-filtros";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { formatearMoneda } from "@/lib/moneda";
 import { fechaComprobante } from "@/lib/comprobantes-presentacion";
@@ -61,11 +73,35 @@ import s from "./facturacion.module.css";
 /** Conserva la emisión por orden o agrupada y el resultado parcial del lote. */
 export function FacturacionView({
   initialOrdenes,
+  initialFiltros = {},
 }: {
   initialOrdenes: OrdenFacturable[];
+  initialFiltros?: FiltrosFacturacion;
 }) {
   const router = useRouter();
   const { moneda } = useConfigRegional();
+  const { fechaNumerica } = useFecha();
+  const [filtros, setFiltros] = React.useState(initialFiltros);
+  const [filtrosAbiertos, setFiltrosAbiertos] = React.useState(false);
+  const [cargandoFiltros, iniciarFiltro] = React.useTransition();
+  const filtroId = React.useId();
+  const filtrosActivos = Boolean(parametrosFacturacion(initialFiltros));
+  const rangoInvalido = Boolean(
+    filtros.emisionDesde &&
+    filtros.emisionHasta &&
+    filtros.emisionDesde > filtros.emisionHasta,
+  );
+  const navegarFiltros = (nuevos: FiltrosFacturacion) => {
+    setFiltros(nuevos);
+    setSel(new Set());
+    setQ("");
+    const query = parametrosFacturacion(nuevos);
+    iniciarFiltro(() =>
+      router.replace(`/administracion/facturacion${query ? `?${query}` : ""}`, {
+        scroll: false,
+      }),
+    );
+  };
   const fmt = (n: number) => formatearMoneda(n, moneda);
   const scope = useDesignScope();
   const theme = useDesignTheme();
@@ -122,7 +158,12 @@ export function FacturacionView({
     });
 
   const prepararEmision = () => {
-    if (!puedeGestionar || seleccionadas.length === 0 || emisionEnCurso.current)
+    if (
+      !puedeGestionar ||
+      seleccionadas.length === 0 ||
+      emisionEnCurso.current ||
+      cargandoFiltros
+    )
       return;
     setConfirmacion({
       ordenes: seleccionadas.map(
@@ -215,20 +256,28 @@ export function FacturacionView({
           <ListMetric
             label="Importe sin facturar"
             value={fmt(totalPendiente)}
-            hint="Total pendiente de facturación, con IVA."
+            hint={
+              filtrosActivos
+                ? "Importe del listado filtrado, con IVA."
+                : "Importe pendiente del listado, con IVA."
+            }
             icon={ReceiptTextIcon}
           />
         </div>
         <ListMetric
           label="Órdenes pendientes"
           value={data.length}
-          hint="Finalizadas o entregadas con importe sin facturar."
+          hint={
+            filtrosActivos
+              ? "Órdenes que coinciden con los filtros."
+              : "Finalizadas o entregadas con importe sin facturar."
+          }
           icon={ListChecksIcon}
         />
         <ListMetric
           label="Clientes"
           value={cantidadClientes}
-          hint="Clientes de las órdenes pendientes de facturación."
+          hint="Clientes de las órdenes del listado."
           icon={UsersRoundIcon}
         />
       </div>
@@ -260,10 +309,156 @@ export function FacturacionView({
                   <SearchField.ClearButton aria-label="Limpiar búsqueda" />
                 </SearchField.Group>
               </SearchField>
+              <ActionButton
+                variant="outline"
+                aria-expanded={filtrosAbiertos}
+                aria-controls={`${filtroId}-panel`}
+                onPress={() => setFiltrosAbiertos(!filtrosAbiertos)}
+              >
+                <ListFilterIcon aria-hidden /> Filtros
+                {filtrosActivos ? " activos" : ""}
+              </ActionButton>
+              {filtrosActivos && (
+                <ActionButton
+                  variant="ghost"
+                  onPress={() => navegarFiltros({})}
+                  isDisabled={facturando || cargandoFiltros}
+                >
+                  <XIcon aria-hidden /> Limpiar filtros
+                </ActionButton>
+              )}
               <span className={s.count}>
                 {rows.length} de {data.length} órdenes
               </span>
             </div>
+            {filtrosActivos && (
+              <p className={s.filterSummary} role="status">
+                {initialFiltros.cobro
+                  ? "Sin facturar · cobradas al 100%. "
+                  : "Todos los cobros. "}
+                {initialFiltros.emisionDesde &&
+                  `Emisión desde ${fechaComprobante(initialFiltros.emisionDesde)}. `}
+                {initialFiltros.emisionHasta &&
+                  `Emisión hasta ${fechaComprobante(initialFiltros.emisionHasta)}.`}
+              </p>
+            )}
+            {filtrosAbiertos && (
+              <form
+                id={`${filtroId}-panel`}
+                aria-label="Filtros de facturación"
+                className={s.filters}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!rangoInvalido && !facturando) navegarFiltros(filtros);
+                }}
+              >
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel id={`${filtroId}-cobro`}>
+                      Cobro de la orden
+                    </FieldLabel>
+                    <SegmentedControl
+                      aria-labelledby={`${filtroId}-cobro`}
+                      value={filtros.cobro ?? "todas"}
+                      isDisabled={facturando || cargandoFiltros}
+                      options={[
+                        {
+                          value: "todas",
+                          label: "Todas las pendientes",
+                          icon: null,
+                        },
+                        {
+                          value: "cobradas_sin_facturar",
+                          label: "Sin facturar · cobradas al 100%",
+                          icon: null,
+                        },
+                      ]}
+                      onChange={(value) =>
+                        setFiltros({
+                          ...filtros,
+                          cobro:
+                            value === "cobradas_sin_facturar"
+                              ? value
+                              : undefined,
+                        })
+                      }
+                    />
+                  </Field>
+                  <FieldGroup className={s.dateFilters}>
+                    <Field data-invalid={rangoInvalido}>
+                      <FieldLabel htmlFor={`${filtroId}-desde`}>
+                        Emisión de OT · desde
+                      </FieldLabel>
+                      <Input
+                        id={`${filtroId}-desde`}
+                        type="date"
+                        value={filtros.emisionDesde ?? ""}
+                        max={filtros.emisionHasta || undefined}
+                        disabled={facturando || cargandoFiltros}
+                        className={focus.singleBorder}
+                        aria-invalid={rangoInvalido}
+                        aria-describedby={
+                          rangoInvalido ? `${filtroId}-error` : undefined
+                        }
+                        onChange={(event) =>
+                          setFiltros({
+                            ...filtros,
+                            emisionDesde: event.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field data-invalid={rangoInvalido}>
+                      <FieldLabel htmlFor={`${filtroId}-hasta`}>
+                        Emisión de OT · hasta
+                      </FieldLabel>
+                      <Input
+                        id={`${filtroId}-hasta`}
+                        type="date"
+                        value={filtros.emisionHasta ?? ""}
+                        min={filtros.emisionDesde || undefined}
+                        disabled={facturando || cargandoFiltros}
+                        className={focus.singleBorder}
+                        aria-invalid={rangoInvalido}
+                        aria-describedby={
+                          rangoInvalido ? `${filtroId}-error` : undefined
+                        }
+                        onChange={(event) =>
+                          setFiltros({
+                            ...filtros,
+                            emisionHasta: event.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                  {rangoInvalido && (
+                    <FieldError id={`${filtroId}-error`}>
+                      La fecha desde no puede ser posterior a la fecha hasta.
+                    </FieldError>
+                  )}
+                </FieldGroup>
+                <div className={s.filterActions}>
+                  <p>
+                    Ambas fechas se incluyen. Al aplicar se limpia la selección
+                    de órdenes.
+                  </p>
+                  <ActionButton
+                    type="submit"
+                    isPending={cargandoFiltros}
+                    isDisabled={facturando || rangoInvalido}
+                  >
+                    Aplicar filtros
+                  </ActionButton>
+                </div>
+              </form>
+            )}
+            {data.length === 500 && (
+              <p className={s.filterSummary}>
+                Se muestran hasta 500 órdenes por consulta. Acotá la fecha de
+                emisión para revisar otro período.
+              </p>
+            )}
             {rows.length > 0 ? (
               <Table
                 className={s.table}
@@ -293,7 +488,7 @@ export function FacturacionView({
                     )}
                     <TableHead>Orden</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Finalizada</TableHead>
+                    <TableHead>Emisión / finalización</TableHead>
                     <TableHead className={s.number}>Total</TableHead>
                     <TableHead className={s.number}>Facturado</TableHead>
                     <TableHead className={s.number}>Cobrado</TableHead>
@@ -349,7 +544,14 @@ export function FacturacionView({
                         {o.clienteNombre ?? "Mostrador / sin cliente"}
                       </TableCell>
                       <TableCell className={s.date}>
-                        {fechaComprobante(o.fechaFinalizada)}
+                        <span>
+                          {o.fechaEmision
+                            ? fechaNumerica(o.fechaEmision)
+                            : "Sin fecha de emisión"}
+                        </span>
+                        <small>
+                          Finalizada: {fechaComprobante(o.fechaFinalizada)}
+                        </small>
                       </TableCell>
                       <TableCell className={s.number}>{fmt(o.total)}</TableCell>
                       <TableCell className={s.number}>
@@ -369,16 +571,20 @@ export function FacturacionView({
               <Empty className={s.empty}>
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
-                    {data.length ? <SearchXIcon /> : <CheckCheckIcon />}
+                    {data.length || filtrosActivos ? (
+                      <SearchXIcon />
+                    ) : (
+                      <CheckCheckIcon />
+                    )}
                   </EmptyMedia>
                   <EmptyTitle>
-                    {data.length
-                      ? "No encontramos órdenes con esa búsqueda"
+                    {data.length || filtrosActivos
+                      ? "No encontramos órdenes con esos filtros"
                       : "La facturación está al día"}
                   </EmptyTitle>
                   <EmptyDescription>
-                    {data.length
-                      ? "Probá otro número de orden o nombre de cliente."
+                    {data.length || filtrosActivos
+                      ? "Cambiá la búsqueda, el cobro o las fechas, o limpiá los filtros."
                       : "Acá aparecen las órdenes finalizadas o entregadas que todavía tienen importe sin facturar."}
                   </EmptyDescription>
                 </EmptyHeader>
