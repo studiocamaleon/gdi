@@ -605,3 +605,32 @@ Cambio de recursos autorizado expresamente por Lucas después del diagnóstico d
 La primera invocación del CLI con imagen explícita duplicó el digest y fue rechazada antes de modificar la máquina. Se repitió la actualización sin argumento de imagen, conservando la configuración existente; el digest exacto se verificó después.
 
 El cambio aumenta el costo de CPU de la API conforme al tipo performance autorizado. Reversión de recursos disponible volviendo a `shared` con una CPU y 2048 MB, aunque reintroduciría el riesgo de agotamiento observado; no requiere revertir código ni datos. Evidencia operativa privada fuera de Git.
+
+
+## 2026-10-08, 21:18 UTC — Facturación durable, cargos y consulta fiscal (PR #48)
+
+Publicado con autorización de Lucas después de validar staging. API, ambos workers y web ejecutan **`f44aab7803487ed8f285d89b1ab508b0f37c6646`**. Se promovieron exactamente las imágenes probadas, comprobando su digest; no se recompiló para producción. El [PR #48](https://github.com/studiocamaleon/gdi/pull/48) depende de #47; no se fusionó ningún PR ni se modificó `main` o Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:7eb79bc7fc280a39eb7730b80f17f7b98ca36b2f97d17ee7c76f45fd3a9641ef` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:aba8644ee0fc64c0607f1cf46165b795f3f8f43fadb8d46e158201d1a16a777e` |
+
+### Cambios y comprobación
+
+- Facturación de lotes durable en PostgreSQL y worker general existente, con respuesta 202, idempotencia, recuperación de reservas vencidas, PDF y seguimiento del envío. La interfaz muestra progreso y errores por factura y avisa sólo al iniciador al finalizar; los envíos no confirmados quedan como observaciones. No se agregó un worker ni una dependencia de Redis para esta cola.
+- Cargos detallados en presupuesto público, PDF y correo; descarte de borradores fuera del listado normal, con historial conservado. Consulta fiscal con espera visible, actualización inmediata del comprobante y respuesta o error persistentes. Bandeja personal accesible sin Panel, conservando sus controles de permisos y aislamiento.
+- **312 migraciones.** Aplicada `20261008210000_facturacion_lotes_durables`, aditiva; sin seeds ni resets. Rol de ejecución con acceso a las tablas nuevas, sin DDL. Orden de actualización: worker, worker PDF, API y web. PDF y copiador conservaron imagen.
+- Seis máquinas iniciadas, recursos idénticos a la captura previa; la API conserva **una CPU performance / 2048 MB**. Salud de API/web 200, acceso directo protegido 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados por servicio. Consulta Sentry de esta revisión/entorno sin incidencias. API y workers sin errores en la muestra; los cinco errores web de stream eran anteriores al despliegue, entre las 15:02 y las 19:14 UTC.
+- [CI permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37841379429), [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37841379184) y [CI dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37841379230) aprobados. Validación funcional y límites documentados en [staging](../staging/VALIDACION.md): datos ficticios, proveedor manual, PDF real, correo HTML, lotes, bandeja personal, consulta repetida y recorrido Chrome. Se retiraron los fixtures y siete archivos de ensayo.
+- En producción se verificó por lectura una autorización fiscal pendiente, comparando la respuesta de ARCA con la solicitud original congelada. La consulta coincidió y devolvió CAE. No se volvió a emitir, no se persistió esa recuperación ni se enviaron facturas reales como prueba de publicación; usar la acción del comprobante también inicia el aviso al cliente y requiere la autorización operativa correspondiente. No se crearon fixtures en producción ni se ejecutó un lote fiscal real de ensayo. El comportamiento bajo un pico comercial real sigue sin medirse.
+
+### Recuperación y reversión
+
+La copia horaria previa de las 20:01 UTC había fallado. Un reintento en el copiador existente, con su bloqueo normal y fuentes de sólo lectura, completó la copia `9c64aef4-324f-47c4-9f33-d6319c2e6050` a las **2026-10-08T20:25:41.691Z**, con 311 migraciones y 99 archivos. Firma y manifiesto comprobados antes de migrar. No se determinó la causa del fallo previo y no se presenta el reintento como prueba de su corrección definitiva.
+
+Se actualizó el inventario de recuperación con las imágenes y la fuente exacta cifrada, protegida durante 31 días. La copia automática posterior `26f6d647-45e4-45a9-9a67-941b3e9683f0` completó a las **2026-10-08T21:17:39.025Z**, con 312 migraciones y 103 archivos. Firma válida, manifiesto descifrado, revisión y digests exactos comprobados. El primer sondeo encontró aún la copia anterior; se comprobó la nueva al terminar. **No se repitió una restauración SQL completa**; la restauración aislada anterior sigue documentada arriba. Las evidencias y accesos permanecen fuera de Git.
+
+Constructor remoto propio retirado al terminar las compilaciones. Sin compilaciones de producción en la Mac, cambios de Docker ni interrupciones de otros proyectos.
+
+Reversión de código disponible con las imágenes de PR #47 registradas arriba, conservando la CPU performance de la API. Mantener tablas e historial de lotes: el código anterior no procesa la cola nueva ni muestra su avance y vuelve al flujo síncrono. Detener nuevas solicitudes y resolver los lotes activos antes de una reversión operativa; priorizar corrección hacia adelante. No eliminar registros ni restaurar encima de la única base activa.

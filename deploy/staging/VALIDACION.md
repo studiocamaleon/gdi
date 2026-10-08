@@ -1208,3 +1208,35 @@ Copia previa **`ce2e9a0a-9ee3-434c-aa31-a0814d6194da`**, completada **2026-10-08
 El constructor remoto propio `fly-builder-lively-sun-8459` fue eliminado. Sin builds de producción en la Mac ni cambios en Docker u otros proyectos. La autenticación temporal del registro expiró durante la promoción: se renovó sin ampliar permisos y se verificaron los digests idénticos.
 
 **Reversión:** la migración de versiones admite varias filas con el mismo número de presupuesto. El backend previo `139ce05ab` asume una sola: no restaurar su imagen sin revisar compatibilidad y bloquear las operaciones afectadas. Conservar historial y migraciones; priorizar corrección hacia adelante. Nunca restaurar encima de la única base activa. El problema previo del brief de diseño obligatorio sigue registrado por separado; este lote no lo corrige.
+
+
+## 08/10/2026, 21:13 UTC — Facturación durable, cargos y consulta fiscal (PR #48)
+
+API, ambos workers y web ejecutan **`f44aab7803487ed8f285d89b1ab508b0f37c6646`**. El [PR #48](https://github.com/studiocamaleon/gdi/pull/48) depende de #47; ambos siguen sin fusionar. No se modificó `main` ni se publicó la web comercial de Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:7eb79bc7fc280a39eb7730b80f17f7b98ca36b2f97d17ee7c76f45fd3a9641ef` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:aba8644ee0fc64c0607f1cf46165b795f3f8f43fadb8d46e158201d1a16a777e` |
+
+**312 migraciones.** Se agregó `20261008210000_facturacion_lotes_durables`, con tablas, índices y restricciones nuevos; sin seeds, resets ni cambios de datos comerciales existentes. Rol de aplicación con acceso al esquema nuevo y sin DDL comprobado. Seis máquinas, tamaños conservados y salud correcta. API/web 200, acceso directo privado 403 y BFF anónimo 401. Revisión y Sentry habilitado verificados en los cuatro servicios actualizados; sin incidencias de esta revisión en la consulta posterior. El único error visible en la muestra de logs web era un `aborted` anterior, de las 00:43 UTC.
+
+### Comportamiento y pruebas
+
+- El lote devuelve 202 sin esperar ARCA/PDF/avisos. PostgreSQL conserva la solicitud e idempotencia; el worker general existente procesa y recupera trabajo mediante reservas temporales. No se agregó un worker ni se aumentaron recursos. Una respuesta fiscal incierta se consulta antes de continuar; no habilita reenviar automáticamente el mismo comprobante.
+- La web muestra «Mis lotes de facturación», avance por factura y resultado de los avisos. La campanita avisa sólo al iniciador al finalizar, incluyendo observaciones; una aceptación del proveedor de mensajes no se cuenta como entrega confirmada. Se corrigió el acceso a la bandeja personal sin exigir Panel, manteniendo restringidos sus eventos de negocio y las notificaciones ajenas.
+- Los cargos aparecen como renglones en el presupuesto público, PDF y vista previa del correo. Ejemplo ficticio comprobado: trabajo $12.100, viático $1.815 y total $13.915. PDF real descargado, texto comprobado y página renderizada e inspeccionada; correo HTML comprobado sin enviarlo.
+- Descartar un borrador lo archiva fuera del listado habitual y lo conserva en «Descartados». Se verificó el mensaje y su persistencia; no elimina el historial.
+- «Consultar resultado» muestra espera, actualiza el comprobante al recibir la respuesta y deja visible el resultado o error. Chrome recuperó un comprobante ficticio manual preparado exclusivamente para ese ensayo; una segunda consulta no generó otra emisión. El proveedor manual no obtiene CAE de ARCA: el estado final «Sin CAE» del fixture es esperado. No se emitieron comprobantes fiscales reales ni se enviaron mensajes externos en staging.
+- **38 comprobaciones HTTPS/BFF y de resultados del backend**, más presupuesto público, comprobaciones finales de bandeja/aislamiento, consulta repetida y recorrido Chrome. Dos lotes ficticios generaron tres facturas manuales y PDF; los envíos quedaron omitidos explícitamente por falta de CAE. Aceptación del lote en **266 ms** y salud/consulta de otro usuario durante su ejecución en **298 ms**. Muestra de ensayo, no prueba de carga ni garantía para picos reales.
+- Validación final local: 45 casos API y 19 web, además de las suites del lote ejecutadas previamente. Auditoría de ejecución de los siete proyectos sin hallazgos y cuatro reproducciones de dependencias con rechazo corregido. [CI permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37841379429), [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37841379184) y [CI dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37841379230) aprobados sobre la revisión final.
+
+Se retiraron por identificadores y claves exactos las dos empresas, siete usuarios y siete archivos ficticios. Base final: una empresa, dos clientes, siete OT, 31 pasos, seis empleados y 24 archivos. No se copiaron credenciales de staging a la configuración local ni se habilitaron tareas programadas locales.
+
+### Recuperación y alcance
+
+Copia previa `77397974-7760-4922-88e7-29b96784e6d0`, completada **2026-10-08T20:01:01.365Z**. Posterior `5fafea5d-e321-4ab0-8562-313f48fc0beb`, completada **2026-10-08T21:12:38.276Z**, con 312 migraciones y 24 archivos. Firma válida, manifiesto descifrado, revisión y digests exactos comprobados; fuente cifrada bajo custodia privada durante 31 días. **No se repitió una restauración SQL completa**; la restauración aislada anterior sigue registrada arriba. El primer sondeo posterior encontró aún la copia previa; se comprobó la nueva al terminar.
+
+Las compilaciones completas se hicieron en remoto. Una conexión al constructor Fly se interrumpió; el reintento terminó correctamente con tipos habilitados. Se retiró únicamente el constructor propio `fly-builder-proud-meadow-7554`. Docker local y otros proyectos conservados.
+
+Reversión de código: imágenes anteriores registradas en el apartado de PR #47. Conservar las tablas nuevas y los lotes existentes; el código anterior no procesa esa cola ni muestra su avance y vuelve al flujo síncrono. Detener nuevas solicitudes y resolver los lotes en curso antes de una reversión operativa. Priorizar corrección hacia adelante; no borrar registros ni restaurar encima de la única base activa.
