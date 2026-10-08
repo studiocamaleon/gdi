@@ -24,7 +24,7 @@ import { AutomaticosWebService } from '../../whatsapp-web/automaticos.service';
 const prisma = new PrismaService();
 afterAll(() => prisma.$disconnect());
 type Contexto = Parameters<Parameters<typeof conPlanesAsignados>[1]>[0];
-const numero = '5492966123456';
+const numero = '5492966456789';
 async function preparar(c: Contexto, canal = 'WATI') {
   const { id: tenantId } = await c.tx.tenant.create({
     data: { nombre: 'Avisos de prueba', slug: `avisos-${randomUUID()}` },
@@ -76,7 +76,7 @@ async function preparar(c: Contexto, canal = 'WATI') {
       tenantId,
       nombre: 'Cliente sintético',
       telefonoCodigo: '+54',
-      telefonoNumero: '2966123456',
+      telefonoNumero: '2966456789',
       paisCodigo: 'AR',
       aceptaWhatsapp: true,
     },
@@ -446,7 +446,7 @@ describe('Avisos: contrato, cierre y resultados inciertos', () => {
         const probar = () =>
           x.dentro(() =>
             service.probarEnvioWati({
-              telefono: '+5492966123456',
+              telefono: '+5492966456789',
               plantilla: 'plantilla_prueba',
               parametros: ['Cliente'],
             }),
