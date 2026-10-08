@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,6 +22,10 @@ import type {
   OrdenFacturable,
   ResultadoLoteFacturacion,
 } from "@/lib/administracion";
+import {
+  FacturaDetalleSelector,
+  type DetalleFactura,
+} from "./factura-detalle-selector";
 import { facturarLote } from "@/lib/administracion-api";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
@@ -72,6 +77,10 @@ export function FacturacionView({
   const puedeGestionar = usePuede("administracion.facturacion.gestionar");
   const [q, setQ] = React.useState("");
   const [sel, setSel] = React.useState<Set<string>>(() => new Set());
+  const [detalleAgrupada, setDetalleAgrupada] =
+    React.useState<DetalleFactura>("orden");
+  const [detallePorOrden, setDetallePorOrden] =
+    React.useState<DetalleFactura>("items");
   const [modo, setModo] = React.useState<"por_orden" | "agrupada">("por_orden");
   const [facturando, setFacturando] = React.useState(false);
   const [confirmacion, setConfirmacion] =
@@ -86,9 +95,9 @@ export function FacturacionView({
       data.filter(
         (o) =>
           !q ||
-          `${o.numero} ${o.clienteNombre ?? ""}`
-            .toLowerCase()
-            .includes(q.toLowerCase()),
+          normalizarBusqueda(`${o.numero} ${o.clienteNombre ?? ""}`).includes(
+            normalizarBusqueda(q),
+          ),
       ),
     [data, q],
   );
@@ -134,6 +143,8 @@ export function FacturacionView({
         }),
       ),
       modo: puedeAgrupar ? modo : "por_orden",
+      detalle:
+        puedeAgrupar && modo === "agrupada" ? detalleAgrupada : detallePorOrden,
     });
   };
 
@@ -155,6 +166,7 @@ export function FacturacionView({
       const res = await facturarLote({
         ordenIds: confirmacion.ordenes.map((o) => o.ordenId),
         modo: modoFinal,
+        detalle: confirmacion.detalle,
       });
       setConfirmacion(null);
       setResultado(res);
@@ -502,12 +514,25 @@ export function FacturacionView({
                       )}
                       <p>
                         {modoFinal === "agrupada"
-                          ? "Una sola factura para el mismo cliente, con un renglón por orden."
+                          ? "Una sola factura para el mismo cliente, con el detalle que elijas."
                           : seleccionadas.length > 1 && !puedeAgrupar
                             ? "Las órdenes son de clientes distintos. Se emite una factura para cada orden."
                             : "Cada orden tendrá su propio comprobante por el importe que falta facturar."}
                       </p>
                     </div>
+                    <FacturaDetalleSelector
+                      value={
+                        modoFinal === "agrupada"
+                          ? detalleAgrupada
+                          : detallePorOrden
+                      }
+                      onChange={
+                        modoFinal === "agrupada"
+                          ? setDetalleAgrupada
+                          : setDetallePorOrden
+                      }
+                      disabled={facturando}
+                    />
                     <dl className={s.selectionTotal}>
                       <div>
                         <dt>Facturas a emitir</dt>

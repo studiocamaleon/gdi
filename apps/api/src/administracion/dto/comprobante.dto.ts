@@ -142,6 +142,10 @@ export class CrearComprobanteDto {
  */
 export class FacturarOrdenDto {
   @IsOptional()
+  @IsIn(['items', 'orden'])
+  detalle?: 'items' | 'orden';
+
+  @IsOptional()
   @IsNumber()
   @Min(0.01)
   monto?: number;
@@ -196,6 +200,10 @@ export type FacturarLoteModo = (typeof FACTURAR_LOTE_MODOS)[number];
  * (una factura tiene un receptor) y arma un renglón por orden.
  */
 export class FacturarLoteDto {
+  @IsOptional()
+  @IsIn(['items', 'orden'])
+  detalle?: 'items' | 'orden';
+
   @IsArray()
   @IsString({ each: true })
   ordenIds: string[];

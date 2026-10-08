@@ -1,3 +1,4 @@
+import { normalizarBusqueda } from '../common/busqueda-texto';
 import { textoErrorLog } from '../common/log-seguro';
 import { EmisionFiscalService } from './emision-fiscal.service';
 import { puedeOperarComprobante } from './permisos-comprobantes';
@@ -56,9 +57,9 @@ import {
   type ItemCalculo,
 } from './invoicing/totales-comprobante';
 import {
-  renglonesDetalladosOrden,
-  itemsOrdenConDescuento,
-} from './invoicing/items-orden-descuento';
+  renglonesFacturaOrden,
+  conciliarRenglones,
+} from './invoicing/items-factura-orden';
 
 type ItemPersistido = ItemCalculo & { descripcion: string };
 
@@ -248,15 +249,21 @@ export class ComprobantesService {
       orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }],
       take: 200,
     });
-    const q = filtros.q?.trim().toLowerCase();
+    const q = normalizarBusqueda(filtros.q ?? '');
     const lista = comprobantes.map((c) => this.toResponse(c));
     if (!q) return lista;
     return lista.filter((c) =>
-      [c.numeroCompleto, c.clienteNombre, c.clienteCuit, c.ordenNumero, c.letra]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q),
+      normalizarBusqueda(
+        [
+          c.numeroCompleto,
+          c.clienteNombre,
+          c.clienteCuit,
+          c.ordenNumero,
+          c.letra,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      ).includes(q),
     );
   }
 
@@ -716,6 +723,7 @@ export class ComprobantesService {
         total: true,
         facturadoTotal: true,
         descuentoTotal: true,
+        cargosDirectosJson: true,
         tratamientoFiscal: true,
         items: {
           where: { parentItemId: null },
@@ -726,6 +734,7 @@ export class ComprobantesService {
             subtotal: true,
             total: true,
             descuentoMonto: true,
+            cotizacionItem: { select: { impuestosSnapshotJson: true } },
           },
         },
       },
@@ -783,16 +792,11 @@ export class ComprobantesService {
     const puntoVentaId =
       payload.puntoVentaId ?? (await this.puntoVentaDefault(auth));
     const letra = await this.letraParaCliente(auth, orden.clienteId);
-    // F5 descuentos: una orden CON descuento que se factura completa y de una
-    // sola vez sale DETALLADA — un renglón por producto con precio de lista +
-    // bonificación (decisión 2026-08-08, ver descuentos-diseno.md §10). Los
-    // montos parciales siguen como renglón único: no mapean a items y el
-    // descuento ya viaja embebido en el monto.
-    const items = this.itemsFacturaOrden(
+    const items = renglonesFacturaOrden(
       orden,
       letra,
       monto,
-      saldo,
+      payload.detalle ?? 'items',
       payload.concepto?.trim() || `Trabajos de impresión — ${orden.numero}`,
     );
     // El vínculo lleva el total RECALCULADO de los renglones (en A el redondeo
@@ -939,6 +943,14 @@ export class ComprobantesService {
         total: true,
         facturadoTotal: true,
         tratamientoFiscal: true,
+        cargosDirectosJson: true,
+        items: {
+          where: { parentItemId: null },
+          orderBy: { ordenIndice: 'asc' },
+          include: {
+            cotizacionItem: { select: { impuestosSnapshotJson: true } },
+          },
+        },
       },
     });
     const porId = new Map(ordenes.map((o) => [o.id, o]));
@@ -980,17 +992,25 @@ export class ComprobantesService {
             `La orden ${orden.numero} ya está facturada por completo.`,
           );
         }
-        const item = this.renglonPorMonto(
+        const renglones = renglonesFacturaOrden(
+          orden,
           letra,
           saldo,
+          payload.detalle ?? 'orden',
           `Trabajos de impresión — ${orden.numero}`,
+          true,
         );
-        items.push(item);
+        items.push(...renglones);
         vinculos.push({
           ordenId: orden.id,
-          monto: calcularTotales(letra, [item]).total,
+          monto: calcularTotales(letra, renglones).total,
         });
       }
+      conciliarRenglones(
+        letra,
+        items,
+        vinculos.reduce((s, v) => s + v.monto, 0),
+      );
       const puntoVentaId =
         payload.puntoVentaId ?? (await this.puntoVentaDefault(auth));
       const borrador = await this.crear(auth, {
@@ -1031,6 +1051,7 @@ export class ComprobantesService {
       try {
         const comprobante = await this.facturarOrden(auth, ordenId, {
           puntoVentaId: payload.puntoVentaId,
+          detalle: payload.detalle ?? 'items',
         });
         resultados.push({
           ordenId,
@@ -1094,48 +1115,6 @@ export class ComprobantesService {
       precioUnitarioSinIva: letra === 'A' ? redondear2(monto / 1.21) : monto,
       alicuotaIva: 21,
     };
-  }
-
-  /**
-   * Renglones de la factura de una orden (F5 descuentos): detallados con
-   * bonificación cuando `renglonesDetalladosOrden` lo permite; si no, el
-   * renglón único por monto de siempre.
-   */
-  private itemsFacturaOrden(
-    orden: {
-      facturadoTotal: Prisma.Decimal | number;
-      descuentoTotal: Prisma.Decimal | number | null;
-      items: Array<{
-        parentItemId?: string | null;
-        nombre: string;
-        cantidad: Prisma.Decimal | number;
-        subtotal: Prisma.Decimal | number;
-        total: Prisma.Decimal | number;
-        descuentoMonto: Prisma.Decimal | number | null;
-      }>;
-    },
-    letra: LetraProvider,
-    monto: number,
-    saldo: number,
-    concepto: string,
-  ): ItemPersistido[] {
-    const detallados = renglonesDetalladosOrden({
-      letra,
-      monto,
-      saldo,
-      facturadoTotal: Number(orden.facturadoTotal),
-      descuentoTotal: Number(orden.descuentoTotal ?? 0),
-      items: orden.items
-        .filter((item) => item.parentItemId == null)
-        .map((item) => ({
-          nombre: item.nombre,
-          cantidad: Number(item.cantidad),
-          subtotal: Number(item.subtotal),
-          total: Number(item.total),
-          descuentoMonto: Number(item.descuentoMonto ?? 0),
-        })),
-    });
-    return detallados ?? [this.renglonPorMonto(letra, monto, concepto)];
   }
 
   private async puntoVentaDefault(auth: CurrentAuth): Promise<string> {
@@ -1209,16 +1188,14 @@ export class ComprobantesService {
         // El precio de entrada depende de la letra: neto en A, final en
         // B/C/E. Comparte la preparación de la facturación desde la orden.
         const letra = await this.letraParaCliente(auth, clienteId);
-        items = itemsOrdenConDescuento(
-          letra,
-          orden.items.map((it) => ({
-            nombre: it.nombre,
-            cantidad: Number(it.cantidad),
-            subtotal: Number(it.subtotal),
-            total: Number(it.total),
-            descuentoMonto: Number(it.descuentoMonto ?? 0),
-          })),
+        const saldo = redondear2(
+          Number(orden.total ?? 0) - Number(orden.facturadoTotal),
         );
+        if (saldo <= 0.01)
+          throw new BadRequestException(
+            'La orden ya está facturada por completo.',
+          );
+        items = renglonesFacturaOrden(orden, letra, saldo, 'items');
       }
     }
 
@@ -1273,7 +1250,15 @@ export class ComprobantesService {
   private async validarOrdenFacturable(auth: CurrentAuth, ordenId: string) {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
-      include: { items: { where: { parentItemId: null } } },
+      include: {
+        items: {
+          where: { parentItemId: null },
+          orderBy: { ordenIndice: 'asc' },
+          include: {
+            cotizacionItem: { select: { impuestosSnapshotJson: true } },
+          },
+        },
+      },
     });
     if (!orden) throw new BadRequestException('La orden no existe.');
     if (orden.estado === 'borrador') {

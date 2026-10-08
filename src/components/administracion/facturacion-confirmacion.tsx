@@ -15,6 +15,7 @@ export type LotePorConfirmar = {
     "ordenId" | "numero" | "clienteNombre" | "saldoSinFacturar"
   >[];
   modo: "por_orden" | "agrupada";
+  detalle?: "items" | "orden";
 };
 
 export function FacturacionConfirmacion({
@@ -61,6 +62,15 @@ export function FacturacionConfirmacion({
               {lote.modo === "agrupada"
                 ? "Una factura agrupada"
                 : "Una factura por orden"}
+            </dd>
+          </div>
+          <div>
+            <dt>Detalle</dt>
+            <dd>
+              {(lote.detalle ??
+                (lote.modo === "agrupada" ? "orden" : "items")) === "items"
+                ? "Productos y cargos"
+                : "Resumen por OT"}
             </dd>
           </div>
           <div>
