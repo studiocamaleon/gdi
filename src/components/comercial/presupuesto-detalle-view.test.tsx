@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { MembershipRole } from "@/lib/auth";
 import type { PresupuestoDetalle } from "@/lib/presupuestos-api";
+import { PresupuestosView } from "./presupuestos-view";
 import { PresupuestoDetalleView } from "./presupuesto-detalle-view";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
@@ -279,4 +280,13 @@ describe("edición por versiones y descarte", () => {
     expect(html).not.toContain("Editar · nueva versión");
     expect(html).not.toContain("Descartar borrador");
   });
+});
+
+
+it("el listado renderiza el filtro Descartados con su icono", () => {
+  const html = renderToStaticMarkup(<PresupuestosView rol="operador" filtroInicial="descartado" initial={{
+    presupuestos: [], stats: [{ estado: "descartado", cantidad: 1, total: 100 }],
+    paginacion: { skip: 0, limit: 50, total: 1, hayMas: false },
+  }} />);
+  expect(button(html, "Descartados")).toContain('aria-pressed="true"');
 });

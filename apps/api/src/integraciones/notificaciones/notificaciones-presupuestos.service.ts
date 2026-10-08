@@ -77,6 +77,7 @@ export class NotificacionesPresupuestosService {
       select: {
         id: true,
         numero: true,
+        versionPresupuesto: true,
         clienteId: true,
         publicToken: true,
         fechaValidez: true,
@@ -95,7 +96,7 @@ export class NotificacionesPresupuestosService {
           cotizacionId: presupuesto.id,
           parametros: [
             nombreDelCliente(presupuesto.cliente?.razonSocial),
-            presupuesto.numero ?? '',
+            presupuesto.versionPresupuesto > 1 ? `${presupuesto.numero} · v${presupuesto.versionPresupuesto}` : presupuesto.numero ?? '',
             fechaLegible(presupuesto.fechaValidez, zonaHoraria),
             urlEnlacePublico(
               TipoEnlacePublico.PRESUPUESTO,
@@ -117,6 +118,7 @@ export class NotificacionesPresupuestosService {
         notificarWhatsapp: true,
         id: true,
         numero: true,
+        versionPresupuesto: true,
         estado: true,
         total: true,
         fechaValidez: true,
@@ -146,10 +148,11 @@ export class NotificacionesPresupuestosService {
     const total = numeroMoneda(Number(p.total ?? 0), moneda);
     const fecha = (d: Date | null) => fechaLegible(d, zonaHoraria);
 
+    const numero = p.versionPresupuesto > 1 ? `${p.numero} · v${p.versionPresupuesto}` : p.numero;
     const parametros =
       evento === 'presupuesto_enviado'
-        ? [nombre, p.numero, total, fecha(p.fechaValidez), url]
-        : [nombre, p.numero, total, url];
+        ? [nombre, numero, total, fecha(p.fechaValidez), url]
+        : [nombre, numero, total, url];
 
     // La aprobación llega desde el link público, que no tiene contexto de
     // tenant. Sin esto el encolado falla y el aviso se pierde callado.

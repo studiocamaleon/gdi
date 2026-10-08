@@ -93,17 +93,15 @@ export class CorreoPresupuestoService {
         select: { nombre: true },
       }),
     ]);
+    const numero = p.versionPresupuesto > 1 ? `${p.numero} · v${p.versionPresupuesto}` : p.numero!;
     const valores = {
       empresa: tenant.nombre,
-      presupuesto: p.numero!,
+      presupuesto: numero,
       cliente: p.cliente?.nombre ?? 'cliente',
     };
     return {
       empresa: tenant.nombre,
-      numero:
-        p.versionPresupuesto > 1
-          ? `${p.numero} · v${p.versionPresupuesto}`
-          : p.numero!,
+      numero,
       para: p.cliente?.emailPrincipal ?? '',
       contactos: p.cliente?.contactos.filter((c) => c.email) ?? [],
       responderA: cfg?.correoResponderA ?? empresa?.email ?? '',

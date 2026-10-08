@@ -1,3 +1,4 @@
+import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
 import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { cambioDelSnapshot } from '../cotizaciones/validar-moneda-documento';
@@ -325,6 +326,7 @@ export class PresupuestosService {
     if (c.tenantId !== auth.tenantId)
       throw new NotFoundException('El presupuesto no existe.');
     await this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
       const cambio = await tx.cotizacion.updateMany({
         where: {
           id,
@@ -534,6 +536,13 @@ export class PresupuestosService {
     };
 
     const numero = await this.prisma.$transaction(async (tx) => {
+      // Enviar toma primero este mismo bloqueo antes de reservar cupones o puntos.
+      if (anterior) await bloquearCupoUsuarios(tx, auth.tenantId);
+      await this.fidelizacion.exigirCompromisoTx(
+        tx,
+        auth.tenantId,
+        fidelizacion,
+      );
       // La escritura sobre la versión vigente serializa edición, descarte,
       // decisión del cliente y conversión en OT. Si cambia, no se pisa.
       if (anterior) {
@@ -583,11 +592,6 @@ export class PresupuestosService {
           },
         });
       }
-      await this.fidelizacion.exigirCompromisoTx(
-        tx,
-        auth.tenantId,
-        fidelizacion,
-      );
       const anio = ahora.getFullYear();
       const contador = anterior
         ? null
