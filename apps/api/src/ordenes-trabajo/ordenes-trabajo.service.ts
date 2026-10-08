@@ -1,3 +1,4 @@
+import { idsClientesPorNombre } from '../clientes/busqueda-clientes';
 import { asignarNumeroOrden, esReferenciaBorrador, numeroOrdenVisible, referenciaBorrador } from './numero-orden';
 import {
   materialesYNotaOperativos,
@@ -1354,7 +1355,7 @@ export class OrdenesTrabajoService {
         ? {
             OR: [
               { numero: { contains: q, mode: 'insensitive' } },
-              { cliente: { nombre: { contains: q, mode: 'insensitive' } } },
+              { clienteId: { in: await idsClientesPorNombre(this.prisma, auth.tenantId, q) } },
               {
                 vendedor: {
                   nombreCompleto: { contains: q, mode: 'insensitive' },
@@ -7045,7 +7046,7 @@ export class OrdenesTrabajoService {
           { orden: { numero: { contains: q, mode: 'insensitive' } } },
           {
             orden: {
-              cliente: { nombre: { contains: q, mode: 'insensitive' } },
+              clienteId: { in: await idsClientesPorNombre(this.prisma, auth.tenantId, q) },
             },
           },
           {

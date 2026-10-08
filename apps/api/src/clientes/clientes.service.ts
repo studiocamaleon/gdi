@@ -1,3 +1,4 @@
+import { contieneSinAcentos } from '../common/busqueda-texto';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -48,34 +49,40 @@ export class ClientesService {
       // Los inhabilitados quedan afuera salvo que los pidan: es lo que hace
       // que "inhabilitar" signifique algo en el resto del sistema.
       ...(pagination.incluirInactivos === 'true' ? {} : { activo: true }),
-      ...(query
-        ? {
-            OR: [
-              { nombre: { contains: query, mode: 'insensitive' } },
-              { razonSocial: { contains: query, mode: 'insensitive' } },
-              { emailPrincipal: { contains: query, mode: 'insensitive' } },
-              { telefonoNumero: { contains: query, mode: 'insensitive' } },
-              { documentoNumero: { contains: query, mode: 'insensitive' } },
-              { cuit: { contains: query, mode: 'insensitive' } },
-              {
-                contactos: {
-                  some: {
-                    OR: [
-                      { nombre: { contains: query, mode: 'insensitive' } },
-                      { email: { contains: query, mode: 'insensitive' } },
-                    ],
-                  },
-                },
-              },
-              {
-                direcciones: {
-                  some: { ciudad: { contains: query, mode: 'insensitive' } },
-                },
-              },
-            ],
-          }
-        : {}),
     };
+
+    let totalBusqueda: number | undefined;
+    if (query) {
+      // Normalizar antes de paginar conserva todas las coincidencias.
+      const contiene = (columna: Prisma.Sql) => contieneSinAcentos(columna, query);
+      const filtro = Prisma.sql`c."tenantId" = ${auth.tenantId}::uuid
+        ${pagination.incluirInactivos === 'true' ? Prisma.empty : Prisma.sql`AND c.activo = true`}
+        AND (${Prisma.join(
+          [
+            'nombre',
+            'razonSocial',
+            'emailPrincipal',
+            'telefonoNumero',
+            'documentoNumero',
+            'cuit',
+          ].map((campo) =>
+            contiene(Prisma.sql`c.${Prisma.raw('"' + campo + '"')}`),
+          ),
+          ' OR ',
+        )}
+          OR EXISTS (SELECT 1 FROM "ClienteContacto" co WHERE co."clienteId" = c.id AND co."tenantId" = c."tenantId" AND (${contiene(Prisma.sql`co.nombre`)} OR ${contiene(Prisma.sql`co.email`)}))
+          OR EXISTS (SELECT 1 FROM "ClienteDireccion" d WHERE d."clienteId" = c.id AND d."tenantId" = c."tenantId" AND ${contiene(Prisma.sql`d.ciudad`)}))`;
+      const [ids, conteo] = await this.prisma.$transaction([
+        this.prisma.$queryRaw<{ id: string }[]>(
+          Prisma.sql`SELECT c.id FROM "Cliente" c WHERE ${filtro} ORDER BY c.nombre, c.id LIMIT ${pagination.limit} OFFSET ${pagination.skip}`,
+        ),
+        this.prisma.$queryRaw<{ total: bigint }[]>(
+          Prisma.sql`SELECT count(*) AS total FROM "Cliente" c WHERE ${filtro}`,
+        ),
+      ]);
+      where.id = { in: ids.map((fila) => fila.id) };
+      totalBusqueda = Number(conteo[0].total);
+    }
 
     const [clientes, total] = await this.prisma.$transaction([
       this.prisma.cliente.findMany({
@@ -88,8 +95,8 @@ export class ClientesService {
             orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
           },
         },
-        orderBy: { nombre: 'asc' },
-        skip: pagination.skip,
+        orderBy: [{ nombre: 'asc' }, { id: 'asc' }],
+        skip: query ? 0 : pagination.skip,
         take: pagination.limit,
       }),
       this.prisma.cliente.count({ where }),
@@ -97,7 +104,7 @@ export class ClientesService {
 
     return paginatedResponse(
       clientes.map((cliente) => this.toResponse(cliente)),
-      total,
+      totalBusqueda ?? total,
       pagination,
     );
   }

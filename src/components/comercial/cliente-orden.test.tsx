@@ -21,6 +21,7 @@ function Ficha({ clientes = primeraPagina }: { clientes?: ClienteOpcion[] }) {
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  vi.stubGlobal("CSS", { escape: (value: string) => value });
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   api.listClientes.mockResolvedValue({ data: [] });
   el = document.createElement("div"); document.body.appendChild(el); root = createRoot(el);
@@ -59,4 +60,20 @@ it("explica cuando el cliente no tiene teléfono", async () => {
   await act(async () => root.render(<OrdenSummaryDetails cliente="Zeta ficticio" clienteTelefono={null} fecha="06/10/2026" vendedor="Vendedora ficticia">{null}</OrdenSummaryDetails>));
   expect(el.textContent).toContain("Sin teléfono");
   expect(el.querySelector('button[aria-label="Copiar teléfono del cliente"]')).toBeNull();
+});
+
+it("el buscador visible acepta nombres y razón social sin sus tildes", async () => {
+  const clientes = [{ ...cliente, id: "maria", nombre: "María Núñez", razonSocial: "Diseño Ágil" }, { ...cliente, id: "otro", nombre: "Otro cliente" }];
+  await act(async () => root.render(<ClienteLista value="" onChange={vi.fn()} options={clientes} />));
+  await act(async () => el.querySelector<HTMLButtonElement>('button')!.click());
+  const input = document.querySelector<HTMLInputElement>('input[placeholder="Buscar cliente…"]')!;
+  for (const texto of ["maria", "nunez", "diseno agil"]) {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, texto);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const opciones = [...document.querySelectorAll('[role="option"]')].map((o) => o.textContent);
+    expect(opciones.some((o) => o?.includes("María Núñez"))).toBe(true);
+    expect(opciones.some((o) => o?.includes("Otro cliente"))).toBe(false);
+  }
 });

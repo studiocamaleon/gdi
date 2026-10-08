@@ -5,6 +5,8 @@ import { useDesignScope, useDesignTheme } from "@/components/design-system/appea
 import brandStyles from "./orden-configurador.module.css";
 import catalogStyles from "./producto-catalogo.module.css";
 import { ProductoCatalogoGlyph } from "./producto-catalogo-glyph";
+import { compararProductosPorUso } from "@/lib/productos-por-uso";
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import { ActionButton } from "@/components/design-system/action-button";
 import { MaterialAutomaticoStock } from "./material-automatico-stock";
 import { CantidadProductoInput } from "./cantidad-producto-input";
@@ -5100,11 +5102,11 @@ function ApSelectStep({
 
   // Busca por título (y código), no por el texto descriptivo. Cada palabra de
   // la consulta debe estar presente (AND).
-  const queryTokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const queryTokens = normalizarBusqueda(query).split(/\s+/).filter(Boolean);
   const filtered = products.filter((product) => {
     if (family !== "Todos" && product.family !== family) return false;
     if (queryTokens.length === 0) return true;
-    const haystack = `${product.code} ${product.name}`.toLowerCase();
+    const haystack = normalizarBusqueda(`${product.code} ${product.name}`);
     return queryTokens.every((token) => haystack.includes(token));
   });
   const activeProduct =
@@ -5217,7 +5219,7 @@ function ApSelectStep({
 
       <div className={catalogStyles.results}>
         <div className={catalogStyles.resultHeading}>
-          <span>{query || family !== "Todos" ? "Resultados" : "Explorá el catálogo"}</span>
+          <span>{query || family !== "Todos" ? "Resultados · más usados primero" : "Más usados en tus órdenes"}</span>
           <span className={catalogStyles.resultCount} role="status" aria-live="polite">
             {filtered.length} producto{filtered.length === 1 ? "" : "s"}
           </span>
@@ -9715,7 +9717,7 @@ export function AgregarProductoSheet({
   const cotizacionAbortRef = React.useRef<AbortController | null>(null);
   const cotizacionScopeRef = React.useRef(crypto.randomUUID());
   const catalogProducts = React.useMemo(
-    () => productos.map(mapProductoReal),
+    () => [...productos].sort(compararProductosPorUso).map(mapProductoReal),
     [productos],
   );
   const geometriasComerciales = React.useMemo(

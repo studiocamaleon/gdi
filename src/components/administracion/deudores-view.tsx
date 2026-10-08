@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -43,7 +44,7 @@ import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./deudores-resumen.module.css";
 
 const columnas: ColumnDef<FilaDeudor>[] = [
-  { id: "cliente", accessorFn: (d) => `${d.nombre} ${d.cuit ?? ""}`, filterFn: "includesString" },
+  { id: "cliente", accessorFn: (d) => `${d.nombre} ${d.cuit ?? ""}`, filterFn: (row, columnId, value: string) => normalizarBusqueda(row.getValue<string>(columnId)).includes(normalizarBusqueda(value)) },
   { accessorKey: "total" },
   { accessorKey: "vencido" },
 ];

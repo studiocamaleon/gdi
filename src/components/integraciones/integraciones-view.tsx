@@ -1,4 +1,5 @@
 "use client";
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import { MetaPilotoCard } from './meta-piloto-card';
 import type { EstadoMetaPiloto } from '@/lib/meta-piloto-api';
 import { MetaRecepcionCard } from './meta-recepcion-card';
@@ -1634,14 +1635,14 @@ export function MensajesTab({
     conteos.set(estado, (conteos.get(estado) ?? 0) + 1);
   }
 
-  const q = busqueda.trim().toLowerCase();
+  const q = normalizarBusqueda(busqueda);
   const visibles = log.filter(
     (l) =>
       (!filtro || estadoMensaje(l.estado) === filtro) &&
       (!q ||
-        (l.cliente ?? "").toLowerCase().includes(q) ||
-        l.telefono.toLowerCase().includes(q) ||
-        l.titulo.toLowerCase().includes(q)),
+        normalizarBusqueda(l.cliente ?? "").includes(q) ||
+        normalizarBusqueda(l.telefono).includes(q) ||
+        normalizarBusqueda(l.titulo).includes(q)),
   );
 
   if (cargando && log.length === 0) {

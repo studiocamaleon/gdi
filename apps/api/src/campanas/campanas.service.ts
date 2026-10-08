@@ -1,3 +1,4 @@
+import { idsClientesPorNombre } from '../clientes/busqueda-clientes';
 import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
@@ -145,7 +146,7 @@ export class CampanasService {
               { codigo: { contains: texto, mode: 'insensitive' } },
               { nombre: { contains: texto, mode: 'insensitive' } },
               { tipo: { contains: texto, mode: 'insensitive' } },
-              { cliente: { nombre: { contains: texto, mode: 'insensitive' } } },
+              { clienteId: { in: await idsClientesPorNombre(this.prisma, auth.tenantId, texto) } },
             ],
           }
         : {}),

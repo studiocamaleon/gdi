@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import {
   InboxResponsable,
   InboxEventoEquipo,
@@ -641,9 +642,7 @@ export function InboxView({
     .toUpperCase();
   const contexto = datos?.contexto;
   const cliente = contexto?.cliente;
-  const coincide = `${nombre} ${datos?.contacto.telefono ?? ""}`
-    .toLocaleLowerCase()
-    .includes(busqueda.toLocaleLowerCase());
+  const coincide = normalizarBusqueda(`${nombre} ${datos?.contacto.telefono ?? ""}`).includes(normalizarBusqueda(busqueda));
   const panelContexto =
     datos?.origen === "GENERAL" && !datos.conversacionId ? (
       <Empty>

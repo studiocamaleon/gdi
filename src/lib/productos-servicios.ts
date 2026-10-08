@@ -98,6 +98,8 @@ export type MetodoCalculoPrecioProducto =
 // ============================================================================
 
 export interface ProductoListItem {
+  /** Cantidad de órdenes emitidas de esta empresa que incluyen el producto. */
+  usosEnOrdenes?: number;
   id: string;
   createdAt: string;
   updatedAt: string;

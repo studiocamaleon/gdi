@@ -1,3 +1,4 @@
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import type { Estacion } from "./estaciones";
 import {
   resolverEstacionDePaso,
@@ -46,17 +47,16 @@ export function filtrarTrabajos(
   zona: string,
   ahora: Date,
 ): ItemView[] {
-  const query = filtros.query.trim().toLocaleLowerCase("es");
+  const query = normalizarBusqueda(filtros.query);
   const acotado = !!(
     filtros.estacionId ||
     filtros.empleadoId ||
     filtros.asignadasAMi
   );
   return items.flatMap((item) => {
-    const texto =
-      `${item.code} ${item.otCode} ${item.customer} ${item.product} ${item.spec} ${item.data.loteEntrega?.nombre ?? ""} ${item.data.loteEntrega?.productoNombre ?? ""}`.toLocaleLowerCase(
-        "es",
-      );
+    const texto = normalizarBusqueda(
+      `${item.code} ${item.otCode} ${item.customer} ${item.product} ${item.spec} ${item.data.loteEntrega?.nombre ?? ""} ${item.data.loteEntrega?.productoNombre ?? ""}`,
+    );
     if (query && !texto.includes(query)) return [];
     if (!acotado) return [item];
     const incluyePaso = (paso: ItemView["data"]["pasos"][number]) =>

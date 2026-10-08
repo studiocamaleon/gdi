@@ -1,3 +1,4 @@
+import { idsClientesPorNombre } from '../clientes/busqueda-clientes';
 import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { cambioDelSnapshot } from '../cotizaciones/validar-moneda-documento';
@@ -597,9 +598,7 @@ export class PresupuestosService {
             OR: [
               { numero: { contains: filtros.busqueda, mode: 'insensitive' } },
               {
-                cliente: {
-                  nombre: { contains: filtros.busqueda, mode: 'insensitive' },
-                },
+                clienteId: { in: await idsClientesPorNombre(this.prisma, auth.tenantId, filtros.busqueda) },
               },
             ],
           }
