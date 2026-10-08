@@ -16,7 +16,8 @@
     "marketing:dev": "npm --prefix apps/marketing run dev",
     "marketing:build": "npm --prefix apps/marketing run build",
     "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "test:dependencias": "node --test scripts/dependencias-runtime.test.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -33,7 +34,7 @@
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.577.0",
     "maxrects-packer": "^2.7.3",
-    "next": "16.3.6",
+    "next": "16.3.8",
     "opentype.js": "^2.0.0",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
@@ -54,7 +55,7 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.149.0",
     "eslint": "^9",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.3.8",
     "jsdom": "26.1.0",
     "postcss": "8.5.28",
     "postcss-selector-parser": "7.1.6",
