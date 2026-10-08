@@ -812,9 +812,16 @@ export class FacturacionOrdenesService {
     const monto = r2(Math.min(libre, Number(actual.saldoPendiente), cupoOrden));
     if (monto <= EPS) return 0;
 
+    // Enviar un decimal exacto: un number viaja como float8 y puede quedar
+    // apenas por encima del saldo NUMERIC aunque ambos tengan los mismos centavos.
+    const montoDecimal = new Prisma.Decimal(monto.toFixed(2));
     const actualizado = await tx.comprobante.updateMany({
-      where: { id: factura.id, tenantId, saldoPendiente: { gte: monto } },
-      data: { saldoPendiente: { decrement: monto } },
+      where: {
+        id: factura.id,
+        tenantId,
+        saldoPendiente: { gte: montoDecimal },
+      },
+      data: { saldoPendiente: { decrement: montoDecimal } },
     });
     if (actualizado.count !== 1) {
       throw new BadRequestException(
@@ -878,9 +885,16 @@ export class FacturacionOrdenesService {
     );
     if (monto <= EPS) return 0;
 
+    // Enviar un decimal exacto: un number viaja como float8 y puede quedar
+    // apenas por encima del saldo NUMERIC aunque ambos tengan los mismos centavos.
+    const montoDecimal = new Prisma.Decimal(monto.toFixed(2));
     const actualizado = await tx.comprobante.updateMany({
-      where: { id: factura.id, tenantId, saldoPendiente: { gte: monto } },
-      data: { saldoPendiente: { decrement: monto } },
+      where: {
+        id: factura.id,
+        tenantId,
+        saldoPendiente: { gte: montoDecimal },
+      },
+      data: { saldoPendiente: { decrement: montoDecimal } },
     });
     if (actualizado.count !== 1) {
       throw new BadRequestException(
