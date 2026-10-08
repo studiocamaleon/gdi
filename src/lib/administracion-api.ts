@@ -1,3 +1,4 @@
+import type { PaginaFacturacion, PaginaComprobantes } from "./listado-fiscal";
 import type { ReglaRetencion, CalendarioAcreditacion } from "./administracion";
 import { apiRequest } from "@/lib/api";
 import {
@@ -27,7 +28,6 @@ import type {
   OrdenFacturable,
   ProveedorFacturacion,
   PuntoVenta,
-  ResultadoLoteFacturacion,
   TesoreriaKpis,
   ValorTesoreria,
 } from "@/lib/administracion";
@@ -113,6 +113,18 @@ export async function getComprobantes(params?: {
 }
 
 // ── Facturación sobre órdenes ──────────────────────────────────────────
+
+export async function getFacturacionPagina(filtros: FiltrosFacturacion, pagina = 1, q = ""): Promise<PaginaFacturacion> {
+  const params = new URLSearchParams(parametrosFacturacion(filtros));
+  params.set("pagina", String(pagina));
+  if (q) params.set("q", q);
+  return apiRequest(`/administracion/facturacion/pendientes/pagina?${params}`);
+}
+export async function getComprobantesPagina(params: {pagina?: number; q?: string; estado?: string; tipo?: string} = {}): Promise<PaginaComprobantes> {
+  const query = new URLSearchParams();
+  for (const [k,v] of Object.entries(params)) if (v) query.set(k, String(v));
+  return apiRequest(`/administracion/comprobantes/pagina?${query}`);
+}
 
 export async function getFacturacionPendientes(
   filtros: FiltrosFacturacion = {},

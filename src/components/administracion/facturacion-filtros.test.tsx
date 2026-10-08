@@ -18,7 +18,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mocks.replace, refresh: vi.fn() }),
 }));
 vi.mock("@/lib/administracion-api", () => ({
-  getFacturacionPendientes: mocks.get,
+  getFacturacionPagina: mocks.get,
   facturarLote: mocks.facturar,
   listarLotesFacturacion: vi.fn(async () => []),
 }));
@@ -61,12 +61,27 @@ async function render(
   filtros: FiltrosFacturacion = {},
   permiso = "administracion.gestionar",
   ordenes = [orden],
+  pagina?: number,
 ) {
   await act(async () =>
     root.render(
       <DesignSystemProvider theme="brand" appearance="light">
         <PermisosProvider permisos={[permiso]}>
-          <FacturacionView initialOrdenes={ordenes} initialFiltros={filtros} />
+          <FacturacionView
+            initialOrdenes={ordenes}
+            initialFiltros={filtros}
+            paginacion={
+              pagina
+                ? {
+                    items: ordenes,
+                    total: 50,
+                    pagina,
+                    tamanoPagina: 25,
+                    resumen: { importe: 5000, clientes: 10 },
+                  }
+                : undefined
+            }
+          />
         </PermisosProvider>
       </DesignSystemProvider>,
     ),
@@ -121,7 +136,9 @@ it("abre sin filtrar; aplica cobro y fechas sólo al confirmar, y limpia la sele
 
 it("permite limpiar filtros activos sin desplegar el panel y no conserva el filtro por defecto", async () => {
   await render({ cobro: "cobradas_sin_facturar", emisionHasta: "2026-10-08" });
-  expect(container.querySelector("form")).toBeNull();
+  expect(
+    container.querySelector('form[aria-label="Filtros de facturación"]'),
+  ).toBeNull();
   expect(container.textContent).toContain("Emisión hasta 08/10/2026");
   await act(async () => boton("Limpiar filtros").click());
   expect(mocks.replace).toHaveBeenCalledWith("/administracion/facturacion", {
@@ -153,23 +170,80 @@ it("lectura puede filtrar, sin habilitar emisión; el vacío filtrado no dice qu
 });
 
 it("la página lleva los filtros a la API y cambia la clave del listado para descartar selecciones antiguas", async () => {
-  mocks.get.mockResolvedValue([orden]);
-  const base = await FacturacionPage({ searchParams: Promise.resolve({}) });
-  expect(mocks.get).toHaveBeenLastCalledWith({
-    cobro: undefined,
-    emisionDesde: undefined,
-    emisionHasta: undefined,
+  mocks.get.mockResolvedValue({
+    items: [orden],
+    total: 1,
+    pagina: 1,
+    tamanoPagina: 25,
+    resumen: { importe: 100, clientes: 1 },
   });
+  const base = await FacturacionPage({ searchParams: Promise.resolve({}) });
+  expect(mocks.get).toHaveBeenLastCalledWith(
+    {
+      cobro: undefined,
+      emisionDesde: undefined,
+      emisionHasta: undefined,
+    },
+    1,
+    "",
+  );
   const filtrada = await FacturacionPage({
     searchParams: Promise.resolve({
       cobro: "cobradas_sin_facturar",
       emisionDesde: "2026-10-01",
     }),
   });
-  expect(mocks.get).toHaveBeenLastCalledWith({
-    cobro: "cobradas_sin_facturar",
-    emisionDesde: "2026-10-01",
-    emisionHasta: undefined,
-  });
+  expect(mocks.get).toHaveBeenLastCalledWith(
+    {
+      cobro: "cobradas_sin_facturar",
+      emisionDesde: "2026-10-01",
+      emisionHasta: undefined,
+    },
+    1,
+    "",
+  );
   expect(filtrada.key).not.toBe(base.key);
+});
+
+it("conserva la selección entre páginas y busca en el servidor desde la primera", async () => {
+  await render({}, "administracion.gestionar", [orden], 1);
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('[aria-label="Seleccionar OT-TEST"]')!
+      .click(),
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Página siguiente"]')!
+      .click(),
+  );
+  expect(mocks.replace).toHaveBeenLastCalledWith(
+    "/administracion/facturacion?pagina=2",
+    { scroll: false },
+  );
+  const otra = { ...orden, ordenId: "otra", numero: "OT-OTRA" };
+  await render({}, "administracion.gestionar", [otra], 2);
+  expect(container.textContent).toContain("1 orden seleccionada");
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('[aria-label="Seleccionar OT-OTRA"]')!
+      .click(),
+  );
+  expect(container.textContent).toContain("2 órdenes seleccionadas");
+  const input = container.querySelector<HTMLInputElement>(
+    'input[type="search"]',
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "Árbol");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => boton("Buscar").click());
+  expect(mocks.replace).toHaveBeenLastCalledWith(
+    "/administracion/facturacion?pagina=1&q=%C3%81rbol",
+    { scroll: false },
+  );
+  expect(container.textContent).not.toContain("2 órdenes seleccionadas");
 });

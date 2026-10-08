@@ -224,7 +224,7 @@ describe('Facturación con permisos por vista (HTTP)', () => {
         { provide: CapacidadesEmpresaService, useValue: capacidades },
         ...dependencias.map((provide) => ({
           provide,
-          useValue: provide === ComprobantesService ? servicio : noUsado,
+          useValue: provide === ComprobantesService ? servicio : provide === FacturacionOrdenesService ? facturacion : noUsado,
         })),
       ],
     }).compile();
@@ -306,6 +306,22 @@ describe('Facturación con permisos por vista (HTTP)', () => {
       },
     });
   }
+
+  it('pagina con permiso de lectura, rechaza gestión aislada y no acepta tenant por cabecera', async () => {
+    const propia = await orden();
+    const ajena = await orden(1);
+    for (const ruta of ['facturacion/pendientes/pagina', 'comprobantes/pagina']) {
+      const get = (actor: string) => request(app.getHttpServer()).get(`/administracion/${ruta}`).auth(tokens[actor], {type:'bearer'}).set('x-tenant-id', tenants[1]);
+      await get('sinAcceso').expect(403);
+      const r = await get('lector').expect(200);
+      expect(r.body.tamanoPagina).toBe(25);
+      expect(r.body.items.some((o: {ordenId?: string}) => o.ordenId === ajena.id)).toBe(false);
+      if(ruta.startsWith('facturacion')) expect(r.body.items.some((o: {ordenId?: string}) => o.ordenId === propia.id)).toBe(true);
+      await get('lector').query({pagina:'-1'}).expect(400);
+      await get('lector').query({tenantId:tenants[1]}).expect(400);
+    }
+    await request(app.getHttpServer()).get('/administracion/comprobantes/pagina').auth(tokens.facturador,{type:'bearer'}).expect(403);
+  });
 
   it.each(['administrador', 'facturador', 'legado'])(
     '%s factura una OT hasta obtener el CAE ficticio',

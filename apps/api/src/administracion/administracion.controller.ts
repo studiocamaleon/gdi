@@ -1,3 +1,4 @@
+import { FacturacionPaginaDto, ComprobantesPaginaDto } from './dto/listado-fiscal.dto';
 import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
@@ -202,6 +203,18 @@ export class AdministracionController {
       ordenId,
       q,
     });
+  }
+
+  @Permiso("administracion.comprobantes.ver")
+  @Get('comprobantes/pagina')
+  comprobantesPagina(@CurrentSession() auth: CurrentAuth, @Query() query: ComprobantesPaginaDto) {
+    return this.comprobantesService.listarPagina(auth, query);
+  }
+
+  @Permiso("administracion.facturacion.ver")
+  @Get('facturacion/pendientes/pagina')
+  facturacionPagina(@CurrentSession() auth: CurrentAuth, @Query() query: FacturacionPaginaDto) {
+    return this.facturacionOrdenesService.pendientesFacturacionPagina(auth.tenantId, query);
   }
 
   // ── Facturación sobre órdenes ────────────────────────────────────────

@@ -1,4 +1,6 @@
 "use client";
+import type { PaginaFacturacion } from "@/lib/listado-fiscal";
+import { TablePagination } from "@/components/ui/table-pagination";
 
 import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import * as React from "react";
@@ -26,7 +28,10 @@ import {
 } from "./factura-detalle-selector";
 import { FacturacionLotes } from "./facturacion-lotes";
 import { facturarLote } from "@/lib/administracion-api";
-import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
+import {
+  useConfigRegional,
+  useFecha,
+} from "@/components/navigation/config-regional-provider";
 import {
   parametrosFacturacion,
   type FiltrosFacturacion,
@@ -76,9 +81,13 @@ import s from "./facturacion.module.css";
 export function FacturacionView({
   initialOrdenes,
   initialFiltros = {},
+  initialQ = "",
+  paginacion,
 }: {
   initialOrdenes: OrdenFacturable[];
   initialFiltros?: FiltrosFacturacion;
+  initialQ?: string;
+  paginacion?: PaginaFacturacion;
 }) {
   const router = useRouter();
   const { moneda } = useConfigRegional();
@@ -87,7 +96,9 @@ export function FacturacionView({
   const [filtrosAbiertos, setFiltrosAbiertos] = React.useState(false);
   const [cargandoFiltros, iniciarFiltro] = React.useTransition();
   const filtroId = React.useId();
-  const filtrosActivos = Boolean(parametrosFacturacion(initialFiltros));
+  const filtrosActivos = Boolean(
+    parametrosFacturacion(initialFiltros) || initialQ,
+  );
   const rangoInvalido = Boolean(
     filtros.emisionDesde &&
     filtros.emisionHasta &&
@@ -108,7 +119,10 @@ export function FacturacionView({
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const puedeGestionar = usePuede("administracion.facturacion.gestionar");
-  const [q, setQ] = React.useState("");
+  const [q, setQ] = React.useState(initialQ);
+  const [cacheSeleccion, setCacheSeleccion] = React.useState<
+    Map<string, OrdenFacturable>
+  >(() => new Map());
   const [sel, setSel] = React.useState<Set<string>>(() => new Set());
   const [detalleAgrupada, setDetalleAgrupada] =
     React.useState<DetalleFactura>("orden");
@@ -125,43 +139,77 @@ export function FacturacionView({
   const data = initialOrdenes;
   const rows = React.useMemo(
     () =>
-      data.filter(
-        (o) =>
-          !q ||
-          normalizarBusqueda(`${o.numero} ${o.clienteNombre ?? ""}`).includes(
-            normalizarBusqueda(q),
+      paginacion
+        ? data
+        : data.filter(
+            (o) =>
+              !q ||
+              normalizarBusqueda(
+                `${o.numero} ${o.clienteNombre ?? ""}`,
+              ).includes(normalizarBusqueda(q)),
           ),
-      ),
-    [data, q],
+    [data, q, paginacion],
   );
 
-  const seleccionadas = data.filter((o) => sel.has(o.ordenId));
+  const seleccionadas = [...cacheSeleccion.values()].filter((o) =>
+    sel.has(o.ordenId),
+  );
   const totalSel = seleccionadas.reduce((s, o) => s + o.saldoSinFacturar, 0);
   const clientesSel = new Set(seleccionadas.map((o) => o.clienteId ?? "CF"));
   const puedeAgrupar = seleccionadas.length > 1 && clientesSel.size === 1;
-  const totalPendiente = data.reduce((s, o) => s + o.saldoSinFacturar, 0);
+  const totalPendiente =
+    paginacion?.resumen.importe ??
+    data.reduce((s, o) => s + o.saldoSinFacturar, 0);
   const todasVisiblesSeleccionadas =
     rows.length > 0 && rows.every((o) => sel.has(o.ordenId));
   const algunaVisibleSeleccionada = rows.some((o) => sel.has(o.ordenId));
 
-  const toggle = (id: string) =>
+  const guardarSeleccion = (filas: OrdenFacturable[]) =>
+    setCacheSeleccion((prev) => {
+      const next = new Map(prev);
+      filas.forEach((o) => next.set(o.ordenId, o));
+      return next;
+    });
+  const navegarPagina = (pagina: number, busqueda = initialQ) => {
+    const params = new URLSearchParams(parametrosFacturacion(initialFiltros));
+    params.set("pagina", String(pagina));
+    if (busqueda.trim()) params.set("q", busqueda.trim());
+    iniciarFiltro(() =>
+      router.replace(`/administracion/facturacion?${params}`, {
+        scroll: false,
+      }),
+    );
+  };
+  const toggle = (id: string) => {
+    if (!sel.has(id) && sel.size >= 100) {
+      toast.info("Podés seleccionar hasta 100 órdenes por lote.");
+      return;
+    }
+    guardarSeleccion(data.filter((o) => o.ordenId === id));
     setSel((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  };
 
-  const toggleTodasVisibles = () =>
+  const toggleTodasVisibles = () => {
+    guardarSeleccion(rows);
     setSel((prev) => {
       const next = new Set(prev);
       if (todasVisiblesSeleccionadas) {
         rows.forEach((o) => next.delete(o.ordenId));
       } else {
-        rows.forEach((o) => next.add(o.ordenId));
+        rows.forEach((o) => {
+          if (next.size < 100) next.add(o.ordenId);
+        });
+        if (rows.some((o) => !next.has(o.ordenId)))
+          toast.info("Podés seleccionar hasta 100 órdenes por lote.");
       }
       return next;
     });
+  };
 
   const prepararEmision = () => {
     if (
@@ -203,15 +251,19 @@ export function FacturacionView({
     setFacturando(true);
     try {
       await facturarLote({
-        claveSolicitud: claveSolicitud.current ?? (claveSolicitud.current = crypto.randomUUID()),
+        claveSolicitud:
+          claveSolicitud.current ??
+          (claveSolicitud.current = crypto.randomUUID()),
         ordenIds: confirmacion.ordenes.map((o) => o.ordenId),
         modo: modoFinal,
         detalle: confirmacion.detalle,
       });
       setConfirmacion(null);
       setSel(new Set());
-      setRevisionLotes(v => v + 1);
-      toast.success("Lote recibido. Podés seguir trabajando; te avisaremos en la campanita al terminar.");
+      setRevisionLotes((v) => v + 1);
+      toast.success(
+        "Lote recibido. Podés seguir trabajando; te avisaremos en la campanita al terminar.",
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo facturar.");
     } finally {
@@ -220,14 +272,14 @@ export function FacturacionView({
     }
   };
 
-
-
   const modoFinal = puedeAgrupar ? modo : "por_orden";
   const cantidadFacturas = modoFinal === "agrupada" ? 1 : seleccionadas.length;
   const ocultas = seleccionadas.filter(
     (o) => !rows.some((r) => r.ordenId === o.ordenId),
   ).length;
-  const cantidadClientes = new Set(data.map((o) => o.clienteId ?? "CF")).size;
+  const cantidadClientes =
+    paginacion?.resumen.clientes ??
+    new Set(data.map((o) => o.clienteId ?? "CF")).size;
 
   return (
     <section {...scope} className={`${theme} ${listPage.page} ${s.page}`}>
@@ -243,7 +295,10 @@ export function FacturacionView({
           </p>
         </div>
         <div className={s.headerActions}>
-          <ActionLink variant="outline" href="/administracion/facturacion/lotes">
+          <ActionLink
+            variant="outline"
+            href="/administracion/facturacion/lotes"
+          >
             Historial de lotes
           </ActionLink>
           <ActionLink variant="outline" href="/administracion/comprobantes">
@@ -268,7 +323,7 @@ export function FacturacionView({
         </div>
         <ListMetric
           label="Órdenes pendientes"
-          value={data.length}
+          value={paginacion?.total ?? data.length}
           hint={
             filtrosActivos
               ? "Órdenes que coinciden con los filtros."
@@ -298,7 +353,16 @@ export function FacturacionView({
                 </Card.Description>
               </div>
             </Card.Header>
-            <div className={s.toolbar}>
+            <form
+              className={s.toolbar}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (paginacion) {
+                  setSel(new Set());
+                  navegarPagina(1, q);
+                }
+              }}
+            >
               <SearchField
                 aria-label="Buscar orden o cliente"
                 value={q}
@@ -307,10 +371,23 @@ export function FacturacionView({
               >
                 <SearchField.Group className={focus.singleBorder}>
                   <SearchField.SearchIcon />
-                  <SearchField.Input placeholder="Número de orden o cliente…" />
+                  <SearchField.Input
+                    maxLength={200}
+                    placeholder="Número de orden o cliente…"
+                  />
                   <SearchField.ClearButton aria-label="Limpiar búsqueda" />
                 </SearchField.Group>
               </SearchField>
+              {paginacion && (
+                <ActionButton
+                  type="submit"
+                  variant="outline"
+                  isDisabled={facturando}
+                  isPending={cargandoFiltros}
+                >
+                  Buscar
+                </ActionButton>
+              )}
               <ActionButton
                 variant="outline"
                 aria-expanded={filtrosAbiertos}
@@ -330,9 +407,9 @@ export function FacturacionView({
                 </ActionButton>
               )}
               <span className={s.count}>
-                {rows.length} de {data.length} órdenes
+                {rows.length} de {paginacion?.total ?? data.length} órdenes
               </span>
-            </div>
+            </form>
             {filtrosActivos && (
               <p className={s.filterSummary} role="status">
                 {initialFiltros.cobro
@@ -455,12 +532,6 @@ export function FacturacionView({
                 </div>
               </form>
             )}
-            {data.length === 500 && (
-              <p className={s.filterSummary}>
-                Se muestran hasta 500 órdenes por consulta. Acotá la fecha de
-                emisión para revisar otro período.
-              </p>
-            )}
             {rows.length > 0 ? (
               <Table
                 className={s.table}
@@ -477,7 +548,7 @@ export function FacturacionView({
                             algunaVisibleSeleccionada &&
                             !todasVisiblesSeleccionadas
                           }
-                          isDisabled={facturando}
+                          isDisabled={facturando || cargandoFiltros}
                           onChange={toggleTodasVisibles}
                         >
                           <Checkbox.Content>
@@ -514,7 +585,7 @@ export function FacturacionView({
                           <Checkbox
                             aria-label={`Seleccionar ${o.numero}`}
                             isSelected={sel.has(o.ordenId)}
-                            isDisabled={facturando}
+                            isDisabled={facturando || cargandoFiltros}
                             onChange={() => toggle(o.ordenId)}
                           >
                             <Checkbox.Content>
@@ -596,6 +667,28 @@ export function FacturacionView({
                   </ActionButton>
                 )}
               </Empty>
+            )}
+            {paginacion && (
+              <div aria-busy={cargandoFiltros}>
+                {cargandoFiltros && (
+                  <p role="status" className={s.filterSummary}>
+                    Cargando órdenes…
+                  </p>
+                )}
+                <TablePagination
+                  disabled={cargandoFiltros || facturando}
+                  total={paginacion.total}
+                  page={paginacion.pagina}
+                  pageSize={paginacion.tamanoPagina}
+                  onPageChange={(p) => {
+                    if (!cargandoFiltros && !facturando) navegarPagina(p);
+                  }}
+                />
+                <p className={s.filterSummary}>
+                  La selección se conserva entre páginas, hasta 100 órdenes por
+                  lote. Buscar o aplicar filtros la limpia.
+                </p>
+              </div>
             )}
           </Card>
           <p className={s.caption}>

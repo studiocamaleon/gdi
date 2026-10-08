@@ -1,4 +1,8 @@
-import { normalizarBusqueda } from '../common/busqueda-texto';
+import type { ComprobantesPaginaDto } from './dto/listado-fiscal.dto';
+import {
+  contieneSinAcentos,
+  normalizarBusqueda,
+} from '../common/busqueda-texto';
 import { textoErrorLog } from '../common/log-seguro';
 import { EmisionFiscalService } from './emision-fiscal.service';
 import { puedeOperarComprobante } from './permisos-comprobantes';
@@ -210,10 +214,12 @@ export class ComprobantesService {
       clienteId?: string;
       ordenId?: string;
       q?: string;
+      ids?: string[];
     },
   ) {
     const where: Prisma.ComprobanteWhereInput = {
       tenantId: auth.tenantId,
+      ...(filtros.ids ? { id: { in: filtros.ids } } : {}),
       ...(filtros.estado ? { estado: filtros.estado } : {}),
       ...(filtros.tipo ? { tipo: filtros.tipo } : {}),
       ...(filtros.clienteId ? { clienteId: filtros.clienteId } : {}),
@@ -246,7 +252,7 @@ export class ComprobantesService {
           select: { id: true },
         },
       },
-      orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
       take: 200,
     });
     const q = normalizarBusqueda(filtros.q ?? '');
@@ -265,6 +271,76 @@ export class ComprobantesService {
           .join(' '),
       ).includes(q),
     );
+  }
+
+  async listarPagina(auth: CurrentAuth, filtros: ComprobantesPaginaDto) {
+    const from = Prisma.sql`FROM "Comprobante" c
+      JOIN "PuntoVenta" pv ON pv."id" = c."puntoVentaId" AND pv."tenantId" = c."tenantId"
+      LEFT JOIN "Cliente" cl ON cl."id" = c."clienteId" AND cl."tenantId" = c."tenantId"
+      LEFT JOIN "OrdenTrabajo" ot ON ot."id" = c."ordenId" AND ot."tenantId" = c."tenantId"`;
+    const texto = Prisma.sql`concat_ws(' ',
+      coalesce(cl."nombre", nullif(c."receptorSnapshot"->>'nombre', ''), 'Consumidor Final'),
+      coalesce(cl."cuit", c."receptorSnapshot"->>'cuit'),
+      c."letra" || ' ' || lpad(pv."numero"::text, 4, '0') || '-' || coalesce(lpad(c."numero"::text, 8, '0'), '—'),
+      ot."numero",
+      (SELECT string_agg(o."numero", ' ') FROM "ComprobanteOrden" co
+       JOIN "OrdenTrabajo" o ON o."id" = co."ordenId" AND o."tenantId" = co."tenantId"
+       WHERE co."comprobanteId" = c."id" AND co."tenantId" = c."tenantId"))`;
+    const where = Prisma.sql`WHERE c."tenantId" = ${auth.tenantId}::uuid
+      ${filtros.tipo && filtros.tipo !== 'todos' ? Prisma.sql`AND c."tipo" = ${filtros.tipo}` : Prisma.empty}
+      ${
+        filtros.estado === 'cae'
+          ? Prisma.sql`AND c."estado" = 'emitido' AND coalesce(c."cae", '') <> ''`
+          : filtros.estado === 'emitido'
+            ? Prisma.sql`AND c."estado" = 'emitido' AND coalesce(c."cae", '') = ''`
+            : filtros.estado && filtros.estado !== 'todos'
+              ? Prisma.sql`AND c."estado" = ${filtros.estado}`
+              : Prisma.empty
+      }
+      ${filtros.q?.trim() ? Prisma.sql`AND ${contieneSinAcentos(texto, filtros.q)}` : Prisma.empty}`;
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const mes = claveFechaEnZona(new Date(), regional.zonaHoraria).slice(0, 7);
+    const pesos = (col: Prisma.Sql) =>
+      Prisma.sql`${col} * CASE WHEN c."moneda" = 'USD' AND c."cotizacion" IS NOT NULL THEN c."cotizacion" ELSE 1 END`;
+    const [r] = await this.prisma.$queryRaw<
+      Array<{
+        total: number;
+        facturado: Prisma.Decimal;
+        pendiente: Prisma.Decimal;
+        facturasMes: number;
+        notasMes: number;
+      }>
+    >(Prisma.sql`
+      SELECT count(*)::int AS total,
+        coalesce(sum(CASE WHEN c."estado" = 'emitido' THEN ${pesos(Prisma.sql`c."total"`)} * CASE WHEN c."tipo" = 'nota_credito' THEN -1 ELSE 1 END ELSE 0 END), 0) AS facturado,
+        coalesce(sum(CASE WHEN c."estado" = 'emitido' AND c."tipo" <> 'nota_credito' THEN ${pesos(Prisma.sql`c."saldoPendiente"`)} ELSE 0 END), 0) AS pendiente,
+        count(*) FILTER (WHERE c."estado" = 'emitido' AND c."tipo" = 'factura' AND to_char(c."fecha", 'YYYY-MM') = ${mes})::int AS "facturasMes",
+        count(*) FILTER (WHERE c."estado" = 'emitido' AND c."tipo" = 'nota_credito' AND to_char(c."fecha", 'YYYY-MM') = ${mes})::int AS "notasMes"
+      ${from} ${where}
+    `);
+    const tamanoPagina = 25;
+    const pagina = Math.min(
+      filtros.pagina ?? 1,
+      Math.max(1, Math.ceil(r.total / tamanoPagina)),
+    );
+    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT c."id" ${from} ${where}
+      ORDER BY c."fecha" DESC, c."createdAt" DESC, c."id" DESC
+      LIMIT ${tamanoPagina} OFFSET ${(pagina - 1) * tamanoPagina}
+    `);
+    const items = await this.listar(auth, { ids: ids.map((c) => c.id) });
+    return {
+      items,
+      total: r.total,
+      pagina,
+      tamanoPagina,
+      resumen: {
+        facturado: Number(r.facturado),
+        pendiente: Number(r.pendiente),
+        facturasMes: r.facturasMes,
+        notasMes: r.notasMes,
+      },
+    };
   }
 
   async obtener(auth: CurrentAuth, id: string) {
@@ -337,7 +413,9 @@ export class ComprobantesService {
     loteLeaseToken?: string,
   ) {
     if (loteItemId && !loteLeaseToken)
-      throw new ConflictException('El lote no tiene un turno de ejecución válido.');
+      throw new ConflictException(
+        'El lote no tiene un turno de ejecución válido.',
+      );
     if (
       !puedeOperarComprobante(
         auth,
@@ -569,13 +647,20 @@ export class ComprobantesService {
         // pueden crear facturas diferentes para el mismo item al recuperar un lease.
         const vinculado = await tx.facturacionLoteItem.updateMany({
           where: {
-            id: loteItemId, tenantId: auth.tenantId, comprobanteId: null,
-            lote: { leaseToken: loteLeaseToken, leaseHasta: { gt: new Date() } },
+            id: loteItemId,
+            tenantId: auth.tenantId,
+            comprobanteId: null,
+            lote: {
+              leaseToken: loteLeaseToken,
+              leaseHasta: { gt: new Date() },
+            },
           },
           data: { comprobanteId: creado.id, estado: 'emitiendo' },
         });
         if (vinculado.count !== 1)
-          throw new ConflictException('El item ya tiene un comprobante asociado o cambió su turno de ejecución.');
+          throw new ConflictException(
+            'El item ya tiene un comprobante asociado o cambió su turno de ejecución.',
+          );
       }
       return creado;
     });
@@ -597,11 +682,15 @@ export class ComprobantesService {
     if (await this.capacidades.puedeOperar(tenantId, 'documentos_pdf'))
       await this.materializarPdf(tenantId, id);
     const existente = await this.prisma.enlacePublico.findUnique({
-      where: { tipo_entidadId: { tipo: TipoEnlacePublico.FACTURA, entidadId: id } },
+      where: {
+        tipo_entidadId: { tipo: TipoEnlacePublico.FACTURA, entidadId: id },
+      },
     });
     if (!existente)
       await this.enlaces.emitir(this.prisma, {
-        tenantId, tipo: TipoEnlacePublico.FACTURA, entidadId: id,
+        tenantId,
+        tipo: TipoEnlacePublico.FACTURA,
+        entidadId: id,
         token: generarTokenPublico(),
       });
     return this.avisos.avisarParaLote(id);
@@ -842,14 +931,19 @@ export class ComprobantesService {
     // del neto puede correr un centavo) para que el reparto cierre exacto.
     const total = calcularTotales(letra, items).total;
 
-    const borrador = await this.crear(auth, {
-      tipo: 'factura',
-      puntoVentaId,
-      clienteId: orden.clienteId ?? undefined,
-      ordenes: [{ ordenId: orden.id, monto: total }],
-      items,
-      condicionVenta: 'contado',
-    } as CrearComprobanteDto, loteItemId, loteLeaseToken);
+    const borrador = await this.crear(
+      auth,
+      {
+        tipo: 'factura',
+        puntoVentaId,
+        clienteId: orden.clienteId ?? undefined,
+        ordenes: [{ ordenId: orden.id, monto: total }],
+        items,
+        condicionVenta: 'contado',
+      } as CrearComprobanteDto,
+      loteItemId,
+      loteLeaseToken,
+    );
     if (payload.emitir === false) return borrador;
     return this.emitir(auth, borrador.id);
   }
@@ -972,8 +1066,10 @@ export class ComprobantesService {
    * renglón por orden — mismo cliente obligatorio.
    */
   async facturarLote(
-    auth: CurrentAuth, payload: FacturarLoteDto,
-    loteItemId?: string, loteLeaseToken?: string,
+    auth: CurrentAuth,
+    payload: FacturarLoteDto,
+    loteItemId?: string,
+    loteLeaseToken?: string,
   ) {
     const ordenes = await this.prisma.ordenTrabajo.findMany({
       where: { id: { in: payload.ordenIds }, tenantId: auth.tenantId },
@@ -1013,8 +1109,10 @@ export class ComprobantesService {
       );
     }
 
-    if (ordenes.some(o => ['borrador', 'cancelada'].includes(o.estado)))
-      throw new BadRequestException('El lote contiene órdenes en borrador o canceladas.');
+    if (ordenes.some((o) => ['borrador', 'cancelada'].includes(o.estado)))
+      throw new BadRequestException(
+        'El lote contiene órdenes en borrador o canceladas.',
+      );
 
     if (payload.modo === 'agrupada') {
       const clientes = new Set(ordenes.map((o) => o.clienteId ?? 'CF'));
@@ -1058,15 +1156,22 @@ export class ComprobantesService {
       );
       const puntoVentaId =
         payload.puntoVentaId ?? (await this.puntoVentaDefault(auth));
-      const borrador = await this.crear(auth, {
-        tipo: 'factura',
-        puntoVentaId,
-        clienteId: clienteId ?? undefined,
-        ordenes: vinculos,
-        items,
-        condicionVenta: 'contado',
-      } as CrearComprobanteDto, loteItemId, loteLeaseToken);
-      const emitido = loteItemId ? borrador : await this.emitir(auth, borrador.id);
+      const borrador = await this.crear(
+        auth,
+        {
+          tipo: 'factura',
+          puntoVentaId,
+          clienteId: clienteId ?? undefined,
+          ordenes: vinculos,
+          items,
+          condicionVenta: 'contado',
+        } as CrearComprobanteDto,
+        loteItemId,
+        loteLeaseToken,
+      );
+      const emitido = loteItemId
+        ? borrador
+        : await this.emitir(auth, borrador.id);
       return {
         modo: 'agrupada' as const,
         resultados: payload.ordenIds.map((ordenId) => ({

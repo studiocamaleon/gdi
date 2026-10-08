@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import type { PaginaComprobantes } from "@/lib/listado-fiscal";
+import { TablePagination } from "@/components/ui/table-pagination";
 import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import * as React from "react";
 import Link from "next/link";
@@ -93,33 +96,53 @@ function totalEnPesos(c: Comprobante, campo: "total" | "saldoPendiente") {
 
 export function ComprobantesView({
   initialComprobantes: data,
+  paginacion,
+  initialFiltros,
 }: {
   initialComprobantes: Comprobante[];
+  paginacion?: PaginaComprobantes;
+  initialFiltros?: { q: string; estado: string; tipo: string };
 }) {
+  const router = useRouter();
+  const [cargando, iniciar] = React.useTransition();
+  const navegar = (q: string, estado: string, tipo: string, pagina = 1) => {
+    const params = new URLSearchParams({ pagina: String(pagina) });
+    if (q.trim()) params.set("q", q.trim());
+    if (estado !== "todos") params.set("estado", estado);
+    if (tipo !== "todos") params.set("tipo", tipo);
+    iniciar(() =>
+      router.replace(`/administracion/comprobantes?${params}`, {
+        scroll: false,
+      }),
+    );
+  };
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const permisoGestionar = usePuede("administracion.comprobantes.gestionar");
   const fiscalDisponible = useCapacidad("fiscal_argentina");
   const puedeGestionar = permisoGestionar && fiscalDisponible;
-  const [q, setQ] = React.useState("");
-  const [est, setEst] = React.useState("todos");
-  const [tip, setTip] = React.useState("todos");
+  const [q, setQ] = React.useState(initialFiltros?.q ?? "");
+  const [est, setEst] = React.useState(initialFiltros?.estado ?? "todos");
+  const [tip, setTip] = React.useState(initialFiltros?.tipo ?? "todos");
   const cumple = (c: Comprobante, estado: string) =>
     estado === "todos" || estadoVisual(c).clave === estado;
-  const list = data.filter((c) => {
-    if (!cumple(c, est) || (tip !== "todos" && c.tipo !== tip)) return false;
-    const texto = normalizarBusqueda(
-      [
-        c.clienteNombre,
-        c.numeroCompleto,
-        c.clienteCuit ?? "",
-        c.ordenNumero ?? "",
-        ...c.ordenes.map((o) => o.numero),
-        c.letra,
-      ].join(" "),
-    );
-    return texto.includes(normalizarBusqueda(q));
-  });
+  const list = paginacion
+    ? data
+    : data.filter((c) => {
+        if (!cumple(c, est) || (tip !== "todos" && c.tipo !== tip))
+          return false;
+        const texto = normalizarBusqueda(
+          [
+            c.clienteNombre,
+            c.numeroCompleto,
+            c.clienteCuit ?? "",
+            c.ordenNumero ?? "",
+            ...c.ordenes.map((o) => o.numero),
+            c.letra,
+          ].join(" "),
+        );
+        return texto.includes(normalizarBusqueda(q));
+      });
   const facturado = data
     .filter((c) => c.estado === "emitido")
     .reduce(
@@ -138,6 +161,7 @@ export function ComprobantesView({
     setQ("");
     setEst("todos");
     setTip("todos");
+    if (paginacion) navegar("", "todos", "todos");
   };
 
   return (
@@ -164,28 +188,34 @@ export function ComprobantesView({
         <div className={s.totalMetric}>
           <ListMetric
             label="Monto facturado"
-            value={fmtResumen(facturado)}
+            value={fmtResumen(paginacion?.resumen.facturado ?? facturado)}
             icon={FileTextIcon}
             hint="Del listado · ARS, descontando notas de crédito."
           />
         </div>
         <ListMetric
           label="Saldo en comprobantes"
-          value={fmtResumen(pendiente)}
+          value={fmtResumen(paginacion?.resumen.pendiente ?? pendiente)}
           icon={WalletIcon}
           hint="Pendiente en documentos de este listado · ARS."
         />
         <ListMetric
           label="Facturas del mes"
-          value={delMes.filter((c) => c.tipo === "factura").length}
+          value={
+            paginacion?.resumen.facturasMes ??
+            delMes.filter((c) => c.tipo === "factura").length
+          }
           icon={CalendarDaysIcon}
-          hint="Facturas emitidas durante el mes actual."
+          hint="Del resultado filtrado · mes actual de la empresa."
         />
         <ListMetric
           label="Notas de crédito del mes"
-          value={delMes.filter((c) => c.tipo === "nota_credito").length}
+          value={
+            paginacion?.resumen.notasMes ??
+            delMes.filter((c) => c.tipo === "nota_credito").length
+          }
           icon={FileMinus2Icon}
-          hint="Correcciones emitidas durante el mes actual."
+          hint="Del resultado filtrado · mes actual de la empresa."
         />
       </div>
       <Card className={s.results}>
@@ -200,10 +230,16 @@ export function ComprobantesView({
             </Card.Description>
           </div>
           <span className={s.count}>
-            {list.length} de {data.length} comprobantes
+            {list.length} de {paginacion?.total ?? data.length} comprobantes
           </span>
         </Card.Header>
-        <div className={s.toolbar}>
+        <form
+          className={s.toolbar}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (paginacion) navegar(q, est, tip);
+          }}
+        >
           <SearchField
             aria-label="Buscar comprobante"
             value={q}
@@ -212,27 +248,43 @@ export function ComprobantesView({
           >
             <SearchField.Group className={focus.singleBorder}>
               <SearchField.SearchIcon />
-              <SearchField.Input placeholder="Cliente, CUIT, comprobante u orden…" />
+              <SearchField.Input
+                maxLength={200}
+                placeholder="Cliente, CUIT, comprobante u orden…"
+              />
               <SearchField.ClearButton aria-label="Limpiar búsqueda" />
             </SearchField.Group>
           </SearchField>
+          {paginacion && (
+            <ActionButton type="submit" variant="outline" isPending={cargando}>
+              Buscar
+            </ActionButton>
+          )}
           <div className={s.stateFilter}>
             <SelectField
               aria-label="Estado fiscal"
               value={est}
-              onChange={setEst}
+              onChange={(value) => {
+                setEst(value);
+                if (paginacion) navegar(q, value, tip);
+              }}
               options={ESTADOS.map(([value, label]) => ({
                 value,
-                label: `${label} (${data.filter((c) => cumple(c, value)).length})`,
+                label: paginacion
+                  ? label
+                  : `${label} (${data.filter((c) => cumple(c, value)).length})`,
               }))}
             />
           </div>
-        </div>
+        </form>
         <div className={s.typeFilters}>
           <SegmentedControl
             aria-label="Tipo de comprobante"
             value={tip}
-            onChange={setTip}
+            onChange={(value) => {
+              setTip(value);
+              if (paginacion) navegar(q, est, value);
+            }}
             options={TIPOS}
           />
         </div>
@@ -240,20 +292,36 @@ export function ComprobantesView({
           <Empty className={s.empty}>
             <EmptyHeader>
               <EmptyMedia variant="icon">
-                {data.length ? <SearchXIcon /> : <FileTextIcon />}
+                {data.length ||
+                initialFiltros?.q ||
+                est !== "todos" ||
+                tip !== "todos" ? (
+                  <SearchXIcon />
+                ) : (
+                  <FileTextIcon />
+                )}
               </EmptyMedia>
               <EmptyTitle>
-                {data.length
+                {data.length ||
+                initialFiltros?.q ||
+                est !== "todos" ||
+                tip !== "todos"
                   ? "No encontramos comprobantes con estos filtros"
                   : "Todavía no hay comprobantes"}
               </EmptyTitle>
               <EmptyDescription>
-                {data.length
+                {data.length ||
+                initialFiltros?.q ||
+                est !== "todos" ||
+                tip !== "todos"
                   ? "Probá otro cliente, número o estado fiscal."
                   : "Las facturas y notas que emitas aparecerán acá con su estado, CAE y saldo."}
               </EmptyDescription>
             </EmptyHeader>
-            {data.length ? (
+            {data.length ||
+            initialFiltros?.q ||
+            est !== "todos" ||
+            tip !== "todos" ? (
               <ActionButton variant="outline" onPress={limpiar}>
                 Limpiar filtros
               </ActionButton>
@@ -359,6 +427,20 @@ export function ComprobantesView({
               })}
             </TableBody>
           </Table>
+        )}
+        {paginacion && (
+          <div aria-busy={cargando}>
+            {cargando && <p role="status">Cargando comprobantes…</p>}
+            <TablePagination
+              disabled={cargando}
+              total={paginacion.total}
+              page={paginacion.pagina}
+              pageSize={paginacion.tamanoPagina}
+              onPageChange={(p) => {
+                if (!cargando) navegar(initialFiltros?.q ?? "", est, tip, p);
+              }}
+            />
+          </div>
         )}
       </Card>
       <p className={s.caption}>

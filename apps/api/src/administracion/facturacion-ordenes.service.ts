@@ -1,3 +1,5 @@
+import { contieneSinAcentos } from '../common/busqueda-texto';
+import type { FacturacionPaginaDto } from './dto/listado-fiscal.dto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -618,6 +620,21 @@ export class FacturacionOrdenesService {
     tenantId: string,
     filtros: FacturacionPendientesQueryDto = {},
   ) {
+    return (await this.consultarPendientes(tenantId, filtros)).items;
+  }
+
+  async pendientesFacturacionPagina(
+    tenantId: string,
+    filtros: FacturacionPaginaDto,
+  ) {
+    return this.consultarPendientes(tenantId, filtros, true);
+  }
+
+  private async consultarPendientes(
+    tenantId: string,
+    filtros: FacturacionPaginaDto,
+    paginado = false,
+  ) {
     const { emisionDesde, emisionHasta, cobro } = filtros;
     if (
       (emisionDesde && !esFechaCalendario(emisionDesde)) ||
@@ -643,22 +660,35 @@ export class FacturacionOrdenesService {
     // Misma tolerancia fiscal que facturarOrden/facturarLote. Resolver todos
     // los filtros antes de LIMIT impide que registros no facturables oculten
     // las coincidencias. Los valores siempre se parametrizan.
-    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT "id" FROM "OrdenTrabajo"
-      WHERE "tenantId" = ${tenantId}::uuid
-        AND "estado" IN ('finalizada', 'entregada')
-        AND "tratamientoFiscal" = 'FISCAL'
-        AND "total" > 0
-        AND "total" - "facturadoTotal" > 0.01
+    const where = Prisma.sql`      WHERE o."tenantId" = ${tenantId}::uuid
+        AND o."estado" IN ('finalizada', 'entregada')
+        AND o."tratamientoFiscal" = 'FISCAL'
+        AND o."total" > 0
+        AND o."total" - o."facturadoTotal" > 0.01
         ${
           cobro === 'cobradas_sin_facturar'
-            ? Prisma.sql`AND "facturadoTotal" = 0 AND "cobradoTotal" >= "total"`
+            ? Prisma.sql`AND o."facturadoTotal" = 0 AND o."cobradoTotal" >= o."total"`
             : Prisma.empty
         }
-        ${desde ? Prisma.sql`AND "fechaEmision" >= ${desde}` : Prisma.empty}
-        ${hasta ? Prisma.sql`AND "fechaEmision" < ${hasta}` : Prisma.empty}
-      ORDER BY "fechaFinalizada" ASC, "id" ASC
-      LIMIT 500
+        ${desde ? Prisma.sql`AND o."fechaEmision" >= ${desde}` : Prisma.empty}
+        ${hasta ? Prisma.sql`AND o."fechaEmision" < ${hasta}` : Prisma.empty}
+
+      ${filtros.q?.trim() ? Prisma.sql`AND ${contieneSinAcentos(Prisma.sql`concat_ws(' ', o."numero", c."nombre")`, filtros.q)}` : Prisma.empty}
+    `;
+    const from = Prisma.sql`FROM "OrdenTrabajo" o LEFT JOIN "Cliente" c ON c."id" = o."clienteId" AND c."tenantId" = o."tenantId"`;
+    const [resumen] = await this.prisma.$queryRaw<
+      Array<{ total: number; importe: Prisma.Decimal; clientes: number }>
+    >(Prisma.sql`
+      SELECT count(*)::int AS total, coalesce(sum(o."total" - o."facturadoTotal"), 0) AS importe,
+        count(DISTINCT coalesce(o."clienteId"::text, 'CF'))::int AS clientes ${from} ${where}
+    `);
+    const tamanoPagina = paginado ? 25 : 500;
+    const paginas = Math.max(1, Math.ceil(resumen.total / tamanoPagina));
+    const pagina = Math.min(filtros.pagina ?? 1, paginas);
+    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT o."id" ${from} ${where}
+      ORDER BY o."fechaFinalizada" ASC, o."id" ASC
+      LIMIT ${tamanoPagina} OFFSET ${(pagina - 1) * tamanoPagina}
     `);
     const ordenes = await this.prisma.ordenTrabajo.findMany({
       where: { tenantId, id: { in: ids.map((o) => o.id) } },
@@ -675,9 +705,9 @@ export class FacturacionOrdenesService {
         cobradoTotal: true,
       },
       orderBy: [{ fechaFinalizada: 'asc' }, { id: 'asc' }],
-      take: 500,
+      take: tamanoPagina,
     });
-    return ordenes.map((o) => ({
+    const items = ordenes.map((o) => ({
       ordenId: o.id,
       numero: o.numero,
       estado: o.estado,
@@ -693,6 +723,13 @@ export class FacturacionOrdenesService {
       cobrado: Number(o.cobradoTotal),
       saldoSinFacturar: r2(Number(o.total ?? 0) - Number(o.facturadoTotal)),
     }));
+    return {
+      items,
+      total: resumen.total,
+      pagina,
+      tamanoPagina,
+      resumen: { importe: Number(resumen.importe), clientes: resumen.clientes },
+    };
   }
 
   // ── Primitivas privadas ────────────────────────────────────────────

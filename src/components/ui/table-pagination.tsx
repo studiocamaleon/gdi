@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type TablePaginationProps = {
+  disabled?: boolean;
   total: number;
   page: number;
   pageSize: number;
@@ -12,6 +13,7 @@ type TablePaginationProps = {
 };
 
 export function TablePagination({
+  disabled = false,
   total,
   page,
   pageSize,
@@ -33,7 +35,7 @@ export function TablePagination({
         <Button
           variant="ghost"
           size="sm"
-          disabled={page <= 1}
+          disabled={disabled || page <= 1}
           onClick={() => onPageChange(page - 1)}
           aria-label="Página anterior"
         >
@@ -45,7 +47,7 @@ export function TablePagination({
         <Button
           variant="ghost"
           size="sm"
-          disabled={page >= pages}
+          disabled={disabled || page >= pages}
           onClick={() => onPageChange(page + 1)}
           aria-label="Página siguiente"
         >
