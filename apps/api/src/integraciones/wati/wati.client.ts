@@ -9,7 +9,7 @@ import { Injectable, Logger } from '@nestjs/common';
  *  1. El identificador del tenant va en el PATH, no en un header:
  *     `https://live-mt-server.wati.io/{tenantId}/api/...`
  *  2. Las operaciones están repartidas entre dos versiones. Crear un template
- *     es v1 (`/api/v1/...`) y enviarlo es v3 (`/api/ext/v3/...`). No es
+ *     es v1 (`/api/v1/...`) y enviarlo es v2 (`/api/v2/...`). No es
  *     prolijo, pero es lo que hay.
  *
  * Ver docs/integraciones-wati-diseno.md §1
@@ -50,6 +50,8 @@ export type PlantillaRemota = {
   parametros: string[];
   /** Señal de calidad de Meta. Un template puede pausarse por bajarla. */
   calidad: string | null;
+  /** Variable de imagen declarada en Wati; nunca la URL estática de muestra. */
+  parametroImagen?: string | null;
   /** Fijo, sin variables. Grafo pone el mismo en todas las suyas. */
   footer: string | null;
 };
@@ -114,57 +116,76 @@ export class WatiClient {
        * de retiro). Se firma fresca por envío. Ausente en casi todas.
        */
       mediaHeaderUrl?: string;
+      mediaHeaderParam?: string | null;
     },
   ): Promise<
     | { ok: true; id: string | null }
     | { ok: false; motivo: string; incierto: boolean }
   > {
+    if (envio.mediaHeaderUrl && !envio.mediaHeaderParam) {
+      return {
+        ok: false,
+        incierto: false,
+        motivo:
+          'La plantilla no tiene una imagen variable. Sincronizá la plantilla QR actual antes de enviar.',
+      };
+    }
     try {
       const json = await this.pedir<{
         result?: boolean;
         info?: string;
+        error?: string;
+        receivers?: Array<{
+          localMessageId?: string;
+          waId?: string;
+          isValidWhatsAppNumber?: boolean;
+          errors?: unknown[];
+        }>;
         validWhatsAppNumber?: boolean;
         message?: unknown;
       }>(
         cred,
         'POST',
-        `/api/v1/sendTemplateMessage?whatsappNumber=${encodeURIComponent(envio.telefono)}`,
+        `/api/v2/sendTemplateMessage?whatsappNumber=${encodeURIComponent(envio.telefono)}`,
         {
           template_name: envio.plantilla,
           broadcast_name: envio.broadcastName ?? `grafo_${envio.plantilla}`,
-          parameters: Object.entries(envio.parametros).map(([name, value]) => ({
-            name,
-            value,
-          })),
-          // ⚠️ SIN VERIFICAR contra la cuenta real. La media DINÁMICA del
-          // header por envío (cada cliente su propio QR) es lo que no está
-          // confirmado: no se sabe si este endpoint v1 la respeta o usa la
-          // muestra estática aprobada —en cuyo caso a todos les llegaría el QR
-          // de ejemplo—. `link` acá espeja la clave que funcionó en el alta,
-          // pero el nombre/lugar exacto se confirma con el primer envío real
-          // (probar-envío a un número propio). Si v1 la ignora, el camino es la
-          // v2 `sendTemplateMessages`. Ver docs/integraciones-wati-diseno.md
-          ...(envio.mediaHeaderUrl
-            ? { header: { type: 'IMAGE', link: envio.mediaHeaderUrl } }
-            : {}),
+          parameters: Object.entries({
+            ...envio.parametros,
+            ...(envio.mediaHeaderUrl && envio.mediaHeaderParam
+              ? { [envio.mediaHeaderParam]: envio.mediaHeaderUrl }
+              : {}),
+          }).map(([name, value]) => ({ name, value })),
         },
       );
 
       // Wati responde 200 con `result: false` cuando rechaza el envío: la
       // plantilla no existe, el número no tiene WhatsApp, falta un parámetro.
       // Sin este chequeo un envío fallido pasa por exitoso.
-      if (json?.result === false) {
+      const receptor = json?.receivers?.find((r) => r.waId === envio.telefono);
+      if (
+        json?.result === false ||
+        receptor?.isValidWhatsAppNumber === false ||
+        receptor?.errors?.length
+      ) {
         return {
           ok: false,
           incierto: false,
           motivo:
             typeof json.info === 'string' && json.info.trim()
               ? json.info.trim()
-              : 'Wati rechazó el envío sin dar motivo.',
+              : typeof json.error === 'string' && json.error.trim()
+                ? json.error.trim()
+                : 'Wati rechazó el envío o el destinatario.',
         };
       }
       const msg = (json?.message ?? {}) as Record<string, unknown>;
-      const id = typeof msg.id === 'string' ? msg.id : null;
+      const id =
+        typeof receptor?.localMessageId === 'string'
+          ? receptor.localMessageId
+          : typeof msg.id === 'string'
+            ? msg.id
+            : null;
       if (json?.result !== true && !id)
         return {
           ok: false,
@@ -262,24 +283,20 @@ export class WatiClient {
         // someter, junto con `bodyOriginal`.
         body: cuerpoNombrado,
         footer: p.footer,
-        // Sin header en casi todas (texto puro). Cuando la plantilla lleva un
-        // header de imagen —hoy sólo la del QR de retiro— va este objeto.
-        //
-        // La muestra va en `link` (una URL) o en `mediaFromPC` (un archivo
-        // subido): son las dos formas que ofrece el dashboard, "pegar link" o
-        // "subir de la PC". Lo confirmó el propio Wati al rechazar el alta con
-        // "Link and MediaFromPC cannot be null at the same time" cuando la
-        // clave era la equivocada (`mediaUrl`). Usamos `link` con la URL
-        // firmada de R2. Ver docs/integraciones-wati-diseno.md
-        header: p.encabezado
-          ? { type: 'IMAGE', link: p.encabezado.ejemploUrl }
-          : null,
+        // El encabezado declara una variable; su muestra se usa sólo al aprobar.
+        // Enviar una URL estática acá la congela y no permite un QR por orden.
+        header: p.encabezado ? { type: 'IMAGE', link: '{{qr_url}}' } : null,
         buttonsType: 'none',
         buttons: [],
-        customParams: p.parametros.map((x) => ({
-          paramName: x.nombre,
-          paramValue: x.ejemplo,
-        })),
+        customParams: [
+          ...p.parametros.map((x) => ({
+            paramName: x.nombre,
+            paramValue: x.ejemplo,
+          })),
+          ...(p.encabezado
+            ? [{ paramName: 'qr_url', paramValue: p.encabezado.ejemploUrl }]
+            : []),
+        ],
       });
 
       // Mismo patrón que el envío: Wati contesta 200 con `result: false`.
@@ -331,6 +348,40 @@ export class WatiClient {
     }
   }
 
+  /** Consulta de sólo lectura: no confunde aceptación HTTP con entrega. */
+  listarCampanias(
+    cred: CredencialesWati,
+    desde: Date,
+    hasta: Date,
+    pagina = 1,
+  ) {
+    const q = new URLSearchParams({
+      page_number: String(pagina),
+      page_size: '100',
+      date_from: desde.toISOString(),
+      date_to: hasta.toISOString(),
+    });
+    return this.pedir<{
+      broadcasts?: Array<{ id: string; name: string }>;
+      total?: number;
+    }>(cred, 'GET', `/api/ext/v3/broadcasts?${q}`);
+  }
+
+  destinatariosCampania(cred: CredencialesWati, id: string) {
+    return this.pedir<{
+      recipients?: Array<{
+        contact_phone: string;
+        local_message_id?: string;
+        status: string;
+        failed_code?: string;
+      }>;
+    }>(
+      cred,
+      'GET',
+      `/api/ext/v3/broadcasts/${encodeURIComponent(id)}/recipients?page_number=1&page_size=100`,
+    );
+  }
+
   // ── Interno ─────────────────────────────────────────────────────────
 
   private async pedir<T>(
@@ -344,7 +395,10 @@ export class WatiClient {
     if (rechazo) throw new ErrorWati(rechazo, 0);
     if (!/^\d+$/.test(cred.tenantId.trim()))
       throw new ErrorWati('El Tenant ID de Wati es numérico.', 0);
-    const url = `${baseDe(cred)}${ruta}`;
+    const base = ruta.startsWith('/api/ext/v3/')
+      ? new URL(cred.endpoint).origin
+      : baseDe(cred);
+    const url = `${base}${ruta}`;
     let respuesta: Response;
     try {
       respuesta = await fetch(url, {
@@ -539,6 +593,7 @@ function normalizarPlantilla(cruda: unknown): PlantillaRemota {
     cuerpoNombrado: texto(o.bodyOriginal),
     parametros: params,
     calidad: texto(o.quality),
+    parametroImagen: parametroImagenDe(o.header),
     footer: texto(o.footer),
   };
 }
@@ -564,7 +619,8 @@ export function mapearParametros(
 ): string[] {
   if (!cuerpo || !cuerpoNombrado) return [];
   const posiciones: string[] = cuerpo.match(/\{\{\s*(\d+)\s*\}\}/g) ?? [];
-  const nombres: string[] = cuerpoNombrado.match(/\{\{\s*([^}]+?)\s*\}\}/g) ?? [];
+  const nombres: string[] =
+    cuerpoNombrado.match(/\{\{\s*([^}]+?)\s*\}\}/g) ?? [];
   if (posiciones.length !== nombres.length) return [];
 
   const porNumero = new Map<number, string>();
@@ -580,4 +636,16 @@ export function mapearParametros(
     { length: max },
     (_, i) => porNumero.get(i + 1) ?? `param${i + 1}`,
   );
+}
+
+/** Sólo el encabezado completamente variable admite reemplazar la imagen. */
+export function parametroImagenDe(header: unknown): string | null {
+  if (!header || typeof header !== 'object') return null;
+  const h = header as Record<string, unknown>;
+  if (h.type !== 2 && String(h.type).toUpperCase() !== 'IMAGE') return null;
+  const m =
+    typeof h.link === 'string'
+      ? h.link.trim().match(/^\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}$/)
+      : null;
+  return m?.[1] ?? null;
 }

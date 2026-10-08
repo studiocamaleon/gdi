@@ -127,6 +127,9 @@ jobs:
             src/cotizaciones/cotizaciones-aislamiento-http.integration.spec.ts \
             src/impresion/impresion-aislamiento-http.integration.spec.ts \
             src/integraciones/integraciones-aislamiento-http.integration.spec.ts \
+            src/integraciones/wati/__tests__/wati.client.spec.ts \
+            src/integraciones/wati/__tests__/wati-entrega.spec.ts \
+            src/integraciones/notificaciones/__tests__/planes-avisos.integration.spec.ts \
             src/workers/admision-colas.integration.spec.ts \
             src/workers/contexto-calculos.integration.spec.ts \
             src/workers/geometria/geometria.worker.spec.ts \

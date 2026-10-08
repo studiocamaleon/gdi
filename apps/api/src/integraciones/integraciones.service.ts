@@ -272,7 +272,8 @@ export class IntegracionesService {
     const cred = await this.credencialesWati();
     if (!cred) throw new NotFoundException('Wati no está conectada.');
 
-    const canonica = POR_CODIGO.get(codigo);
+    const actual = ["grafo_orden_lista_qr_v1", "grafo_orden_lista_con_saldo_qr_v1"].includes(codigo) ? codigo.replace(/_v1$/, "_v2") : codigo;
+    const canonica = POR_CODIGO.get(actual);
     if (!canonica) {
       throw new NotFoundException(
         `"${codigo}" no está en el catálogo de Grafo.`,
@@ -402,14 +403,13 @@ export class IntegracionesService {
 
   /**
    * QR de retiro de UNA orden, para el header del WhatsApp de "orden lista".
-   * Codifica el número (lo mismo que el del mostrador). Firma corta: el envío
-   * es inmediato y Wati baja la media al toque. Clave por número: idempotente.
+   * Codifica el número (lo mismo que el del mostrador). La firma de 24 horas permite que Wati procese su cola sin usar una muestra vencida.
    */
   urlQrRetiroParaEnvio(numero: string): Promise<string> {
     return this.subirQrYFirmar(
       numero,
-      `sistema/qr-retiro/${numero}.png`,
-      10 * 60,
+      `sistema/qr-retiro/${getCurrentTenantId() ?? "muestra"}/${encodeURIComponent(numero)}.png`,
+      24 * 60 * 60,
     );
   }
 
@@ -423,7 +423,8 @@ export class IntegracionesService {
     codigo: string,
     parametros: Record<string, string>,
   ): Promise<string | undefined> {
-    const canonica = POR_CODIGO.get(codigo);
+    const actual = ["grafo_orden_lista_qr_v1", "grafo_orden_lista_con_saldo_qr_v1"].includes(codigo) ? codigo.replace(/_v1$/, "_v2") : codigo;
+    const canonica = POR_CODIGO.get(actual);
     if (canonica?.encabezado?.tipo !== 'IMAGE') return undefined;
     const numero = parametros['numero_orden'];
     return numero ? this.urlQrRetiroParaEnvio(numero) : undefined;
@@ -518,7 +519,8 @@ export class IntegracionesService {
         telefono: tel.e164,
         plantilla: plantilla.nombre,
         parametros,
-        broadcastName: `grafo_prueba_${plantilla.nombre}`,
+        broadcastName: `grafo_${aviso.reservaToken}`,
+        mediaHeaderParam: plantilla.parametroImagen,
         mediaHeaderUrl,
       });
 
@@ -531,11 +533,14 @@ export class IntegracionesService {
         },
         data: {
           estado: res.ok
-            ? ESTADOS.enviada
+            ? ESTADOS.aceptada
             : res.incierto
               ? ESTADOS.incierta
               : ESTADOS.fallida,
-          enviadaEl: res.ok ? new Date() : null,
+          enviadaEl: null,
+          watiMensajeId: res.ok ? res.id : null,
+          estadoEntrega: res.ok ? "aceptado" : null,
+          estadoEntregaEl: res.ok ? new Date() : null,
           reservadaEl: null,
           motivo: res.ok ? null : res.motivo,
         },

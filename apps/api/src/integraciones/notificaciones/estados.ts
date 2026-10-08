@@ -13,6 +13,8 @@ export const ESTADOS = {
    * No es un estado de negocio: es el candado que evita el envío doble.
    */
   enviando: 'enviando',
+  /** Wati aceptó el POST; todavía no confirmó que el mensaje haya salido. */
+  aceptada: 'wati_aceptada',
   enviada: 'enviada',
   fallida: 'fallida',
   descartada: 'descartada',

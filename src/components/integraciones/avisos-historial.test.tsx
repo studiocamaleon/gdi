@@ -296,3 +296,16 @@ it("muestra el rechazo del reintento y refresca el historial sin repetir el env�
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   expect(boton("Reintentar envío")).toBeUndefined();
 });
+
+it.each([
+  { estado: 'wati_aceptada', entrega: 'aceptado', etiqueta: 'Aceptados por Wati' },
+  { estado: 'enviada', entrega: null, etiqueta: 'Aceptados por Wati' },
+  { estado: 'enviada', entrega: 'entregado', etiqueta: 'Entregados' },
+  { estado: 'enviada', entrega: 'leido', etiqueta: 'Leídos' },
+])('distingue aceptación y entrega en el historial: $entrega', async ({ estado, entrega, etiqueta }) => {
+  vi.mocked(getLogNotificaciones).mockResolvedValue([{ ...fila(estado), estadoEntrega: entrega }]);
+  await act(async () => root.render(<MensajesTab puedeResolver />));
+  const registro = container.querySelector('.int-nt-log-fila')!;
+  expect(registro.querySelector('.int-pill')?.textContent).toBe(etiqueta);
+  expect(registro.textContent).not.toContain('Reintentar envío');
+});

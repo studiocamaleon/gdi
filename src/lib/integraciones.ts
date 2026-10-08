@@ -177,6 +177,8 @@ export type LineaLog = {
   intentos: number;
   programadaPara: string | null;
   enviadaEl: string | null;
+  estadoEntrega?: string | null;
+  estadoEntregaEl?: string | null;
   createdAt: string;
 };
 

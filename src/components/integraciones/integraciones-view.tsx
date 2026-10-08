@@ -1564,7 +1564,10 @@ function NotificacionesTab() {
  * porque si una fila se queda ahí, eso mismo es el síntoma.
  */
 const ESTADOS_MSJ = [
+  { valor: "aceptada", label: "Aceptados por Wati" },
   { valor: "enviada", label: "Enviados" },
+  { valor: "entregada", label: "Entregados" },
+  { valor: "leida", label: "Leídos" },
   { valor: "pendiente", label: "En espera" },
   { valor: "enviando", label: "Saliendo" },
   { valor: "incierta", label: "Por confirmar" },
@@ -1572,6 +1575,7 @@ const ESTADOS_MSJ = [
   { valor: "descartada", label: "Descartados" },
 ] as const;
 const GRUPOS_ESTADO: Record<string, string> = {
+  wati_aceptada: "aceptada",
   wati_reservada: "pendiente",
   web_reservada: "pendiente",
   web_enviando: "enviando",
@@ -1579,6 +1583,15 @@ const GRUPOS_ESTADO: Record<string, string> = {
   web_incierta: "incierta",
 };
 const estadoMensaje = (estado: string) => GRUPOS_ESTADO[estado] ?? estado;
+const estadoFila = (fila: LineaLog) => {
+  if (fila.canal === 'WATI' || !fila.canal) {
+    if (fila.estadoEntrega === 'leido') return 'leida';
+    if (fila.estadoEntrega === 'entregado') return 'entregada';
+    if (fila.estadoEntrega === 'fallido') return 'fallida';
+    if (fila.estado === 'enviada' && !fila.estadoEntrega) return 'aceptada';
+  }
+  return estadoMensaje(fila.estado);
+};
 
 const PASOS_LIMITE = [100, 250, 500];
 
@@ -1631,14 +1644,14 @@ export function MensajesTab({
   // sobre cuántos mensajes está hecha la cuenta.
   const conteos = new Map<string, number>();
   for (const l of log) {
-    const estado = estadoMensaje(l.estado);
+    const estado = estadoFila(l);
     conteos.set(estado, (conteos.get(estado) ?? 0) + 1);
   }
 
   const q = normalizarBusqueda(busqueda);
   const visibles = log.filter(
     (l) =>
-      (!filtro || estadoMensaje(l.estado) === filtro) &&
+      (!filtro || estadoFila(l) === filtro) &&
       (!q ||
         normalizarBusqueda(l.cliente ?? "").includes(q) ||
         normalizarBusqueda(l.telefono).includes(q) ||
@@ -1761,8 +1774,8 @@ export function MensajesTab({
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <span className={`int-pill ${pillLog(l.estado)}`}>
-                  {ESTADOS_MSJ.find((e) => e.valor === estadoMensaje(l.estado))
+                <span className={`int-pill ${pillLog(estadoFila(l))}`}>
+                  {ESTADOS_MSJ.find((e) => e.valor === estadoFila(l))
                     ?.label ?? l.estado}
                 </span>
                 <small>
@@ -1788,7 +1801,7 @@ export function MensajesTab({
                           Reintentar envío
                         </ActionButton>
                       )}
-                      {estadoMensaje(l.estado) === "incierta" && (
+                      {estadoFila(l) === "incierta" && (
                         <ActionButton
                           variant="outline"
                           onPress={() =>
@@ -1913,8 +1926,8 @@ export function MensajesTab({
 /** Enviada verde, fallida roja, el resto neutro. */
 function pillLog(valor: string): string {
   const estado = estadoMensaje(valor);
-  if (estado === "enviada") return "int-pill-ok";
+  if (["enviada", "entregada", "leida"].includes(estado)) return "int-pill-ok";
   if (estado === "fallida") return "int-pill-bad";
-  if (estado === "pendiente" || estado === "incierta") return "int-pill-warn";
+  if (estado === "pendiente" || estado === "incierta" || estado === "aceptada") return "int-pill-warn";
   return "";
 }

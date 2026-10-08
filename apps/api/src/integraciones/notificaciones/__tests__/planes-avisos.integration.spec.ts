@@ -209,7 +209,7 @@ describe('Avisos: contrato, cierre y resultados inciertos', () => {
         await x.pendiente();
         if (canal === 'WATI') {
           expect(await x.dentro(() => x.despacho.despachar(id))).toEqual({
-            estado: 'enviada',
+            estado: 'aceptada',
           });
           expect(x.wati.enviarPlantilla).toHaveBeenCalledTimes(1);
         } else {
@@ -228,7 +228,7 @@ describe('Avisos: contrato, cierre y resultados inciertos', () => {
           await x.web.resultado(x.tenantId, id, resultado);
           await x.web.resultado(x.tenantId, id, resultado);
         }
-        expect((await x.leer(id)).estado).toBe('enviada');
+        expect((await x.leer(id)).estado).toBe(canal === 'WATI' ? 'wati_aceptada' : 'enviada');
       }),
   );
 
@@ -470,7 +470,7 @@ describe('Avisos: contrato, cierre y resultados inciertos', () => {
             where: { tenantId: x.tenantId },
           });
           expect(aviso.estado).toBe(
-            escenario === 'éxito' ? 'enviada' : 'wati_incierta',
+            escenario === 'éxito' ? 'wati_aceptada' : 'wati_incierta',
           );
           expect(await x.dentro(() => x.despacho.despachar(aviso.id))).toEqual({
             estado: 'nada',
@@ -636,7 +636,7 @@ describe('Aviso de orden finalizada y reintento manual', () => {
           where: { tenantId: x.tenantId, ordenId: segunda.id },
         });
         expect(avisoQr.evento).toBe(qr);
-        expect(avisoQr.plantilla).toBe(`grafo_${qr}_v1`);
+        expect(avisoQr.plantilla).toBe(`grafo_${qr}_v2`);
         // Cerrar de nuevo después de un cobro tampoco cambia el aviso existente.
         await c.tx.ordenTrabajo.update({
           where: { id: segunda.id },

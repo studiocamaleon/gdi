@@ -664,6 +664,9 @@ model NotificacionWhatsapp {
   textoWeb String?
   reservaToken String? @db.Uuid
   mensajeWebId String?
+  /// Wati: correlación y rotación del seguimiento de entrega.
+  watiMensajeId String?
+  watiConsultaEl DateTime?
 
   /// Cloud API: aceptar el POST no significa que el destinatario lo recibió.
   metaWamid String? @unique
@@ -689,6 +692,7 @@ model NotificacionWhatsapp {
 
   @@unique([tenantId, claveUnica])
   @@index([tenantId, estado, programadaPara])
+  @@index([canal, estado, watiConsultaEl], map: "NotificacionWhatsapp_wati_seguimiento_idx")
   @@index([tenantId, createdAt])
 }
 

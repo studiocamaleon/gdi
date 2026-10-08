@@ -393,6 +393,8 @@ export class NotificacionesService {
       evento: f.evento,
       titulo: POR_EVENTO.get(f.evento as never)?.titulo ?? f.evento,
       estado: f.estado,
+      estadoEntrega: f.estadoEntrega,
+      estadoEntregaEl: f.estadoEntregaEl,
       cliente: f.clienteId ? (nombre.get(f.clienteId) ?? null) : null,
       telefono: f.telefono,
       motivo: f.motivo,
@@ -474,6 +476,11 @@ export class NotificacionesService {
         },
         data: {
           estado: 'pendiente',
+          plantilla: plantilla.codigo,
+          watiMensajeId: null,
+          watiConsultaEl: null,
+          estadoEntrega: null,
+          estadoEntregaEl: null,
           reservaToken: null,
           reservadaEl: null,
           programadaPara: null,
@@ -564,6 +571,7 @@ export class NotificacionesService {
           reservadaEl: null,
           programadaPara: null,
           enviadaEl: estado === 'enviada' ? new Date() : n.enviadaEl,
+          ...(n.canal === 'WATI' && estado === 'enviada' ? { estadoEntrega: 'confirmado_manualmente', estadoEntregaEl: new Date() } : {}),
           motivo: `${estado === 'enviada' ? 'Confirmado' : 'Descartado'} por ${actorNombre}: ${motivo}${n.motivo ? ` · Antecedente: ${n.motivo}` : ''}`,
         },
       });

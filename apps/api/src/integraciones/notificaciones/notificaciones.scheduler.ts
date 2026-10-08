@@ -1,3 +1,4 @@
+import { WatiEntregaService } from '../wati/wati-entrega.service';
 import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
@@ -45,6 +46,7 @@ export class NotificacionesScheduler {
     private readonly despacho: DespachoService,
     private readonly resenas: NotificacionesResenasService,
     private readonly presupuestos: NotificacionesPresupuestosService,
+    private readonly seguimiento?: WatiEntregaService,
   ) {}
 
   @Cron('*/5 * * * *', { name: 'notificaciones-whatsapp' })
@@ -60,6 +62,7 @@ export class NotificacionesScheduler {
           await this.soltarReservasVencidas();
           for (const tenantId of await this.tenantsConWati()) {
             await this.drenarTenant(tenantId);
+            await this.seguimiento?.revisarTenant(tenantId);
           }
         },
       );
@@ -198,11 +201,11 @@ export class NotificacionesScheduler {
       let enviadas = 0;
       for (const { id } of pendientes) {
         const res = await this.despacho.despachar(id, ahora);
-        if (res.estado === 'enviada') enviadas += 1;
+        if (res.estado === 'aceptada') enviadas += 1;
       }
 
       if (enviadas > 0) {
-        this.logger.log(`Tenant ${tenantId}: ${enviadas} WhatsApp enviados.`);
+        this.logger.log(`Tenant ${tenantId}: ${enviadas} avisos aceptados por Wati; entrega pendiente.`);
       }
     });
   }

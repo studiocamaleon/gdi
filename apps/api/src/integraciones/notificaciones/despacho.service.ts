@@ -39,7 +39,7 @@ export const MAX_INTENTOS = 4;
 // multi-moneda-zona-horaria (D11), sí la modelamos.
 
 export type ResultadoDespacho =
-  | { estado: 'enviada' }
+  | { estado: 'aceptada' }
   | { estado: 'reprogramada'; para: Date }
   | { estado: 'pendiente'; motivo: string }
   | { estado: 'fallida'; motivo: string }
@@ -208,13 +208,13 @@ export class DespachoService {
     // que nadie avise. Verificarlo acá da un motivo legible en vez de un
     // rechazo críptico de Wati.
     const remota = (await this.wati.listarPlantillas(cred)).find(
-      (p) => p.nombre === n.plantilla,
+      (p) => p.nombre === plantilla.codigo,
     );
     if (remota?.estado !== 'APPROVED') {
       const intentos = n.intentos + 1;
       await this.marcar(id, token, ESTADOS.pendiente, {
         intentos,
-        motivo: `La plantilla ${n.plantilla} está ${remota?.estado ?? 'sin crear'}.`,
+        motivo: `La plantilla ${plantilla.codigo} está ${remota?.estado ?? 'sin crear'}.`,
         // Una plantilla en revisión se aprueba sola en horas.
         programadaPara: new Date(ahora.getTime() + 60 * 60 * 1000),
       });
@@ -243,7 +243,7 @@ export class DespachoService {
     // orden acá, con firma fresca por envío. Para las de texto puro es
     // `undefined` y el envío va igual que siempre.
     const mediaHeaderUrl = await this.integraciones.mediaHeaderDe(
-      n.plantilla,
+      plantilla.codigo,
       parametros,
     );
 
@@ -271,7 +271,7 @@ export class DespachoService {
           estado: ESTADOS.reservada,
           reservaToken: token,
         },
-        data: { estado: ESTADOS.enviando, reservadaEl: new Date() },
+        data: { estado: ESTADOS.enviando, reservadaEl: new Date(), plantilla: plantilla.codigo },
       });
     });
     if (!autorizada.count) {
@@ -284,20 +284,23 @@ export class DespachoService {
 
     const res = await this.wati.enviarPlantilla(cred, {
       telefono: n.telefono,
-      plantilla: n.plantilla,
+      plantilla: plantilla.codigo,
       parametros,
-      broadcastName: `grafo_${n.evento}`,
+      broadcastName: `grafo_${token}`,
+      mediaHeaderParam: remota.parametroImagen,
       mediaHeaderUrl,
     });
 
     if (res.ok) {
-      await this.marcar(id, token, ESTADOS.enviada, {
+      await this.marcar(id, token, ESTADOS.aceptada, {
         intentos: n.intentos + 1,
         motivo: null,
-        enviadaEl: new Date(),
+        watiMensajeId: res.id,
+        estadoEntrega: "aceptado",
+        estadoEntregaEl: new Date(),
         programadaPara: null,
       });
-      return { estado: 'enviada' };
+      return { estado: 'aceptada' };
     }
 
     if (res.incierto) {
@@ -356,6 +359,9 @@ export class DespachoService {
       intentos: number;
       motivo?: string | null;
       enviadaEl?: Date;
+      watiMensajeId?: string | null;
+      estadoEntrega?: string;
+      estadoEntregaEl?: Date;
       programadaPara?: Date | null;
     },
   ): Promise<void> {
