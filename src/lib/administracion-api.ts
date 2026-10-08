@@ -125,7 +125,7 @@ export async function getFacturacionPendientes(
 
 export async function facturarOrden(
   ordenId: string,
-  payload: { monto?: number; concepto?: string; puntoVentaId?: string },
+  payload: { monto?: number; concepto?: string; puntoVentaId?: string; detalle?: "items" | "orden" },
 ): Promise<Comprobante> {
   return apiRequest(`/administracion/ordenes/${ordenId}/facturar`, {
     method: "POST",
@@ -151,6 +151,7 @@ export async function notaCreditoOrden(
 export async function facturarLote(payload: {
   ordenIds: string[];
   modo: "por_orden" | "agrupada";
+  detalle?: "items" | "orden";
   puntoVentaId?: string;
 }): Promise<ResultadoLoteFacturacion> {
   return apiRequest(`/administracion/facturacion/lote`, {

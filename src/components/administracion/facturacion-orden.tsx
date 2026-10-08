@@ -1,4 +1,8 @@
 "use client";
+import {
+  FacturaDetalleSelector,
+  type DetalleFactura,
+} from "./factura-detalle-selector";
 import { ActionButton } from "@/components/design-system/action-button";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
@@ -204,7 +208,6 @@ export function FacturarOrdenModal({
   ordenId,
   numero,
   saldoSinFacturar,
-  descuentoTotal = 0,
   onClose,
   onFacturada,
 }: {
@@ -212,9 +215,8 @@ export function FacturarOrdenModal({
   numero: string;
   saldoSinFacturar: number;
   /**
-   * Descuento comercial de la orden. Con descuento y facturación del 100%,
-   * el backend emite la factura DETALLADA (un renglón por producto con su
-   * bonificación) y el concepto no se usa — este prop sólo avisa eso.
+   * Conservado por compatibilidad con las fichas. El detalle ahora incluye
+   * productos y cargos aunque no haya descuentos.
    */
   descuentoTotal?: number;
   onClose: () => void;
@@ -226,14 +228,14 @@ export function FacturarOrdenModal({
   const [concepto, setConcepto] = React.useState(
     `Trabajos de impresión — ${numero}`,
   );
+  const [detalle, setDetalle] = React.useState<DetalleFactura>("items");
   const [enviando, setEnviando] = React.useState(false);
 
   const montoNum = Number(monto);
   const valido =
     Number.isFinite(montoNum) &&
     montoNum > 0 &&
-    montoNum <= saldoSinFacturar + 0.01 &&
-    concepto.trim().length > 0;
+    montoNum <= saldoSinFacturar + 0.01;
 
   const emitir = async () => {
     if (!valido || enviando) return;
@@ -242,6 +244,7 @@ export function FacturarOrdenModal({
       const comprobante = await facturarOrden(ordenId, {
         monto: montoNum,
         concepto: concepto.trim(),
+        detalle,
       });
       if (comprobante.estado === "emitido") {
         toast.success(`Factura ${comprobante.numeroCompleto} emitida.`);
@@ -300,9 +303,7 @@ export function FacturarOrdenModal({
                   <button
                     className="cf-max"
                     type="button"
-                    onClick={() =>
-                      setMonto(String(saldoCentavos / 100))
-                    }
+                    onClick={() => setMonto(String(saldoCentavos / 100))}
                   >
                     100% del saldo
                   </button>
@@ -328,27 +329,19 @@ export function FacturarOrdenModal({
                   </span>
                 ) : null}
               </label>
+              <FacturaDetalleSelector
+                value={detalle}
+                onChange={setDetalle}
+                disabled={enviando}
+              />
               <label className="cf-field">
-                <span className="cf-lbl">Concepto del renglón</span>
+                <span className="cf-lbl">Concepto del resumen (opcional)</span>
                 <input
                   type="text"
                   value={concepto}
                   onChange={(e) => setConcepto(e.target.value)}
                   placeholder="Trabajos de impresión…"
                 />
-                {descuentoTotal > 0 &&
-                Math.abs(montoNum - saldoSinFacturar) <= 0.5 ? (
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "var(--muted)",
-                      marginTop: 4,
-                    }}
-                  >
-                    La orden tiene descuento: la factura sale detallada por
-                    producto con su bonificación (el concepto no se imprime).
-                  </span>
-                ) : null}
               </label>
             </div>
             <div className="cf-actions">

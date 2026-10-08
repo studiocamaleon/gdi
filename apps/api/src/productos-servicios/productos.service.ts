@@ -199,6 +199,20 @@ export class ProductosService {
       this.prisma.producto.count({ where }),
     ]);
 
+    // Frecuencia comercial: una OT emitida cuenta una vez por producto,
+    // aunque tenga varias líneas. No cuentan borradores, canceladas ni hijos.
+    const usos = data.length ? await this.prisma.$queryRaw<{ productoId: string; usos: bigint }[]>(Prisma.sql`
+      SELECT ci."productoId", count(DISTINCT i."ordenId") AS usos
+      FROM "OrdenTrabajoItem" i
+      JOIN "OrdenTrabajo" o ON o.id = i."ordenId" AND o."tenantId" = i."tenantId"
+      JOIN "CotizacionItem" ci ON ci.id = i."cotizacionItemId" AND ci."tenantId" = i."tenantId"
+      WHERE i."tenantId" = ${tenantId}::uuid AND i."parentItemId" IS NULL
+        AND o.estado IN ('pendiente', 'produccion', 'finalizada', 'entregada')
+        AND ci."productoId" IN (${Prisma.join(data.map((p) => Prisma.sql`${p.id}::uuid`))})
+      GROUP BY ci."productoId"
+    `) : [];
+    const usosPorProducto = new Map(usos.map((u) => [u.productoId, Number(u.usos)]));
+
     // Flag derivado: ¿algún paso tercerizado en alguna ruta? (para el badge)
     const conFlag = data.map((producto) => {
       const rutasCompletas =
@@ -228,6 +242,7 @@ export class ProductosService {
         tercerizado: producto.rutasAlternativas.some((ra) =>
           ra.configPasos.some((paso) => paso.tercerizado),
         ),
+        usosEnOrdenes: usosPorProducto.get(producto.id) ?? 0,
         listoParaCotizar,
         estadoCatalogo: producto.activo
           ? listoParaCotizar

@@ -2,7 +2,7 @@
  * Las columnas nuevas de la base no se publican por defecto. */
 const CAMPOS = new Set(
   `id codigo nombre descripcion createdAt updatedAt estructuraProducto esCompuesto
-usadoComoComponente activo listoParaCotizar estadoCatalogo tercerizado unidadComercial modoMedidas
+usosEnOrdenes usadoComoComponente activo listoParaCotizar estadoCatalogo tercerizado unidadComercial modoMedidas
 medidaDefaultAnchoMm medidaDefaultAltoMm medidaDefaultProfundidadMm dimensionesRequeridas
 minimoComercialPolitica minimoComercialCantidad minimoComercialBase subcategoriaComercial categoria
 icono color orden ordenInterno ordenFlujo insertarDespuesDeRutaPasoId maquinaM1Id perfilM1Id centroCostoId version rutaVersion nombreVisible esPreferida rutaAlternativaId

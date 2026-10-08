@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { CheckIcon, ChevronDownIcon, SearchIcon, XIcon } from "lucide-react";
@@ -41,13 +42,7 @@ export type GrupoOpciones = {
  * Nadie escribe "energía eléctrica" con tilde cuando está buscando rápido, y
  * una búsqueda que no encuentra "energia" se siente rota.
  */
-export function normalizarBusqueda(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
-}
+export { normalizarBusqueda } from "@/lib/busqueda-texto";
 
 /**
  * Las opciones que sobreviven a lo tipeado.

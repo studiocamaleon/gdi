@@ -1,4 +1,5 @@
 "use client";
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import { CobroAcreditacionDialog } from "./cobro-acreditacion-dialog";
 import type { AcreditarCobroPayload } from "@/lib/administracion-api";
 
@@ -558,12 +559,11 @@ export function AcreditacionesView({
     }
   };
 
-  const q = busqueda.trim().toLowerCase();
+  const q = normalizarBusqueda(busqueda);
   const valoresFiltrados = valores.filter((valor) => {
     const coincide =
       !q ||
-      `${valor.numero} ${valor.banco} ${valor.clienteNombre ?? ""} ${valor.proveedorNombre ?? ""}`
-        .toLowerCase()
+      normalizarBusqueda(`${valor.numero} ${valor.banco} ${valor.clienteNombre ?? ""} ${valor.proveedorNombre ?? ""}`)
         .includes(q);
     const estadoCoincide =
       estado === "todos" ||

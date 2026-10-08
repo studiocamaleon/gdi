@@ -141,6 +141,62 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
     await app.init();
     for (const t of tenants) enlaces.push((await servicio.habilitar(t)).token);
   });
+  it('notifica una sola vez a quienes aprueban, con enlace a solicitudes, sin avisar al resto', async () => {
+    const extras = [];
+    for (const [tenantId, activa, activo] of [
+      [tenants[0], true, true],
+      [tenants[0], false, true],
+      [tenants[0], true, false],
+      [tenants[1], true, true],
+    ] as const) {
+      const user = await prisma.user.create({
+        data: {
+          nombreCompleto: 'Admin ficticio',
+          email: `aviso-${randomUUID()}@example.invalid`,
+          activo,
+        },
+      });
+      users.push(user.id);
+      extras.push(user.id);
+      await prisma.membership.create({
+        data: { tenantId, userId: user.id, rol: 'ADMINISTRADOR', activa },
+      });
+    }
+    const body = datos();
+    await publica(body).expect(201);
+    await publica(body).expect(201);
+    const solicitud = await prisma.solicitudAltaCliente.findFirstOrThrow({
+      where: { tenantId: tenants[0], documentoNumero: body.documentoNumero },
+    });
+    const avisos = await prisma.notificacionInterna.findMany({
+      where: { tenantId: tenants[0], evento: { entidadId: solicitud.id } },
+      include: { evento: true },
+    });
+    expect(avisos.map((a) => a.userId).sort()).toEqual(
+      [users[0], extras[0]].sort(),
+    );
+    expect(avisos[0].evento).toMatchObject({
+      tipo: 'clientes.alta_solicitada',
+      href: '/crm/clientes/solicitudes',
+    });
+    expect(avisos[0].evento.mensaje).toContain(body.nombre);
+    expect(
+      await prisma.notificacionInterna.count({
+        where: { tenantId: tenants[1], evento: { entidadId: solicitud.id } },
+      }),
+    ).toBe(0);
+    const trampa = datos({ sitioWeb: 'bot.example.invalid' });
+    await publica(trampa).expect(201);
+    expect(
+      await prisma.solicitudAltaCliente.count({
+        where: {
+          tenantId: tenants[0],
+          documentoNumero: trampa.documentoNumero,
+        },
+      }),
+    ).toBe(0);
+  });
+
   afterAll(async () => {
     await app?.close();
     if (baseValidada) {

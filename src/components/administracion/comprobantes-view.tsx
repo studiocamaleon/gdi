@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import * as React from "react";
 import Link from "next/link";
 import { Card, SearchField } from "@heroui/react";
@@ -107,17 +108,17 @@ export function ComprobantesView({
     estado === "todos" || estadoVisual(c).clave === estado;
   const list = data.filter((c) => {
     if (!cumple(c, est) || (tip !== "todos" && c.tipo !== tip)) return false;
-    const texto = [
-      c.clienteNombre,
-      c.numeroCompleto,
-      c.clienteCuit ?? "",
-      c.ordenNumero ?? "",
-      ...c.ordenes.map((o) => o.numero),
-      c.letra,
-    ]
-      .join(" ")
-      .toLocaleLowerCase();
-    return texto.includes(q.trim().toLocaleLowerCase());
+    const texto = normalizarBusqueda(
+      [
+        c.clienteNombre,
+        c.numeroCompleto,
+        c.clienteCuit ?? "",
+        c.ordenNumero ?? "",
+        ...c.ordenes.map((o) => o.numero),
+        c.letra,
+      ].join(" "),
+    );
+    return texto.includes(normalizarBusqueda(q));
   });
   const facturado = data
     .filter((c) => c.estado === "emitido")

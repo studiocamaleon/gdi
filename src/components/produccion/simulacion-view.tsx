@@ -12,6 +12,7 @@
  * Ver docs/simulacion-mesa-de-luz-diseno.md
  */
 
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import * as React from "react";
 
 import {
@@ -391,12 +392,12 @@ export function SimulacionView({
     };
   }, [sel]);
 
-  const q = consulta.trim().toLowerCase();
+  const q = normalizarBusqueda(consulta);
   const coincide = React.useCallback(
     (b: Bloque) =>
       flujoBuscado
         ? b.flujoClave === flujoBuscado
-        : !q || `${b.flujoNombre} ${b.cliente} ${b.itemNombre}`.toLowerCase().includes(q),
+        : !q || normalizarBusqueda(`${b.flujoNombre} ${b.cliente} ${b.itemNombre}`).includes(q),
     [q, flujoBuscado],
   );
 
@@ -443,7 +444,7 @@ export function SimulacionView({
 
   const hits = q
     ? flujosInfo.filter((f) =>
-        `${f.nombre} ${f.cliente} ${f.items.join(" ")}`.toLowerCase().includes(q),
+        normalizarBusqueda(`${f.nombre} ${f.cliente} ${f.items.join(" ")}`).includes(q),
       ).slice(0, 8)
     : [];
 

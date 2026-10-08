@@ -100,6 +100,12 @@ function estacion(overrides: Partial<Estacion> = {}): Estacion {
 }
 
 describe("lista operativa compartida con Kanban", () => {
+  it("encuentra clientes sin tildes en operación diaria", () => {
+    const items = [trabajo({ clienteNombre: "María Núñez" })];
+    const filtros: FiltrosTrabajo = { query: "maria nunez", estacionId: "", empleadoId: "", asignadasAMi: false };
+    expect(filtrarTrabajos(items, [], filtros, zona, ahora)).toHaveLength(1);
+    expect(filtrarTrabajos(items, [], { ...filtros, query: "otra" }, zona, ahora)).toHaveLength(0);
+  });
   it("cada trabajo aparece una vez, prioriza bloqueos y ordena por fin previsto del paso", () => {
     const grupos = agruparTrabajos([
       trabajo({ id: "tardio" }, [

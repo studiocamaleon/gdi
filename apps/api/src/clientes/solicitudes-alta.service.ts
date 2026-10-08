@@ -9,6 +9,8 @@ import {
 import { Prisma, SolicitudAltaCliente } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
+import { expandir, permisosDeRolBase } from '../auth/permisos';
 import { CurrentAuth } from '../auth/auth.types';
 import { firmaActor } from '../common/firma-actor';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,6 +30,9 @@ export class SolicitudesAltaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly capacidades: CapacidadesEmpresaService,
+    private readonly eventos: EventosSistemaService = new EventosSistemaService(
+      prisma,
+    ),
   ) {}
 
   async enlace(tenantId: string) {
@@ -119,9 +124,45 @@ export class SolicitudesAltaService {
           'Se alcanzó el límite de solicitudes. Intentá más tarde o contactá a la empresa.',
           HttpStatus.TOO_MANY_REQUESTS,
         );
-      await db.solicitudAltaCliente.create({
+      const solicitud = await db.solicitudAltaCliente.create({
         data: { tenantId: link.tenantId, ...datos },
       });
+      const miembros = await db.membership.findMany({
+        where: {
+          tenantId: link.tenantId,
+          activa: true,
+          user: { activo: true },
+        },
+        select: {
+          userId: true,
+          rol: true,
+          rolDelTenant: { select: { permisos: true } },
+        },
+      });
+      const destinatariosUserId = miembros
+        .filter((m) =>
+          expandir(m.rolDelTenant?.permisos ?? permisosDeRolBase(m.rol)).has(
+            'crm.aprobar_altas',
+          ),
+        )
+        .map((m) => m.userId);
+      // Solicitud y aviso se confirman juntos. Un reintento del formulario no
+      // crea otra solicitud ni otra notificación para el mismo documento pendiente.
+      await this.eventos.publicar(
+        {
+          tenantId: link.tenantId,
+          actorNombre: 'Formulario de clientes',
+          tipo: 'clientes.alta_solicitada',
+          entidadTipo: 'solicitud_alta_cliente',
+          entidadId: solicitud.id,
+          titulo: 'Nueva solicitud de alta de cliente',
+          mensaje: `${solicitud.nombre} completó el formulario. Revisá sus datos para aprobar o rechazar el alta.`,
+          href: '/crm/clientes/solicitudes',
+          topicos: ['clientes', 'solicitudes-alta-clientes', 'notificaciones'],
+          destinatariosUserId,
+        },
+        db,
+      );
       // Nunca revelar públicamente si el documento ya pertenece a un cliente.
       return RECIBIDA;
     });
