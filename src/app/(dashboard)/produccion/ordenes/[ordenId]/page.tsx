@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/api";
 import { getClientes } from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
 import { getOrdenTrabajo } from "@/lib/ordenes-trabajo-api";
-import { getProductos } from "@/lib/productos-servicios-api";
+import { getCargosDirectosCatalogo, getProductos } from "@/lib/productos-servicios-api";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 import { getEstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 
@@ -39,6 +39,7 @@ export default async function OrdenTrabajoDetallePage({
   // para agregar/editar items (mientras la orden esté en borrador/pendiente).
   let clientes: ClienteDetalle[] = [];
   let productos: ProductoListItem[] = [];
+  const cargos = await getCargosDirectosCatalogo(true, true).catch(() => []);
   const documentos = await getEstadoDocumentalOrden(ordenId).catch(() => null);
   try {
     clientes = await getClientes({ limit: 30 }, true);
@@ -58,6 +59,7 @@ export default async function OrdenTrabajoDetallePage({
       orden={detalle}
       initialClientes={clientes}
       initialProductos={productos}
+      initialCargosDirectos={cargos}
       recienEmitida={emitida === "1"}
       recienConvertida={convertida === "1"}
       initialDocumentos={documentos}

@@ -179,13 +179,13 @@ export function OrdenSaveActions({
   const disponible = autorizado && conCotizacion && (tipo === "orden" ? conOrdenes : conPresupuestos);
   return (
     <div className={resumenBar.saveActions}>
-      {tipo === "orden" && (
+      {(
         <HeroButton
           variant="outline"
           size="sm"
           onPress={onGuardarBorrador}
           isDisabled={
-            !disponible || guardandoBorrador || emitiendo || empty || operacionPendiente
+            !disponible || guardandoBorrador || emitiendo || empty || operacionPendiente || (tipo === "presupuesto" && !clienteSeleccionado)
           }
         >
           <SaveIcon />

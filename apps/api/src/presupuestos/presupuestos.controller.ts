@@ -115,6 +115,12 @@ export class PresupuestosController {
     return this.service.emitir(auth, dto);
   }
 
+  @Permiso("comercial.presupuestos.gestionar")
+  @Post('borradores')
+  guardarBorrador(@CurrentSession() auth: CurrentAuth, @Body() dto: EmitirPresupuestoDto) {
+    return this.service.guardarBorrador(auth, dto);
+  }
+
   @Get(':id')
   detalle(
     @CurrentSession() auth: CurrentAuth,

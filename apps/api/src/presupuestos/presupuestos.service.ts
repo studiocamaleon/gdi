@@ -176,9 +176,17 @@ export class PresupuestosService {
 
   // ── Emitir: la Cotizacion de la ficha se vuelve presupuesto formal ─
   async emitir(auth: CurrentAuth, dto: EmitirPresupuestoDto) {
+    return this.preparar(auth, dto, true);
+  }
+
+  async guardarBorrador(auth: CurrentAuth, dto: EmitirPresupuestoDto) {
+    return this.preparar(auth, dto, false);
+  }
+
+  private async preparar(auth: CurrentAuth, dto: EmitirPresupuestoDto, emitir: boolean) {
     await this.capacidades.exigir(auth.tenantId, 'presupuestos');
     const cotizacion = await this.prisma.cotizacion.findFirst({
-      where: { id: dto.cotizacionId },
+      where: { id: dto.cotizacionId, tenantId: auth.tenantId },
       select: { id: true, numero: true },
     });
     if (!cotizacion) throw new NotFoundException('La cotización no existe.');
@@ -188,7 +196,7 @@ export class PresupuestosService {
       );
     }
     const cliente = await this.prisma.cliente.findFirst({
-      where: { id: dto.clienteId, activo: true },
+      where: { id: dto.clienteId, tenantId: auth.tenantId, activo: true },
       select: { id: true },
     });
     if (!cliente) {
@@ -308,8 +316,8 @@ export class PresupuestosService {
           vendedorEmpleadoId,
           canalVenta: dto.canalVenta,
           estado: 'borrador',
-          fechaEmision: ahora,
-          notificarWhatsapp: dto.notificarWhatsapp ?? true,
+          fechaEmision: emitir ? ahora : null,
+          notificarWhatsapp: emitir ? (dto.notificarWhatsapp ?? true) : false,
           fechaValidez: null,
           observaciones: dto.observaciones,
           senaSugeridaPct: dto.senaSugeridaPct ?? cfg.senaSugeridaPctDefault,
@@ -336,7 +344,7 @@ export class PresupuestosService {
           tenantId: auth.tenantId,
           cotizacionId: dto.cotizacionId,
           tipo: 'creado',
-          descripcion: `Presupuesto ${nro} emitido (validez ${validezDias} días).`,
+          descripcion: emitir ? `Presupuesto ${nro} emitido (validez ${validezDias} días).` : `Presupuesto ${nro} guardado en borrador.`,
           usuarioId: auth.userId,
           usuarioNombre: await this.nombreDe(auth),
         },
@@ -364,6 +372,8 @@ export class PresupuestosService {
       }
       return nro;
     });
+
+    if (!emitir) return this.detalle(auth, dto.cotizacionId);
 
     // Emitir es emitir: el comercial que apretó "Emitir presupuesto" quiere
     // que salga, no dejarlo en borrador para acordarse de enviarlo después.
@@ -916,6 +926,7 @@ export class PresupuestosService {
       this.capacidades.puedeOperar(auth.tenantId, 'aprobacion_presupuestos'),
       this.capacidades.puedeOperar(auth.tenantId, 'documentos_pdf'),
     ]);
+    const fechaEnvio = new Date();
     const token = c.publicToken ?? (conEnlace ? generarTokenPublico() : null);
     const emision = (c.emisionJson ?? { items: [] }) as unknown as EmisionJson;
     const fechaValidez =
@@ -935,6 +946,7 @@ export class PresupuestosService {
       const datos = await this.datosPdf(auth, c.id);
       const regional = await this.empresa.regional(auth.tenantId);
       datos.fechaValidez = claveFechaEnZona(fechaValidez, regional.zonaHoraria);
+      if (!opts.reenvio) datos.fechaEmision = fechaEnvio.toISOString();
       documento = this.documentos.preparar(
         auth.tenantId,
         c.id,
@@ -976,7 +988,8 @@ export class PresupuestosService {
         },
         data: {
           estado: 'enviado',
-          fechaEnvio: new Date(),
+          fechaEnvio,
+          ...(!opts.reenvio ? { fechaEmision: fechaEnvio } : {}),
           fechaValidez,
           publicToken: token,
           ...(opts.notificarWhatsapp !== undefined ? { notificarWhatsapp: opts.notificarWhatsapp } : {}),

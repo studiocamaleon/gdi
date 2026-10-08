@@ -155,6 +155,7 @@ export async function editarOrdenTrabajo(
 }
 
 export type EditarOrdenTrabajoLotePayload = EditarOrdenTrabajoPayload & {
+  cargos?: Array<NonNullable<CrearOrdenTrabajoPayload["cargos"]>[number] & { id?: string }>;
   tipoCambioId?: string;
   expectedVersion: string;
   /** Conjunto final completo; con `id` actualiza, sin `id` crea. */

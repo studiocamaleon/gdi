@@ -251,6 +251,13 @@ export function emitirPresupuesto(payload: {
   });
 }
 
+/** Persiste un presupuesto sin emisión, enlace público ni avisos al cliente. */
+export function guardarBorradorPresupuesto(payload: Parameters<typeof emitirPresupuesto>[0]) {
+  return apiRequest<PresupuestoDetalle>("/presupuestos/borradores", {
+    method: "POST", body: JSON.stringify(payload),
+  });
+}
+
 export type CorreoPresupuestoEntrada = { idempotencia: string; para: string; asunto: string; mensaje: string };
 export type CorreoPresupuestoPreparacion = {
   empresa: string; numero: string; para: string; responderA: string; remitente: string;

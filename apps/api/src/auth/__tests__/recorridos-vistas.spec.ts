@@ -312,3 +312,13 @@ describe('Contrato de permisos de todas las vistas', () => {
     },
   );
 });
+
+
+describe('guardado de presupuestos en borrador', () => {
+  it('permite guardar con el permiso propio de presupuestos, sin administrar ni gestionar OT', () => {
+    expect(acceso(PresupuestosController, 'guardarBorrador', ['acceso.por_vista', 'comercial.presupuestos.gestionar'])).toBe(true);
+  });
+  it.each(['comercial.presupuestos.ver', 'comercial.ordenes.gestionar'])('rechaza el guardado con sólo %s', permiso => {
+    expect(() => acceso(PresupuestosController, 'guardarBorrador', ['acceso.por_vista', permiso])).toThrow();
+  });
+});

@@ -333,7 +333,21 @@ export class EditarOrdenTrabajoItemLoteDto extends CrearOrdenTrabajoItemDto {
  * que cambió desde que el usuario abrió la ficha y `items` representa el
  * conjunto final completo (altas, cambios, bajas y orden incluidos).
  */
+export class EditarOrdenTrabajoCargoDto extends CrearOrdenTrabajoCargoDto {
+  /** Con ID conserva el snapshot histórico; sin ID calcula un cargo nuevo. */
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+}
+
 export class EditarOrdenTrabajoLoteDto extends EditarOrdenTrabajoDto {
+  @ValidateIf((_, valor) => valor !== undefined)
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EditarOrdenTrabajoCargoDto)
+  @ArrayMaxSize(30)
+  cargos?: EditarOrdenTrabajoCargoDto[];
+
   @IsOptional()
   @IsUUID()
   tipoCambioId?: string;

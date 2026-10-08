@@ -125,7 +125,7 @@ describe("acciones y datos de la ficha de presupuesto", () => {
       </CapacidadesProvider>,
     );
     expect(button(html, tipo === "orden" ? "Emitir OT" : "Emitir presupuesto")).toContain("disabled");
-    if (tipo === "orden") expect(button(html, "Guardar borrador")).toContain("disabled");
+    expect(button(html, "Guardar borrador")).toContain("disabled");
   });
 
   it("ofrece una única descarga con preparación asíncrona", () => {

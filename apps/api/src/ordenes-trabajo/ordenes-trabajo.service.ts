@@ -1,3 +1,4 @@
+import { asignarNumeroOrden, esReferenciaBorrador, numeroOrdenVisible, referenciaBorrador } from './numero-orden';
 import {
   materialesYNotaOperativos,
   type DetalleOperativoItem,
@@ -196,6 +197,8 @@ const ARCHIVO_PUBLICO = {
 } as const;
 
 type CargoOrdenSnapshot = {
+  id?: string;
+  cargoDirectoCatalogoId?: string;
   montoNeto?: unknown;
   impuestoMonto?: unknown;
   total?: unknown;
@@ -2078,9 +2081,8 @@ export class OrdenesTrabajoService {
           data: {
             tenantId: auth.tenantId,
             idempotencyKey: payload.idempotencyKey ?? null,
-            // Identidad provisional sólo dentro de esta transacción. Nunca
-            // se publica ni consume un número si la materialización falla.
-            numero: `pendiente-${randomUUID()}`,
+            // El borrador tiene una referencia interna; se numera al emitir.
+            numero: referenciaBorrador(),
             clienteId: payload.clienteId ?? null,
             vendedorEmpleadoId,
             cotizacionId: payload.cotizacionId ?? null,
@@ -2177,21 +2179,10 @@ export class OrdenesTrabajoService {
           await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
         }
 
-        // Numerar después del trabajo geométrico: el lock por empresa sólo
-        // dura las escrituras finales y mantiene secuencia + rollback.
-        const anio = ahora.getFullYear();
-        const contador = await tx.ordenTrabajoContador.upsert({
-          where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
-          create: { tenantId: auth.tenantId, anio, ultimo: 1 },
-          update: { ultimo: { increment: 1 } },
-        });
-        const numero = `OT-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
-
-        await tx.ordenTrabajo.update({
-          where: { id: orden.id },
-          data: { numero },
-          select: { id: true },
-        });
+        // La secuencia comercial se consume únicamente al emitir.
+        const numero = emitida
+          ? await asignarNumeroOrden(tx, auth.tenantId, orden.id, ahora)
+          : orden.numero;
         orden.numero = numero;
 
         if (tokenSeguimiento) {
@@ -2249,9 +2240,11 @@ export class OrdenesTrabajoService {
             } agregado${payload.items.length === 1 ? '' : 's'} a la orden`,
           },
           { tipo: 'borrador', descripcion: 'Borrador guardado' },
-          { tipo: 'numero_asignado', descripcion: `Nº asignado ${numero}` },
           ...(emitida
-            ? [{ tipo: 'emision', descripcion: 'OT emitida al taller' }]
+            ? [
+                { tipo: 'numero_asignado', descripcion: `Nº asignado ${numero}` },
+                { tipo: 'emision', descripcion: 'OT emitida al taller' },
+              ]
             : []),
         ];
         await tx.ordenTrabajoEvento.createMany({
@@ -2277,7 +2270,7 @@ export class OrdenesTrabajoService {
               tenantId: auth.tenantId,
               proyectoCampanaId,
               tipo: 'vinculo',
-              descripcion: `Se vinculó la orden ${numero}.`,
+              descripcion: `Se vinculó ${emitida ? `la orden ${numero}` : 'un borrador de orden'}.`,
               actorUserId: auth.impersonacion?.actorUserId ?? auth.userId,
               actorNombre: usuarioNombre,
               datosJson: { tipo: 'orden', documentoId: orden.id },
@@ -2475,7 +2468,7 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró la orden de trabajo.');
     }
 
-    if (orden.estado === 'borrador' || payload.items !== undefined)
+    if (orden.estado === 'borrador' || payload.items !== undefined || payload.cargos !== undefined)
       await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const versionEsperada = new Date(payload.expectedVersion);
     if (
@@ -2499,6 +2492,9 @@ export class OrdenesTrabajoService {
     }
 
     const estado = orden.estado as OrdenTrabajoEstado;
+    if (payload.cargos !== undefined && estado === 'cancelada')
+      throw new ConflictException('No se pueden modificar cargos de una orden cancelada.');
+
     const campos = (
       [
         'clienteId',
@@ -2733,6 +2729,7 @@ export class OrdenesTrabajoService {
     await this.prisma.$transaction(async (tx) => {
       await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
         'identidad',
+        ...(payload.cargos !== undefined ? ['ordenes', 'cotizacion'] as const : []),
       ]);
       await this.exigirCuponesEnEscritura(tx, auth, itemsAutorizados ?? []);
       const reclamo = await tx.ordenTrabajo.updateMany({
@@ -2769,6 +2766,73 @@ export class OrdenesTrabajoService {
         throw new ConflictException(
           'La orden cambió mientras la estabas editando. Recargala antes de volver a guardar.',
         );
+      }
+
+      // updateMany ya bloqueó la orden y comprobó la versión. Consultar aquí
+      // la facturación impide cambiar importes mientras se emite un comprobante.
+      let cargosActualizados: CargoOrdenSnapshot[] | undefined;
+      if (payload.cargos !== undefined) {
+        const actual = await tx.ordenTrabajo.findUniqueOrThrow({
+          where: { id: orden.id },
+        });
+        const comprobante = await tx.comprobante.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            tipo: 'factura',
+            estado: { notIn: ['rechazado', 'anulado'] },
+            OR: [{ ordenId: orden.id }, { ordenes: { some: { ordenId: orden.id } } }],
+          },
+          select: { id: true },
+        });
+        if (Number(actual.facturadoTotal) > 0 || comprobante)
+          throw new ConflictException(
+            'La orden tiene facturación emitida, preparada o en proceso. Revisá los comprobantes antes de modificar sus cargos.',
+          );
+        const anteriores = (Array.isArray(actual.cargosDirectosJson)
+          ? actual.cargosDirectosJson
+          : []) as unknown as CargoOrdenSnapshot[];
+        if (!anteriores.length && Number(actual.cargosDirectos) > 0)
+          throw new ConflictException(
+            'Esta orden tiene cargos históricos sin detalle. Revisalos antes de reemplazarlos.',
+          );
+        const conservados = payload.cargos
+          .filter((cargo) => cargo.id)
+          .map((cargo) => {
+            const anterior = anteriores.find((a) => a.id === cargo.id);
+            if (
+              !anterior ||
+              anterior.cargoDirectoCatalogoId !== cargo.cargoDirectoCatalogoId
+            )
+              throw new BadRequestException(
+                'Un cargo no pertenece a esta orden. Recargá antes de guardar.',
+              );
+            return anterior;
+          });
+        const catalogos = payload.cargos.map((cargo) => cargo.cargoDirectoCatalogoId);
+        if (new Set(catalogos).size !== catalogos.length)
+          throw new BadRequestException(
+            'No se puede agregar dos veces el mismo cargo a una orden.',
+          );
+        const nuevos = await this.cargosAutorizados(
+          auth.tenantId,
+          payload.cargos.filter((cargo) => !cargo.id),
+          itemsAutorizados
+            ? itemsAutorizados.reduce((s, i) => s + Number(i.subtotal), 0)
+            : Number(actual.subtotal),
+          regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales,
+        );
+        cargosActualizados = [...conservados, ...nuevos];
+        await tx.ordenTrabajo.update({
+          where: { id: orden.id },
+          data: {
+            cargosDirectosJson: cargosActualizados as never,
+            cargosDirectos: montoCargosPorTratamiento(
+              cargosActualizados,
+              actual.tratamientoFiscal as 'FISCAL' | 'SIN_COMPROBANTE',
+              0,
+            ),
+          },
+        });
       }
 
       if (itemsAutorizados) {
@@ -2867,11 +2931,15 @@ export class OrdenesTrabajoService {
         if (estado === 'pendiente') {
           await this.reconciliarCupones(tx, auth, orden.id, itemsAutorizados);
         }
-        await this.recalcularTotales(
-          tx,
-          orden.id,
-          Number(orden.cargosDirectos ?? 0),
-        );
+      }
+      if (itemsAutorizados || cargosActualizados !== undefined) {
+        await this.recalcularTotales(tx, orden.id,
+          cargosActualizados !== undefined ? 0 : Number(orden.cargosDirectos ?? 0));
+        if (cargosActualizados !== undefined) {
+          const actualizada = await tx.ordenTrabajo.findUniqueOrThrow({ where: { id: orden.id } });
+          if (Number(actualizada.total) + 0.005 < Number(actualizada.cobradoTotal))
+            throw new ConflictException('El cambio de cargos dejaría el total por debajo de lo cobrado. Resolvé primero la diferencia en los cobros.');
+        }
       }
 
       if (
@@ -2901,12 +2969,13 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           tipo: 'modificacion',
-          descripcion: `Edición guardada: ${campos.length} campo(s) y ${itemsAutorizados ? `${itemsAutorizados.length} producto(s)` : 'sin cambios de productos'}`,
+          descripcion: `Edición guardada: ${campos.length} campo(s) y ${itemsAutorizados ? `${itemsAutorizados.length} producto(s)` : 'sin cambios de productos'}${cargosActualizados !== undefined ? ` y ${cargosActualizados.length} cargo(s)` : ''}`,
           usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
           usuarioId: auth.userId,
           origen: 'usuario',
           datosJson: {
             campos,
+            ...(cargosActualizados !== undefined ? { cargosAntes: orden.cargosDirectosJson, cargosDespues: cargosActualizados as unknown as Prisma.InputJsonValue } : {}),
             itemsAntes: orden.items.length,
             itemsDespues: itemsAutorizados?.length ?? orden.items.length,
           },
@@ -4702,6 +4771,13 @@ export class OrdenesTrabajoService {
         throw new ConflictException(
           'La orden cambió de estado mientras la estabas actualizando. Recargala e intentá nuevamente.',
         );
+      }
+      if (desde === 'borrador' && hacia !== 'cancelada' && esReferenciaBorrador(orden.numero)) {
+        const numero = await asignarNumeroOrden(tx, auth.tenantId, orden.id, new Date());
+        await tx.ordenTrabajoEvento.create({
+          data: { tenantId: auth.tenantId, ordenId: orden.id, tipo: 'numero_asignado',
+            descripcion: `Nº asignado ${numero}`, usuarioNombre: 'Sistema', origen: 'sistema' },
+        });
       }
       if (tokenSeguimiento) {
         await this.enlaces.emitir(tx, {
@@ -8996,7 +9072,7 @@ export class OrdenesTrabajoService {
     );
     return {
       id: orden.id,
-      numero: orden.numero,
+      numero: numeroOrdenVisible(orden.numero),
       clienteId: orden.clienteId,
       clienteNombre: orden.cliente?.nombre ?? 'Sin cliente',
       vendedorEmpleadoId: orden.vendedorEmpleadoId,

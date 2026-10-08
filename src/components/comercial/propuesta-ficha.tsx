@@ -145,6 +145,7 @@ import {
 } from "@/lib/ordenes-trabajo-api";
 import {
   emitirPresupuesto,
+  guardarBorradorPresupuesto,
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
 import { type ValidarCuponResultado } from "@/lib/cupones-api";
@@ -338,6 +339,30 @@ import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { useFecha } from "@/components/navigation/config-regional-provider";
+
+function cargosDeOrden(orden?: OrdenTrabajoDetalle): PropuestaCargoDirecto[] {
+  return orden?.cargos?.length
+    ? orden.cargos
+    : orden && orden.cargosDirectos > 0
+      ? [
+          {
+            id: "ot-cargos",
+            cargoDirectoCatalogoId: "",
+            codigoSnapshot: "cargos_orden",
+            nombreSnapshot: "Cargos directos de la orden",
+            modoCalculoSnapshot: "MONTO_FIJO_PLANO",
+            configSnapshot: {},
+            baseCalculo: 0,
+            montoNeto: orden.cargosDirectos,
+            impuestoPorcentaje: 0,
+            impuestoMonto: 0,
+            total: orden.cargosDirectos,
+            detalle: "Persistido al emitir la orden",
+            createdAt: orden.creadaEl,
+          },
+        ]
+      : [];
+}
 
 type PropuestaFichaProps = {
   initialClientes?: ClienteDetalle[];
@@ -5057,30 +5082,7 @@ function PropuestaFichaContenido({
   );
   const documentosCentroCopiado = items.filter(item => metaCentroCopiado(item.jobContext)).length;
 
-  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(
-    () =>
-      orden?.cargos?.length
-        ? orden.cargos
-        : orden && orden.cargosDirectos > 0
-          ? [
-              {
-                id: "ot-cargos",
-                cargoDirectoCatalogoId: "",
-                codigoSnapshot: "cargos_orden",
-                nombreSnapshot: "Cargos directos de la orden",
-                modoCalculoSnapshot: "MONTO_FIJO_PLANO",
-                configSnapshot: {},
-                baseCalculo: 0,
-                montoNeto: orden.cargosDirectos,
-                impuestoPorcentaje: 0,
-                impuestoMonto: 0,
-                total: orden.cargosDirectos,
-                detalle: "Persistido al emitir la orden",
-                createdAt: orden.creadaEl,
-              },
-            ]
-          : [],
-  );
+  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(() => cargosDeOrden(orden));
   const [fidelizacionCanjePuntos, setFidelizacionCanjePuntos] =
     React.useState(0);
   const [fidelizacionCanjeMonto, setFidelizacionCanjeMonto] = React.useState(0);
@@ -5523,6 +5525,9 @@ function PropuestaFichaContenido({
    * habilitan DENTRO del modo "Editar orden", igual que los field-cards.
    * TODO es staging local — nada pega en la base hasta "Guardar cambios".
    */
+  const puedeModificarCargos = puedeEditarOrden && conCotizacion && (!orden || (conOrdenes && orden.facturadoTotal === 0));
+  React.useEffect(() => { if (!puedeModificarCargos) setCargoOpen(false); }, [puedeModificarCargos]);
+  const cambiosCargos = Boolean(orden && editandoOrden && JSON.stringify(cargosOrden) !== JSON.stringify(cargosDeOrden(orden)));
   const itemsEnEdicion = conCotizacion && conOrdenes && puedeTocarItems && puedeEditarOrden;
   // Misma puerta para botones, atajos y confirmación de ambos sheets.
   const puedeModificarProductos =
@@ -5567,6 +5572,7 @@ function PropuestaFichaContenido({
     ordenSyncRef.current = orden;
     if (editandoOrden || !ordenCambio) return;
     setItems(orden.productos.map(rehidratarOrdenItem));
+    setCargosOrden(cargosDeOrden(orden));
     setFechaEstimada(orden.fechaEntrega ?? "");
     itemFechaTocadaRef.current = new Set(
       orden.productos.flatMap((p) => (p.id && p.fechaEntrega ? [p.id] : [])),
@@ -5628,7 +5634,7 @@ function PropuestaFichaContenido({
       Number(sinComprobante)
     : 0;
   const cambiosSinGuardar =
-    cambiosCreacion + cambiosItems.total + Object.keys(cambiosFields).length;
+    cambiosCreacion + cambiosItems.total + Object.keys(cambiosFields).length + Number(cambiosCargos);
 
   /**
    * Qué le va a pasar a la orden al cancelarla. Se arma con los datos de ESTA
@@ -5977,6 +5983,7 @@ function PropuestaFichaContenido({
       orden.productos.flatMap((p) => (p.id && p.fechaEntrega ? [p.id] : [])),
     );
     setItems(orden.productos.map(rehidratarOrdenItem));
+    setCargosOrden(cargosDeOrden(orden));
     cambioDocumento?.establecer(
       orden.productos
         .map(
@@ -6047,6 +6054,10 @@ function PropuestaFichaContenido({
           tipoCambioId: cambioAlGuardar?.id,
           ...cambiosFields,
           items: itemsFinales,
+          ...(cambiosCargos ? { cargos: cargosOrden.map(cargo => ({
+            ...cargoToOrdenInput(cargo),
+            ...(orden.cargos?.some(anterior => anterior.id === cargo.id) ? { id: cargo.id } : {}),
+          })) } : {}),
         });
 
         // Los binarios se publican post-commit y sólo para los ítems tocados;
@@ -6113,6 +6124,8 @@ function PropuestaFichaContenido({
       validarCanalVenta,
       cambiosSinGuardar,
       cambiosItems,
+      cambiosCargos,
+      cargosOrden,
       cambiosFields,
       items,
       prepararItemOrden,
@@ -6322,7 +6335,7 @@ function PropuestaFichaContenido({
         itemsConSnapshot.push({ item, ...previa });
         continue;
       }
-      if (item.cotizacionItemId) {
+      if (item.cotizacionItemId && ordenTipo !== "presupuesto") {
         itemsConSnapshot.push({
           item,
           cotizacionItemId: item.cotizacionItemId,
@@ -6647,7 +6660,7 @@ function PropuestaFichaContenido({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
-    if (!conOrdenes || !conCotizacion) {
+    if (!(ordenTipo === "presupuesto" ? conPresupuestos : conOrdenes) || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
     }
@@ -6656,12 +6669,30 @@ function PropuestaFichaContenido({
       toast.error("Agregá al menos un producto antes de guardar el borrador.");
       return;
     }
+    if (ordenTipo === "presupuesto" && !clienteId) {
+      toast.error("Asigná un cliente para guardar el presupuesto.");
+      return;
+    }
     setGuardandoBorrador(true);
     setConfirmBorradorConCobros(false);
     try {
       const { itemsConSnapshot, cotizacionId } =
         await persistirSnapshotsItems();
       const fechaEntrega = fechaEntregaOrden();
+      if (ordenTipo === "presupuesto") {
+        if (!cotizacionId) throw new Error("No se pudo guardar la cotización del presupuesto.");
+        const presupuesto = await guardarBorradorPresupuesto({
+          cotizacionId, clienteId, canalVenta,
+          proyectoCampanaId: proyectoCampanaId || undefined,
+          fechaEntrega: fechaEntrega || undefined,
+          fidelizacionCanjePuntos,
+          cargos: cargosOrden.map(cargoToOrdenInput),
+          items: itemsConSnapshot.map(({ item, cotizacionItemId, planEntrega }) => itemToOrdenItemPayload(item, cotizacionItemId, planEntrega)),
+        });
+        toast.success(`Presupuesto ${presupuesto.numero} guardado en borrador, sin enviar al cliente.`);
+        router.push(`/comercial/presupuestos/${presupuesto.id}`);
+        return;
+      }
       const idempotencyKey =
         borradorIdempotencyRef.current ?? crypto.randomUUID();
       borradorIdempotencyRef.current = idempotencyKey;
@@ -6702,7 +6733,7 @@ function PropuestaFichaContenido({
         );
       }
       toast.success(
-        `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
+        "Borrador guardado. El número de OT se asignará al emitir.",
       );
       router.push(`/produccion/ordenes/${orden.id}`);
     } catch (error) {
@@ -6716,6 +6747,8 @@ function PropuestaFichaContenido({
     }
   }, [
     conOrdenes,
+    conPresupuestos,
+    ordenTipo,
     conCotizacion,
     items,
     cargosOrden,
@@ -7537,7 +7570,7 @@ function PropuestaFichaContenido({
                   guardandoBorrador={guardandoBorrador}
                   sinComprobante={sinComprobante}
                   onAgregarCargo={
-                    !modoOrden ? () => setCargoOpen(true) : undefined
+                    puedeModificarCargos ? () => setCargoOpen(true) : undefined
                   }
                   onDescuentoOrden={
                     modoOrden
@@ -7578,7 +7611,7 @@ function PropuestaFichaContenido({
                   cargosOrden={cargosOrden}
                   sinComprobante={sinComprobante}
                   fidelizacionCanjeMonto={fidelizacionCanjeMonto}
-                  readOnly={modoOrden}
+                  readOnly={modoOrden && !editandoOrden}
                   resumenPersistido={
                     orden
                       ? {
@@ -8232,7 +8265,7 @@ function PropuestaFichaContenido({
                 cargos={cargosOrden}
                 isDisabled={cuponValidando || descuentoAplicando}
                 onRemove={
-                  modoOrden
+                  !puedeModificarCargos
                     ? undefined
                     : (id) =>
                         setCargosOrden((current) =>
@@ -8672,6 +8705,11 @@ function PropuestaFichaContenido({
           subtotalBase={calcularResumen(items).subtotal}
           onClose={() => setCargoOpen(false)}
           onAdd={(cargo) => {
+            if (!puedeModificarCargos) return;
+            if (cargosOrden.some(actual => actual.cargoDirectoCatalogoId === cargo.cargoDirectoCatalogoId)) {
+              toast.error("Ese cargo ya está agregado. Quitalo antes de reemplazarlo.");
+              return;
+            }
             setCargosOrden((current) => [...current, cargo]);
             setCargoOpen(false);
             toast.success(`${cargo.nombreSnapshot} agregado a la orden.`);

@@ -97,6 +97,9 @@ jobs:
             src/administracion/__tests__/tesoreria-operativa.spec.ts \
             src/archivos/__tests__/cajas-recibos.spec.ts \
             src/productos-servicios/__tests__/producto-cotizacion-publico.spec.ts \
+            src/ordenes-trabajo/__tests__/emision-reservas.integration.spec.ts \
+            src/presupuestos/__tests__/presupuestos.service.spec.ts \
+            src/auth/__tests__/recorridos-vistas.spec.ts \
             src/ordenes-trabajo/__tests__/descuento-posterior.spec.ts \
             src/ordenes-trabajo/__tests__/descuento-posterior.integration.spec.ts \
             src/centro-copiado/__tests__/inicializacion-requisitos.spec.ts \
