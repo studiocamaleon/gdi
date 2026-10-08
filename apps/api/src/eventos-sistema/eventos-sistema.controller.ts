@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, SoloAutenticado } from '../auth/permiso.decorator';
 import { EventosSistemaService } from './eventos-sistema.service';
 import {
   REVALIDAR_ACCESO,
@@ -24,6 +24,9 @@ import {
 export class EventosSistemaController {
   constructor(private readonly service: EventosSistemaService) {}
 
+  // La bandeja es personal: el servicio exige tenant y usuario de la sesión.
+  // No requiere acceso al Panel ni habilita el canal de cambios del negocio.
+  @SoloAutenticado()
   @Get('notificaciones')
   listar(
     @CurrentSession() auth: CurrentAuth,
@@ -32,6 +35,7 @@ export class EventosSistemaController {
     return this.service.listarNotificaciones(auth, limite);
   }
 
+  @SoloAutenticado()
   @Get('notificaciones/no-leidas')
   noLeidas(@CurrentSession() auth: CurrentAuth) {
     return this.service.contarNoLeidas(auth);
@@ -42,11 +46,13 @@ export class EventosSistemaController {
     return this.service.cambiosDesde(auth, desde);
   }
 
+  @SoloAutenticado()
   @Patch('notificaciones/leer-todas')
   leerTodas(@CurrentSession() auth: CurrentAuth) {
     return this.service.marcarTodasLeidas(auth);
   }
 
+  @SoloAutenticado()
   @Patch('notificaciones/:id/leer')
   leer(
     @CurrentSession() auth: CurrentAuth,

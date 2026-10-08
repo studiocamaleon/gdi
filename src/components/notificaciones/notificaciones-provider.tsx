@@ -83,14 +83,15 @@ export function NotificacionesProvider({
       setEstado("respaldo");
       fallback = window.setInterval(async () => {
         if (document.hidden) return;
-        try {
-          const lote = await consultarCambiosSistema(cursor.current);
-          cursor.current = lote.cursor;
-          lote.cambios.forEach(despachar);
-          await recargar();
-        } catch {
-          // Se conserva el último estado conocido y se reintenta.
-        }
+        // La bandeja personal sigue disponible sin permiso para el Panel.
+        // Un rechazo del canal de cambios no debe impedir consultar avisos.
+        await Promise.allSettled([
+          consultarCambiosSistema(cursor.current).then((lote) => {
+            cursor.current = lote.cursor;
+            lote.cambios.forEach(despachar);
+          }),
+          recargar(),
+        ]);
       }, 15000);
     };
 

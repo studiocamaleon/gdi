@@ -124,6 +124,74 @@ describe('Canal de eventos: revocación con la conexión abierta', () => {
     else process.env.JWT_SECRET = anterior;
   });
 
+  it('un facturador sin Panel consulta y lee sólo sus notificaciones personales', async () => {
+    await prisma.rol.update({
+      where: { id: rolId },
+      data: {
+        permisos: ['acceso.por_vista', 'administracion.facturacion.gestionar'],
+      },
+    });
+    const otro = await prisma.user.create({
+      data: { email: `qa-notificaciones-${randomUUID()}@example.invalid` },
+    });
+    users.push(otro.id);
+    await prisma.membership.create({
+      data: { tenantId, userId: otro.id, rolId, rol: 'OPERADOR' },
+    });
+    const service = app.get(EventosSistemaService);
+    for (const destinatario of [userId, otro.id])
+      await service.publicar({
+        tenantId,
+        actorNombre: 'Sistema',
+        tipo: 'facturacion_lote_finalizado',
+        entidadTipo: 'facturacion_lote',
+        titulo: 'Lote ficticio finalizado',
+        mensaje: 'Finalizó el ensayo',
+        topicos: [],
+        destinatariosUserId: [destinatario],
+      });
+    const url = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}/eventos-sistema`;
+    const headers = { authorization: `Bearer ${token}` };
+    expect((await fetch(url + '/notificaciones')).status).toBe(401);
+    const respuesta = await fetch(url + '/notificaciones', { headers });
+    expect(respuesta.status).toBe(200);
+    const filas = (await respuesta.json()) as { id: string }[];
+    expect(filas).toHaveLength(1);
+    expect(
+      await (
+        await fetch(url + '/notificaciones/no-leidas', { headers })
+      ).json(),
+    ).toEqual({ cantidad: 1 });
+    const ajena = await prisma.notificacionInterna.findFirstOrThrow({
+      where: { tenantId, userId: otro.id },
+    });
+    expect(
+      (
+        await fetch(url + '/notificaciones/' + ajena.id + '/leer', {
+          method: 'PATCH',
+          headers,
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await fetch(url + '/notificaciones/' + filas[0].id + '/leer', {
+          method: 'PATCH',
+          headers,
+        })
+      ).status,
+    ).toBe(200);
+    expect((await fetch(url + '/cambios', { headers })).status).toBe(403);
+    expect((await fetch(url + '/stream', { headers })).status).toBe(403);
+    await prisma.membership.update({
+      where: { id: membershipId },
+      data: { activa: false },
+    });
+    expect((await fetch(url + '/notificaciones', { headers })).status).toBe(
+      401,
+    );
+  });
+
   function abrir() {
     const port = (app.getHttpServer().address() as AddressInfo).port;
     let contenido = '';

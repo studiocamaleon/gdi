@@ -235,3 +235,16 @@ it("una lectura histórica no muestra un autor inventado", async () => {
   );
   expect(container.textContent).not.toContain("Visto por");
 });
+
+it("actualiza la campanita aunque el usuario no tenga acceso a los cambios del Panel", async () => {
+  vi.mocked(api.consultarCambiosSistema).mockRejectedValue(new Error("403"));
+  datos.push(fixture("lote-finalizado"));
+  await act(async () => {
+    Fuente.actual.onerror?.();
+    await vi.advanceTimersByTimeAsync(15000);
+  });
+  expect(contexto.noLeidas).toBe(3);
+  expect(contexto.notificaciones.some((n) => n.id === "lote-finalizado")).toBe(
+    true,
+  );
+});
