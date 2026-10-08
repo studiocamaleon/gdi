@@ -906,7 +906,7 @@ export function OrdenTrabajoDetalleView({
             </Link>
             <div className="otd-title-row">
               <h1>{orden.numero}</h1>
-              <EstadoOtBadge estado={orden.estado} />
+              <EstadoOtBadge estado={orden.estado} borradorDescartado={orden.borradorDescartado} />
               {esNueva ? (
                 <span className="otd-new-tag-lg">RECIÉN EMITIDA</span>
               ) : null}

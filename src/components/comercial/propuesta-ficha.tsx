@@ -5671,7 +5671,10 @@ function PropuestaFichaContenido({
 
   const impactoCancelacion = React.useMemo(() => {
     if (!orden) return [];
-    const puntos = orden.estado === "borrador" ? [] : [
+    const puntos = orden.estado === "borrador" ? [
+      "Deja de aparecer en Todas y en los borradores activos.",
+      "Se conserva para consulta en el filtro Descartados, junto con su historial.",
+    ] : [
       "Sale del tablero del taller y de la capacidad comprometida.",
       "Deja de contar como venta en el panel y los reportes.",
       "El link de seguimiento del cliente deja de funcionar.",
@@ -5705,16 +5708,19 @@ function PropuestaFichaContenido({
         setConfirmCancelar(false);
         setEditandoOrden(false);
         toast.success(
-          acreditaYCancela
+          orden.estado === "borrador"
+            ? `Borrador ${orden.numero} descartado y archivado.`
+            : acreditaYCancela
             ? `Orden ${orden.numero} cancelada y facturación acreditada.`
-            : orden.estado === "borrador" ? "Borrador descartado." : `Orden ${orden.numero} cancelada.`,
+            : `Orden ${orden.numero} cancelada.`,
         );
+        if (orden.estado === "borrador") router.push("/produccion/ordenes");
         router.refresh();
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
-            : "No se pudo cancelar la orden.",
+            : orden.estado === "borrador" ? "No se pudo descartar el borrador." : "No se pudo cancelar la orden.",
         );
       } finally {
         setCancelando(false);
@@ -7693,7 +7699,7 @@ function PropuestaFichaContenido({
                       <span className={workspaceStyles.titleText}>
                         {orden.numero}
                       </span>
-                      <EstadoOtBadge estado={orden.estado} />
+                      <EstadoOtBadge estado={orden.estado} borradorDescartado={orden.borradorDescartado} />
                       {sinComprobante ? <ChipSinComprobante /> : null}
                       {mostrarRecienEmitida ? (
                         <Chip size="sm" color="success" variant="soft">
@@ -7799,7 +7805,9 @@ function PropuestaFichaContenido({
                           onPress={() => setConfirmCancelar(true)}
                           isDisabled={cancelando || cambiosSinGuardar > 0 || (facturaViva && !puedeAnular)}
                           title={
-                            facturaViva && !puedeAnular
+                            orden.estado === "borrador"
+                              ? "Descartar y archivar el borrador: deja de aparecer en el listado habitual"
+                              : facturaViva && !puedeAnular
                               ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
                               : acreditaYCancela
                                 ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
@@ -7877,8 +7885,8 @@ function PropuestaFichaContenido({
                   <div className="prf-cancelada">
                     <div className="prf-cancelada-t">
                       <XCircleIcon width={15} height={15} />
-                      Cancelada
-                      {orden.cancelacion.estadoAlCancelar
+                      {orden.borradorDescartado ? "Borrador descartado y archivado" : "Cancelada"}
+                      {!orden.borradorDescartado && orden.cancelacion.estadoAlCancelar
                         ? ` cuando estaba ${(
                             ORDEN_TRABAJO_ESTADOS[
                               orden.cancelacion
@@ -8613,9 +8621,11 @@ function PropuestaFichaContenido({
           open={puedeEditarOrden && confirmCancelar}
           onOpenChange={setConfirmCancelar}
           apariencia="heroui"
-          titulo={orden?.estado === "borrador" ? "Descartar borrador de OT" : `Cancelar la orden ${orden?.numero ?? ""}`}
+          titulo={orden?.estado === "borrador" ? `Descartar el borrador ${orden.numero}` : `Cancelar la orden ${orden?.numero ?? ""}`}
           descripcion={
-            orden?.estado === "borrador" ? "El borrador se retira de los pendientes. Su contenido y el autor del descarte quedan en el historial; no se asigna un número de OT." : acreditaYCancela
+            orden?.estado === "borrador"
+              ? "Este borrador se archivará y dejará de aparecer en el listado habitual. Sus datos e historial se conservan para consulta en Descartados."
+              : acreditaYCancela
               ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
               : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
           }
@@ -8626,7 +8636,7 @@ function PropuestaFichaContenido({
             placeholder:
               "Ej.: el cliente se arrepintió · error de carga · no aprobó el arte",
           }}
-          accionLabel={orden?.estado === "borrador" ? "Descartar borrador" : "Cancelar la orden"}
+          accionLabel={orden?.estado === "borrador" ? "Descartar y archivar" : "Cancelar la orden"}
           onConfirmar={(motivo) => cancelarOrden(motivo)}
         />
 

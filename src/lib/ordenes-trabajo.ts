@@ -100,6 +100,7 @@ export const ORDEN_TRABAJO_ESTADOS: Record<
  * Fechas: ISO date (`YYYY-MM-DD`) o datetime ISO completo; la vista formatea.
  */
 export type OrdenTrabajoListItem = {
+  borradorDescartado?: boolean;
   id: string;
   /** Número visible, p.ej. "OT-2026-0184". Lo asigna el backend al emitir. */
   numero: string;
@@ -317,6 +318,7 @@ export type OrdenTrabajoCancelacion = {
  * había más órdenes que el límite de la página.
  */
 export type OrdenesTrabajoStats = {
+  descartados?: number;
   porEstado: Record<OrdenTrabajoEstado, number>;
   totalOrdenes: number;
   activas: number;
