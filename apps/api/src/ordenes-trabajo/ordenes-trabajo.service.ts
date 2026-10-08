@@ -4017,7 +4017,7 @@ export class OrdenesTrabajoService {
             | undefined;
           if (!zona)
             throw new BadRequestException(
-              `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
+              `Elegí una zona válida para el cargo "${catalogo.nombre}". Si lo agregaste antes de actualizar sus tarifas, quitá el cargo y volvé a agregarlo.`,
             );
           montoNeto = Number(zona.monto ?? 0);
           configSnapshot.zonaAplicada = {

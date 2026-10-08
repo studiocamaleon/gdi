@@ -1,4 +1,5 @@
 import { productoParaCotizacion } from './producto-cotizacion-publico';
+import { cargoParaOrden } from './cargo-orden-comercial';
 import { PublicarCambiosReceta } from './publicacion-automatica.interceptor';
 import {
   Body,
@@ -573,7 +574,8 @@ export class ProductosServiciosController {
   @Permiso('comercial.ordenes.ver', 'comercial.presupuestos.ver')
   @Get('cotizacion-cargos')
   async cargosCotizacion(@Req() req: RequestWithAuth) {
-    return productoParaCotizacion(await this.service.listarCargosDirectos(req.auth!.tenantId,true));
+    const cargos = await this.service.listarCargosDirectos(req.auth!.tenantId, true);
+    return cargos.map(cargoParaOrden);
   }
 
   @Permiso("costos.cargos.ver", "costos.catalogo.ver")
