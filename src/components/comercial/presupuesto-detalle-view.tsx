@@ -1002,6 +1002,23 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
           </div>
         </Card>
       ))}
+      {d.cargos?.map((cargo, idx) => (
+        <Card key={`cargo-${idx}`} className={s.product}>
+          <div className={s.productHead}>
+            <div className={s.productIdentity}>
+              <span className={s.eyebrow}>Cargo adicional</span>
+              <h3>{cargo.nombre}</h3>
+            </div>
+          </div>
+          {cargo.descripcion && <p>{cargo.descripcion}</p>}
+          <div className={s.productAmounts}>
+            <div className={s.productTotal}>
+              <span>Total con impuestos</span>
+              <strong>{fmtMoneda(cargo.total, moneda)}</strong>
+            </div>
+          </div>
+        </Card>
+      ))}
       {d.observaciones && (
         <Card className={s.note}>
           <h3>

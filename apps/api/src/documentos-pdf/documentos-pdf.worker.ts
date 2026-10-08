@@ -15,7 +15,10 @@ import { runWithTenant } from '../common/tenant-context';
 import { conLockDeCron } from '../common/cron-lock';
 import { ArchivosService } from '../archivos/archivos.service';
 import { PresupuestoRenderService } from '../presupuestos/pdf-piloto/presupuesto-render.service';
-import { VERSION_PRESUPUESTO_HTML } from '../presupuestos/pdf-piloto/presupuesto-html';
+import {
+  VERSION_PRESUPUESTO_HTML,
+  VERSION_PRESUPUESTO_HTML_ANTERIOR,
+} from '../presupuestos/pdf-piloto/presupuesto-html';
 import type { PresupuestoPdfDatos } from '../presupuestos/presupuesto-pdf.service';
 import { conexionRedisApi, conexionRedisWorker } from '../workers/redis';
 import {
@@ -293,11 +296,16 @@ export class DocumentosPdfWorker
         renovar.unref();
         await this.capacidades.exigir(tenantId, 'documentos_pdf');
         const datos = doc.datosJson as unknown as PresupuestoPdfDatos;
-        if (doc.plantillaVersion !== VERSION_PRESUPUESTO_HTML)
+        if (
+          ![
+            VERSION_PRESUPUESTO_HTML,
+            VERSION_PRESUPUESTO_HTML_ANTERIOR,
+          ].includes(doc.plantillaVersion)
+        )
           throw new Error('PDF_VERSION_NO_SOPORTADA');
         if (hashDatosPdf(datos) !== doc.datosHash)
           throw new Error('PDF_SNAPSHOT_INVALIDO');
-        const pdf = await this.renderer.generar(datos);
+        const pdf = await this.renderer.generar(datos, doc.plantillaVersion);
         if (!(await this.tenants.renovar(lease)))
           throw new Error('PDF_LEASE_PERDIDO');
         await this.archivos.materializarVersionPdf({

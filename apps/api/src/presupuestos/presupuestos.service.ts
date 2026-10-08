@@ -56,6 +56,7 @@ import {
   ASUNTO_PRESUPUESTO,
   MENSAJE_PRESUPUESTO,
 } from './correo-presupuesto.plantilla';
+import { cargosVisiblesDe } from './presupuesto-cargos';
 
 /**
  * Presupuestos — el ciclo comercial de la cotización
@@ -831,6 +832,7 @@ export class PresupuestosService {
       subtotal: detalle.subtotal,
       impuestos: detalle.impuestos,
       cargosDirectos: detalle.cargosDirectos,
+      cargos: detalle.cargos,
       total: detalle.total,
       descuentoTotal: detalle.descuentoTotal,
       fidelizacionPuntosEstimados: detalle.fidelizacion.puntosEstimados,
@@ -1171,6 +1173,7 @@ export class PresupuestosService {
         c.items.map((i) => cambioDelSnapshot(i.snapshotJson)).find(Boolean) ??
         null,
       fechaEntrega: emision.fechaEntrega ?? null,
+      cargos: cargosVisiblesDe(emision),
       publicToken: c.publicToken,
       ordenConvertida: ordenConvertida?.numero ?? null,
       ordenConvertidaId: ordenConvertida?.id ?? null,
@@ -1822,11 +1825,7 @@ export class PresupuestosService {
       cargosDirectos: emision.cargosDirectos ?? 0,
       total: Number(c.total ?? 0),
       descuentoTotal: this.descuentoTotalDe(emision),
-      cargos: (emision.cargos ?? []).map((cargo) => ({
-        nombre: cargo.nombreSnapshot,
-        descripcion: cargo.descripcionSnapshot ?? null,
-        total: Number(cargo.total),
-      })),
+      cargos: cargosVisiblesDe(emision),
       fidelizacion: {
         puntosEstimados: Number(c.fidelizacionPuntosEstimados ?? 0),
         canjePuntos: Number(c.fidelizacionCanjePuntos ?? 0),

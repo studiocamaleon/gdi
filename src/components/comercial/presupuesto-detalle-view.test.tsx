@@ -84,6 +84,12 @@ const button = (html: string, label: string) =>
   )?.[0];
 
 describe("acciones y datos de la ficha de presupuesto", () => {
+  it("muestra el desglose de cargos en el detalle interno", () => {
+    const html = render({ cargos: [{ nombre: "Instalación", descripcion: "Colocación en el local", total: 955900 }] });
+    expect(html).toContain("Instalación");
+    expect(html).toContain("Colocación en el local");
+    expect(html).toContain("955.900");
+  });
   const sinFunciones = (props: Partial<PresupuestoDetalle> = {}) =>
     renderToStaticMarkup(
       <CapacidadesProvider capacidades={{ funciones: {

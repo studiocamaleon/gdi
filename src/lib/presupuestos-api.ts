@@ -148,6 +148,7 @@ export type PresupuestoDetalle = {
   impuestos: number;
   total: number;
   cargosDirectos: number;
+  cargos?: PresupuestoPublico["cargos"];
   fechaEntrega: string | null;
   publicToken: string | null;
   ordenConvertida: string | null;
