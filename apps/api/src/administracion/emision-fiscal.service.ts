@@ -391,9 +391,8 @@ export class EmisionFiscalService {
   /** Un GET remoto no autoriza un segundo POST, incluso si todavía no encuentra CAE. */
   async consultar(auth: CurrentAuth, id: string) {
     const intento = await this.prisma.$transaction(async (tx) => {
-      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
-        'identidad',
-      ]);
+      // Admisión de lectura: aplicar() conserva el bloqueo para persistir el resultado.
+      await this.capacidades.exigirTodas(auth.tenantId, ['identidad'], tx);
       const comprobante = await tx.comprobante.findFirst({
         where: { id, tenantId: auth.tenantId },
         select: {

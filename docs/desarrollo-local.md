@@ -117,3 +117,33 @@ En el mismo worktree y rama `codex/inbox-canal-pruebas`, se aplicó la migració
 ## Lectura y estados compartidos — 28/09
 
 Aplicada la migración aditiva `20260928200000_inbox_estados_lectura` sólo a desarrollo y tests: **298 migraciones**. Agrega lectura compartida por el equipo y estados Activa/Resuelta, sin tablas nuevas ni cambios de credenciales. Prisma regenerado, con Meta y cron reales apagados. No se ejecutaron seeds/reset ni se desplegó staging/producción. Presencia simulada únicamente en la demo; el indicador real permanece neutral hasta implementar sus señales de conexión.
+
+
+## Facturación por lote
+
+La API registra el lote y devuelve `202`. El worker de cálculos existente también
+procesa facturación, con una cola durable en PostgreSQL (`FacturacionLote` y sus
+items): Redis no interviene en la admisión ni en la recuperación del lote. Los
+PDF se generan en el proceso worker; cada aviso conserva la cola WhatsApp actual.
+
+Para aislar únicamente facturación en una terminal local, sin servidor HTTP ni
+cron, existe `npm --prefix apps/api run worker:facturacion:dev`. Usar Node 24 y
+las variables de desarrollo indicadas arriba. No levantarlo adicionalmente al
+worker general salvo que se esté comprobando la exclusión entre procesos.
+El lease de PostgreSQL admite un turno por empresa; cada turno procesa una
+factura o un paso de publicación. Un resultado fiscal incierto se consulta y,
+si no se confirma en tres minutos, detiene el resto del lote para revisión.
+
+Las pruebas HTTP usan la base **local de test** y un proveedor fiscal ficticio.
+No arrancar workers reales contra esa base durante las pruebas. El avance y la
+campanita se verifican con avisos ficticios: `pendiente` y `wati_aceptada` no se
+consideran enviados. La notificación personal de finalización se confirma en
+la misma transacción que cierra el lote y enlaza a su detalle.
+
+Para un despliegue posterior: aplicar la migración, actualizar el worker general
+y luego API y web. No hace falta crear otra máquina. El contrato POST ahora
+requiere `claveSolicitud` UUID; la web conserva esa clave al reintentar una
+solicitud sin respuesta. Una pestaña anterior debe actualizarse antes de iniciar
+un lote. Ni este cambio ni las pruebas locales verifican por sí solos la
+estabilidad de Redis en producción: ese incidente requiere correlacionar
+latencias, recursos y errores del entorno remoto.

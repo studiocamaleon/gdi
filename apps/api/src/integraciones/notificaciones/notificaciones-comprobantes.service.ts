@@ -4,6 +4,7 @@ import { TipoEnlacePublico } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificacionesService } from './notificaciones.service';
+import type { ResultadoEncolar } from './notificaciones.service';
 import { nombreDelCliente } from './notificaciones-ordenes.service';
 import { enContextoDe } from './contexto';
 import { urlEnlacePublico } from '../../enlaces-publicos/enlaces-publicos.urls';
@@ -50,7 +51,11 @@ export class NotificacionesComprobantesService {
     }
   }
 
-  private async intentar(comprobanteId: string): Promise<void> {
+  async avisarParaLote(comprobanteId: string): Promise<ResultadoEncolar> {
+    return this.intentar(comprobanteId);
+  }
+
+  private async intentar(comprobanteId: string): Promise<ResultadoEncolar> {
     const comprobante = await this.prisma.comprobante.findFirst({
       where: { id: comprobanteId },
       select: {
@@ -68,12 +73,12 @@ export class NotificacionesComprobantesService {
         puntoVenta: { select: { numero: true } },
       },
     });
-    if (!comprobante) return;
+    if (!comprobante) return { encolada: false, motivo: 'No se encontró el comprobante.' };
 
     // Sin CAE no hay comprobante que mostrar: el manual lo carga después y ahí
     // vuelve a pasar por acá.
-    if (comprobante.estado !== 'emitido' || !comprobante.cae) return;
-    if (!comprobante.clienteId || !comprobante.numero) return;
+    if (comprobante.estado !== 'emitido' || !comprobante.cae) return { encolada: false, motivo: 'El comprobante no tiene CAE confirmado.' };
+    if (!comprobante.clienteId || !comprobante.numero) return { encolada: false, motivo: 'El comprobante no tiene cliente destinatario.' };
 
     const enlace = await this.prisma.enlacePublico.findUnique({
       where: {
@@ -86,7 +91,7 @@ export class NotificacionesComprobantesService {
     });
     // El mensaje existe para que el cliente abra el comprobante: sin link no
     // hay nada que abrir.
-    if (!enlace) return;
+    if (!enlace) throw new Error('El comprobante no tiene enlace público.');
 
     const parametros = [
       nombreDelCliente(comprobante.cliente?.razonSocial),
@@ -98,7 +103,7 @@ export class NotificacionesComprobantesService {
 
     // Cargar el CAE a mano puede venir de un flujo con tenant en contexto, pero
     // el encolado lo exige y no cuesta nada asegurarlo desde acá.
-    await enContextoDe(comprobante.tenantId, () =>
+    return enContextoDe(comprobante.tenantId, () =>
       this.notificaciones.encolar({
         evento: 'comprobante_emitido',
         entidadId: comprobante.id,

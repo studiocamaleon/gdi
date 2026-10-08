@@ -1,3 +1,6 @@
+import { FacturacionCoreModule } from './facturacion-core.module';
+import { FacturacionLotesController } from './facturacion-lotes.controller';
+import { EventosSistemaModule } from '../eventos-sistema/eventos-sistema.module';
 import { FiscalPlataformaModule } from '../fiscal-plataforma/fiscal-plataforma.module';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
@@ -11,23 +14,16 @@ import { ComprobantesPublicosController } from './comprobantes-publicos.controll
 import { MetodosPagoService } from './metodos-pago.service';
 import { CobrosService } from './cobros.service';
 import { TesoreriaService } from './tesoreria.service';
-import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
-import { AfipIntegracionService } from './afip-integracion.service';
-import { EmisionFiscalService } from './emision-fiscal.service';
-import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
-import { FacturaService } from './factura.service';
-import { FacturaPdfService } from './factura-pdf.service';
 import { EstadoCuentaPdfService } from './estado-cuenta-pdf.service';
 import { RecibosService } from './recibos.service';
 import { ReciboPdfService } from './recibo-pdf.service';
-import { FacturacionOrdenesService } from './facturacion-ordenes.service';
-import { ManualProvider } from './invoicing/manual.provider';
-import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
   imports: [
+    FacturacionCoreModule,
+    EventosSistemaModule,
     FiscalPlataformaModule,
     CapacidadesEmpresaModule,
     ArchivosModule,
@@ -38,6 +34,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
   // El público primero: `administracion` no tiene comodines hoy, pero el
   // orden de registro es el que resuelve Nest y no cuesta nada dejarlo claro.
   controllers: [
+    FacturacionLotesController,
     RecibosController,
     ComprobantesPublicosController,
     AdministracionController,
@@ -46,20 +43,11 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
     MetodosPagoService,
     CobrosService,
     TesoreriaService,
-    ConfiguracionFiscalService,
-    AfipIntegracionService,
-    ComprobantesService,
-    EmisionFiscalService,
     ImputacionesService,
     CuentaCorrienteService,
-    FacturaService,
-    FacturaPdfService,
     EstadoCuentaPdfService,
     RecibosService,
     ReciboPdfService,
-    FacturacionOrdenesService,
-    ManualProvider,
-    AfipSdkProvider,
   ],
   // El seguimiento público del recibo lo sirve su propio controller.
   // Recibos: seguimiento público. Comprobantes: el billing del control plane.
@@ -67,10 +55,9 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
   // acto). La dependencia sigue siendo de ida: Administración no importa
   // OrdenesTrabajoModule.
   exports: [
+    FacturacionCoreModule,
     RecibosService,
-    ComprobantesService,
     CobrosService,
-    FacturacionOrdenesService,
   ],
 })
 export class AdministracionModule {}

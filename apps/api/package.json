@@ -31,7 +31,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:dependencias": "node --test test/dependencias-prisma.test.cjs"
+    "test:dependencias": "node --test test/dependencias-prisma.test.cjs",
+    "worker:facturacion:dev": "ts-node --transpile-only src/administracion/facturacion-worker-main.ts",
+    "worker:facturacion:prod": "node dist/src/administracion/facturacion-worker-main.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1092.0",

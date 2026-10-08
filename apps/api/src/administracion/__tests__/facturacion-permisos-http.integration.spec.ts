@@ -1,3 +1,7 @@
+import { FacturacionLotesService } from '../facturacion-lotes.service';
+import { FacturacionLotesController } from '../facturacion-lotes.controller';
+import { EventosSistemaService } from '../../eventos-sistema/eventos-sistema.service';
+import { runWithTenant } from '../../common/tenant-context';
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
@@ -18,7 +22,7 @@ import { FacturacionOrdenesService } from '../facturacion-ordenes.service';
 import { EmisionFiscalService } from '../emision-fiscal.service';
 import { ManualProvider } from '../invoicing/manual.provider';
 import type { AfipSdkProvider } from '../invoicing/afip-sdk.provider';
-import type { EmitirInput } from '../invoicing/invoicing-provider';
+import type { EmitirInput, EmitirResultado } from '../invoicing/invoicing-provider';
 
 /** HTTP, roles persistidos, servicios fiscales y PostgreSQL reales.
  * ARCA se sustituye por un proveedor ficticio; no hay red fiscal, PDF ni avisos. */
@@ -33,7 +37,7 @@ describe('Facturación con permisos por vista (HTTP)', () => {
   const jwt = new JwtService({ secret });
   const capacidades = capacidadesDePrueba();
   const ultimos = new Map<string, number>();
-  const emitir = jest.fn(async (input: EmitirInput) => {
+  const emitir = jest.fn(async (input: EmitirInput): Promise<EmitirResultado> => {
     ultimos.set(
       `${input.puntoVenta}:${input.tipo}:${input.letra}`,
       input.numero!,
@@ -55,6 +59,8 @@ describe('Facturación con permisos por vista (HTTP)', () => {
       ultimos.get(`${pv}:${tipo}:${letra}`) ?? 0,
     emitir,
   } as unknown as AfipSdkProvider;
+  let generarAviso = false;
+  let lotes: FacturacionLotesService;
   let app: INestApplication<Server>;
   let baseValidada = false;
 
@@ -178,8 +184,17 @@ describe('Facturación con permisos por vista (HTTP)', () => {
         afipIntegracion: { facturacionHabilitada: async () => true },
         congelarPdf: jest.fn(),
         publicar: jest.fn(),
+        publicarParaLote: jest.fn(async (tenantId: string, comprobanteId: string) => {
+          if (!generarAviso) return { encolada: false, motivo: 'Avisos desactivados en el ensayo.' };
+          const aviso = await prisma.notificacionWhatsapp.create({ data: {
+            tenantId, evento: 'comprobante_emitido', claveUnica: `comprobante_emitido:${comprobanteId}`,
+            telefono: '5491100000000', plantilla: 'ficticia', parametros: [],
+          } });
+          return { encolada: true, id: aviso.id };
+        }),
       },
     ) as ComprobantesService;
+    lotes = new FacturacionLotesService(prisma, servicio, emisiones, new EventosSistemaService(prisma), capacidades);
     const noUsado = new Proxy(
       {},
       {
@@ -203,8 +218,9 @@ describe('Facturación con permisos por vista (HTTP)', () => {
       AdministracionController,
     ) as Array<new (...args: never[]) => unknown>;
     const modulo = await Test.createTestingModule({
-      controllers: [AdministracionController],
+      controllers: [AdministracionController, FacturacionLotesController],
       providers: [
+        { provide: FacturacionLotesService, useValue: lotes },
         { provide: CapacidadesEmpresaService, useValue: capacidades },
         ...dependencias.map((provide) => ({
           provide,
@@ -311,25 +327,123 @@ describe('Facturación con permisos por vista (HTTP)', () => {
       expect(Number(actual.facturadoTotal)).toBe(121);
     },
   );
+  async function avanzarLote(id: string) {
+    const lote = await prisma.facturacionLote.findUniqueOrThrow({ where: { id } });
+    const propio = { ...lote, leaseToken: randomUUID() };
+    await prisma.facturacionLote.update({ where: { id }, data: { leaseToken: propio.leaseToken, leaseHasta: new Date(Date.now() + 120_000) } });
+    try { await lotes.procesar(propio); } finally { await lotes.liberar(propio, 0); }
+  }
   it.each(['por_orden', 'agrupada'])(
-    'factura un lote %s con sólo el permiso de facturación',
-    async (modo) => {
+    'acepta un lote %s sin emitir en HTTP, lo recupera y notifica sólo al iniciador',
+    async modo => {
       const ordenes = await Promise.all([orden(), orden()]);
       const inicio = emitir.mock.calls.length;
-      const res = await post('facturacion/lote', 'facturador').send({
-        modo,
-        ordenIds: ordenes.map((o) => o.id),
-      });
-      expect(res.status).toBe(201);
-      expect(res.body.resultados).toHaveLength(2);
-      expect(res.body.resultados.every((r: { ok: boolean }) => r.ok)).toBe(
-        true,
-      );
-      expect(emitir.mock.calls.length - inicio).toBe(
-        modo === 'agrupada' ? 1 : 2,
-      );
+      const body = { modo, claveSolicitud: randomUUID(), ordenIds: ordenes.map(o => o.id) };
+      const res = await post('facturacion/lote', 'facturador').send(body).expect(202);
+      expect(res.body.items).toHaveLength(modo === 'agrupada' ? 1 : 2);
+      expect(res.body.leaseToken).toBeUndefined();
+      expect(res.body.solicitudJson).toBeUndefined();
+      expect(emitir.mock.calls.length).toBe(inicio);
+      const repetido = await post('facturacion/lote', 'facturador').send(body).expect(202);
+      expect(repetido.body.id).toBe(res.body.id);
+      await post('facturacion/lote', 'facturador').send({ ...body, detalle: modo === 'agrupada' ? 'items' : 'orden' }).expect(409);
+      await post('facturacion/lote', 'facturador').send({ ...body, claveSolicitud: randomUUID() }).expect(409);
+      for (let paso = 0; paso < 8; paso++) await avanzarLote(res.body.id);
+      const final = await prisma.facturacionLote.findUniqueOrThrow({ where: { id: res.body.id }, include: { items: true } });
+      expect(final.estado).toBe('con_observaciones'); // avisos intencionalmente apagados
+      expect(final.items.every(i => i.estado === 'emitida' && i.avisoEstado === 'omitida')).toBe(true);
+      expect(emitir.mock.calls.length - inicio).toBe(modo === 'agrupada' ? 1 : 2);
+      const eventos = await prisma.eventoSistema.findMany({ where: { entidadId: res.body.id }, include: { notificaciones: true } });
+      expect(eventos).toHaveLength(1);
+      expect(eventos[0].notificaciones.map(n => n.userId)).toEqual([final.userId]);
+      expect(eventos[0].titulo).not.toContain('envíos completados');
+      await request(app.getHttpServer()).get(`/administracion/facturacion/lotes/${res.body.id}`).auth(tokens.administrador, { type: 'bearer' }).expect(404);
     },
   );
+  it('espera confirmación del envío, sobrevive a recuperar el item y notifica éxito una sola vez', async () => {
+    generarAviso = true;
+    try {
+      const ot = await orden();
+      const inicio = emitir.mock.calls.length;
+      const res = await post('facturacion/lotes', 'facturador').send({ modo: 'por_orden', claveSolicitud: randomUUID(), ordenIds: [ot.id] }).expect(202);
+      const id = res.body.id;
+      await avanzarLote(id); // ARCA confirmó, el worker puede morir acá.
+      await prisma.facturacionLoteItem.updateMany({ where: { loteId: id }, data: { estado: 'emitiendo' } });
+      await avanzarLote(id); // Recupera la factura emitida, sin un segundo POST fiscal.
+      expect(emitir.mock.calls.length - inicio).toBe(1);
+      await avanzarLote(id); // Encola el aviso.
+      await avanzarLote(id); // Pendiente todavía no es éxito.
+      expect(await prisma.eventoSistema.count({ where: { entidadId: id } })).toBe(0);
+      const item = await prisma.facturacionLoteItem.findFirstOrThrow({ where: { loteId: id } });
+      await prisma.notificacionWhatsapp.updateMany({ where: { claveUnica: `comprobante_emitido:${item.comprobanteId}` }, data: { estado: 'enviada' } });
+      await avanzarLote(id);
+      await avanzarLote(id);
+      await avanzarLote(id);
+      const final = await prisma.facturacionLote.findUniqueOrThrow({ where: { id } });
+      expect(final.estado).toBe('completado');
+      expect(await prisma.eventoSistema.count({ where: { entidadId: id, severidad: 'EXITO' } })).toBe(1);
+    } finally { generarAviso = false; }
+  });
+
+  it('conserva resultados parciales y muestra el rechazo fiscal sin deshacer la otra factura', async () => {
+    const ordenes = await Promise.all([orden(), orden()]);
+    const res = await post('facturacion/lotes', 'facturador').send({ modo: 'por_orden', claveSolicitud: randomUUID(), ordenIds: ordenes.map(o => o.id) }).expect(202);
+    emitir.mockResolvedValueOnce({ estado: 'rechazado', errores: ['Receptor ficticio inválido.'], raw: {} });
+    for (let i = 0; i < 7; i++) await avanzarLote(res.body.id);
+    const items = await prisma.facturacionLoteItem.findMany({ where: { loteId: res.body.id }, orderBy: { posicion: 'asc' } });
+    expect(items.map(i => i.estado)).toEqual(['error', 'emitida']);
+    expect(items[0].error).toContain('Receptor ficticio inválido');
+    expect(await prisma.eventoSistema.count({ where: { entidadId: res.body.id, severidad: 'ADVERTENCIA' } })).toBe(1);
+  });
+
+  it('no reenvía un resultado fiscal incierto y detiene las otras órdenes del lote', async () => {
+    const ordenes = await Promise.all([orden(), orden()]);
+    const res = await post('facturacion/lotes', 'facturador').send({ modo: 'por_orden', claveSolicitud: randomUUID(), ordenIds: ordenes.map(o => o.id) }).expect(202);
+    const inicio = emitir.mock.calls.length;
+    emitir.mockRejectedValueOnce(new Error('Timeout ficticio después del envío'));
+    await avanzarLote(res.body.id);
+    const item = await prisma.facturacionLoteItem.findFirstOrThrow({ where: { loteId: res.body.id, posicion: 0 } });
+    await prisma.comprobanteEmision.updateMany({ where: { comprobanteId: item.comprobanteId! }, data: { creadaEl: new Date(Date.now() - 240_000) } });
+    await avanzarLote(res.body.id);
+    await avanzarLote(res.body.id);
+    expect(emitir.mock.calls.length - inicio).toBe(1);
+    const items = await prisma.facturacionLoteItem.findMany({ where: { loteId: res.body.id }, orderBy: { posicion: 'asc' } });
+    expect(items.map(i => i.estado)).toEqual(['verificar', 'error']);
+    expect(items[1].comprobanteId).toBeNull();
+    // Libera sólo el intento ficticio para los otros ensayos fiscales de esta empresa.
+    await prisma.comprobanteEmision.updateMany({ where: { comprobanteId: item.comprobanteId! }, data: { estado: 'rechazado', serieActiva: null } });
+    await prisma.comprobante.update({ where: { id: item.comprobanteId! }, data: { estado: 'rechazado', numero: null } });
+  });
+
+  it('revalida permisos antes de emitir y distribuye leases sin tomar dos lotes de la empresa', async () => {
+    const ordenes = await Promise.all([orden(), orden()]);
+    const ids: string[] = [];
+    for (const ot of ordenes) {
+      const res = await post('facturacion/lotes', 'facturador').send({ modo: 'por_orden', claveSolicitud: randomUUID(), ordenIds: [ot.id] }).expect(202);
+      ids.push(res.body.id);
+    }
+    const claims = await Promise.all([lotes.reclamar(), lotes.reclamar()]);
+    const reclamados = claims.filter((l): l is NonNullable<typeof l> => Boolean(l));
+    expect(reclamados.filter(l => l.tenantId === tenants[0])).toHaveLength(1);
+    const reclamado = reclamados.find(l => ids.includes(l.id))!;
+    expect(reclamado).toBeDefined();
+    const lote = await prisma.facturacionLote.findUniqueOrThrow({ where: { id: reclamado.id } });
+    const miembro = await prisma.membership.findFirstOrThrow({ where: { tenantId: lote.tenantId, userId: lote.userId } });
+    await prisma.membership.update({ where: { id: miembro.id }, data: { activa: false } });
+    const inicio = emitir.mock.calls.length;
+    try {
+      await lotes.procesar(reclamado);
+      expect(emitir.mock.calls.length).toBe(inicio);
+      const item = await prisma.facturacionLoteItem.findFirstOrThrow({ where: { loteId: lote.id } });
+      expect(item.estado).toBe('error');
+      expect(item.error).toContain('ya no tiene acceso');
+    } finally {
+      await prisma.membership.update({ where: { id: miembro.id }, data: { activa: true } });
+      await lotes.liberar(reclamado);
+      await prisma.facturacionLote.updateMany({ where: { id: { in: ids } }, data: { estado: 'con_observaciones' } });
+    }
+  });
+
   it('gestión de comprobantes crea, emite y consulta sin Administración global', async () => {
     const creado = await post('comprobantes', 'comprobantes').send(payload());
     expect(creado.status).toBe(201);
@@ -410,7 +524,7 @@ describe('Facturación con permisos por vista (HTTP)', () => {
     const inicio = emitir.mock.calls.length;
     await post(`ordenes/${ot.id}/facturar`).send({}).expect(404);
     await post('facturacion/lote')
-      .send({ modo: 'agrupada', ordenIds: [ot.id] })
+      .send({ modo: 'agrupada', claveSolicitud: randomUUID(), ordenIds: [ot.id] })
       .expect(400);
     await post('comprobantes').send(payload(1)).expect(400);
     await post(`comprobantes/${c.id}/emitir`).send({}).expect(404);

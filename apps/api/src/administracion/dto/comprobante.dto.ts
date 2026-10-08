@@ -1,6 +1,10 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsUUID,
+  ArrayMinSize,
+  ArrayMaxSize,
+  ArrayUnique,
   IsIn,
   IsInt,
   IsNumber,
@@ -205,7 +209,10 @@ export class FacturarLoteDto {
   detalle?: 'items' | 'orden';
 
   @IsArray()
-  @IsString({ each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
   ordenIds: string[];
 
   @IsIn(FACTURAR_LOTE_MODOS as unknown as string[])
@@ -233,4 +240,9 @@ export class ImputarCobroDto {
   @IsNumber()
   @Min(0.01)
   monto: number;
+}
+
+export class IniciarLoteFacturacionDto extends FacturarLoteDto {
+  @IsUUID('4', { message: 'Actualizá la página para iniciar el lote con el nuevo seguimiento de facturación.' })
+  claveSolicitud: string;
 }

@@ -133,7 +133,7 @@ export function eventoMinimo(
   const tags: Record<string, string> = {};
   for (const [k, v] of Object.entries(objeto(input.tags))) {
     if (typeof v !== 'string') continue;
-    if (['tenant_id', 'request_id'].includes(k) && uuid.test(v)) tags[k] = v;
+    if (['tenant_id', 'request_id', 'lote_id'].includes(k) && uuid.test(v)) tags[k] = v;
     if (k === 'area' && (areas.has(v) || v === 'aplicacion')) tags[k] = v;
     if (
       k === 'servicio' &&
@@ -144,9 +144,10 @@ export function eventoMinimo(
       tags[k] = v;
     if (
       k === 'cola' &&
-      /^(cotizacion|geometria|planificacion|documentos-pdf)$/.test(v)
+      /^(cotizacion|geometria|planificacion|documentos-pdf|facturacion)$/.test(v)
     )
       tags[k] = v;
+    if (k === 'etapa' && /^(emision|publicacion|worker)$/.test(v)) tags[k] = v;
     if (k === 'status' && /^5\d\d$/.test(v)) tags[k] = v;
     if (k === 'codigo' && codigoSeguro.test(v)) tags[k] = v;
   }

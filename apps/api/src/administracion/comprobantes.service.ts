@@ -330,7 +330,14 @@ export class ComprobantesService {
    * emisor×receptor y se congela acá: si el cliente después cambia de
    * condición fiscal, este comprobante no cambia.
    */
-  async crear(auth: CurrentAuth, payload: CrearComprobanteDto) {
+  async crear(
+    auth: CurrentAuth,
+    payload: CrearComprobanteDto,
+    loteItemId?: string,
+    loteLeaseToken?: string,
+  ) {
+    if (loteItemId && !loteLeaseToken)
+      throw new ConflictException('El lote no tiene un turno de ejecución válido.');
     if (
       !puedeOperarComprobante(
         auth,
@@ -498,7 +505,7 @@ export class ComprobantesService {
         ['fiscal_argentina'],
         ['fiscal_argentina'],
       );
-      return tx.comprobante.create({
+      const creado = await tx.comprobante.create({
         data: {
           tenantId: auth.tenantId,
           tipo: payload.tipo,
@@ -557,6 +564,20 @@ export class ComprobantesService {
           },
         },
       });
+      if (loteItemId) {
+        // La factura y su vínculo durable se confirman juntos. Dos workers no
+        // pueden crear facturas diferentes para el mismo item al recuperar un lease.
+        const vinculado = await tx.facturacionLoteItem.updateMany({
+          where: {
+            id: loteItemId, tenantId: auth.tenantId, comprobanteId: null,
+            lote: { leaseToken: loteLeaseToken, leaseHasta: { gt: new Date() } },
+          },
+          data: { comprobanteId: creado.id, estado: 'emitiendo' },
+        });
+        if (vinculado.count !== 1)
+          throw new ConflictException('El item ya tiene un comprobante asociado o cambió su turno de ejecución.');
+      }
+      return creado;
     });
     return this.toResponse(comprobante);
   }
@@ -568,6 +589,22 @@ export class ComprobantesService {
       await this.publicar(auth.tenantId, id);
     }
     return this.obtener(auth, id);
+  }
+
+  async publicarParaLote(tenantId: string, id: string) {
+    // A diferencia del best-effort de emisión individual, el lote conserva
+    // el resultado de cada etapa y vuelve a intentar sólo lo que no confirmó.
+    if (await this.capacidades.puedeOperar(tenantId, 'documentos_pdf'))
+      await this.materializarPdf(tenantId, id);
+    const existente = await this.prisma.enlacePublico.findUnique({
+      where: { tipo_entidadId: { tipo: TipoEnlacePublico.FACTURA, entidadId: id } },
+    });
+    if (!existente)
+      await this.enlaces.emitir(this.prisma, {
+        tenantId, tipo: TipoEnlacePublico.FACTURA, entidadId: id,
+        token: generarTokenPublico(),
+      });
+    return this.avisos.avisarParaLote(id);
   }
 
   async consultarEmision(auth: CurrentAuth, id: string) {
@@ -712,6 +749,8 @@ export class ComprobantesService {
     auth: CurrentAuth,
     ordenId: string,
     payload: FacturarOrdenDto,
+    loteItemId?: string,
+    loteLeaseToken?: string,
   ) {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
@@ -810,7 +849,7 @@ export class ComprobantesService {
       ordenes: [{ ordenId: orden.id, monto: total }],
       items,
       condicionVenta: 'contado',
-    } as CrearComprobanteDto);
+    } as CrearComprobanteDto, loteItemId, loteLeaseToken);
     if (payload.emitir === false) return borrador;
     return this.emitir(auth, borrador.id);
   }
@@ -932,7 +971,10 @@ export class ComprobantesService {
    * reportadas, las demás salen). 'agrupada' arma UNA factura con un
    * renglón por orden — mismo cliente obligatorio.
    */
-  async facturarLote(auth: CurrentAuth, payload: FacturarLoteDto) {
+  async facturarLote(
+    auth: CurrentAuth, payload: FacturarLoteDto,
+    loteItemId?: string, loteLeaseToken?: string,
+  ) {
     const ordenes = await this.prisma.ordenTrabajo.findMany({
       where: { id: { in: payload.ordenIds }, tenantId: auth.tenantId },
       select: {
@@ -970,6 +1012,9 @@ export class ComprobantesService {
           .join(', ')}): no se pueden facturar.`,
       );
     }
+
+    if (ordenes.some(o => ['borrador', 'cancelada'].includes(o.estado)))
+      throw new BadRequestException('El lote contiene órdenes en borrador o canceladas.');
 
     if (payload.modo === 'agrupada') {
       const clientes = new Set(ordenes.map((o) => o.clienteId ?? 'CF'));
@@ -1020,8 +1065,8 @@ export class ComprobantesService {
         ordenes: vinculos,
         items,
         condicionVenta: 'contado',
-      } as CrearComprobanteDto);
-      const emitido = await this.emitir(auth, borrador.id);
+      } as CrearComprobanteDto, loteItemId, loteLeaseToken);
+      const emitido = loteItemId ? borrador : await this.emitir(auth, borrador.id);
       return {
         modo: 'agrupada' as const,
         resultados: payload.ordenIds.map((ordenId) => ({

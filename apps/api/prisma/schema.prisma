@@ -697,6 +697,8 @@ model NotificacionWhatsapp {
 }
 
 model Tenant {
+  facturacionLotes FacturacionLote[]
+  facturacionLoteItems FacturacionLoteItem[]
   solicitudesAltaCliente SolicitudAltaCliente[]
   tiposCambioCotizacion TipoCambioCotizacion[]
   planesEntregaItems PlanEntregaItem[]
@@ -1046,6 +1048,7 @@ model CentroCopiadoOperacion {
 }
 
 model User {
+  facturacionLotes FacturacionLote[]
   id                       String                                @id @default(uuid()) @db.Uuid
   email                    String                                @unique
   emailVerificado          String?
@@ -7388,4 +7391,51 @@ model SolicitudAltaCliente {
 
   @@index([tenantId, estado, createdAt])
   @@index([tenantId, documentoTipo, documentoNumero])
+}
+
+/// Cola durable. Un lote se acepta por commit, sin depender de Redis ni del navegador.
+model FacturacionLote {
+  id               String                @id @default(uuid()) @db.Uuid
+  tenantId         String                @db.Uuid
+  userId           String                @db.Uuid
+  claveSolicitud   String                @db.Uuid
+  solicitudJson    Json
+  estado           String                @default("pendiente")
+  proximaEjecucion DateTime              @default(now())
+  leaseToken       String?               @db.Uuid
+  leaseHasta       DateTime?
+  notificadaEl     DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items            FacturacionLoteItem[]
+
+  @@unique([tenantId, userId, claveSolicitud])
+  @@index([estado, proximaEjecucion, leaseHasta])
+  @@index([tenantId, userId, createdAt])
+}
+
+/// Un item representa una factura; en modo agrupado incluye varias OT.
+model FacturacionLoteItem {
+  id                  String          @id @default(uuid()) @db.Uuid
+  tenantId            String          @db.Uuid
+  loteId              String          @db.Uuid
+  posicion            Int
+  ordenIds            String[]        @db.Uuid
+  numeros             String[]
+  estado              String          @default("pendiente")
+  comprobanteId       String?         @unique @db.Uuid
+  error               String?
+  avisoEstado         String          @default("pendiente")
+  avisoDetalle        String?
+  pdfEstado           String          @default("pendiente")
+  intentosPublicacion Int             @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lote                FacturacionLote @relation(fields: [loteId], references: [id], onDelete: Cascade)
+
+  @@unique([loteId, posicion])
+  @@index([tenantId, loteId])
 }

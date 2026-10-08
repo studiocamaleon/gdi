@@ -40,7 +40,6 @@ import {
 import {
   CargarCaeDto,
   CrearComprobanteDto,
-  FacturarLoteDto,
   FacturarOrdenDto,
   NotaCreditoOrdenDto,
   ImputarCobroDto,
@@ -288,16 +287,6 @@ export class AdministracionController {
     @Body() body: FacturarOrdenDto,
   ) {
     return this.comprobantesService.facturarOrden(auth, ordenId, body);
-  }
-
-  /** Facturar un lote de órdenes (N facturas o una agrupada). */
-  @Permiso("administracion.facturacion.gestionar")
-  @Post('facturacion/lote')
-  facturarLote(
-    @CurrentSession() auth: CurrentAuth,
-    @Body() body: FacturarLoteDto,
-  ) {
-    return this.comprobantesService.facturarLote(auth, body);
   }
 
   @Get('comprobantes/:id')
