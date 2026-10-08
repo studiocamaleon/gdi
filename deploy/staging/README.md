@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-08, 21:13 UTC.** API, ambos workers y web ejecutan `f44aab780` (PR #48, dependiente de #47; sin fusionar). Facturación por lotes durable en el worker existente, seguimiento y aviso personal en la campanita; cargos detallados en presupuesto público/PDF/correo y descarte de borradores fuera del listado habitual. Consulta fiscal con respuesta visible. 312 migraciones; CI y recorrido ficticio aprobados, seis servicios saludables. Firma y manifiesto del respaldo posterior verificados; no se repitió restauración SQL. Ver [VALIDACION.md](./VALIDACION.md).
+> **Estado vigente: 2026-10-08, 21:36 UTC.** API y ambos workers ejecutan `7ff929fd7`; web conserva `f44aab780` (PR #48, dependiente de #47; sin fusionar). Se agregó la corrección de comparación decimal del saldo al recuperar o emitir una factura con cobros previos. Dos reproducciones fallaban antes y pasaron después por HTTPS, con PDF, saldo cero y consulta repetida sin duplicados. Se retiraron los fixtures. CI completo, seis servicios saludables y respaldo posterior con firma/manifiesto verificados; 312 migraciones, sin cambios de esquema ni de recursos. Se conservan las mejoras de lotes/campanita, cargos, borradores y consulta fiscal descritas abajo. Ver [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 

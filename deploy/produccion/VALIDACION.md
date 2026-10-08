@@ -634,3 +634,28 @@ Se actualizó el inventario de recuperación con las imágenes y la fuente exact
 Constructor remoto propio retirado al terminar las compilaciones. Sin compilaciones de producción en la Mac, cambios de Docker ni interrupciones de otros proyectos.
 
 Reversión de código disponible con las imágenes de PR #47 registradas arriba, conservando la CPU performance de la API. Mantener tablas e historial de lotes: el código anterior no procesa la cola nueva ni muestra su avance y vuelve al flujo síncrono. Detener nuevas solicitudes y resolver los lotes activos antes de una reversión operativa; priorizar corrección hacia adelante. No eliminar registros ni restaurar encima de la única base activa.
+
+
+## 2026-10-08, 21:39 UTC — Recuperación fiscal con cobros previos
+
+Durante la recuperación operativa autorizada se encontró un segundo bloqueo: ARCA confirmaba la autorización, pero una comparación del saldo como float8 rechazaba un cobro del mismo importe NUMERIC y revertía toda la persistencia. Se reprodujo mediante una transacción revertida y un filtro de lectura: el importe como `number` no encontraba la fila, el decimal exacto sí. No se creó otra emisión ni se alteró el envío fiscal original.
+
+Se corrigió el filtro y descuento mediante `Prisma.Decimal`, conservando el control condicional de saldo y concurrencia. Las dos reproducciones fallaron antes y pasaron después: **37 pruebas locales** y el [CI completo](https://github.com/studiocamaleon/gdi/actions/runs/37846635084), además de permisos/aislamiento y dependencias, aprobados. En staging se recuperaron dos comprobantes manuales ficticios con cobros previos, uno por OT y otro general; PDF, saldo cero, una emisión e imputación, repetición sin duplicados y cero avisos externos. Fixtures retirados. Ver [validación de staging](../staging/VALIDACION.md).
+
+Se promovió la misma imagen validada, sin recompilar para producción:
+
+| Servicio | Revisión / imagen |
+| --- | --- |
+| API / worker / worker-pdf | `7ff929fd7ab73d61d78d8725a3f2693ffdae4462` / `registry.fly.io/grafoprint-production-api@sha256:047249efdfcecff8926509d70f236c87eaedc4aa7d8d25aad3c6738bd57cbe97` |
+| Web, conservada | `f44aab7803487ed8f285d89b1ab508b0f37c6646` / `registry.fly.io/grafoprint-production-web@sha256:aba8644ee0fc64c0607f1cf46165b795f3f8f43fadb8d46e158201d1a16a777e` |
+
+Seis máquinas saludables y mismos recursos, incluida una CPU performance / 2048 MB para API. Salud API/web 200, acceso privado directo 403 y BFF anónimo 401. Revisiones exactas y Sentry habilitado comprobados por servicio; cero incidencias de la nueva revisión en la consulta posterior. Sin migraciones, cambios de esquema, PR fusionados ni cambios de `main` o Vercel. Constructor remoto propio retirado después de la compilación; Docker y otros proyectos conservados.
+
+### Operación real autorizada
+
+Lucas autorizó expresamente recuperar la factura existente y enviar su aviso al cliente destinatario. A las **21:38 UTC**, la acción «Consultar resultado» recuperó el CAE coincidente con la solicitud congelada y dejó visible «Comprobante registrado correctamente», estado «Con CAE» y acceso al PDF. Se comprobó el mismo número, **una emisión, un PDF y una imputación**, con el saldo cancelado por el cobro ya existente. No se volvió a emitir ni a cobrar. El aviso de WhatsApp fue aceptado por Wati en **un intento**, con clave única por comprobante. A las **21:40 UTC**, el seguimiento normal confirmó estado **enviada / leido**: el destinatario ya leyó el mensaje. Se comprobó el único intento y la ausencia de duplicados. Identificadores, datos fiscales y evidencia operativa permanecen fuera de Git.
+
+Reversión disponible a la imagen API `7eb79bc7fc280a39eb7730b80f17f7b98ca36b2f97d17ee7c76f45fd3a9641ef`, conservando datos, esquema, historial y recursos; esa reversión reintroduce el fallo decimal. Priorizar corrección hacia adelante y no restaurar encima de la única base activa.
+
+
+Fuente exacta cifrada y protegida por 31 días; inventario de recuperación actualizado. Copia posterior `7b9f371d-cc58-4636-b657-f18b1c2160a5`, completada **2026-10-08T21:40:39.093Z**, con 312 migraciones y 104 archivos. Firma válida, manifiesto descifrado y fuente/digest backend nuevos comprobados. El primer sondeo encontró todavía la copia anterior; la nueva se comprobó al terminar. **No se repitió una restauración SQL completa.** Evidencia operativa privada fuera de Git.

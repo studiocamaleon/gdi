@@ -1240,3 +1240,18 @@ Copia previa `77397974-7760-4922-88e7-29b96784e6d0`, completada **2026-10-08T20:
 Las compilaciones completas se hicieron en remoto. Una conexión al constructor Fly se interrumpió; el reintento terminó correctamente con tipos habilitados. Se retiró únicamente el constructor propio `fly-builder-proud-meadow-7554`. Docker local y otros proyectos conservados.
 
 Reversión de código: imágenes anteriores registradas en el apartado de PR #47. Conservar las tablas nuevas y los lotes existentes; el código anterior no procesa esa cola ni muestra su avance y vuelve al flujo síncrono. Detener nuevas solicitudes y resolver los lotes en curso antes de una reversión operativa. Priorizar corrección hacia adelante; no borrar registros ni restaurar encima de la única base activa.
+
+
+## 2026-10-08, 21:36 UTC — Comparación exacta del saldo fiscal
+
+API y ambos workers actualizados a **`7ff929fd7ab73d61d78d8725a3f2693ffdae4462`**, imagen `registry.fly.io/grafoprint-staging-api@sha256:047249efdfcecff8926509d70f236c87eaedc4aa7d8d25aad3c6738bd57cbe97`. La web conserva `f44aab780` y su imagen anterior. Sin migraciones ni cambios de recursos.
+
+Se reprodujo que un importe `number` enviado como float8 podía quedar apenas por encima del saldo NUMERIC y hacer fallar el filtro `saldoPendiente >= monto`, aun con centavos iguales. La recuperación fiscal revertía su transacción al no poder imputar un cobro previo. Se usan `Prisma.Decimal` exactos para comparar y descontar, conservando la actualización condicional contra concurrencia. Se cubren cobros de OT y cobros generales del cliente.
+
+- Local: dos regresiones fallaron antes; **37 pruebas en dos suites** aprobaron después, incluidos matching, recuperación fiscal y consulta repetida.
+- HTTPS/BFF en staging: dos comprobantes ficticios manuales, cada uno con saldo e importe iguales y centavos. Antes quedaron por verificar; después quedaron emitidos, con saldo cero, una emisión, una imputación y un PDF por comprobante. Repetir la consulta no duplicó la emisión ni la imputación. Avisos externos cero.
+- Se retiraron por identificadores exactos las dos empresas, siete usuarios y dos archivos generados; no se tocaron datos existentes.
+- Seis máquinas saludables, tamaños conservados, API/web 200, acceso privado directo 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados por servicio; cero incidencias de esta revisión en staging.
+- [CI permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37846635083), [CI dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37846635030) y [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37846635084) aprobados.
+
+Fuente cifrada custodiada por 31 días e inventario actualizado. Copia posterior `85838584-71a8-45f8-9d15-81d52f506e90`, completada **2026-10-08T21:35:20.747Z**: 312 migraciones, 24 archivos, fuente y digest nuevos comprobados mediante firma y descifrado del manifiesto. El primer sondeo encontró aún la copia anterior; se verificó la nueva al terminar. **No se repitió restauración SQL.** Reversión disponible al digest API `7eb79bc7fc280a39eb7730b80f17f7b98ca36b2f97d17ee7c76f45fd3a9641ef`, que reintroduce este fallo decimal. Las evidencias privadas permanecen fuera de Git.
