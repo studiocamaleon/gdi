@@ -192,7 +192,7 @@ export class MetaArchivosPlantillaService {
             clienteId,
             estado: 'emitido',
             anuladoEl: null,
-            numero: { not: null }, versionVigente: true,
+            numero: { not: null },
           },
         },
       });
