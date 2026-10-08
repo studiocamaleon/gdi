@@ -261,7 +261,7 @@ export function DetalleLoteFacturacion({
       <div className={s.detailBody}>
         {lote.estado === "esperando_envios" && (
           <p className={s.waiting}>
-            Las facturas ya están emitidas. La confirmación de WhatsApp puede
+            Estamos verificando los envíos con WhatsApp. La confirmación puede
             demorar unos minutos; podés seguir trabajando.
           </p>
         )}
