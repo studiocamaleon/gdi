@@ -677,3 +677,22 @@ Comprobación posterior:
 - Cinco pruebas locales del control aprobadas e incorporadas al CI. Staging quedó explícitamente manual, `arcaValidada: false`, sin trasladar credenciales.
 
 Los tres borradores conservan sus accesos desde el lote para revisión y emisión autorizada. No crear otro comprobante sólo para superar el error ni considerar la consulta de lectura una prueba de emisión fiscal real en lote. Los identificadores y secretos operativos permanecen fuera de Git. Se exige este control y la consulta desde worker antes de habilitar o restaurar facturación automática en adelante.
+
+## 2026-10-08 — Autoregistro, teléfonos e historial de lotes (PR #49)
+
+Publicado con autorización del usuario tras validar staging. Revisión de código `00511a1e1ed932fc23112b7e75ad4583809337ce` en API, worker, worker PDF y web. Se copiaron las imágenes de staging al registro de producción y se comprobaron manifiestos de igual digest, sin recompilar: backend `sha256:0830c8a90f925fd36bcc6b7d615538f38b449c7443db213a0a2c6da022cc681a`, web `sha256:7e351d75af3987132d995aa099a51d9a16339ce5ca867c329c3a370af760145f`.
+
+Antes de actualizar no había lotes activos. Orden: worker, worker PDF, API y web. Sin migraciones, cambios de recursos ni fusiones de PR. Se conserva la API performance de una CPU/2 GB y el resto de tamaños anteriores. Los seis servicios están saludables; HTTPS API/web 200, acceso privado directo 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados en los cuatro procesos actualizados.
+
+- Chrome en producción: Facturación sin lotes terminados, acceso al historial con los dos lotes anteriores y resultados fiscales/envíos separados. Autoregistro público existente con Argentina (+54) por defecto, ayuda de pegado y control nuevo. Sin crear clientes, renovar enlaces, emitir facturas ni enviar avisos reales durante esta comprobación.
+- Preflight fiscal automático aprobado: configuración del worker coincidente con API. Un primer sondeo durante el reinicio de API no pudo leerla; pasó al finalizar. Consulta de sólo lectura desde worker a ARCA devolvió el comprobante existente número 3 autorizado, con CAE y datos coincidentes. No constituye un ensayo nuevo de emisión fiscal real.
+- Base conservada: una empresa, 776 clientes, 27 cobros, nueve métodos, 22 movimientos, 45 OT, 115 pasos y seis empleados. 312 migraciones; rol de aplicación sin DDL. Sin seeds ni resets.
+- Sentry sin incidencias de la revisión al verificar. Logs de API y workers sin errores; los errores de cierre de stream encontrados en el historial web son anteriores al despliegue. Evidencias operativas privadas fuera de Git.
+
+Pruebas locales, CI y recorrido ficticio de staging registrados en `deploy/staging/VALIDACION.md`. Staging usa proveedor manual sin ARCA: la integración fiscal efectiva se comprobó aparte desde el worker de producción. El alcance fiscal argentino del autoregistro se conserva. Sólo el historial pagina de 20; OT para facturar y comprobantes siguen con límites de 500/200 sin paginación real.
+
+Fuente exacta cifrada bajo custodia por 31 días. Copia previa `7f3dbb22-3a9c-47c4-9987-e79f817ac658`, completada 22:56:44.847Z, con 312 migraciones y 111 archivos, firma y manifiesto verificados. Una copia horaria anterior falló antes de esta publicación; reiniciar sólo el copiador permitió obtener esta copia previa correcta, sin causa confirmada del fallo inicial. Configuración posterior del copiador actualizada con los digests y fuentes nuevos.
+
+Copia posterior `36e2a6de-b9fc-4b48-85c2-481e7457a220`, completada **2026-10-08T23:17:07.748Z**: firma válida, manifiesto descifrado, revisión `00511a1e1`, imágenes exactas y fuente bajo custodia comprobadas; 312 migraciones y 111 archivos. El primer sondeo encontró aún una copia anterior; se verificó la nueva cuando terminó. No se repitió restauración SQL.
+
+Reversión de código: API y ambos workers a `sha256:047249efdfcecff8926509d70f236c87eaedc4aa7d8d25aad3c6738bd57cbe97`, web a `sha256:aba8644ee0fc64c0607f1cf46165b795f3f8f43fadb8d46e158201d1a16a777e`. Mantener registros y esquema; no restaurar encima de la base activa. No se repitió restauración SQL en esta publicación.
