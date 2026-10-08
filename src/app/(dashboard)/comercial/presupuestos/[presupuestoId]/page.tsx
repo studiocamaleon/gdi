@@ -21,5 +21,5 @@ export default async function PresupuestoDetallePage({
     throw error;
   }
 
-  return <PresupuestoDetalleView inicial={detalle} />;
+  return <PresupuestoDetalleView key={detalle.id} inicial={detalle} />;
 }

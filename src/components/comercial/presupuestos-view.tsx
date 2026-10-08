@@ -144,6 +144,7 @@ function PresupuestosContent({
     { k: "rechazado", label: "Rechazados" },
     { k: "vencido", label: "Vencidos" },
     { k: "convertido", label: "Convertidos" },
+    { k: "descartado", label: "Descartados" },
   ];
   const countChip = (k: PresupuestoEstado | "todos") =>
     k === "todos"

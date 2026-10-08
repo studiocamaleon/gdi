@@ -20,6 +20,8 @@ const ESTADO_LABEL: Record<PresupuestoEstado, string> = {
   rechazado: "Rechazado",
   vencido: "Vencido",
   convertido: "Convertido",
+  descartado: "Descartado",
+  reemplazado: "Versión anterior",
 };
 
 export const fmtMoneda = (n: number, moneda: Moneda) =>
@@ -102,7 +104,7 @@ export function PresupuestosTable({
                   className={s.number}
                   href={`/comercial/presupuestos/${p.id}`}
                 >
-                  {p.numero}
+                  {p.numero}{(p.versionPresupuesto ?? 1) > 1 ? ` · v${p.versionPresupuesto}` : ""}
                   <ArrowUpRight aria-hidden />
                 </Link>
               </td>

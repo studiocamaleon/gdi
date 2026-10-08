@@ -252,3 +252,31 @@ describe("aprobación con permisos personalizados", () => {
     expect(button(html, "Devolver")).toBeUndefined();
   });
 });
+
+
+describe("edición por versiones y descarte", () => {
+  it.each(["borrador", "enviado", "rechazado", "vencido"] as const)("permite preparar otra versión de %s", (estado) => {
+    expect(render({ estado })).toContain("Editar · nueva versión");
+  });
+  it.each(["aprobado", "convertido", "pendiente_aprobacion"] as const)("no ofrece versionar %s", (estado) => {
+    expect(render({ estado })).not.toContain("Editar · nueva versión");
+  });
+  it("una versión histórica se puede consultar pero no modificar ni enviar", () => {
+    const html = render({ versionVigente: false, versionPresupuesto: 1 });
+    expect(html).not.toContain("Editar · nueva versión");
+    expect(html).not.toContain("Descartar borrador");
+    expect(html).not.toContain("Registrar aprobación");
+    expect(html).toContain("Versiones");
+  });
+  it("descarta borradores, nunca documentos ya emitidos", () => {
+    expect(render({ estado: "borrador" })).toContain("Descartar borrador");
+    expect(render({ estado: "enviado" })).not.toContain("Descartar borrador");
+  });
+  it("un lector no puede descartar ni crear versiones", () => {
+    const html = renderToStaticMarkup(<PermisosProvider permisos={["acceso.por_vista", "comercial.presupuestos.ver"]}>
+      <PresupuestoDetalleView inicial={{ ...inicial, estado: "borrador" }} />
+    </PermisosProvider>);
+    expect(html).not.toContain("Editar · nueva versión");
+    expect(html).not.toContain("Descartar borrador");
+  });
+});

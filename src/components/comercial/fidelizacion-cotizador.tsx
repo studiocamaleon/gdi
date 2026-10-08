@@ -14,6 +14,7 @@ import { formatearMoneda, type Moneda } from "@/lib/moneda";
 
 export function FidelizacionCotizador({
   clienteId,
+  presupuestoBaseId,
   margen,
   total,
   moneda,
@@ -22,6 +23,7 @@ export function FidelizacionCotizador({
   onSimulation,
 }: {
   clienteId: string;
+  presupuestoBaseId?: string;
   margen?: number;
   total: number;
   moneda: Moneda;
@@ -33,7 +35,7 @@ export function FidelizacionCotizador({
   React.useEffect(() => {
     if (!clienteId) return;
     const timer = window.setTimeout(() => {
-      void simularFidelizacion(clienteId, { margen, total, canjePuntos: value })
+      void simularFidelizacion(clienteId, { margen, total, canjePuntos: value, presupuestoBaseId })
         .then((resultado) => {
           setSim(resultado);
           onSimulation?.(resultado);
@@ -44,7 +46,7 @@ export function FidelizacionCotizador({
         });
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [clienteId, margen, total, value, onChange, onSimulation]);
+  }, [clienteId, presupuestoBaseId, margen, total, value, onChange, onSimulation]);
   if (!clienteId) return null;
   if (!sim || (!sim.acumulacionActiva && sim.saldoDisponible <= 0)) return null;
   const money = (amount: number) => formatearMoneda(amount, moneda);
