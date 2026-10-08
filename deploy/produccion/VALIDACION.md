@@ -553,6 +553,43 @@ El constructor temporal propio `fly-builder-ancient-breeze-3294` fue eliminado. 
 Reversión de código disponible: API/workers `d0645233b`, digest `sha256:aaf0f547ead6509b541488a5f90519f5d6a81339eeb6880833bb340f0362cbcb`; web `360037038`, digest `sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af`. **Los borradores nuevos usan referencias internas `BORRADOR-…`; el código anterior no les asigna número al emitir.** Priorizar corrección hacia adelante; una reversión exige conservar la base y bloquear su emisión hasta resolver la compatibilidad. No renumerar históricos, borrar registros ni restaurar sobre la única base activa.
 
 
+## 08/10/2026, 17:48 UTC — Lote comercial, producción y entrega de QR (PR #47)
+
+API y ambos workers ejecutan **`37917a28cad39349d09738818ac94179165b7433`**; web **`ead4447d594d525655f90aaf3a758e520f113cd6`**. La diferencia es únicamente el dato de vendedor de un fixture frontend. El [PR #47](https://github.com/studiocamaleon/gdi/pull/47) reúne #40–#46 y la corrección de Wati, con dependencia temporal de #39; permanece sin fusionar. No se modificó `main` ni Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:fc7449a7f2a7bada65822ef904dcd4c447dc77df5ceec3f165ea0de6b4e445a8` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:4025c88c130d97f5bff6ff2548ad55c06c900bf6762330cf22fb38d9b7dfb557` |
+
+**311 migraciones.** Se aplicaron `20261008150000_presupuestos_versiones` y `20261008190000_wati_entrega_confirmada`, sin seeds ni resets. Rol de ejecución sin DDL y acceso al esquema nuevo comprobados. Seis servicios conservan tamaño; PDF y copiador conservan imagen. Salud API/web 200, acceso directo protegido 403, BFF anónimo 401, revisión exacta y Sentry configurado comprobados.
+
+### Cambios y pruebas
+
+- Descarte de borradores de OT y presupuesto; versiones de presupuestos aún no aprobados, con número e historial conservados. La versión anterior deja de aceptar acciones; presupuestos aprobados no admiten nuevas versiones.
+- Filtros opcionales de facturación para cobro completo sin facturar y fecha de emisión. Factura de una OT detallada por ítems y cargos; opción de resumen por orden para agrupadas y detalle completo seleccionable. Las pruebas fiscales usaron datos ficticios; no se emitió ningún comprobante real de ensayo.
+- Emisión de presupuesto con guardado y redirección sin `beforeunload`; búsqueda de clientes sin acentos, foco inmediato y resultados de productos priorizados por uso comercial válido. Solicitudes de autorregistro generan aviso interno a quienes pueden revisarlas.
+- Pasos del ítem ordenados por precedencia del flujo. Desde cualquier ítem de una OT finalizada/entregada, el operario puede recuperar la etiqueta; se conserva la prohibición de leer la ficha comercial y sus importes.
+- QR Wati con imagen variable `qr_url`, plantillas `_v2` y API v2. Aceptación del proveedor separada de envío/entrega/lectura/fallo; consulta periódica sin emitir ni reintentar mensajes. Dos ensayos autorizados al titular, con y sin saldo ficticio: proveedor confirmó entrega; titular confirmó QR visible. [Detalle](../../docs/wati-qr-entrega.md).
+- Local: 325 suites / 2.412 casos web aprobados, más cuatro casos nuevos de estados de entrega (suite final 13/13); etiqueta final 10/10. API: 316 casos del lote correctos entre ejecuciones y fixture aislado de planes 36/36. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37814053855) y [CI contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/37814054157) aprobados en la revisión final.
+- Staging: 41 comprobaciones HTTPS/BFF/resultados base más 29 del lote. Incluyen permisos, aislamiento, conflictos, importes, versiones, descarte, filtros, acentos, frecuencia, aviso interno y etiqueta PDF con operario sin OT.
+- Chrome en staging: foco real y búsqueda «Jose» → «José»; producto agregado con rol comercial limitado; presupuesto emitido y redirigido sin cartel, persistencia comprobada y ningún envío externo. Operario: Pre-prensa → Impresión → Corte, etiqueta abierta, PDF descargado y reabierto desde el ítem, sin enlace a la OT ni precios. No se ensayó impresión física: staging carece de certificado QZ del servidor; la descarga funciona. La espera automática de descarga perdió la conexión del navegador, pero su historial confirmó el archivo y se comprobó la cabecera PDF del archivo guardado.
+- Se retiraron dos empresas, seis usuarios y tres PDF sintéticos por identificadores y claves exactos. Staging vuelve a una empresa, dos clientes, siete OT, 31 pasos y 24 archivos.
+
+### Verificación de producción
+
+Se promovieron los mismos manifiestos probados en staging, sin recompilar. Conservados 775 clientes, 38 OT, 92 pasos, 16 cobros, nueve métodos de pago, 15 movimientos y seis empleados en el control posterior. No se crearon documentos comerciales de prueba. Nueve avisos históricos se conciliaron con fallos confirmados por Wati, comparando teléfono, parámetros completos, campaña y hora; actualización condicionada a no haber cambiado la fila y evento de auditoría por OT. Quedaron fallidos, disponibles para reintento manual, **sin reenviarlos**.
+
+### Recuperación y límites
+
+Antes de publicar se restauraron copias en bases locales temporales aisladas, con tareas externas apagadas: staging con 309 migraciones, 24 archivos de huella idéntica, una clave MFA y una integración descifradas; producción con 309 migraciones, 72 archivos, dos claves MFA y una integración descifradas. Las dos migraciones nuevas se ensayaron también sobre esos clones; se eliminaron al terminar. No se arrancó la aplicación restaurada ni se probó un cambio completo a infraestructura cloud de reemplazo.
+
+Copia previa **`8a7df31f-8cd9-4a20-98a1-4a583a5383ca`**, completada **2026-10-08T17:01:17.202Z**. Posterior **`b1566239-e12f-42dc-8e98-bfb4ffe09e5a`**, completada **2026-10-08T17:47:41.699Z**, con 311 migraciones y 73 archivos. Firma y huella, descifrado del manifiesto, imágenes exactas y ambas revisiones fuente verificadas. El respaldo posterior no se restauró de nuevo. Fuentes cifradas y protegidas bajo custodia privada. El primer sondeo posterior aún encontró la copia anterior; se verificó la nueva al completarse.
+
+El constructor remoto propio `fly-builder-lively-sun-8459` fue eliminado. Sin builds de producción en la Mac ni cambios en Docker u otros proyectos. La autenticación temporal del registro expiró durante la promoción: se renovó sin ampliar permisos y se verificaron los digests idénticos.
+
+**Reversión:** la migración de versiones admite varias filas con el mismo número de presupuesto. El backend previo `139ce05ab` asume una sola: no restaurar su imagen sin revisar compatibilidad y bloquear las operaciones afectadas. Conservar historial y migraciones; priorizar corrección hacia adelante. Nunca restaurar encima de la única base activa. El problema previo del brief de diseño obligatorio sigue registrado por separado; este lote no lo corrige.
+
 ## 2026-10-08, 20:07 UTC — API con CPU performance
 
 Cambio de recursos autorizado expresamente por Lucas después del diagnóstico de lentitud de producción. La máquina API `d8946dec3e9278`, en `gru`, pasó de **1 CPU shared / 2048 MB** a **1 CPU performance / 2048 MB** mediante actualización de la máquina existente. El manifiesto de producción conserva este tamaño para futuros despliegues.
