@@ -293,3 +293,38 @@ it('proyecta la referencia del paso sin descargar su historial y conserva los fi
   expect(item.pasos.find((p) => p.id === pasoHecho)!.planReferencia).toBeNull();
   expect(JSON.stringify(data)).not.toContain('historial');
 });
+
+it('presenta una OT ya guardada según sus precedencias y rechaza completar impresión antes de preprensa', async () => {
+  const nueva = await db.ordenTrabajo.create({
+    data: { tenantId, numero: 'OT-ORDEN-FLUJO-QA', estado: 'pendiente', items: { create: baseItem(tenantId, 'PVC-QA') } },
+    include: { items: true },
+  });
+  try {
+    const itemId = nueva.items[0].id;
+    const impresion = await paso(itemId, 0, 'pendiente', nueva.id);
+    const refilado = await paso(itemId, 1, 'pendiente', nueva.id);
+    const preprensa = await paso(itemId, 2, 'pendiente', nueva.id);
+    await db.ordenTrabajoPasoDependencia.createMany({ data: [
+      { tenantId, ordenId: nueva.id, predecesorPasoId: preprensa.id, sucesorPasoId: impresion.id },
+      { tenantId, ordenId: nueva.id, predecesorPasoId: impresion.id, sucesorPasoId: refilado.id },
+    ] });
+    const esperado = [preprensa.id, impresion.id, refilado.id];
+    const listado = await service.tablero(auth);
+    expect(listado.items.find(i => i.id === itemId)!.pasos.map(p => p.id)).toEqual(esperado);
+    const detalle = await service.consultarItemTablero(auth, itemId);
+    expect(detalle.pasos.map(p => p.id)).toEqual(esperado);
+    expect(detalle.pasos.map(p => p.predecesoresSatisfechos)).toEqual([true, false, false]);
+    const ejecutor = Object.assign(Object.create(OrdenesTrabajoService.prototype) as OrdenesTrabajoService, {
+      prisma: db, capacidades: { exigir: jest.fn() }, reconciliarTramosVencidos: jest.fn(),
+    });
+    for (const posterior of [impresion, refilado]) {
+      await expect(ejecutor.accionPaso({ ...auth, permisos: new Set(['produccion.supervisar']) }, nueva.id, itemId, posterior.id,
+        { accion: 'completar', sinTiempoConfirmado: true },
+      )).rejects.toThrow('faltan dependencias obligatorias');
+    }
+    const guardados = await db.ordenTrabajoItemPaso.findMany({ where: { itemId }, orderBy: { indice: 'asc' }, select: { id: true, indice: true, estado: true } });
+    expect(guardados).toEqual([impresion, refilado, preprensa].map((p, indice) => ({ id: p.id, indice, estado: 'pendiente' })));
+  } finally {
+    await db.ordenTrabajo.delete({ where: { id: nueva.id } });
+  }
+});
