@@ -122,7 +122,6 @@ describe('Facturación — filtros opcionales de OT', () => {
       'SIN-FECHA',
       'ULTIMO-INSTANTE',
       'UN-CENTAVO',
-      'UN-CENTAVO-FISCAL',
     ]);
   });
   it('sólo completamente cobradas y sin importe facturado, sin redondear un centavo de deuda', async () => {

@@ -636,41 +636,32 @@ export class FacturacionOrdenesService {
           })
         : null;
     const zona = regional?.zonaHoraria ?? ZONA_DEFAULT;
-    const fields = this.prisma.ordenTrabajo.fields;
+    const desde = emisionDesde ? instanteDe(emisionDesde, '00:00', zona) : null;
+    const hasta = emisionHasta
+      ? instanteDe(sumarDiasAClave(emisionHasta, 1), '00:00', zona)
+      : null;
+    // Misma tolerancia fiscal que facturarOrden/facturarLote. Resolver todos
+    // los filtros antes de LIMIT impide que registros no facturables oculten
+    // las coincidencias. Los valores siempre se parametrizan.
+    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id" FROM "OrdenTrabajo"
+      WHERE "tenantId" = ${tenantId}::uuid
+        AND "estado" IN ('finalizada', 'entregada')
+        AND "tratamientoFiscal" = 'FISCAL'
+        AND "total" > 0
+        AND "total" - "facturadoTotal" > 0.01
+        ${
+          cobro === 'cobradas_sin_facturar'
+            ? Prisma.sql`AND "facturadoTotal" = 0 AND "cobradoTotal" >= "total"`
+            : Prisma.empty
+        }
+        ${desde ? Prisma.sql`AND "fechaEmision" >= ${desde}` : Prisma.empty}
+        ${hasta ? Prisma.sql`AND "fechaEmision" < ${hasta}` : Prisma.empty}
+      ORDER BY "fechaFinalizada" ASC, "id" ASC
+      LIMIT 500
+    `);
     const ordenes = await this.prisma.ordenTrabajo.findMany({
-      where: {
-        tenantId,
-        estado: { in: ['finalizada', 'entregada'] },
-        total: { gt: 0 },
-        // Las órdenes sin comprobante fiscal quedan FUERA de la cola: no se
-        // facturan por error. Ver docs/margen-y-decisiones-de-precio.md §6.
-        tratamientoFiscal: 'FISCAL',
-        // Filtrar ANTES del límite: las OT ya facturadas no deben ocupar
-        // los primeros 500 lugares y esconder otras todavía pendientes.
-        facturadoTotal:
-          cobro === 'cobradas_sin_facturar' ? 0 : { lt: fields.total },
-        ...(cobro === 'cobradas_sin_facturar'
-          ? { cobradoTotal: { gte: fields.total } }
-          : {}),
-        ...(emisionDesde || emisionHasta
-          ? {
-              fechaEmision: {
-                ...(emisionDesde
-                  ? { gte: instanteDe(emisionDesde, '00:00', zona) }
-                  : {}),
-                ...(emisionHasta
-                  ? {
-                      lt: instanteDe(
-                        sumarDiasAClave(emisionHasta, 1),
-                        '00:00',
-                        zona,
-                      ),
-                    }
-                  : {}),
-              },
-            }
-          : {}),
-      },
+      where: { tenantId, id: { in: ids.map((o) => o.id) } },
       select: {
         id: true,
         numero: true,
