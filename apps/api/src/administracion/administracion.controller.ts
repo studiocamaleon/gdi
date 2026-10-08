@@ -41,6 +41,7 @@ import {
   ImputarCobroDto,
 } from './dto/comprobante.dto';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
+import { FacturacionPendientesQueryDto } from './dto/facturacion-pendientes.dto';
 import {
   UpsertConfiguracionFiscalDto,
   UpsertPuntoVentaDto,
@@ -236,8 +237,14 @@ export class AdministracionController {
 
   /** Órdenes finalizadas con saldo sin facturar (vista Facturación). */
   @Get('facturacion/pendientes')
-  pendientesFacturacion(@CurrentSession() auth: CurrentAuth) {
-    return this.facturacionOrdenesService.pendientesFacturacion(auth.tenantId);
+  pendientesFacturacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: FacturacionPendientesQueryDto,
+  ) {
+    return this.facturacionOrdenesService.pendientesFacturacion(
+      auth.tenantId,
+      query,
+    );
   }
 
   /**

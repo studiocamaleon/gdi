@@ -2,6 +2,13 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { HISTORICO_SIN_ORDEN, saldoComercialCobro } from './saldo-comercial';
+import {
+  esFechaCalendario,
+  instanteDe,
+  sumarDiasAClave,
+  ZONA_DEFAULT,
+} from '../common/zona';
+import type { FacturacionPendientesQueryDto } from './dto/facturacion-pendientes.dto';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 /** Tolerancia subcentavo: un saldo de $0,01 también se aplica. */
@@ -604,11 +611,32 @@ export class FacturacionOrdenesService {
 
   /**
    * La vista Administración → Facturación: órdenes finalizadas/entregadas
-   * con saldo sin facturar. El filtro total>facturado se hace acá (Prisma
-   * no compara columnas entre sí); el volumen de finalizadas vivas lo
-   * aguanta de sobra.
+   * con saldo sin facturar. Los filtros se aplican en la base antes del
+   * límite del listado; el cobro completo nunca es un requisito por defecto.
    */
-  async pendientesFacturacion(tenantId: string) {
+  async pendientesFacturacion(
+    tenantId: string,
+    filtros: FacturacionPendientesQueryDto = {},
+  ) {
+    const { emisionDesde, emisionHasta, cobro } = filtros;
+    if (
+      (emisionDesde && !esFechaCalendario(emisionDesde)) ||
+      (emisionHasta && !esFechaCalendario(emisionHasta)) ||
+      (emisionDesde && emisionHasta && emisionDesde > emisionHasta)
+    ) {
+      throw new BadRequestException(
+        'Elegí un rango válido de fecha de emisión de la orden.',
+      );
+    }
+    const regional =
+      emisionDesde || emisionHasta
+        ? await this.prisma.datosEmpresa.findUnique({
+            where: { tenantId },
+            select: { zonaHoraria: true },
+          })
+        : null;
+    const zona = regional?.zonaHoraria ?? ZONA_DEFAULT;
+    const fields = this.prisma.ordenTrabajo.fields;
     const ordenes = await this.prisma.ordenTrabajo.findMany({
       where: {
         tenantId,
@@ -617,6 +645,31 @@ export class FacturacionOrdenesService {
         // Las órdenes sin comprobante fiscal quedan FUERA de la cola: no se
         // facturan por error. Ver docs/margen-y-decisiones-de-precio.md §6.
         tratamientoFiscal: 'FISCAL',
+        // Filtrar ANTES del límite: las OT ya facturadas no deben ocupar
+        // los primeros 500 lugares y esconder otras todavía pendientes.
+        facturadoTotal:
+          cobro === 'cobradas_sin_facturar' ? 0 : { lt: fields.total },
+        ...(cobro === 'cobradas_sin_facturar'
+          ? { cobradoTotal: { gte: fields.total } }
+          : {}),
+        ...(emisionDesde || emisionHasta
+          ? {
+              fechaEmision: {
+                ...(emisionDesde
+                  ? { gte: instanteDe(emisionDesde, '00:00', zona) }
+                  : {}),
+                ...(emisionHasta
+                  ? {
+                      lt: instanteDe(
+                        sumarDiasAClave(emisionHasta, 1),
+                        '00:00',
+                        zona,
+                      ),
+                    }
+                  : {}),
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -625,30 +678,30 @@ export class FacturacionOrdenesService {
         clienteId: true,
         cliente: { select: { nombre: true, condicionFiscal: true } },
         fechaFinalizada: true,
+        fechaEmision: true,
         total: true,
         facturadoTotal: true,
         cobradoTotal: true,
       },
-      orderBy: { fechaFinalizada: 'asc' },
+      orderBy: [{ fechaFinalizada: 'asc' }, { id: 'asc' }],
       take: 500,
     });
-    return ordenes
-      .filter((o) => Number(o.total ?? 0) - Number(o.facturadoTotal) > 0.01)
-      .map((o) => ({
-        ordenId: o.id,
-        numero: o.numero,
-        estado: o.estado,
-        clienteId: o.clienteId,
-        clienteNombre: o.cliente?.nombre ?? null,
-        clienteCondicionFiscal: o.cliente?.condicionFiscal ?? null,
-        fechaFinalizada: o.fechaFinalizada
-          ? o.fechaFinalizada.toISOString().slice(0, 10)
-          : null,
-        total: Number(o.total ?? 0),
-        facturado: Number(o.facturadoTotal),
-        cobrado: Number(o.cobradoTotal),
-        saldoSinFacturar: r2(Number(o.total ?? 0) - Number(o.facturadoTotal)),
-      }));
+    return ordenes.map((o) => ({
+      ordenId: o.id,
+      numero: o.numero,
+      estado: o.estado,
+      clienteId: o.clienteId,
+      clienteNombre: o.cliente?.nombre ?? null,
+      clienteCondicionFiscal: o.cliente?.condicionFiscal ?? null,
+      fechaEmision: o.fechaEmision?.toISOString() ?? null,
+      fechaFinalizada: o.fechaFinalizada
+        ? o.fechaFinalizada.toISOString().slice(0, 10)
+        : null,
+      total: Number(o.total ?? 0),
+      facturado: Number(o.facturadoTotal),
+      cobrado: Number(o.cobradoTotal),
+      saldoSinFacturar: r2(Number(o.total ?? 0) - Number(o.facturadoTotal)),
+    }));
   }
 
   // ── Primitivas privadas ────────────────────────────────────────────
