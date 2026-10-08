@@ -5587,6 +5587,20 @@ function PropuestaFichaContenido({
     : 0;
   const cambiosSinGuardar =
     cambiosCreacion + cambiosItems.total + Object.keys(cambiosFields).length;
+  // La confirmación del servidor protege esta revisión concreta. No vaciamos
+  // el formulario: si la navegación tarda y se edita de nuevo, vuelve el aviso.
+  const revisionPropuesta = React.useMemo(
+    () => ({
+      items, cargosOrden, cobrosStaged, clienteId, proyectoCampanaId, canalVenta,
+      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo,
+    }),
+    [items, cargosOrden, cobrosStaged, clienteId, proyectoCampanaId, canalVenta,
+      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo],
+  );
+  const presupuestoGuardadoRef = React.useRef<{
+    revision: typeof revisionPropuesta;
+    destino: string;
+  } | null>(null);
 
   /**
    * Qué le va a pasar a la orden al cancelarla. Se arma con los datos de ESTA
@@ -6091,10 +6105,12 @@ function PropuestaFichaContenido({
   React.useEffect(() => {
     if (cambiosSinGuardar === 0) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (presupuestoGuardadoRef.current?.revision === revisionPropuesta) return;
       event.preventDefault();
       event.returnValue = "";
     };
     const onClickCapture = (event: MouseEvent) => {
+      if (presupuestoGuardadoRef.current?.revision === revisionPropuesta) return;
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
         return;
@@ -6112,7 +6128,7 @@ function PropuestaFichaContenido({
       window.removeEventListener("beforeunload", onBeforeUnload);
       document.removeEventListener("click", onClickCapture, true);
     };
-  }, [cambiosSinGuardar]);
+  }, [cambiosSinGuardar, revisionPropuesta]);
 
   /**
    * Emitir un borrador guardado (borrador → pendiente): la salida comercial
@@ -6370,8 +6386,14 @@ function PropuestaFichaContenido({
    * proyección de items para convertir después. No crea ninguna OT.
    */
   const [emitiendoPresupuesto, setEmitiendoPresupuesto] = React.useState(false);
+  const emisionPresupuestoEnCursoRef = React.useRef(false);
   const [canalPresupuestoAbierto, setCanalPresupuestoAbierto] = React.useState(false);
   const emitirPresupuestoCb = React.useCallback(async (canal: CanalPresupuesto = "whatsapp") => {
+    if (emisionPresupuestoEnCursoRef.current) return;
+    if (presupuestoGuardadoRef.current?.revision === revisionPropuesta) {
+      router.replace(presupuestoGuardadoRef.current.destino);
+      return;
+    }
     if (!conPresupuestos || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -6387,6 +6409,7 @@ function PropuestaFichaContenido({
       toast.error("Asigná un cliente: el presupuesto es para alguien.");
       return;
     }
+    emisionPresupuestoEnCursoRef.current = true;
     setEmitiendoPresupuesto(true);
     try {
       const { itemsConSnapshot, cotizacionId } =
@@ -6420,8 +6443,12 @@ function PropuestaFichaContenido({
             : canal === "whatsapp" ? `Presupuesto ${presupuesto.numero} emitido y enviado.` : `Presupuesto ${presupuesto.numero} emitido. Revisá el correo antes de enviarlo.`,
         );
       }
+      const destino = `/comercial/presupuestos/${presupuesto.id}${canal === "whatsapp" ? "" : `?correo=${canal}`}`;
+      // Sin esperar al próximo render: Next puede necesitar una carga completa
+      // y disparar beforeunload en la misma llamada de navegación.
+      presupuestoGuardadoRef.current = { revision: revisionPropuesta, destino };
       setCanalPresupuestoAbierto(false);
-      router.push(canal === "whatsapp" ? "/comercial/presupuestos" : `/comercial/presupuestos/${presupuesto.id}?correo=${canal}`);
+      router.replace(destino);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -6429,9 +6456,11 @@ function PropuestaFichaContenido({
           : "No se pudo emitir el presupuesto.",
       );
     } finally {
+      emisionPresupuestoEnCursoRef.current = false;
       setEmitiendoPresupuesto(false);
     }
   }, [
+    revisionPropuesta,
     conPresupuestos,
     conCotizacion,
     items,
