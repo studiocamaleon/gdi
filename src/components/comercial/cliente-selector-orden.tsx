@@ -93,7 +93,7 @@ export function ClienteLista({
             )
           }
         >
-          <SearchField aria-label="Buscar cliente" className="px-2 pt-2">
+          <SearchField autoFocus aria-label="Buscar cliente" className="px-2 pt-2">
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input placeholder="Buscar cliente…" />
