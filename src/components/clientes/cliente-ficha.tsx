@@ -22,7 +22,10 @@ import {
 } from "lucide-react";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
-import { useFecha } from "@/components/navigation/config-regional-provider";
+import {
+  useConfigRegional,
+  useFecha,
+} from "@/components/navigation/config-regional-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { ClienteFidelizacionCard } from "@/components/crm/cliente-fidelizacion-card";
 import { createCliente, updateCliente } from "@/lib/clientes-api";
@@ -71,6 +74,9 @@ import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./clientes.module.css";
 import { toast } from "sonner";
 
+import { TelefonoField } from "./telefono-field";
+import { normalizarTelefonoCliente } from "@/lib/telefono-cliente";
+
 type ClienteFichaProps = {
   cliente: ClienteDetalle;
   mode: "create" | "edit" | "view";
@@ -100,11 +106,6 @@ const countryItems = latamCountries.map((country) => ({
   value: country.code,
 }));
 
-const phoneCodeItems = latamCountries.map((country) => ({
-  label: `${country.flag} +${country.phoneCode}`,
-  value: country.phoneCode,
-}));
-
 const addressTypeItems: Array<{ label: string; value: TipoDireccion }> = [
   { label: "Principal", value: "principal" },
   { label: "Facturación", value: "facturacion" },
@@ -117,26 +118,11 @@ const whatsappConsentItems = [
   { label: "No autoriza mensajes", value: "no" },
 ];
 
-function formatWhatsappPhone(phoneCode: string, phoneNumber: string) {
-  const sanitizedNumber = phoneNumber.replace(/\D/g, "");
-  const sanitizedCode = phoneCode.replace(/\D/g, "");
-
-  if (!sanitizedCode && !sanitizedNumber) {
-    return "";
-  }
-
-  if (!sanitizedNumber) {
-    return `+${sanitizedCode}`;
-  }
-
-  return `+${sanitizedCode} ${sanitizedNumber}`;
-}
-
 function buildPayload(
   datosGenerales: DatosGeneralesState,
   contactos: ClienteContacto[],
   direcciones: ClienteDireccion[],
-  aceptaWhatsapp: boolean | null
+  aceptaWhatsapp: boolean | null,
 ): ClientePayload {
   const plazoCuentaCorrienteDias =
     datosGenerales.plazoCuentaCorrienteDias.trim() === ""
@@ -198,6 +184,12 @@ type FieldErrors = Partial<
 
 function validatePayload(payload: ClientePayload) {
   const fields: FieldErrors = {};
+  const telefono = normalizarTelefonoCliente(
+    payload.telefonoCodigo,
+    payload.telefonoNumero,
+    payload.pais,
+  );
+  if (!telefono.ok) fields.telefonoNumero = telefono.error;
   if (!payload.nombre) fields.nombre = "Ingresá el nombre del cliente.";
   if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
     fields.email = "Ingresá un correo válido.";
@@ -229,7 +221,7 @@ function validatePayload(payload: ClientePayload) {
   if (fieldMessage) return { message: fieldMessage, fields, focusId: null };
 
   const contactoInvalido = payload.contactos.findIndex(
-    (contacto) => !contacto.nombre
+    (contacto) => !contacto.nombre,
   );
 
   if (contactoInvalido !== -1) {
@@ -240,12 +232,27 @@ function validatePayload(payload: ClientePayload) {
     };
   }
 
+  const contactoTelefonoInvalido = payload.contactos.find(
+    (c) =>
+      !normalizarTelefonoCliente(
+        c.telefonoCodigo ?? "",
+        c.telefonoNumero ?? "",
+        payload.pais,
+      ).ok,
+  );
+  if (contactoTelefonoInvalido)
+    return {
+      message: `Revisá el teléfono de ${contactoTelefonoInvalido.nombre}.`,
+      fields,
+      focusId: `contacto-telefono-${contactoTelefonoInvalido.id}`,
+    };
+
   const direccionInvalida = payload.direcciones.findIndex(
     (direccion) =>
       !direccion.descripcion ||
       !direccion.pais ||
       !direccion.direccion ||
-      !direccion.ciudad
+      !direccion.ciudad,
   );
 
   if (direccionInvalida !== -1) {
@@ -254,10 +261,10 @@ function validatePayload(payload: ClientePayload) {
     const missing = !direccion.descripcion
       ? "descripcion"
       : !direccion.pais
-      ? "pais"
-      : !direccion.direccion
-      ? "calle"
-      : "ciudad";
+        ? "pais"
+        : !direccion.direccion
+          ? "calle"
+          : "ciudad";
     return {
       message: `Completá descripción, país, dirección y ciudad en la dirección ${
         direccionInvalida + 1
@@ -305,11 +312,13 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const puedeConsultarPuntos = usePuede("crm.fidelizacion.ver");
   const router = useRouter();
   const { fechaHora } = useFecha();
+  const { paisCodigo } = useConfigRegional();
+  const telefonoInicial = normalizarTelefonoCliente("", "", paisCodigo);
   const [isSaving, startSaving] = React.useTransition();
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
   const [aceptaWhatsapp, setAceptaWhatsapp] = React.useState<boolean | null>(
-    cliente.aceptaWhatsapp
+    cliente.aceptaWhatsapp,
   );
   const [version, setVersion] = React.useState(cliente.updatedAt);
   const [datosGenerales, setDatosGenerales] =
@@ -325,18 +334,23 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
           : String(cliente.plazoCuentaCorrienteDias),
       limiteCredito:
         cliente.limiteCredito === null ? "" : String(cliente.limiteCredito),
-      telefonoCodigo: cliente.telefonoCodigo,
+      telefonoCodigo:
+        mode === "create"
+          ? telefonoInicial.ok
+            ? telefonoInicial.telefonoCodigo
+            : "54"
+          : cliente.telefonoCodigo,
       telefonoNumero: cliente.telefonoNumero,
       email: cliente.email,
-      pais: cliente.pais,
+      pais: mode === "create" ? paisCodigo : cliente.pais,
     });
   const [contactos, setContactos] = React.useState(cliente.contactos);
   const [direcciones, setDirecciones] = React.useState(cliente.direcciones);
   const [activeContactoId, setActiveContactoId] = React.useState(
-    cliente.contactos[0]?.id ?? ""
+    cliente.contactos[0]?.id ?? "",
   );
   const [activeDireccionId, setActiveDireccionId] = React.useState(
-    cliente.direcciones[0]?.id ?? ""
+    cliente.direcciones[0]?.id ?? "",
   );
   const [activeSection, setActiveSection] = React.useState<
     "ficha" | "fidelizacion" | "historial"
@@ -368,11 +382,6 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       event.preventDefault();
     }
   };
-
-  const telefonoWhatsapp = formatWhatsappPhone(
-    datosGenerales.telefonoCodigo,
-    datosGenerales.telefonoNumero
-  );
 
   React.useEffect(() => {
     if (contactos.length === 0) {
@@ -408,11 +417,11 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const removeContacto = (contactoId: string) => {
     const removed = contactos.find((contacto) => contacto.id === contactoId);
     const removedIndex = contactos.findIndex(
-      (contacto) => contacto.id === contactoId
+      (contacto) => contacto.id === contactoId,
     );
     setContactos((current) => {
       const nextContactos = current.filter(
-        (contacto) => contacto.id !== contactoId
+        (contacto) => contacto.id !== contactoId,
       );
 
       if (
@@ -442,12 +451,12 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const updateContacto = (
     contactoId: string,
     field: keyof ClienteContacto,
-    value: string | boolean
+    value: string | boolean,
   ) => {
     setContactos((current) =>
       current.map((contacto) =>
-        contacto.id === contactoId ? { ...contacto, [field]: value } : contacto
-      )
+        contacto.id === contactoId ? { ...contacto, [field]: value } : contacto,
+      ),
     );
   };
 
@@ -456,7 +465,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       current.map((contacto) => ({
         ...contacto,
         principal: contacto.id === contactoId,
-      }))
+      })),
     );
   };
 
@@ -471,14 +480,14 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
 
   const removeDireccion = (direccionId: string) => {
     const removed = direcciones.find(
-      (direccion) => direccion.id === direccionId
+      (direccion) => direccion.id === direccionId,
     );
     const removedIndex = direcciones.findIndex(
-      (direccion) => direccion.id === direccionId
+      (direccion) => direccion.id === direccionId,
     );
     setDirecciones((current) => {
       const nextDirecciones = current.filter(
-        (direccion) => direccion.id !== direccionId
+        (direccion) => direccion.id !== direccionId,
       );
 
       if (
@@ -508,14 +517,14 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const updateDireccion = (
     direccionId: string,
     field: keyof ClienteDireccion,
-    value: string | boolean
+    value: string | boolean,
   ) => {
     setDirecciones((current) =>
       current.map((direccion) =>
         direccion.id === direccionId
           ? { ...direccion, [field]: value }
-          : direccion
-      )
+          : direccion,
+      ),
     );
   };
 
@@ -524,7 +533,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       current.map((direccion) => ({
         ...direccion,
         principal: direccion.id === direccionId,
-      }))
+      })),
     );
   };
 
@@ -537,7 +546,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       datosGenerales,
       contactos,
       direcciones,
-      aceptaWhatsapp
+      aceptaWhatsapp,
     );
     const validation = validatePayload(payload);
     setFieldErrors(validation.fields);
@@ -550,8 +559,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       // enfocar el dato inválido.
       setActiveSection("ficha");
       const firstField = Object.keys(validation.fields)[0] as
-        | keyof FieldErrors
-        | undefined;
+        keyof FieldErrors | undefined;
       const fieldIds: Record<keyof FieldErrors, string> = {
         nombre: "cliente-nombre",
         email: "cliente-email",
@@ -563,10 +571,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       };
       if (validation.focusId) {
         const contacto = contactos.find((item) =>
-          validation.focusId?.endsWith(item.id)
+          validation.focusId?.endsWith(item.id),
         );
         const direccion = direcciones.find((item) =>
-          validation.focusId?.endsWith(item.id)
+          validation.focusId?.endsWith(item.id),
         );
         if (contacto) setActiveContactoId(contacto.id);
         if (direccion) setActiveDireccionId(direccion.id);
@@ -762,12 +770,18 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                 description: "Datos y contactos",
                 icon: <UserRoundIcon />,
               },
-              ...(puedeConsultarPuntos ? [{
-                id: "fidelizacion",
-                label: conFidelizacion ? "Fidelización" : "Historial de puntos",
-                description: "Puntos y movimientos",
-                icon: <StarIcon />,
-              }] : []),
+              ...(puedeConsultarPuntos
+                ? [
+                    {
+                      id: "fidelizacion",
+                      label: conFidelizacion
+                        ? "Fidelización"
+                        : "Historial de puntos",
+                      description: "Puntos y movimientos",
+                      icon: <StarIcon />,
+                    },
+                  ]
+                : []),
               {
                 id: "historial",
                 label: "Historial",
@@ -945,7 +959,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                               ...current,
                               documentoNumero: event.target.value.replace(
                                 /\D/g,
-                                ""
+                                "",
                               ),
                             }))
                           }
@@ -958,7 +972,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                       </Field>
                       <Field
                         data-invalid={Boolean(
-                          fieldErrors.plazoCuentaCorrienteDias
+                          fieldErrors.plazoCuentaCorrienteDias,
                         )}
                       >
                         <FieldLabel htmlFor="cliente-condicion-pago">
@@ -969,7 +983,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                           id="cliente-condicion-pago"
                           inputMode="numeric"
                           aria-invalid={Boolean(
-                            fieldErrors.plazoCuentaCorrienteDias
+                            fieldErrors.plazoCuentaCorrienteDias,
                           )}
                           value={datosGenerales.plazoCuentaCorrienteDias}
                           onChange={(event) =>
@@ -1010,7 +1024,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                               ...current,
                               limiteCredito: event.target.value.replace(
                                 ",",
-                                "."
+                                ".",
                               ),
                             }))
                           }
@@ -1059,58 +1073,26 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                           </FieldDescription>
                         ) : null}
                       </Field>
-                      <FieldGroup className={styles.phoneGrid}>
-                        <Field>
-                          <FieldLabel htmlFor="telefono-codigo">
-                            Código de país
-                          </FieldLabel>
-                          <SelectField
-                            options={phoneCodeItems}
-                            value={datosGenerales.telefonoCodigo}
-                            onChange={(value) => {
-                              if (!value) {
-                                return;
-                              }
-
-                              setDatosGenerales((current) => ({
-                                ...current,
-                                telefonoCodigo: value,
-                              }));
-                            }}
-                            id="telefono-codigo"
-                            aria-label="Código de país"
-                            disabled={readOnly}
-                          />
-                        </Field>
-
-                        <Field
-                          data-invalid={Boolean(fieldErrors.telefonoNumero)}
-                        >
-                          <FieldLabel htmlFor="telefono-numero">
-                            Teléfono principal (opcional)
-                          </FieldLabel>
-                          <Input
-                            className={focus.singleBorder}
-                            id="telefono-numero"
-                            inputMode="tel"
-                            aria-invalid={Boolean(fieldErrors.telefonoNumero)}
-                            value={datosGenerales.telefonoNumero}
-                            onChange={(event) =>
-                              setDatosGenerales((current) => ({
-                                ...current,
-                                telefonoNumero: event.target.value,
-                              }))
-                            }
-                            placeholder="Número sin código de país"
-                          />
-                          <FieldDescription>
-                            {fieldErrors.telefonoNumero ??
-                              `Se guardará como: ${
-                                telefonoWhatsapp || "Sin definir"
-                              }`}
-                          </FieldDescription>
-                        </Field>
-                      </FieldGroup>
+                      <TelefonoField
+                        id="telefono-numero"
+                        label="Teléfono principal (opcional)"
+                        codigo={datosGenerales.telefonoCodigo}
+                        numero={datosGenerales.telefonoNumero}
+                        pais={datosGenerales.pais}
+                        disabled={readOnly}
+                        error={fieldErrors.telefonoNumero}
+                        onChange={(telefonoCodigo, telefonoNumero) => {
+                          setDatosGenerales((current) => ({
+                            ...current,
+                            telefonoCodigo,
+                            telefonoNumero,
+                          }));
+                          setFieldErrors((current) => ({
+                            ...current,
+                            telefonoNumero: undefined,
+                          }));
+                        }}
+                      />
                       <Field className={styles.wideField}>
                         <FieldLabel htmlFor="cliente-whatsapp-consentimiento">
                           Consentimiento para WhatsApp
@@ -1121,12 +1103,12 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                             aceptaWhatsapp === null
                               ? "sin_definir"
                               : aceptaWhatsapp
-                              ? "si"
-                              : "no"
+                                ? "si"
+                                : "no"
                           }
                           onChange={(value) =>
                             setAceptaWhatsapp(
-                              value === "sin_definir" ? null : value === "si"
+                              value === "sin_definir" ? null : value === "si",
                             )
                           }
                           id="cliente-whatsapp-consentimiento"
@@ -1275,7 +1257,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateContacto(
                                         contacto.id,
                                         "nombre",
-                                        event.target.value
+                                        event.target.value,
                                       )
                                     }
                                     placeholder="Nombre y apellido"
@@ -1296,7 +1278,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateContacto(
                                         contacto.id,
                                         "cargo",
-                                        event.target.value
+                                        event.target.value,
                                       )
                                     }
                                     placeholder="Compras, administracion, marketing..."
@@ -1318,69 +1300,37 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateContacto(
                                         contacto.id,
                                         "email",
-                                        event.target.value
+                                        event.target.value,
                                       )
                                     }
                                     placeholder="mail@empresa.com"
                                   />
                                 </Field>
 
-                                <FieldGroup className={styles.phoneGrid}>
-                                  <Field>
-                                    <FieldLabel
-                                      htmlFor={`contacto-codigo-${contacto.id}`}
-                                    >
-                                      Código de país
-                                    </FieldLabel>
-                                    <SelectField
-                                      options={phoneCodeItems}
-                                      value={contacto.telefonoCodigo}
-                                      onChange={(value) => {
-                                        if (!value) {
-                                          return;
-                                        }
-
-                                        updateContacto(
-                                          contacto.id,
-                                          "telefonoCodigo",
-                                          value
-                                        );
-                                      }}
-                                      id={`contacto-codigo-${contacto.id}`}
-                                      aria-label="Código de país"
-                                      disabled={readOnly}
-                                    />
-                                  </Field>
-
-                                  <Field>
-                                    <FieldLabel
-                                      htmlFor={`contacto-telefono-${contacto.id}`}
-                                    >
-                                      Teléfono
-                                    </FieldLabel>
-                                    <Input
-                                      className={focus.singleBorder}
-                                      id={`contacto-telefono-${contacto.id}`}
-                                      inputMode="tel"
-                                      value={contacto.telefonoNumero}
-                                      onChange={(event) =>
-                                        updateContacto(
-                                          contacto.id,
-                                          "telefonoNumero",
-                                          event.target.value
-                                        )
-                                      }
-                                      placeholder="Número del contacto"
-                                    />
-                                    <FieldDescription>
-                                      WhatsApp:{" "}
-                                      {formatWhatsappPhone(
-                                        contacto.telefonoCodigo,
-                                        contacto.telefonoNumero
-                                      ) || "Sin definir"}
-                                    </FieldDescription>
-                                  </Field>
-                                </FieldGroup>
+                                <TelefonoField
+                                  id={`contacto-telefono-${contacto.id}`}
+                                  label="Teléfono del contacto (opcional)"
+                                  codigo={contacto.telefonoCodigo}
+                                  numero={contacto.telefonoNumero}
+                                  pais={datosGenerales.pais}
+                                  disabled={readOnly}
+                                  onChange={(
+                                    telefonoCodigo,
+                                    telefonoNumero,
+                                  ) => {
+                                    setContactos((current) =>
+                                      current.map((c) =>
+                                        c.id === contacto.id
+                                          ? {
+                                              ...c,
+                                              telefonoCodigo,
+                                              telefonoNumero,
+                                            }
+                                          : c,
+                                      ),
+                                    );
+                                  }}
+                                />
                               </FieldGroup>
                             </Card.Content>
                           </Card>
@@ -1483,7 +1433,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     <MapPinHouseIcon data-icon="inline-start" />
                                     {
                                       addressTypeItems.find(
-                                        (item) => item.value === direccion.tipo
+                                        (item) => item.value === direccion.tipo,
                                       )?.label
                                     }
                                   </Chip>
@@ -1533,7 +1483,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateDireccion(
                                         direccion.id,
                                         "descripcion",
-                                        event.target.value
+                                        event.target.value,
                                       )
                                     }
                                     placeholder="Ej. Domicilio principal"
@@ -1557,7 +1507,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateDireccion(
                                         direccion.id,
                                         "tipo",
-                                        value
+                                        value,
                                       );
                                     }}
                                     id={`direccion-tipo-${direccion.id}`}
@@ -1583,7 +1533,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateDireccion(
                                         direccion.id,
                                         "pais",
-                                        value
+                                        value,
                                       );
                                     }}
                                     id={`direccion-pais-${direccion.id}`}
@@ -1606,7 +1556,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateDireccion(
                                         direccion.id,
                                         "codigoPostal",
-                                        event.target.value
+                                        event.target.value,
                                       )
                                     }
                                     placeholder="Código postal"
@@ -1627,7 +1577,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateDireccion(
                                         direccion.id,
                                         "direccion",
-                                        event.target.value
+                                        event.target.value,
                                       )
                                     }
                                     placeholder="Calle o avenida"
@@ -1648,7 +1598,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateDireccion(
                                         direccion.id,
                                         "numero",
-                                        event.target.value
+                                        event.target.value,
                                       )
                                     }
                                     placeholder="Número o piso"
@@ -1669,7 +1619,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       updateDireccion(
                                         direccion.id,
                                         "ciudad",
-                                        event.target.value
+                                        event.target.value,
                                       )
                                     }
                                     placeholder="Ciudad"

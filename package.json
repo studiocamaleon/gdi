@@ -32,6 +32,7 @@
     "dxf-writer": "1.18.4",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
+    "libphonenumber-js": "1.13.9",
     "lucide-react": "^0.577.0",
     "maxrects-packer": "^2.7.3",
     "next": "16.3.8",
