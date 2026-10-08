@@ -437,6 +437,7 @@ export type OrdenFacturable = {
   clienteId: string | null;
   clienteNombre: string | null;
   clienteCondicionFiscal: string | null;
+  fechaEmision?: string | null;
   fechaFinalizada: string | null;
   total: number;
   facturado: number;

@@ -1,5 +1,9 @@
 import type { ReglaRetencion, CalendarioAcreditacion } from "./administracion";
 import { apiRequest } from "@/lib/api";
+import {
+  parametrosFacturacion,
+  type FiltrosFacturacion,
+} from "@/lib/facturacion-filtros";
 import type {
   Cobro,
   CobroPendienteAcreditacion,
@@ -110,8 +114,13 @@ export async function getComprobantes(params?: {
 
 // ── Facturación sobre órdenes ──────────────────────────────────────────
 
-export async function getFacturacionPendientes(): Promise<OrdenFacturable[]> {
-  return apiRequest(`/administracion/facturacion/pendientes`);
+export async function getFacturacionPendientes(
+  filtros: FiltrosFacturacion = {},
+): Promise<OrdenFacturable[]> {
+  const query = parametrosFacturacion(filtros);
+  return apiRequest(
+    `/administracion/facturacion/pendientes${query ? `?${query}` : ""}`,
+  );
 }
 
 export async function facturarOrden(
