@@ -7,6 +7,7 @@ vi.mock("@/lib/ordenes-trabajo-api", () => ({
 vi.mock("@/lib/clientes-api", () => ({ getClientes: vi.fn(async () => []) }));
 vi.mock("@/lib/productos-servicios-api", () => ({
   getProductos: vi.fn(async () => []),
+  getCargosDirectosCatalogo: vi.fn(async () => []),
 }));
 vi.mock("@/lib/desarrollo-documental-api", () => ({
   getEstadoDocumentalOrden: vi.fn(async () => null),

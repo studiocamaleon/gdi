@@ -100,6 +100,7 @@ it.each([
   await act(async () => boton("Emitir factura").click());
   expect(api.facturarOrden).toHaveBeenCalledWith("ot-ficticia", {
     monto: total,
+    detalle: "items",
     concepto: "Trabajos de impresión — OT-QA",
   });
 });
