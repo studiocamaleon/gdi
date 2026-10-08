@@ -73,7 +73,11 @@ type EmisionJson = {
   canalVenta?: string;
   validezDias?: number;
   cargosDirectos?: number;
-  cargos?: unknown[];
+  cargos?: Array<{
+    nombreSnapshot: string;
+    descripcionSnapshot?: string | null;
+    total: number;
+  }>;
   items: CrearOrdenTrabajoItemDto[];
   fidelizacionCanjePuntos?: number;
 };
@@ -1425,6 +1429,11 @@ export class PresupuestosService {
       cargosDirectos: emision.cargosDirectos ?? 0,
       total: Number(c.total ?? 0),
       descuentoTotal: this.descuentoTotalDe(emision),
+      cargos: (emision.cargos ?? []).map((cargo) => ({
+        nombre: cargo.nombreSnapshot,
+        descripcion: cargo.descripcionSnapshot ?? null,
+        total: Number(cargo.total),
+      })),
       fidelizacion: {
         puntosEstimados: Number(c.fidelizacionPuntosEstimados ?? 0),
         canjePuntos: Number(c.fidelizacionCanjePuntos ?? 0),
