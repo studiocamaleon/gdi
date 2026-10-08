@@ -476,3 +476,36 @@ Constructor remoto propio retirado después de promover las imágenes. No se aum
 Copia previa **`90714ae8-3787-4467-939a-b6267d3b1619`**, completada **2026-10-07T20:01:14.566Z**. Copia posterior al primer lote **`3d6a7d0a-c598-4c3c-9c4f-7f7c25a6f0c6`**, completada **2026-10-07T20:29:06.195Z**. Copia final **`90c1ebb5-732c-41f4-bff2-3823a7d62cce`**, completada **2026-10-07T20:49:48.053Z**, con 307 migraciones y 61 archivos. Firma, huella, descifrado del manifiesto, fuentes e imágenes finales verificados. Código cifrado y protegido durante 31 días. **No se repitió una restauración SQL completa**.
 
 Para volver al conjunto previo `53087e81c82d093876132a26f25af0b7533c038c`, mantener la base: backend `sha256:c2c7d1367060a051cdad6a24fafa33f7d7271aac8d19445bd82fd920499959e1`, web `sha256:655b0becaa9507786368ac4aa088fc4d278773ac67821753e99fc56d556cdb93`. Reintroduce los defectos de este lote y elimina el acceso a recuperar flujos. No borrar operaciones ni revertir migraciones; priorizar una corrección hacia adelante. La primera web de este lote (`d2ca245a…`) conserva el error de centavos y no debe usarse como solución definitiva.
+
+
+## 08/10/2026, 00:29 UTC — Lote de octubre promovido desde staging (PR #37)
+
+**API, ambos workers y web ejecutan `360037038ac17da69fa71b32c2fe3d864578c678`.** Publicación autorizada tras el ensayo completo del conjunto en staging. El PR #37 reúne #28–#36 y depende temporalmente de #27. No se fusionó `main` ni se modificó Vercel. El commit `f89743bcd` sólo completa la lista de permisos esperada por una prueba; los commits documentales posteriores tampoco modifican las imágenes.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:f6270c0d57aba902942ea5571e0996c8e5eeb64b8c1af08e0dc67b409a8929ee` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af` |
+
+SHA-256 de ambos manifiestos idénticos a staging. **309 migraciones**, incluidas las tablas de lectores de notificaciones y solicitudes de alta de clientes. Migración aditiva y rol de aplicación sin DDL verificados, sin seeds ni resets. Conteos comerciales anteriores y posteriores conservados; no se crearon datos de ensayo en producción. Seis máquinas y tamaños originales, imágenes de Gotenberg y copiador intactas. Salud web/API 200, API privada directa 403 y BFF anónimo 401. Revisión exacta y Sentry configurado en los cuatro servicios actualizados.
+
+### Cambios y comprobaciones
+
+- Pasos asignados automáticamente: pueden ejecutarlos integrantes habilitados de la estación y queda registrado quién lo hizo. Las asignaciones manuales conservan exclusividad. Operación diaria muestra fecha de entrega del ítem o, en su defecto, de la OT.
+- Precio fijo: incluye los obligatorios y suma opcionales según costo y margen configurable en Producto → Precio. Sin margen explícito usa 0%; no se cambiaron las configuraciones comerciales existentes. Tiempo opcional y costo del centro afectan el importe final.
+- Notificaciones: «Marcar leído», autor/fecha y actualización en vivo. Los lectores son visibles al equipo autorizado; el estado de no leído se conserva por usuario. No se atribuyen autores a lecturas históricas sin registro.
+- CRM → Clientes → Solicitudes de alta: formulario móvil con datos fiscales, revisión, aprobación/rechazo, detección de duplicados y permiso `crm.aprobar_altas`. Cada empresa habilita su enlace; en producción se comprobó inicialmente desactivado. Este registro de clientes es independiente del registro público de empresas SaaS, que sigue cerrado.
+- Permisos de Facturación/Comprobantes permiten crear el comprobante sin exigir un permiso general de Administración. Nota de crédito conserva su control adicional.
+- Las finalizadas están en «Para retirar» y no cuentan como atrasadas por falta de entrega. Conserva los indicadores históricos de finalización.
+- Interfaz de operadores alineada, liquidación con scroll interior y pie fijo, y foco único en campos de tiempo.
+- **333 pruebas locales**: 157 API del lote, 39 de permisos transversales y 137 web. Compilaciones remotas completas con tipos, guard CSS y diff aprobados. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37701409659) y [CI contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37701409736) aprobados en `f89743bcd`, con el mismo código ejecutable desplegado.
+- **Staging: 33 comprobaciones HTTP/SSE/SSR** y recorrido Chrome de escritorio/móvil. Precio base $10.000 y opcionales de 30/60/120 minutos: $14.000/$18.000/$26.000; control de asignaciones, lectores, permisos, aislamiento, duplicados, alta/aprobación, fecha y estilos. Se retiraron las dos empresas y siete usuarios ficticios. [Detalle](../staging/VALIDACION.md).
+- **Producción, sólo lectura:** sesión administrativa real, nueva pestaña «Para retirar» con trabajos finalizados y desaparición del falso atraso; acceso a Solicitudes de alta; apertura de Facturar desde una OT con acción de emitir habilitada, cancelada sin emitir. No se modificaron órdenes, precios, clientes ni cuentas para comprobarlo.
+
+### Operación, respaldo y reversión
+
+El constructor remoto se apagó automáticamente tras terminar las compilaciones y Fly no pudo reiniciarlo por falta de CPU en su host. Se promovieron las imágenes existentes directamente entre repositorios del registro mediante `docker buildx imagetools create --prefer-index=false`, comprobando el hash del manifiesto destino. No se recompiló ni se aumentaron recursos. El constructor propio fue eliminado. Durante el reemplazo de la API, una pestaña con la web anterior registró React 441; tras recargar la nueva web el recorrido quedó operativo. No hubo recuperación de datos ni reemplazo manual de máquinas de aplicación.
+
+Copia previa **`95924f84-ff72-4f94-aa90-69e980c67381`**, completada **2026-10-08T00:01:15.073Z**. Copia posterior **`4f36cc0a-9038-43e7-9e55-863cc59ac1cb`**, completada **2026-10-08T00:27:56.495Z**, con 309 migraciones y 62 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes verificados. Fuentes cifradas y protegidas durante 31 días. **No se repitió una restauración SQL completa.** Evidencias y accesos fuera de Git.
+
+Reversión de código al conjunto anterior: backend `dd71567e3`, imagen `sha256:f3c54b59a098da9d6c9175b47bd2904f183ea95cecbb1bfbf44c80c445721b0c`; web `0e2e013d7`, imagen `sha256:fdeb342f2f47dacd3a7adc886932fc5f3f0411dc52c0af421ded49f40a33bee9`. Conservar las tablas y datos nuevos, que son compatibles con el código anterior; volver atrás retira las mejoras. No revertir migraciones ni borrar registros; priorizar una corrección hacia adelante.

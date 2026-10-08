@@ -1101,3 +1101,35 @@ En la comprobación posterior se detectó un redondeo anterior a pesos enteros e
 Tres casos de regresión fallaron antes de corregirlo y pasaron después. **41 pruebas web en cuatro suites**, lint y compilación remota completa aprobados. Ocho comprobaciones fiscales HTTP/SSR repetidas. En Chrome, sin permiso de editar la OT, se verificaron $2.420,66 iniciales, $1.210,33 al 50%, vuelta al total exacto y botón habilitado, sin pulsar emisión. Segunda empresa de ensayo y sus usuarios retirados, sin comprobantes ni cobros. [CI HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37682561420) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37682561432), aprobados para el SHA final.
 
 Salud y tamaños nuevamente comprobados, Sentry activo en web. Copia final **`8e1a35a1-7703-417e-b07a-e7b9b9e25785`**, completada **2026-10-07T20:41:37.499Z**, con 307 migraciones y 24 archivos. Firma, descifrado del manifiesto, ambas fuentes e imágenes finales verificados; sin repetir restauración SQL. Constructor temporal propio retirado después de promover las imágenes finales. Para reversión, usar el conjunto anterior documentado arriba; volver sólo a la primera web de este lote reintroduce el error de centavos.
+
+
+## 08/10/2026, 00:20 UTC — Lote de octubre: operación, precios, clientes e interfaz (PR #37)
+
+Revisión ejecutada **`360037038ac17da69fa71b32c2fe3d864578c678`** en API, ambos workers y web. El PR #37 reúne #28–#36 y depende temporalmente de #27. No se fusionó `main` ni se modificó Vercel. El commit posterior `f89743bcd` sólo actualiza la lista esperada de permisos de una prueba; no cambia código ejecutable.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:f6270c0d57aba902942ea5571e0996c8e5eeb64b8c1af08e0dc67b409a8929ee` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af` |
+
+**309 migraciones.** Se agregaron `20261007190000_notificaciones_lecturas` y `20261007210000_clientes_autoregistro`, sin seeds ni resets. Verificado el rol de ejecución sin DDL y con acceso a las tablas nuevas. Seis máquinas y mismos tamaños; PDF y copiador conservan sus imágenes. Salud web/API 200, API privada directa 403 y BFF anónimo 401; revisión exacta y Sentry configurado en los cuatro servicios actualizados.
+
+### Alcance y verificación
+
+- **Operación compartida:** un integrante habilitado de la estación completa el paso asignado automáticamente a otro; queda registrado el ejecutor real. La asignación manual conserva exclusividad. Fecha de entrega visible en la tabla, con preferencia por la del ítem y alternativa de la OT.
+- **Precio fijo:** incluye pasos obligatorios; los opcionales agregan su costo y el margen configurable del producto. Ensayo con base $10.000, centro $6.000/h y margen 25%: $10.000 sin opcional, $14.000 / $18.000 / $26.000 con 30 / 60 / 120 minutos. Antes de publicar, el mismo caso daba $10.000 en todas las variantes. Comprobados cotización, cambio de minutos y agregado al formulario de OT en Chrome.
+- **Notificaciones:** lectura explícita, autor y fecha; actualización SSE y lectores compartidos. Cada usuario conserva su estado de no leído. Se verificaron dos lectores, aislamiento y un registro histórico sin autor inventado.
+- **Autoregistro de clientes:** formulario móvil con datos fiscales obligatorios, revisión, aprobación y rechazo bajo `crm.aprobar_altas`. Documento duplicado no genera un segundo cliente; teléfono compartido requiere revisión. API y navegador comprobaron envío, aprobación, rechazo, 403 y 404 entre empresas. En 390 × 844 no hay desborde horizontal. No crea usuarios ni emite comprobantes.
+- **Permisos fiscales:** el permiso granular de Facturación/Comprobantes permite crear un borrador, y el lector recibe 403. Proveedor manual y datos ficticios; no se invocó emisión ARCA.
+- **Estados:** las finalizadas aparecen en «Para retirar», aunque la fecha de entrega haya pasado; las pendientes vencidas siguen en «Atrasadas».
+- **Interfaz:** operadores alineados por paso/estación, liquidación con cuerpo desplazable y pie con total/acciones siempre visible, e input de tiempo sin borde/sombra propios duplicados. Se comprobó foco, scroll real del modal y las opciones de personal; no se acreditó el cobro ficticio.
+- **Pruebas:** 157 API en 12 suites, 39 de permisos transversales y 137 web en 12 archivos; guard de CSS y diff correctos. Compilaciones remotas completas con tipos. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37701409659) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37701409736) aprobados sobre `f89743bcd`, cuyo único cambio respecto de la imagen es la prueba mencionada.
+- **33 comprobaciones funcionales HTTP/SSE/SSR**, además del recorrido visual. Dos empresas y siete usuarios ficticios retirados por identificador. Conteos finales iguales a los previos: una empresa, dos clientes, siete órdenes, 31 pasos, seis empleados y cuatro movimientos de fondos. Sin comprobantes emitidos ni comunicaciones externas.
+
+### Respaldo y reversión
+
+Copia previa `1d52cf7e-99ba-449a-9b7d-0fbcdc39d8c5`, completada 2026-10-07T23:01:02Z. Copia posterior **`8403b11e-d89f-4675-baf1-009932a7b73a`**, completada **2026-10-08T00:20:10.287Z**, con 309 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de fuentes/imágenes verificados. Fuente cifrada protegida durante 31 días. **No se repitió una restauración SQL completa.** Evidencias y accesos fuera de Git.
+
+La primera subida de API al registro falló por transporte y luego por una capa incompleta. Se recuperó la imagen ya construida y se verificó su digest, sin omitir compilación ni tipos. La promoción puede copiar los manifiestos con `docker buildx imagetools create --prefer-index=false`; comprobar el SHA-256 del manifiesto destino antes de desplegar. No necesita compilar ni iniciar Docker local. [Referencia de Docker](https://docs.docker.com/reference/cli/docker/buildx/imagetools/create/).
+
+Reversión de código al conjunto previo: backend `dd71567e3`, imagen `sha256:f3c54b59a098da9d6c9175b47bd2904f183ea95cecbb1bfbf44c80c445721b0c`; web `0e2e013d7`, imagen `sha256:fdeb342f2f47dacd3a7adc886932fc5f3f0411dc52c0af421ded49f40a33bee9`. Conservar las tablas y registros nuevos: las migraciones son aditivas. El código anterior pierde estas mejoras; no borrar datos ni revertir migraciones, y priorizar una corrección hacia adelante.
