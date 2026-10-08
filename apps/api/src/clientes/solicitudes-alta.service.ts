@@ -350,7 +350,7 @@ export class SolicitudesAltaService {
           await db.clienteEvento.create({
             data: {
               tenantId: auth.tenantId,
-              clienteId: clienteId!,
+              clienteId,
               tipo: dto.accion === 'aprobar' ? 'creado' : 'solicitud_vinculada',
               actorId,
               actorNombre,
