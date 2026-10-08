@@ -551,3 +551,20 @@ Copia previa **`1584a0b6-cee6-4077-ac2f-7755c1fce76f`**, completada **2026-10-08
 El constructor temporal propio `fly-builder-ancient-breeze-3294` fue eliminado. No se compilaron contenedores en la Mac ni se alteraron otros proyectos. No hubo cambios de recursos permanentes.
 
 Reversión de código disponible: API/workers `d0645233b`, digest `sha256:aaf0f547ead6509b541488a5f90519f5d6a81339eeb6880833bb340f0362cbcb`; web `360037038`, digest `sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af`. **Los borradores nuevos usan referencias internas `BORRADOR-…`; el código anterior no les asigna número al emitir.** Priorizar corrección hacia adelante; una reversión exige conservar la base y bloquear su emisión hasta resolver la compatibilidad. No renumerar históricos, borrar registros ni restaurar sobre la única base activa.
+
+
+## 2026-10-08, 20:07 UTC — API con CPU performance
+
+Cambio de recursos autorizado expresamente por Lucas después del diagnóstico de lentitud de producción. La máquina API `d8946dec3e9278`, en `gru`, pasó de **1 CPU shared / 2048 MB** a **1 CPU performance / 2048 MB** mediante actualización de la máquina existente. El manifiesto de producción conserva este tamaño para futuros despliegues.
+
+### Evidencia y alcance
+
+- Antes del cambio: chequeos de salud con timeout; muestra de 81 solicitudes completadas, excluyendo streams, con mediana de 12.558 ms y máximo de 30.717 ms. Métricas históricas de Fly alrededor de las 20:00 UTC: saldo de ráfaga prácticamente agotado y throttling aproximado del 93 % del intervalo. Memoria disponible; la muestra PostgreSQL no mostró bloqueos ni agotamiento de conexiones. Esto no descarta otros problemas puntuales de transacciones o Redis.
+- Imagen conservada exactamente: `registry.fly.io/grafoprint-production-api@sha256:fc7449a7f2a7bada65822ef904dcd4c447dc77df5ceec3f165ea0de6b4e445a8`. Comparación de configuración antes/después: sólo cambió `guest.cpu_kind`; número de CPU y memoria idénticos. Sin compilación, despliegue de código, migraciones, cambios de secretos ni modificación de datos comerciales.
+- Actualización terminada correctamente; máquina iniciada y chequeo Fly en `passing`. La métrica histórica `fly_instance_cpu_baseline` confirmó el cambio de **0,0625 a 1 CPU** tras actualizarse el recolector. Dos consultas HTTPS de salud de API: **200**, base `up`, **372 y 356 ms** desde la Mac. Web **200**, **346 ms**.
+- Muestra posterior de CPU de 10 segundos: **1 tick de steal de 1.003 ticks totales** (aproximadamente 0,1 %); presión CPU `avg10` de 3,14 %. Es una muestra inmediata de baja carga; no sustituye validar el comportamiento durante un pico real.
+- No se cambiaron web, workers, generador PDF, base, Redis ni copiador. Los cambios de lotes de facturación siguen locales. No se emitieron facturas ni se enviaron mensajes como ensayo.
+
+La primera invocación del CLI con imagen explícita duplicó el digest y fue rechazada antes de modificar la máquina. Se repitió la actualización sin argumento de imagen, conservando la configuración existente; el digest exacto se verificó después.
+
+El cambio aumenta el costo de CPU de la API conforme al tipo performance autorizado. Reversión de recursos disponible volviendo a `shared` con una CPU y 2048 MB, aunque reintroduciría el riesgo de agotamiento observado; no requiere revertir código ni datos. Evidencia operativa privada fuera de Git.

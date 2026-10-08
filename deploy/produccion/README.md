@@ -10,10 +10,10 @@ El alta inicial fue de una empresa nueva, sin historial local. La migración ope
 
 ## Recursos y separación
 
-| Parte | Producción | Tamaño inicial |
+| Parte | Producción | Tamaño vigente |
 |---|---|---|
 | Aplicación | `app.grafoprint.com.ar`, Fly web en São Paulo | 1 CPU compartida / 1 GB |
-| API | `api.grafoprint.com.ar`, Fly API en São Paulo | 1 CPU compartida / 2 GB |
+| API | `api.grafoprint.com.ar`, Fly API en São Paulo | 1 CPU performance / 2 GB |
 | Cálculos y trabajos | Fly worker, São Paulo | 2 CPU compartidas / 4 GB |
 | Trabajos PDF | Fly worker-pdf, São Paulo | 1 CPU compartida / 1 GB |
 | Generador PDF | Fly pdf, sólo red privada | 1 CPU compartida / 1 GB |
@@ -22,6 +22,8 @@ El alta inicial fue de una empresa nueva, sin historial local. La migración ope
 | Archivos | R2 `grafoprint-production-files`, privado US | Según consumo |
 | Copiador | Fly respaldo, Virginia, red propia | 1 CPU compartida / 512 MB; volumen 10 GB |
 | Copias | B2 en cuenta independiente, depósito exclusivo | Cada hora, cifradas y protegidas contra borrado 30 días |
+
+El 08/10/2026, a las 20:07 UTC, la API pasó de CPU compartida a `performance`, conservando una CPU, 2 GB y su imagen existente. Cambio de recursos autorizado para corregir el agotamiento de saldo de CPU; no publicó los cambios locales de facturación. Ver el registro de validación.
 
 Las cinco apps Fly usan la red `grafoprint-production`. El copiador usa `grafoprint-production-respaldo`. Son redes separadas dentro de la organización de Fly; **no equivalen a cuentas administrativas independientes**. B2 sí está en el proveedor independiente elegido. Una máquina por servicio no constituye alta disponibilidad completa.
 
