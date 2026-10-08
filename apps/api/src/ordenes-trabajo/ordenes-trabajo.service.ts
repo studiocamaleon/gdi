@@ -27,6 +27,7 @@ import type {
   TableroItemData as ItemPersonal,
   TableroPasoData as PasoPersonal,
 } from '../eta/motor/tablero-tipos';
+import { ordenarPasosProduccion } from './orden-pasos-produccion';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { ReservasMaterialService } from '../inventario/reservas-material.service';
 import {
@@ -8882,9 +8883,10 @@ export class OrdenesTrabajoService {
       contexto && typeof contexto === 'object' && !Array.isArray(contexto)
         ? (contexto as Record<string, unknown>)
         : null;
-    const pasosVisibles = item.pasos.filter(
-      (paso) => paso.nestingLoteRol !== 'PARTICIPANTE',
-    );
+    const pasosVisibles = ordenarPasosProduccion(
+      item.pasos,
+      (paso) => (paso.dependenciasEntrantes ?? []).map((d) => d.predecesorPasoId),
+    ).filter((paso) => paso.nestingLoteRol !== 'PARTICIPANTE');
     return {
       id: item.id,
       parentItemId: item.parentItemId,
