@@ -518,3 +518,36 @@ Reversión de código al conjunto anterior: backend `dd71567e3`, imagen `sha256:
 - Producción: seis máquinas sanas con tamaños originales, HTTPS API/web 200, API protegida 403 y BFF sin sesión 401. Revisión exacta y Sentry activo verificados en los cuatro servicios. Consulta de sólo lectura usando el código compilado publicado: nueve cargos activos y tres zonas conservan códigos/tarifas; no se crearon presupuestos, órdenes ni facturas reales para probar.
 - Fuente exacta cifrada y protegida 31 días en B2; inventario del copiador actualizado. Constructor remoto temporal eliminado después de publicar la imagen. La promoción usó copia entre registros sin recompilar ni reiniciar Docker local.
 - Copia posterior `eb82f908-f5ee-4f5d-8371-bae8bcb30a3e`, completada a las 01:57:48 UTC: firma y descifrado del manifiesto verificados, 309 migraciones, 63 archivos y ambas revisiones fuente, incluida la nueva imagen backend. No se repitió restauración SQL.
+
+
+## 08/10/2026, 12:46 UTC — Borradores y cargos promovidos desde staging (PR #39)
+
+**API, ambos workers y web ejecutan `139ce05aba5e549973225e80e0b0c3ecc8433562`.** Publicación autorizada después de comprobar las tres correcciones en staging. El [PR #39](https://github.com/studiocamaleon/gdi/pull/39) depende de #38 y permanece abierto, sin fusionar la cadena ni modificar Vercel. Los commits documentales posteriores no cambian el código ejecutado.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-production-api@sha256:ba08b41d5412f01c8aae5276038f8e4aecaac9dcd49c883ce6b739a73e8478d9` |
+| Web | `registry.fly.io/grafoprint-production-web@sha256:4a79710ab2591b081c8927663fdb51848f6ee131228b6c6169d89234899ff01a` |
+
+SHA-256 de ambos manifiestos idénticos a staging; promoción entre registros sin recompilar. **309 migraciones, ninguna nueva.** Seis máquinas con tamaños originales; PDF y copiador conservan sus imágenes. No se ejecutaron seeds ni resets.
+
+### Resultado y validación
+
+- Borradores nuevos de OT: número comercial al emitir, no al guardar. Los históricos ya numerados conservan su número.
+- Presupuestos: «Guardar borrador» conserva el trabajo sin crear una OT ni enviarlo; se puede enviar después desde su detalle, respetando las reglas de aprobación.
+- Cargos: agregar y quitar desde «Editar orden», con guardado conjunto de cargos, totales e historial. El servidor calcula tarifas por zona; conserva snapshots de los cargos existentes. Rechaza órdenes canceladas, facturadas o con comprobantes en preparación, versiones desactualizadas y totales inferiores a lo cobrado.
+- **323 pruebas locales** (267 API y 56 web), [CI de permisos con 1.135 pruebas/73 suites](https://github.com/studiocamaleon/gdi/actions/runs/37718223090) y [CI completo de tipos/contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37718223002) aprobados para el SHA ejecutado.
+- **Staging: 41 comprobaciones HTTP/SSR y de resultados**, más guardado visual en Chrome y comprobación de persistencia sin avisos. Numeración al emitir, cargo por zona, presupuesto borrador, estados permitidos, límites fiscales/cobros, permisos y separación de empresas. Dos empresas y cuatro usuarios ficticios retirados por identificador; sin objetos R2. [Registro detallado](../staging/VALIDACION.md).
+- **Producción, sólo lectura:** seis servicios sanos, HTTP web/API 200, API privada directa 403 y BFF sin sesión 401. Revisión exacta y Sentry configurado en los cuatro servicios actualizados. Consulta con el código publicado dentro de transacción de sólo lectura: nueve cargos y una zona conservan la información comercial requerida, sin exponer campos internos de costos. No se crearon órdenes, presupuestos, cobros ni comprobantes reales como ensayo.
+
+### Incidencia conocida fuera del lote
+
+En staging se reprodujo un problema previo de productos con diseño obligatorio: se exige completar el brief, pero el formulario sólo se monta para opcionales. Ese componente no cambia en este PR. Se informó al titular y quedó registrado como pendiente separado, con datos y evidencia ficticios; no se presenta esta publicación como solución de ese problema. El recorrido de borradores se completó con un producto de trabajo manual.
+
+### Respaldo y reversión
+
+Copia previa **`1584a0b6-cee6-4077-ac2f-7755c1fce76f`**, completada **2026-10-08T12:01:11.529Z**. Posterior **`b52d2a92-b43f-4c0e-bdde-b251c888b5b0`**, completada **2026-10-08T12:43:33.444Z**, con 309 migraciones y 64 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes verificados. Fuente cifrada y protegida durante 31 días. **No se repitió una restauración SQL completa.** Evidencias y accesos fuera de Git. El primer sondeo aún encontró la copia anterior; se comprobó la nueva al terminar.
+
+El constructor temporal propio `fly-builder-ancient-breeze-3294` fue eliminado. No se compilaron contenedores en la Mac ni se alteraron otros proyectos. No hubo cambios de recursos permanentes.
+
+Reversión de código disponible: API/workers `d0645233b`, digest `sha256:aaf0f547ead6509b541488a5f90519f5d6a81339eeb6880833bb340f0362cbcb`; web `360037038`, digest `sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af`. **Los borradores nuevos usan referencias internas `BORRADOR-…`; el código anterior no les asigna número al emitir.** Priorizar corrección hacia adelante; una reversión exige conservar la base y bloquear su emisión hasta resolver la compatibilidad. No renumerar históricos, borrar registros ni restaurar sobre la única base activa.

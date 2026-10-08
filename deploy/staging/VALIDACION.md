@@ -1142,3 +1142,35 @@ Reversión de código al conjunto previo: backend `dd71567e3`, imagen `sha256:f3
 - Ensayo HTTPS/BFF sobre staging: fallo reproducido antes del despliegue; 13 comprobaciones aprobadas después. Vendedor ficticio sin permisos de costos: catálogo y página SSR con zonas/tarifas, acceso al catálogo administrativo rechazado, catálogo de otra empresa aislado, dos presupuestos emitidos con zonas distintas, rechazo de zona ausente/inexistente antes de numerar y OT guardada con el mismo cargo. Se alteró el importe de entrada y el servidor conservó la tarifa autoritativa. Sin correos ni WhatsApp; ambos PDF ficticios comprobados y eliminados de R2. Empresas, usuarios y documentos de ensayo retirados.
 - Seis servicios sanos con tamaños originales, API/web 200, API directa protegida 403 y BFF sin sesión 401. Sentry activo y revisión exacta verificada en API, workers y web. Constructor remoto temporal retirado tras publicar la imagen.
 - Fuente exacta cifrada y custodiada en B2. Copia posterior `d8576f4c-2835-4de9-90d7-497f50379fbc`, completada a las 01:55:06 UTC: firma, descifrado del manifiesto, 309 migraciones, 24 archivos, nueva imagen backend y ambas revisiones fuente verificados. No se repitió la restauración SQL.
+
+
+## 08/10/2026, 12:38 UTC — Borradores y cargos de órdenes y presupuestos (PR #39)
+
+Revisión ejecutada **`139ce05aba5e549973225e80e0b0c3ecc8433562`** en API, ambos workers y web. El [PR #39](https://github.com/studiocamaleon/gdi/pull/39) depende temporalmente de #38; no se fusionó la cadena ni se modificó Vercel. Los commits documentales posteriores no cambian las imágenes.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:ba08b41d5412f01c8aae5276038f8e4aecaac9dcd49c883ce6b739a73e8478d9` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:4a79710ab2591b081c8927663fdb51848f6ee131228b6c6169d89234899ff01a` |
+
+**309 migraciones, ninguna nueva.** Seis máquinas y tamaños originales; PDF y copiador conservan sus imágenes. Salud web/API 200, API privada directa 403 y BFF anónimo 401. Revisión exacta y Sentry configurado en los cuatro servicios actualizados. Compilaciones completas remotas con tipos habilitados.
+
+### Recorrido comprobado
+
+- Dos borradores de OT no incrementan el contador y muestran «Borrador». Emitir uno asigna `OT-2026-0001`; repetir la emisión se rechaza sin consumir otro número. Los borradores históricos numerados conservan su número.
+- El rol que sólo gestiona presupuestos puede guardar uno en borrador, sin crear OT, fecha de emisión, enlace público ni avisos externos. En Chrome se guardó otro presupuesto y se comprobó su persistencia con los mismos controles.
+- Agregar y quitar cargos en una OT existente funciona en borrador, pendiente, producción, finalizada y entregada. Para ensayar los estados se modificó únicamente el registro ficticio; no se ejecutaron flujos de entrega ni comunicaciones externas. El servidor calcula la tarifa por zona: un cargo neto de $1.500 más IVA de $315 lleva el total de $12.100 a $13.915, aunque el cliente envíe un importe distinto.
+- Rechazos comprobados: versión desactualizada 409, lector 403, otra empresa 404, orden facturada/cancelada y reducción por debajo de cobros 409. Las pruebas locales cubren también comprobantes en preparación y cargos históricos sin detalle.
+- Chrome: «Editar orden» → «Agregar cargo» → zona → «Guardar cambios»; el cargo queda persistido y vuelve la vista de lectura. En creación de presupuesto, «Guardar borrador» abre el detalle en estado Borrador sin enviarlo. Comprobación posterior de base: número OT sin consumo adicional y cero correos/WhatsApp.
+- **41 comprobaciones HTTP/SSR y de resultados**, más el recorrido visual y una comprobación compuesta de persistencia. Se retiraron por identificador las dos empresas y cuatro usuarios ficticios y sus dependencias. No se crearon archivos R2.
+- **323 pruebas locales:** 267 API y 56 web. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/37718223090): 1.135 pruebas de API en 73 suites. [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37718223002): tipos API/web, imágenes PDF/respaldo, migraciones efímeras, arranque y login directo/BFF aprobados sobre la revisión ejecutada.
+
+### Incidencia previa detectada
+
+Un producto con `diseno_grafico` obligatorio exige completar un brief al agregarlo, pero el formulario sólo se monta dentro de los opcionales. Puede bloquear «Agregar» sin mostrar cómo resolverlo. `agregar-producto-sheet.tsx` es idéntico entre la base del PR y la revisión publicada: no es una regresión de este lote. Se reprodujo con datos ficticios y quedó pendiente fuera del alcance del PR listo. Para completar el ensayo de borradores se cambió exclusivamente el paso del producto ficticio a trabajo manual. Evidencia visual privada; no se alteraron productos reales para sortearlo.
+
+### Respaldo y reversión
+
+Copia previa **`737baa16-b80d-4533-98ff-3f24aeddaf36`**, completada **2026-10-08T12:00:58.555Z**. Posterior **`dbec96d2-6a32-41ed-8b28-d9c556a715ae`**, completada **2026-10-08T12:37:20.371Z**, con 309 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión e inventario de imágenes/fuentes comprobados. Fuente exacta cifrada y protegida durante 31 días. **No se repitió una restauración SQL completa.** Evidencias y accesos fuera de Git.
+
+Constructor remoto propio retirado al terminar la promoción. No se compiló en Docker local ni se cambiaron tamaños. Reversión de código disponible: API/workers `d0645233b`, imagen `sha256:aaf0f547ead6509b541488a5f90519f5d6a81339eeb6880833bb340f0362cbcb`; web `360037038`, imagen `sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af`. **Los nuevos borradores guardan una referencia interna `BORRADOR-…` y el código anterior no sabe asignarles número al emitir:** priorizar corrección hacia adelante; si se revierte, conservar la base y bloquear la emisión de esos borradores hasta resolver su compatibilidad. No renumerar históricos, ejecutar seeds ni restaurar encima de la base activa.

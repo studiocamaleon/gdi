@@ -116,12 +116,13 @@ del frontend es el contrato de la API).
 4. Módulo de pagos (diseño propio, cuelga de OrdenTrabajo).
 
 
-## Borradores y cargos — corrección local del 07/10/2026
+## Borradores y cargos — publicación del 08/10/2026
 
 - Los borradores nuevos no consumen numeración de OT. Emitirlos numera y registra el evento en la misma transacción; el control de versión impide una segunda emisión concurrente. Los borradores históricos ya numerados conservan su número.
 - La ficha permite guardar un presupuesto con cliente, canal de venta y productos mediante `POST /presupuestos/borradores`. Queda en el listado con estado borrador e identificador PRES, sin fecha de emisión, vencimiento, enlace público ni envío de avisos. El detalle permite enviarlo posteriormente, con las reglas de aprobación existentes. No crea una OT.
 - Desde «Editar orden» se pueden agregar o quitar cargos en borrador, pendiente, producción, finalizada y entregada. «Guardar cambios» actualiza cargos, totales e historial en una sola transacción; «Cancelar» descarta los cambios locales. Los cargos conservados mantienen su snapshot aunque cambie el catálogo; los nuevos se calculan contra el catálogo del tenant.
 - Una orden cancelada o con facturación preparada/emitida rechaza la modificación de cargos. El total no puede quedar por debajo de los cobros. Las órdenes históricas que sólo guardaron un agregado de cargos sin su detalle requieren revisión antes de reemplazarlos.
 - La pantalla de detalle carga el catálogo comercial de cargos y utiliza el permiso de gestionar órdenes. Guardar un presupuesto sólo requiere el permiso correspondiente a presupuestos; no requiere Administración ni gestionar órdenes.
-- Pruebas locales: 267 comprobaciones de API en siete suites (incluye PostgreSQL aislado) y 56 de interfaz en seis archivos, con fixtures ficticios y sin envíos a proveedores. La comprobación global de tipos de API excedió 2 GB de heap local; completar la compilación con tipos en CI remoto. Sin nuevas migraciones ni publicación de entornos.
+- Pruebas locales: 267 comprobaciones de API en siete suites (incluye PostgreSQL aislado) y 56 de interfaz en seis archivos, con fixtures ficticios y sin envíos a proveedores. La comprobación global de tipos de API excedió 2 GB de heap local y quedó completada en CI remoto junto con los tipos de web, los contenedores y 1.135 pruebas de API. Sin nuevas migraciones.
+- Publicado `139ce05aba5e549973225e80e0b0c3ecc8433562` en staging y producción. Staging: 41 comprobaciones HTTPS/BFF/resultados, guardado visual de cargos y presupuesto, y verificación de persistencia sin envíos ni consumo de número OT. Producción: mismas imágenes por digest y comprobaciones de sólo lectura. Detalles y límites en los registros de [staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md).
 - Rama `codex/borradores-cargos-orden`, dependiente del PR #38, que contiene la corrección de tarifas por zona ya publicada. No fusionar la cadena incidentalmente.

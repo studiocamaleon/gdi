@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-08, 01:55 UTC.** API y ambos workers `d0645233b` (PR #38): corrección de zonas y tarifas de cargos al emitir órdenes/presupuestos. Web conserva `360037038`. 260 pruebas locales y 13 comprobaciones HTTPS/BFF en staging aprobadas, incluidos dos presupuestos y una OT ficticios; CI completo aprobado. 309 migraciones, mismos tamaños, salud, Sentry y respaldo con fuentes/imágenes verificados. No se repitió restauración SQL. Ver [VALIDACION.md](./VALIDACION.md).
+> **Estado vigente: 2026-10-08, 12:38 UTC.** API, ambos workers y web ejecutan `139ce05ab` (PR #39): borradores de OT sin consumir número, presupuestos en borrador y edición de cargos en órdenes existentes. 323 pruebas locales, CI completo y 41 comprobaciones HTTPS/BFF/resultados en staging aprobadas, más guardado real desde Chrome con datos ficticios. 309 migraciones, mismos tamaños, salud, Sentry e inventario del respaldo comprobados. Se detectó y registró aparte una incidencia previa del brief de diseño obligatorio. No se repitió restauración SQL. Ver [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
