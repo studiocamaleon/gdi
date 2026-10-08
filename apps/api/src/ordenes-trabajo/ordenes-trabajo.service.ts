@@ -2049,14 +2049,14 @@ export class OrdenesTrabajoService {
           );
         if (tienePlanEntrega || conversion) await bloquearColaEntrega(tx, auth.tenantId);
         if (conversion) {
-          const presupuesto = await tx.cotizacion.findFirst({
-            where: { tenantId: auth.tenantId, id: payload.cotizacionId, estado: 'aprobado' },
-            select: { id: true },
+          const presupuesto = await tx.cotizacion.updateMany({
+            where: { tenantId: auth.tenantId, id: payload.cotizacionId, estado: 'aprobado', versionVigente: true },
+            data: { updatedAt: new Date() },
           });
           const convertidos = await tx.ordenTrabajoItem.count({
             where: { tenantId: auth.tenantId, cotizacionItemId: { in: idsSnapshot }, orden: { cotizacionId: payload.cotizacionId } },
           });
-          if (!presupuesto || convertidos)
+          if (presupuesto.count !== 1 || convertidos)
             throw new ConflictException('El presupuesto cambió o alguno de sus productos ya fue convertido. Actualizá la ficha.');
         }
         const contextoEntrega = tienePlanEntrega
@@ -2380,6 +2380,7 @@ export class OrdenesTrabajoService {
     cotizacionId: string,
     payload: CrearOrdenTrabajoItemDto[],
     clienteId: string | null = null,
+    cuponesYaReservados: ReadonlySet<string> = new Set(),
   ): Promise<CrearOrdenTrabajoItemDto[]> {
     const ids = payload.map((item) => item.cotizacionItemId);
     if (new Set(ids).size !== ids.length) {
@@ -2426,7 +2427,7 @@ export class OrdenesTrabajoService {
       this.itemAutorizado(item, porId.get(item.cotizacionItemId)!, decimales),
     );
     this.validarMontosItems(autorizados);
-    return this.validarCupones(auth, clienteId, autorizados);
+    return this.validarCupones(auth, clienteId, autorizados, cuponesYaReservados);
   }
 
   /** Calcula y congela cargos desde el catálogo vigente del tenant. */
@@ -4921,6 +4922,7 @@ export class OrdenesTrabajoService {
     auth: CurrentAuth,
     id: string,
     payload: CancelarOrdenTrabajoDto,
+    soloBorrador = false,
   ) {
     const [orden, actor] = await Promise.all([
       this.prisma.ordenTrabajo.findFirst({
@@ -4935,6 +4937,7 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró la orden de trabajo.');
     }
 
+    if (soloBorrador && orden.estado !== 'borrador') throw new ConflictException('El borrador ya fue emitido. Recargá la orden antes de actuar.');
     const desde = orden.estado as OrdenTrabajoEstado;
     const motivo = payload.motivo.trim();
 
@@ -5098,8 +5101,8 @@ export class OrdenesTrabajoService {
         data: {
           tenantId: auth.tenantId,
           ordenId: orden.id,
-          tipo: 'cancelacion',
-          descripcion: `Orden cancelada (estaba ${ORDEN_TRABAJO_ESTADO_LABELS[desde].toLowerCase()}): ${motivo}`,
+          tipo: soloBorrador ? 'borrador_descartado' : 'cancelacion',
+          descripcion: soloBorrador ? "Borrador descartado. Se conserva el historial." : `Orden cancelada (estaba ${ORDEN_TRABAJO_ESTADO_LABELS[desde].toLowerCase()}): ${motivo}`,
           usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
           usuarioId: auth.userId,
           origen: 'usuario',

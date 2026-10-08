@@ -2221,7 +2221,7 @@ export class CentroCopiadoService {
       if (!c) throw new NotFoundException('No se encontró la cotización.');
       if (c.estado !== 'borrador') {
         throw new BadRequestException(
-          'Solo se pueden agregar items a una cotización en borrador.',
+          'Sólo se pueden agregar items a una cotización sin formalizar. Creá una nueva versión del presupuesto.',
         );
       }
       return c.id;
@@ -3125,19 +3125,20 @@ export class CentroCopiadoService {
       if (cotizacionId) {
         const existente = await tx.cotizacion.findFirst({
           where: { id: cotizacionId, tenantId },
-          select: { id: true, estado: true, tipoCambioId: true },
+          select: { id: true, estado: true, numero: true, tipoCambioId: true },
         });
         if (!existente) {
           throw new NotFoundException('No se encontró la cotización.');
         }
-        if (existente.estado !== 'borrador') {
+        if (existente.estado !== 'borrador' || existente.numero) {
           throw new BadRequestException(
-            'Solo se pueden agregar items a una cotización en borrador.',
+            'Sólo se pueden agregar items a una cotización sin formalizar. Creá una nueva versión del presupuesto.',
           );
         }
         const cambioId = monedaCotizacionContext.getStore()?.cambio.id;
-        if (cambioId) {
-          if (existente.tipoCambioId && existente.tipoCambioId !== cambioId)
+        {
+          // Bloquear incluso sin tipo de cambio: una emisión concurrente congela los items.
+          if (cambioId && existente.tipoCambioId && existente.tipoCambioId !== cambioId)
             throw new BadRequestException(
               'El tipo de cambio del tomo no coincide con la cotización.',
             );
@@ -3146,9 +3147,10 @@ export class CentroCopiadoService {
               id: cotizacionId,
               tenantId,
               estado: 'borrador',
+              numero: null,
               tipoCambioId: existente.tipoCambioId,
             },
-            data: { tipoCambioId: cambioId, updatedAt: new Date() },
+            data: { ...(cambioId ? { tipoCambioId: cambioId } : {}), updatedAt: new Date() },
           });
           if (lock.count !== 1)
             throw new BadRequestException(

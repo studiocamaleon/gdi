@@ -3754,6 +3754,9 @@ model Cotizacion {
   /// PRES-AAAA-NNNN (CotizacionContador). Null = contenedor de snapshots
   /// de la ficha (venta directa); con número = PRESUPUESTO formal.
   numero                       String?
+  /// Cada revisión conserva su identidad, snapshots, PDF, enlaces y decisiones.
+  versionPresupuesto           Int                   @default(1)
+  versionVigente                Boolean               @default(true)
   clienteId                    String?               @db.Uuid
   proyectoCampanaId            String?               @db.Uuid
   /// Ciclo del presupuesto (docs/presupuestos-modulo-estudio.md §4):
@@ -3813,7 +3816,7 @@ model Cotizacion {
   cuponRedenciones             CuponRedencion[]
   reservasFidelizacion         FidelizacionReserva[]
 
-  @@unique([tenantId, numero])
+  @@unique([tenantId, numero, versionPresupuesto])
   @@index([tenantId, estado])
   @@index([tenantId, createdAt])
   @@index([tenantId, clienteId])

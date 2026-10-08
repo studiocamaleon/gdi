@@ -60,6 +60,7 @@ const CAMPANA_INCLUDE = {
     orderBy: [{ orden: 'asc' as const }, { createdAt: 'asc' as const }],
   },
   cotizaciones: {
+    where: { versionVigente: true, estado: { not: 'descartado' } },
     select: {
       id: true,
       numero: true,
@@ -162,7 +163,7 @@ export class CampanasService {
             cliente: { select: { id: true, nombre: true } },
             responsable: { select: { id: true, nombreCompleto: true } },
             _count: {
-              select: { cotizaciones: true, ordenes: true, hitos: true },
+              select: { cotizaciones: { where: { versionVigente: true, estado: { not: 'descartado' } } }, ordenes: true, hitos: true },
             },
             hitos: { select: { estado: true, fechaObjetivo: true } },
             ordenes: {

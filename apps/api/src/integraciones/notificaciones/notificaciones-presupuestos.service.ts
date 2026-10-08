@@ -67,6 +67,7 @@ export class NotificacionesPresupuestosService {
       where: {
         tenantId,
         estado: 'enviado',
+        versionVigente: true,
         notificarWhatsapp: true,
         clienteId: { not: null },
         publicToken: { not: null },
@@ -110,7 +111,7 @@ export class NotificacionesPresupuestosService {
 
   private async intentar(cotizacionId: string): Promise<void> {
     const p = await this.prisma.cotizacion.findFirst({
-      where: { id: cotizacionId },
+      where: { id: cotizacionId, versionVigente: true },
       select: {
         tenantId: true,
         notificarWhatsapp: true,

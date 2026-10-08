@@ -2600,14 +2600,14 @@ export class MotorUniversalService {
           // (evita IDOR de escritura cross-tenant).
           const existente = await tx.cotizacion.findFirst({
             where: { id: cid, tenantId: input.tenantId },
-            select: { id: true, estado: true, tipoCambioId: true },
+            select: { id: true, estado: true, numero: true, tipoCambioId: true },
           });
           if (!existente) {
             throw new NotFoundException('No se encontró la cotización.');
           }
-          if (existente.estado !== 'borrador') {
+          if (existente.estado !== 'borrador' || existente.numero) {
             throw new BadRequestException(
-              'Solo se pueden agregar items a una cotización en borrador.',
+              'Sólo se pueden agregar items a una cotización sin formalizar. Creá una nueva versión del presupuesto.',
             );
           }
           const cambioId = monedaCotizacionContext.getStore()?.cambio.id;
@@ -2627,6 +2627,7 @@ export class MotorUniversalService {
               id: cid,
               tenantId: input.tenantId,
               estado: 'borrador',
+              numero: null,
               tipoCambioId: existente.tipoCambioId,
             },
             data: {
@@ -2698,6 +2699,7 @@ export class MotorUniversalService {
           select: {
             id: true,
             estado: true,
+            numero: true,
             clienteId: true,
             tipoCambioId: true,
           },
@@ -2707,9 +2709,9 @@ export class MotorUniversalService {
     if (!item) {
       throw new NotFoundException('No se encontró el item de cotización.');
     }
-    if (item.cotizacion.estado !== 'borrador') {
+    if (item.cotizacion.estado !== 'borrador' || item.cotizacion.numero) {
       throw new BadRequestException(
-        'Solo se pueden recotizar items de una cotización en borrador.',
+        'Para editar un presupuesto guardado, creá una nueva versión. Sólo se recotizan directamente las cotizaciones sin formalizar.',
       );
     }
 
@@ -2799,6 +2801,7 @@ export class MotorUniversalService {
           id: item.cotizacionId,
           tenantId: input.tenantId,
           estado: 'borrador',
+          numero: null,
         },
         data: {
           updatedAt: new Date(),

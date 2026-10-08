@@ -7,6 +7,7 @@ import { Permiso } from '../permiso.decorator';
 import { PermisosGuard } from '../permisos.guard';
 import { expandir } from '../permisos';
 import { CampanasController } from '../../campanas/campanas.controller';
+import { OrdenesTrabajoController } from '../../ordenes-trabajo/ordenes-trabajo.controller';
 import { PresupuestosController } from '../../presupuestos/presupuestos.controller';
 import { ReportesController } from '../../reportes/reportes.controller';
 import { ProductosServiciosController } from '../../productos-servicios/productos-servicios.controller';
@@ -177,5 +178,19 @@ describe('Delegación explícita sin depender del nombre histórico del rol', ()
         contexto('guardar', ['configuracion.gestionar']),
       ),
     ).toThrow(ForbiddenException);
+  });
+});
+
+
+describe('Permisos del descarte y versiones', () => {
+  it.each(['edicion', 'nuevaVersion', 'descartar'] as const)('%s exige gestionar presupuestos', (metodo) => {
+    const handler = PresupuestosController.prototype[metodo];
+    expect(() => pasa(PresupuestosController, handler, ['acceso.por_vista', 'comercial.presupuestos.ver'])).toThrow(ForbiddenException);
+    expect(pasa(PresupuestosController, handler, ['acceso.por_vista', 'comercial.presupuestos.gestionar'])).toBe(true);
+  });
+  it('descartar una OT no queda incluido en el permiso de lectura', () => {
+    const handler = OrdenesTrabajoController.prototype.descartarBorrador;
+    expect(() => pasa(OrdenesTrabajoController, handler, ['acceso.por_vista', 'comercial.ordenes.ver'])).toThrow(ForbiddenException);
+    expect(pasa(OrdenesTrabajoController, handler, ['acceso.por_vista', 'comercial.ordenes.gestionar'])).toBe(true);
   });
 });

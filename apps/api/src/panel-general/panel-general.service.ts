@@ -462,7 +462,7 @@ export class PanelGeneralService {
         where: {
           tenantId,
           ...filtroVendedor,
-          numero: { not: null },
+          numero: { not: null }, versionVigente: true,
           estado: 'pendiente_aprobacion',
         },
       }),
@@ -470,7 +470,7 @@ export class PanelGeneralService {
         where: {
           tenantId,
           ...filtroVendedor,
-          numero: { not: null },
+          numero: { not: null }, versionVigente: true,
           estado: 'enviado',
           fechaValidez: { gte: fechaDb(hoy), lte: fechaDb(enTres) },
         },
