@@ -31,6 +31,28 @@ const datos: PresupuestoPdfDatos = {
 };
 
 describe('presupuesto HTML', () => {
+  it('incluye el desglose de cargos en la tabla y conserva la plantilla anterior', () => {
+    const snapshot = {
+      ...datos,
+      cargosDirectos: 955900,
+      cargos: [
+        {
+          nombre: 'Instalación <local>',
+          descripcion: 'Colocación & traslado',
+          total: 955900,
+        },
+      ],
+    };
+    const html = presupuestoHtml(snapshot);
+    const tabla = html.slice(html.indexOf('<tbody>'), html.indexOf('</tbody>'));
+    expect(tabla).toContain('Instalación &lt;local&gt;');
+    expect(tabla).toContain('Colocación &amp; traslado');
+    expect(tabla).toContain('AR$ 955.900,00');
+    expect(html).toContain('1 producto · 1 cargo');
+    expect(presupuestoHtml(snapshot, 'presupuesto-marca-v1')).not.toContain(
+      'Instalación',
+    );
+  });
   it('preserva importes, moneda regional y fechas calendario sin recalcular el presupuesto', () => {
     const html = presupuestoHtml({
       ...datos,
@@ -118,9 +140,12 @@ describe('caché acotado del piloto', () => {
     const generar = jest.fn().mockResolvedValue(Buffer.from('%PDF-prueba'));
     return {
       generar,
-      service: new PresupuestoPilotoService({
-        generar,
-      } as unknown as PresupuestoRenderService, { exigir: jest.fn().mockResolvedValue(undefined) } as never),
+      service: new PresupuestoPilotoService(
+        {
+          generar,
+        } as unknown as PresupuestoRenderService,
+        { exigir: jest.fn().mockResolvedValue(undefined) } as never,
+      ),
     };
   };
 

@@ -12,7 +12,7 @@ Con `PRESUPUESTO_PDF_ASYNC=true`, el envío guarda en una misma transacción su 
 - Los snapshots y el hash del PDF terminado son inmutables, también por restricciones de base de datos. Reenviar, reintentar o descargar no reemplaza la versión ya guardada.
 - Los PDFs históricos siguen descargándose sin cambios. Un presupuesto antiguo que nunca tuvo PDF se captura cuando se pide por primera vez: sus importes guardados se conservan, pero la marca y condiciones sólo pueden capturarse con los datos disponibles en ese momento.
 - El almacenamiento usa el driver existente (R2 en producción), URL firmada de corta duración y cómputo de cuota. Los bytes de descarga no atraviesan la API ni el BFF.
-- La plantilla `presupuesto-marca-v1` usa Geist, logo del tenant, grafito y naranja; tablas paginadas, totales y condiciones de la prueba piloto. Los restantes tipos de documento conservan sus generadores actuales.
+- La plantilla `presupuesto-marca-v2` incluye el desglose de cargos (nombre, descripción e importe con impuestos) junto a los productos. El worker también admite `presupuesto-marca-v1` para completar trabajos pendientes con el diseño anterior. Los restantes tipos de documento conservan sus generadores actuales.
 
 ## Límites y recuperación
 

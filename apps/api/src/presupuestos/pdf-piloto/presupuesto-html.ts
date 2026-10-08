@@ -2,7 +2,8 @@ import { formatearMonedaDoc, monedaDe } from '../../common/moneda';
 import type { PresupuestoPdfDatos } from '../presupuesto-pdf.service';
 
 /** Cambiar al modificar plantilla, fuentes o contrato de impresión. */
-export const VERSION_PRESUPUESTO_HTML = 'presupuesto-marca-v1';
+export const VERSION_PRESUPUESTO_HTML = 'presupuesto-marca-v2';
+export const VERSION_PRESUPUESTO_HTML_ANTERIOR = 'presupuesto-marca-v1';
 
 export function escaparHtml(value: string | number | null | undefined): string {
   return String(value ?? '').replace(
@@ -25,7 +26,25 @@ function fecha(value: string | null): string {
 }
 
 /** HTML autónomo: ninguna URL del tenant se carga como recurso remoto. */
-export function presupuestoHtml(d: PresupuestoPdfDatos): string {
+export function presupuestoHtml(
+  d: PresupuestoPdfDatos,
+  version = VERSION_PRESUPUESTO_HTML,
+): string {
+  const cargos =
+    version === VERSION_PRESUPUESTO_HTML_ANTERIOR ? [] : (d.cargos ?? []);
+  const filas: PresupuestoPdfDatos['items'] = [
+    ...d.items,
+    ...cargos.map((cargo) => ({
+      nombre: cargo.nombre,
+      cantidad: 1,
+      cantidadUnidad: 'cargo',
+      total: cargo.total,
+      specs: cargo.descripcion
+        ? [{ etiqueta: 'Descripción', valor: cargo.descripcion }]
+        : [],
+      adicionales: [],
+    })),
+  ];
   const moneda = d.empresa?.moneda ?? monedaDe(null);
   const money = (n: number) => escaparHtml(formatearMonedaDoc(n, moneda));
   const cantidad = (n: number) =>
@@ -105,10 +124,10 @@ export function presupuestoHtml(d: PresupuestoPdfDatos): string {
   <div class="document-number"><span>Referencia</span><strong>${escaparHtml(d.numero)}</strong></div>
 </section>
 <dl class="metadata">${campos.map(([label, value]) => `<div><dt>${label}</dt><dd>${escaparHtml(value)}</dd></div>`).join('')}</dl>
-<section class="details"><div class="section-heading"><h2>Detalle del trabajo</h2><span>${d.items.length} ${d.items.length === 1 ? 'producto' : 'productos'}</span></div>
+<section class="details"><div class="section-heading"><h2>Detalle del trabajo</h2><span>${d.items.length} ${d.items.length === 1 ? 'producto' : 'productos'}${cargos.length ? ` · ${cargos.length} ${cargos.length === 1 ? 'cargo' : 'cargos'}` : ''}</span></div>
 <table><colgroup><col class="description-col"><col class="quantity-col"><col class="unit-col"><col class="amount-col"></colgroup>
 <thead><tr><th>Producto / especificaciones</th><th class="numeric">Cantidad</th><th class="numeric">Unitario</th><th class="numeric">Importe</th></tr></thead>
-<tbody>${d.items
+<tbody>${filas
     .map(
       (
         item,
@@ -123,7 +142,7 @@ export function presupuestoHtml(d: PresupuestoPdfDatos): string {
 </tr>`,
     )
     .join('')}</tbody></table>
-<p class="table-note">Importes por producto con impuestos incluidos. Moneda: ${escaparHtml(moneda.codigo)}.</p></section>
+<p class="table-note">Importes por producto${cargos.length ? ' y cargo' : ''} con impuestos incluidos. Moneda: ${escaparHtml(moneda.codigo)}.</p></section>
 <div class="settlement${condiciones.length + (d.observaciones?.length ?? 0) > 1800 ? ' extensive' : ''}">
 <section class="summary"><div class="summary-kicker"><span class="section-index">02</span><h2>Tu propuesta,<br>en números<span class="dot">.</span></h2></div>
   <div class="totals"><dl>${totales.map(([label, value]) => `<div${value < 0 ? ' class="discount"' : ''}><dt>${escaparHtml(label)}</dt><dd>${money(value)}</dd></div>`).join('')}</dl>

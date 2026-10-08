@@ -68,6 +68,30 @@ it('escapa el contenido editable en HTML y conserva sus saltos de línea', () =>
   expect(correo.html).toContain('Imprenta &amp; Cía');
 });
 
+it('incluye nombres, descripciones e importes de cargos en HTML y texto con la moneda del negocio', async () => {
+  const entrada = {
+    ...datos,
+    monedaCodigo: 'USD',
+    cargos: [
+      {
+        nombre: 'Instalación <local>',
+        descripcion: 'Colocación & traslado',
+        total: 950.5,
+      },
+      { nombre: 'Envío', descripcion: null, total: 10 },
+    ],
+  };
+  await new CorreoPresupuestoTransporte().enviar(entrada);
+  const correo = send.mock.calls[0][0];
+  expect(correo.html).toContain('Instalación &lt;local&gt;');
+  expect(correo.html).toContain('Colocación &amp; traslado');
+  for (const contenido of [correo.html, correo.text]) {
+    expect(contenido).toContain('US$ 950,50');
+    expect(contenido).toContain('US$ 10,00');
+    expect(contenido).toContain('Envío');
+  }
+});
+
 it('el remitente mantiene la dirección de Grafo aunque cambie la empresa', () => {
   const transporte = new CorreoPresupuestoTransporte();
   expect(transporte.remitente('Imprenta <otra@empresa.test>\r\n')).toBe(

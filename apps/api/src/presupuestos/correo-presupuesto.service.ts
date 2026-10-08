@@ -20,6 +20,8 @@ import { ArchivosService } from '../archivos/archivos.service';
 import { REVISION_EMITIDA } from '../documentos-pdf/documentos-pdf.service';
 import { urlEnlacePublico } from '../enlaces-publicos/enlaces-publicos.urls';
 import { runWithTenant } from '../common/tenant-context';
+import { regionalDelTenant } from '../common/regional';
+import { cargosVisiblesDe } from './presupuesto-cargos';
 import { PresupuestosService } from './presupuestos.service';
 import { CorreoPresupuestoTransporte } from './correo-presupuesto.transporte';
 import {
@@ -75,7 +77,7 @@ export class CorreoPresupuestoService {
   async preparar(auth: CurrentAuth, id: string) {
     const p = await this.exigirAcceso(auth, id);
     await this.exigirCapacidades(auth.tenantId);
-    const [cfg, empresa, tenant] = await Promise.all([
+    const [cfg, empresa, tenant, regional] = await Promise.all([
       this.prisma.configuracionPresupuestos.findUnique({
         where: { tenantId: auth.tenantId },
       }),
@@ -87,6 +89,7 @@ export class CorreoPresupuestoService {
         where: { id: auth.tenantId },
         select: { nombre: true },
       }),
+      regionalDelTenant(this.prisma, auth.tenantId),
     ]);
     const valores = {
       empresa: tenant.nombre,
@@ -96,6 +99,8 @@ export class CorreoPresupuestoService {
     return {
       empresa: tenant.nombre,
       numero: p.numero!,
+      cargos: cargosVisiblesDe(p.emisionJson),
+      monedaCodigo: regional.moneda.codigo,
       para: p.cliente?.emailPrincipal ?? '',
       contactos: p.cliente?.contactos.filter((c) => c.email) ?? [],
       responderA: cfg?.correoResponderA ?? empresa?.email ?? '',
@@ -469,7 +474,13 @@ export class CorreoPresupuestoService {
         },
       });
       if (!listo.count) return;
-      const proveedorId = await this.transporte.enviar({ ...correo, pdf });
+      const regional = await regionalDelTenant(this.prisma, correo.tenantId);
+      const proveedorId = await this.transporte.enviar({
+        ...correo,
+        pdf,
+        cargos: cargosVisiblesDe(p.emisionJson),
+        monedaCodigo: regional.moneda.codigo,
+      });
       await this.prisma.$transaction(async (tx) => {
         const actualizado = await tx.correoPresupuesto.updateMany({
           where,

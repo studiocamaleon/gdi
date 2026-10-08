@@ -189,6 +189,45 @@ describe('correo de presupuestos (PostgreSQL de test, transporte simulado)', () 
     ).toBe(1);
   });
 
+  it('usa los cargos emitidos tanto en la vista previa como en el correo enviado', async () => {
+    await prisma.cotizacion.update({
+      where: { id: cotizacionId },
+      data: {
+        emisionJson: {
+          items: [],
+          cargos: [
+            {
+              nombreSnapshot: 'Instalación',
+              descripcionSnapshot: 'Colocación en el local',
+              total: 955900,
+              nota: 'Interna',
+            },
+          ],
+        },
+      },
+    });
+    const dto = entrada();
+    const previo = await service.vistaPrevia(auth, cotizacionId, dto);
+    expect(previo.html).toContain('Instalación');
+    expect(previo.html).toContain('Colocación en el local');
+    expect(previo.html).toContain('955.900');
+    expect(previo.html).not.toContain('Interna');
+    const result = await service.encolar(auth, cotizacionId, dto);
+    await service.procesar(await obtener(result.id));
+    expect(transporte.enviar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        monedaCodigo: 'ARS',
+        cargos: [
+          {
+            nombre: 'Instalación',
+            descripcion: 'Colocación en el local',
+            total: 955900,
+          },
+        ],
+      }),
+    );
+  });
+
   it('deduplica peticiones y workers concurrentes y no permite cambiar los datos de la misma clave', async () => {
     const dto = entrada();
     const [a, b] = await Promise.all([
