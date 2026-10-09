@@ -137,6 +137,44 @@ const renderTracking = (cambios: Partial<TrackingPublico> = {}) =>
   );
 
 describe("contratos de las vistas públicas", () => {
+  it.each(["pendiente", "en_curso", "hecho"] as const)(
+    "identifica cada trabajo manual por su nombre real en estado %s",
+    (estado) => {
+      const item = seguimiento.items[0];
+      const html = renderTracking({
+        items: [
+          {
+            ...item,
+            pasoActual:
+              estado === "hecho" ? "Perforado" : "Encolado de talonarios",
+            pasos: [
+              {
+                ...item.pasos[0],
+                nombre: "Encolado de talonarios",
+                familiaCodigo: "trabajo_manual",
+                estado,
+              },
+              {
+                ...item.pasos[0],
+                indice: 2,
+                nombre: "Perforado",
+                familiaCodigo: "familia-propia",
+                plantillaCodigo: "trabajo_manual",
+              },
+            ],
+          },
+        ],
+      });
+      expect(html).toContain("<strong>Encolado de talonarios</strong>");
+      expect(html).toContain("<strong>Perforado</strong>");
+      // El encabezado y la línea de tiempo usan el mismo nombre.
+      expect(html).toContain(
+        `<span>${estado === "hecho" ? "Perforado" : "Encolado de talonarios"}</span>`,
+      );
+      expect(html).not.toContain(">Trabajo manual<");
+      expect(html).not.toContain("20 min");
+    },
+  );
   it("conserva el snapshot comercial, descuentos, canje y condiciones sin recalcular el total", () => {
     const html = renderPresupuesto();
     for (const dato of [
