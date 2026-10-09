@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-09, 01:31 UTC.** API y ambos workers ejecutan `afd1148ea`; web conserva `a2999b333` (PR #51, dependiente de #50; sin fusionar). Corregida la lectura del IVA congelado ante redondeo comercial unitario, conservando el importe pactado. Local, CI y cálculo con datos ficticios en API/worker aprobados; salud, recursos y respaldo posterior comprobados. Sin nuevas migraciones: 312 aplicadas. Ver [VALIDACION.md](./VALIDACION.md).
+> **Estado vigente: 2026-10-09, 18:39 UTC.** Web ejecuta `50e069b08` (PR #52, dependiente de #51; sin fusionar), con Colas de trabajo compacta y tabla ampliable a pantalla completa. API y ambos workers conservan `afd1148ea`. Pruebas locales, CI y recorrido de navegador aprobados; tamaños conservados y sin nuevas migraciones: 312 aplicadas. Ver [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 

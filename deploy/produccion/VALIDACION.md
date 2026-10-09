@@ -721,3 +721,23 @@ Reversión de código: API/ambos workers a `sha256:0830c8a90f925fd36bcc6b7d61553
 - CI de la versión: contenedores y permisos/separación de empresas aprobados. Seis máquinas iniciadas, tamaños conservados y HTTPS/salud/accesos comprobados. Sin nuevas migraciones: 312 aplicadas.
 - Respaldo posterior `f7713361-a00b-4201-bb4b-74a6566b2b70`, terminado `2026-10-09T01:30:07.998Z`: firma y descifrado del manifiesto comprobados, 312 migraciones, 112 archivos y fuentes/imágenes exactas incluidas. Fuente nueva cifrada y custodiada por 31 días. No se repitió la restauración SQL aislada en esta publicación.
 - Los errores de lotes existentes conservan su historial; este despliegue no reintenta las emisiones fallidas ni vuelve a enviar las facturas autorizadas. Los avisos programados mantienen su ventana horaria.
+
+
+## 2026-10-09, 18:39 UTC — Colas de trabajo compactas y tabla ampliada (PR #52)
+
+Revisión web `50e069b082c9a24ff2efe647ae2eb7310bb2a4b9`, imagen `sha256:d6d06dc4d88a34640a65bfd01684e939d603981353e86bc2f0002b28998a131e`. [PR #52](https://github.com/studiocamaleon/gdi/pull/52), dependiente de #51, sin fusionar. La rama incorporó la base ya desplegada para conservar las correcciones anteriores de facturación, IVA, autoregistro, teléfonos e historial/paginación. El cambio funcional frente a esa base se limita a los dos archivos de Colas de trabajo.
+
+La vista reduce encabezados en pantallas pequeñas, reemplaza la lista lateral de máquinas por un selector cuando falta ancho y oculta las acciones de selección cuando no se necesitan. «Ampliar tabla» abre la cola en un modal que ocupa el viewport y mantiene filtros, búsqueda, página y selección. Cierre con botón o Escape; foco de vuelta en «Ampliar tabla». Se conserva la tabla con desplazamiento horizontal y vertical.
+
+- Local: 35 pruebas existentes de colas, selección, helpers y simulación aprobadas; ESLint dirigido, guard de CSS y `git diff --check` correctos. Interfaz comprobada a 1134×647, 1440×900, 390×844 y 320×568; formulario de tiempos anidado y Escape ensayados con datos ficticios, sin confirmar operaciones.
+- CI del código publicado: [contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37970610262), [permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37970610302), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37970610350) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/37970605012) aprobados.
+- Sólo se actualizó la web. API y ambos workers conservan `afd1148ea09338c31a3f0d01b7b1e162f0b67313`, digest `sha256:b8c76956f068ee35e73fc06302c80c71a5381d397ed218999b8a330ba339ddad`; PDF y copiador conservan sus imágenes. Una máquina por servicio, mismos tamaños, HTTPS web/API 200, API privada 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados en la web.
+- Sin nuevas migraciones ni cambios de datos, dependencias o configuración fiscal. No se emitieron comprobantes ni se enviaron avisos de prueba. Evidencias de navegador y operación guardadas fuera de Git.
+
+Publicación expresamente autorizada después de validar staging. Se copió al registro de producción la misma imagen y se verificó su manifiesto por SHA-256, sin recompilar. Se renovó el acceso temporal al registro antes de la copia. Fly reemplazó la máquina web durante el despliegue; quedó una sola máquina saludable con el tamaño anterior. API y workers no se reiniciaron para esta publicación.
+
+Chrome en producción: modal comprobado a **390×844**, con datos existentes, búsqueda y tabla visibles; cierre con Escape y foco de vuelta al botón correctos. Consola sin advertencias ni errores. Las comprobaciones de filtros/selección se completaron antes en staging; no se ejecutaron acciones de producción sobre trabajos reales.
+
+Fuente exacta cifrada y custodiada por 31 días e inventario del copiador actualizado. Copia previa `4f355d07-8b17-43ec-b212-eaaf049c9eee` (2026-10-09T18:01:42.446Z). Copia posterior `855ba8c9-8c7a-48f4-8a8c-98f215a128aa` (2026-10-09T18:39:37.248Z): firma válida, manifiesto descifrado, revisión, fuentes y digests exactos comprobados; 312 migraciones y 125 archivos. El primer sondeo todavía encontró la copia anterior. **No se repitió restauración SQL.** Constructor temporal eliminado; inventario final de apps igual al inicial.
+
+Reversión sólo de web: `registry.fly.io/grafoprint-production-web@sha256:42af339be2249afa3208db43fa6dd5261dcc9ff89ca87e347dcdd2c231b4f079` (`a2999b333`), sin modificar esquema ni registros. Actualizar también el inventario del copiador si se revierte.

@@ -1303,3 +1303,23 @@ Reversión de código: API/ambos workers a `sha256:0830c8a90f925fd36bcc6b7d61553
 - Los errores de lotes existentes conservan su historial; este despliegue no reintenta las emisiones fallidas ni vuelve a enviar las facturas autorizadas. Los avisos programados mantienen su ventana horaria.
 
 Nota operativa de esta publicación: el primer respaldo automático posterior no terminó. Un reintento manual con la misma configuración finalizó y su firma/manifiesto se comprobaron. El diagnóstico del reintento no produjo error; la causa del fallo inicial no quedó confirmada. El respaldo automático posterior de producción sí terminó correctamente.
+
+
+## 2026-10-09, 18:39 UTC — Colas de trabajo compactas y tabla ampliada (PR #52)
+
+Revisión web `50e069b082c9a24ff2efe647ae2eb7310bb2a4b9`, imagen `sha256:d6d06dc4d88a34640a65bfd01684e939d603981353e86bc2f0002b28998a131e`. [PR #52](https://github.com/studiocamaleon/gdi/pull/52), dependiente de #51, sin fusionar. La rama incorporó la base ya desplegada para conservar las correcciones anteriores de facturación, IVA, autoregistro, teléfonos e historial/paginación. El cambio funcional frente a esa base se limita a los dos archivos de Colas de trabajo.
+
+La vista reduce encabezados en pantallas pequeñas, reemplaza la lista lateral de máquinas por un selector cuando falta ancho y oculta las acciones de selección cuando no se necesitan. «Ampliar tabla» abre la cola en un modal que ocupa el viewport y mantiene filtros, búsqueda, página y selección. Cierre con botón o Escape; foco de vuelta en «Ampliar tabla». Se conserva la tabla con desplazamiento horizontal y vertical.
+
+- Local: 35 pruebas existentes de colas, selección, helpers y simulación aprobadas; ESLint dirigido, guard de CSS y `git diff --check` correctos. Interfaz comprobada a 1134×647, 1440×900, 390×844 y 320×568; formulario de tiempos anidado y Escape ensayados con datos ficticios, sin confirmar operaciones.
+- CI del código publicado: [contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37970610262), [permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37970610302), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37970610350) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/37970605012) aprobados.
+- Sólo se actualizó la web. API y ambos workers conservan `afd1148ea09338c31a3f0d01b7b1e162f0b67313`, digest `sha256:b8c76956f068ee35e73fc06302c80c71a5381d397ed218999b8a330ba339ddad`; PDF y copiador conservan sus imágenes. Una máquina por servicio, mismos tamaños, HTTPS web/API 200, API privada 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados en la web.
+- Sin nuevas migraciones ni cambios de datos, dependencias o configuración fiscal. No se emitieron comprobantes ni se enviaron avisos de prueba. Evidencias de navegador y operación guardadas fuera de Git.
+
+Compilación remota con TypeScript habilitado. La primera subida al registro falló después de compilar; se conservó el diagnóstico y el reintento reutilizó la caché remota y completó la publicación. Constructor temporal eliminado al finalizar.
+
+Chrome autenticado en la empresa demo: a **1134×647**, el área visible de la tabla pasó de **34 a 330 px** de alto; en el modal mide **452 px**, con el diálogo exactamente en 0,0 y 1134×647. Filtro «En espera», búsqueda, selección, apertura/cierre y retorno de foco comprobados. El intento de preparar el completado de un trabajo en espera mostró la validación correspondiente, sin modificarlo. No se afirmó un ensayo de completado real en staging. Consola sin advertencias ni errores durante el recorrido.
+
+Fuente exacta cifrada y custodiada por 31 días; inventario de recuperación actualizado con las imágenes realmente activas. Copia previa `068751b3-cf4e-4c53-b330-103c4a844807` (2026-10-09T18:01:02.465Z); posterior `c0c3731a-bdb9-4829-a34c-837c33e4d614` (2026-10-09T18:33:38.941Z): firma válida, manifiesto descifrado, revisión, fuentes y digests comprobados; 312 migraciones y 24 archivos. El primer sondeo todavía encontró la copia anterior. **No se repitió restauración SQL.**
+
+Reversión sólo de web: `registry.fly.io/grafoprint-staging-web@sha256:42af339be2249afa3208db43fa6dd5261dcc9ff89ca87e347dcdd2c231b4f079` (`a2999b333`), sin modificar esquema ni registros. Actualizar también el inventario del copiador si se revierte.
