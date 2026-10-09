@@ -109,3 +109,34 @@ it('exige sesión de empresa, acceso a planificación y capacidad contratada', a
   expect(servicio.simular).not.toHaveBeenCalled();
   expect(servicio.confirmar).not.toHaveBeenCalled();
 });
+
+it('acepta ajuste automático/manual junto al compromiso y valida sus campos', async () => {
+  const s = {
+    tipo: 'entrega',
+    alcance: 'item',
+    fecha: '2099-01-10',
+    ajusteProduccion: 'manual',
+    alcanceProduccion: 'paso',
+    fechaProduccion: '2099-01-09',
+    horaProduccion: '10:00',
+  };
+  await request(app.getHttpServer())
+    .post(`${ruta}/simular`)
+    .send(s)
+    .expect(201);
+  expect(servicio.simular).toHaveBeenLastCalledWith(
+    expect.anything(),
+    expect.any(String),
+    s,
+  );
+  for (const cambio of [
+    { ajusteProduccion: 'forzar' },
+    { alcanceProduccion: 'orden' },
+    { fechaProduccion: 'ayer' },
+    { horaProduccion: 'diez' },
+  ])
+    await request(app.getHttpServer())
+      .post(`${ruta}/simular`)
+      .send({ ...s, ...cambio })
+      .expect(400);
+});

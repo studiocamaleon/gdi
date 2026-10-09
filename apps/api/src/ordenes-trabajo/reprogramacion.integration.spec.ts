@@ -449,104 +449,117 @@ it('reprograma los componentes de un producto pero no otro producto de la misma 
   ).toBeNull();
 });
 
-it('cambia un lote de entrega y conserva su lote hermano', async () => {
-  const root = await db.ordenTrabajoItem.create({
-    data: {
-      tenantId,
-      ordenId,
-      codigo: 'COMPUESTO',
-      nombre: 'Producto por lotes QA',
-      familia: 'Manual',
-      cantidad: 2,
-      cantidadUnidad: 'u',
-      subtotal: 0,
-      impuestos: 0,
-      total: 0,
-      contieneLotesEntrega: true,
-    },
-  });
-  const plan = await db.planEntregaItem.create({
-    data: { tenantId, ordenItemId: root.id },
-  });
-  const revision = await db.planEntregaRevision.create({
-    data: {
-      tenantId,
-      planId: plan.id,
-      numero: 1,
-      idempotencyKey: randomUUID(),
-      solicitudHuella: 'qa',
-      origenHuella: 'qa',
-      cantidad: 2,
-      solicitadoPorId: users[0],
-      solicitudJson: {},
-    },
-  });
-  const fuente = await db.fuenteProduccionEntrega.create({
-    data: {
-      tenantId,
-      revisionId: revision.id,
-      cantidad: 2,
-      calculoJson: {},
-      contextoJson: {},
-    },
-  });
-  const lotes: string[] = [];
-  for (let n = 0; n < 2; n++) {
-    const lote = await db.loteProduccionEntrega.create({
+it.each([false, true])(
+  'cambia un lote y conserva su hermano (con producción: %s)',
+  async (conProduccion) => {
+    const root = await db.ordenTrabajoItem.create({
+      data: {
+        tenantId,
+        ordenId,
+        codigo: 'COMPUESTO',
+        nombre: 'Producto por lotes QA',
+        familia: 'Manual',
+        cantidad: 2,
+        cantidadUnidad: 'u',
+        subtotal: 0,
+        impuestos: 0,
+        total: 0,
+        contieneLotesEntrega: true,
+      },
+    });
+    const plan = await db.planEntregaItem.create({
+      data: { tenantId, ordenItemId: root.id },
+    });
+    const revision = await db.planEntregaRevision.create({
+      data: {
+        tenantId,
+        planId: plan.id,
+        numero: 1,
+        idempotencyKey: randomUUID(),
+        solicitudHuella: 'qa',
+        origenHuella: 'qa',
+        cantidad: 2,
+        solicitadoPorId: users[0],
+        solicitudJson: {},
+      },
+    });
+    const fuente = await db.fuenteProduccionEntrega.create({
       data: {
         tenantId,
         revisionId: revision.id,
-        fuenteId: fuente.id,
-        productoItemId: root.id,
-        clave: `qa-${n}`,
-        secuencia: n,
-        cantidad: 1,
-        fechaEntrega: new Date('2026-09-20'),
+        cantidad: 2,
+        calculoJson: {},
+        contextoJson: {},
       },
     });
-    lotes.push(lote.id);
+    const lotes: string[] = [];
+    for (let n = 0; n < 2; n++) {
+      const lote = await db.loteProduccionEntrega.create({
+        data: {
+          tenantId,
+          revisionId: revision.id,
+          fuenteId: fuente.id,
+          productoItemId: root.id,
+          clave: `qa-${n}`,
+          secuencia: n,
+          cantidad: 1,
+          fechaEntrega: new Date('2026-09-20'),
+        },
+      });
+      lotes.push(lote.id);
+      await db.ordenTrabajoItem.update({
+        where: { id: pasos[n].itemId },
+        data: {
+          parentItemId: root.id,
+          loteEntregaId: lote.id,
+          fechaEntrega: new Date('2026-09-20'),
+        },
+      });
+    }
+    const r = await servicio.simular(
+      auth(),
+      pasos[0].id,
+      conProduccion
+        ? {
+            ...entrega(),
+            ajusteProduccion: 'automatico',
+            alcanceProduccion: 'item',
+          }
+        : entrega(),
+    );
+    expect(r.entregaOrden.propuesta).toBe('2026-09-22');
+    await servicio.confirmar(auth(), pasos[0].id, { token: r.token! });
+    expect(
+      (
+        await db.loteProduccionEntrega.findUniqueOrThrow({
+          where: { id: lotes[0] },
+        })
+      ).fechaEntrega,
+    ).toEqual(new Date('2026-09-22'));
+    expect(
+      (
+        await db.loteProduccionEntrega.findUniqueOrThrow({
+          where: { id: lotes[1] },
+        })
+      ).fechaEntrega,
+    ).toEqual(new Date('2026-09-20'));
+    expect(
+      (await db.ordenTrabajoItem.findUniqueOrThrow({ where: { id: root.id } }))
+        .fechaEntrega,
+    ).toEqual(new Date('2026-09-22'));
     await db.ordenTrabajoItem.update({
-      where: { id: pasos[n].itemId },
-      data: {
-        parentItemId: root.id,
-        loteEntregaId: lote.id,
-        fechaEntrega: new Date('2026-09-20'),
-      },
+      where: { id: pasos[2].itemId },
+      data: { parentItemId: root.id },
     });
-  }
-  const r = await servicio.simular(auth(), pasos[0].id, entrega());
-  expect(r.entregaOrden.propuesta).toBe('2026-09-22');
-  await servicio.confirmar(auth(), pasos[0].id, { token: r.token! });
-  expect(
-    (
-      await db.loteProduccionEntrega.findUniqueOrThrow({
-        where: { id: lotes[0] },
-      })
-    ).fechaEntrega,
-  ).toEqual(new Date('2026-09-22'));
-  expect(
-    (
-      await db.loteProduccionEntrega.findUniqueOrThrow({
-        where: { id: lotes[1] },
-      })
-    ).fechaEntrega,
-  ).toEqual(new Date('2026-09-20'));
-  expect(
-    (await db.ordenTrabajoItem.findUniqueOrThrow({ where: { id: root.id } }))
-      .fechaEntrega,
-  ).toEqual(new Date('2026-09-22'));
-  await db.ordenTrabajoItem.update({
-    where: { id: pasos[2].itemId },
-    data: { parentItemId: root.id },
-  });
-  await expect(
-    servicio.simular(auth(), pasos[2].id, entrega()),
-  ).rejects.toThrow('Seleccioná un paso del lote');
-  const prod = await confirmar(pasos[0].id, solicitud('2026-09-15', 'item'));
-  expect(prod.pasos.filter((p) => p.seGuarda).map((p) => p.id)).toEqual([
-    pasos[0].id,
-  ]);
-});
+    await expect(
+      servicio.simular(auth(), pasos[2].id, entrega()),
+    ).rejects.toThrow('Seleccioná un paso del lote');
+    const prod = await confirmar(pasos[0].id, solicitud('2026-09-15', 'item'));
+    expect(prod.pasos.filter((p) => p.seGuarda).map((p) => p.id)).toEqual([
+      pasos[0].id,
+    ]);
+  },
+);
 
 it('rechaza un cambio si se perdió el permiso después de simular y revierte si falla el historial', async () => {
   const r = await servicio.simular(auth(), pasos[0].id, solicitud());
@@ -630,4 +643,222 @@ it('conserva los ítems ya entregados y no cambia una dependencia de un paso ini
   await expect(
     servicio.simular(auth(), pasos[0].id, solicitud()),
   ).rejects.toThrow('Un paso siguiente ya se inició');
+});
+
+const conjunta = (
+  fecha = '2026-09-24',
+  alcanceProduccion: 'paso' | 'item' = 'paso',
+) => ({
+  ...entrega(fecha),
+  ajusteProduccion: 'automatico' as const,
+  alcanceProduccion,
+});
+
+it('posterga la instalación diez días y guarda el compromiso junto al paso, conservando lo realizado', async () => {
+  const instalacion = await agregarSucesor();
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: instalacion.id },
+    data: { nombre: 'Instalación QA' },
+  });
+  const previo = await db.ordenTrabajoItemPaso.update({
+    where: { id: pasos[0].id },
+    data: {
+      estado: 'hecho',
+      iniciadoEl: new Date('2026-09-14T10:00:00Z'),
+      completadoEl: new Date('2026-09-14T11:00:00Z'),
+    },
+  });
+  const r = await servicio.simular(auth(), instalacion.id, conjunta());
+  expect(r.motivos).toEqual([]);
+  expect(r.entregaOrden.propuesta).toBe('2026-09-24');
+  expect(r.pasos.find((p) => p.id === instalacion.id)).toMatchObject({
+    seGuarda: true,
+    inicioPropuesto: '2026-09-24T12:00:00.000Z',
+  });
+  expect(r.pasos.some((p) => p.id === previo.id && p.seGuarda)).toBe(false);
+  await servicio.confirmar(auth(), instalacion.id, { token: r.token! });
+  const item = await db.ordenTrabajoItem.findUniqueOrThrow({
+    where: { id: instalacion.itemId },
+  });
+  expect(item.fechaEntrega).toEqual(new Date('2026-09-24'));
+  expect(
+    (await db.ordenTrabajo.findUniqueOrThrow({ where: { id: ordenId } }))
+      .fechaEntrega,
+  ).toEqual(new Date('2026-09-24'));
+  const guardado = await db.ordenTrabajoItemPaso.findUniqueOrThrow({
+    where: { id: instalacion.id },
+  });
+  expect(guardado.planificadoDesde?.toISOString()).toBe(
+    r.pasos.find((p) => p.id === instalacion.id)!.inicioPropuesto,
+  );
+  expect(
+    await db.ordenTrabajoItemPaso.findUniqueOrThrow({
+      where: { id: previo.id },
+    }),
+  ).toEqual(previo);
+  expect(
+    (
+      await db.ordenTrabajoItem.findUniqueOrThrow({
+        where: { id: pasos[1].itemId },
+      })
+    ).fechaEntrega,
+  ).toEqual(new Date('2026-09-20'));
+  const recargada = simularFlujo(await eta.contextoSimulacion(tenantId));
+  expect(
+    recargada.traza.find((p) => p.pasoId === instalacion.id)?.inicio,
+  ).toEqual(guardado.planificadoDesde);
+});
+
+it('acomoda el ítem completo cerca del compromiso, sin mover los otros productos', async () => {
+  const siguiente = await agregarSucesor();
+  const r = await servicio.simular(
+    auth(),
+    pasos[0].id,
+    conjunta('2026-09-24', 'item'),
+  );
+  expect(r.motivos).toEqual([]);
+  expect(
+    r.pasos
+      .filter((p) => p.seGuarda)
+      .map((p) => p.id)
+      .sort(),
+  ).toEqual([pasos[0].id, siguiente.id].sort());
+  expect(r.pasos.find((p) => p.id === pasos[0].id)?.inicioPropuesto).toContain(
+    '2026-09-24',
+  );
+  await servicio.confirmar(auth(), pasos[0].id, { token: r.token! });
+  const otro = await db.ordenTrabajoItemPaso.findUniqueOrThrow({
+    where: { id: pasos[1].id },
+  });
+  expect(otro.planificadoDesde).toBeNull();
+  expect(
+    (
+      await db.ordenTrabajoItem.findUniqueOrThrow({
+        where: { id: otro.itemId },
+      })
+    ).fechaEntrega,
+  ).toEqual(new Date('2026-09-20'));
+});
+
+it('rechaza una instalación en un domingo en lugar de moverla silenciosamente al lunes', async () => {
+  const r = await servicio.simular(auth(), pasos[0].id, conjunta('2026-09-20'));
+  expect(r.viable).toBe(false);
+  expect(r.token).toBeNull();
+  expect(r.motivos.join(' ')).toContain(
+    'No se moverá automáticamente a otro día',
+  );
+  expect(
+    (
+      await db.ordenTrabajoItemPaso.findUniqueOrThrow({
+        where: { id: pasos[0].id },
+      })
+    ).planificadoDesde,
+  ).toBeNull();
+});
+
+it('busca un día previo para completar un ítem que no cabe en el día acordado', async () => {
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: pasos[0].id },
+    data: {
+      duracionEstimadaMin: 600,
+      demandaHumanaJson: {
+        version: 1,
+        verificada: true,
+        fases: [{ minutos: 600, personas: 1 }],
+      },
+    },
+  });
+  const r = await servicio.simular(
+    auth(),
+    pasos[0].id,
+    conjunta('2026-09-24', 'item'),
+  );
+  expect(r.motivos).toEqual([]);
+  const p = r.pasos.find((p) => p.id === pasos[0].id)!;
+  expect(p.inicioPropuesto!.slice(0, 10)).toBe('2026-09-23');
+  expect(p.finPropuesto!.slice(0, 10)).toBe('2026-09-24');
+});
+
+it('permite elegir un inicio manual y rechaza una propuesta que no llega al compromiso', async () => {
+  const s = {
+    ...conjunta(),
+    ajusteProduccion: 'manual' as const,
+    fechaProduccion: '2026-09-23',
+    horaProduccion: '10:00',
+  };
+  const r = await servicio.simular(auth(), pasos[0].id, s);
+  expect(r.motivos).toEqual([]);
+  expect(r.pasos.find((p) => p.id === pasos[0].id)?.inicioPropuesto).toBe(
+    '2026-09-23T13:00:00.000Z',
+  );
+  await servicio.confirmar(auth(), pasos[0].id, { token: r.token! });
+  expect(
+    (
+      await db.ordenTrabajoItem.findUniqueOrThrow({
+        where: { id: pasos[0].itemId },
+      })
+    ).fechaEntrega,
+  ).toEqual(new Date('2026-09-24'));
+  const imposible = await servicio.simular(auth(), pasos[0].id, {
+    ...s,
+    fechaProduccion: '2026-09-24',
+    horaProduccion: '23:00',
+  });
+  expect(imposible.token).toBeNull();
+  expect(imposible.motivos.join(' ')).toContain('no llega a la fecha acordada');
+});
+
+it('el cambio conjunto exige ambos permisos al simular y al confirmar', async () => {
+  const comercial = auth();
+  comercial.permisos!.delete('produccion.supervisar');
+  await expect(
+    servicio.simular(comercial, pasos[0].id, conjunta()),
+  ).rejects.toThrow('permiso de supervisión');
+  const r = await servicio.simular(auth(), pasos[0].id, conjunta());
+  await expect(
+    servicio.confirmar(comercial, pasos[0].id, { token: r.token! }),
+  ).rejects.toThrow('permiso de supervisión');
+  const soloFecha = await servicio.simular(comercial, pasos[0].id, {
+    ...entrega(),
+    ajusteProduccion: 'mantener',
+  });
+  expect(soloFecha.token).toBeTruthy();
+  expect(soloFecha.pasos.some((p) => p.seGuarda)).toBe(false);
+});
+
+it('un cambio concurrente no deja la nueva promesa guardada con la producción anterior', async () => {
+  const r = await servicio.simular(auth(), pasos[0].id, conjunta());
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: pasos[0].id },
+    data: { estado: 'en_curso', iniciadoEl: ahora },
+  });
+  await expect(
+    servicio.confirmar(auth(), pasos[0].id, { token: r.token! }),
+  ).rejects.toThrow('Cambiaron los trabajos');
+  expect(
+    (
+      await db.ordenTrabajoItem.findUniqueOrThrow({
+        where: { id: pasos[0].itemId },
+      })
+    ).fechaEntrega,
+  ).toBeNull();
+  expect(
+    (await db.ordenTrabajo.findUniqueOrThrow({ where: { id: ordenId } }))
+      .fechaEntrega,
+  ).toEqual(new Date('2026-09-20'));
+});
+
+it('valida opciones incompatibles y fechas manuales también fuera del DTO', async () => {
+  for (const s of [
+    { ...solicitud(), ajusteProduccion: 'automatico' as const },
+    { ...conjunta(), horaProduccion: '10:00' },
+    { ...conjunta(), ajusteProduccion: 'mantener' as const },
+    {
+      ...conjunta(),
+      ajusteProduccion: 'manual' as const,
+      fechaProduccion: '2026-09-25',
+      horaProduccion: '10:00',
+    },
+  ])
+    await expect(servicio.simular(auth(), pasos[0].id, s)).rejects.toThrow();
 });

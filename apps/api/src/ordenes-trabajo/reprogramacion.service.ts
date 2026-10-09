@@ -97,6 +97,72 @@ export function fechaReprogramacion(
   return inicio.toISOString();
 }
 
+/** Valida también llamadas internas y propuestas firmadas; el DTO no basta. */
+function ajusteDeProduccion(
+  s: SolicitudReprogramacion,
+  zona: string,
+  ahora: Date,
+) {
+  const modo = s.ajusteProduccion ?? 'mantener';
+  if (!['mantener', 'automatico', 'manual'].includes(modo))
+    throw new BadRequestException(
+      'Elegí cómo acompañar el cambio en producción.',
+    );
+  if (s.tipo === 'produccion' || modo === 'mantener') {
+    if (
+      (s.ajusteProduccion && s.tipo === 'produccion') ||
+      s.alcanceProduccion !== undefined ||
+      s.fechaProduccion !== undefined ||
+      s.horaProduccion !== undefined
+    )
+      throw new BadRequestException(
+        'La solicitud mezcla opciones de reprogramación incompatibles.',
+      );
+    return s.tipo === 'produccion'
+      ? {
+          modo: 'manual' as const,
+          alcance: s.alcance,
+          inicio: fechaReprogramacion(s, zona, ahora),
+        }
+      : null;
+  }
+  if (!['paso', 'item'].includes(s.alcanceProduccion ?? ''))
+    throw new BadRequestException(
+      'Elegí el paso o ítem que querés reprogramar.',
+    );
+  if (s.fecha > sumarDiasAClave(claveFechaEnZona(ahora, zona), 119))
+    throw new BadRequestException(
+      'La planificación admite los próximos 119 días.',
+    );
+  if (modo === 'automatico') {
+    if (s.fechaProduccion !== undefined || s.horaProduccion !== undefined)
+      throw new BadRequestException(
+        'En modo automático el sistema propone el inicio.',
+      );
+    const piso = instanteDe(s.fecha, '00:00', zona);
+    return {
+      modo: 'automatico' as const,
+      alcance: s.alcanceProduccion!,
+      inicio: new Date(Math.max(+piso, +ahora)).toISOString(),
+    };
+  }
+  const inicio = fechaReprogramacion(
+    {
+      tipo: 'produccion',
+      alcance: s.alcanceProduccion!,
+      fecha: s.fechaProduccion ?? '',
+      hora: s.horaProduccion,
+    },
+    zona,
+    ahora,
+  );
+  if (s.fechaProduccion! > s.fecha)
+    throw new BadRequestException(
+      'El inicio no puede ser posterior a la fecha acordada.',
+    );
+  return { modo: 'manual' as const, alcance: s.alcanceProduccion!, inicio };
+}
+
 @Injectable()
 export class ReprogramacionService {
   constructor(
@@ -108,7 +174,8 @@ export class ReprogramacionService {
     ),
   ) {}
 
-  private autorizar(auth: CurrentAuth, tipo: SolicitudReprogramacion['tipo']) {
+  private autorizar(auth: CurrentAuth, s: SolicitudReprogramacion) {
+    const tipo = s.tipo;
     const permiso =
       tipo === 'produccion'
         ? 'produccion.supervisar'
@@ -123,6 +190,15 @@ export class ReprogramacionService {
           ? 'Necesitás permiso de supervisión para reprogramar producción.'
           : 'Necesitás permiso para gestionar órdenes y cambiar la entrega.',
       );
+    if (
+      tipo === 'entrega' &&
+      s.ajusteProduccion &&
+      s.ajusteProduccion !== 'mantener' &&
+      !auth.permisos.has('produccion.supervisar')
+    )
+      throw new ForbiddenException(
+        'Necesitás permiso de supervisión para ajustar también la producción.',
+      );
   }
 
   async leer(
@@ -131,7 +207,7 @@ export class ReprogramacionService {
     s: SolicitudReprogramacion,
     db: Prisma.TransactionClient,
   ) {
-    this.autorizar(auth, s.tipo);
+    this.autorizar(auth, s);
     await this.capacidades.exigir(auth.tenantId, 'planificacion_avanzada', db);
     const [entrada, registros, items] = await Promise.all([
       this.eta.contextoSimulacion(
@@ -214,7 +290,7 @@ export class ReprogramacionService {
         : [raiz.id],
     );
     if (!item.loteEntregaId)
-      for (let cambio = true; cambio; ) {
+      for (let cambio = true; cambio;) {
         cambio = false;
         for (const i of items)
           if (
@@ -243,6 +319,7 @@ export class ReprogramacionService {
         'Este producto tiene entregas por lotes. Seleccioná un paso del lote cuya entrega querés cambiar.',
       );
     const solicitado = fechaReprogramacion(s, entrada.zona, entrada.ahora);
+    const ajuste = ajusteDeProduccion(s, entrada.zona, entrada.ahora);
     const distribuciones = await distribucionesDeItems(
       db,
       auth.tenantId,
@@ -299,6 +376,7 @@ export class ReprogramacionService {
       paso,
       idsItem,
       solicitado,
+      ajuste,
       entregaOrden,
       huella,
       alcance:
@@ -311,7 +389,7 @@ export class ReprogramacionService {
   }
 
   private evaluar(foto: Foto, s: SolicitudReprogramacion) {
-    const { entrada, solicitado } = foto;
+    const { entrada, solicitado, ajuste } = foto;
     const antes = simularFlujo(entrada);
     const pendientes = (id: string) => {
       const p = foto.registros.find((p) => p.id === id);
@@ -323,9 +401,9 @@ export class ReprogramacionService {
       );
     };
     const objetivos = new Set(
-      s.tipo === 'entrega'
+      !ajuste
         ? []
-        : s.alcance === 'paso'
+        : ajuste.alcance === 'paso'
           ? [foto.paso.id]
           : entrada.items
               .filter((i) => foto.idsItem.has(i.id))
@@ -334,7 +412,7 @@ export class ReprogramacionService {
               ),
     );
     if (
-      s.tipo === 'produccion' &&
+      ajuste &&
       (!objetivos.size || [...objetivos].some((id) => !pendientes(id)))
     )
       throw new ConflictException(
@@ -356,7 +434,7 @@ export class ReprogramacionService {
       );
     }
     const movidos = new Set(objetivos);
-    for (let cambio = true; cambio; ) {
+    for (let cambio = true; cambio;) {
       cambio = false;
       for (const [id, prev] of previos)
         if (
@@ -395,7 +473,7 @@ export class ReprogramacionService {
         'Este recorrido tiene operaciones agrupadas en un trabajo conjunto. La reprogramación conjunta todavía no está disponible.',
       );
     const pisos = new Map<string, string | null>();
-    const propuesta = {
+    const construir = (inicio: string) => ({
       ...entrada,
       items: entrada.items.map((i) => ({
         ...i,
@@ -419,7 +497,7 @@ export class ReprogramacionService {
             null;
           pisos.set(p.id, piso);
           const desde = objetivos.has(p.id)
-            ? [solicitado, piso]
+            ? [inicio, piso]
                 .filter((v): v is string => !!v)
                 .sort()
                 .at(-1)!
@@ -432,13 +510,80 @@ export class ReprogramacionService {
           };
         }),
       })),
-    };
-    const despues = simularFlujo(propuesta);
+    });
+    let propuesta = construir(ajuste?.inicio ?? solicitado);
+    let despues = simularFlujo(propuesta);
+    // La fecha acordada es un límite real. No confirmar un día distinto
+    // silenciosamente cuando una visita/instalación no encuentra disponibilidad.
+    const cumpleEntrega = (resultado: ReturnType<typeof simularFlujo>) =>
+      entrada.items
+        .filter((i) => foto.idsItem.has(i.id))
+        .every((i) => {
+          const fin = resultado.porItem.get(i.id);
+          return (
+            !!fin?.finEstimado &&
+            !fin.parcial &&
+            !fin.sinEstimar &&
+            claveFechaEnZona(fin.finEstimado, entrada.zona) <= s.fecha
+          );
+        });
+    if (ajuste?.modo === 'automatico' && ajuste.alcance === 'item') {
+      // Buscar por días mantiene acotado el coste (como máximo ocho propuestas)
+      // y reutiliza calendarios, capacidad y reservas del motor. Es una propuesta
+      // factible cercana al compromiso, no un optimizador global del taller.
+      const hoy = claveFechaEnZona(entrada.ahora, entrada.zona);
+      let desde = 0;
+      let hasta = Math.round(
+        (Date.parse(s.fecha) - Date.parse(hoy)) / 86_400_000,
+      );
+      let mejor: typeof despues | null = null;
+      let mejorEntrada = propuesta;
+      while (desde <= hasta) {
+        const medio = Math.floor((desde + hasta) / 2);
+        const piso = instanteDe(
+          sumarDiasAClave(hoy, medio),
+          '00:00',
+          entrada.zona,
+        );
+        const candidata = construir(
+          new Date(Math.max(+piso, +entrada.ahora)).toISOString(),
+        );
+        const resultado = simularFlujo(candidata);
+        if (cumpleEntrega(resultado)) {
+          mejor = resultado;
+          mejorEntrada = candidata;
+          desde = medio + 1;
+        } else hasta = medio - 1;
+      }
+      if (mejor) {
+        propuesta = mejorEntrada;
+        despues = mejor;
+      }
+    }
     const a = new Map(antes.traza.map((p) => [p.pasoId, p])),
       b = new Map(despues.traza.map((p) => [p.pasoId, p]));
     const motivos: string[] = [];
+    if (s.tipo === 'entrega' && ajuste) {
+      if (!cumpleEntrega(despues))
+        motivos.push(
+          'La producción no llega a la fecha acordada con la disponibilidad actual. Elegí otra fecha o revisá los recursos.',
+        );
+      const elegido = b.get(foto.paso.id);
+      if (
+        ajuste.modo === 'automatico' &&
+        ajuste.alcance === 'paso' &&
+        (!elegido ||
+          claveFechaEnZona(elegido.inicio, entrada.zona) !== s.fecha ||
+          claveFechaEnZona(elegido.fin, entrada.zona) !== s.fecha)
+      )
+        motivos.push(
+          `${foto.paso.nombre} no puede realizarse en la fecha acordada. No se moverá automáticamente a otro día.`,
+        );
+    }
+
     if (
       s.tipo === 'entrega' &&
+      !ajuste &&
       entrada.items
         .filter((i) => foto.idsItem.has(i.id))
         .every((i) => i.fechaEntrega === s.fecha)
@@ -497,7 +642,9 @@ export class ReprogramacionService {
           ? claveFechaEnZona(
               sumarDiasHabiles(
                 fin,
-                entrada.margenEtaDias,
+                s.tipo === 'entrega' && ajuste && foto.idsItem.has(i.id)
+                  ? 0
+                  : entrada.margenEtaDias,
                 entrada.noLaborables,
                 entrada.zona,
               ),
@@ -517,10 +664,11 @@ export class ReprogramacionService {
         ];
       });
     const advertencias: string[] = [];
-    if (s.tipo === 'produccion') {
-      advertencias.push(
-        'La entrega comprometida se conserva. El inicio solicitado es un límite: el calendario y las dependencias pueden ubicar el trabajo más tarde.',
-      );
+    if (ajuste) {
+      if (s.tipo === 'produccion')
+        advertencias.push(
+          'La entrega comprometida se conserva. El inicio solicitado es un límite: el calendario y las dependencias pueden ubicar el trabajo más tarde.',
+        );
       if (
         [...movidos].some(
           (id) =>
@@ -533,14 +681,23 @@ export class ReprogramacionService {
         advertencias.push(
           'Hay requisitos pendientes. La propuesta supone su resolución; cambiar la fecha no habilita la ejecución.',
         );
-      if ([...pisos.values()].some((p) => p && p > solicitado))
+      if ([...pisos.values()].some((p) => p && p > ajuste.inicio))
         advertencias.push(
           'Se conserva un inicio mínimo anterior del trabajo; puede corresponder a disponibilidad de material.',
         );
-    } else
+    }
+    if (s.tipo === 'entrega') {
+      advertencias.push(
+        ajuste
+          ? ajuste.modo === 'automatico' && ajuste.alcance === 'paso'
+            ? `Se programa ${foto.paso.nombre} para el día acordado. Se guardan juntos la producción y el compromiso; los pasos previos conservan su planificación.`
+            : 'Se guardan juntos la nueva fecha acordada y los horarios de producción mostrados. Los pasos ya iniciados se conservan.'
+          : 'Se conserva la planificación de producción; sólo se actualiza la fecha acordada.',
+      );
       advertencias.push(
         'Se cambia el compromiso del ítem o lote. La entrega final de la OT refleja el último compromiso cuando todos sus productos tienen fecha.',
       );
+    }
     const impacto = {
       viable: !motivos.length,
       motivos: [...new Set(motivos)],
@@ -654,7 +811,7 @@ export class ReprogramacionService {
     body: ConfirmarReprogramacionDto,
   ) {
     const p = this.token(auth, pasoId, body.token);
-    this.autorizar(auth, p.solicitud.tipo);
+    this.autorizar(auth, p.solicitud);
     return this.transaccion(async (tx) => {
       await this.capacidades.exigirOperacionTx(
         tx,
@@ -677,7 +834,7 @@ export class ReprogramacionService {
         throw new ConflictException(
           'La proyección cambió. Volvé a revisar el impacto.',
         );
-      if (p.solicitud.tipo === 'produccion') {
+      if (foto.ajuste) {
         for (const plan of e.despues.traza.filter((t) =>
           e.movidos.has(t.pasoId),
         )) {
@@ -716,7 +873,8 @@ export class ReprogramacionService {
               'Un paso ya se inició. Volvé a revisar la propuesta.',
             );
         }
-      } else {
+      }
+      if (p.solicitud.tipo === 'entrega') {
         const fecha = new Date(`${p.solicitud.fecha}T00:00:00Z`);
         // Materializar la herencia antes de modificar el cierre de la OT.
         await tx.ordenTrabajoItem.updateMany({

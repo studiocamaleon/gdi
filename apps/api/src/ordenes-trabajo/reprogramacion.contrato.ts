@@ -4,6 +4,11 @@ export type SolicitudReprogramacion = {
   alcance: 'paso' | 'item';
   fecha: string;
   hora?: string;
+  /** Al cambiar el compromiso, decidir cómo acompañarlo en producción. */
+  ajusteProduccion?: 'mantener' | 'automatico' | 'manual';
+  alcanceProduccion?: 'paso' | 'item';
+  fechaProduccion?: string;
+  horaProduccion?: string;
 };
 export type RevisionReprogramacion = {
   token: string | null;
