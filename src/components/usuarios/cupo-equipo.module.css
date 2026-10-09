@@ -1,0 +1,129 @@
+.panel {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.resumen {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 20px 22px;
+}
+.icono {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: var(--brand-graphite);
+  color: var(--accent);
+}
+.icono svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.5;
+}
+.etiqueta {
+  color: var(--muted-text);
+  font: 9px/1.5 var(--brand-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ocupacion {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 4px 0 0;
+}
+.ocupacion strong {
+  font-size: 29px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.ocupacion span {
+  font-size: 13px;
+  color: var(--muted-text);
+}
+.limite {
+  margin-left: auto;
+  padding: 6px 9px;
+  border-radius: 5px;
+  background: var(--surface-secondary);
+  font: 10px/1.4 var(--brand-mono);
+}
+.metricas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+.metricas > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+}
+.metricas > div + div {
+  border-left: 1px solid var(--border);
+}
+.metricas dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.metricas dt svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  stroke-width: 1.5;
+}
+.metricas dd {
+  margin-left: auto;
+  font: 15px/1.4 var(--brand-mono);
+}
+.pie {
+  padding: 12px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-secondary);
+}
+.pie p {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.progreso {
+  margin-bottom: 10px;
+}
+.progreso :global([data-slot="progress-indicator"]) {
+  background: var(--accent);
+}
+@media (max-width: 600px) {
+  .resumen {
+    padding: 16px;
+  }
+  .limite {
+    margin-left: 56px;
+  }
+  .metricas {
+    grid-template-columns: 1fr;
+  }
+  .metricas > div {
+    padding: 12px 16px;
+  }
+  .metricas > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .pie {
+    padding: 12px 16px;
+  }
+}

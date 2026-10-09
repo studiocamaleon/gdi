@@ -1,0 +1,133 @@
+.dialog.dialog {
+  max-width: 720px;
+  overflow: clip;
+}
+.body {
+  position: relative;
+  flex: 1 1 auto;
+  color: var(--foreground);
+}
+.body > [data-slot="field-group"] {
+  gap: 24px;
+}
+.notice {
+  padding: 12px 14px;
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-text);
+}
+.section {
+  gap: 14px;
+}
+.sectionTitle,
+.retencionesHeader h3 {
+  margin: 0;
+  padding: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sectionTitle {
+  margin-bottom: 14px;
+}
+.retenciones {
+  gap: 12px;
+}
+.retencionesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.retencionesHeader > span {
+  color: var(--muted-text);
+  font: 10px var(--brand-mono);
+}
+.body input:not([type="checkbox"]) {
+  min-height: 36px;
+  font-size: 13px;
+}
+.body input[type="number"] {
+  font-family: var(--brand-mono);
+}
+.addRetention {
+  align-self: flex-start;
+}
+.review {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.reviewContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.review [data-slot="checkbox-control"] {
+  flex-shrink: 0;
+}
+.review input[type="checkbox"] {
+  min-height: 0;
+}
+.review label {
+  font-size: inherit;
+  line-height: inherit;
+}
+.footer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 18px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-secondary);
+}
+.total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.total span {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.total small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.total strong {
+  flex-shrink: 0;
+  color: var(--foreground);
+  font: 500 22px/1.2 var(--brand-mono);
+  letter-spacing: -0.04em;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 639px) {
+  .footer {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+  .total {
+    flex-wrap: wrap;
+  }
+  .total strong {
+    font-size: 20px;
+  }
+  .actions > button {
+    flex: 1 1 auto;
+  }
+}

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
+import { CorreoRecuperacion } from "@/components/auth/correo-recuperacion";
 import { PerfilMfa } from "@/components/perfil-mfa";
 import { ActionButton } from "@/components/design-system/action-button";
 import { getContextoPlataforma } from "@/lib/plataforma-api";
@@ -34,6 +35,7 @@ export function SeguridadBackoffice({ email }: { email: string }) {
             </p>
           </div>
           <PerfilMfa onBloqueoChange={setBloqueado} />
+          {!bloqueado && <CorreoRecuperacion />}
           {error && (
             <p role="alert" className={styles.error}>
               {error}

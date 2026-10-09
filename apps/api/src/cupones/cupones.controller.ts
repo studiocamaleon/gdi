@@ -13,7 +13,7 @@ import {
 import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { CuponesService } from './cupones.service';
 import {
@@ -23,7 +23,7 @@ import {
   ValidarCuponDto,
 } from './dto/cupones.dto';
 
-@Permiso('crm.ver')
+@Permiso("crm.cupones.ver")
 @Controller('cupones')
 export class CuponesController {
   constructor(private readonly service: CuponesService) {}
@@ -38,7 +38,8 @@ export class CuponesController {
 
   // Crear/editar cupones ES autorizar descuentos (por eso aplicarlos no
   // gatea): mismo permiso y roles que resolver una aprobación.
-  @Permiso('comercial.aprobar_descuento')
+  @Permiso("crm.cupones.gestionar")
+  @RequiereVista("crm.cupones.ver")
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   @RequiereCapacidad('cupones')
   @Post()
@@ -46,7 +47,8 @@ export class CuponesController {
     return this.service.crear(auth, dto);
   }
 
-  @Permiso('comercial.aprobar_descuento')
+  @Permiso("crm.cupones.gestionar")
+  @RequiereVista("crm.cupones.ver")
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   @RequiereCapacidad('cupones')
   @Patch(':id')
@@ -58,7 +60,8 @@ export class CuponesController {
     return this.service.actualizar(auth, id, dto);
   }
 
-  @Permiso('comercial.aprobar_descuento')
+  @Permiso("crm.cupones.gestionar")
+  @RequiereVista("crm.cupones.ver")
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   @RequiereCapacidad('cupones')
   @Delete(':id')
@@ -70,7 +73,7 @@ export class CuponesController {
   }
 
   /** El comercial valida el código (tecleado o escaneado) contra su carrito. */
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.ordenes.gestionar")
   @RequiereCapacidad('cupones')
   @Post('validar')
   validar(@CurrentSession() auth: CurrentAuth, @Body() dto: ValidarCuponDto) {

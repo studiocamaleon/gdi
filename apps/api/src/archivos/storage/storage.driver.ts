@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 /**
  * Contrato del almacenamiento de objetos. Dos implementaciones:
  *
@@ -108,6 +109,9 @@ export interface StorageDriver {
 
   /** Bytes crudos. Sólo para uso del servidor (embeber el logo en un PDF). */
   leer(key: string): Promise<Buffer | null>;
+
+  /** Lectura incremental; quien consume debe destruir el stream al cancelar. */
+  abrirLectura(key: string): Promise<Readable | null>;
 
   /**
    * Los primeros N bytes del objeto, con un GET por rango. Es para verificar

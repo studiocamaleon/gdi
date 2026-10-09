@@ -1,5 +1,8 @@
 # Publicar la web de Grafoprint antes que el sistema
 
+> Antecedente de la publicación inicial del 24/09. Para el estado actual de staging consultar [VALIDACION.md](../deploy/staging/VALIDACION.md); para la siguiente etapa, [preparación de producción](preparacion-produccion.md). Las menciones a infraestructura o PR pendientes más abajo corresponden a esa fecha.
+
+
 Estado al 24 de septiembre de 2026: web comercial publicada en
 <https://grafoprint.com.ar>, proyecto `grafoprint-web` de Vercel Pro.
 Commit `604bf17`, rama `meta-tech-provider`, todavía sin integrar en `main`.

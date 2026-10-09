@@ -17,14 +17,19 @@ export const unidadComercialProductoItems: Array<{
 ];
 
 export type ModoMedidasProducto =
-  "FIJA" | "LIBRE" | "COMERCIAL_ELIGE" | "MIXTA";
+  | "FIJA"
+  | "LIBRE"
+  | "COMERCIAL_ELIGE"
+  | "MIXTA";
 
 export type DimensionProducto = "ANCHO" | "ALTO" | "PROFUNDIDAD";
 
 export type EstructuraProducto = "SIMPLE" | "COMPUESTO";
 
 export type MinimoComercialPolitica =
-  "NONE" | "ADVERTIR_FACTURAR_MINIMO" | "BLOQUEAR";
+  | "NONE"
+  | "ADVERTIR_FACTURAR_MINIMO"
+  | "BLOQUEAR";
 
 export type MinimoComercialBase = "cantidad_comercial" | "pliegos_impresos";
 
@@ -93,6 +98,8 @@ export type MetodoCalculoPrecioProducto =
 // ============================================================================
 
 export interface ProductoListItem {
+  /** Cantidad de órdenes emitidas de esta empresa que incluyen el producto. */
+  usosEnOrdenes?: number;
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -140,6 +147,7 @@ export interface ProductoDetalle extends Omit<
   "rutasAlternativas"
 > {
   rutasAlternativas: RutaAlternativaDetalle[];
+  rutasInactivas?: Array<{ id: string; nombre: string }>;
   pasosExtras: PasoExtra[];
   cargosDirectosCotizacion: CargoCotizacionDetalle[];
 }
@@ -205,6 +213,7 @@ export interface ConfigPasoDetalle {
       tipoPerfil?: string | null;
       /** Ordena los niveles de complejidad del corte (más m²/h = más fácil). */
       productivityValue?: number | string | null;
+      productivityUnit?: string | null;
       detalleJson?: Record<string, unknown> | null;
     }>;
     centroCostoPrincipalId?: string | null;
@@ -317,6 +326,7 @@ export interface SlotMaterialDetalle {
     sku: string;
     nombreVariante: string | null;
     precioReferencia: string | null;
+    precioCargado?: boolean;
     atributosVarianteJson?: Record<string, unknown> | null;
     materiaPrima: {
       id: string;
@@ -330,6 +340,7 @@ export interface SlotMaterialDetalle {
         sku: string;
         nombreVariante: string | null;
         precioReferencia: string | null;
+        precioCargado?: boolean;
         atributosVarianteJson?: Record<string, unknown> | null;
       }>;
     };
@@ -354,6 +365,7 @@ export interface SlotMaterialDetalle {
         sku: string;
         nombreVariante: string | null;
         precioReferencia: string | null;
+        precioCargado?: boolean;
         atributosVarianteJson?: unknown;
       }>;
     };
@@ -362,6 +374,7 @@ export interface SlotMaterialDetalle {
       sku: string;
       nombreVariante: string | null;
       precioReferencia: string | null;
+      precioCargado?: boolean;
     } | null;
     variantes: Array<{
       variante: {
@@ -369,6 +382,7 @@ export interface SlotMaterialDetalle {
         sku: string;
         nombreVariante: string | null;
         precioReferencia: string | null;
+        precioCargado?: boolean;
         atributosVarianteJson?: Record<string, unknown> | null;
       };
     }>;

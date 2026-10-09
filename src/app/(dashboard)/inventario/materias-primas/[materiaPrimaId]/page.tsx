@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { MateriaPrimaFicha } from "@/components/inventario/materia-prima-ficha";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
-import { getMaquinas } from "@/lib/maquinaria-api";
+import { getMaquinasOpciones } from "@/lib/maquinaria-api";
 import { getMateriaPrimaById } from "@/lib/materias-primas-api";
 import { getProveedores } from "@/lib/proveedores-api";
 
@@ -34,7 +34,7 @@ async function MateriaPrimaDetallePageContent({
   const [materiaPrima, proveedores, maquinas] = await Promise.all([
     getMateriaPrimaById(materiaPrimaId),
     getProveedores(),
-    getMaquinas(),
+    getMaquinasOpciones(),
   ]);
 
   if (!materiaPrima) {

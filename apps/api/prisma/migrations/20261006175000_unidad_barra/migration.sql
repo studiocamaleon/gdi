@@ -1,0 +1,1 @@
+ALTER TYPE "UnidadMateriaPrima" ADD VALUE IF NOT EXISTS 'BARRA';

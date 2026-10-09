@@ -302,7 +302,10 @@ export function resolveNestingConfig(
     0,
     configuredPieceBleedMm ??
       paso.defaultsFamilia?.demasiaMm ??
-      (separacionLiteral
+      // Una franja vendida por largo no tiene piezas vecinas: la separación
+      // legacy no debe inventarle sangrado. Conservar una demasía explícita
+      // del paso/familia y los márgenes físicos de la máquina.
+      (jobContext.modoCotizacionLineal === 'directo' || separacionLiteral
         ? 0
         : Math.max(legacySeparationHMm, legacySeparationVMm) / 2),
   );

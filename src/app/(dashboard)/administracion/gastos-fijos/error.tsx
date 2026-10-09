@@ -1,5 +1,7 @@
 "use client";
 
+import { useReportarError } from "@/hooks/use-reportar-error";
+
 import { AlertCircleIcon, RefreshCwIcon } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
@@ -16,7 +18,14 @@ import {
 import listPage from "@/components/design-system/list-page.module.css";
 import styles from "@/components/costos/gastos-fijos.module.css";
 
-export default function GastosFijosError({ reset }: { reset: () => void }) {
+export default function GastosFijosError({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  useReportarError(error);
   const scope = useDesignScope();
   const theme = useDesignTheme();
   return (
@@ -32,7 +41,8 @@ export default function GastosFijosError({ reset }: { reset: () => void }) {
           </EmptyMedia>
           <EmptyTitle>No pudimos cargar los gastos fijos</EmptyTitle>
           <EmptyDescription>
-            Reintentá para consultar los importes y las vigencias de tu estructura.
+            Reintentá para consultar los importes y las vigencias de tu
+            estructura.
           </EmptyDescription>
         </EmptyHeader>
         <ActionButton variant="outline" onPress={reset}>

@@ -20,14 +20,14 @@ const VACIO: EstadoIntegraciones = {
 };
 
 export default async function IntegracionesPage() {
-  if (!(await tienePermiso("configuracion.ver"))) {
+  if (!(await tienePermiso("configuracion.integraciones.ver"))) {
     return <SinPermiso modulo="Integraciones" />;
   }
 
   const inicial = await getIntegraciones().catch(() => VACIO);
   // La gestión de credenciales exige configuracion.gestionar en el API; acá
   // sólo decide si se RENDERIZA la sección (un supervisor con .ver no la ve).
-  const puedeGestionar = await tienePermiso("configuracion.gestionar");
+  const puedeGestionar = await tienePermiso("configuracion.integraciones.gestionar");
   const usuario = await getCurrentUserCached().catch(() => null);
   const metaPiloto = puedeGestionar && usuario?.currentUser.tenantActual.rol === 'administrador'
     ? await getMetaPiloto().catch(() => null) : null;

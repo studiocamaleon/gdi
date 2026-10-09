@@ -10,6 +10,7 @@ import {
   IsUUID,
   Max,
   MaxLength,
+  Matches,
   Min,
   MinLength,
   ValidateNested,
@@ -18,6 +19,7 @@ import {
 export const RETENCION_REGIMENES = [
   'SIRCREB',
   'SIRTAC',
+  'SIRCUPA',
   'IIBB_CONVENIO',
   'SICORE_GANANCIAS',
   'IVA_RG2854',
@@ -26,6 +28,11 @@ export const RETENCION_REGIMENES = [
 ] as const;
 
 export class RetencionLineaDto {
+  @IsOptional()
+  @IsIn(['procesador', 'banco', 'cliente', 'no_informado'])
+  agente?: string;
+  @IsOptional() @IsUUID() reglaId?: string;
+
   @IsIn(RETENCION_REGIMENES)
   regimen: string;
 
@@ -34,17 +41,19 @@ export class RetencionLineaDto {
   @MaxLength(60)
   jurisdiccion?: string;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(999999999999.99)
   base: number;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0)
   @Max(100)
   alicuota: number;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(999999999999.99)
   monto: number;
 
   @IsOptional()
@@ -159,4 +168,23 @@ export class AnularCobroDto {
   @IsOptional()
   @IsUUID()
   idempotencyKey?: string;
+}
+
+/** Se confirman importes y fecha REALES, nunca sólo el vencimiento previsto. */
+export class AcreditarCobroDto {
+  @Matches(/^\d{4}-\d{2}-\d{2}$/) fecha: string;
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(999999999999.99)
+  comisionMonto: number;
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(999999999999.99)
+  comisionIvaMonto: number;
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => RetencionLineaDto)
+  retenciones: RetencionLineaDto[];
+  @IsString() @MinLength(1) @MaxLength(100) referencia: string;
 }

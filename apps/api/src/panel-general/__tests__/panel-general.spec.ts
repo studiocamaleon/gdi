@@ -1,3 +1,4 @@
+import { expandir } from '../../auth/permisos';
 import { PERMISO_KEY } from '../../auth/permiso.decorator';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { PanelGeneralController } from '../panel-general.controller';
@@ -13,7 +14,7 @@ const authCon = (permisos: string[]): CurrentAuth =>
     membershipId: 'membership-1',
     role: 'ADMINISTRADOR',
     email: 'persona@ejemplo.com',
-    permisos: new Set(permisos),
+    permisos: expandir(permisos),
   }) as CurrentAuth;
 
 function dependencias() {
@@ -104,8 +105,13 @@ describe('Panel General', () => {
       expect.objectContaining({
         where: {
           tenantId: 'tenant-a',
-          estado: { in: ['pendiente', 'produccion', 'finalizada'] },
-          fechaEntrega: { lte: new Date('2026-09-22T00:00:00Z') },
+          OR: [
+            {
+              estado: { in: ['pendiente', 'produccion'] },
+              fechaEntrega: { lte: new Date('2026-09-22T00:00:00Z') },
+            },
+            { estado: 'finalizada' },
+          ],
         },
       }),
     );
@@ -124,6 +130,7 @@ describe('Panel General', () => {
         hoy: { items: [], total: 0 },
         atrasada: { items: [], total: 0 },
         proxima: { items: [], total: 0 },
+        lista: { items: [], total: 0 },
       });
       expect(respuesta.kpis.map((kpi) => kpi.id)).toEqual([
         'entregas-hoy',
@@ -142,7 +149,10 @@ describe('Panel General', () => {
 
   it('conserva la autorización del historial empresarial al compartir la presentación', async () => {
     const { servicio, admin } = dependencias();
-    const auth = authCon(['panel.ver', 'configuracion.gestionar']);
+    const sinResumen = authCon(['panel.ver', 'configuracion.gestionar']);
+    await servicio.obtener(sinResumen);
+    expect(admin.obtener).not.toHaveBeenCalled();
+    const auth = authCon(['panel.ver', 'configuracion.gestionar', 'reportes.resumen.ver']);
     await servicio.obtener({ ...auth, role: 'OPERADOR' });
     expect(admin.obtener).not.toHaveBeenCalled();
     await servicio.obtener(auth);
@@ -215,6 +225,7 @@ describe('Panel General', () => {
       hoy: { items: [], total: 0 },
       atrasada: { items: [], total: 0 },
       proxima: { items: [], total: 0 },
+      lista: { items: [], total: 0 },
     });
     expect(respuesta.taller).toBeNull();
     expect(respuesta.atencion[0]).toMatchObject({

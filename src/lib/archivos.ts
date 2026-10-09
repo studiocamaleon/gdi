@@ -16,6 +16,7 @@ export const ARCHIVO_SCOPES = [
   /** La factura del proveedor escaneada, colgada del egreso. */
   "EGRESO",
   "PRODUCTO",
+  "DISENO_COTIZACION",
   "PROVEEDOR",
 ] as const;
 

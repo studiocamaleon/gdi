@@ -43,3 +43,8 @@ export class PoliticaReservasDto {
   @IsBoolean() incluirConsumibles: boolean;
   @IsInt() @Min(0) version: number;
 }
+
+export class InicioInventarioDto {
+  @IsBoolean() activo: boolean;
+  @IsInt() @Min(0) version: number;
+}

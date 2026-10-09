@@ -1,6 +1,6 @@
 /* Los matchers asimétricos de Jest declaran su resultado como any. */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { ServiceUnavailableException } from '@nestjs/common';
+import { ServiceUnavailableException, Logger } from '@nestjs/common';
 import { Resend } from 'resend';
 import { CorreoTransaccionalService } from './correo-transaccional.service';
 
@@ -29,6 +29,7 @@ beforeEach(() => {
   enviar.mockResolvedValue({ data: { id: 'envio-simulado' }, error: null });
 });
 afterEach(() => {
+  jest.restoreAllMocks();
   process.env = { ...ambiente };
 });
 
@@ -71,4 +72,25 @@ it('no presenta como enviado un rechazo del proveedor', async () => {
   await expect(
     new CorreoTransaccionalService().enviarVerificacion(datos),
   ).rejects.toBeInstanceOf(ServiceUnavailableException);
+});
+
+it('el correo simulado no imprime el enlace ni el destinatario', async () => {
+  delete process.env.RESEND_API_KEY;
+  process.env.NODE_ENV = 'development';
+  const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+  await new CorreoTransaccionalService().enviarVerificacion(datos);
+  expect(JSON.stringify(warn.mock.calls)).not.toContain(datos.url);
+  expect(JSON.stringify(warn.mock.calls)).not.toContain(datos.para);
+});
+it('el rechazo del proveedor no imprime sus datos ni mensajes privados', async () => {
+  const error = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+  enviar.mockResolvedValue({
+    data: null,
+    error: { message: `token=privado para ${datos.para}` },
+  });
+  await expect(
+    new CorreoTransaccionalService().enviarVerificacion(datos),
+  ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  expect(JSON.stringify(error.mock.calls)).not.toContain(datos.para);
+  expect(JSON.stringify(error.mock.calls)).not.toContain('token=privado');
 });

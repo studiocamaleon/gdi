@@ -1,3 +1,4 @@
+import { vistaDeRuta } from "@/lib/permisos-rutas";
 /**
  * Las secciones del módulo Configuración: la única lista que existe.
  *
@@ -35,14 +36,14 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
     href: "/configuracion/empresa",
     label: "Empresa",
     detalle: "Nombre, logo y datos de contacto",
-    permiso: "configuracion.ver",
+    permiso: "configuracion.empresa.ver",
   },
   {
     key: "usuarios",
     href: "/configuracion/usuarios",
     label: "Usuarios",
     detalle: "Quién entra y con qué rol",
-    permiso: "configuracion.ver",
+    permiso: "configuracion.usuarios.ver",
   },
   // Datos fiscales y Métodos de pago son del que cobra y factura, no del dueño:
   // se sostienen con su propia llave. Por eso el Administrativo llega a
@@ -53,7 +54,7 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
     href: "/configuracion/datos-fiscales",
     label: "Datos fiscales",
     detalle: "Quién factura y desde qué punto de venta",
-    permiso: "administracion.configurar",
+    permiso: "configuracion.fiscal.ver",
     soloPais: "AR",
   },
   {
@@ -61,7 +62,7 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
     href: "/configuracion/metodos-pago",
     label: "Métodos de pago",
     detalle: "Qué medios acepta el taller y con qué comisión",
-    permiso: "administracion.configurar",
+    permiso: "configuracion.metodos.ver",
   },
   // Impuestos y comisiones vivían bajo Costos, pero no son costos técnicos: se
   // configuran una vez y casi no se tocan. Su lugar es Configuración (tenant).
@@ -72,28 +73,28 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
     href: "/configuracion/impuestos",
     label: "Impuestos",
     detalle: "Los tributos que el taller aplica al cotizar",
-    permiso: "costos.ver",
+    permiso: "configuracion.impuestos.ver",
   },
   {
     key: "comisiones",
     href: "/configuracion/comisiones",
     label: "Comisiones",
     detalle: "Comisiones de vendedor y de pasarela de pago",
-    permiso: "costos.ver",
+    permiso: "configuracion.comisiones.ver",
   },
   {
     key: "centro-copiado",
     href: "/configuracion/centro-copiado",
     label: "Centro de copiado",
     detalle: "Papeles, tamaños y terminaciones que ofrece el TPV",
-    permiso: "costos.gestionar",
+    permiso: "configuracion.copiado.ver",
   },
   {
     key: "almacenamiento",
     href: "/configuracion/almacenamiento",
     label: "Almacenamiento",
     detalle: "Los archivos del taller y la cuota del plan",
-    permiso: "configuracion.ver",
+    permiso: "configuracion.almacenamiento.ver",
   },
   {
     key: "impresoras",
@@ -101,14 +102,14 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
     href: "/configuracion/impresoras",
     label: "Impresoras",
     detalle: "Etiquetas y conexión de este puesto",
-    permiso: "configuracion.ver",
+    permiso: "configuracion.impresoras.ver",
   },
   {
     key: "integraciones",
     href: "/configuracion/integraciones",
     label: "Integraciones",
     detalle: "WhatsApp, facturación y demás servicios",
-    permiso: "configuracion.ver",
+    permiso: "configuracion.integraciones.ver",
   },
 ];
 
@@ -124,7 +125,7 @@ export function seccionesConfigVisibles(
 ): SeccionConfig[] {
   return SECCIONES_CONFIG.filter(
     (s) =>
-      puede(s.permiso) &&
+      puede(`${vistaDeRuta(s.href)}.ver` as PermisoClave) &&
       (!s.soloPais || s.soloPais === pais) &&
       (!s.requiereImpresionDirecta || impresionDirecta) &&
       (s.key !== "centro-copiado" || centroCopiado),

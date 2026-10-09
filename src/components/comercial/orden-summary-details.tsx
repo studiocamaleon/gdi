@@ -4,11 +4,13 @@ import { CalendarDays, Folder, Pencil, User } from "lucide-react";
 import { IdentityAvatar } from "@/components/design-system/identity-avatar";
 import type { ReactNode } from "react";
 import { ActionButton } from "@/components/design-system/action-button";
+import { CopiarTelefonoCliente } from "./copiar-telefono-cliente";
 import s from "./orden-summary-details.module.css";
 
 /** Resumen de lectura: la edición mantiene sus controles en Datos. */
 export function OrdenSummaryDetails({
   cliente,
+  clienteTelefono,
   campana,
   fecha,
   vendedor,
@@ -16,6 +18,7 @@ export function OrdenSummaryDetails({
   children,
 }: {
   cliente?: string;
+  clienteTelefono?: string | null;
   campana?: string;
   fecha: string;
   vendedor: string;
@@ -30,7 +33,10 @@ export function OrdenSummaryDetails({
           <User aria-hidden />
           <div>
             <dt>Cliente</dt>
-            <dd>{cliente || "Sin cliente asignado"}</dd>
+            <dd className={s.client}>
+              <span>{cliente || "Sin cliente asignado"}</span>
+              {cliente && <CopiarTelefonoCliente telefono={clienteTelefono} />}
+            </dd>
           </div>
         </div>
         {campana && (

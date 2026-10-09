@@ -1,3 +1,5 @@
+import { FacturacionCoreModule } from '../administracion/facturacion-core.module';
+import { FacturacionLotesWorker } from '../administracion/facturacion-lotes.worker';
 import { MetaAdjuntosWorker } from '../integraciones/meta/inbox/meta-adjuntos.worker';
 import { MetaAdjuntosModule } from '../integraciones/meta/inbox/meta-adjuntos.module';
 import { MetaAltaModule } from '../integraciones/meta/meta-alta.module';
@@ -25,6 +27,7 @@ import { MetaInboxWorker } from '../integraciones/meta/inbox/meta-inbox.worker';
  */
 @Module({
   imports: [
+    FacturacionCoreModule,
     MetaAdjuntosModule,
     MetaAltaModule,
     MetaInboxProcesamientoModule,
@@ -37,6 +40,7 @@ import { MetaInboxWorker } from '../integraciones/meta/inbox/meta-inbox.worker';
     CapacidadGeometriaModule,
   ],
   providers: [
+    FacturacionLotesWorker,
     MetaAltaWorker,
     MetaInboxWorker,
     MetaAdjuntosWorker,

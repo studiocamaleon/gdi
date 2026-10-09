@@ -273,6 +273,7 @@ it('pagina la lista con fechas iguales, busca en todas las páginas y trata % co
     ).size,
   ).toBe(53);
   expect((await leer({ busqueda: 'ÚNICO' }))?.conversaciones).toHaveLength(1);
+  expect((await leer({ busqueda: 'unico' }))?.conversaciones).toHaveLength(1);
   expect((await leer({ busqueda: '%' }))?.conversaciones).toHaveLength(1);
   expect(
     (await leer({ busqueda: '+1 (650) 555-0152' }))?.conversaciones,

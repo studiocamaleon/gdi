@@ -187,3 +187,20 @@ describe('integridad de empleados', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 });
+
+describe('Comisiones delegadas', () => {
+  it.each([false, true])('la ficha sólo revela reglas si el extra está activo: %s', async permitido => {
+    const ficha = { ...empleado(), comisionesHabilitadas: true, comisiones: [{ id: 'comision-ficticia', descripcion: 'Venta', tipo: 'porcentaje', valor: 3 }] };
+    const service = new EmpleadosService({ empleado: { findFirst: jest.fn().mockResolvedValue(ficha) } } as never, {} as never, capacidadesDePrueba());
+    const auth = { ...AUTH, permisos: new Set(['acceso.por_vista', 'registros.empleados.gestionar', ...(permitido ? ['registros.ver_comisiones'] : [])]) };
+    const result = await service.findOne(auth, 'e1');
+    expect(result.comisionesVisibles).toBe(permitido);
+    expect(result.comisiones).toHaveLength(permitido ? 1 : 0);
+  });
+  it('sin el extra no permite agregar comisiones aunque administre legajos', async () => {
+    const service = new EmpleadosService({} as never, {} as never, capacidadesDePrueba());
+    await expect(service.create({ ...AUTH, permisos: new Set(['acceso.por_vista', 'registros.empleados.gestionar']) }, {
+      ...payload, comisionesHabilitadas: true, comisiones: [{ descripcion: 'Venta', tipo: 'porcentaje', valor: '3' }],
+    } as never)).rejects.toThrow('No tenés permiso para configurar comisiones');
+  });
+});

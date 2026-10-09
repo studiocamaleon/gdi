@@ -140,6 +140,18 @@ describe('PresupuestosService.emitir', () => {
     });
   });
 
+  it('guarda un presupuesto en borrador sin enviarlo ni fechar su emisión', async () => {
+    const { service, actualizacionPersistida } = escenario();
+    jest.spyOn(service, 'detalle').mockResolvedValue({ id: dto.cotizacionId, estado: 'borrador' } as never);
+    const resultado = await service.guardarBorrador(auth, dto);
+    expect(resultado.estado).toBe('borrador');
+    expect(service.enviar).not.toHaveBeenCalled();
+    expect(actualizacionPersistida()).toMatchObject({ data: {
+      estado: 'borrador', notificarWhatsapp: false, fechaEmision: null, fechaValidez: null,
+      total: 1331, emisionJson: { items: [expect.objectContaining({ total: 1210 })] },
+    } });
+  });
+
   it('la actualización condicional evita emitir dos veces la misma cotización', async () => {
     const { service } = escenario(0);
     await expect(service.emitir(auth, dto)).rejects.toBeInstanceOf(

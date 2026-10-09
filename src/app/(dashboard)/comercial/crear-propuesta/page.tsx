@@ -24,9 +24,9 @@ async function CrearPropuestaContent() {
   if (!(await tieneCapacidad("cotizacion"))) return <FuncionNoIncluida />;
   const [clientesResult, productosResult, cargosResult, usuarioResult] =
     await Promise.allSettled([
-      getClientes({ limit: 30 }),
-      getProductos(true),
-      getCargosDirectosCatalogo(true),
+      getClientes({ limit: 30 }, true),
+      getProductos(true, true),
+      getCargosDirectosCatalogo(true, true),
       tryGetCurrentUser(),
     ]);
   const clientes: ClienteDetalle[] =

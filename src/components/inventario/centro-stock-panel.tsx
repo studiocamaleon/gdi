@@ -36,7 +36,7 @@ import type {
   OrigenMovimientoStockMateriaPrima,
   StockMateriaPrimaItem,
 } from "@/lib/inventario-stock";
-import type { MateriaPrima } from "@/lib/materias-primas";
+import type { MateriaPrimaStock } from "@/lib/materias-primas";
 import {
   getMateriaPrimaVarianteLabel,
   getVarianteDisplayName,
@@ -80,11 +80,12 @@ import {
 } from "./reservas-stock-controls";
 import layout from "@/components/design-system/list-page.module.css";
 import materialStyles from "./materiales.module.css";
+import { ModoInicioInventario } from "./modo-inicio-inventario";
 import styles from "./centro-stock.module.css";
 
 type CentroStockPanelProps = {
   initialAlmacenes: AlmacenMateriaPrima[];
-  materiasPrimas: MateriaPrima[];
+  materiasPrimas: MateriaPrimaStock[];
 };
 
 const ORIGEN_ITEMS: Array<{ value: OrigenMovimientoStockMateriaPrima; label: string }> = [
@@ -128,7 +129,8 @@ export function CentroStockPanel({
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const conExistencias = useCapacidad("existencias");
-  const permisoGestionar = usePuede("inventario.gestionar");
+  const permisoGestionar = usePuede("inventario.stock.gestionar");
+  const permisoEditarMaterial = usePuede("inventario.materiales.gestionar");
   const canManage = conExistencias && permisoGestionar;
   const query = useInventoryQuery();
   const { result, loading, error, refresh } = useStockPage({
@@ -258,6 +260,7 @@ export function CentroStockPanel({
             maxDimensiones: 5,
           }),
           puedeActualizarReferencia:
+            permisoEditarMaterial &&
             (!variante.moneda || variante.moneda === moneda.codigo) &&
             (variante.unidadPrecio ??
               variante.unidadCompra ??
@@ -270,7 +273,7 @@ export function CentroStockPanel({
     }
 
     return map;
-  }, [materiasPrimas, moneda.codigo]);
+  }, [materiasPrimas, moneda.codigo, permisoEditarMaterial]);
 
   const unidadesMovimiento = rowSelected
     ? varianteMetaById.get(rowSelected.varianteId)?.unidades
@@ -721,6 +724,7 @@ export function CentroStockPanel({
           </p>
         </div>
         <div className={styles.headerActions}>
+          {canManage && <ModoInicioInventario configuracion />}
           {canManage && <ConfiguracionReservas />}
           <ActionButton variant="outline" onPress={() => setDepositsOpen(true)}>
             <Warehouse data-icon="inline-start" />
@@ -741,6 +745,7 @@ export function CentroStockPanel({
           )}
         </div>
       </header>
+      <ModoInicioInventario />
       {!conExistencias && <p className={layout.subtitle}>
         Consulta de existencias registradas. El plan actual no incluye nuevos ingresos, ajustes ni transferencias.
       </p>}

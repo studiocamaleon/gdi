@@ -127,6 +127,19 @@ describe("Operaciones de materiales en la OT", () => {
     );
     expect(onChanged).toHaveBeenCalledOnce();
   });
+  it("identifica la OT de inicio sin presentar compras ni reservas o consumos", async () => {
+    const data = fixture();
+    data.control!.inicioSinStock = true;
+    await act(async () =>
+      root.render(<MaterialesOrdenControl data={data} onChanged={() => {}} />),
+    );
+    expect(container.textContent).toContain(
+      "Emitida en modo de inicio sin stock",
+    );
+    expect(container.textContent).not.toContain("Pendiente de abastecimiento");
+    expect(container.querySelectorAll("button, a")).toHaveLength(0);
+    expect(operarMateriales).not.toHaveBeenCalled();
+  });
   it("oculta las escrituras sin permiso o con el control desactivado", async () => {
     vi.mocked(usePuede).mockReturnValue(false);
     await act(async () =>

@@ -1,10 +1,10 @@
 import type { FuenteDisenoVectorial } from "@/components/comercial/diseno-vectorial-cotizador";
 import type { FuenteGuardada } from "./geometrias-producto-api";
 import type { ConfiguracionGeometriasComerciales } from "./producto-geometrias";
-import type { ProductoRecetaRevision } from "./productos-servicios-api";
+import type { RevisionRecetaCotizacion } from "./productos-servicios-api";
 
 export function idsFuentesVectorialesHeredadas(
-  componentes: ProductoRecetaRevision["componentes"] = [],
+  componentes: RevisionRecetaCotizacion["componentes"] = [],
 ) {
   return new Set(
     componentes.flatMap((c) => {

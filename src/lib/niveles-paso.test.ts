@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   describirNivel,
+  describirProductividad,
   leerNivelesPaso,
   nivelEfectivo,
   nombreNivel,
@@ -22,6 +23,43 @@ const dosNiveles = (nombre: string, etiqueta = "¿Dónde se coloca?") => ({
       { codigo: "nivel_2", nombre: "Zona 1", esDefault: false },
     ],
   },
+});
+
+describe("ritmo visible de cada nivel", () => {
+  const maquina = {
+    id: "plotter", nombre: "Plotter ficticio", perfilDefaultId: "medio",
+    perfiles: [
+      { id: "medio", nombre: "Medio corte", productivityValue: "10", productivityUnit: "M2_H" },
+      { id: "profundo", nombre: "Corte profundo", productivityValue: "6", productivityUnit: "M2_H" },
+    ],
+  };
+  const base = { usaTiempoDeMaquina: true, maquina };
+  const nivel = { codigo: "base", nombre: "Base", esDefault: true, overrides: {} };
+  it("muestra el perfil heredado y el elegido con su unidad, ignorando un ritmo manual viejo", () => {
+    expect(describirNivel(nivel, base)).toBe("10 m²/h");
+    expect(describirNivel({ ...nivel, overrides: { perfilesPorMaquina: { plotter: "profundo" }, productividadHora: 99 } }, base)).toBe("6 m²/h");
+  });
+  it("resuelve el perfil de la máquina activa, sin reutilizar la unidad del plotter", () => {
+    expect(describirNivel({ ...nivel, overrides: { perfilesPorMaquina: { plotter: "profundo", laser: "lento" } } }, {
+      usaTiempoDeMaquina: true,
+      maquina: { id: "laser", nombre: "Láser ficticio", perfiles: [{ id: "lento", nombre: "Lento", productivityValue: 12.5, productivityUnit: "MM_S" }] },
+    })).toBe("12,5 mm/s");
+  });
+  it("sin datos suficientes muestra el perfil y no inventa una velocidad o unidad", () => {
+    expect(describirNivel(nivel, { ...base, maquina: { ...maquina, perfiles: [{ id: "medio", nombre: "Medio corte", productivityValue: 10 }] } })).toBe("Perfil: Medio corte");
+    expect(describirNivel(nivel, { usaTiempoDeMaquina: true })).toBe("Perfil del paso");
+  });
+  it("no presenta un ritmo único cuando el corte usa perfiles por operación", () => {
+    expect(describirNivel(nivel, { ...base, perfilesPorOperacion: true })).toBe("Ritmo según la operación");
+  });
+  it("en trabajo manual muestra tanto el ritmo heredado como el override con su unidad", () => {
+    const manual = { productividadHora: 12, unidadProductividad: "unidades_h" };
+    expect(describirNivel(nivel, manual)).toBe("12 unid./h");
+    expect(describirNivel({ ...nivel, overrides: { productividadHora: 6 } }, manual)).toBe("6 unid./h");
+  });
+  it.each([["PPM", "30 pág. A4-eq/min"], ["M_MIN", "30 m/min"], ["PIEZAS_H", "30 piezas/h"], ["G_H", "30 g/h"]])("respeta la unidad %s", (unidad, esperado) => {
+    expect(describirProductividad(30, unidad)).toBe(esperado);
+  });
 });
 
 describe("leerNivelesPaso — fidelidad para el editor", () => {
@@ -55,7 +93,9 @@ describe("leerNivelesPaso — fidelidad para el editor", () => {
 
   it("null con menos de dos opciones: un solo nivel no es una decisión", () => {
     expect(
-      leerNivelesPaso({ niveles: { opciones: [{ codigo: "a", nombre: "A" }] } }),
+      leerNivelesPaso({
+        niveles: { opciones: [{ codigo: "a", nombre: "A" }] },
+      }),
     ).toBeNull();
   });
 });
@@ -164,7 +204,10 @@ describe("patchTiemposExtra — borrar un bloque limpia los niveles", () => {
           codigo: "a",
           nombre: "A",
           esDefault: true,
-          overrides: { dotacion: 2, tiemposExtraMin: { prep: 10, traslado: 0 } },
+          overrides: {
+            dotacion: 2,
+            tiemposExtraMin: { prep: 10, traslado: 0 },
+          },
         },
         {
           codigo: "b",
@@ -182,7 +225,10 @@ describe("patchTiemposExtra — borrar un bloque limpia los niveles", () => {
       niveles: { opciones: Array<Record<string, never>> };
     };
     const opciones = patch.niveles.opciones as unknown as Array<{
-      overrides: { tiemposExtraMin?: Record<string, number>; dotacion?: number };
+      overrides: {
+        tiemposExtraMin?: Record<string, number>;
+        dotacion?: number;
+      };
     }>;
     expect(opciones[0].overrides.tiemposExtraMin).toEqual({ prep: 10 });
     // Sin bloques que pisar, la clave se va entera; el resto del nivel queda.
@@ -198,5 +244,31 @@ describe("patchTiemposExtra — borrar un bloque limpia los niveles", () => {
   it("sin niveles declarados no inventa la clave", () => {
     const patch = patchTiemposExtra([], { tiemposExtra: [] });
     expect("niveles" in patch).toBe(false);
+  });
+});
+
+describe("perfiles por nivel", () => {
+  it("conserva perfiles al editar otro campo del nivel", () => {
+    const niveles = leerNivelesPaso({
+      niveles: {
+        opciones: [
+          {
+            codigo: "a",
+            overrides: {
+              perfilesPorMaquina: { plotter: "simple" },
+              tiempoFijoMin: 5,
+            },
+          },
+          {
+            codigo: "b",
+            overrides: { perfilesPorMaquina: { plotter: "complejo" } },
+          },
+        ],
+      },
+    })!;
+    expect(
+      leerNivelesPaso({ niveles: { ...niveles, etiqueta: "Elegí corte" } })
+        ?.opciones[0].overrides,
+    ).toEqual({ tiempoFijoMin: 5, perfilesPorMaquina: { plotter: "simple" } });
   });
 });

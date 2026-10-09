@@ -40,12 +40,15 @@ export function NotificacionesProvider({
   const [cargando, setCargando] = React.useState(true);
   const listeners = React.useRef(new Set<Listener>());
   const cursor = React.useRef<string | undefined>(undefined);
+  const ultimaRecarga = React.useRef(0);
 
   const recargar = React.useCallback(async () => {
+    const solicitud = ++ultimaRecarga.current;
     const [items, conteo] = await Promise.all([
       listarNotificacionesInternas(),
       contarNotificacionesNoLeidas(),
     ]);
+    if (solicitud !== ultimaRecarga.current) return;
     setNotificaciones(items);
     setNoLeidas(conteo.cantidad);
     setCargando(false);
@@ -80,14 +83,15 @@ export function NotificacionesProvider({
       setEstado("respaldo");
       fallback = window.setInterval(async () => {
         if (document.hidden) return;
-        try {
-          const lote = await consultarCambiosSistema(cursor.current);
-          cursor.current = lote.cursor;
-          lote.cambios.forEach(despachar);
-          await recargar();
-        } catch {
-          // Se conserva el último estado conocido y se reintenta.
-        }
+        // La bandeja personal sigue disponible sin permiso para el Panel.
+        // Un rechazo del canal de cambios no debe impedir consultar avisos.
+        await Promise.allSettled([
+          consultarCambiosSistema(cursor.current).then((lote) => {
+            cursor.current = lote.cursor;
+            lote.cambios.forEach(despachar);
+          }),
+          recargar(),
+        ]);
       }, 15000);
     };
 
@@ -107,6 +111,7 @@ export function NotificacionesProvider({
       setNoLeidas(data.noLeidas);
       setEstado("en_vivo");
       detenerFallback();
+      programarRecarga();
     });
     source.addEventListener("cambio", (raw) => {
       if (!activo) return;
@@ -120,32 +125,25 @@ export function NotificacionesProvider({
 
     return () => {
       activo = false;
+      ultimaRecarga.current++;
       source.close();
       detenerFallback();
       if (recargaPendiente !== undefined) window.clearTimeout(recargaPendiente);
     };
   }, [despachar, recargar]);
 
-  const leer = React.useCallback(async (id: string) => {
-    await marcarNotificacionLeida(id);
-    setNotificaciones((actuales) =>
-      actuales.map((item) =>
-        item.id === id && !item.leidaEl
-          ? { ...item, leidaEl: new Date().toISOString() }
-          : item,
-      ),
-    );
-    setNoLeidas((valor) => Math.max(0, valor - 1));
-  }, []);
+  const leer = React.useCallback(
+    async (id: string) => {
+      await marcarNotificacionLeida(id);
+      await recargar();
+    },
+    [recargar],
+  );
 
   const leerTodas = React.useCallback(async () => {
     await marcarTodasLasNotificacionesLeidas();
-    const ahora = new Date().toISOString();
-    setNotificaciones((actuales) =>
-      actuales.map((item) => ({ ...item, leidaEl: item.leidaEl ?? ahora })),
-    );
-    setNoLeidas(0);
-  }, []);
+    await recargar();
+  }, [recargar]);
 
   const suscribir = React.useCallback((listener: Listener) => {
     listeners.current.add(listener);

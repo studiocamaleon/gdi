@@ -66,11 +66,106 @@ lo que no levanta HTTP, guards ni los cron que todavía viven en el API.
   cambie de vista o se corte la conexión original.
 - Semáforo distribuido por tenant para cotización y geometría. Una ráfaga de
   una empresa se reprograma sin fallar y deja avanzar trabajos de las demás.
-- Caché compartida de soluciones validadas durante siete días, configurable
-  con `GRAFONEST_CACHE_TTL_SECONDS`.
+- Caché compartida de soluciones validadas con vencimiento máximo de siete días,
+  configurable con `GRAFONEST_CACHE_TTL_SECONDS`, y presupuestos de espacio.
 
 El job de medición sigue siendo el smoke liviano para separar una falla de
 Redis/BullMQ de una falla de la dependencia nativa.
+
+## Espacio de la caché vectorial
+
+La caché conserva resultados reutilizables; si una entrada vence o sale por
+capacidad, el motor vuelve a calcular desde la fuente que conserva la solicitud.
+El resultado de un trabajo terminado se entrega aunque no quepa en la caché.
+No usar este mecanismo para descartar entradas pendientes ni contextos necesarios
+para recuperar un trabajo aceptado.
+
+| Datos serializados | Por proceso (L1) | Redis compartido (L2) |
+| --- | ---: | ---: |
+| Total | 16 MiB / 100 entradas | 32 MiB / 128 entradas |
+| Una empresa | 4 MiB / 32 entradas | 8 MiB / 32 entradas |
+| Una entrada | 2 MiB | 2 MiB |
+
+La serialización tiene presupuesto previo y conservador; algunas entradas muy
+fragmentadas pueden quedar fuera aunque su JSON final pese menos de 2 MiB. No se
+redondean coordenadas. L1 conserva strings y entrega copias independientes, sin
+retener un árbol de objetos ampliable por sus consumidores. Los valores son
+presupuestos de JSON, **no mediciones ni límites de toda la RAM de Node/Redis**.
+
+L2 aplica cantidad y bytes dentro de Lua, compartido entre réplicas. Usa tres
+claves fijas: datos, uso y vencimiento. Retira primero las entradas menos utilizadas
+de la misma empresa cuando ésta agota su cupo; después aplica el límite global.
+Las lecturas L1 actualizan sólo el orden local. Redis registra las escrituras y
+lecturas L2; no representa cada consulta que se resolvió desde L1. Una caída de
+esta caché permite recalcular; no evita que otras operaciones que requieren
+Redis puedan fallar.
+
+El espacio `analysis:{v4}:…` no lee la caché histórica `analysis:v3:…`. En el
+primer despliegue del cambio, verificar los bytes y TTL del prefijo antiguo:
+dejar vencer sus entradas o retirar **sólo esa caché reconstruible** una vez
+actualizadas todas las réplicas. No afirmar un límite total durante la transición
+ni borrar colas, preparaciones o resultados de trabajos. Esos datos tienen otro
+ciclo de vida y requieren su propio presupuesto.
+
+`cache-presupuesto.integration.spec.ts` usa Redis desechable en 127.0.0.1:16387:
+cantidad/bytes, concurrencia, empresas, reinicio, vencimiento, Unicode, descarte
+de resultados grandes y fallo de Redis. Nunca ejecutarla sobre Redis persistente.
+
+## Admisión de cálculos
+
+`ColaCalculos` limita los trabajos aceptados en cada una de las tres colas,
+además del semáforo que decide cuáles se ejecutan. Cuenta los trabajos en
+espera, activos, demorados y pausados. Los cupos iniciales son:
+
+| Por cola | Cantidad | Datos de entrada acumulados |
+| --- | ---: | ---: |
+| Una empresa | 32 | 8 MiB |
+| Todas las empresas | 128 | 32 MiB |
+
+Cada entrada admite hasta 8 MiB. Una preparación comercial de hasta veinte
+cantidades cabe en el cupo por cantidad; también debe cumplir el límite de
+bytes. Los límites son independientes por cola: una cotización pendiente no
+ocupa el cupo de los nestings que necesita para terminar.
+
+El análisis vectorial guarda la información para reconstruir su vista dentro
+de los datos del mismo job. Ese contexto cuenta completo en el cupo de bytes,
+se escribe al aceptar el trabajo y se retira con él. No hay una escritura
+separada que pueda quedar huérfana. El worker excluye ese contexto antes de
+llamar al motor nativo. La consulta verifica siempre la empresa del trabajo.
+Durante la transición se siguen leyendo las preparaciones anteriores con su
+TTL original; no se crean nuevas claves del prefijo `vector-analysis:v1`.
+Su retención histórica y los datos de jobs terminales requieren medición
+separada: el cupo de pendientes no limita esos resultados retenidos.
+
+Al alcanzar el cupo, el productor devuelve **429** y conserva los trabajos ya
+aceptados. Una entrada demasiado grande devuelve **413**. Terminar o cancelar
+un trabajo libera capacidad al evaluar la siguiente alta; el resultado
+terminado conserva su retención habitual. Un reintento de nesting fallido
+tiene una identidad nueva y las solicitudes iguales en curso se comparten.
+
+La admisión y el alta usan `WATCH`/`MULTI` en una conexión exclusiva de Redis.
+El registro sobrevive a reinicios y no usa reservas con vencimiento. Si cambia
+la conexión, el alta se rechaza; no continúa con una vigilancia perdida.
+Los productores no deben usar `addBulk` ni reactivar jobs terminales evitando
+esta admisión.
+
+Antes de desplegar por primera vez, dejar terminar los cálculos pendientes
+de la versión anterior. Mientras existan jobs sin registro de admisión, las
+nuevas altas reciben **503**; no se borran ni se reinician las colas para
+actualizar. Estos cupos **no limitan toda la memoria de Redis**: resultados
+terminados, cachés e índices necesitan presupuesto y medición adicionales.
+
+La suite `admision-colas.integration.spec.ts` usa un Redis desechable exclusivo
+en `127.0.0.1:16387`, indicado por `TEST_QUEUE_REDIS_URL`. Prueba productores
+y BullMQ reales, concurrencia, reinicios, cortes de conexión, reintentos y
+cupos de ambas familias. El workflow `security-boundaries.yml` crea ese
+servicio de prueba sin credenciales cloud.
+
+`contexto-calculos.integration.spec.ts` comprueba el cupo completo, retiro sin
+preparaciones huérfanas, recuperación desde otro servidor, aislamiento entre
+empresas, deduplicación y lectura de trabajos anteriores sobre ese mismo Redis
+desechable. El resultado se resuelve en JavaScript en este ensayo; no ejecuta
+el optimizador nativo.
 
 ## Ejecución local
 

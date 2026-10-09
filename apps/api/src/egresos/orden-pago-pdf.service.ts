@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { jsPDF } from 'jspdf';
 
@@ -192,9 +193,9 @@ export class OrdenPagoPdfService {
       } catch (error) {
         // Un logo corrupto no puede impedir emitir la orden de pago.
         this.log.warn(
-          `No pude dibujar el logo en la orden de pago: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `No pude dibujar el logo en la orden de pago: ${textoErrorLog(
+            error,
+          )}`,
         );
       }
     }

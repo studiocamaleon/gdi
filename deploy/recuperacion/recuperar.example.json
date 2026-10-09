@@ -1,0 +1,17 @@
+{
+  "carpeta": "/ruta/privada/recuperacion-aislada",
+  "ageBin": "/usr/local/bin/age",
+  "identidad": "/ruta/custodia-separada/identidad.agekey",
+  "recibo": "/ruta/custodia-separada/recibo-copia.json",
+  "firmaComprobantes": {
+    "idClave": "firma-staging-v1",
+    "clavePublica": "COPIAR LA CLAVE PUBLICA DEL KIT CONSERVADO FUERA DEL EJECUTOR"
+  },
+  "b2": {
+    "RESPALDO_ENTORNO": "staging",
+    "RESPALDO_B2_ACCOUNT_ID": "",
+    "RESPALDO_B2_BUCKET_ID": "",
+    "RESPALDO_B2_KEY_ID": "",
+    "RESPALDO_B2_KEY": ""
+  }
+}

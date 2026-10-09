@@ -165,6 +165,7 @@ export type EstadoNotificaciones = {
 };
 
 export type LineaLog = {
+  versionReintento?: string | null;
   id: string;
   canal?: string;
   evento: string;
@@ -176,6 +177,8 @@ export type LineaLog = {
   intentos: number;
   programadaPara: string | null;
   enviadaEl: string | null;
+  estadoEntrega?: string | null;
+  estadoEntregaEl?: string | null;
   createdAt: string;
 };
 

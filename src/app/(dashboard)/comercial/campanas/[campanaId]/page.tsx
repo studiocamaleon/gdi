@@ -25,7 +25,7 @@ export default async function CampanaDetallePage({
   const [archivos, empleados, canManage, desarrollo] = await Promise.all([
     listarArchivos("CAMPANA", campanaId).catch(() => []),
     getEmpleados().catch(() => []),
-    puedeConfigurar("proyectos", "comercial.gestionar"),
+    puedeConfigurar("proyectos", "comercial.campanas.gestionar"),
     getDesarrolloCampana(campanaId).catch(() => ({ maestros: [] })),
   ]);
   return (

@@ -85,7 +85,12 @@ vi.mock("@/components/design-system/action-button", () => ({
 }));
 function Abrir() {
   const p = useImpresionDocumentos();
-  return <button onClick={() => p.abrir("ot", true)}>Emitida</button>;
+  return (
+    <>
+      <button onClick={() => p.abrir("ot", true)}>Emitida</button>
+      <button onClick={() => p.abrir("ot")}>Abrir manualmente</button>
+    </>
+  );
 }
 let root: Root, el: HTMLDivElement, vista: VistaDocumentos;
 const base: EnvioDocumento = {
@@ -194,7 +199,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   el.remove();
 });
-async function montar() {
+async function montar(manual = true) {
   await act(async () =>
     root.render(
       <DocumentosImpresionProvider tenantId="tenant">
@@ -202,6 +207,9 @@ async function montar() {
       </DocumentosImpresionProvider>,
     ),
   );
+  expect(el.textContent).not.toContain("Asistente Grafo");
+  expect(el.textContent).not.toContain("Asistente de impresión");
+  if (manual) await click("Abrir manualmente");
 }
 async function click(text: string, indice = 0) {
   const b = Array.from(el.querySelectorAll("button")).filter(
@@ -259,18 +267,25 @@ it("cerrar el asistente oculta el widget, conserva el seguimiento y permite reab
   expect(mocks.cerrar).not.toHaveBeenCalled();
 
   const recibir = mocks.escuchar.mock.calls[0][2];
-  await act(async () => recibir({
-    printerName: "RICOH",
-    eventType: "JOB",
-    jobName: vista.historial[0].jobName,
-    statusText: "COMPLETE",
-  }));
+  await act(async () =>
+    recibir({
+      printerName: "RICOH",
+      eventType: "JOB",
+      jobName: vista.historial[0].jobName,
+      statusText: "COMPLETE",
+    }),
+  );
   expect(el.textContent).not.toContain("Asistente Grafo");
   await click("Emitida");
+  expect(el.textContent).not.toContain("Asistente Grafo");
+  expect(el.textContent).not.toContain("Asistente de impresión");
+  await click("Abrir manualmente");
   expect(el.textContent).toContain("Finalizado según la cola");
   expect(mocks.imprimir).toHaveBeenCalledTimes(1);
   await click("Minimizar");
-  expect(el.querySelector('[aria-label="Cerrar asistente de impresión"]')).not.toBeNull();
+  expect(
+    el.querySelector('[aria-label="Cerrar asistente de impresión"]'),
+  ).not.toBeNull();
 });
 
 it("verifica varios juntos, permite seleccionar por impresora y excluye pendientes e inciertos", async () => {
@@ -301,7 +316,7 @@ it("verifica varios juntos, permite seleccionar por impresora y excluye pendient
     },
   ];
   await montar();
-  await click("Colas de impresión · 4");
+
   await click("Verificar varios (2)");
   await click("Seleccionar salidas de Color");
   expect(el.textContent).toContain("1 salida seleccionada");
@@ -357,7 +372,7 @@ it("conserva sólo los fallidos seleccionados si la verificación entre OT tiene
     return { ok: true };
   });
   await montar();
-  await click("Colas de impresión · 2");
+
   await click("Verificar varios (2)");
   await click("Seleccionar todos (2)");
   await click("Verifiqué los seleccionados (2)");
@@ -386,7 +401,7 @@ it("una selección no verifica una reimpresión posterior del mismo archivo", as
     { ...base, id: "envio-2", itemId: "item-2", estado: "COMPLETE" },
   ];
   await montar();
-  await click("Colas de impresión · 2");
+
   await click("Verificar varios (2)");
   await click("Seleccionar todos (2)");
   vista.historial.unshift({
@@ -505,4 +520,18 @@ it("el papel pendiente se selecciona y libera explícitamente antes de enviar", 
     "1:1:1",
   );
   expect(mocks.imprimir).toHaveBeenCalledTimes(1);
+});
+
+it("emitir por primera vez no muestra ni el diálogo ni el widget y sigue enviando en segundo plano", async () => {
+  await montar(false);
+  await click("Emitida");
+  expect(mocks.imprimir).toHaveBeenCalledTimes(1);
+  expect(el.textContent).not.toContain("Asistente Grafo");
+  expect(el.textContent).not.toContain("Asistente de impresión");
+  await click("Abrir manualmente");
+  await click("Minimizar");
+  await click("Emitida");
+  expect(el.textContent).not.toContain("Asistente de impresión");
+  expect(el.textContent).toContain("Asistente Grafo");
+  expect(mocks.cerrar).not.toHaveBeenCalled();
 });

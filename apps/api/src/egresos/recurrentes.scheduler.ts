@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
@@ -59,9 +60,9 @@ export class RecurrentesScheduler {
       } catch (error) {
         // Un tenant que falla no puede dejar sin emitir a los demás.
         this.log.error(
-          `No pude emitir los recurrentes de ${tenantId}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `No pude emitir los recurrentes de ${tenantId}: ${textoErrorLog(
+            error,
+          )}`,
         );
       }
     }

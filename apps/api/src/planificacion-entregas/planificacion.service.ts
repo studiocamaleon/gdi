@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   Optional,
@@ -1131,7 +1132,7 @@ export class PlanificacionEntregasService {
           },
           data: { updatedAt: new Date() },
         })
-        .catch((error: unknown) => this.logger.warn(respuestaError(error)))
+        .catch((error: unknown) => this.logger.warn(textoErrorLog(error)))
         .finally(() => {
           renovando = false;
         });

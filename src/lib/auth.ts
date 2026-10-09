@@ -128,12 +128,12 @@ export async function logout() {
   });
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser(signal?: AbortSignal) {
   return apiRequest<{
     accessToken: string | null;
     sessionId: string;
     currentUser: CurrentUser;
-  }>("/tenants/current");
+  }>("/tenants/current", { signal });
 }
 
 export async function switchTenant(tenantId: string) {

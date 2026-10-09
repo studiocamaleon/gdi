@@ -8,7 +8,7 @@ import { PrevisionMaterialesService } from './prevision-materiales.service';
 export class PrevisionMaterialesController {
   constructor(private readonly prevision: PrevisionMaterialesService) {}
   @Post()
-  @Permiso('comercial.ver')
+  @Permiso("comercial.ordenes.ver")
   consultar(
     @CurrentSession() auth: CurrentAuth,
     @Body() data: PrevisionMaterialesDto,

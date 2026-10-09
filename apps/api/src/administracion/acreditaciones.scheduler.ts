@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { conLockDeCron } from '../common/cron-lock';
@@ -43,7 +44,7 @@ export class AcreditacionesScheduler {
     } catch (error) {
       this.logger.error(
         'Falló el barrido de acreditaciones vencidas.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     } finally {
       this.corriendo = false;

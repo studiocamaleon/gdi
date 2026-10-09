@@ -27,7 +27,7 @@ const VACIO: DatosEmpresa = {
 };
 
 export default async function EmpresaPage() {
-  if (!(await tienePermiso("configuracion.gestionar"))) {
+  if (!(await tienePermiso("configuracion.empresa.gestionar"))) {
     return <SinPermiso modulo="Empresa" />;
   }
 

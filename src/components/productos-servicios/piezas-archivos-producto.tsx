@@ -137,7 +137,7 @@ export function PiezasArchivosProducto({
       if (file.size > 524288)
         throw new Error("El vector supera el máximo de 512 KB.");
       const archivo = await subirArchivo(file, {
-        scope: "PRODUCTO",
+        scope: paraCotizacion ? "DISENO_COTIZACION" : "PRODUCTO",
         entidadId: productoId,
         calcularHash: true,
       });

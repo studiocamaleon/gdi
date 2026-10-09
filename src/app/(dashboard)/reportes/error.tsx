@@ -1,5 +1,7 @@
 "use client";
 
+import { useReportarError } from "@/hooks/use-reportar-error";
+
 import { Button } from "@/components/ui/button";
 
 /**
@@ -9,9 +11,19 @@ import { Button } from "@/components/ui/button";
  * shell atajaba el error acá mismo; ahora que cada reporte es una ruta, el
  * límite de error es este archivo.
  */
-export default function ErrorReporte({ reset }: { error: Error; reset: () => void }) {
+export default function ErrorReporte({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  useReportarError(error);
   return (
-    <div className="d-empty" style={{ padding: 48, display: "grid", gap: 14, justifyItems: "center" }}>
+    <div
+      className="d-empty"
+      style={{ padding: 48, display: "grid", gap: 14, justifyItems: "center" }}
+    >
       <div>No se pudo cargar el reporte.</div>
       <Button type="button" variant="outline" onClick={reset}>
         Reintentar

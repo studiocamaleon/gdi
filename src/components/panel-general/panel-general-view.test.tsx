@@ -16,6 +16,7 @@ const base: PanelGeneralData = {
     hoy: { items: [], total: 0 },
     atrasada: { items: [], total: 0 },
     proxima: { items: [], total: 0 },
+    lista: { items: [], total: 0 },
   },
   taller: null,
   accionesRapidas: [],

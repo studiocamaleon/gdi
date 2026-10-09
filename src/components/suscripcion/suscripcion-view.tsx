@@ -13,6 +13,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useFecha } from "@/components/navigation/config-regional-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { Button } from "@/components/ui/button";
 import {
@@ -253,6 +254,7 @@ type CheckoutInline = {
 
 export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   const router = useRouter();
+  const puedeGestionar = usePuede("configuracion.suscripcion.gestionar");
   const { fechaCorta } = useFecha();
   const fechaLarga = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
   const [datos, setDatos] = React.useState(inicial);
@@ -295,6 +297,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       : "sandbox";
 
   React.useEffect(() => {
+    if (!puedeGestionar) return;
     let vivo = true;
     void contratacionPendiente()
       .then((r) => {
@@ -304,7 +307,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [puedeGestionar]);
   const refrescarContrato = async () => {
     try {
       const fresco = await getSuscripcion();
@@ -318,6 +321,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     }
   };
   const abrirPagoComercial = (r: VistaContratacion) => {
+    if (!puedeGestionar) return;
     if (!paddle || !r.transaccionId) {
       toast.error(
         "El formulario de pago todavía se está cargando. Podés retomarlo en un momento.",
@@ -512,6 +516,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
    * SEGUNDA suscripción y le cobrarían las dos.
    */
   const elegirPlan = (plan: PlanContratable) => {
+    if (!puedeGestionar) return;
     if (plan.ofertaId) {
       if (
         intentoComercial &&
@@ -542,7 +547,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   };
 
   const aplicarCambio = async () => {
-    if (!confirmarCambio || confirmando) return;
+    if (!puedeGestionar || !confirmarCambio || confirmando) return;
     const plan = confirmarCambio;
     setConfirmarCambio(null);
     setConfirmando(true);
@@ -565,23 +570,14 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   };
 
   const contratar = (plan: PlanContratable) => {
+    if (!puedeGestionar) return;
     if (plan.ofertaId) {
       elegirPlan(plan);
       return;
     }
-    if (!paddle) {
-      toast.error("El checkout todavía se está cargando. Probá en un momento.");
-      return;
-    }
-    setAbriendo(plan.codigo);
-    contratacionRef.current = null;
-    // El ciclo define QUÉ precio de Paddle se cobra: son dos precios distintos
-    // del mismo plan, no un descuento aplicado sobre el mensual.
-    const priceId =
-      ciclo === "anual" && plan.anual ? plan.anual.priceId : plan.priceId;
-    setCheckoutError(null);
-    setCheckoutCargando(true);
-    setCheckoutInline({ plan, ciclo, priceId });
+    toast.error(
+      "Este plan ya no admite nuevas contrataciones. Elegí una de las opciones disponibles.",
+    );
   };
 
   const cerrarCheckout = React.useCallback(() => {
@@ -601,20 +597,19 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
   React.useEffect(() => {
     if (!checkoutInline || !paddle) return;
+    const transaccionId = checkoutInline.contratacion?.transaccionId;
+    if (!transaccionId) {
+      setCheckoutError("Volvé a revisar el plan antes de continuar con el pago.");
+      setCheckoutCargando(false);
+      return;
+    }
 
     // El frameTarget tiene que existir en el DOM antes de llamar a Paddle.
     // El siguiente frame garantiza que el Dialog ya montó su contenido.
     const frame = window.requestAnimationFrame(() => {
       try {
         paddle.Checkout.open({
-          ...(checkoutInline.contratacion?.transaccionId
-            ? { transactionId: checkoutInline.contratacion.transaccionId }
-            : {
-                items: [{ priceId: checkoutInline.priceId, quantity: 1 }],
-                // El tenantId sale de la SESIÓN (lo puso el backend): es lo que el
-                // webhook usa para saber a qué imprenta corresponde el pago.
-                customData: { tenantId: datos.checkout.tenantId },
-              }),
+          transactionId: transaccionId,
           customer: { email: datos.checkout.email },
           settings: {
             displayMode: "inline",
@@ -644,7 +639,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   }, [checkoutInline, checkoutIntento, paddle, datos.checkout]);
 
   const reactivar = async () => {
-    if (reactivando) return;
+    if (!puedeGestionar || reactivando) return;
     setReactivando(true);
     try {
       setDatos(await reactivarSuscripcion());
@@ -672,7 +667,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   };
 
   const irAlPortal = async () => {
-    if (yendoAlPortal) return;
+    if (!puedeGestionar || yendoAlPortal) return;
     setYendoAlPortal(true);
     try {
       const { url } = await abrirPortalSuscripcion();
@@ -688,7 +683,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
   const [verificandoPago, setVerificandoPago] = React.useState(false);
   const verificarPago = async () => {
-    if (verificandoPago) return;
+    if (!puedeGestionar || verificandoPago) return;
     setVerificandoPago(true);
     try {
       const fresco = await actualizarEstadoSuscripcion();
@@ -767,7 +762,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
             type="button"
             className="btn-primary"
             onClick={reactivar}
-            disabled={reactivando}
+            disabled={!puedeGestionar || reactivando}
           >
             {reactivando ? "Reactivando…" : "Reactivar suscripción"}
           </button>
@@ -787,7 +782,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               type="button"
               className="btn-ghost"
               onClick={verificarPago}
-              disabled={verificandoPago}
+              disabled={!puedeGestionar || verificandoPago}
             >
               {verificandoPago ? "Verificando…" : "Verificar pago"}
             </button>
@@ -795,7 +790,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               type="button"
               className="btn-primary"
               onClick={irAlPortal}
-              disabled={yendoAlPortal}
+              disabled={!puedeGestionar || yendoAlPortal}
             >
               Actualizar medio de pago
             </button>
@@ -847,7 +842,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               type="button"
               className="btn-primary"
               onClick={() => planElegido && contratar(planElegido)}
-              disabled={confirmando || !planElegido}
+              disabled={!puedeGestionar || confirmando || !planElegido}
             >
               Activar suscripción
             </button>
@@ -1318,7 +1313,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                             setElegido(p.codigo);
                             elegirPlan(p);
                           }}
-                          isDisabled={confirmando || abriendo === p.codigo}
+                          isDisabled={!puedeGestionar || confirmando || abriendo === p.codigo}
                         >
                           {abriendo === p.codigo
                             ? "Abriendo…"
@@ -1508,7 +1503,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                 type="button"
                 className="btn-primary w"
                 onClick={() => contratar(planElegido)}
-                disabled={confirmando}
+                disabled={!puedeGestionar || confirmando}
               >
                 Activar suscripción
               </button>
@@ -1564,7 +1559,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                   variant="secondary"
                   className="w-full"
                   onPress={irAlPortal}
-                  isDisabled={yendoAlPortal}
+                  isDisabled={!puedeGestionar || yendoAlPortal}
                 >
                   {yendoAlPortal ? "Abriendo…" : "Cambiar medio de pago"}
                   <ArrowUpRightIcon aria-hidden="true" />
@@ -1580,7 +1575,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                 type="button"
                 className="sub-manage"
                 onClick={irAlPortal}
-                disabled={yendoAlPortal}
+                disabled={!puedeGestionar || yendoAlPortal}
               >
                 Ver facturas y datos de facturación
               </button>
@@ -1589,7 +1584,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                   type="button"
                   className="sub-manage danger"
                   onClick={irAlPortal}
-                  disabled={yendoAlPortal}
+                  disabled={!puedeGestionar || yendoAlPortal}
                 >
                   Cancelar suscripción
                 </button>

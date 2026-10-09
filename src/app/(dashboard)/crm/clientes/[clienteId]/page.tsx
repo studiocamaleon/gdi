@@ -26,7 +26,7 @@ async function Content({ params }: { params: Promise<{ clienteId: string }> }) {
   const { clienteId } = await params;
   const [cliente, canManage] = await Promise.all([
     getClienteById(clienteId),
-    puedeConfigurar("clientes", "crm.gestionar"),
+    puedeConfigurar("clientes", "crm.clientes.gestionar"),
   ]);
   if (!cliente) notFound();
   return (

@@ -3,6 +3,7 @@ import { RolSistema } from '@prisma/client';
 import { ArchivosService } from '../archivos/archivos.service';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Roles } from '../auth/roles.decorator';
+import { PermitirClaveProvisoria } from '../auth/clave-provisoria.decorator';
 import { Permiso, SoloAutenticado } from '../auth/permiso.decorator';
 import { SwitchTenantDto } from '../auth/dto/switch-tenant.dto';
 import { DefinirLogoTenantDto } from './dto/logo-tenant.dto';
@@ -35,7 +36,7 @@ export class TenantsController {
 
   /** Cambiar la marca del negocio no es cosa de un operador. */
   @Put('logo')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.empresa.gestionar")
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   definirLogo(
     @CurrentSession() auth: CurrentAuth,
@@ -45,7 +46,7 @@ export class TenantsController {
   }
 
   @Delete('logo')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.empresa.gestionar")
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   async quitarLogo(@CurrentSession() auth: CurrentAuth): Promise<{ ok: true }> {
     await this.archivos.quitarLogo(auth);
@@ -66,7 +67,7 @@ export class TenantsController {
 
   /** Cambiar cómo se presenta el negocio es del dueño, no del que factura. */
   @Put('empresa')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.empresa.gestionar")
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   guardarDatosEmpresa(
     @CurrentSession() auth: CurrentAuth,
@@ -76,6 +77,9 @@ export class TenantsController {
   }
 
   @Get('current')
+  // La web necesita leer debeCambiarPassword para mostrar «Elegí tu clave».
+  // La excepción no alcanza al resto de las operaciones de la empresa.
+  @PermitirClaveProvisoria()
   getCurrent(@CurrentSession() auth: CurrentAuth) {
     return this.tenantsService.getCurrent(auth);
   }

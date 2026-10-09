@@ -67,6 +67,7 @@ export function OrdenTabs({
   comprobantesCount,
   archivosCount,
   archivosPendientesCount = 0,
+  mostrarPagos = true,
   mostrarMateriales = false,
   materialesFaltantesCount = 0,
 }: {
@@ -80,6 +81,7 @@ export function OrdenTabs({
   /** null hasta que el tab de Archivos se abre y los cuenta. */
   archivosCount?: number | null;
   archivosPendientesCount?: number;
+  mostrarPagos?: boolean;
   mostrarMateriales?: boolean;
   materialesFaltantesCount?: number;
 }) {
@@ -101,7 +103,7 @@ export function OrdenTabs({
           },
         ]
       : []),
-    { key: "pagos", label: "Pagos", icon: <CreditCardIcon /> },
+    ...(mostrarPagos ? [{ key: "pagos" as const, label: "Pagos", icon: <CreditCardIcon /> }] : []),
     ...(comprobantesCount !== undefined
       ? [
           {

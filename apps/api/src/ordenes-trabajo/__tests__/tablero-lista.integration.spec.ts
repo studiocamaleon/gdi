@@ -1,3 +1,4 @@
+import { ArchivosService } from '../../archivos/archivos.service';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
@@ -22,13 +23,13 @@ const auth = {
 } as CurrentAuth;
 // Se prueba la consulta real; conciliación/backfill tienen sus propias suites.
 const service = Object.assign(
-  Object.create(OrdenesTrabajoService.prototype) as OrdenesTrabajoService,
+  Object.create(OrdenesTrabajoService.prototype),
   {
     prisma: db,
     reconciliarTramosVencidos: jest.fn().mockResolvedValue(undefined),
     backfillPasosTablero: jest.fn().mockResolvedValue(undefined),
   },
-);
+) as OrdenesTrabajoService;
 let ordenId: string,
   activoId: string,
   terminadoId: string,
@@ -292,4 +293,59 @@ it('proyecta la referencia del paso sin descargar su historial y conserva los fi
   );
   expect(item.pasos.find((p) => p.id === pasoHecho)!.planReferencia).toBeNull();
   expect(JSON.stringify(data)).not.toContain('historial');
+});
+
+it('cuenta y descarga los generales en cada ítem sin incluir archivos hermanos ni de otra OT', async () => {
+  const archivos = new ArchivosService(db as never, {} as never, {} as never);
+  const general = await db.archivo.create({ data: { tenantId, scope: 'ORDEN', ordenId, key: randomUUID(), nombreOriginal: 'General.pdf', mimeType: 'application/pdf', estado: 'LISTO', bytes: 100 } });
+  const propio = await db.archivo.create({ data: { tenantId, scope: 'ORDEN_ITEM', ordenItemId: activoId, key: randomUUID(), nombreOriginal: 'Arte activo.pdf', mimeType: 'application/pdf', estado: 'LISTO', bytes: 100 } });
+  await db.archivo.create({ data: { tenantId, scope: 'ORDEN_ITEM', ordenItemId: terminadoId, key: randomUUID(), nombreOriginal: 'Arte terminado.pdf', mimeType: 'application/pdf', estado: 'LISTO', bytes: 100 } });
+  await db.archivo.create({ data: { tenantId, scope: 'ORDEN', ordenId, key: randomUUID(), nombreOriginal: 'Factura del sistema.pdf', mimeType: 'application/pdf', generado: true, estado: 'LISTO', bytes: 100 } });
+  const activos = await service.tablero(auth);
+  expect(activos.items.find(i => i.id === activoId)?.archivosCount).toBe(2);
+  expect(activos.items.find(i => i.id === sinRutaId)?.archivosCount).toBe(1);
+  expect((await service.consultarItemTablero(auth, activoId)).archivosCount).toBe(2);
+  const terminados = await service.tableroTerminados(auth, { page: 1, limit: 25 });
+  expect(terminados.items.find(i => i.id === terminadoId)?.archivosCount).toBe(2);
+  const consulta = jest.spyOn(db.archivo, 'findMany');
+  await archivos.prepararDescargaZip(tenantId, { itemId: activoId });
+  const seleccion = await consulta.mock.results[0].value;
+  expect(seleccion.map((a: { key: string }) => a.key).sort()).toEqual([general.key, propio.key].sort());
+  await expect(archivos.prepararDescargaZip(otroTenant, { itemId: activoId })).rejects.toThrow('no encontrado');
+  consulta.mockRestore();
+});
+
+it('presenta una OT ya guardada según sus precedencias y rechaza completar impresión antes de preprensa', async () => {
+  const nueva = await db.ordenTrabajo.create({
+    data: { tenantId, numero: 'OT-ORDEN-FLUJO-QA', estado: 'pendiente', items: { create: baseItem(tenantId, 'PVC-QA') } },
+    include: { items: true },
+  });
+  try {
+    const itemId = nueva.items[0].id;
+    const impresion = await paso(itemId, 0, 'pendiente', nueva.id);
+    const refilado = await paso(itemId, 1, 'pendiente', nueva.id);
+    const preprensa = await paso(itemId, 2, 'pendiente', nueva.id);
+    await db.ordenTrabajoPasoDependencia.createMany({ data: [
+      { tenantId, ordenId: nueva.id, predecesorPasoId: preprensa.id, sucesorPasoId: impresion.id },
+      { tenantId, ordenId: nueva.id, predecesorPasoId: impresion.id, sucesorPasoId: refilado.id },
+    ] });
+    const esperado = [preprensa.id, impresion.id, refilado.id];
+    const listado = await service.tablero(auth);
+    expect(listado.items.find(i => i.id === itemId)!.pasos.map(p => p.id)).toEqual(esperado);
+    const detalle = await service.consultarItemTablero(auth, itemId);
+    expect(detalle.pasos.map(p => p.id)).toEqual(esperado);
+    expect(detalle.pasos.map(p => p.predecesoresSatisfechos)).toEqual([true, false, false]);
+    const ejecutor = Object.assign(Object.create(OrdenesTrabajoService.prototype) as OrdenesTrabajoService, {
+      prisma: db, capacidades: { exigir: jest.fn() }, reconciliarTramosVencidos: jest.fn(),
+    });
+    for (const posterior of [impresion, refilado]) {
+      await expect(ejecutor.accionPaso({ ...auth, permisos: new Set(['produccion.supervisar']) }, nueva.id, itemId, posterior.id,
+        { accion: 'completar', sinTiempoConfirmado: true },
+      )).rejects.toThrow('faltan dependencias obligatorias');
+    }
+    const guardados = await db.ordenTrabajoItemPaso.findMany({ where: { itemId }, orderBy: { indice: 'asc' }, select: { id: true, indice: true, estado: true } });
+    expect(guardados).toEqual([impresion, refilado, preprensa].map((p, indice) => ({ id: p.id, indice, estado: 'pendiente' })));
+  } finally {
+    await db.ordenTrabajo.delete({ where: { id: nueva.id } });
+  }
 });

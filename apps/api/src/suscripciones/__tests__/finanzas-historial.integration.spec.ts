@@ -336,7 +336,7 @@ describe('Historial financiero después de retirar módulos', () => {
       }
     }));
 
-  it('consultar cuentas y cobros no acredita vencidos ni mueve fondos; el cron conserva su ejecución independiente', () =>
+  it('ni consultar ni dejar pasar el tiempo acredita cobros sin confirmación', () =>
     conPlanesAsignados(prisma, async (c) => {
       const x = await preparar(c);
       await x.bajar();
@@ -368,7 +368,7 @@ describe('Historial financiero después de retirar módulos', () => {
         (await c.tx.cobro.findUniqueOrThrow({ where: { id: cobro.id } }))
           .estadoAcreditacion,
       ).toBe('pendiente');
-      expect(await x.cobros.barrerVencidos(x.tenantId)).toBe(1);
+      expect(await x.cobros.barrerVencidos(x.tenantId)).toBe(0);
       expect(
         Number(
           (
@@ -377,7 +377,7 @@ describe('Historial financiero después de retirar módulos', () => {
             })
           ).saldo,
         ),
-      ).toBe(920);
+      ).toBe(900);
     }));
 
   it.each(['activa', 'cancelada'])(

@@ -1,3 +1,4 @@
+import { exigirCuentaOperable, exigirTesoreriaCompleta } from './acceso-cuentas';
 import {
   BadRequestException,
   ConflictException,
@@ -41,6 +42,8 @@ export class ImputacionesService {
         include: { imputaciones: true },
       });
       if (!cobro) throw new NotFoundException(`No existe el cobro ${cobroId}`);
+      if (cobro.cuentaDestinoId) await exigirCuentaOperable(tx, auth, cobro.cuentaDestinoId);
+      else await exigirTesoreriaCompleta(tx, auth);
       if (cobro.anuladoEl) {
         throw new ConflictException('El cobro está anulado.');
       }
@@ -158,11 +161,13 @@ export class ImputacionesService {
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
       const imp = await tx.cobroImputacion.findFirst({
         where: { id: imputacionId, tenantId: auth.tenantId },
-        include: { comprobante: true },
+        include: { comprobante: true, cobro: {select:{cuentaDestinoId:true}} },
       });
       if (!imp) {
         throw new NotFoundException(`No existe la imputación ${imputacionId}`);
       }
+      if (imp.cobro.cuentaDestinoId) await exigirCuentaOperable(tx, auth, imp.cobro.cuentaDestinoId);
+      else await exigirTesoreriaCompleta(tx, auth);
       await tx.cobroImputacion.delete({ where: { id: imputacionId } });
       await tx.comprobante.update({
         where: { id: imp.comprobanteId },

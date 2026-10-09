@@ -1,3 +1,4 @@
+import { validarMargenOpcionales } from './precio/margen-opcionales';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -77,7 +78,10 @@ export class ProductosService {
     const fuentes = leerGeometriasComerciales(atributos).fuentes;
     const ids = fuentes.flatMap(f => f.predeterminada ? [f.predeterminada.procedencia.geometriaId] : []);
     if (!ids.length) return;
-    const guardadas = await this.prisma.geometriaProducto.findMany({ where: { tenantId, id: { in: ids } } });
+    // Los diseños de un trabajo no se convierten en originales del catálogo.
+    const guardadas = await this.prisma.geometriaProducto.findMany({
+      where: { tenantId, id: { in: ids }, archivo: { scope: 'PRODUCTO' } },
+    });
     const raw = (atributos as { geometriasComerciales: { fuentes: Array<Record<string, unknown>> } }).geometriasComerciales;
     for (const fuente of fuentes) {
       if (!fuente.predeterminada) continue;
@@ -195,6 +199,20 @@ export class ProductosService {
       this.prisma.producto.count({ where }),
     ]);
 
+    // Frecuencia comercial: una OT emitida cuenta una vez por producto,
+    // aunque tenga varias líneas. No cuentan borradores, canceladas ni hijos.
+    const usos = data.length ? await this.prisma.$queryRaw<{ productoId: string; usos: bigint }[]>(Prisma.sql`
+      SELECT ci."productoId", count(DISTINCT i."ordenId") AS usos
+      FROM "OrdenTrabajoItem" i
+      JOIN "OrdenTrabajo" o ON o.id = i."ordenId" AND o."tenantId" = i."tenantId"
+      JOIN "CotizacionItem" ci ON ci.id = i."cotizacionItemId" AND ci."tenantId" = i."tenantId"
+      WHERE i."tenantId" = ${tenantId}::uuid AND i."parentItemId" IS NULL
+        AND o.estado IN ('pendiente', 'produccion', 'finalizada', 'entregada')
+        AND ci."productoId" IN (${Prisma.join(data.map((p) => Prisma.sql`${p.id}::uuid`))})
+      GROUP BY ci."productoId"
+    `) : [];
+    const usosPorProducto = new Map(usos.map((u) => [u.productoId, Number(u.usos)]));
+
     // Flag derivado: ¿algún paso tercerizado en alguna ruta? (para el badge)
     const conFlag = data.map((producto) => {
       const rutasCompletas =
@@ -224,6 +242,7 @@ export class ProductosService {
         tercerizado: producto.rutasAlternativas.some((ra) =>
           ra.configPasos.some((paso) => paso.tercerizado),
         ),
+        usosEnOrdenes: usosPorProducto.get(producto.id) ?? 0,
         listoParaCotizar,
         estadoCatalogo: producto.activo
           ? listoParaCotizar
@@ -246,6 +265,7 @@ export class ProductosService {
       await this.capacidades.exigir(tenantId, 'reglas_precio');
     await this.exigirCambiosGeometria(tenantId, dto.atributosComercialesJson);
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
+    validarMargenOpcionales(dto.precioConfigJson);
     validarGeometriasComerciales(dto.atributosComercialesJson);
     await this.hidratarGeometrias(tenantId, dto.atributosComercialesJson);
     const subcategoriaComercial = await this.assertSubcategoriaComercial(
@@ -355,6 +375,7 @@ export class ProductosService {
   ) {
     await this.capacidades.exigir(tenantId, 'productos');
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
+    validarMargenOpcionales(dto.precioConfigJson);
     validarGeometriasComerciales(dto.atributosComercialesJson);
     const existente = await this.prisma.producto.findFirst({
       where: { id, tenantId },
@@ -1297,6 +1318,7 @@ export class ProductosService {
                         // Ordena los niveles de complejidad del corte en el
                         // sheet (más m²/h = corte más fácil).
                         productivityValue: true,
+                        productivityUnit: true,
                         detalleJson: true,
                       },
                     },
@@ -1441,6 +1463,7 @@ export class ProductosService {
                             tipoPerfil: true,
                             // Ídem maquinaM1: niveles de complejidad del corte.
                             productivityValue: true,
+                            productivityUnit: true,
                             detalleJson: true,
                           },
                         },
@@ -1462,7 +1485,17 @@ export class ProductosService {
           orderBy: { ordenInterno: 'asc' },
           include: {
             maquinaM1: {
-              select: { id: true, codigo: true, nombre: true, plantilla: true },
+              select: {
+                id: true, codigo: true, nombre: true, plantilla: true,
+                perfilesOperativos: {
+                  where: { activo: true },
+                  select: {
+                    id: true, nombre: true, activo: true, tipoPerfil: true,
+                    productivityValue: true, productivityUnit: true,
+                    detalleJson: true,
+                  },
+                },
+              },
             },
             perfilM1: { select: { id: true, nombre: true } },
             centroCosto: {
@@ -1496,8 +1529,14 @@ export class ProductosService {
       tenantId,
       producto.pasosExtras,
     );
+    const rutasInactivas = await this.prisma.productoRutaAlternativa.findMany({
+      where: { tenantId, productoId: id, activo: false },
+      select: { id: true, nombre: true },
+      orderBy: [{ orden: 'asc' }, { id: 'asc' }],
+    });
     return {
       ...producto,
+      rutasInactivas,
       rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
         ...rutaAlt,
         ruta: {
@@ -1674,6 +1713,8 @@ export class ProductosService {
                   nombre: true,
                   activo: true,
                   tipoPerfil: true,
+                  productivityValue: true,
+                  productivityUnit: true,
                   detalleJson: true,
                 },
               },

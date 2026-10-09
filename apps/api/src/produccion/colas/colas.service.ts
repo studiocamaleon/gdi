@@ -1,7 +1,10 @@
+import { gateOperativoCumplido } from '../../ordenes-trabajo/gate-operativo-cumplido';
 import {
   leerAsignacionPersonal,
   proyectarAsignacionPersonal,
+  ejecucionCompartidaPorEquipo,
 } from '../asignacion-personal';
+import { leerAsignacionManual } from '../asignacion-manual';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { sumaTramosMin } from '../../ordenes-trabajo/tiempos-ejecucion';
@@ -50,6 +53,7 @@ export const pasoColaSelect = {
   tipoEjecucion: true,
   mesaUsuarioId: true,
   asignacionPersonalJson: true,
+  asignacionManualJson: true,
   tramos: {
     select: {
       inicioEl: true,
@@ -132,7 +136,7 @@ export function disponibilidadCola(
   if (pendientes.length)
     motivos.push(`Espera: ${pendientes.map((p) => p.nombre).join(', ')}.`);
   for (const g of paso.gatesOperativos)
-    if (g.estado !== 'CUMPLIDO') {
+    if (!gateOperativoCumplido(g)) {
       motivos.push(
         g.detalle ||
           (g.tipo === 'MATERIAL'
@@ -284,13 +288,18 @@ export class ColasProduccionService {
         );
         const abierto = p.tramos.find((t) => !t.finEl);
         const asignacion = leerAsignacionPersonal(p.asignacionPersonalJson);
+        const manual = leerAsignacionManual(p.asignacionManualJson);
         const asignado =
           !!empleado &&
-          !asignacion?.conflicto &&
-          asignacion?.personas.some((p) => p.empleadoId === empleado.id);
+          (p.asignacionManualJson
+            ? !!manual?.empleadoIds.includes(empleado.id)
+            : !asignacion?.conflicto &&
+              asignacion?.personas.some((p) => p.empleadoId === empleado.id));
         const tieneMesa = Boolean(
           auth &&
+          (!p.asignacionManualJson || asignado) &&
           (asignado ||
+            ejecucionCompartidaPorEquipo(p) ||
             p.mesaUsuarioId === auth.userId ||
             abierto?.usuarioId === auth.userId),
         );
@@ -362,6 +371,7 @@ export class ColasProduccionService {
               requiereMesa &&
               !p.mesaUsuarioId &&
               !abierto &&
+              !p.asignacionManualJson &&
               !asignacion?.personas.length,
           },
         };

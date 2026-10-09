@@ -64,6 +64,18 @@ describe('etiquetas por tenant', () => {
     expect(findFirst.mock.calls[0][0].select.items.where).toEqual({
       parentItemId: null,
     });
+    expect(findFirst.mock.calls[0][0].select).toEqual({
+      numero: true,
+      estado: true,
+      fechaEntrega: true,
+      tenant: { select: { nombre: true } },
+      cliente: { select: { nombre: true } },
+      items: {
+        where: { parentItemId: null },
+        orderBy: { ordenIndice: 'asc' },
+        select: { nombre: true, cantidad: true, cantidadUnidad: true },
+      },
+    });
     expect(vista.paginas).toHaveLength(1);
     expect(vista.numero).toBe('OT-2026-0060');
     expect(logoDataUri).toHaveBeenCalledWith('tenant-a');

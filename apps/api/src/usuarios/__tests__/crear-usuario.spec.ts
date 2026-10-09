@@ -167,10 +167,9 @@ describe('dar de alta un acceso', () => {
   });
 
   /**
-   * El que ya tenía cuenta en OTRA empresa: entra a esta con la provisoria que
-   * se le dicta, igual que cualquiera. Antes esto dependía del modo elegido.
+   * El acceso a otra empresa nunca reemplaza la contraseña de la identidad.
    */
-  it('al que ya tenía cuenta también se le dicta una clave', async () => {
+  it('la cuenta existente conserva su clave y no entrega una provisoria', async () => {
     const { service, userUpdate, userCreate } = armar({
       id: 'u5',
       passwordHash: 'hash-viejo',
@@ -181,8 +180,8 @@ describe('dar de alta un acceso', () => {
 
     expect(userCreate).not.toHaveBeenCalled();
     expect(res.yaTeniaCuenta).toBe(true);
-    expect(res.provisoria).not.toBeNull();
-    expect(userUpdate.mock.calls[0][0].where).toEqual({ id: 'u5' });
+    expect(res.provisoria).toBeNull();
+    expect(userUpdate).not.toHaveBeenCalled();
   });
 
   it('no deja dar dos veces el acceso a la misma persona', async () => {

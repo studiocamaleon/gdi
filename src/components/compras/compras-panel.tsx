@@ -94,7 +94,7 @@ export function ComprasPanel() {
   const theme = useDesignTheme();
   const costos = usePuede("finanzas.ver_margenes");
   const conCompras = useCapacidad("compras");
-  const canManage = usePuede("inventario.gestionar") && costos && conCompras;
+  const canManage = usePuede("inventario.compras.gestionar") && costos && conCompras;
   const [tabElegida, setTab] = useState("necesidades");
   const tab = conCompras ? tabElegida : "compras";
   const [page, setPage] = useState(1);

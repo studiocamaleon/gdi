@@ -26,6 +26,7 @@ export type PasoProduccionPropuesta = {
 };
 
 export type PropuestaItem = {
+  asignacionesPersonal?: import("../../apps/api/src/ordenes-trabajo/personal-previsto.contrato").EleccionPersonal[];
   id: string;
   cotizacionItemId?: string;
   productoNombre: string;
@@ -187,5 +188,5 @@ export function calcularResumen(items: PropuestaItem[]): PropuestaResumen {
 }
 
 export function calcularCostoTotal(item: PropuestaItem) {
-  return item.cotizacion.costos.total;
+  return item.cotizacion.costos?.total ?? null;
 }

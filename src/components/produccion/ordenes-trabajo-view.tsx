@@ -58,14 +58,16 @@ import {
   useFecha,
 } from "@/components/navigation/config-regional-provider";
 
-type FiltroEstado = OrdenTrabajoEstado | "todas";
+type FiltroEstado = OrdenTrabajoEstado | "descartada" | "todas";
 
 export function EstadoOtBadge({
   estado,
   sm,
+  borradorDescartado,
 }: {
   estado: OrdenTrabajoEstado;
   sm?: boolean;
+  borradorDescartado?: boolean;
 }) {
   const e = ORDEN_TRABAJO_ESTADOS[estado];
   return (
@@ -74,7 +76,7 @@ export function EstadoOtBadge({
       style={{ color: e.fg, background: e.bg }}
     >
       <span className="d" style={{ background: e.dot }} />
-      {e.label}
+      {borradorDescartado ? "Borrador descartado" : e.label}
     </span>
   );
 }
@@ -232,7 +234,7 @@ function OrdenesTrabajoContent({
         ...filas.map((orden) => [
           orden.numero,
           orden.clienteNombre,
-          ORDEN_TRABAJO_ESTADOS[orden.estado].label,
+          orden.borradorDescartado ? "Borrador descartado" : ORDEN_TRABAJO_ESTADOS[orden.estado].label,
           orden.progresoPct ?? "",
           orden.itemsCount,
           orden.fechaEntrega?.slice(0, 10) ?? "",
@@ -280,6 +282,7 @@ function OrdenesTrabajoContent({
 
   const counts: Record<FiltroEstado, number> = {
     todas: stats.totalOrdenes,
+    descartada: stats.descartados ?? 0,
     ...stats.porEstado,
   };
   const kpis = stats;
@@ -301,6 +304,9 @@ function OrdenesTrabajoContent({
           },
         ]
       : []),
+    ...((stats.descartados ?? 0) > 0 || filtro === "descartada"
+      ? [{ k: "descartada" as const, label: "Descartados" }]
+      : []),
   ];
 
   const filtroActivo = Boolean(qInicial || urgencia || filtro !== "todas");
@@ -316,6 +322,7 @@ function OrdenesTrabajoContent({
     finalizada: CircleCheck,
     entregada: Truck,
     cancelada: CircleX,
+    descartada: FilePenLine,
   };
 
   return (
@@ -439,7 +446,9 @@ function OrdenesTrabajoContent({
               {urgencia
                 ? "Entregas atrasadas"
                 : filtro !== "todas"
-                  ? ORDEN_TRABAJO_ESTADOS[filtro].label
+                  ? filtro === "descartada"
+                    ? "Descartados"
+                    : ORDEN_TRABAJO_ESTADOS[filtro].label
                   : "Todas las órdenes"}
               {qInicial && <span className={s.query}>“{qInicial}”</span>}
             </span>
@@ -524,7 +533,7 @@ function OrdenesTrabajoContent({
                         </div>
                       </td>
                       <td>
-                        <EstadoListado estado={o.estado} />
+                        <EstadoListado estado={o.estado} borradorDescartado={o.borradorDescartado} />
                       </td>
                       <td>
                         <ProgresoListado

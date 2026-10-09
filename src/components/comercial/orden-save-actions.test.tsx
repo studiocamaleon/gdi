@@ -49,6 +49,16 @@ describe("acciones de emisión en la cabecera", () => {
   it("también exige cliente para emitir un presupuesto", () => {
     expect(
       botones({ tipo: "presupuesto", clienteSeleccionado: false }),
-    ).toEqual([{ texto: "Emitir presupuesto", deshabilitado: true }]);
+    ).toEqual([
+      { texto: "Guardar borrador", deshabilitado: true },
+      { texto: "Emitir presupuesto", deshabilitado: true },
+    ]);
   });
+  it("permite guardar un presupuesto sin enviarlo cuando tiene cliente y productos", () => {
+    expect(botones({ tipo: "presupuesto" })).toEqual([
+      { texto: "Guardar borrador", deshabilitado: false },
+      { texto: "Emitir presupuesto", deshabilitado: false },
+    ]);
+  });
+
 });

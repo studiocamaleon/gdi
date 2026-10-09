@@ -35,6 +35,7 @@ export const PRESUPUESTO_ESTADOS = [
   'rechazado',
   'vencido',
   'convertido',
+  'descartado',
 ] as const;
 export type PresupuestoEstado = (typeof PRESUPUESTO_ESTADOS)[number];
 
@@ -71,7 +72,9 @@ export class EmitirPresupuestoDto {
   @IsUUID()
   vendedorEmpleadoId?: string;
 
-  @IsIn(ORDEN_CANALES_VENTA, { message: 'Elegí un canal de venta para guardar.' })
+  @IsIn(ORDEN_CANALES_VENTA, {
+    message: 'Elegí un canal de venta para guardar.',
+  })
   canalVenta?: string;
 
   /** ISO date (YYYY-MM-DD) — entrega estimada que se prometería. */
@@ -118,6 +121,14 @@ export class EmitirPresupuestoDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
   items: CrearOrdenTrabajoItemDto[];
+}
+
+export class NuevaVersionPresupuestoDto extends EmitirPresupuestoDto {
+  @IsISO8601()
+  revisionBaseActualizadaEl: string;
+  @IsOptional()
+  @IsBoolean()
+  enviar?: boolean;
 }
 
 export class ResolverPresupuestoDto {

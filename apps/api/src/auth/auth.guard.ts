@@ -15,7 +15,11 @@ import { SIN_TENANT_KEY } from '../common/sin-tenant.decorator';
 import { CurrentAuth, JwtPayload } from './auth.types';
 import { ipDeRequest, ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
-import { SessionCacheService } from './session-cache.service';
+import { CLAVE_PROVISORIA } from './clave-provisoria.decorator';
+import {
+  REVALIDAR_ACCESO,
+  type RequestConRevalidacion,
+} from './revalidacion-acceso';
 import {
   ENROLAMIENTO_PLATAFORMA,
   mfaPlataformaCompleta,
@@ -32,13 +36,12 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
-    private readonly sessionCache: SessionCacheService,
     private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
       prisma,
     ),
   ) {}
 
-  async canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext, renovarSesion = true) {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -48,12 +51,22 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<{
-      headers: Record<string, string | undefined>;
-      auth?: CurrentAuth;
-      ip?: string;
-      socket?: { remoteAddress?: string };
-    }>();
+    const request = context.switchToHttp().getRequest<
+      RequestConRevalidacion & {
+        headers: Record<string, string | undefined>;
+        auth?: CurrentAuth;
+        ip?: string;
+        socket?: { remoteAddress?: string };
+      }
+    >();
+
+    if (renovarSesion) {
+      request[REVALIDAR_ACCESO] = async () => {
+        await this.canActivate(context, false);
+        if (!request.auth) throw new UnauthorizedException('Sesion invalida.');
+        return request.auth;
+      };
+    }
 
     const token = this.extractBearerToken(request.headers.authorization);
 
@@ -122,7 +135,8 @@ export class AuthGuard implements CanActivate {
       ) {
         throw new UnauthorizedException('Sesion expirada o revocada.');
       }
-      void this.renovar({ ...session, id: payload.sessionId });
+      if (renovarSesion)
+        void this.renovar({ ...session, id: payload.sessionId });
       const plataformaMfaPendiente = !mfaPlataformaCompleta(
         session.user.mfa,
         session.mfaVerificadoEl,
@@ -155,34 +169,9 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
-    // Cache hit: evita el query con 3 joins. Requiere que el tenant/membership
-    // La impersonación NO se cachea: la sesión puede cerrarse o expirar en
-    // cualquier momento y el corte tiene que ser inmediato (a diferencia del
-    // camino normal, que tolera el cache de 30 s). Va siempre a la base.
-    if (!payload.imp) {
-      // cacheados coincidan con el token (tras switch-tenant el token cambia y
-      // el cache se invalida, así que un mismatch fuerza revalidación en DB).
-      const cached = this.sessionCache.get(payload.sessionId);
-      if (
-        cached &&
-        !cached.impersonacion &&
-        cached.userId === payload.sub &&
-        cached.tenantId === payload.tenantId &&
-        cached.membershipId === payload.membershipId
-      ) {
-        // La IP se compara también contra el cache: sin esto, un usuario
-        // restringido que ya pasó una vez seguiría entrando desde cualquier
-        // lado durante los 30 s del TTL.
-        if (!ipPermitida(ipDeRequest(request), cached.ipsPermitidas ?? [])) {
-          throw new UnauthorizedException(
-            'Tu cuenta sólo puede usarse desde la red autorizada de tu empresa.',
-          );
-        }
-        request.auth = cached;
-        return true;
-      }
-    }
-
+    // La base compartida es la autoridad en CADA request. Un resultado local
+    // cacheado puede seguir autorizando después de revocar, cambiar permisos o
+    // activar MFA en otra réplica. Tampoco autorizar si la base no responde.
     const session = await this.prisma.authSession.findUnique({
       where: { id: payload.sessionId },
       include: {
@@ -215,11 +204,24 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sesion expirada o revocada.');
     }
 
+    // No basta con que un flujo haya emitido una sesión: si la identidad tiene
+    // MFA, debe constar que esta sesión verificó la versión vigente. Así un
+    // alta secundaria o una sesión histórica no pueden omitir el factor.
+    if (
+      session.user.mfa?.activatedAt &&
+      (!session.mfaVerificadoEl ||
+        session.mfaVerificadoEl < session.user.mfa.activatedAt)
+    ) {
+      throw new UnauthorizedException(
+        'Volvé a iniciar sesión y verificar tu segundo factor.',
+      );
+    }
+
     // La sesión se corre con el uso: muere por inactividad, no a plazo fijo.
     // `vencimientoRenovado` devuelve null casi siempre —sólo escribe cuando ya
     // pasó media ventana—, así que esto no es un UPDATE por request. Además
-    // este camino corre sólo en miss del cache de 30 s.
-    void this.renovar(session);
+    // la autorización siempre consulta el estado vigente.
+    if (renovarSesion) void this.renovar(session);
 
     // ── Impersonación ──────────────────────────────────────────────────
     if (payload.imp) {
@@ -285,14 +287,24 @@ export class AuthGuard implements CanActivate {
       );
     }
 
+    if (
+      session.user.debeCambiarPassword &&
+      !this.reflector.getAllAndOverride<boolean>(CLAVE_PROVISORIA, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+    ) {
+      throw new ForbiddenException('Elegí tu clave personal para continuar.');
+    }
+
     const rol = session.currentMembership.rolDelTenant;
     const auth: CurrentAuth = {
       userId: payload.sub,
       sessionId: payload.sessionId,
       tenantId: payload.tenantId,
       membershipId: payload.membershipId,
-      role: payload.role,
-      email: payload.email,
+      role: session.currentMembership.rol,
+      email: session.user.email,
       // Con rol asignado manda el rol; sin él —membership que el backfill no
       // alcanzó, o rol borrado— se cae a los permisos del enum. Nadie queda
       // sin acceso por no tener rol.
@@ -302,7 +314,6 @@ export class AuthGuard implements CanActivate {
       ipsPermitidas: session.currentMembership.ipsPermitidas,
     };
 
-    this.sessionCache.set(auth);
     request.auth = auth;
 
     return true;
@@ -313,7 +324,7 @@ export class AuthGuard implements CanActivate {
    *
    * Espejo del camino de sesión normal, con tres diferencias:
    *  - No hay AuthSession: la credencial ES la sesión. Revocación/expiración
-   *    se validan acá en cada request (con el mismo cache de 30 s).
+   *    se validan acá en cada request contra la base compartida.
    *  - Los permisos son rol ∩ scopes y NUNCA incluyen finanzas.ver_margenes
    *    (permisosEfectivosMcp): la IA ve precios, jamás costos ni márgenes.
    *  - Rutas @SinTenant se rechazan siempre: una credencial MCP vive DENTRO
@@ -347,29 +358,15 @@ export class AuthGuard implements CanActivate {
     }
 
     const tokenHash = hashTokenMcp(token);
-    // La clave del cache sale del hash (determinística, sin ir a la base).
-    // El service de credenciales invalida esta misma clave al revocar.
-    const cacheKey = `mcp:${tokenHash}`;
-
-    const cached = this.sessionCache.get(cacheKey);
-    if (cached?.mcp) {
-      if (!ipPermitida(ipDeRequest(request), cached.ipsPermitidas ?? [])) {
-        throw new UnauthorizedException(
-          'Tu cuenta sólo puede usarse desde la red autorizada de tu empresa.',
-        );
-      }
-      await this.capacidades.exigir(cached.tenantId, 'mcp');
-      request.auth = cached;
-      return true;
-    }
-
     const credencial = await this.prisma.credencialMcp.findUnique({
       where: { tokenHash },
       include: {
         membership: {
           include: {
             rolDelTenant: true,
-            user: { select: { activo: true, email: true } },
+            user: {
+              select: { activo: true, email: true, debeCambiarPassword: true },
+            },
             tenant: { select: { activo: true } },
           },
         },
@@ -382,6 +379,7 @@ export class AuthGuard implements CanActivate {
       (credencial.expiraEl && credencial.expiraEl <= new Date()) ||
       !credencial.membership.activa ||
       !credencial.membership.user.activo ||
+      credencial.membership.user.debeCambiarPassword ||
       !credencial.membership.tenant.activo ||
       // Cinturón: la credencial y su membership tienen que ser del mismo
       // tenant. No debería poder divergir, pero si diverge es fuga, no bug.
@@ -404,7 +402,7 @@ export class AuthGuard implements CanActivate {
     );
     const auth: CurrentAuth = {
       userId: membership.userId,
-      sessionId: cacheKey,
+      sessionId: `mcp:${tokenHash}`,
       tenantId: credencial.tenantId,
       membershipId: credencial.membershipId,
       role: membership.rol,
@@ -437,7 +435,6 @@ export class AuthGuard implements CanActivate {
         .catch(() => {});
     }
 
-    this.sessionCache.set(auth);
     request.auth = auth;
     return true;
   }

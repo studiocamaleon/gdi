@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Grafoprint
 
-## Getting Started
+Grafo reúne la aplicación de gestión, su API y workers, la web comercial y Grafo3D. Cada entorno tiene sus propios datos y accesos.
 
-First, run the development server:
+## Antes de trabajar
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Leer [AGENTS.md](AGENTS.md), [desarrollo local](docs/desarrollo-local.md) y [ramas y pull requests](docs/flujo-pull-requests.md). Desarrollar primero en local, agrupar cambios y comprobarlos antes de actualizar staging. Una rama o un PR no publica producción por sí solo.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Este proyecto usa **npm y los archivos `package-lock.json`** de cada aplicación. Para una instalación reproducible, ejecutar `npm ci` en la carpeta correspondiente siguiendo su guía. No mezclar gestores ni generar un segundo lockfile. El antiguo `pnpm-lock.yaml` fue retirado porque ya no coincidía con las dependencias comprobadas. La compilación de Fly y la web comercial de Vercel también usan npm.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+No volver a instalar dependencias ni cambiar la rama de una carpeta que tenga procesos activos sin revisar antes el impacto. Los accesos locales se preparan fuera de Git; nunca se copian desde staging para levantar desarrollo.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Dónde está cada parte
 
-## Learn More
+| Parte | Carpeta | Función |
+| --- | --- | --- |
+| Aplicación | `src/` | Pantallas de gestión e Inbox; usa la API. |
+| API y workers | `apps/api/` | Reglas de negocio, datos y tareas de fondo. |
+| Web comercial | `apps/marketing/` | Sitio público en Vercel. |
+| Grafo3D | `apps/forma-studio/` | Diseños y modelos accesibles desde la web comercial. |
+| Despliegue | `deploy/` | Contenedores y configuración para Fly. |
+| Recuperación | `deploy/recuperacion/` | Copias cifradas, verificación y recuperación. |
 
-To learn more about Next.js, take a look at the following resources:
+## Guías de operación
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [Arrancar y trabajar en local](docs/desarrollo-local.md).
+- [Revisar e integrar cambios mediante PR](docs/flujo-pull-requests.md).
+- [Operar staging](deploy/staging/README.md) y consultar su [validación y versión vigente](deploy/staging/VALIDACION.md).
+- [Operar y recuperar backups](deploy/recuperacion/OPERACION.md).
+- [Web comercial y Grafo3D](apps/marketing/README.md).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+No ejecutar seeds, resets ni borrados sobre entornos con datos para actualizarlos. Las pruebas con base utilizan `gdi_saas_test` y datos ficticios. Los informes privados de seguridad, archivos de clientes, respaldos y secretos deben permanecer fuera de este repositorio.

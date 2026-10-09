@@ -33,10 +33,8 @@ import { McpServerFactory } from './mcp-server.factory';
 export class McpController {
   constructor(private readonly factory: McpServerFactory) {}
 
-  // 30/min POR CREDENCIAL (tracker de AppThrottlerGuard): una conversación
-  // usa ~4-8 requests por cotización (initialize, tools/list, tools). Las
-  // llamadas loopback de las tools van a otras rutas y cuentan contra el
-  // default de 100/min de la misma cubeta — el total queda acotado igual.
+  // 30/min por IP antes de autenticar, compartidos entre réplicas. Las tools
+  // vuelven al API por HTTP y quedan sujetas al límite de cada ruta.
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @SoloAutenticado()
   @Post()

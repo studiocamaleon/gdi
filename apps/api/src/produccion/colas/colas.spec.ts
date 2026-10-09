@@ -43,9 +43,9 @@ function paso() {
     },
   } as unknown as Parameters<typeof disponibilidadCola>[0];
 }
-it('requiere permiso de producción para ambas lecturas', () => {
+it('requiere el permiso granular de colas para ambas lecturas', () => {
   expect(Reflect.getMetadata(PERMISO_KEY, ColasProduccionController)).toEqual([
-    'produccion.ver',
+    'produccion.colas.ver',
   ]);
 });
 it('permite la frontera DAG y respeta dependencias de otros componentes', () => {

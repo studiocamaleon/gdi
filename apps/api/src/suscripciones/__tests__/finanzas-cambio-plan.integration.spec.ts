@@ -401,7 +401,7 @@ describe('Contrato pendiente y compromisos financieros', () => {
     }));
 
   it(
-    'el barrido avanza sobre una página completa de empresas en sólo lectura y acredita las siguientes',
+    'el paso del tiempo no acredita fondos de empresas activas ni en sólo lectura',
     () =>
       conPlanesAsignados(prisma, async (c) => {
         const cerrada = await preparar(c);
@@ -441,7 +441,7 @@ describe('Contrato pendiente y compromisos financieros', () => {
         expect(
           (await c.tx.cobro.findUniqueOrThrow({ where: { id: cobro.id } }))
             .estadoAcreditacion,
-        ).toBe('acreditado');
+        ).toBe('pendiente');
         expect(
           await c.tx.cobro.count({
             where: {
@@ -459,7 +459,7 @@ describe('Contrato pendiente y compromisos financieros', () => {
           await c.tx.movimientoFondos.count({
             where: { tenantId: activa.tenantId },
           }),
-        ).toBe(1);
+        ).toBe(0);
       }),
     90000,
   );

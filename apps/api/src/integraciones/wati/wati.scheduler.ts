@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
@@ -55,7 +56,7 @@ export class WatiScheduler {
     } catch (error) {
       this.logger.error(
         'Falló la sincronización de plantillas de Wati.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     } finally {
       this.corriendo = false;
@@ -92,9 +93,9 @@ export class WatiScheduler {
         // Credenciales revocadas, Wati caído: no es motivo para frenar a los
         // demás tenants.
         this.logger.warn(
-          `No se pudieron leer las plantillas del tenant ${tenantId}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `No se pudieron leer las plantillas del tenant ${tenantId}: ${textoErrorLog(
+            error,
+          )}`,
         );
         return;
       }
@@ -122,7 +123,7 @@ export class WatiScheduler {
           return;
         }
         this.logger.warn(
-          `Tenant ${tenantId}: falló ${p.codigo} — ${res.motivo ?? 'sin motivo'}`,
+          `Tenant ${tenantId}: no se pudo enviar la plantilla ${p.codigo} a revisión.`,
         );
       }
 

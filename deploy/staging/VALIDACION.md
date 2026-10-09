@@ -1,4 +1,247 @@
-# Validación de staging — historial de septiembre de 2026
+# Validación de staging — historial
+
+## Primer ingreso e impresión rígida con corte — 01/10/2026, 16:20 UTC
+
+- Publicación conjunta autorizada. API y ambos workers ejecutan `b378ae41ead10c5a6ad08b0432aabecb660a5859`, imagen `registry.fly.io/grafoprint-staging-api@sha256:f4171c0f2035177c75d8794a52a0cbfc526687f1b9897726a9e57088ab8e0319`. Web conserva `c42d6d506`; PDF y copiador conservan sus imágenes. Mismas máquinas y tamaños; sin nuevas migraciones, seeds, resets ni cambios de DNS.
+- Primer acceso: una clave provisoria puede consultar `/tenants/current` para mostrar «Elegí tu clave». La excepción está limitada a ese método; las operaciones de empresa continúan bloqueadas hasta cambiar la contraseña. El alta de Usuarios continúa entregando clave provisoria al administrador, sin envío automático de correo.
+- Impresión rígida: considera el área de los cortes posteriores activos sobre el mismo material antes del acomodo. Conserva placa física, posiciones compartidas y consumo impreso; mantiene las optimizaciones existentes si el corte no agrega restricciones.
+- Validación local del conjunto: 207 casos aprobados en diez suites. La revisión ejecutable aprobó [permisos HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36889386716) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36889386717). Compilación remota con tipos; no se compiló en Docker de la Mac.
+- Ensayo HTTPS con una empresa y operador ficticios: login, cookie segura, contexto de sesión y página SSR de cambio de clave, rechazo de operaciones con clave provisoria, cambio personal, revocación de cookie anterior, conservación del rol, rechazo de la clave anterior y reingreso con la nueva. Sólo se retiraron los fixtures creados por el ensayo; sin correo ni proveedores externos.
+- Motor compilado en Fly: nueve piezas de 400 × 400 mm, dos placas físicas de 1220 × 1220 mm y área de corte de 1300 × 1000 mm; impresión y corte conservan las mismas posiciones y no exceden el área accesible. Cálculo en memoria, sin guardar presupuestos ni órdenes.
+- Fuentes cifradas y retenidas en B2; inventario del copiador actualizado. Copia posterior `b053ccf7-9461-40ab-b25c-fd24be4b2514`, completada a las 16:16:59 UTC: firma y descifrado del manifiesto aprobados, 301 migraciones, 13 archivos y fuentes/imágenes correctas. No se repitió la restauración SQL. Constructor y túnel temporales retirados al finalizar.
+- [PR #13](https://github.com/studiocamaleon/gdi/pull/13), dependiente de #12, sin fusionar. La misma imagen se promovió a producción; ver [su registro](../produccion/VALIDACION.md).
+
+## Medios de pago y liquidaciones reales — 01/10/2026, 10:32 UTC
+
+- API y ambos workers ejecutan `c0aa8cf46cf31a00c942afd9d99dc7f952475690`, imagen `registry.fly.io/grafoprint-staging-api@sha256:338ce43559d5d91558f32f52587d93cd8200206aa71b9175071b41157e3b2b0e`. La web ejecuta `c42d6d5063ce9cea23ae037475443edc0b6a6156`, imagen `registry.fly.io/grafoprint-staging-web@sha256:839e3c369a7c1a4643ce8bb8c876dd249cbbf223f1793d9cdbd5fdc77b9e827b`. PDF y copiador conservan las imágenes anteriores. Mismos tamaños, sin cambios de DNS ni credenciales de aplicación.
+- Se aplicaron las migraciones aditivas pendientes, incluidas ARCA de Plataforma y `20261001100000_medios_pago_retenciones`: 301 completas. Sin seeds ni resets. Se conservaron los recuentos de empresa, clientes, cobros, métodos y movimientos; el rol de aplicación puede usar los nuevos campos y sigue sin DDL.
+- Pasaron 50 pruebas de cálculo/vistas y 41 de integración con PostgreSQL en una base local exclusiva. Incluyen centavos, fechas y feriados, vigencias, duplicados, no duplicación del costo IIBB, histórico, permisos, aislamiento y confirmación concurrente con un único movimiento. Tipos y lint dirigidos correctos. La revisión web final pasó [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36847103416), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36847103408) y Vercel Preview en GitHub.
+- Ensayo en la API compilada de Fly y PostgreSQL de staging: una empresa temporal verificó estimación, confirmación con importe real, concurrencia, conservación del histórico y rechazo de referencias ajenas. Proveedores externos reemplazados, sin correos, facturas ni mensajes; sólo los datos sintéticos del ensayo se retiraron al terminar.
+- HTTPS de API/web devuelve 200. Chrome accedió a la empresa de staging y mostró calendario bancario, fechas adicionales y reglas con régimen, agente, jurisdicción, alícuota, base y vigencia. El formulario se cerró sin guardar. Los porcentajes del ensayo no se configuraron en empresas reales.
+- Las fuentes de ambas revisiones quedaron cifradas y retenidas en B2. La copia posterior `de393966-b363-476e-a46b-e97a4249e93f`, completada a las 10:30:47 UTC, pasó firma y descifrado del manifiesto: 301 migraciones, 13 archivos, imágenes y fuentes exactas. **Esta comprobación no repitió la restauración SQL.** El constructor remoto de esta tarea y su túnel se retiraron; Docker local no se reinició.
+- [PR #12](https://github.com/studiocamaleon/gdi/pull/12), dependiente de #11, sin fusionar. Guía de uso y límites: [medios de pago](../../docs/medios-pago-retenciones.md). El calendario incorporado cubre Argentina 2026; otros años/países advierten su cobertura parcial. No acredita una liquidación fiscal automática ni reglas particulares de todos los agentes.
+
+## Límites de soporte y lectura DXF — 01/10/2026, 00:10 UTC
+
+API y los dos workers ejecutan `f992d30c5ed18931596e4f8ef899e7b7f4fad01d`, imagen `registry.fly.io/grafoprint-staging-api@sha256:1ba9851de529095532fc10b23333c2cd02bae22c591d0d076bc16844a23d24af`. Web/PDF conservan `5cb1a5248` y el copiador `6d2c51a15`. Las seis máquinas están activas, conservan sus tamaños y API/web responden 200. Se retiró el builder temporal. No se modificó producción.
+
+- Las sesiones de soporte pueden diagnosticar integraciones, pero no ejecutar nueve acciones de configuración/envío de notificaciones y WhatsApp. Pasaron 24 casos nuevos en 19 rutas con sesiones, guards, plan y SQL reales; 137 casos en ocho suites de regresión. Los proveedores de mensajería se sustituyeron: no hubo envíos reales.
+- El lector DXF comprueba tamaño y complejidad antes de expandir bloques o interpolar curvas. Los ensayos aislados reprodujeron referencias circulares y trabajo excesivo; después se rechazan sin expandir. Pasaron 37 casos nuevos dentro de 80 en seis suites, tipos y lint. Se conservaron medidas y fabricación de dibujos válidos. El primer lote de fabricación necesitó seleccionar el intérprete CAD local existente; luego aprobó sin cambiar aserciones.
+- La imagen final con Node 24.21.0 pasó tres rechazos DXF, un SVG válido y comprobación de las nueve protecciones de soporte en un proceso sin red. CI de esa revisión aprobó [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36793251602), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36793251591), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36793251470), [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36793246880) y Vercel Preview. Los intentos iniciales de construcción clásica no resolvieron la arquitectura; la compilación correcta usó BuildKit remoto.
+- El postflight de sólo lectura conservó los mismos IDs/recuentos en las seis tablas comprobadas, las 299 migraciones y cero cruces en 270 relaciones entre empresas. Sin migraciones nuevas.
+- La configuración del copiador registra las cuatro imágenes activas y tres fuentes exactas. La copia `49d8c66f-a1eb-40c2-a2fb-ab1be65da336`, completada a las 00:08:48 UTC, pasó firma, descifrado e integridad de base, 13 archivos y fuentes a las 00:10:43 UTC. El monitor recibió el éxito real. También terminó la copia horaria de las 00:00 UTC.
+
+Esta comprobación de la nueva copia no repitió su importación SQL: la última restauración funcional completa sigue siendo la del 30/09 a las 21:12 UTC. Continúan la cobertura restante, el correo de recuperación y las condiciones del futuro entorno de producción. No acredita auditoría integral, resistencia a toda carga ni conmutación completa entre proveedores. PR #10 en borrador, sin fusionar #8/#9/#10.
+
+## Copiador seguro, versiones custodiadas y copia comprobada — 30/09/2026, 23:14 UTC
+
+El refuerzo del arranque `6d2c51a15f58e42743af38d056642df28efe1636` está desplegado en el copiador. API, dos workers, web y PDF mantienen `5cb1a52488d8a8918c70ebb2182a44cdc7f3292b`. Se conservaron las seis máquinas y sus tamaños; el servidor temporal de compilación fue retirado. No hubo migraciones ni cambios en producción.
+
+- La imagen real del copiador pasó el arranque con UID 10001, carpetas privadas, bloqueo exclusivo, siete rechazos de rutas manipuladas y conservación del estado/inode entre reinicios. En Fly se comprobaron padre root sin escritura para el usuario, estado/configuración privados y bloqueo retenido. Los seis servicios pasaron el control de utilidades sin elevación; un PDF real y salud de API/web también aprobaron.
+- El postflight de sólo lectura conserva las 299 migraciones y los mismos IDs/recuentos de empresa, usuarios, conversación, mensajes, envíos y archivos. No hay cruces entre empresas en las 270 relaciones comprobadas.
+- CI de `6d2c51a15` aprobó [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36789058688), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36789058722), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36789058806) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36789058658), incluido el check de resultados. Vercel Preview también aprobó. Esto corresponde a esa revisión ejecutable, no a futuros commits documentales.
+- Copia `2ff47abd-0019-402a-86f1-6efeee0593aa`: inició 23:11:50 y terminó 23:12:42 UTC. El copiador notificó éxito real al monitor. Con el material de custodia del titular se verificaron firma, descifrado e integridad de la base, los 13 archivos y las dos fuentes exactas que contienen los cuatro componentes. El manifiesto coincide con las cuatro imágenes desplegadas; verificación terminada a las 23:14:08 UTC. La retención sigue siendo de al menos 30 días.
+
+| Componente | Imagen fijada |
+| --- | --- |
+| API y workers | `registry.fly.io/grafoprint-staging-api@sha256:5cf57fa2289707cecb8ce7bf5eca6c28df832a0535a8a9337ad61593c9e79118` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:df56b9ba00fc70b7b3a0af725bb774945d3446834cf852c6d3f55a3092a8213e` |
+| PDF | `registry.fly.io/grafoprint-staging-pdf@sha256:c04d34a4ee5612eb085dde7183d683248f08eaeced025b70b16fe5a2c9aca4c8` |
+| Copiador | `registry.fly.io/grafoprint-staging-respaldo@sha256:766e1ba841ffc48c6ca2425ae02c385a2fbded3942083aed3abcf1a30107b2b4` |
+
+La descarga de esta nueva copia no repite su importación SQL ni el recorrido funcional completo. La última restauración SQL/API comprobada sigue siendo la de las 21:12 UTC descrita debajo. Continúan la revisión restante de seguridad, el correo de recuperación deshabilitado, la resolución de dependencias entre PR y los ensayos del futuro entorno de producción. El PR #10 permanece en borrador.
+
+## Imágenes reforzadas y preparación segura del copiador — 30/09/2026
+
+Las seis máquinas ejecutan `5cb1a52488d8a8918c70ebb2182a44cdc7f3292b`. Se comprobaron sus usuarios sin root y la ausencia de setuid/setgid en las utilidades de consola revisadas. API/web responden 200; la API generó un PDF ficticio válido por la red privada. Se conservan máquinas, regiones, tamaños y las 299 migraciones. El postflight de sólo lectura conserva IDs y cantidades de seis tablas y no encuentra cruces en las 270 relaciones con empresa en ambos extremos. Todos los controles de CI de esta revisión aprobaron.
+
+Se añade una protección de arranque del copiador: la raíz del volumen queda controlada por root, las carpetas de trabajo siguen privadas para UID 10001 y el bloqueo conserva su inode. Un ensayo aislado reprodujo antes el seguimiento de un enlace; después se rechazan siete variantes de rutas manipuladas y pasan dos arranques con estado existente. El ensayo se incorpora a CI; esta protección adicional todavía no está desplegada al escribir esta entrada. La regresión del copiador aprobó 97 pruebas, con 20 pruebas que necesitan herramientas/SQL adicionales omitidas en esa ejecución. No equivale a repetir la restauración integral ya documentada.
+
+
+## Impresión: accesos y separación entre empresas — 30/09/2026
+
+Sin nuevo despliegue. Se incorporan once casos HTTP con sesiones, permisos, servicios, plan persistido y PostgreSQL reales. Cubren el acceso a las 32 rutas de impresión/perfiles CAD, listados aislados, referencias ajenas, campos internos, documentos/historial, estados de envío, versiones de bandejas, entradas de firma y pérdida de capacidad del plan. Los rechazos conservan los datos originales; las operaciones propias autorizadas funcionan. Storage y motor rechazan llamadas no previstas: no hay certificados QZ, impresoras ni proveedores reales en el ensayo.
+
+Pasaron **131 casos en once suites** de impresión, además de tipos y lint dirigidos del test nuevo. El control HTTP de PR incorpora la nueva suite. Quedan fuera de este ensayo la firma con certificado real, impresión física, carga máxima y los recorridos externos; no se identificó una nueva brecha en los casos comprobados.
+
+## Permisos de utilidades en las imágenes — 30/09/2026
+
+Preparado un refuerzo de las cuatro imágenes: retirar setuid/setgid de utilidades de consola en `/usr/bin`, `/usr/sbin` y `/usr/local/bin`. Se conservan los permisos ordinarios, el usuario de cada servicio y el helper de aislamiento de Chromium. El respaldo sigue preparando su volumen como root y baja a `respaldo` antes de ejecutar el servicio; `gosu` no depende del bit setuid de un archivo.
+
+El verificador nuevo rechazó las cuatro imágenes vigentes por esos atributos; no se ejecutó un ataque ni se demostró escalada de privilegios. Sintaxis de los dos ensayos y diff local comprobados. CI ahora compila también el copiador y exige usuario sin root, ausencia de esos atributos y arranque del respaldo con directorios privados y bloqueo exclusivo, sin red. En `83160c948`, [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36783340329), [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36783340324) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36783340319) aprobaron. Las cuatro imágenes nuevas y el recorrido funcional remoto pasaron; todavía pendiente desplegar en Fly. La instalación vigente no cambia por este registro.
+
+## Archivos locales y tipos de cambio — 30/09/2026
+
+Sin nuevo despliegue: API/workers siguen en `119db9792`, web en `a93268414`, PDF y copiador conservan sus versiones custodiadas. El cambio `af2b1ca9c` afecta al almacenamiento de desarrollo: exige un objeto relativo dentro de su raíz, sin aceptar la propia carpeta ni reinterpretar rutas absolutas. Cuatro casos fallaron antes; las 14 pruebas de archivos, tipos y lint pasaron después. GitHub marcó como **Fixed** las cinco alertas del PR y su control de resultados CodeQL pasó, sin descartarlas ni desactivar reglas. Esto no elimina automáticamente las alertas históricas de `main` ni certifica todo el sistema.
+
+Se agregan siete casos HTTP de tipos de cambio con sesiones, permisos, servicios y PostgreSQL reales: acceso en las cinco rutas, lecturas simultáneas aisladas, identificador ajeno denegado, configuración sólo para gestores, autor y empresa fijados por el servidor, entradas inválidas sin persistencia y destino externo fijo. Pasaron 67 casos de tres suites, tipos y lint. Sólo la lectura de suscripción y la respuesta de DolarAPI son fixtures; no hubo llamadas a proveedores ni cambios en staging. El control obligatorio del PR incorpora estas pruebas y las de archivos. Su resultado remoto debe comprobarse sobre la nueva revisión.
+
+## Protección de main y recuperación de respaldos — 30/09/2026, 21:12 UTC
+
+Los dos bloqueos operativos quedaron resueltos. GitHub confirma la regla activa de `main`: PR obligatorio, check `http` de GitHub Actions, rama al día, conversaciones resueltas y prohibición de borrado/force-push, sin bypass. No se fusionaron PR ni se cambió producción. Los cuatro workflows de `eea7e351` aprobaron: [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36715486634), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36715486703), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36715486660) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36715481015). Sus comentarios de análisis requieren revisión independiente del resultado de ejecución.
+
+- Backblaze confirmó agotamiento del límite gratuito de 1 GB diario de descarga. El titular registró su medio de pago y se fijaron topes de USD 0,10/día para almacenamiento y USD 0,10/día para descargas, con alertas de 75 % y 100 %. Son límites por categoría, no un cargo fijo ni el presupuesto total de infraestructura. La retención sigue siendo de al menos 30 días; no se borraron versiones.
+- Se custodió el código exacto de API/workers `119db9792`, web `a93268414`, PDF `28c94c673` y copiador `4d921268`. Se actualizó exclusivamente la configuración del copiador con las cuatro fuentes e imágenes vigentes. Las aplicaciones y tamaños no cambiaron.
+- Nueva copia `77c9a668-cdad-4241-8e10-a4f58e707919`: iniciada a las 21:08:53.849 y completa a las 21:09:46.004 UTC. Trece archivos reutilizados; comprobante remoto firmado, descifrado y huellas de datos y cuatro fuentes verificados con el material de las notas del titular.
+- Restauración en una base aislada: **216 tablas, 299 migraciones/checksums y 1.591 filas**. Se comprobó el descifrado de la clave MFA. La API de la fuente vigente pasó ingreso con MFA, consulta y alta de cliente, 401 sin sesión y denegación entre dos empresas. Un adjunto pasó por su ruta autenticada y los 13 objetos por el almacenamiento recuperado, con huellas correctas. Red externa denegada por el sistema operativo; sin cron, workers ni envíos. Al terminar se sellaron los roles SQL y se detuvieron sólo la API y Redis exclusivos del ensayo.
+- El primer intento funcional encontró Redis de ensayo apagado y devolvió 503. Se corrigió el usuario del contenedor temporal; el recorrido pasó sin modificar la aplicación ni debilitar aserciones. No se reinició Docker ni se afectaron otros proyectos.
+- Healthchecks volvió a **UP** por la señal real del copiador a las 21:09 UTC. Mantiene una hora de período, 30 minutos de gracia y correo activo. Entre copias completas hubo **10 h 27 min 19 s** sin un punto nuevo de recuperación. La nueva copia no reconstruye los puntos horarios que faltaron durante ese intervalo.
+
+El incidente operativo de B2 queda cerrado. El PR #10 conserva su borrador y pendientes de revisión/dependencias; producción continúa pendiente. Este ensayo acredita recuperación aislada de datos y API, no interfaz web, workers, conmutación completa a otra nube ni un RTO garantizado. Los apartados siguientes son el historial y sus bloqueos anteriores no sustituyen este estado.
+
+## Lote de entradas desplegado y comprobado — 30/09/2026, 12:32 UTC
+
+API y ambos workers ejecutan `119db9792a47cae8d688b8d8ea49fbf6e9fee355`, imagen `registry.fly.io/grafoprint-staging-api@sha256:c93f4535bf689c261950726e3b24414c762ec4889c26a728f5d01e01254d280c`. Compilación remota con tipos aprobada. Web conserva `a93268414`; PDF y ejecutor de respaldos no cambiaron. Se conservaron las seis máquinas y sus tamaños, sin migraciones nuevas ni cambios de producción.
+
+- Pasaron los 312 casos de las 16 suites del control local y remoto; los 12 casos del motor vectorial también aprobaron. Los cuatro controles de esta revisión terminaron correctamente: [HTTP y parsers](https://github.com/studiocamaleon/gdi/actions/runs/36714403949), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36714403873), [contenedores/login/BFF](https://github.com/studiocamaleon/gdi/actions/runs/36714403980) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36714397780).
+- El código compilado de la API en Fly rechazó claves reservadas, consultas con tipos incorrectos y atributos SVG inválidos; los controles positivos de cotización, filtros y escala decimal pasaron. Se ejecutaron en un proceso separado, con consultas sustituidas: no se usó la base real ni se llamaron proveedores externos en ese ensayo. No equivale a probar esos casos por HTTP en cloud.
+- API y web responden 200 a salud; controles disponibles aprobados y workers iniciados. El control de sólo lectura de PostgreSQL conservó los mismos IDs/recuentos originales: una empresa, tres usuarios, una conversación, 31 mensajes, 16 envíos y 13 archivos. Las 299 migraciones coinciden; 270 relaciones con empresa en ambos extremos no tienen cruces. El usuario de ejecución continúa sin privilegios de superusuario, creación de roles/bases ni bypass de RLS.
+
+**Pendientes:** guardar la protección de main después del segundo factor de GitHub y normalizar el límite de Backblaze para comprobar una copia nueva y la custodia de las fuentes vigentes. La última copia completa verificada sigue siendo la de las 10:42 UTC; no se declara protegido este lote en B2. El PR #10 continúa en borrador, con descripción actualizada. No se considera habilitado el despliegue a producción.
+
+## Validaciones de entradas y motor vectorial — 30/09/2026
+
+Lote preparado localmente, todavía sin nuevo despliegue al escribir esta entrada. Se rechazan claves reservadas en respuestas de cotización, tipos inesperados y fechas inexistentes en filtros, y cursores con campos que no sean texto. El parser del motor vectorial evita repetir búsquedas costosas ante atributos y longitudes malformados. Las pruebas de cada corrección reprodujeron antes el problema y comprobaron después su resolución.
+
+Resultados locales: MCP 24 casos; consultas y regresión de egresos/panel 79; motor vectorial 12; controles existentes de Meta/archivos/recorridos/órdenes 50. Tipos dirigidos aprobados. El lint de las pruebas nuevas aprueba; el módulo MCP conserva doce avisos de tipos preexistentes fuera del cambio. CI incorpora los nuevos casos y el ensayo del motor. Se retira el lockfile de pnpm obsoleto; las instalaciones y despliegues siguen usando npm y sus package-lock.
+
+La revisión previa `e156b208fd310ef62237702a3cfea22a20f9906c` aprobó los cuatro controles remotos: [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36712110378), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36712110327), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36712110360) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/36712106451). CodeQL quedó activo para JavaScript/TypeScript, Python y GitHub Actions; un análisis completado no significa ausencia de alertas.
+
+La protección de `main` continúa pendiente de guardar por la verificación personal de GitHub. Los respaldos conservan el incidente operativo descrito debajo. No se modifica producción ni se considera habilitada.
+
+## Previsiones y controles automáticos de GitHub — 30/09/2026
+
+Sin cambios ejecutables ni despliegue: API/web siguen en `a93268414c03b26013c181fe25e28281fad674b3`. Se añadieron nueve casos HTTP de ETA con sesiones, permisos, servicios y PostgreSQL reales: las cinco rutas exigen sus accesos correspondientes, separan contexto/colas/precisión/salud entre dos empresas y sólo permiten al supervisor publicar registros propios sin duplicarlos. Se usaron datos ficticios; únicamente la lectura del plan está sustituida. No se acredita carga máxima ni todas las entradas de negocio. Regresión dirigida de cuatro suites: 20 casos aprobados; tipos y lint aprobados. El lote de trece suites HTTP aprobó 273 casos localmente.
+
+El check `http` ahora corre en todos los PR hacia `main`, sin filtros por archivos. La versión previa de ese cambio, `ca618cb6f415c79b2e811ae7b04f8144b2d6cfc6`, aprobó [fronteras HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36710587669), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36710587715) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36710587735). El resultado remoto de la incorporación de ETA se registra por separado.
+
+Se activaron en GitHub el grafo de dependencias, las alertas de vulnerabilidades y las alertas de paquetes maliciosos. La protección de secretos y de pushes con claves ya estaba activa. Se solicitó la configuración inicial de CodeQL para JavaScript/TypeScript, Python y GitHub Actions; sus resultados deben comprobarse por rama y revisión. No equivale a una certificación de seguridad.
+
+El incidente de respaldos continúa abierto; estas comprobaciones no normalizan las copias ni habilitan producción.
+
+## Fronteras de producción y productos — 30/09/2026, 11:35 UTC
+
+Sin cambios de código ejecutable ni nuevo despliegue: API/web conservan la fuente `a93268414c03b26013c181fe25e28281fad674b3`. Se añadieron 26 casos HTTP con PostgreSQL y dos empresas ficticias, usando sesiones, permisos, validación y servicios reales.
+
+- Producción: listados aislados, recursos, familias, días y configuración; rechazo de edición/borrado ajeno y referencias a equipos, empleados, horarios, máquinas y pasos ajenos. Se comprobaron datos sin cambios después del rechazo, altas propias y concurrencia al asignar un paso a estaciones. Trece casos nuevos aprobados; tipos y lint aprobados.
+- Productos: lectura, edición, duplicación y borrado; referencias cruzadas entre producto/ruta/alternativa/paso, migración mixta y campos internos rechazados sin escrituras parciales. Trece casos nuevos aprobados, con el interceptor real de publicación. Regresión dirigida: 33 casos en seis suites aprobados; tipos y lint aprobados. El plan y la entrega externa de eventos se sustituyen; no se ensayaron proveedores ni todos los tipos de configuración productiva.
+- Planificación y producción: otras cuatro suites existentes, 42 casos aprobados. No equivalen a un ensayo completo de todo el taller.
+- Se preparó un control de PR con PostgreSQL efímero, migraciones y doce suites HTTP explícitas, sin seeds ni accesos cloud. Su lote local aprobó 264 casos. El primer resultado de este workflow nuevo en GitHub se registrará al terminar; no se deduce del resultado local.
+- Sobre el commit anterior `a1380019facc9c037a3d48af8ebcffbdf6f472dc` aprobaron [contenedores y HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36707647368) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36707647337).
+
+El incidente de respaldos descrito debajo sigue abierto. Estas pruebas no normalizan las copias ni habilitan producción.
+
+## Contratación vinculada y estado de respaldos — 30/09/2026, 11:08 UTC
+
+API, ambos workers y web ejecutan la fuente `a93268414c03b26013c181fe25e28281fad674b3`. Backend: `registry.fly.io/grafoprint-staging-api@sha256:27859e1f7345e7232cb37fd2b61a07293af08cb6f9707420b9cd5a73b02c4fa6`; web: `registry.fly.io/grafoprint-staging-web@sha256:e974960a90585f7e4b6083143cee28b2d92c3778f6fb7c6b64aac4a3897e3026`. PDF y copiador conservan sus imágenes. Seis máquinas iniciadas y controles de salud disponibles aprobados. Sin nuevas migraciones, tamaños, fusiones ni cambios de producción.
+
+- Las nuevas contrataciones usan la transacción preparada por el servidor. Los planes históricos conservan la gestión de suscripciones ya vinculadas y no ofrecen nuevas altas. Una notificación del proveedor no puede crear una suscripción histórica usando sólo los datos personalizados del navegador.
+- Pasaron 62 casos API y ocho web, tipos/lint dirigidos y ambas compilaciones remotas. La API compilada en staging comprobó alta rechazada, renovación vinculada y catálogo limitado dentro de una transacción revertida. No se consultó Paddle ni se efectuaron pagos reales. El webhook firmado se ensayó localmente; no se declara validada una compra real.
+- Postflight: 299 migraciones/checksums, mismos IDs y cantidades originales; 270 relaciones entre tablas de empresa sin cruces. Los datos del ensayo se revirtieron.
+- **Respaldo pendiente de normalización:** la copia horaria de las 11:00 UTC falló y el monitor externo lo detectó. La última copia completa verificada sigue siendo la de las 10:42 UTC, detallada debajo. La custodia y copia posterior de esta nueva fuente aún no están verificadas. No considerar cerrado este control ni habilitar producción; el diagnóstico operativo permanece en el registro privado.
+- El lote anterior `51ae83ba0d79def1a9fc42aa33a37eb9a5509d94` aprobó [contenedores y HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36704410307) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36704410632). Los resultados de este nuevo commit deben registrarse por separado.
+
+Comprobaciones locales posteriores, sin nuevo despliegue: nueve casos HTTP con PostgreSQL y dos empresas para enlaces de presupuestos y órdenes. Se verificaron alcance del token, adjuntos públicos/privados/pendientes/ajenos, cabeceras, logos, campos internos, doble aprobación, revocación, caducidad y reemisión. Regresión de cuatro suites: 47 casos aprobados; tipos y lint del nuevo test aprobados. Firma de almacenamiento, notificaciones y lectura de plan sustituidas; no hubo proveedores externos. Otros diez casos existentes de aprobación de arte y concurrencia pasaron: incluyen revocación durante una decisión y cambios de capacidad entre lectura y escritura. No se acredita por estos ensayos el circuito completo de recibos/facturas ni la interfaz pública desplegada.
+
+## Actualización de runtime y reportes — 30/09/2026, 10:44 UTC
+
+API y ambos workers ejecutan la fuente `cf04d5773a52133e8d3479e6d7b4c20f6d8792c4`, imagen `registry.fly.io/grafoprint-staging-api@sha256:aab68158d8e357dc58f39963ef3231c698adfac4cea0f41dc71d4ec7db11f609`. La web usa `7a632da5bfbb83f059128153fd9755d783ee771a`, imagen `registry.fly.io/grafoprint-staging-web@sha256:241257c6d112c44c08fccb92e84b745944a708d5dc346ff4787a77ab96cb4a20`. PDF y copiador conservan sus imágenes. Se comprobaron las seis máquinas iniciadas, sus identidades/tamaños y controles de salud disponibles. Sin cambios de producción ni nuevas migraciones.
+
+- Node 24.21.0 fijado por digest; compilaciones remotas con tipos aprobadas. Es una actualización del runtime, no una declaración de que desaparecieron todos los avisos nativos. Pasaron 73 pruebas locales dirigidas de configuración, accesos, sesiones, archivos y seguridad web. En la API desplegada se comprobó la versión real y conversión de audio con rechazo de formatos inválidos.
+- Ensayo HTTP de staging repetido sobre la pareja nueva API/web: perímetro, origen, login, cookie protegida, aislamiento de empresas, permisos vigentes, MFA, rotación de contraseña y cierre de SSE tras revocación. Se retiraron únicamente los datos temporales del ensayo. Postflight: mismos IDs y cantidades originales, 299 migraciones/checksums y 270 relaciones sin referencias entre empresas.
+- Reportes: 13 casos aprobados de planes/permisos, incluidos doce reportes de una empresa y un control positivo de otra, con nombres y montos distintos. Servicios, planes, permisos y SQL reales; identidad inyectada como fixture, sin acreditar nuevamente AuthGuard/JWT en esta suite. Tipos y lint dirigidos aprobados. Se corrigió el nombre de un rol de prueba sin cambiar código ejecutable.
+- Copia posterior `d298d3c6-18c6-4ab3-8df7-aa5f9e7e2dc2`, completa a las 10:42:27 UTC: cuatro fuentes exactas y 13 archivos. Descarga, firma, descifrado y huellas aprobados. No se volvió a importar esta copia a PostgreSQL; el ensayo SQL/funcional completo sigue siendo el de las 09:17 UTC.
+- El lote anterior `cab2aba197221dbf743d80ec74694b5b7fb22ab5` aprobó [contenedores y HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36702014840) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36702014768). El resultado de GitHub para esta actualización se registra por separado cuando concluya.
+
+
+## Procesamiento de archivos y tesorería — 30/09/2026, 10:23 UTC
+
+API y ambos workers ejecutan la fuente `45bf112cc9254403fc20ad2142715e92d525c547`, imagen `registry.fly.io/grafoprint-staging-api@sha256:1a51bda900534d3c6e6fcb77a0a07b2a6c9ada8da0809a0f3b840b408e4735aa`. Web, PDF y ejecutor de copias conservan sus versiones. Se verificaron las seis máquinas iniciadas, mismos tamaños y controles de salud disponibles aprobados. Sin migraciones nuevas ni cambios de producción. Los apartados inferiores conservan el estado histórico de cada ensayo.
+
+- OpenNest, lector DXF y herramientas de audio reciben únicamente variables necesarias para su trabajo. Tres pruebas con secretos ficticios fallaron antes de la corrección; después pasaron 23 casos en cinco suites, incluidos procesos reales, cancelación, conversión AAC/Opus y DXF. Tipos y lint dirigidos aprobados. La compilación remota pasó con tipos y comprobación de audio como usuario sin privilegios.
+- En la imagen desplegada se comprobó la lista permitida y un hijo real sin la variable secreta ficticia; también pasó conversión multimedia real y rechazo de archivos no válidos. Esto reduce la exposición por herencia de configuración, pero **no constituye un aislamiento del sistema operativo**: los hijos conservan UID y permisos de archivos del proceso padre.
+- Copia posterior completa a las 10:16:01 UTC: cuatro fuentes exactas, 299 migraciones y 13 archivos. Descarga, firma, descifrado y huellas aprobados. Se conserva como ensayo SQL/funcional completo el de las 09:17 UTC detallado debajo; no se presenta esta descarga posterior como una nueva restauración SQL.
+- Tesorería: diez casos nuevos y 37 solicitudes HTTP con PostgreSQL, sesiones y servicios reales. Se probaron permisos, cuentas/métodos/puntos de venta ajenos, transferencias entre empresas en ambos sentidos, imputaciones cruzadas y rechazo sin modificaciones parciales. La transferencia propia repetida conserva exactamente dos movimientos; la imputación propia y su reversión funcionan. Se sustituye la lectura del plan y las dependencias externas no utilizadas; no hubo emisión fiscal, correo ni llamadas a proveedores. Lint y tipos dirigidos aprobados.
+- El commit anterior `ca8f45e1178e4ef6e3ddc6f1d32d1370b40b95e3` aprobó [contenedores y recorrido HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36699649192) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36699649179). La ejecución de GitHub sobre este lote nuevo se registra al finalizar; no se infiere de esos resultados anteriores.
+
+## Permisos de Centro de Copiado y comprobaciones adicionales — 30/09/2026, 09:44 UTC
+
+API y ambos workers ejecutan ahora la fuente `a949ba30571a7532c83c1f4a9087f6d3c3df79c7`, imagen `registry.fly.io/grafoprint-staging-api@sha256:4b4883f533a94cb8a3204f8420ce4d68b141bf19b255423361a65781831997d6`. Web y PDF mantienen las versiones de la tabla del apartado anterior. Mismos recursos y máquinas; builder temporal retirado al terminar. Sin nuevas migraciones, cambios de producción ni fusiones.
+
+- Las dos operaciones de guardado de Centro de Copiado exigen `comercial.gestionar`; las vistas previas siguen disponibles con lectura. Reproducción local antes del cambio: cinco rechazos esperados fallaron. Después: 13 pruebas HTTP aprobadas con sesiones y roles reales. Los servicios de cálculo/guardado se sustituyen en esos tests; no acreditan el cálculo de una cotización completa.
+- En staging, dos usuarios ficticios temporales probaron ambos guardados: lector 403, gestor 400 al alcanzar la validación de un cuerpo deliberadamente incompleto. No se guardaron cotizaciones. Las identidades temporales se eliminaron; postflight aprobó mismos datos históricos, 299 migraciones/checksums y 270 relaciones sin referencias entre empresas.
+- Regresión Centro de Copiado: 73 pruebas aprobadas y una excedió cinco segundos; al repetir sólo su archivo, las cuatro pruebas pasaron sin cambiar código, timeout ni aserciones. Lint dirigido aprobado.
+- Campañas, cupones, fidelización y desarrollo documental: 11 casos nuevos, 36 solicitudes HTTP con base y servicios reales; permisos, lecturas y referencias ajenas, rechazo sin escrituras parciales y altas propias comprobados. La lectura del plan se sustituye por un plan de prueba. Esto no cubre todos los recorridos ni acredita interacciones externas.
+- CI anterior: dependencias aprobadas; contenedores compilaron y pasaron tipos, pero el ensayo HTTP conservaba una cookie anterior al cambio de contraseña. Se corrigió el ensayo para exigir revocación de la anterior y usar la cookie rotada, y se agregó arranque/espera explícitos del PDF. Sobre `170d04765ad52764f9b174a58c92031c7023a4b3` aprobaron [contenedores, tipos, migraciones y HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36698485609) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36698485608). No se omitieron controles.
+- Respaldo posterior: copia completa a las 09:48:01 UTC con las cuatro fuentes vigentes, 299 migraciones y 13 archivos. Descarga, firma, descifrado y huellas comprobados. Esta copia no se volvió a importar a PostgreSQL: el ensayo SQL y funcional del mismo esquema se realizó con la copia anterior, como se detalla debajo.
+- Inventario: 16 casos nuevos y 44 solicitudes HTTP con PostgreSQL, sesiones y servicios reales. Se comprobaron lectura por empresa, 14 operaciones denegadas al lector, rechazo de proveedor/variante/ubicación ajenos, lote mixto de precios sin escritura parcial y movimiento propio autorizado. Plan sustituido por un fixture; sin consultas de cambio ni modificaciones del inventario existente. Lint y tipos dirigidos aprobados. El intento de tipos de todos los tests juntos agotó la memoria disponible; no se aumentó la memoria de la Mac/Docker ni se cuenta ese intento como aprobado.
+
+## Lote de seguridad y recuperación — 30/09/2026
+
+**Estado actual:** API, web, ambos workers y generador PDF desplegados y saludables, en las mismas cinco máquinas y con los mismos recursos. No se modificó producción ni se fusionaron PR. Se conservan las mejoras del Inbox del PR #8 y la redirección del PR #9.
+
+| Componente | Fuente | Imagen exacta |
+| --- | --- | --- |
+| API y ambos workers | `f78273ffa66fdb9d1216bf37bfe8309964b69a78` | `registry.fly.io/grafoprint-staging-api@sha256:4ff66704884319007798bb58a7140d75b72cb604f7cbed946ac8bde36cec8859` |
+| Web | `6552177322633140bf5e5b53cc026f697b2d965b` | `registry.fly.io/grafoprint-staging-web@sha256:e29ab48c5e856e2056203714b9df34a67fa37ef75731463a464779133689a93d` |
+| Generador PDF | `28c94c67381a69de85c94dfa12c176c67941004c` | `registry.fly.io/grafoprint-staging-pdf@sha256:db32ce06062ac320ce2b11b15e5b5b8ad2382455ec2462987a75e2d82cb87d75` |
+
+- **Base:** migración aditiva `20260930020000_recuperacion_identidad`, total 299. Historial anterior y checksums conservados, cero migraciones pendientes. Se reaplicaron las concesiones del rol de ejecución y se verificó que el lector de respaldos puede leer las tres tablas nuevas sin escribir. No hubo seeds ni reinicio de datos. IDs y cantidades originales de empresas, usuarios, conversaciones, mensajes, envíos y archivos conservados después de limpiar los ensayos. Se verificaron 270 relaciones con empresa en ambos extremos, sin referencias cruzadas en los datos existentes.
+- **Prueba HTTP real:** con dos empresas/usuarios ficticios temporales pasaron login, cookie Secure/HttpOnly/SameSite, rechazo de origen ajeno, perímetro de API, otra empresa rechazada, cabecera de empresa falsificada ignorada y permisos quitados efectivos de inmediato. Pasaron activación de MFA, revocación de sesiones anteriores, rotación al cambiar contraseña, nuevo login con segundo factor/código de recuperación y cierre del canal SSE al revocar su sesión. Datos temporales eliminados al finalizar.
+- **Archivos reales:** después de vencer las firmas anteriores, la API emitió una subida de PDF con condición de creación única. Carga y confirmación 201 aprobadas, segundo confirmar sin duplicar cuota, reemplazo de bytes 412 y escritura con rol de sólo lectura 403. El driver también pasó multipart, hash de descarga, CORS exacto y rechazo sin firma. Se eliminaron únicamente los objetos y filas del ensayo.
+- **Componentes:** FFmpeg 9.0.2 construido desde fuente verificada, con protocolos y formatos limitados; conversión AAC → Opus y rechazos de formatos no permitidos aprobados como usuario sin privilegios. pip 26.2.1 e importaciones de los motores verificadas. Etiqueta con texto/QR comprobada en la imagen final. PDF con Gotenberg 8.37.0 y Chromium 154.0.8037.57, actualizaciones de Debian aplicadas; documento real generado por red privada y solicitudes a URLs públicas/privadas rechazadas con 403. No tiene servicio público.
+- **Dependencias:** auditorías de dependencias npm de producción sin avisos en los siete proyectos revisados. Se prepararon revisiones de Dependabot y un check de PR sin secretos, sin instalación de paquetes del PR ni fusión automática. Se activarán al integrar los archivos a `main`; todavía no acreditan una ejecución de GitHub. Esto no significa que todo aviso del sistema operativo haya desaparecido.
+- **Interfaz:** sesión existente conservada y panel de la empresa demo cargado en Chrome tras recargar. Inbox muestra correctamente el vencimiento del acceso de prueba de Meta; no se enviaron mensajes ni se afirma haber repetido un intercambio real con ese token vencido.
+- **Compilación:** tipos y builds remotos aprobados. Un primer push de la web falló en el registro después de compilar; el reintento final terminó correctamente. No se compilaron contenedores en la Mac ni se reinició Docker.
+
+El ejecutor de copias se actualizó con las tres imágenes desplegadas y cuatro fuentes exactas (API, web, PDF y ejecutor). La copia posterior al cambio terminó; se descargó y descifró con firma válida, 299 migraciones, 13 archivos y cuatro archivos de fuentes con huellas correctas. Restauración SQL en base nueva aislada: 216 tablas y 1.591 filas, con dueño sin superusuario y sin login al terminar. La API del lote nuevo arrancó con esa base restaurada: login con MFA recuperada, lectura/alta de cliente, rechazo de otra empresa y de acceso sin sesión, y apertura de los 13 objetos con hash correcto. La red externa se bloqueó desde el sistema operativo; no se habilitaron cron, workers ni envíos. El rol del ensayo se dejó sin login. Healthchecks confirmó el cierre real. El builder temporal se retiró tras terminar las compilaciones.
+
+**Límites:** estas verificaciones son evidencia de los recorridos indicados, no una certificación de las 675 rutas inventariadas ni garantía frente a cualquier ataque. Recuperación de cuenta por correo permanece deshabilitada hasta configurar y ensayar un transporte real. Coexistencia de Meta, carga sostenida, cambio completo a infraestructura de reemplazo y recuperación ante pérdida del teléfono requieren sus ensayos específicos. Los hallazgos y la cobertura detallada permanecen en el informe privado.
+
+
+## Activación del respaldo y recuperación de la copia operativa — 30/09/2026
+
+- El titular detectó que la nota larga de recuperación había sido recortada. Se invalidó aquella confirmación y se prepararon cuatro notas de 144–233 caracteres, con marcas de final. El titular confirmó las cuatro completas después de guardarlas. La llave privada de descifrado y la clave interna de Grafo permanecen fuera del ejecutor.
+- Se activó un único ejecutor de 512 MB y una CPU compartida, región `iad`, volumen cifrado de 10 GB, red privada separada y sin servicios ni IP públicos. Imagen `registry.fly.io/grafoprint-staging-respaldo@sha256:c368bb3396bd49ef4f5a96228132a878c7e448cd40a551a773d198b43c099245`, código `4d9212683`. Proceso sin privilegios, configuración 0600, bloqueo exclusivo del volumen y reinicio `always`. No se ampliaron los cinco servicios de la aplicación.
+- El primer intento no terminó y notificó fallo. Las comprobaciones de lectura a los tres proveedores y el siguiente intento completo aprobaron sin cambiar accesos; no se determinó la causa del primer fallo. Reiniciar el ejecutor produjo copias completas y reutilizó los 13 objetos sin cambios. No se publicaron éxitos manuales en el monitor.
+- Interrupción controlada sólo del copiador a las 06:41:49 UTC, con respaldo y temporales en curso. Fly detectó `SIGKILL`, reinició automáticamente y completó otra copia a las 06:42:47, reutilizando los 13 archivos. No se reinició Docker ni ningún servicio de Grafo. El ensayo comprueba recuperación de ese proceso; no una pérdida del proveedor o del volumen.
+- Se recuperó un comprobante operativo desde B2 con el lector y la firma pública reconstruidos de las notas. Descarga, firma, descifrado y huellas aprobados para el dump, los 13 archivos y las tres fuentes custodiadas. Restauración SQL nueva y aislada: 213 tablas, 298 migraciones/checksums, 1.588 filas. La descarga y restauración SQL del conjunto pequeño tomó unos 24 segundos; no representa el tiempo total de recuperación del servicio.
+- Contra esa nueva copia, la API exacta desplegada pasó ingreso con MFA, ingreso de una segunda empresa, consulta/alta de cliente, rechazo entre empresas y acceso sin sesión denegado. Un adjunto se abrió por su ruta autenticada y los 13 archivos por el almacenamiento aislado con huellas correctas. Sin conexión externa, cron ni workers; accesos SQL del ensayo sellados y su Redis detenido al terminar. No se ensayó la interfaz web ni un proveedor cloud sustituto.
+- Monitor externo activo: una hora de período y 30 minutos de gracia, correo habilitado y señales reales de fallo/éxito observadas. El ensayo previo de ausencia registró entrega del aviso por el proveedor; no se acredita lectura humana del correo.
+- Horario observado sin intervención: inicio `2026-09-30T07:00:00.453Z`, cierre `07:00:49.761Z` y confirmación del monitor a las 07:00:50. Trece archivos reutilizados. Comprobante obtenido del catálogo B2 con lector separado y firma pública de las notas; descarga/descifrado verificados del dump, 13 archivos y las tres fuentes, incluida la revisión exacta del ejecutor `4d9212683`. Las fuentes se listaron sin extraer ni ejecutar. Se acredita este disparo horario; no es una garantía de que nunca fallen ejecuciones futuras.
+- La configuración de reinicio pasó la validación de Fly. Continúan vigentes las 117 pruebas del paquete de recuperación; no se modificó su algoritmo en esta activación. Sin migraciones ni cambios de datos de staging, sin despliegue de la aplicación ni cambios en producción. La revisión integral de seguridad y el ensayo de recuperación completa en infraestructura sustituta siguen siendo trabajos separados.
+
+## Preparación del ejecutor y ensayo funcional de recuperación — 30/09/2026
+
+- API ensayada: `ce4e06fca19779ae4f7551f35a3e21e27734c523`, contra la copia restaurada de 213 tablas y 298 migraciones. Ingreso con MFA, consulta/alta de cliente y denegación entre dos empresas correctos. Identidades QA creadas únicamente en la recuperación; no se cambiaron claves de staging. Sandbox sin salida externa, cron y workers desactivados.
+- Trece objetos recuperados abiertos y verificados por hash en el almacenamiento aislado; un adjunto de cliente comprobado además por su endpoint autenticado. Sin ensayo de interfaz web ni reconexión de Meta. Runtime SQL del ensayo sellado sin login al terminar.
+- Código de backend y de web (`250b8643ab0ca6269c4d0e58a2d1ef45cf602d8e`) archivado, cifrado, protegido en B2 y recuperado con hashes correctos.
+- Comprobante de ensayo firmado y protegido en B2; recuperación con lector separado y firma pública verificada. No se depende del recibo local para futuras copias.
+- Aviso externo de ausencia ensayado: Healthchecks informó correo entregado. Umbral normal restituido a 90 minutos. La cuenta es gratuita; no recibe datos de clientes ni logs.
+- Se crearon la app exclusiva de backups y su volumen de 10 GB dentro del presupuesto de backups acordado. Red privada separada, sin servicio HTTP público. Imagen construida en remoto; todavía **sin máquina operativa ni horario activado**. Falta confirmar la actualización de la firma pública en la custodia del titular y verificar arranque/ejecución programada.
+- 117 pruebas del paquete de recuperación aprobadas, sin omisiones. Sin cambios al código, imágenes o tamaños de los cinco servicios habituales de staging ni a producción. Evidencia sensible y configuraciones fuera de Git.
+
+## Recuperación del Inbox — validación local, 28/09/2026
+
+Rama `codex/inbox-recuperacion`, basada en `main` después de integrar el PR #7 (`7e58b0735`). Este apartado no acredita todavía un despliegue nuevo.
+
+- Una apertura durante una caída de la API muestra una pantalla de reconexión con la estética de Grafo. Espera hasta diez segundos por la sesión y vuelve a consultar automáticamente; conserva el control de acceso normal.
+- Una interrupción con el Inbox abierto conserva en memoria el chat elegido, los filtros y los borradores. No reenvía mensajes automáticamente. Si el usuario reintenta un envío incierto, conserva su clave para evitar duplicados. Una revocación real de sesión/permisos descarta los borradores privados.
+- Al apagar Nest se completan tanto los canales del Inbox como los de notificaciones generales. Se evita que sus conexiones HTTP impidan cerrar el servidor. Esto no convierte una única máquina en alta disponibilidad.
+- Pruebas locales: 83 comprobaciones web (vista, editor, reconexión, ruta y transporte) y 34 de API/notificaciones; incluyen dos streams HTTP reales abiertos durante el cierre de Nest. ESLint de los archivos modificados y control de CSS. En Chrome, con la API local apagada apareció la pantalla de recuperación; al iniciar la API la misma pestaña volvió al Inbox autenticado sin recarga manual. Las integraciones y las tareas programadas locales permanecieron desactivadas.
+- Los borradores sobreviven a la interrupción dentro de la pestaña; no se guardan en almacenamiento persistente del navegador. Cerrar o recargar completamente esa pestaña no está cubierto. No hubo envíos reales a Meta, migraciones ni cambios de recursos.
+
+**Despliegue completado y comprobado a las 19:14 UTC / 16:14 Argentina.** La comprobación remota [CI 36468124321](https://github.com/studiocamaleon/gdi/actions/runs/36468124321) aprobó sobre `c64b203f776868808d2999450cebc77417a06574`: backend/web con tipos, migraciones, permisos y acceso HTTP en servicios desechables. El segundo commit agrega el manejo de un corte durante la lectura de la respuesta HTTP; no cambia el backend.
+
+- Backend, API y ambos workers: código `ce4e06fca19779ae4f7551f35a3e21e27734c523`, imagen `registry.fly.io/grafoprint-staging-api@sha256:ec9736bf77cfda7795832df026cb0ce1731322cdfa2a4259c9e1889f8e6d135c`.
+- Aplicación: código `c64b203f776868808d2999450cebc77417a06574`, imagen `registry.fly.io/grafoprint-staging-web@sha256:246e62ad433f32751838e5d148cec4e67775fd22b5b5ea2f2185731d1e1a132e`.
+- Se publicó primero la aplicación para comprobar la pantalla de recuperación durante el reemplazo de la API anterior. En Chrome apareció el aviso; al terminar el despliegue la misma pestaña volvió a la sesión autenticada sin recarga ni login. La versión anterior aún demoró su cierre durante ese reemplazo.
+- Con la versión corregida instalada, una segunda interrupción controlada envió `SIGTERM` manteniendo el límite de 120 segundos. La orden de detención terminó en **3,53 segundos**; el registro muestra salida por `SIGTERM`, sin `SIGKILL`. Se mantuvo apagada 25 segundos deliberadamente y el comando de arranque terminó en 3,30 segundos. Estas duraciones de comandos no son una garantía de disponibilidad. La pestaña mostró el aviso y volvió automáticamente otra vez.
+- Los cinco servicios quedaron iniciados, con los mismos IDs, región y recursos; controles de salud aprobados e imágenes esperadas. Gotenberg no cambió. Salud web/API/base, protección Basic, restricción de la API directa, página de login y rechazo de webhook sin firma aprobaron.
+- Comparación de base en transacciones de sólo lectura: **298 migraciones** y sus checksums intactos, ninguna pendiente, mismos IDs/cantidades de empresas, usuarios, conversaciones, mensajes, envíos y archivos. No se aplicaron migraciones ni seeds y no se renovaron secretos.
+- El token temporal de Meta ya había vencido a las 15:00 Argentina. La recuperación en staging se acreditó hasta la vista autenticada con el aviso de vencimiento; no se presenta como una nueva prueba de envío ni de chat activo. Borradores y reintento sin duplicados se acreditan con las pruebas locales; los ensayos reales previos del PR #7 siguen documentados abajo.
+- Builder temporal `fly-builder-graceful-haze-5428` retirado después de publicar ambas imágenes. No se aumentaron recursos ni se desplegó producción. El [PR #8](https://github.com/studiocamaleon/gdi/pull/8) conserva el arreglo separado; el [plan de producción](../../docs/preparacion-produccion.md) registra el siguiente orden de trabajo.
+
 
 ## Ensayo con dos operadores distintos — 28/09/2026
 
@@ -461,3 +704,602 @@ Lucas abrió el mensaje y respondió `PRUEBA GRAFO DEMO-0002`. Se comprobó en N
 Se importó exclusivamente `META_PILOT_ACCESS_TOKEN` en `grafoprint-staging-api`, release **10**, conservando la imagen del piloto `7efabd87213e` (`sha256:ccf65db71c98a649b36793aed49a4a264b39d81bf1902a0ac678f0dc0ccae4e0`). El reemplazo de la única máquina produjo una interrupción temporal observable; Fly terminó correctamente con control saludable. Comprobación final: API `200`, `database: up`, y web `200`. No cambiaron máquinas, recursos, workers, migraciones ni la versión del Inbox publicada.
 
 El recorrido desde la interfaz nueva, sus checks en vivo y el PDF siguen pendientes. El [plan concreto del siguiente lote](../../docs/meta-prueba-plantillas.md#preparación-del-recorrido-completo-en-staging) identifica la necesidad de un canal de prueba explícito y las diez migraciones acumuladas. No se fusionaron ramas ni se modificó producción.
+# Lectores de respaldo y primer ensayo de recuperación — 30/09/2026
+
+Se creó un rol separado de sólo lectura en Neon, con acceso a las 213 tablas y a las tablas/secuencias futuras creadas por el dueño actual. La creación se probó primero en una base local ficticia, incluido el caso de dueño sin superusuario de PostgreSQL 16. Se verificó la conexión TLS y ausencia de escritura/DDL/funciones privilegiadas; no hubo migraciones, seeds ni cambios en datos de staging.
+
+Se creó un token R2 con `Object Read only`, limitado al bucket de staging. Listado/descarga aprobaron; subir o borrar un objeto sintético fue rechazado con 403. Se creó un lector B2 independiente, limitado al bucket y prefijo de staging, con permisos exactos de lectura/verificación de retención. El acceso amplio temporal utilizado para aprovisionarlo fue revocado y eliminado del archivo local.
+
+La primera copia real de ensayo quedó cifrada y protegida por la retención de 30 días. Se descargaron y verificaron los 13 archivos y el dump; restauración SQL en una base nueva aislada: 213 tablas, 298 migraciones/checksums y 1.588 filas. Los dos valores internos cifrados presentes pudieron descifrarse con la clave de staging. No se iniciaron servicios ni tareas externas; el dueño local de restauración quedó sin login. No se alteró la base de desarrollo. El titular confirmó el kit completo en una nota segura del teléfono. Ensayo de aplicación completa y dos empresas, programación/alertas y custodia automática de futuros comprobantes siguen pendientes; no se acredita recuperación total ni cierre de seguridad.
+
+Versiones observadas durante el ensayo: backend `ce4e06fca19779ae4f7551f35a3e21e27734c523`, digest `sha256:ec9736bf77cfda7795832df026cb0ce1731322cdfa2a4259c9e1889f8e6d135c` en API y ambos workers; web `250b8643ab0ca6269c4d0e58a2d1ef45cf602d8e`, digest `sha256:5e2c1bf5640e2fab26cf5e5ff769bacdbb82bc5cb1a3345b6da5ef4460ae3ab6`. Las cinco máquinas siguieron iniciadas con los mismos recursos. No se desplegaron imágenes, no se fusionaron PR ni se modificó producción. Los cambios de seguridad de esta rama aún no están publicados.
+
+El ejecutor corrigió una incompatibilidad de precisión entre fechas de ListObjectsV2 y GET/HEAD de R2, manteniendo ETag/tamaño exactos. La tentativa anterior abortó sin cierre válido. Pasaron 106 pruebas locales del respaldo; evidencias privadas fuera de Git. Ver detalles y límites en [recuperación](../recuperacion/README.md).
+
+## 01/10/2026 — Permisos por vista, cajas asignadas y recorrido publicado
+
+Revisión **`2fee017048b1ba529f579dc5820878f9cf1ce066`**, PR #14 sobre #13, sin fusionar los PR. Lucas autorizó comprobar local, publicar en staging y promover a producción sólo después del ensayo. API, ambos workers, web y generador PDF usan este lote.
+
+| Servicio | Imagen inmutable |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:47db777a89768d5f989dd8443532e52ea73f8d0ab1bf1937bf7036e5a5e48674` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:eb5699889ae1629f57e9a37eeaeaa11e2af118c3b808b2154d38583f435d2271` |
+| PDF | `registry.fly.io/grafoprint-staging-pdf@sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d` |
+
+302 migraciones terminadas. `20261001220000_permisos_cuentas_usuario` agrega asignaciones de cuentas y claves de idempotencia de arqueos; no ejecuta seeds ni modifica roles existentes. El rol de aplicación pudo leer las nuevas columnas y sigue sin DDL. Una máquina por servicio, mismos tamaños; copiador conserva su imagen y recibió únicamente la configuración con las fuentes e imágenes nuevas.
+
+### Comprobaciones
+
+- Las 500 pruebas de API y 57 de interfaz previas del lote habían pasado. La corrección encontrada en el recorrido agregó siete regresiones; las cuatro suites focalizadas terminaron con 32 pruebas aprobadas. Revisión local de tipos sin errores y compilaciones completas remotas.
+- CI del código desplegado: [HTTP y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/36918285844) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36918285859), ambos aprobados.
+- Recorrido local con API completa, Next, sesión real y PostgreSQL exclusivo de tests. Vendedor con órdenes y caja limitada: creación de orden, cobro, arqueo exacto persistido, transferencia y repetición sin duplicado. Rechazo de cajas no asignadas y destinos no autorizados. Navegador confirmó que sólo se muestra Mostrador y que Fuerte sólo aparece como destino, sin saldo.
+- Se corrigió el fallo detectado en Pagos de la OT: consultar pagos de una orden requiere acceso a esa vista; omitir `ordenId` no abre el listado general de Cobrar. El recibo del vendedor exige permiso de cobro, acceso a órdenes y cuenta operable.
+- En staging pasaron **46 comprobaciones HTTP** con administrador, vendedor, sólo presupuestos y sólo informe comercial. Después de publicar la web se repitieron los accesos permitidos y rechazados. Un cobro ficticio adicional produjo un PDF nuevo de 22.510 bytes a través del generador actualizado, accesible al vendedor. No se emitieron comprobantes fiscales ni mensajes a clientes.
+- Revisión de navegador en staging: Usuarios, lugares del equipo y editor con Comercial e informes independientes. Revisión en producción: sesión del administrador, Usuarios, cajas y métodos de pago. Los formularios se cerraron sin guardar cambios de clientes reales.
+- Las empresas y usuarios sintéticos, sus órdenes, cobros y archivos fueron retirados de local y staging. Los conteos finales de staging coinciden con los previos. En producción se conservaron los conteos de clientes, medios, cobros y movimientos; no se importó el catálogo local.
+- Salud web 200; controles Fly de API y PDF aprobados. API directa protegida 403 y BFF sin sesión 401 en producción. Doce máquinas activas entre los dos entornos, sin aumentar tamaño.
+
+### Respaldo y límites
+
+Copia previa válida de **2026-10-01T19:00:50.902Z**. Fuentes exactas cifradas y custodiadas en B2 con 31 días de protección. Copia posterior **`65dac61e-ffa8-44ef-9a07-119e3869aac4`**, completada **2026-10-01T20:17:16.027Z**, con 302 migraciones, 13 archivos y las imágenes de la tabla: firma y descifrado del manifiesto comprobados. No se repitió una restauración SQL completa en esta publicación.
+
+El copiador no cerró correctamente dos intentos durante esta ventana; no se contaron como copias válidas. Se verificó el origen (13 archivos requeridos presentes), se repitió el ciclo tras retirar los datos de ensayo y se confirmó el comprobante nuevo firmado indicado arriba. Una lectura de B2 también agotó el plazo de conexión y pasó al repetirla; no se desactivaron los controles de integridad.
+
+El recorrido usa una cotización y producto sintéticos de importe conocido; no reemplaza la validación industrial del catálogo a migrar. Centro de Copiado informa los requisitos faltantes: todavía debe incorporarse y verificar maquinaria/papel. Las restricciones de cuentas son opt-in por usuario. **No revertir a la API anterior después de asignar restricciones:** la versión vieja ignoraría las columnas nuevas; evaluar primero una corrección hacia adelante. El resto del plan de carga, recuperación cloud completa y facturación legítima mantiene los límites documentados anteriormente.
+
+
+## 01/10/2026, 21:35 UTC — Cotizador y scroll de selectores (PR #15)
+
+La API ejecuta **`fd7c20b88028d0445273ed310ab2edb5957854a0`** y la web **`5e6cffbab2bad64f6f8c4c5a2318c78d3186931b`**. PR #15 dependiente del #14; ninguno se fusionó durante esta corrección. Se comprobó local, luego staging y se promovieron las mismas imágenes por digest a producción.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API | `registry.fly.io/grafoprint-staging-api@sha256:f4e5e6df330da2c742415933afb064efe4be06bcc963aa77d0df7fb6979e8895` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:4d211c03e12cdca75ec1c468d6155b0390a9002d425ce401cb99bb2edb030da1` |
+
+Los workers y PDF mantienen `2fee01704` y las imágenes de la entrada anterior. Permanecen **302 migraciones**, una máquina por servicio y los mismos tamaños. No hubo migraciones de esquema, seeds, cambios de permisos ni de secretos de acceso.
+
+- Crear propuesta caía en el render del selector porque la proyección comercial omitía `atributosSchemaJson`. La API conserva ese esquema pasando por el filtro de datos económicos privados. La regresión reproduce el render real del selector; no se oculta el error con un catálogo vacío.
+- El CSS optimizado aplanaba los selectores de HeroUI y el aislamiento de estilos anclaba incorrectamente toda la cadena a `:scope`. Los descendientes del portal perdían `max-height`, `min-height` y `overflow-y`. Se conserva la raíz y sus combinadores mediante el parser de selectores, incluyendo pseudo-elementos, sin ampliar estilos a las pantallas anteriores.
+- El buscador de asignaciones no tenía la función de filtrado conectada. Ahora filtra por nombre/grupo con comparación de mayúsculas y acentos. Se mantienen las opciones bloqueadas y los avisos de traslado.
+- Nueve pruebas focalizadas aprobadas (cinco API, dos de contrato API/interfaz y dos de aislamiento CSS), con fallos reproducidos antes de corregirlos. Tipos de web y compilaciones remotas completas sin omitir la validación. CI del código: [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36927855712), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36927855707) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/36927855697), aprobados.
+- Navegador local con componente real dentro de FormSheet, 35 opciones y CSS optimizado: lista de 320 px, desplazamiento hasta el final, selección de la última opción, teclado, búsqueda y ausencia de resultados comprobados. En staging se alcanzó el final del listado de pasos; en producción también el de máquinas. El cotizador abre el catálogo y la configuración del producto en ambos entornos. Formularios cerrados sin guardar asignaciones ni emitir órdenes.
+- Controles de salud de Fly aprobados. Builder temporal retirado; no se reinició Docker ni se modificaron los servidores locales existentes.
+
+### Recuperación de esta publicación
+
+Fuentes de ambas revisiones cifradas y custodiadas con 31 días de protección. El inventario de recuperación conserva tanto la imagen de API nueva como la anterior que siguen usando los workers, además de la web, PDF y copiador. Copia posterior **`827677f1-2320-4806-9125-ac0fb26b7b4c`**, completada **2026-10-01T21:32:06.561Z**, con 13 archivos: firma, huella, descifrado del manifiesto y presencia de las fuentes/imágenes activas comprobados. Esta verificación de código no repitió la restauración SQL. Evidencia detallada privada fuera de Git.
+
+
+## 02/10/2026, 18:15 UTC — Inicio sin stock y atajos comerciales (PR #16)
+
+Revisión **`debada9153ce43ad2e4a00e8c043b5982d8e2fdf`**, dependiente de PR #15. Publicación autorizada por Lucas: primero staging, recorrido aprobado y promoción de las mismas imágenes inmutables a producción. Sin fusionar PR anteriores ni modificar la web comercial.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:8acc4b8db24ee0a3ea9b7c01329ebe4dfc354a3241bbef430046c9a4cdfeca8f` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:8fd868a4a16a68afa9bda97027e0bd0b7f3bcee0692522d60ecf391da2030b03` |
+
+PDF conserva `2fee01704` y el digest `a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`. Copiador conserva su imagen y recibe el inventario actualizado de código e imágenes. **303 migraciones**; `20261001223000_inicio_inventario` agrega indicadores de empresa y OT inicialmente falsos, sin seeds ni cambios de existencias. Rol de aplicación comprobado sin DDL. Una máquina por servicio, mismos tamaños; builder temporal retirado.
+
+### Comprobaciones
+
+- 124 pruebas API y 41 de interfaz/reglas locales aprobadas. [CI HTTP](https://github.com/studiocamaleon/gdi/actions/runs/36937251818) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/36937251834) de la revisión publicada aprobados; compilaciones completas con tipos, incluido Next.
+- Staging: **28 comprobaciones HTTP** por BFF y sesiones reales en dos empresas sintéticas. Activación/desactivación, versión concurrente, vendedor sin facultad de cambiar el modo, aislamiento, previsión, emisión directa y desde borrador, repetición idempotente, conservación de necesidades de una OT anterior y marcas históricas. No se crearon existencias, reservas ni consumos en las nuevas OTs de inicio.
+- El paso de producción sintético mantuvo el bloqueo de calidad; al resolverlo permitió finalizar sin exigir material ni generar movimientos. Las cotizaciones de emisión y el paso de ejecución fueron fixtures de importe conocido: este ensayo no equivale a probar todas las rutas industriales.
+- El primer intento de emisión con fecha de entrega 2099 se guardó, pero la respuesta excedió 120 segundos. Se comprobó el guardado y se retiró sólo esa fixture. La repetición con fecha próxima completó las 28 comprobaciones. La causa de aquella demora no quedó aislada y no se atribuye a una corrección del motor.
+- Navegador en ambos entornos: botón en Inventario → Stock, diálogo con alcance y estado desactivado; escribir **C** en el selector de clientes conserva la búsqueda sin abrir Centro de Copiado. No se guardaron formularios comerciales reales.
+- Fixtures y usuarios temporales retirados de staging; conteos originales recuperados. En producción se conservaron los conteos de empresas, clientes, cobros, medios y movimientos de fondos; sin facturación ni comunicaciones de prueba. Modo de inicio apagado, sin OTs marcadas en producción al cerrar la verificación.
+- Salud web/API 200, API directa protegida 403 y BFF sin sesión 401. La interrupción del build web durante la pausa y el posterior fallo de conexión de Fly se resolvieron reutilizando la compilación remota; no se reinició Docker ni se tocaron los servidores locales de desarrollo.
+
+### Respaldo y uso
+
+Copia posterior **`2559694d-8a79-4f96-9b60-fcfcf1343312`**, completada **2026-10-02T18:08:21.060Z**: 303 migraciones, 13 archivos, fuente exacta cifrada con protección de 31 días e imágenes vigentes. Firma, huella y descifrado del manifiesto comprobados. No se repitió una restauración SQL completa en esta publicación. Evidencia detallada y accesos fuera de Git.
+
+El modo queda **apagado por defecto**. Lo activa quien tenga Gestionar stock desde Inventario → Stock → Modo de inicio. Las nuevas órdenes no controlan ni consumen stock; conservan cantidades, costos y demás requisitos. Las anteriores mantienen su control y apagar el modo no provoca consumo retroactivo. Ver [guía](../../docs/inicio-sin-stock.md). **No revertir a código que ignore las marcas después de emitir OTs en este modo**; evaluar una corrección hacia adelante conservando columnas e historial.
+
+
+## 02/10/2026, 22:00 UTC — Recorridos con permisos por vista (PR #17)
+
+Código de ejecución **`088f92576ceb7bcbb4fbc73c53198c5f92ded19f`**. Rama dependiente del PR #16, sin fusionar la cadena. Primero se comprobó local y staging; después se promovieron a producción las mismas imágenes por digest. Los commits posteriores que registran esta evidencia no cambian el código desplegado.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:95f8b868c6b99b8bcb76d83308bd1b242d9c8f69647b1e7c9790a6d347748899` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:4067b9f5df484360ed938cd98e10177763501ba17110703dfcd141a5c74ca8e8` |
+
+PDF conserva `2fee01704` y su digest `a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`. El copiador conserva imagen y recibe inventario actualizado. Una máquina por servicio, mismos tamaños; builder temporal retirado.
+
+### Cambios y pruebas
+
+- Cotizaciones y OTs aceptan la respuesta sin costos/márgenes. El diseño SVG/DXF se guarda como archivo privado del trabajo, sin requerir modificar el catálogo. Las consultas auxiliares y los controles de gestión respetan el permiso de cada vista.
+- La prueba del navegador encontró además una consulta de receta que aún exigía acceso al catálogo: se sustituyó por una proyección de componentes publicados, sin borradores, historial ni reglas privadas de precios.
+- Dos migraciones aditivas: `20261002160000_diseno_cotizacion` y `20261002160100_diseno_cotizacion_vinculo`. **305 migraciones**, rol de aplicación sin DDL; sin seeds, resets ni cambios de roles reales.
+- 443 pruebas API en 22 suites y 71 de aplicación en 11 archivos, sin contar repeticiones. Matriz de 50 vistas y 124 consultas principales/auxiliares. Chequeo global de tests históricos de API: 142 diagnósticos previos, sin nuevos; no se declara ese chequeo aprobado.
+- Compilaciones remotas completas con tipos. [CI HTTP y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37066078130) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37066077984) del código desplegado aprobados.
+- 79 comprobaciones HTTP tanto en local como en staging con seis perfiles ficticios: administración, vendedor equivalente al reportado, sólo presupuestos, lectura, producción y caja limitada. Cotización/guardado/reapertura, SVG/DXF, recetas publicadas y rechazos de acciones/datos ajenos.
+- Chrome local: cotización simple, SVG, guardado, reapertura y reemplazo por DXF. Chrome staging: SVG de 100 × 80 mm a $1.500, agregar a OT, guardar, recargar y editar especificaciones. Geometría y precio conservados, sin costos visibles ni error de permisos.
+- Datos sintéticos retirados de local y staging; conteos originales recuperados. Producción: formulario y catálogo cargan; sin guardar órdenes, emitir comprobantes ni enviar comunicaciones reales. Se conservaron los conteos de empresas, clientes, cobros, medios y movimientos entre verificaciones; el modo de inicio existente no se modificó.
+- Salud web/API 200; API directa protegida 403 y BFF sin sesión 401. Los servicios locales ajenos al ensayo y Docker permanecieron intactos. Falló la conexión de Fly al terminar de subir la web; se recuperó la imagen ya compilada y se promovió sin reconstruirla.
+
+### Respaldo y límites
+
+Copia posterior **`db5916c9-21b1-442e-b513-2e4aa7a22116`**, completada **2026-10-02T21:59:14.784Z**: 305 migraciones, 13 archivos y fuentes exactas cifradas con protección de 31 días. Firma, huella, descifrado del manifiesto y presencia de las imágenes vigentes comprobados. No se repitió una restauración SQL completa. Evidencia detallada y secretos fuera de Git.
+
+El primer ciclo posterior de staging no completó; se repitió y se verificó el comprobante nuevo indicado arriba. La primera lectura posterior desde la Mac también falló al contactar B2 y pasó al reintentar; no se relajaron controles de seguridad ni se contó el intento fallido como respaldo válido.
+
+Esta cobertura no asegura todas las combinaciones posibles de permisos, planes o rutas industriales. Ver [alcance detallado](../../docs/permisos-recorridos-validacion.md). Para revertir la interfaz, conservar las migraciones y archivos creados; la API debe seguir reconociendo `DISENO_COTIZACION`. No eliminar valores del enum ni diseños para revertir código.
+
+## 02/10/2026 (Argentina) — Tomos PDF y avisos de la OT (PR #18)
+
+Código de ejecución **`e11e431b368353fb12fd52fb6768c2ffbfa661b2`**, dependiente del PR #17. Publicación solicitada por Lucas, primero en staging y después en producción con las mismas imágenes por digest. Sin fusionar la cadena de PR ni cambiar la web comercial.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:bc61b4374bc023f0660554ba52936468e05e93b3db32fbfc940977da7036d6a6` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:5e4c38bf4eb45b2cb4b845e66bf05a48ac02c99384970a612b11c8ec3e6eb971` |
+
+PDF conserva `2fee01704` y su imagen anterior. **305 migraciones, sin cambios de esquema**; una máquina por servicio, mismos tamaños. Fuentes de ejecución cifradas con 31 días de protección y referencias anteriores conservadas para recuperación. No se recalculan cotizaciones históricas.
+
+### Comprobaciones del lote
+
+- 72 pruebas de API y 32 de interfaz/lógica, sin contar repeticiones. [CI de contenedores y tipos](https://github.com/studiocamaleon/gdi/actions/runs/37076522073) y [CI HTTP y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37076521960) aprobados para la revisión exacta publicada. Compilaciones remotas completas; Docker y otros proyectos locales intactos.
+- Ensayo HTTP en staging con una empresa y un operador ficticios, máquina láser, papel y tóner de importes conocidos. Dos PDF de cinco páginas, rangos `1,3,5` y `2`, doble faz, diez juegos. El motor mantiene 40 carillas y 30 hojas; preparación de 10 a 5 minutos, precio de $2.339,10 a $1.505,70. Sueltos conservan dos preparaciones. Vista previa y guardado devuelven el mismo precio.
+- Cotización, creación de borrador, subida privada de ambos originales y reapertura mediante los endpoints normales. Chrome abre **Ver PDF del tomo** desde Archivos de la OT guardada: **6 páginas y 2 reversos en blanco**; originales agrupados y conservados. No se imprimió físicamente ni se emitió una OT real.
+- Chrome: nueva orden sin aviso superior ni widget del Asistente; aviso de inicio visible al abrir Materiales, con estilo Grafo. El modo sólo se activó para la empresa ficticia.
+- Datos, usuario y objetos ficticios retirados de staging; recuentos iniciales recuperados. Evidencia detallada y capturas fuera de Git. No hay datos ni credenciales privados en este registro.
+
+### Uso y reversión
+
+Ver [guía de tomos](../../docs/tomos-pdf-y-avisos.md). Crear el tomo, ordenar originales, indicar rangos y juegos, y pulsar **Ver PDF del tomo**. Los juegos se indican al imprimir: el PDF contiene uno. Papel/color/tamaño distintos pueden requerir preparaciones separadas; no se unifican simple y doble faz en un mismo archivo.
+
+La reversión de código puede usar los digests del registro anterior, conservando los originales y cotizaciones guardadas. Volver a cotizar con la versión anterior recupera su regla de preparación por documento; evitar hacerlo sin evaluar ese cambio de precio. No hace falta revertir migraciones.
+
+### Cierre de la publicación
+
+Salud web/API 200, API directa protegida 403 y BFF sin sesión 401; seis máquinas iniciadas y tamaños conservados. Builder temporal retirado. Copia posterior **`1d96303b-6208-45a0-9237-cc19d4478672`**, completada **2026-10-03T00:01:12.874Z**, con 305 migraciones y 13 archivos: firma, huellas, descifrado de manifiesto, código exacto e imágenes desplegadas comprobados. El copiador terminó el ciclo automático y notificó éxito. No se repitió una restauración SQL completa en esta publicación.
+
+Los intentos automáticos de las 23:01, 23:34, 23:42 y 23:54 UTC fallaron. Hubo además consultas B2 intermitentes que vencieron desde la Mac; no se demostró que todos los intentos tuvieran la misma causa. Una copia aislada a las 23:46 UTC fue verificada antes del despliegue. El ciclo horario de las 00:00 UTC volvió a completar con el servicio normal y el inventario actualizado, después de retirar las fixtures. No se redujeron retención, validación TLS ni controles de origen. Diagnóstico temporal retirado.
+
+
+## 03/10/2026 — Sentry y monitor de Plataforma (PR #20)
+
+Revisión de ejecución **`b030b6ab7a471bf41e55ff6f460a928c4b808b63`**, dependiente del PR #19. Publicación autorizada, comprobada primero en staging y promovida a producción conservando los digests. No se fusionaron PR ni se modificó la web comercial.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:804ae5218e78591c8629317eca1609998232e61c0a998d613ca7fabd0ea4839d` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:0d7ea346a5ee7da29931281f1e0f8f094b31d7f7145c63f246a2c265e8e02d42` |
+
+Gotenberg conserva su imagen `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`. **305 migraciones, ninguna nueva**. Seis máquinas iniciadas, mismos tamaños y controles de salud; web/API 200, API privada directa 403 y BFF sin sesión 401. Constructor temporal retirado, sin reiniciar Docker ni otros proyectos locales.
+
+### Recorrido comprobado
+
+- 36 pruebas enfocadas (28 backend, 8 interfaz), tipos y lint de los cambios. [CI de contenedores y tipos](https://github.com/studiocamaleon/gdi/actions/runs/37096268431), [HTTP y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37096268425) y [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37096268400) aprobados para la revisión exacta.
+- Recepción de eventos ficticios desde API y navegador al pulsar **Probar monitoreo** en el panel. Eventos de transporte desde los contenedores de worker, worker PDF y Next servidor aceptados por Sentry, con servicio, entorno y versión correctos. No se hizo caer un proceso ni se provocó un fallo de una cola real para este ensayo.
+- **Plataforma → Errores del sistema** muestra los grupos de ensayo, filtra entorno/estado/período y los incorpora automáticamente sin recargar. El acceso de lectura de Sentry es únicamente `event:read`; la API proyecta campos permitidos y no expone la credencial. Los ensayos se excluyen por defecto. Si falta el conteo del período, se muestra «—».
+- Sesión personal de Plataforma y MFA obligatorios. Usuario de empresa rechazado en el monitor. En staging se verificó además el recorrido HTTP con un administrador ficticio y MFA; al finalizar se revocaron sus sesiones y permisos, conservando la auditoría. No se crearon accesos de ensayo en producción.
+- Filtrado de datos sensibles e IP en Sentry; sin formularios, conversaciones, archivos, cookies, logs, Replay ni transacciones. Las pruebas locales cubren aislamiento y minimización; la vista recibida y el ensayo del emisor servidor corroboraron los datos técnicos permitidos.
+- Dirección operativa de avisos verificada por el titular y configurada para los dos proyectos. Las reglas de alta prioridad notifican a un miembro explícito, sin depender de asignados sugeridos ni actividad reciente. Se solicitó una notificación de prueba por proyecto; Sentry confirmó «Notification fired!» para API. La recepción en la casilla tras cambiar el destinatario queda pendiente de confirmación del titular; no confundir envío con entrega.
+
+### Copia y reversión
+
+Copia posterior **`5e84a7c3-f258-4cc5-a06a-f475f8bd1cd1`**, completada **2026-10-03T05:05:17.738Z**, con 305 migraciones y 13 archivos. Firma, huellas, descifrado del manifiesto, fuentes exactas cifradas con protección de 31 días e imágenes vigentes comprobados. No se repitió una restauración SQL completa. Evidencias y secretos fuera de Git.
+
+Para desactivar la captura, establecer `SENTRY_ENABLED=false` y reiniciar los servicios afectados. Para revertir el lote completo, conservar la base y usar API/workers `e11e431b3` (digest `sha256:bc61b4374bc023f0660554ba52936468e05e93b3db32fbfc940977da7036d6a6`) y web `061a75873` (digest `sha256:adf8dfd9f5b386b6cea2bd785c4cad2fa4fd465303ab3edbd7a948d49d2d3b9f`). No eliminar datos ni revertir migraciones.
+
+Mapas de código fuente desactivados en esta primera etapa. No equivale a monitoreo completo de disponibilidad, rendimiento, errores absorbidos por integraciones ni a una prueba de caída de producción. Ver [alcance y operación](../../docs/monitoreo-sentry.md).
+
+## 05/10/2026, 21:06 UTC — Cobros delegados y permisos transversales (PR #22)
+
+Revisión de ejecución **`0d0b70509c706c6c33875ef5e8a35890ad03107f`**, dependiente del PR #20. Publicación solicitada por el titular, primero en staging y después en producción con las mismas imágenes por digest. No se fusionaron PR ni se modificó Vercel. Los commits documentales posteriores no cambian la revisión ejecutada.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:b0a3b812577cb52b709b3ce5f286ce6232f6d9d6eaf90b3d7c0b7422f983fd85` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:dd3c8eee47dca7f638d1822d5efb4279143aeee2b70174babccf6b81008a0c69` |
+
+Gotenberg conserva `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`. **305 migraciones, ninguna nueva**; una máquina por servicio, seis iniciadas y mismos tamaños. Salud web/API 200, API privada directa 403 y BFF sin sesión 401. Constructor temporal de esta publicación retirado; Docker y otros proyectos locales intactos.
+
+### Corrección y comprobaciones
+
+- Cobrar desde una OT ya no exige entrar a Administración. Conserva los permisos de consulta del trabajo y del cliente, limita las cuentas a las asignadas y evita consultar deuda general sin autorización. El saldo usa el importe aplicado a la OT, aunque el recibo se reparta.
+- Aprobación de presupuestos, gestión de empleados/comisiones, ejecución desde Estaciones/Colas y acciones de anulación se alinearon con los permisos extra y las vistas correspondientes. La matriz contrasta las 11 opciones actuales de «Aparte de los módulos» con autorización y rechazo en API.
+- Regresión local: 234 pruebas de API y 116 de interfaz; ensayo HTTP con base desechable: 19. Ejecuciones enfocadas posteriores: 43 API y 42 interfaz, con solapamiento respecto de las anteriores. Tras corregir una declaración de tipo faltante, 39 pruebas de interfaz/navegación correctas.
+- Compilaciones completas de backend y web en Fly, **con comprobación de tipos habilitada**. Los trabajos de GitHub de [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37371713733) y [HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37371713729) no consiguieron un ejecutor alojado y se cancelaron. **No se declaran aprobados**. La publicación se comprobó mediante builds remotos y ensayos directos; no se fusionó el PR.
+
+- Antes de publicar se reprodujo el bloqueo del formulario. Después pasaron 20 comprobaciones HTTP/SSR con cobrador y lector ficticios: formulario, dos cuentas permitidas, cobro de prueba, recibo/enlace, saldo e idempotencia. Se rechazaron la tercera cuenta, el actor sin permiso, Tesorería, deuda general, configuración fiscal y anulación.
+- Empresa, usuarios, cobro y demás filas sintéticas retirados por sus identificadores; eliminado también el PDF de ensayo en R2. Sin borrar ni reiniciar los datos persistentes de staging.
+
+### Respaldo
+
+Copia previa `a4561d81-239f-495e-a2e5-5140cf709822`, completada a las **20:01:07.826 UTC**. Copia posterior **`324c2881-933e-4670-ae94-5b03f16ae95e`**, completada **2026-10-05T21:02:16.279Z**, con 305 migraciones y 24 archivos. Firma, huellas y descifrado del manifiesto, revisión exacta e inventario de imágenes comprobados. Fuentes cifradas protegidas durante 31 días; referencias históricas conservadas. **No se repitió una restauración SQL completa**. Evidencia y accesos fuera de Git.
+
+El ciclo automático de las 21:01 UTC registró un fallo antes de actualizar el inventario del copiador; no se determinó su causa. La copia posterior al reinicio completó y fue comprobada. No se redujeron controles ni retención.
+
+### Reversión
+
+Para revertir sólo este lote, conservar la base y usar la revisión anterior `b030b6ab7a471bf41e55ff6f460a928c4b808b63`: API/workers `sha256:804ae5218e78591c8629317eca1609998232e61c0a998d613ca7fabd0ea4839d` y web `sha256:0d7ea346a5ee7da29931281f1e0f8f094b31d7f7145c63f246a2c265e8e02d42`. Esto vuelve a introducir el bloqueo del cobro delegado. No revertir migraciones ni borrar operaciones comerciales.
+
+## 05/10/2026, 22:36 UTC — Operadores habituales/de apoyo y acciones de la OT (PR #23)
+
+Revisión de ejecución **`5837255089303538b7ec9cbe7f20d03c3b4ca5a7`**, dependiente del PR #22. Despliegue solicitado por el titular: staging, comprobación y promoción de las mismas imágenes a producción. Sin fusionar la cadena de PR ni modificar Vercel. Los commits documentales posteriores no cambian la revisión ejecutada.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:5a3b4b141345b67be3d97dd7cc6eca3d19a392ef8a344c933ae775dbd326e92e` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:e6baa8cb022b4d7483b52718411383a9fd6b54f721aeaf6f321a96dbb92fa137` |
+
+Gotenberg conserva `2fee01704` y `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`. Se mantienen las seis máquinas y sus tamaños. Salud web/API 200, API directa privada 403 y BFF sin sesión 401; versión ejecutada y configuración de Sentry comprobadas. Constructor remoto temporal retirado; Docker y los otros proyectos locales intactos.
+
+### Migración y alcance
+
+- **306 migraciones**: aplicada una sola vez `20261005220000_personal_habitual_apoyo`, mediante el migrador separado, sin seeds ni resets. Agrega el modo de personal por estación (habitual por defecto) y la elección de personal en el ítem de OT. Permisos de lectura del rol de ejecución comprobados, sin DDL.
+- Las personas existentes siguen como habituales. Agregar un apoyo a otra estación no cambia su horario ni concede permisos de usuario. No se modificó el personal de las empresas operativas durante las pruebas.
+- Elección previa por paso raíz: revisar disponibilidad, guardar/reabrir y emitir. Validación de nuevo al emitir y rollback si dejó de ser posible. La reasignación posterior no es reemplazada por la elección antigua del borrador.
+- Menús únicos **Imprimir** y **Seguimiento**, conservando condiciones y permisos de documentos, etiqueta, historial, enlace y QR. Componentes/lotes y pasos iniciados mantienen los límites documentados en [la guía](../../docs/asignacion-operadores-ot.md).
+
+### Comprobaciones
+
+- **122 pruebas locales** (85 de motor/ETA/interfaz y 37 de integración con PostgreSQL), tipos completos de API/web y revisión visual local aprobadas previamente.
+- CI del SHA desplegado: [HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37380181309/job/111999845353) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37380180950/job/111999844284), ambos correctos. Compilaciones completas remotas adicionales con tipos habilitados.
+- **24 comprobaciones HTTP/SSR en staging** con empresa y usuarios ficticios: alta de estación habitual/apoyo, revisión, guardar/reabrir/emitir, rechazo sin supervisión y de cotización ajena, operador inválido, rollback por habilitación retirada, transferencia conservada al leer el tablero, reparto automático sin apoyo y ausencia de doble ocupación del habitual.
+- Chrome en staging: desplegables Imprimir y Seguimiento, apertura del QR, configuración de Centro de copiado y opciones Habitual/De apoyo. Se cerró la configuración sin guardar; no se ejecutaron impresiones físicas.
+- Datos y accesos ficticios retirados por sus identificadores; recuentos operativos de staging conservados. Producción recibió únicamente la migración y las imágenes; no se crearon órdenes, cobros, facturas ni comunicaciones de prueba allí.
+
+### Respaldo y reversión
+
+Copia previa `14771b4e-bf05-4f2b-be5a-537d68d719fe`, completada **2026-10-05T22:00:58.721Z**. Copia posterior **`1b0fae1b-7763-4975-922c-c9aa02b25fb3`**, completada **2026-10-05T22:34:18.796Z**, con 306 migraciones y 24 archivos. Firma, huella y descifrado del manifiesto, revisión exacta y referencias de imágenes/fuentes comprobados. Fuentes cifradas y protegidas por 31 días. No se repitió una restauración SQL completa. Evidencias y accesos fuera de Git.
+
+Para revertir este lote, mantener las columnas nuevas y volver a API/workers `sha256:b0a3b812577cb52b709b3ce5f286ce6232f6d9d6eaf90b3d7c0b7422f983fd85` y web `sha256:dd3c8eee47dca7f638d1822d5efb4279143aeee2b70174babccf6b81008a0c69` (`0d0b70509`). No borrar datos ni revertir migraciones. La versión anterior no distingue apoyos y podría incluirlos en el reparto automático: revisar las habilitaciones creadas después del despliegue antes de volver atrás.
+
+
+## 2026-10-06, 12:06 UTC — Avisos de órdenes finalizadas, reintentos y botones (PR #24)
+
+Revisión ejecutada **`8053bcf0ee05c6d8575e967547fc2888b448e690`**, dependiente del PR #23. Publicación solicitada por el titular: staging, validación y promoción de las mismas imágenes a producción. Sin fusionar la cadena de PR ni modificar la web comercial de Vercel. Los commits documentales posteriores no cambian esta revisión de ejecución.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:9b7a956cb647b28440d449f9e61ac24f4413a0ca65ddebb1cba2e798850115a7` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:61b249babbb53792f2f9d9597497bd47c5854fc7fcc45a5805786e5c535603c1` |
+
+**306 migraciones; ninguna nueva.** Se conservan seis máquinas, sus tamaños, el PDF `2fee01704` (`sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`) y la imagen del copiador. Salud web/API 200, API directa privada 403 y BFF sin sesión 401. Revisión de ejecución y Sentry comprobados. Constructor temporal retirado al terminar; Docker y los otros proyectos locales intactos.
+
+### Alcance y comprobaciones
+
+- Finalizar el último paso genera la variante con/sin saldo que corresponda: QR si está habilitado; de lo contrario texto, si está habilitado. Las cuatro variantes comparten deduplicación. QR deja de figurar como pendiente de implementación y continúa siendo optativo.
+- Historial de avisos: reintento de fallos Wati confirmados, previa confirmación del destinatario, misma fila y contador de intentos conservado. Registro de autor, control de versión, permisos y aislamiento. Los estados inciertos requieren su resolución manual habitual.
+- Editar orden, Entregar, Imprimir y Seguimiento comparten componente Grafo y altura de 32 px; se conservan sus menús y acciones.
+- **170 pruebas locales** previamente aprobadas. CI del SHA publicado: [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37387179827/job/112023670720) y [HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37387180140/job/112023432421), ambos correctos. Builds remotos con tipos habilitados; la interrupción de transporte durante la primera subida se resolvió publicando la misma imagen compilada por SSH, sin modificar el código.
+- **35 comprobaciones HTTP/SSR en staging**: finalizar el último paso, las cuatro variantes, saldo parcial correcto, ambas opciones apagadas, reapertura sin duplicación, reintento válido, segundo clic rechazado, versión inválida, usuario sin permiso, otra empresa, anónimo y estado incierto. El ensayo usa cobros/órdenes ficticios y una integración sin credenciales externas; no envió mensajes.
+- Chrome: menús de impresión/seguimiento y QR de una OT existente; historial de avisos y confirmación del reintento sobre una fila ficticia, cancelada sin enviar. Datos y usuarios del ensayo retirados por identificadores, sin limpiar los datos persistentes de staging.
+- Producción: comprobación de lectura sobre una OT existente y de la configuración del canal. No se crearon operaciones comerciales ficticias, no se cambiaron las opciones de avisos y no se reenviaron mensajes históricos. La entrega real por Wati no fue ensayada en este despliegue y conserva las condiciones del proveedor, plantilla, consentimiento y horario.
+
+### Respaldo y reversión
+
+Copia previa **`852d9cbc-7826-4834-ae39-d880dd854f71`**, completada **2026-10-06T11:01:02.529Z**. Copia posterior **`707028a1-7319-475b-aefe-f410c4ec7e2b`**, completada **2026-10-06T12:05:48.482Z**, con 306 migraciones y 24 archivos. Firma, huella y descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes comprobados. Fuentes cifradas protegidas por 31 días. **No se repitió una restauración SQL completa**. Evidencia privada fuera de Git.
+
+Para revertir únicamente el código, conservar la base y volver a `5837255089303538b7ec9cbe7f20d03c3b4ca5a7`: API/workers `sha256:5a3b4b141345b67be3d97dd7cc6eca3d19a392ef8a344c933ae775dbd326e92e` y web `sha256:e6baa8cb022b4d7483b52718411383a9fd6b54f721aeaf6f321a96dbb92fa137`. Esto reintroduce la selección incorrecta de QR y quita el reintento. No borrar avisos ni operaciones y no revertir migraciones.
+## 06/10/2026, 17:30 UTC — Niveles, planchas y descuentos en OT (PR #25)
+
+Revisión ejecutada **`b89000446af1153ea720481c424a5eaad175a8f9`**, dependiente del PR #24. API y ambos workers se actualizaron primero y la web después de completar su compilación remota, con tipos habilitados. No se fusionó la cadena de PR ni se modificó Vercel. Los commits documentales posteriores no cambian la revisión ejecutada.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:006f62ffbbdc6456c37f72859c133f14d02146fcd7d55f4849e5c9e41ed9483f` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:a384f9677a0c2362db3179287f707fdd16ea11f9f75649e7398127dee96e8977` |
+
+**306 migraciones, ninguna nueva.** Se mantienen las seis máquinas, sus tamaños, Gotenberg `2fee01704` y la imagen del copiador. Salud web/API 200, API directa privada 403 y BFF anónimo 401; revisión y configuración de Sentry verificadas en los cuatro servicios actualizados. Rol de aplicación sin DDL comprobado. No se reinició Docker ni se compilaron contenedores en la Mac.
+
+### Alcance y comprobaciones
+
+- Niveles con perfil por máquina para pasos de ruta, opcionales y nodos propios. Conserva elecciones anteriores, rechaza perfiles incompatibles y mantiene tiempos/dotación de los niveles manuales. No reescribe productos existentes al leerlos.
+- El catálogo comercial conserva los márgenes físicos del pliego sin exponer costos. «Papel adhesivo / sticker troquelado» deriva **270,4 × 428,2 mm**: una plancha por pliego, coincidente con el motor.
+- La ficha de una OT permite aplicar, reemplazar o quitar un descuento/cupón, incluso después de finalizar. Conserva pasos, costos y presupuesto original. Rechaza facturación preparada/emitida, total inferior a lo cobrado, permisos insuficientes, versiones desactualizadas y uso indebido de cupones.
+- **320 pruebas dirigidas**: 107 API de niveles/plancha, 72 web, 127 API de descuentos/órdenes/cupones, 10 de integración con PostgreSQL aislado y 4 de interfaz de descuentos. [CI de permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37485067263) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37485066986) aprobados para el SHA ejecutado; compilaciones remotas Fly también aprobadas con tipos habilitados.
+- **26 comprobaciones HTTP/SSR y de resultados en staging**: guardado de niveles y costos distintos según perfil; rechazo de perfil inválido, actor sin permiso y empresa ajena; cotización de tres planchas; descuentos manuales, cupón sin duplicar usos, quitar/reaplicar, invariantes de pasos/presupuesto y controles de cobros, facturación, concurrencia y campos inyectados. Un operador sin acceso a costos ajustó el precio sin recibir esos datos.
+- Chrome: plancha SRA3 de **27,04 × 42,82 cm**, cotización correcta y botón Agregar a la OT habilitado; se cerró sin agregarla. En una OT ficticia finalizada: **$1.210 → $1.089** con 10%, quitar devuelve **$1.210**, cupón del 15% deja **$1.028,50**, conservado después de recargar. Evidencia visual privada guardada.
+- Órdenes, revisiones de precio, cupón, usuarios y empresas propios del ensayo retirados por identificadores. No se alteró la configuración del producto demo ni se enviaron comunicaciones, cobros o facturas de prueba.
+
+### Respaldo y reversión
+
+Copia previa `9b7ba298-f525-4a49-958f-10b0f95b8a58`, completada **2026-10-06T15:01:03.428Z**. Copia posterior **`61d9fb55-663d-44c8-b2ef-5505be893ca1`**, completada **2026-10-06T17:29:16.218Z**, con 306 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta y referencias de imágenes/fuentes comprobados. Fuentes cifradas protegidas durante 31 días. **No se repitió una restauración SQL completa**. Evidencias y accesos fuera de Git. Constructor temporal propio retirado después de promover ambas imágenes al registro de producción.
+
+Para volver al código anterior, mantener la base y usar `8053bcf0ee05c6d8575e967547fc2888b448e690`: backend `sha256:9b7a956cb647b28440d449f9e61ac24f4413a0ca65ddebb1cba2e798850115a7`, web `sha256:61b249babbb53792f2f9d9597497bd47c5854fc7fcc45a5805786e5c535603c1`. Esto elimina el ajuste de descuentos de la ficha y reintroduce la falla de plancha. Las revisiones de precio ya guardadas se conservan; antes de recotizar productos con niveles nuevos, revisar su compatibilidad. No borrar operaciones ni revertir migraciones.
+
+
+## 06/10/2026, 22:03 UTC — OT, permisos del taller y caño estructural (PR #26)
+
+Revisión ejecutada **`a9c2d563dae051d704b18bf71974a7c75b7517e8`**, dependiente del PR #25. Publicación solicitada por el titular para comprobar el lote antes de promoverlo a producción. Compilaciones remotas con tipos habilitados; no se fusionó la cadena de PR ni se modificó Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:c137b072cffaab608d02b9235effee55a9057478e0f3bb5a34b5b5c6fed25bd2` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:53cd120b3a43979fcd5bd11e4bae38d794412c1afefc80da16e3e5400f364608` |
+
+**307 migraciones**: únicamente se agregó `20261006175000_unidad_barra`, sin seeds ni resets. Rol de ejecución sin DDL verificado. Se conservan seis máquinas y sus tamaños, Gotenberg y el copiador. Salud web/API 200, API privada directa 403 y BFF sin sesión 401. Los cuatro servicios actualizados informan la revisión esperada y Sentry configurado.
+
+### Alcance y recorrido comprobado
+
+- Caño estructural: largo comercial en metros, sección exterior en dos ejes y espesor de pared; unidad Barra para compra/stock y metro lineal para consumo. No se cambian automáticamente unidades, precios ni existencias de variantes existentes.
+- Bastidor doble de **2,40 × 1,20 × 0,18 m**, caño **40 × 40 × 1,6 mm** y barras de **6 m**: **17,12 m** de piezas, **3 barras / 18 m comerciales**, material ficticio de $18.000 y precio de venta de $40.800. Cotización, guardado, reapertura, emisión, reserva de tres barras y consumo de tres barras comprobados. Se ensayaron bastidor simple, cantidades, largo decimal, orientación 20 × 30, geometría del visor y compatibilidad del precio antiguo por metro. Piezas mayores que la barra y secciones incompatibles rechazadas.
+- Se detectó en el navegador que la orientación se enviaba como una lista. Se corrigió la elección única en pasos obligatorios y opcionales, con valor inicial y cadena enviada al motor. También se corrigió la compresión de la etiqueta. Reproducción local y 37 pruebas de controles/params aprobadas; 11 reejecutadas tras el ajuste visual, con solapamiento.
+- Vinilo por metro: cotizaciones de 0,5 y 0,25 m; coma decimal y campo vacío en la interfaz. Plancha de papel adhesivo 270,4 × 428,2 mm. Niveles con perfiles de 8 y 4 m²/h y precios distintos; unidades visibles en ambas opciones.
+- OT: copia del teléfono, ZIP de toda la orden y del trabajo abierto, nombres repetidos conservados, subidas incompletas/papelera excluidas y bytes descomprimidos comprobados. Descuento/cupón sólo en edición; cambios de importe sin modificar pasos y rechazo del lector sin autorización.
+- Operario: consulta materiales, actividad operativa y archivos. No aparece «Ver OT» y la URL directa devuelve la pantalla sin acceso. Listado/detalle comercial rechazados por la API; contrato operativo sin importes ni snapshots, aislamiento entre empresas comprobado.
+- **87 comprobaciones HTTP/SSR y de resultados del lote**, más revisión visual de los recorridos. Tras las correcciones se repitieron los rechazos de permisos y ambas orientaciones sobre la revisión final. Las suites locales anteriores están detalladas en `docs/ot-archivos-y-perfiles-20261006.md` y `docs/cotizacion-cantidades-decimales.md`.
+- CI del SHA final: [permisos y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37536433530) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37536433698), ambos aprobados.
+
+Dos empresas, seis usuarios y archivos ficticios retirados por identificadores, incluidos los objetos propios en R2. Se conservaron los recuentos originales: una empresa, dos clientes, siete OT, 31 pasos, seis empleados y cuatro movimientos de fondos. Ningún cobro/factura ni mensaje externo de ensayo. Evidencias privadas fuera de Git.
+
+### Respaldo y reversión
+
+Copia previa **`2e87060f-c885-4bb3-bcc3-760c06f4dbb3`**, completada **2026-10-06T21:01:00.559Z**. Copia posterior **`65bc7b93-49b9-40d4-9c44-01104cb4fe5e`**, completada **2026-10-06T22:02:29.461Z**, con 307 migraciones y 24 archivos. Firma, huella y descifrado del manifiesto, revisión e inventario de imágenes/fuentes comprobados. Fuentes cifradas protegidas 31 días. **No se repitió una restauración SQL completa**.
+
+La revisión anterior `b89000446` usa API/workers `sha256:006f62ffbbdc6456c37f72859c133f14d02146fcd7d55f4849e5c9e41ed9483f` y web `sha256:a384f9677a0c2362db3179287f707fdd16ea11f9f75649e7398127dee96e8977`. No revertir la base ni borrar operaciones. Antes de volver al código anterior, comprobar que no haya datos usando BARRA: esa versión no reconoce la unidad y reintroduce el acceso comercial indebido del operario. Priorizar una corrección hacia adelante.
+
+Constructor remoto temporal de esta publicación retirado después de promover las imágenes; otros recursos de compilación y proyectos locales intactos.
+
+
+## 07/10/2026, 00:36 UTC — Cliente de OT y precio de vinilo por metro (PR #26)
+
+Revisión ejecutada **`53087e81c82d093876132a26f25af0b7533c038c`** (noche del 06/10 en Argentina). Correcciones agrupadas a pedido del titular: local, staging y promoción a producción de las mismas imágenes por digest. No se fusionaron PR ni se modificó Vercel. Los commits documentales posteriores no cambian esta revisión de ejecución.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:c2c7d1367060a051cdad6a24fafa33f7d7271aac8d19445bd82fd920499959e1` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:655b0becaa9507786368ac4aa088fc4d278773ac67821753e99fc56d556cdb93` |
+
+**307 migraciones, ninguna nueva.** Se conservan seis máquinas, sus tamaños, Gotenberg y la imagen del copiador. Salud web/API 200, API privada directa 403 y BFF anónimo 401. Revisión exacta y Sentry configurado comprobados en los cuatro servicios actualizados. Constructor temporal propio retirado al terminar; no se compiló en Docker local ni se alteraron otros proyectos.
+
+### Correcciones y comprobaciones
+
+- El selector inicial contiene 30 clientes. Ahora incorpora el cliente persistido de la OT aunque quede fuera de esa página, combina la búsqueda sin duplicados y conserva su nombre/teléfono en lectura y edición. Copiar no exige editar; si falta el número se muestra «Sin teléfono».
+- Vinilo por metro directo: no gira la franja ni aplica demasía implícita derivada de separación entre piezas. Respeta demasía explícita y márgenes físicos; rechaza un corte en rollo sin layout válido antes de confundir área con metros. Mantiene preparación fija y mínimos comerciales explícitos.
+- **172 pruebas API en ocho suites y 10 web en dos suites**, lint y diff correctos. Compilaciones completas API/web remotas con tipos habilitados. [CI de HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37549718127) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37549718140), aprobados para la revisión ejecutada.
+- **25 comprobaciones HTTP/SSR y de resultados finales en staging**: cliente fuera de página, teléfono completo, guardar otro dato sin perder cliente/importe, lector sin escritura, operario rechazado y aislamiento entre empresas. Cotizaciones reales de 0,25 / 0,5 / 1 / 1,5 / 2 m con consumo 0,27 / 0,52 / 1,02 / 1,52 / 2,02 m y precios crecientes. Once controles API previos se solapan con esta pasada; no se suman como pruebas únicas.
+- Chrome en staging: reproducido el selector vacío antes del cambio; luego conserva el cliente fuera de la primera página, permite buscar y cambiar, actualiza nombre/teléfono en el resumen y recupera el original al cancelar. Guardar otro dato conservó cliente e importe. Copia completa al portapapeles comprobada desde lectura, con aviso «Teléfono copiado». Usuarios, roles, órdenes y empresas ficticios retirados por sus identificadores.
+
+### Respaldo y reversión
+
+Copia previa **`05157525-93f5-407e-bb03-d85e94ff3586`**, completada **2026-10-07T00:01:28.477Z**. Copia posterior **`549df210-77be-48aa-b6a3-cd30c2d3f0bf`**, completada **2026-10-07T00:36:02.642Z**, con 307 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de fuentes/imágenes comprobados. Fuente cifrada protegida durante 31 días. **No se repitió una restauración SQL completa**. Evidencias y accesos privados fuera de Git.
+
+Para volver a `a9c2d563dae051d704b18bf71974a7c75b7517e8`, conservar la base: API/workers `sha256:c137b072cffaab608d02b9235effee55a9057478e0f3bb5a34b5b5c6fed25bd2`, web `sha256:53cd120b3a43979fcd5bd11e4bae38d794412c1afefc80da16e3e5400f364608`. Reintroduce ambos defectos; no borrar datos ni revertir migraciones. Priorizar una corrección hacia adelante.
+
+
+## 07/10/2026, 20:25 UTC — Facturar, flujos recuperables y archivos generales (PR #27)
+
+Revisión ejecutada **`dd71567e38b81e573c0b9cba9a85020484d34624`**, dependiente del PR #26. Publicación y promoción condicionada a las pruebas autorizadas por el titular. Los commits documentales posteriores no cambian la revisión ejecutada. No se fusionó ningún PR ni se modificó Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:f3c54b59a098da9d6c9175b47bd2904f183ea95cecbb1bfbf44c80c445721b0c` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:d2ca245a1dd8dc54afd2d7c1d7ff52376f10c93f9112bba788d136e3575ea3b2` |
+
+**307 migraciones, ninguna nueva.** Seis máquinas, tamaños originales y servicios PDF/copiador conservados. Web/API 200, API privada directa 403 y BFF anónimo 401; revisión exacta y Sentry configurado en los cuatro servicios actualizados. Compilaciones completas remotas con tipos habilitados, sin usar Docker local.
+
+### Recorrido verificado
+
+- **Facturar:** aparece en la cabecera de una OT sin entrar en edición. El usuario de prueba con permiso fiscal, pero sin editar órdenes, pudo abrir el modal con el saldo correcto de $2.420. El lector recibe 403 y no ve la acción; el acceso limitado a comprobantes exige la orden concreta. No se emitieron comprobantes.
+- **Flujos:** desactivar conserva la alternativa, la receta y sus revisiones, la retira de nuevas cotizaciones y permite reactivarla. Se comprobaron la elección de otra preferida, las dos rutas HTTP de desactivación, 403 por permisos y 404 entre empresas. En Chrome se desactivó y recuperó el flujo ficticio sin error de referencia.
+- **Archivos:** dos ítems con un archivo propio cada uno y un archivo general compartido. Ambos contadores muestran dos archivos; los ZIP contienen el general más el arte del propio ítem, nunca el del otro. Nombres y bytes descomprimidos comprobados. Chrome muestra las secciones «Archivos generales» y «Archivos del ítem» con el rol operario, sin enlace «Ver OT» ni acceso comercial por API.
+- **35 comprobaciones HTTP/SSR y de resultados** (8 fiscal, 10 flujos, 17 archivos), más el recorrido visual. Dos empresas, cinco usuarios, una OT y tres objetos R2 ficticios retirados por identificador; sin cobros, facturas ni comunicaciones externas.
+- Verificación local previa: último lote de 161 pruebas API en siete suites, pruebas web de facturación, lectura, permisos/archivos y flujos inactivos, publicación automática con base de ensayo y aislamiento HTTP de productos. Comprobación de tipos de archivos tocados sin errores. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37678423635) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37678423446), aprobados para el SHA ejecutado.
+
+### Respaldo y reversión
+
+Copia previa **`ae63b3f2-a8a3-498b-9da7-9f168e385395`**, completada **2026-10-07T19:00:58.018Z**. Posterior **`0700ec4d-e954-43a4-87f7-53fe05681487`**, completada **2026-10-07T20:23:59.016Z**, con 307 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de imágenes/fuentes verificados. Fuentes cifradas y protegidas 31 días. **No se repitió una restauración SQL completa**. Evidencias y accesos fuera de Git.
+
+Reversión de código a `53087e81c82d093876132a26f25af0b7533c038c`: backend `sha256:c2c7d1367060a051cdad6a24fafa33f7d7271aac8d19445bd82fd920499959e1`, web `sha256:655b0becaa9507786368ac4aa088fc4d278773ac67821753e99fc56d556cdb93`. Conserva la base, pero reintroduce los tres defectos y quita la acción de recuperar flujos. No borrar datos ni revertir migraciones; priorizar una corrección hacia adelante.
+
+### 07/10/2026, 20:41 UTC — Ajuste final del importe fiscal con centavos
+
+En la comprobación posterior se detectó un redondeo anterior a pesos enteros en el modal fiscal. Podía bloquear la emisión si redondeaba por encima del saldo, o dejar centavos pendientes. Se reprodujo en staging con una OT ficticia de $2.420,66: proponía $2.421 y mostraba un exceso de saldo.
+
+**Web final `0e2e013d7e99aa0bc0390cc96ee5e9fe539f1ddd`**, imagen `registry.fly.io/grafoprint-staging-web@sha256:fdeb342f2f47dacd3a7adc886932fc5f3f0411dc52c0af421ded49f40a33bee9`. **Backend sin cambios: `dd71567e3`**, digest de la tabla anterior. El campo y el saldo mostrado conservan dos decimales; 100% y 50% calculan centavos, no pesos enteros.
+
+Tres casos de regresión fallaron antes de corregirlo y pasaron después. **41 pruebas web en cuatro suites**, lint y compilación remota completa aprobados. Ocho comprobaciones fiscales HTTP/SSR repetidas. En Chrome, sin permiso de editar la OT, se verificaron $2.420,66 iniciales, $1.210,33 al 50%, vuelta al total exacto y botón habilitado, sin pulsar emisión. Segunda empresa de ensayo y sus usuarios retirados, sin comprobantes ni cobros. [CI HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37682561420) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37682561432), aprobados para el SHA final.
+
+Salud y tamaños nuevamente comprobados, Sentry activo en web. Copia final **`8e1a35a1-7703-417e-b07a-e7b9b9e25785`**, completada **2026-10-07T20:41:37.499Z**, con 307 migraciones y 24 archivos. Firma, descifrado del manifiesto, ambas fuentes e imágenes finales verificados; sin repetir restauración SQL. Constructor temporal propio retirado después de promover las imágenes finales. Para reversión, usar el conjunto anterior documentado arriba; volver sólo a la primera web de este lote reintroduce el error de centavos.
+
+
+## 08/10/2026, 00:20 UTC — Lote de octubre: operación, precios, clientes e interfaz (PR #37)
+
+Revisión ejecutada **`360037038ac17da69fa71b32c2fe3d864578c678`** en API, ambos workers y web. El PR #37 reúne #28–#36 y depende temporalmente de #27. No se fusionó `main` ni se modificó Vercel. El commit posterior `f89743bcd` sólo actualiza la lista esperada de permisos de una prueba; no cambia código ejecutable.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:f6270c0d57aba902942ea5571e0996c8e5eeb64b8c1af08e0dc67b409a8929ee` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af` |
+
+**309 migraciones.** Se agregaron `20261007190000_notificaciones_lecturas` y `20261007210000_clientes_autoregistro`, sin seeds ni resets. Verificado el rol de ejecución sin DDL y con acceso a las tablas nuevas. Seis máquinas y mismos tamaños; PDF y copiador conservan sus imágenes. Salud web/API 200, API privada directa 403 y BFF anónimo 401; revisión exacta y Sentry configurado en los cuatro servicios actualizados.
+
+### Alcance y verificación
+
+- **Operación compartida:** un integrante habilitado de la estación completa el paso asignado automáticamente a otro; queda registrado el ejecutor real. La asignación manual conserva exclusividad. Fecha de entrega visible en la tabla, con preferencia por la del ítem y alternativa de la OT.
+- **Precio fijo:** incluye pasos obligatorios; los opcionales agregan su costo y el margen configurable del producto. Ensayo con base $10.000, centro $6.000/h y margen 25%: $10.000 sin opcional, $14.000 / $18.000 / $26.000 con 30 / 60 / 120 minutos. Antes de publicar, el mismo caso daba $10.000 en todas las variantes. Comprobados cotización, cambio de minutos y agregado al formulario de OT en Chrome.
+- **Notificaciones:** lectura explícita, autor y fecha; actualización SSE y lectores compartidos. Cada usuario conserva su estado de no leído. Se verificaron dos lectores, aislamiento y un registro histórico sin autor inventado.
+- **Autoregistro de clientes:** formulario móvil con datos fiscales obligatorios, revisión, aprobación y rechazo bajo `crm.aprobar_altas`. Documento duplicado no genera un segundo cliente; teléfono compartido requiere revisión. API y navegador comprobaron envío, aprobación, rechazo, 403 y 404 entre empresas. En 390 × 844 no hay desborde horizontal. No crea usuarios ni emite comprobantes.
+- **Permisos fiscales:** el permiso granular de Facturación/Comprobantes permite crear un borrador, y el lector recibe 403. Proveedor manual y datos ficticios; no se invocó emisión ARCA.
+- **Estados:** las finalizadas aparecen en «Para retirar», aunque la fecha de entrega haya pasado; las pendientes vencidas siguen en «Atrasadas».
+- **Interfaz:** operadores alineados por paso/estación, liquidación con cuerpo desplazable y pie con total/acciones siempre visible, e input de tiempo sin borde/sombra propios duplicados. Se comprobó foco, scroll real del modal y las opciones de personal; no se acreditó el cobro ficticio.
+- **Pruebas:** 157 API en 12 suites, 39 de permisos transversales y 137 web en 12 archivos; guard de CSS y diff correctos. Compilaciones remotas completas con tipos. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37701409659) y [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37701409736) aprobados sobre `f89743bcd`, cuyo único cambio respecto de la imagen es la prueba mencionada.
+- **33 comprobaciones funcionales HTTP/SSE/SSR**, además del recorrido visual. Dos empresas y siete usuarios ficticios retirados por identificador. Conteos finales iguales a los previos: una empresa, dos clientes, siete órdenes, 31 pasos, seis empleados y cuatro movimientos de fondos. Sin comprobantes emitidos ni comunicaciones externas.
+
+### Respaldo y reversión
+
+Copia previa `1d52cf7e-99ba-449a-9b7d-0fbcdc39d8c5`, completada 2026-10-07T23:01:02Z. Copia posterior **`8403b11e-d89f-4675-baf1-009932a7b73a`**, completada **2026-10-08T00:20:10.287Z**, con 309 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión exacta e inventario de fuentes/imágenes verificados. Fuente cifrada protegida durante 31 días. **No se repitió una restauración SQL completa.** Evidencias y accesos fuera de Git.
+
+La primera subida de API al registro falló por transporte y luego por una capa incompleta. Se recuperó la imagen ya construida y se verificó su digest, sin omitir compilación ni tipos. La promoción puede copiar los manifiestos con `docker buildx imagetools create --prefer-index=false`; comprobar el SHA-256 del manifiesto destino antes de desplegar. No necesita compilar ni iniciar Docker local. [Referencia de Docker](https://docs.docker.com/reference/cli/docker/buildx/imagetools/create/).
+
+Reversión de código al conjunto previo: backend `dd71567e3`, imagen `sha256:f3c54b59a098da9d6c9175b47bd2904f183ea95cecbb1bfbf44c80c445721b0c`; web `0e2e013d7`, imagen `sha256:fdeb342f2f47dacd3a7adc886932fc5f3f0411dc52c0af421ded49f40a33bee9`. Conservar las tablas y registros nuevos: las migraciones son aditivas. El código anterior pierde estas mejoras; no borrar datos ni revertir migraciones, y priorizar una corrección hacia adelante.
+
+## Cargos comerciales por zona — 08/10/2026
+
+- [PR #38](https://github.com/studiocamaleon/gdi/pull/38), dependiente de #37. API y ambos workers ejecutan `d0645233b640dee694da09ff7ced50634055e0fb`, imagen `registry.fly.io/grafoprint-staging-api@sha256:aaf0f547ead6509b541488a5f90519f5d6a81339eeb6880833bb340f0362cbcb`. Web conserva `360037038ac17da69fa71b32c2fe3d864578c678` y digest `sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af`; PDF y copiador sin cambios de imagen. Sin migraciones ni cambios de tamaño.
+- El catálogo comercial de cargos conserva zonas, tarifas e importes sugeridos. Mantiene separada la configuración interna de costos y márgenes; al emitir, la API vuelve a consultar el catálogo del tenant y recalcula el importe. La zona ausente o inexistente ahora tiene un mensaje preciso.
+- 226 pruebas API y 34 web locales aprobadas; tipos API y contrato web aprobados. El chequeo web completo excedió 2 GB de heap local, pero la compilación remota completa con tipos aprobó en [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37714233747). También aprobó [HTTP y permisos](https://github.com/studiocamaleon/gdi/actions/runs/37714233676).
+- Ensayo HTTPS/BFF sobre staging: fallo reproducido antes del despliegue; 13 comprobaciones aprobadas después. Vendedor ficticio sin permisos de costos: catálogo y página SSR con zonas/tarifas, acceso al catálogo administrativo rechazado, catálogo de otra empresa aislado, dos presupuestos emitidos con zonas distintas, rechazo de zona ausente/inexistente antes de numerar y OT guardada con el mismo cargo. Se alteró el importe de entrada y el servidor conservó la tarifa autoritativa. Sin correos ni WhatsApp; ambos PDF ficticios comprobados y eliminados de R2. Empresas, usuarios y documentos de ensayo retirados.
+- Seis servicios sanos con tamaños originales, API/web 200, API directa protegida 403 y BFF sin sesión 401. Sentry activo y revisión exacta verificada en API, workers y web. Constructor remoto temporal retirado tras publicar la imagen.
+- Fuente exacta cifrada y custodiada en B2. Copia posterior `d8576f4c-2835-4de9-90d7-497f50379fbc`, completada a las 01:55:06 UTC: firma, descifrado del manifiesto, 309 migraciones, 24 archivos, nueva imagen backend y ambas revisiones fuente verificados. No se repitió la restauración SQL.
+
+
+## 08/10/2026, 12:38 UTC — Borradores y cargos de órdenes y presupuestos (PR #39)
+
+Revisión ejecutada **`139ce05aba5e549973225e80e0b0c3ecc8433562`** en API, ambos workers y web. El [PR #39](https://github.com/studiocamaleon/gdi/pull/39) depende temporalmente de #38; no se fusionó la cadena ni se modificó Vercel. Los commits documentales posteriores no cambian las imágenes.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:ba08b41d5412f01c8aae5276038f8e4aecaac9dcd49c883ce6b739a73e8478d9` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:4a79710ab2591b081c8927663fdb51848f6ee131228b6c6169d89234899ff01a` |
+
+**309 migraciones, ninguna nueva.** Seis máquinas y tamaños originales; PDF y copiador conservan sus imágenes. Salud web/API 200, API privada directa 403 y BFF anónimo 401. Revisión exacta y Sentry configurado en los cuatro servicios actualizados. Compilaciones completas remotas con tipos habilitados.
+
+### Recorrido comprobado
+
+- Dos borradores de OT no incrementan el contador y muestran «Borrador». Emitir uno asigna `OT-2026-0001`; repetir la emisión se rechaza sin consumir otro número. Los borradores históricos numerados conservan su número.
+- El rol que sólo gestiona presupuestos puede guardar uno en borrador, sin crear OT, fecha de emisión, enlace público ni avisos externos. En Chrome se guardó otro presupuesto y se comprobó su persistencia con los mismos controles.
+- Agregar y quitar cargos en una OT existente funciona en borrador, pendiente, producción, finalizada y entregada. Para ensayar los estados se modificó únicamente el registro ficticio; no se ejecutaron flujos de entrega ni comunicaciones externas. El servidor calcula la tarifa por zona: un cargo neto de $1.500 más IVA de $315 lleva el total de $12.100 a $13.915, aunque el cliente envíe un importe distinto.
+- Rechazos comprobados: versión desactualizada 409, lector 403, otra empresa 404, orden facturada/cancelada y reducción por debajo de cobros 409. Las pruebas locales cubren también comprobantes en preparación y cargos históricos sin detalle.
+- Chrome: «Editar orden» → «Agregar cargo» → zona → «Guardar cambios»; el cargo queda persistido y vuelve la vista de lectura. En creación de presupuesto, «Guardar borrador» abre el detalle en estado Borrador sin enviarlo. Comprobación posterior de base: número OT sin consumo adicional y cero correos/WhatsApp.
+- **41 comprobaciones HTTP/SSR y de resultados**, más el recorrido visual y una comprobación compuesta de persistencia. Se retiraron por identificador las dos empresas y cuatro usuarios ficticios y sus dependencias. No se crearon archivos R2.
+- **323 pruebas locales:** 267 API y 56 web. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/37718223090): 1.135 pruebas de API en 73 suites. [CI de contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37718223002): tipos API/web, imágenes PDF/respaldo, migraciones efímeras, arranque y login directo/BFF aprobados sobre la revisión ejecutada.
+
+### Incidencia previa detectada
+
+Un producto con `diseno_grafico` obligatorio exige completar un brief al agregarlo, pero el formulario sólo se monta dentro de los opcionales. Puede bloquear «Agregar» sin mostrar cómo resolverlo. `agregar-producto-sheet.tsx` es idéntico entre la base del PR y la revisión publicada: no es una regresión de este lote. Se reprodujo con datos ficticios y quedó pendiente fuera del alcance del PR listo. Para completar el ensayo de borradores se cambió exclusivamente el paso del producto ficticio a trabajo manual. Evidencia visual privada; no se alteraron productos reales para sortearlo.
+
+### Respaldo y reversión
+
+Copia previa **`737baa16-b80d-4533-98ff-3f24aeddaf36`**, completada **2026-10-08T12:00:58.555Z**. Posterior **`dbec96d2-6a32-41ed-8b28-d9c556a715ae`**, completada **2026-10-08T12:37:20.371Z**, con 309 migraciones y 24 archivos. Firma, huella, descifrado del manifiesto, revisión e inventario de imágenes/fuentes comprobados. Fuente exacta cifrada y protegida durante 31 días. **No se repitió una restauración SQL completa.** Evidencias y accesos fuera de Git.
+
+Constructor remoto propio retirado al terminar la promoción. No se compiló en Docker local ni se cambiaron tamaños. Reversión de código disponible: API/workers `d0645233b`, imagen `sha256:aaf0f547ead6509b541488a5f90519f5d6a81339eeb6880833bb340f0362cbcb`; web `360037038`, imagen `sha256:d37cbae51058e88281e9a5a8bef3195f7da1623787929278d2613f1a90e8b7af`. **Los nuevos borradores guardan una referencia interna `BORRADOR-…` y el código anterior no sabe asignarles número al emitir:** priorizar corrección hacia adelante; si se revierte, conservar la base y bloquear la emisión de esos borradores hasta resolver su compatibilidad. No renumerar históricos, ejecutar seeds ni restaurar encima de la base activa.
+
+
+## 08/10/2026, 17:44 UTC — Lote comercial, producción y entrega de QR (PR #47)
+
+API y ambos workers ejecutan **`37917a28cad39349d09738818ac94179165b7433`**; web **`ead4447d594d525655f90aaf3a758e520f113cd6`**. La diferencia es únicamente el dato de vendedor de un fixture frontend. El [PR #47](https://github.com/studiocamaleon/gdi/pull/47) reúne #40–#46 y la corrección de Wati, con dependencia temporal de #39; permanece sin fusionar. No se modificó `main` ni Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:fc7449a7f2a7bada65822ef904dcd4c447dc77df5ceec3f165ea0de6b4e445a8` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:4025c88c130d97f5bff6ff2548ad55c06c900bf6762330cf22fb38d9b7dfb557` |
+
+**311 migraciones.** Se aplicaron `20261008150000_presupuestos_versiones` y `20261008190000_wati_entrega_confirmada`, sin seeds ni resets. Rol de ejecución sin DDL y acceso al esquema nuevo comprobados. Seis servicios conservan tamaño; PDF y copiador conservan imagen. Salud API/web 200, acceso directo protegido 403, BFF anónimo 401, revisión exacta y Sentry configurado comprobados.
+
+### Cambios y pruebas
+
+- Descarte de borradores de OT y presupuesto; versiones de presupuestos aún no aprobados, con número e historial conservados. La versión anterior deja de aceptar acciones; presupuestos aprobados no admiten nuevas versiones.
+- Filtros opcionales de facturación para cobro completo sin facturar y fecha de emisión. Factura de una OT detallada por ítems y cargos; opción de resumen por orden para agrupadas y detalle completo seleccionable. Las pruebas fiscales usaron datos ficticios; no se emitió ningún comprobante real de ensayo.
+- Emisión de presupuesto con guardado y redirección sin `beforeunload`; búsqueda de clientes sin acentos, foco inmediato y resultados de productos priorizados por uso comercial válido. Solicitudes de autorregistro generan aviso interno a quienes pueden revisarlas.
+- Pasos del ítem ordenados por precedencia del flujo. Desde cualquier ítem de una OT finalizada/entregada, el operario puede recuperar la etiqueta; se conserva la prohibición de leer la ficha comercial y sus importes.
+- QR Wati con imagen variable `qr_url`, plantillas `_v2` y API v2. Aceptación del proveedor separada de envío/entrega/lectura/fallo; consulta periódica sin emitir ni reintentar mensajes. Dos ensayos autorizados al titular, con y sin saldo ficticio: proveedor confirmó entrega; titular confirmó QR visible. [Detalle](../../docs/wati-qr-entrega.md).
+- Local: 325 suites / 2.412 casos web aprobados, más cuatro casos nuevos de estados de entrega (suite final 13/13); etiqueta final 10/10. API: 316 casos del lote correctos entre ejecuciones y fixture aislado de planes 36/36. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37814053855) y [CI contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/37814054157) aprobados en la revisión final.
+- Staging: 41 comprobaciones HTTPS/BFF/resultados base más 29 del lote. Incluyen permisos, aislamiento, conflictos, importes, versiones, descarte, filtros, acentos, frecuencia, aviso interno y etiqueta PDF con operario sin OT.
+- Chrome en staging: foco real y búsqueda «Jose» → «José»; producto agregado con rol comercial limitado; presupuesto emitido y redirigido sin cartel, persistencia comprobada y ningún envío externo. Operario: Pre-prensa → Impresión → Corte, etiqueta abierta, PDF descargado y reabierto desde el ítem, sin enlace a la OT ni precios. No se ensayó impresión física: staging carece de certificado QZ del servidor; la descarga funciona. La espera automática de descarga perdió la conexión del navegador, pero su historial confirmó el archivo y se comprobó la cabecera PDF del archivo guardado.
+- Se retiraron dos empresas, seis usuarios y tres PDF sintéticos por identificadores y claves exactos. Staging vuelve a una empresa, dos clientes, siete OT, 31 pasos y 24 archivos.
+
+### Recuperación y límites
+
+Antes de publicar se restauraron copias en bases locales temporales aisladas, con tareas externas apagadas: staging con 309 migraciones, 24 archivos de huella idéntica, una clave MFA y una integración descifradas; producción con 309 migraciones, 72 archivos, dos claves MFA y una integración descifradas. Las dos migraciones nuevas se ensayaron también sobre esos clones; se eliminaron al terminar. No se arrancó la aplicación restaurada ni se probó un cambio completo a infraestructura cloud de reemplazo.
+
+Copia previa **`ce2e9a0a-9ee3-434c-aa31-a0814d6194da`**, completada **2026-10-08T17:00:58.375Z**. Posterior **`24c5fd94-98ab-498e-bfba-e7ba1f4ff5c5`**, completada **2026-10-08T17:41:42.813Z**, con 311 migraciones y 24 archivos. Firma y huella, descifrado del manifiesto, imágenes exactas y ambas revisiones fuente verificadas. El respaldo posterior no se restauró de nuevo. Fuentes cifradas y protegidas bajo custodia privada. El primer sondeo posterior aún encontró la copia anterior; se verificó la nueva al completarse.
+
+El constructor remoto propio `fly-builder-lively-sun-8459` fue eliminado. Sin builds de producción en la Mac ni cambios en Docker u otros proyectos. La autenticación temporal del registro expiró durante la promoción: se renovó sin ampliar permisos y se verificaron los digests idénticos.
+
+**Reversión:** la migración de versiones admite varias filas con el mismo número de presupuesto. El backend previo `139ce05ab` asume una sola: no restaurar su imagen sin revisar compatibilidad y bloquear las operaciones afectadas. Conservar historial y migraciones; priorizar corrección hacia adelante. Nunca restaurar encima de la única base activa. El problema previo del brief de diseño obligatorio sigue registrado por separado; este lote no lo corrige.
+
+
+## 08/10/2026, 21:13 UTC — Facturación durable, cargos y consulta fiscal (PR #48)
+
+API, ambos workers y web ejecutan **`f44aab7803487ed8f285d89b1ab508b0f37c6646`**. El [PR #48](https://github.com/studiocamaleon/gdi/pull/48) depende de #47; ambos siguen sin fusionar. No se modificó `main` ni se publicó la web comercial de Vercel.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:7eb79bc7fc280a39eb7730b80f17f7b98ca36b2f97d17ee7c76f45fd3a9641ef` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:aba8644ee0fc64c0607f1cf46165b795f3f8f43fadb8d46e158201d1a16a777e` |
+
+**312 migraciones.** Se agregó `20261008210000_facturacion_lotes_durables`, con tablas, índices y restricciones nuevos; sin seeds, resets ni cambios de datos comerciales existentes. Rol de aplicación con acceso al esquema nuevo y sin DDL comprobado. Seis máquinas, tamaños conservados y salud correcta. API/web 200, acceso directo privado 403 y BFF anónimo 401. Revisión y Sentry habilitado verificados en los cuatro servicios actualizados; sin incidencias de esta revisión en la consulta posterior. El único error visible en la muestra de logs web era un `aborted` anterior, de las 00:43 UTC.
+
+### Comportamiento y pruebas
+
+- El lote devuelve 202 sin esperar ARCA/PDF/avisos. PostgreSQL conserva la solicitud e idempotencia; el worker general existente procesa y recupera trabajo mediante reservas temporales. No se agregó un worker ni se aumentaron recursos. Una respuesta fiscal incierta se consulta antes de continuar; no habilita reenviar automáticamente el mismo comprobante.
+- La web muestra «Mis lotes de facturación», avance por factura y resultado de los avisos. La campanita avisa sólo al iniciador al finalizar, incluyendo observaciones; una aceptación del proveedor de mensajes no se cuenta como entrega confirmada. Se corrigió el acceso a la bandeja personal sin exigir Panel, manteniendo restringidos sus eventos de negocio y las notificaciones ajenas.
+- Los cargos aparecen como renglones en el presupuesto público, PDF y vista previa del correo. Ejemplo ficticio comprobado: trabajo $12.100, viático $1.815 y total $13.915. PDF real descargado, texto comprobado y página renderizada e inspeccionada; correo HTML comprobado sin enviarlo.
+- Descartar un borrador lo archiva fuera del listado habitual y lo conserva en «Descartados». Se verificó el mensaje y su persistencia; no elimina el historial.
+- «Consultar resultado» muestra espera, actualiza el comprobante al recibir la respuesta y deja visible el resultado o error. Chrome recuperó un comprobante ficticio manual preparado exclusivamente para ese ensayo; una segunda consulta no generó otra emisión. El proveedor manual no obtiene CAE de ARCA: el estado final «Sin CAE» del fixture es esperado. No se emitieron comprobantes fiscales reales ni se enviaron mensajes externos en staging.
+- **38 comprobaciones HTTPS/BFF y de resultados del backend**, más presupuesto público, comprobaciones finales de bandeja/aislamiento, consulta repetida y recorrido Chrome. Dos lotes ficticios generaron tres facturas manuales y PDF; los envíos quedaron omitidos explícitamente por falta de CAE. Aceptación del lote en **266 ms** y salud/consulta de otro usuario durante su ejecución en **298 ms**. Muestra de ensayo, no prueba de carga ni garantía para picos reales.
+- Validación final local: 45 casos API y 19 web, además de las suites del lote ejecutadas previamente. Auditoría de ejecución de los siete proyectos sin hallazgos y cuatro reproducciones de dependencias con rechazo corregido. [CI permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37841379429), [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37841379184) y [CI dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37841379230) aprobados sobre la revisión final.
+
+Se retiraron por identificadores y claves exactos las dos empresas, siete usuarios y siete archivos ficticios. Base final: una empresa, dos clientes, siete OT, 31 pasos, seis empleados y 24 archivos. No se copiaron credenciales de staging a la configuración local ni se habilitaron tareas programadas locales.
+
+### Recuperación y alcance
+
+Copia previa `77397974-7760-4922-88e7-29b96784e6d0`, completada **2026-10-08T20:01:01.365Z**. Posterior `5fafea5d-e321-4ab0-8562-313f48fc0beb`, completada **2026-10-08T21:12:38.276Z**, con 312 migraciones y 24 archivos. Firma válida, manifiesto descifrado, revisión y digests exactos comprobados; fuente cifrada bajo custodia privada durante 31 días. **No se repitió una restauración SQL completa**; la restauración aislada anterior sigue registrada arriba. El primer sondeo posterior encontró aún la copia previa; se comprobó la nueva al terminar.
+
+Las compilaciones completas se hicieron en remoto. Una conexión al constructor Fly se interrumpió; el reintento terminó correctamente con tipos habilitados. Se retiró únicamente el constructor propio `fly-builder-proud-meadow-7554`. Docker local y otros proyectos conservados.
+
+Reversión de código: imágenes anteriores registradas en el apartado de PR #47. Conservar las tablas nuevas y los lotes existentes; el código anterior no procesa esa cola ni muestra su avance y vuelve al flujo síncrono. Detener nuevas solicitudes y resolver los lotes en curso antes de una reversión operativa. Priorizar corrección hacia adelante; no borrar registros ni restaurar encima de la única base activa.
+
+
+## 2026-10-08, 21:36 UTC — Comparación exacta del saldo fiscal
+
+API y ambos workers actualizados a **`7ff929fd7ab73d61d78d8725a3f2693ffdae4462`**, imagen `registry.fly.io/grafoprint-staging-api@sha256:047249efdfcecff8926509d70f236c87eaedc4aa7d8d25aad3c6738bd57cbe97`. La web conserva `f44aab780` y su imagen anterior. Sin migraciones ni cambios de recursos.
+
+Se reprodujo que un importe `number` enviado como float8 podía quedar apenas por encima del saldo NUMERIC y hacer fallar el filtro `saldoPendiente >= monto`, aun con centavos iguales. La recuperación fiscal revertía su transacción al no poder imputar un cobro previo. Se usan `Prisma.Decimal` exactos para comparar y descontar, conservando la actualización condicional contra concurrencia. Se cubren cobros de OT y cobros generales del cliente.
+
+- Local: dos regresiones fallaron antes; **37 pruebas en dos suites** aprobaron después, incluidos matching, recuperación fiscal y consulta repetida.
+- HTTPS/BFF en staging: dos comprobantes ficticios manuales, cada uno con saldo e importe iguales y centavos. Antes quedaron por verificar; después quedaron emitidos, con saldo cero, una emisión, una imputación y un PDF por comprobante. Repetir la consulta no duplicó la emisión ni la imputación. Avisos externos cero.
+- Se retiraron por identificadores exactos las dos empresas, siete usuarios y dos archivos generados; no se tocaron datos existentes.
+- Seis máquinas saludables, tamaños conservados, API/web 200, acceso privado directo 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados por servicio; cero incidencias de esta revisión en staging.
+- [CI permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37846635083), [CI dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37846635030) y [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37846635084) aprobados.
+
+Fuente cifrada custodiada por 31 días e inventario actualizado. Copia posterior `85838584-71a8-45f8-9d15-81d52f506e90`, completada **2026-10-08T21:35:20.747Z**: 312 migraciones, 24 archivos, fuente y digest nuevos comprobados mediante firma y descifrado del manifiesto. El primer sondeo encontró aún la copia anterior; se verificó la nueva al terminar. **No se repitió restauración SQL.** Reversión disponible al digest API `7eb79bc7fc280a39eb7730b80f17f7b98ca36b2f97d17ee7c76f45fd3a9641ef`, que reintroduce este fallo decimal. Las evidencias privadas permanecen fuera de Git.
+
+
+## 2026-10-08, 21:48 UTC — Alcance del ensayo manual y control de configuración
+
+El incidente del primer lote fiscal real mostró una omisión que el proveedor manual no cubría: la API tenía la credencial del proveedor fiscal y el worker no. Se agregó `deploy/verificar-worker-fiscal.mjs`, con cinco pruebas que cubren token ausente/distinto, cifrado incompatible, ambiente incorrecto y el alcance explícito del modo manual. Las pruebas se incorporaron al CI de contenedores; el script se ejecuta contra Fly antes de habilitar facturación automática. No depende de secretos cloud en CI.
+
+Staging comprobado con `--permitir-manual`: API/worker en `dev`, sin proveedor automático configurado, salida `modo: manual, arcaValidada: false`. No se copiaron credenciales de producción ni se cambió staging. Las verificaciones manuales previas siguen siendo válidas para lógica de lotes, permisos, PDF y UI, **no como prueba de la integración fiscal efectiva del worker en producción**.
+
+## 2026-10-08, 23:09 UTC — Autoregistro, teléfonos e historial de lotes (PR #49)
+
+Código `00511a1e1ed932fc23112b7e75ad4583809337ce`. API y workers: `sha256:0830c8a90f925fd36bcc6b7d615538f38b449c7443db213a0a2c6da022cc681a`; web: `sha256:7e351d75af3987132d995aa099a51d9a16339ce5ca867c329c3a370af760145f`. Sin migraciones nuevas: 312 aplicadas. Recursos conservados y seis máquinas saludables; revisión y Sentry habilitado comprobados por servicio, sin incidencias nuevas de esta revisión.
+
+Autoregistro público con selector de país, país inicial del tenant, normalización al pegar y validación compartida con API. Chrome comprobó Uruguay por defecto, cambio a Argentina al pegar un número internacional, rechazo de prefijo repetido y solicitud ficticia persistida. La aprobación guardó código y número separados. El alcance fiscal argentino anterior del formulario se conserva.
+
+Facturación oculta lotes terminados; historial separado con páginas de 20, detalle y enlaces desde campanita y enlaces antiguos. Chrome verificó navegación y diseño. El recorrido HTTPS/BFF completó 38 comprobaciones de regresión, 11 de teléfonos/historial, cinco de autoregistro y una de persistencia desde navegador. Dos lotes emitieron tres facturas manuales con PDF; avisos omitidos por falta de CAE. Aceptación en 187 ms y consulta de otro usuario durante el lote en 285 ms: ensayo funcional, no prueba de carga. Preflight fiscal manual con `arcaValidada: false`.
+
+Local: 63 casos API, 11 de interfaz, tipos, lint y formato aprobados. CI sobre esta revisión: [permisos](https://github.com/studiocamaleon/gdi/actions/runs/37854136719), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37854136823), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/37854136887). Compilación remota y constructor propio retirado.
+
+Retirados por identificadores exactos dos tenants, siete usuarios y cuatro archivos ficticios; base original conservada y 24 archivos. Fuente cifrada custodiada por 31 días. Copia previa `82d29a0a-8df8-4050-8c05-ec13c8531acf` (22:01:07.990Z); posterior `1497d17d-2924-4194-834e-410aefa6001d` (23:08:37.567Z), con firma, manifiesto, fuentes, digests, 312 migraciones y 24 archivos verificados. El primer intento posterior falló; el reintento pasó, sin causa confirmada del fallo inicial. No se repitió restauración SQL.
+
+
+## 2026-10-09, 00:59 UTC — Paginación de Facturación y Comprobantes (PR #50)
+
+Backend `cdeab2cf9a4611d1882adca64a0b6f897169a140` y web `a2999b3337d670e8572b033476f6c600aa97addb` (aclaración final del mensaje de selección), [PR #50](https://github.com/studiocamaleon/gdi/pull/50), dependiente de #49, sin fusionar. API y ambos workers: `sha256:b44b68c55b72254ace7bdcd21556f9e020cb91771da7ce7b2c0d18eb0d7fbada`; web: `sha256:42af339be2249afa3208db43fa6dd5261dcc9ff89ca87e347dcdd2c231b4f079`. Facturación y Comprobantes consultan páginas reales de 25, con búsqueda y filtros en SQL antes del límite. Indicadores globales sobre el filtro completo. Selección de hasta 100 OT entre páginas, reiniciada al buscar o aplicar filtros; navegación con estado de carga. Contratos de arrays anteriores conservados para otros consumidores.
+
+Local: **35 casos API y 15 de interfaz**, tipos, lint dirigido, formato y guard de CSS aprobados. CI exacto: [permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37864988013) y [contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37864987949) aprobados. Sin nuevas dependencias ni migraciones: 312 aplicadas. Recursos de los servicios conservados; PDF y copiador conservan sus imágenes.
+
+Staging: **41 comprobaciones HTTPS/BFF** con 502 OT y 202 comprobantes ficticios, recorriendo todas las páginas sin omisiones ni duplicados; búsquedas fuera de los límites antiguos, número completo, aislamiento, filtros y rechazos de parámetros inválidos. Chrome verificó selección entre páginas, búsqueda que vuelve a página uno y limpia selección, navegación y búsqueda histórica de Comprobantes. Se retiraron únicamente los dos tenants y dos usuarios del ensayo, sin archivos generados ni emisión o avisos externos. Base original conservada.
+
+Comparación funcional de cuatro GET: OT 172501 → 8718 bytes (500 → 25 filas); Comprobantes 113697 → 14346 bytes (200 → 25). No constituye una prueba de carga ni garantiza latencias. Preflight fiscal explícitamente manual, `arcaValidada: false`.
+
+La primera imagen web compiló pero no terminó su subida: el constructor remoto sufrió cortes y luego Fly informó host inaccesible. Un constructor remoto nuevo completó la compilación con tipos y publicación. La aclaración final del mensaje de selección requirió otra web; su primer envío de capas falló y el reintento con la caché completa y sin fallback HTTPS publicó la imagen correcta, sin recompilar. Se retiraron los recursos temporales propios; Docker local y los servicios de producción no se reiniciaron para compilar.
+
+Fuente exacta cifrada y retenida por 31 días; inventario del copiador actualizado. Copia previa `1497d17d-2924-4194-834e-410aefa6001d` (2026-10-08T23:08:37.567Z); posterior `369c3bd4-caa6-4826-912e-9ffc9f7ef627` (2026-10-09T00:54:42.511Z), con firma, descifrado del manifiesto, fuentes, digests, 312 migraciones y 24 archivos comprobados. **No se repitió restauración SQL.** Los primeros sondeos todavía encontraron la copia anterior; se comprobó la nueva al completar. Evidencia privada fuera de Git.
+
+Reversión de código: API/ambos workers a `sha256:0830c8a90f925fd36bcc6b7d615538f38b449c7443db213a0a2c6da022cc681a`, web a `sha256:7e351d75af3987132d995aa099a51d9a16339ce5ca867c329c3a370af760145f`. Sin reversión de esquema; restablecería los límites anteriores. Antes de revertir, comprobar lotes en curso y actualizar también el inventario de recuperación.
+
+
+## 2026-10-09, 01:31 UTC — IVA congelado y redondeo comercial (PR #51)
+
+- Versión backend `afd1148ea09338c31a3f0d01b7b1e162f0b67313`, imagen `sha256:b8c76956f068ee35e73fc06302c80c71a5381d397ed218999b8a330ba339ddad` en API, worker principal y worker PDF. Web conserva `a2999b3337d670e8572b033476f6c600aa97addb`. PR #51 depende temporalmente de #50; no se fusionó la cadena ni se modificó la web comercial.
+- Se elimina la comparación con tolerancia fija para una alícuota válida congelada en la cotización: el pricing comercial redondea por unidad y acumula diferencias en tiradas grandes o precios enteros. La base fiscal se obtiene del bruto pactado y conserva el total. Tasas inválidas o varios impuestos externos se rechazan; sólo las órdenes históricas sin alícuota usan inferencia por importes.
+- Regresión reproducida antes de corregir; 52 pruebas locales aprobadas y compilación Nest correcta. En la imagen desplegada, API y worker pasaron 33 comprobaciones cada uno con datos ficticios: A/B, detalle, resumen, parciales, redondeos y rechazo de tasas inválidas. No se emitieron comprobantes ni se enviaron avisos como parte del ensayo.
+- CI de la versión: contenedores y permisos/separación de empresas aprobados. Seis máquinas iniciadas, tamaños conservados y HTTPS/salud/accesos comprobados. Sin nuevas migraciones: 312 aplicadas.
+- Respaldo posterior `8fa44166-6f8a-4b4d-92e6-0162a782207e`, terminado `2026-10-09T01:28:37.465Z`: firma y descifrado del manifiesto comprobados, 312 migraciones, 24 archivos y fuentes/imágenes exactas incluidas. Fuente nueva cifrada y custodiada por 31 días. No se repitió la restauración SQL aislada en esta publicación.
+- Los errores de lotes existentes conservan su historial; este despliegue no reintenta las emisiones fallidas ni vuelve a enviar las facturas autorizadas. Los avisos programados mantienen su ventana horaria.
+
+Nota operativa de esta publicación: el primer respaldo automático posterior no terminó. Un reintento manual con la misma configuración finalizó y su firma/manifiesto se comprobaron. El diagnóstico del reintento no produjo error; la causa del fallo inicial no quedó confirmada. El respaldo automático posterior de producción sí terminó correctamente.

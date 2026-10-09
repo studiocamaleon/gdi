@@ -13,6 +13,8 @@ export type EstructuraBastidor = {
   profundidadM: number;
   /** Lado del caño del despiece; ausente en snapshots viejos (40×40). */
   perfilLadoM?: number;
+  perfilProfundidadM?: number;
+  barras?: { cantidad: number; largoM: number; metrosUtiles: number; metrosComerciales: number; sobranteM: number };
   sepRefuerzoVcm: number;
   sepRefuerzoHcm: number;
   refuerzosV: number;

@@ -1,4 +1,4 @@
-import { Helper } from 'dxf';
+import { crearHelperDxfSeguro } from '../../motor-universal/geometria-vectorial/dxf-seguro';
 import type { FabricacionVectorial } from '../../motor-universal/geometria-vectorial/fabricacion-vectorial';
 import { analizarSvgFabricacion } from '../../motor-universal/geometria-vectorial/svg-parser';
 
@@ -143,7 +143,7 @@ export function inspeccionarVector(
       : null;
   if (!formato) throw new Error('Elegí un archivo DXF o SVG.');
   if (formato === 'DXF') {
-    const helper = new Helper(contenido);
+    const helper = crearHelperDxfSeguro(contenido);
     const unidades: Record<number, string> = {
       1: 'pulgadas',
       2: 'pies',

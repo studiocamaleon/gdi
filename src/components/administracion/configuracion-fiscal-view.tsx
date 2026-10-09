@@ -8,7 +8,7 @@ import {
 import * as React from "react";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import {
   BuildingIcon,
@@ -71,12 +71,14 @@ function estadoInicial(config: ConfiguracionFiscal | null): FormState {
 
 export function ConfiguracionFiscalView({
   initialConfig,
+  ambienteArca,
 }: {
   initialConfig: ConfiguracionFiscal | null;
+  ambienteArca: "dev" | "prod" | null;
 }) {
   const router = useRouter();
   const fiscalIncluida = useCapacidad("fiscal_argentina");
-  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeGestionar = usePuede("configuracion.fiscal.gestionar");
   const puedeGestionarFiscal = fiscalIncluida && puedeGestionar;
   const [form, setForm] = React.useState<FormState>(() =>
     estadoInicial(initialConfig),
@@ -562,26 +564,29 @@ export function ConfiguracionFiscalView({
                   </option>
                 </select>
               </div>
-              <div className="arc-auto-note" style={{ marginBottom: 0 }}>
+              <Alert>
                 <BuildingIcon />
-                {form.proveedorFacturacion === "afipsdk" ? (
-                  <span>
-                    Al emitir, Grafo le pide el número y el CAE a ARCA. En este
-                    entorno de desarrollo va contra{" "}
-                    <b style={{ color: "var(--ink-2)" }}>homologación</b>: los
-                    comprobantes son reales en formato pero{" "}
-                    <b style={{ color: "var(--signal)" }}>
-                      no tienen validez fiscal
-                    </b>
-                    .
-                  </span>
-                ) : (
-                  <span>
-                    El comprobante se numera con nuestro contador y queda sin
-                    CAE; lo cargás a mano desde el detalle.
-                  </span>
-                )}
-              </div>
+                <AlertTitle>
+                  {form.proveedorFacturacion !== "afipsdk"
+                    ? "Facturación manual"
+                    : ambienteArca === "prod"
+                      ? "ARCA · Producción"
+                      : ambienteArca === "dev"
+                        ? "ARCA · Homologación"
+                        : "Ambiente de ARCA sin confirmar"}
+                </AlertTitle>
+                <AlertDescription>
+                  {form.proveedorFacturacion !== "afipsdk" ? (
+                    "El comprobante se numera con nuestro contador y queda sin CAE; lo cargás a mano desde el detalle."
+                  ) : ambienteArca === "prod" ? (
+                    "Al emitir, Grafo solicita el número y el CAE a ARCA en producción. Los comprobantes autorizados tienen validez fiscal."
+                  ) : ambienteArca === "dev" ? (
+                    "La integración usa el ambiente de pruebas de ARCA. Los comprobantes emitidos en homologación no tienen validez fiscal."
+                  ) : (
+                    "No pudimos confirmar el ambiente de facturación. Revisá el estado de ARCA en Integraciones antes de emitir."
+                  )}
+                </AlertDescription>
+              </Alert>
             </div>
           </div>
         </div>

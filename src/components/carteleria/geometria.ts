@@ -24,6 +24,7 @@ export type CarteleriaVista = {
   fondo: boolean;
   /** Lado del caño en metros (para el dibujo; 40×40 → 0.04). */
   perfilLadoM: number;
+  perfilProfundidadM?: number;
   /** Densidad de sembrado LED (1 = la recomendada del módulo). */
   densidadLed: number;
   /** Cobertura del módulo LED en m² (atributo de la variante). */
@@ -62,7 +63,7 @@ export function derivarMetricas(v: CarteleriaVista): MetricasCartel {
   const L = Math.max(0, v.perfilLadoM);
   const hInt = Math.max(0, H - 2 * L);
   const wInt = Math.max(0, W - 2 * L);
-  const dInt = Math.max(0, D - 2 * L);
+  const dInt = Math.max(0, D - 2 * (v.perfilProfundidadM ?? L));
   const mlPerimetro = esDoble ? 4 * W + 4 * hInt + 4 * dInt : 2 * W + 2 * hInt;
   const mlRefuerzos = refuerzosV * hInt + refuerzosH * wInt;
   const mlConectores = esDoble ? 2 * (refuerzosV + refuerzosH) * dInt : 0;

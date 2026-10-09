@@ -22,7 +22,7 @@ export default async function Page({
   searchParams: Promise<ParametrosPeriodo>;
 }) {
   if (!(await tieneCapacidad("reportes_resumen"))) return <FuncionNoIncluida />;
-  if (!(await tienePermiso("reportes.ver_resumen"))) {
+  if (!(await tienePermiso("reportes.resumen.ver"))) {
     return <SinPermiso modulo="el Resumen ejecutivo" />;
   }
 

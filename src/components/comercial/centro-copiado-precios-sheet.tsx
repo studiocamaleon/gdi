@@ -1,6 +1,9 @@
 "use client";
 
-import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 
 import * as React from "react";
 import { createPortal } from "react-dom";
@@ -10,6 +13,7 @@ import {
   opcionesCentroCopiado,
   dimsDeFormato,
   type DocumentoCentroCopiado,
+  type GrupoCentroCopiado,
   type ColorDoc,
   type FazDoc,
   metaCentroCopiado,
@@ -122,15 +126,22 @@ export default function CentroCopiadoPreciosSheet({
     setError(null);
     setResumen(null);
 
-    // 1. Todas las hojas como documentos sueltos (cada tomo se abre en sus
-    //    segmentos, con copias = juegos). El precio es lineal (sin setup), así que
-    //    cotizar cada config una vez da el $/hoja exacto.
+    // Conserva los tomos para no volver a cobrar preparación por cada original.
+    // Este resumen muestra impresión; las terminaciones permanecen en su ítem.
     let seq = 0;
     const documentos: DocumentoCentroCopiado[] = [];
+    const grupos: GrupoCentroCopiado[] = [];
     const configPorId = new Map<string, Config>();
     for (const it of items) {
       const meta = metaCentroCopiado(it.jobContext);
       if (!meta) continue;
+      const grupoId = meta.esTomo ? `tomo-${it.id}` : undefined;
+      if (grupoId)
+        grupos.push({
+          id: grupoId,
+          juegos: meta.juegos ?? 1,
+          terminaciones: [],
+        });
       const segs: Seg[] =
         meta.esTomo && meta.segmentos?.length
           ? meta.segmentos.map((sg) => ({ ...sg, copias: meta.juegos ?? 1 }))
@@ -147,6 +158,7 @@ export default function CentroCopiadoPreciosSheet({
         const faz: FazDoc = sg.faz ?? 1;
         documentos.push({
           id,
+          grupoId,
           paginas: Number(sg.paginas) || 1,
           copias: Number(sg.copias) || 1,
           tamano,
@@ -174,7 +186,7 @@ export default function CentroCopiadoPreciosSheet({
     }
 
     void Promise.all([
-      cotizarCentroCopiado({ documentos }),
+      cotizarCentroCopiado({ documentos, grupos }),
       opcionesCentroCopiado(),
     ])
       .then(([cot, opciones]) => {

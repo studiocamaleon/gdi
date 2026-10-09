@@ -152,6 +152,7 @@ export function normalizePrecioConfig(
     return {
       metodoCalculo: metodo,
       detalle: {
+        ...(cleanForCompare(detalle) as Record<string, unknown>),
         tiers: tiersToPayload(metodo, tiersFromDetalle(metodo, detalle)),
       },
       ...metadataCompuesto,
@@ -225,6 +226,7 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
     }
     if (usaTiers) {
       onChange({
+        ...value,
         metodoCalculo: metodo,
         detalle: { ...detalle, tiers: tiersToPayload(metodo, tiers) },
       });
@@ -247,11 +249,22 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
       newDetalle = { tiers: [{ quantity: 100, price: 0 }] };
     else if (m === "fijo_con_margen_variable")
       newDetalle = { tiers: [{ quantity: 100, marginPct: 40 }] };
-    onChange({ metodoCalculo: m, detalle: newDetalle });
+    if (
+      [
+        "precio_fijo",
+        "precio_fijo_para_margen_minimo",
+        "variable_por_cantidad",
+        "fijado_por_cantidad",
+      ].includes(m)
+    ) {
+      newDetalle.margenOpcionalesPct = detalle.margenOpcionalesPct ?? 0;
+    }
+    onChange({ ...value, metodoCalculo: m, detalle: newDetalle });
   };
 
   const updateDetalleField = (campo: string, val: number) => {
     onChange({
+      ...value,
       metodoCalculo: metodo,
       detalle: { ...detalle, [campo]: val },
     });
@@ -374,6 +387,34 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
               hacia arriba.
             </FieldDescription>
           </FieldGroup>
+        )}
+
+        {usaPrecioConfigurado && (
+          <Field>
+            <FieldLabel htmlFor={`${fieldId}-margen-opcionales`}>
+              Margen de los opcionales (%)
+            </FieldLabel>
+            <Input
+              id={`${fieldId}-margen-opcionales`}
+              type="number"
+              min={0}
+              max={99.99}
+              step="0.01"
+              value={(detalle.margenOpcionalesPct as number) ?? 0}
+              onChange={(e) =>
+                updateDetalleField(
+                  "margenOpcionalesPct",
+                  Number(e.target.value),
+                )
+              }
+            />
+            <FieldDescription>
+              El precio fijo incluye los pasos obligatorios. Los opcionales
+              seleccionados se suman según su costo, con este margen sobre su
+              precio neto. Con 0% sólo se recuperan sus costos y las cargas de
+              venta.
+            </FieldDescription>
+          </Field>
         )}
 
         {usaTiers && (

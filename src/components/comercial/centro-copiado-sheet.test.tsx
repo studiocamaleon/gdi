@@ -6,6 +6,7 @@ import { CapacidadesProvider } from "@/components/navigation/capacidades-provide
 import CentroCopiadoSheet from "./centro-copiado-sheet";
 import { itemConstruidoAPropuestaItem } from "@/lib/centro-copiado-api";
 import type { CentroCopiadoMeta } from "@/lib/centro-copiado-api";
+import type { PropuestaItem } from "@/lib/propuestas";
 
 const mocks = vi.hoisted(() => ({
   cotizar: vi.fn(),
@@ -13,6 +14,11 @@ const mocks = vi.hoisted(() => ({
   opciones: vi.fn(),
   opcionesCad: vi.fn(),
   leerPdf: vi.fn(),
+  recuperarOriginales: vi.fn(),
+}));
+vi.mock("@/lib/tomo-pdf", async (original) => ({
+  ...(await original<object>()),
+  recuperarOriginalesTomo: mocks.recuperarOriginales,
 }));
 vi.mock("@/lib/pdf-medidas", () => ({ leerMedidasPdf: mocks.leerPdf }));
 vi.mock("@/lib/centro-copiado-cad", async (original) => ({
@@ -119,6 +125,7 @@ beforeEach(() => {
   mocks.opciones.mockResolvedValue({ papeles: [], terminaciones: [] });
   mocks.cotizar.mockResolvedValue(preview);
   mocks.construir.mockResolvedValue({ items: [] });
+  mocks.recuperarOriginales.mockResolvedValue([]);
   el = document.createElement("div");
   document.body.append(el);
   root = createRoot(el);
@@ -130,7 +137,12 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   Reflect.deleteProperty(Element.prototype, "getAnimations");
 });
-async function montar(meta = doc, funciones?: Record<string, boolean>) {
+async function montar(
+  meta = doc,
+  funciones?: Record<string, boolean>,
+  onAgregar: (items: PropuestaItem[]) => boolean = () => false,
+  persistido = false,
+) {
   const item = itemConstruidoAPropuestaItem({
     documentoId: "item",
     grupoTomoId: null,
@@ -153,8 +165,9 @@ async function montar(meta = doc, funciones?: Record<string, boolean>) {
         <CentroCopiadoSheet
           open
           onOpenChange={() => {}}
-          onAgregar={() => false}
+          onAgregar={onAgregar}
           editItems={[item]}
+          persistedItemIds={persistido ? new Set([item.id]) : undefined}
         />
       </CapacidadesProvider>,
     ),
@@ -348,6 +361,7 @@ const perfilCarga = {
 async function montarCarga(
   perfiles: object[] = [perfilCarga],
   funciones?: Record<string, boolean>,
+  onAgregar: (items: PropuestaItem[]) => boolean = () => false,
 ) {
   mocks.opciones.mockResolvedValue({
     papelDefaultId: "papel",
@@ -369,7 +383,7 @@ async function montarCarga(
         <CentroCopiadoSheet
           open
           onOpenChange={() => {}}
-          onAgregar={() => false}
+          onAgregar={onAgregar}
         />
       </CapacidadesProvider>,
     ),
@@ -685,4 +699,231 @@ it("una terminación guardada se conserva y bloquea la recotización sin esa fun
   expect(el.querySelector<HTMLButtonElement>("footer button")?.disabled).toBe(
     true,
   );
+});
+
+it("permite crear un tomo sin anilladora, cambiar el orden y conserva los rangos al cotizar", async () => {
+  await montarCarga();
+  await cargarPdfs([
+    [a4, a4, a4],
+    [a4, a4],
+  ]);
+  await rango("1,3", 0);
+  const seleccionar = el.querySelectorAll<HTMLInputElement>(
+    'input[aria-label^="Seleccionar archivo-"]',
+  );
+  expect(seleccionar).toHaveLength(2);
+  await act(async () => {
+    seleccionar[0].click();
+    seleccionar[1].click();
+  });
+  const crear = Array.from(el.querySelectorAll("button")).find(
+    (b) => b.textContent === "Crear tomo (2)",
+  )!;
+  expect(crear.disabled).toBe(false);
+  await act(async () => crear.click());
+  expect(el.textContent).toContain("Ver PDF del tomo");
+  await act(async () =>
+    el
+      .querySelector<HTMLButtonElement>('[aria-label="Subir archivo-2.pdf"]')!
+      .click(),
+  );
+  await avanzar();
+  const dto = mocks.cotizar.mock.calls.at(-1)![0];
+  expect(dto.documentos.map((d: { nombre: string }) => d.nombre)).toEqual([
+    "archivo-2.pdf",
+    "archivo-1.pdf",
+  ]);
+  expect(dto.documentos[1]).toMatchObject({
+    paginas: 2,
+    paginasOriginales: 3,
+    rangoPaginas: "1,3",
+  });
+  expect(dto.grupos).toHaveLength(1);
+  expect(dto.grupos[0].terminaciones).toEqual([]);
+});
+
+async function cambiarJuegos(value: string) {
+  const input = Array.from(el.querySelectorAll("label"))
+    .find((label) => label.textContent === "Juegos")!
+    .querySelector("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function separarTomo() {
+  const button = Array.from(el.querySelectorAll("button")).find(
+    (b) => b.textContent?.trim() === "Deshacer tomo",
+  );
+  expect(button).toBeDefined();
+  await act(async () => button!.click());
+  await avanzar();
+}
+
+function construirSueltos() {
+  mocks.construir.mockImplementation(async (dto) => ({
+    items: dto.documentos.map((d: Record<string, unknown>) => ({
+      documentoId: d.id,
+      grupoTomoId: null,
+      nombre: d.nombre,
+      productoId: "producto",
+      jobContext: { _centroCopiado: d },
+      especificaciones: {},
+      cantidad: 1,
+      precioUnitario: 100,
+      subtotal: 100,
+      impuestoPorcentaje: 21,
+      impuestoMonto: 21,
+      total: 121,
+      cotizacion: null,
+      error: null,
+    })),
+  }));
+}
+
+it("al deshacer un tomo nuevo conserva juegos, rangos y los dos archivos originales por separado", async () => {
+  const agregar = vi.fn<(items: PropuestaItem[]) => boolean>().mockReturnValue(false);
+  await montarCarga([], undefined, agregar);
+  await cargarPdfs([
+    [a4, a4, a4],
+    [a4, a4],
+  ]);
+  await rango("1,3", 0);
+  await act(async () => {
+    el.querySelectorAll<HTMLInputElement>(
+      'input[aria-label^="Seleccionar archivo-"]',
+    ).forEach((input) => input.click());
+  });
+  await act(async () => {
+    Array.from(el.querySelectorAll("button"))
+      .find((b) => b.textContent === "Crear tomo (2)")!
+      .click();
+  });
+  await cambiarJuegos("7");
+  await separarTomo();
+  const dto = mocks.cotizar.mock.calls.at(-1)![0];
+  expect(dto.grupos).toEqual([]);
+  expect(dto.documentos).toMatchObject([
+    {
+      nombre: "archivo-1.pdf",
+      grupoId: null,
+      copias: 7,
+      paginas: 2,
+      paginasOriginales: 3,
+      rangoPaginas: "1,3",
+    },
+    {
+      nombre: "archivo-2.pdf",
+      grupoId: null,
+      copias: 7,
+      paginas: 2,
+      paginasOriginales: 2,
+    },
+  ]);
+  expect(el.textContent).not.toContain("Ver PDF del tomo");
+  construirSueltos();
+  await act(async () => {
+    Array.from(el.querySelectorAll("button"))
+      .find((b) => b.textContent?.includes("Agregar a la OT"))!
+      .click();
+  });
+  const items = agregar.mock.calls[0]?.[0] as PropuestaItem[] | undefined;
+  expect(items?.map((i) => i.archivosPendientes?.map((f) => f.name))).toEqual([
+    ["archivo-1.pdf"],
+    ["archivo-2.pdf"],
+  ]);
+});
+
+it("deshace un tomo guardado con los juegos actuales y conserva el origen de cada PDF al guardar", async () => {
+  const agregar = vi.fn<(items: PropuestaItem[]) => boolean>().mockReturnValue(false);
+  await montar(
+    {
+      esTomo: true,
+      juegos: 3,
+      terminaciones: ["Anillado"],
+      segmentos: [
+        {
+          ...doc,
+          nombre: "manual.pdf",
+          tamano: "A4",
+          papelMateriaPrimaId: "papel",
+          color: "BN",
+          faz: 2,
+          archivoNombre: "manual.pdf",
+          paginas: 2,
+          rangoPaginas: "1,3",
+          gramaje: 80,
+        },
+        {
+          ...doc,
+          nombre: "anexo.pdf",
+          tamano: "A4",
+          papelMateriaPrimaId: "papel",
+          archivoNombre: "anexo.pdf",
+          paginas: 1,
+          rangoPaginas: "2",
+          color: "COLOR",
+          faz: 1,
+          gramaje: 150,
+        },
+      ],
+    },
+    undefined,
+    agregar,
+    true,
+  );
+  await cambiarJuegos("5");
+  await separarTomo();
+  const dto = mocks.cotizar.mock.calls.at(-1)![0];
+  expect(dto.grupos).toEqual([]);
+  expect(dto.documentos).toMatchObject([
+    {
+      archivoNombre: "manual.pdf",
+      grupoId: null,
+      copias: 5,
+      paginas: 2,
+      paginasOriginales: 20,
+      rangoPaginas: "1,3",
+      color: "BN",
+      faz: 2,
+      gramaje: 80,
+      terminaciones: [],
+    },
+    {
+      archivoNombre: "anexo.pdf",
+      grupoId: null,
+      copias: 5,
+      paginas: 1,
+      paginasOriginales: 20,
+      rangoPaginas: "2",
+      color: "COLOR",
+      faz: 1,
+      gramaje: 150,
+      terminaciones: [],
+    },
+  ]);
+  construirSueltos();
+  const copiaAnexo = new File(["pdf"], "anexo.pdf", {
+    type: "application/pdf",
+  });
+  mocks.recuperarOriginales.mockImplementation(async (segmentos) =>
+    segmentos.length ? [copiaAnexo] : [],
+  );
+  await act(async () => guardar()!.click());
+  const items = agregar.mock.calls[0]?.[0] as PropuestaItem[] | undefined;
+  expect(items).toHaveLength(2);
+  expect(items![0].archivosOrigenItemIds).toHaveLength(1);
+  expect(items![1].archivosOrigenItemIds).toEqual([]);
+  expect(items![1].archivosPendientes).toEqual([copiaAnexo]);
+  expect(mocks.recuperarOriginales).toHaveBeenLastCalledWith([
+    expect.objectContaining({
+      archivoNombre: "anexo.pdf",
+      origenItemIds: items![0].archivosOrigenItemIds,
+      rangoPaginas: "2",
+    }),
+  ]);
 });

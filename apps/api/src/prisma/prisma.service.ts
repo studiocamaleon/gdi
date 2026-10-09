@@ -25,6 +25,14 @@ export class PrismaService
 {
   constructor() {
     super();
+    if (
+      process.env.NODE_ENV === 'production' &&
+      process.env.TENANT_GUARD === 'off'
+    ) {
+      throw new Error(
+        'No se puede desactivar el aislamiento de empresas en producción.',
+      );
+    }
 
     // El cliente extendido inyecta tenantId en modelos y en las queries dentro
     // de $transaction. Ruteamos los accesos de modelo / $transaction / $queryRaw
@@ -43,13 +51,17 @@ export class PrismaService
       get(target, prop, receiver) {
         if (typeof prop === 'string' && SOLO_BASE.has(prop)) {
           const value = Reflect.get(target, prop, target) as unknown;
-          return typeof value === 'function' ? value.bind(target) : value;
+          return typeof value === 'function'
+            ? (value.bind(target) as unknown)
+            : value;
         }
         if (typeof prop === 'string' && prop in (extended as object)) {
           const value = (extended as unknown as Record<string, unknown>)[prop];
-          return typeof value === 'function' ? value.bind(extended) : value;
+          return typeof value === 'function'
+            ? (value.bind(extended) as unknown)
+            : value;
         }
-        return Reflect.get(target, prop, receiver);
+        return Reflect.get(target, prop, receiver) as unknown;
       },
     }) as PrismaService;
   }

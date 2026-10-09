@@ -1654,6 +1654,12 @@ const estructura_bastidor: DefinicionFamilia = {
         'Simple: un marco plano (frontlight). Doble: cajón con frente y contra unidos por la profundidad (backlight).',
     },
     {
+      campo: 'orientacionPerfil', etiqueta: 'Cara del perfil hacia el frente', tipo: 'enum',
+      valoresPermitidos: ['ancho_al_frente', 'alto_al_frente'], default: 'ancho_al_frente', requerido: false,
+      descripcion: 'Ancho al frente: el ancho exterior ocupa el plano del marco y el alto ocupa profundidad. Alto al frente: gira el caño 90°.',
+      expuestoAlComercial: true,
+    },
+    {
       campo: 'sepRefuerzoVcm',
       etiqueta: 'Separación máx. refuerzos verticales (cm)',
       tipo: 'number',

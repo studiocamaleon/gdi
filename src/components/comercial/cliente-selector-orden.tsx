@@ -1,16 +1,22 @@
 "use client";
 
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import { useMemo } from "react";
 import { Autocomplete, SearchField, ListBox } from "@heroui/react";
 import type { ClienteDetalle } from "@/lib/clientes";
 import fieldFocus from "@/components/design-system/field-focus.module.css";
-import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 
-type ClienteOpcion = Pick<
+export type ClienteOpcion = Pick<
   ClienteDetalle,
   "id" | "nombre" | "razonSocial" | "email"
 > &
-  Partial<Pick<ClienteDetalle, "contacto">>;
+  Partial<
+    Pick<ClienteDetalle, "contacto" | "telefonoCodigo" | "telefonoNumero">
+  >;
 
 /** Vista accesible reutilizable; no conoce APIs ni permisos comerciales. */
 export function ClienteLista({
@@ -37,16 +43,17 @@ export function ClienteLista({
     for (const option of options) {
       byName.set(
         option.nombre,
-        [
-          byName.get(option.nombre),
-          option.nombre,
-          option.razonSocial,
-          option.email,
-          option.contacto,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase(),
+        normalizarBusqueda(
+          [
+            byName.get(option.nombre),
+            option.nombre,
+            option.razonSocial,
+            option.email,
+            option.contacto,
+          ]
+            .filter(Boolean)
+            .join(" "),
+        ),
       );
     }
     return byName;
@@ -81,12 +88,12 @@ export function ClienteLista({
         <Autocomplete.Filter
           onInputChange={onInputChange}
           filter={(text, query) =>
-            (searchText.get(text) ?? text.toLocaleLowerCase()).includes(
-              query.trim().toLocaleLowerCase(),
+            (searchText.get(text) ?? normalizarBusqueda(text)).includes(
+              normalizarBusqueda(query),
             )
           }
         >
-          <SearchField aria-label="Buscar cliente" className="px-2 pt-2">
+          <SearchField autoFocus aria-label="Buscar cliente" className="px-2 pt-2">
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input placeholder="Buscar cliente…" />

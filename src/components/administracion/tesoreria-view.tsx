@@ -1,4 +1,5 @@
 "use client";
+import { HistorialArqueos } from "./historial-arqueos";
 import { CuentaDialog } from "./cuenta-fondos-dialog";
 
 import * as React from "react";
@@ -87,6 +88,8 @@ import {
   editarCuentaFondos,
   getMovimientosCuenta,
   transferirEntreCuentas,
+  getDestinosTransferencia,
+  type DestinoTransferencia,
 } from "@/lib/administracion-api";
 import { formatearMoneda, monedaDe } from "@/lib/moneda";
 import { cn } from "@/lib/utils";
@@ -96,6 +99,7 @@ import styles from "./tesoreria-view.module.css";
 type Modal =
   | { tipo: "transferir"; desde?: string }
   | { tipo: "arqueo"; cuenta: CuentaFondos }
+  | { tipo: "historial-arqueos"; cuenta: CuentaFondos }
   | { tipo: "cuenta"; cuenta?: CuentaFondos }
   | { tipo: "ajuste"; cuenta: CuentaFondos }
   | null;
@@ -172,6 +176,7 @@ function selector(
 function TransferenciaDialog({
   open,
   cuentas,
+  destinos,
   desdeInicial,
   ocupado,
   onOpenChange,
@@ -179,6 +184,7 @@ function TransferenciaDialog({
 }: {
   open: boolean;
   cuentas: CuentaFondos[];
+  destinos: DestinoTransferencia[];
   desdeInicial?: string;
   ocupado: boolean;
   onOpenChange: (open: boolean) => void;
@@ -188,14 +194,14 @@ function TransferenciaDialog({
     desdeInicial ?? cuentas[0]?.id ?? "",
   );
   const [hacia, setHacia] = React.useState(
-    cuentas.find((cuenta) => cuenta.id !== desdeInicial)?.id ?? "",
+    destinos.find((cuenta) => cuenta.id !== (desdeInicial ?? cuentas[0]?.id))?.id ?? "",
   );
   const [monto, setMonto] = React.useState("");
   const [montoDestino, setMontoDestino] = React.useState("");
   const [referencia, setReferencia] = React.useState("");
   const [notas, setNotas] = React.useState("");
   const origen = cuentas.find((cuenta) => cuenta.id === desde);
-  const destino = cuentas.find((cuenta) => cuenta.id === hacia);
+  const destino = destinos.find((cuenta) => cuenta.id === hacia);
   const cruzada = Boolean(
     origen && destino && origen.moneda !== destino.moneda,
   );
@@ -238,7 +244,7 @@ function TransferenciaDialog({
           {selector(
             hacia,
             setHacia,
-            cuentas
+            destinos
               .filter((cuenta) => cuenta.id !== desde)
               .map((cuenta) => ({ value: cuenta.id, label: cuenta.nombre })),
             "Cuenta de destino",
@@ -547,8 +553,10 @@ export function TesoreriaView({
   initialCuentas,
   initialKpis,
   monedaLocal,
+  accesoRestringido = false,
 }: {
   initialCuentas: CuentaFondos[];
+  accesoRestringido?: boolean;
   initialKpis: TesoreriaKpis;
   monedaLocal: string;
 }) {
@@ -556,7 +564,11 @@ export function TesoreriaView({
   const scope = useLegacyDesignScope();
   const designScope = useDesignScope();
   const conTesoreria = useCapacidad("tesoreria");
-  const permisoGestionar = usePuede("administracion.gestionar");
+  const permisoGestionar = usePuede("administracion.tesoreria.gestionar") && !accesoRestringido;
+  const puedeTransferir = usePuede("tesoreria.transferir") && conTesoreria;
+  const puedeArquear = usePuede("tesoreria.arquear") && conTesoreria;
+  const [destinos, setDestinos] = React.useState<DestinoTransferencia[]>([]);
+  React.useEffect(() => { let vivo = true; void getDestinosTransferencia().then(d => { if (vivo) setDestinos(d); }).catch(() => { if (vivo) setDestinos([]); }); return () => { vivo = false; }; }, []);
   const puedeGestionar = permisoGestionar && conTesoreria;
   const { moneda, zonaHoraria } = useConfigRegional();
   const { fechaHora, fechaNumerica } = useFecha();
@@ -761,14 +773,14 @@ export function TesoreriaView({
           <h1>
             Tesorería<span aria-hidden="true">.</span>
           </h1>
-          <p>Posición real, cuentas, valores y conciliación de fondos.</p>
+          <p>{accesoRestringido ? "Saldos y movimientos de tus cuentas asignadas." : "Posición real, cuentas, valores y conciliación de fondos."}</p>
         </div>
-        {puedeGestionar ? (
+        {puedeGestionar || puedeTransferir ? (
           <div className={styles.acciones}>
-            <Button
+            {puedeTransferir && <Button
               variant="outline"
               className={styles.accionSecundaria}
-              disabled={activas.length < 2}
+              disabled={!activas.some(c => destinos.some(d => d.id !== c.id))}
               onClick={() =>
                 setModal({
                   tipo: "transferir",
@@ -778,14 +790,14 @@ export function TesoreriaView({
             >
               <ArrowLeftRightIcon data-icon="inline-start" />
               Transferir
-            </Button>
-            <Button
+            </Button>}
+            {puedeGestionar && <Button
               className={styles.accionPrincipal}
               onClick={() => setModal({ tipo: "cuenta" })}
             >
               <PlusIcon data-icon="inline-start" />
               Nueva cuenta
-            </Button>
+            </Button>}
           </div>
         ) : null}
       </header>
@@ -796,7 +808,7 @@ export function TesoreriaView({
             <WalletIcon />
           </span>
           <div className={styles.kpiTexto}>
-            <span>Posición total · {monedaLocal}</span>
+            <span>{accesoRestringido ? "Posición de tus cuentas" : "Posición total"} · {monedaLocal}</span>
             <strong>{fmtLocal(initialKpis.posicionLocal)}</strong>
           </div>
           <div className={styles.monedasAlternativas}>
@@ -843,17 +855,17 @@ export function TesoreriaView({
           <span className={styles.kpiIcono} aria-hidden="true">
             <ArrowDownIcon />
           </span>
-          <Link
+          {!accesoRestringido && <Link
             href="/administracion/tesoreria/acreditaciones"
             className={styles.accesoAcreditaciones}
           >
             <ArrowUpRightIcon />
             <span className="sr-only">Abrir acreditaciones y valores</span>
-          </Link>
+          </Link>}
           <div className={styles.kpiTexto}>
-            <span>A acreditar / en cartera</span>
+            <span>{accesoRestringido ? "A acreditar en tus cuentas" : "A acreditar / en cartera"}</span>
             <strong>{fmtLocal(initialKpis.aAcreditar)}</strong>
-            <small>Valores: {fmtLocal(initialKpis.valoresEnCartera)}</small>
+            {!accesoRestringido && <small>Valores: {fmtLocal(initialKpis.valoresEnCartera)}</small>}
             <div className={styles.detalleMonedas}>
               {[
                 ...new Set([
@@ -929,7 +941,7 @@ export function TesoreriaView({
                   </EmptyMedia>
                   <EmptyTitle>No hay cuentas</EmptyTitle>
                   <EmptyDescription>
-                    Creá la primera cuenta con su saldo inicial.
+                    {accesoRestringido ? "Pedile a un administrador que te asigne una cuenta de trabajo." : "Creá la primera cuenta con su saldo inicial."}
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -1008,7 +1020,11 @@ export function TesoreriaView({
                       <Settings2Icon data-icon="inline-start" />
                       {seleccion.activo ? "Desactivar" : "Activar"}
                     </Button>
-                    {seleccion.tipo === "caja" && seleccion.activo ? (
+
+                  </>
+                ) : null}
+                {seleccion.tipo === "caja" && <Button variant="ghost" size="sm" className={styles.detalleAccion} onClick={()=>setModal({tipo:"historial-arqueos",cuenta:seleccion})}>Historial de arqueos</Button>}
+                    {puedeArquear && seleccion.tipo === "caja" && seleccion.activo ? (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1021,8 +1037,6 @@ export function TesoreriaView({
                         Arqueo
                       </Button>
                     ) : null}
-                  </>
-                ) : null}
               </div>
             </header>
 
@@ -1361,6 +1375,7 @@ export function TesoreriaView({
         ) : null}
       </section>
 
+      {modal?.tipo === "historial-arqueos" && <HistorialArqueos cuentaId={modal.cuenta.id} nombre={modal.cuenta.nombre} onCerrar={()=>setModal(null)}/>}
       {puedeGestionar && modal?.tipo === "cuenta" ? (
         <CuentaDialog
           key={modal.cuenta?.id ?? "nueva"}
@@ -1380,11 +1395,12 @@ export function TesoreriaView({
           }
         />
       ) : null}
-      {puedeGestionar && modal?.tipo === "transferir" ? (
+      {puedeTransferir && modal?.tipo === "transferir" ? (
         <TransferenciaDialog
           key={modal.desde ?? "transferir"}
           open
           cuentas={activas}
+          destinos={destinos}
           desdeInicial={modal.desde}
           ocupado={ocupado}
           onOpenChange={(open) => !open && setModal(null)}
@@ -1412,7 +1428,7 @@ export function TesoreriaView({
           }
         />
       ) : null}
-      {puedeGestionar && modal?.tipo === "arqueo" ? (
+      {puedeArquear && modal?.tipo === "arqueo" ? (
         <ArqueoDialog
           key={modal.cuenta.id}
           open

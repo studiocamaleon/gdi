@@ -62,6 +62,22 @@ describe("controles compartidos entre Tablero y Colas", () => {
       }),
     ).toEqual([]);
   });
+  it("habilita materiales omitidos por inicio y sigue exigiendo calidad", () => {
+    const material = { tipo: "MATERIAL", estado: "OMITIDO_INICIO" };
+    const calidad = { tipo: "CALIDAD", estado: "PENDIENTE" };
+    expect(
+      accionesDisponiblesProduccion({
+        ...base,
+        paso: { ...base.paso, gatesOperativos: [material] },
+      }),
+    ).toContain("completar");
+    expect(
+      accionesDisponiblesProduccion({
+        ...base,
+        paso: { ...base.paso, gatesOperativos: [material, calidad] },
+      }),
+    ).toEqual([]);
+  });
   it("sólo el supervisor desbloquea o reabre y respeta las etapas siguientes", () => {
     expect(
       accionesDisponiblesProduccion({
@@ -173,4 +189,13 @@ it("habilita a asignados con reparto válido y conserva el control del tramo rea
       },
     }),
   ).toBe(true);
+});
+
+it("permite actuar en una previsión compartida sin ser la persona prevista, pero no en la manual", () => {
+  const paso = {
+    mesaEsMia: false, tramoAbierto: null,
+    asignacionPersonal: { origen: "automatica" as const, personas: [], franjas: [], esMia: false, conflicto: null },
+  };
+  expect(asignacionPermiteEjecutar({ ...paso, ejecucionPorEquipo: true })).toBe(true);
+  expect(asignacionPermiteEjecutar({ ...paso, ejecucionPorEquipo: false, asignacionPersonal: { ...paso.asignacionPersonal, origen: "manual" } })).toBe(false);
 });

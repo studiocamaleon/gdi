@@ -11,7 +11,7 @@ let root: Root,
   host: HTMLDivElement,
   api: MediosInboxApi,
   borradores: BorradoresMedios,
-  actualizar: ReturnType<typeof vi.fn>;
+  actualizar: ReturnType<typeof vi.fn<() => Promise<unknown>>>;
 const file = new File(["%PDF-1.7 ficticio"], "muestra.pdf", {
   type: "application/pdf",
 });
@@ -32,7 +32,7 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   borradores = new Map();
-  actualizar = vi.fn().mockResolvedValue(true);
+  actualizar = vi.fn<() => Promise<unknown>>().mockResolvedValue(true);
   api = {
     cargar: vi.fn().mockResolvedValue("archivo"),
     enviar: vi.fn().mockResolvedValue(aceptado),

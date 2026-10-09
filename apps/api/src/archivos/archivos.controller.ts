@@ -1,14 +1,17 @@
+import { pipeline } from 'node:stream/promises';
 import {
   Body,
   Controller,
   Delete,
   Get,
+  Logger,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { ProhibidoImpersonando } from '../auth/prohibido-impersonando.decorator';
 import type { Response } from 'express';
@@ -23,21 +26,21 @@ import {
   ListarArchivosDto,
 } from './dto/archivos.dto';
 import { SoloAutenticado } from '../auth/permiso.decorator';
+import { AccesoArchivo, ArchivosAccesoGuard } from './archivos-acceso.guard';
 
 /**
- * Transversal a propósito: los archivos cuelgan de una orden, de un cliente o
- * del branding, y quien llega a esa pantalla ya pasó por el permiso del módulo
- * que la sirve. Poner un permiso propio acá obligaría a que el operario que
- * sube la foto de un trabajo terminado tenga permiso de "archivos", que no es
- * un módulo del sidebar ni significa nada para el que configura el rol.
- * El aislamiento por tenant lo hace el service, como siempre.
+ * El permiso depende del módulo del archivo y se resuelve en el guard propio.
+ * @SoloAutenticado delega esa autorización dinámica; no sustituye el guard.
  */
 @SoloAutenticado()
+@UseGuards(ArchivosAccesoGuard)
 @Controller('archivos')
 export class ArchivosController {
+  private readonly logger = new Logger(ArchivosController.name);
   constructor(private readonly service: ArchivosService) {}
 
   @Get()
+  @AccesoArchivo({ origen: 'query', accion: 'leer' })
   listar(@Query() query: ListarArchivosDto) {
     return this.service.listar(query);
   }
@@ -48,23 +51,53 @@ export class ArchivosController {
    * depender del orden de evaluación de rutas para eso.
    */
   @Get('de-orden/:ordenId')
+  @AccesoArchivo({ origen: 'orden', accion: 'leer' })
   deOrden(@Param('ordenId', ParseUUIDPipe) ordenId: string) {
     return this.service.deOrden(ordenId);
   }
 
+  @Get('de-orden/:ordenId/zip')
+  @AccesoArchivo({ origen: 'orden', accion: 'leer' })
+  async zipOrden(@CurrentSession() auth: CurrentAuth, @Param('ordenId', ParseUUIDPipe) id: string, @Query('comprobar') comprobar: string | undefined, @Res() res: Response) {
+    return this.enviarZip(auth.tenantId, { ordenId: id }, comprobar, res);
+  }
+
+  @Get('de-item/:itemId/zip')
+  @AccesoArchivo({ origen: 'orden', accion: 'leer' })
+  async zipItem(@CurrentSession() auth: CurrentAuth, @Param('itemId', ParseUUIDPipe) id: string, @Query('comprobar') comprobar: string | undefined, @Res() res: Response) {
+    return this.enviarZip(auth.tenantId, { itemId: id }, comprobar, res);
+  }
+
+  private async enviarZip(tenantId: string, destino: { ordenId: string } | { itemId: string }, comprobar: string | undefined, res: Response) {
+    const paquete = await this.service.prepararDescargaZip(tenantId, destino);
+    res.setHeader('Cache-Control', 'private, no-store');
+    if (comprobar === '1') { res.json({ cantidad: paquete.cantidad }); return; }
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `attachment; filename="archivos.zip"; filename*=UTF-8''${encodeURIComponent(paquete.nombre)}`);
+    try { await pipeline(paquete.stream(), res); }
+    catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) this.logger.error('No se pudo completar la descarga ZIP de archivos.');
+      if (!res.destroyed) res.destroy(error instanceof Error ? error : undefined);
+    }
+  }
+
   /** Cuánto espacio ocupa el tenant y en qué. */
   @Get('uso')
+  @AccesoArchivo({ origen: 'uso' })
   uso(@CurrentSession() auth: CurrentAuth) {
     return this.service.uso(auth.tenantId);
   }
 
   /** Lo borrado que todavía se puede recuperar. */
   @Get('papelera')
+  @AccesoArchivo({ origen: 'query', accion: 'leer' })
   papelera(@Query() query: ListarArchivosDto) {
     return this.service.papelera(query);
   }
 
   @Post(':id/restaurar')
+  @AccesoArchivo({ origen: 'archivo', accion: 'escribir' })
   restaurar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -74,6 +107,7 @@ export class ArchivosController {
 
   /** Paso 1 de la subida: devuelve la URL firmada para el PUT directo. */
   @Post('iniciar')
+  @AccesoArchivo({ origen: 'body', accion: 'escribir' })
   iniciar(@CurrentSession() auth: CurrentAuth, @Body() dto: IniciarSubidaDto) {
     return this.service.iniciar(auth, dto);
   }
@@ -84,6 +118,7 @@ export class ArchivosController {
    * ellos el multipart no se puede cerrar.
    */
   @Post(':id/confirmar')
+  @AccesoArchivo({ origen: 'archivo', accion: 'escribir' })
   confirmar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -93,6 +128,7 @@ export class ArchivosController {
   }
 
   @Post(':id/cancelar-subida')
+  @AccesoArchivo({ origen: 'archivo', accion: 'escribir' })
   async cancelarSubida(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -111,6 +147,7 @@ export class ArchivosController {
    * el API. Ver docs/archivos-r2-diseno.md §D4.
    */
   @Get(':id/contenido')
+  @AccesoArchivo({ origen: 'archivo', accion: 'leer' })
   async contenido(
     @Param('id', ParseUUIDPipe) id: string,
     @Res() res: Response,
@@ -120,6 +157,7 @@ export class ArchivosController {
   }
 
   @Patch(':id')
+  @AccesoArchivo({ origen: 'archivo', accion: 'escribir' })
   actualizar(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ActualizarArchivoDto,
@@ -129,6 +167,7 @@ export class ArchivosController {
 
   @ProhibidoImpersonando()
   @Delete(':id')
+  @AccesoArchivo({ origen: 'archivo', accion: 'escribir' })
   async eliminar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,

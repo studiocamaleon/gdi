@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { InboxView } from "./inbox-view";
+import { ApiError } from "@/lib/api";
 import type { CargarInbox, MetaInbox } from "@/lib/meta-inbox-api";
 import type { EscucharInbox } from "@/lib/inbox-tiempo-real";
 
@@ -84,7 +85,7 @@ it("una consulta sin respuesta vence y se recupera automáticamente", async () =
   await act(async () => {
     await vi.advanceTimersByTimeAsync(15000);
   });
-  expect(container.textContent).toContain("No pudimos cargar");
+  expect(container.textContent).toContain("Estamos reconectando");
   expect(container.querySelector("[role=log]")).toBeNull();
   expect(container.textContent).not.toContain("Actualizar");
   await act(async () => {
@@ -205,7 +206,7 @@ it("el error de actualización retira mensajes y contexto, luego permite recuper
   await render();
   cargar.mockRejectedValueOnce(new Error("403"));
   await act(async () => window.dispatchEvent(new Event("focus")));
-  expect(container.textContent).toContain("No pudimos cargar");
+  expect(container.textContent).toContain("Estamos reconectando");
   expect(container.textContent).not.toContain("Conectar WhatsApp");
   expect(container.textContent).not.toContain("Estudio Oliva");
   expect(container.querySelector("[role=log]")).toBeNull();
@@ -1073,7 +1074,7 @@ it("recuperar un error no pierde los filtros seleccionados", async () => {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(300);
   });
-  expect(container.textContent).toContain("No pudimos cargar");
+  expect(container.textContent).toContain("Estamos reconectando");
   await act(async () => {
     await vi.advanceTimersByTimeAsync(5000);
   });
@@ -1081,4 +1082,105 @@ it("recuperar un error no pierde los filtros seleccionados", async () => {
     estados: "ACTIVA",
     sinResponder: "true",
   });
+});
+
+it.each([false, true])(
+  "recupera el chat elegido y su borrador sin reenviar (intento previo: %s)",
+  async (intento) => {
+    vi.useFakeTimers();
+    const respuesta = {
+      habilitado: true,
+      abierta: true,
+      hasta: new Date(Date.now() + 3600000).toISOString(),
+      servidorEl: new Date().toISOString(),
+    };
+    cargar.mockImplementation(async (q) => ({
+      ...general(q.conversacionId),
+      respuesta,
+    }));
+    const enviar = vi
+      .fn()
+      .mockRejectedValue(new ApiError("Sin respuesta", 503));
+    await act(async () =>
+      root.render(
+        <InboxView
+          identidad={identidad}
+          cargar={cargar}
+          enviarTexto={enviar}
+          tiempoReal={null}
+        />,
+      ),
+    );
+    await abrir("Bruno");
+    const input = container.querySelector("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!.call(input, "Borrador de Bruno");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    if (intento)
+      await act(async () =>
+        container
+          .querySelector("form")!
+          .dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
+          ),
+      );
+    const clave = enviar.mock.calls[0]?.[1].clave;
+    cargar.mockRejectedValueOnce(new ApiError("Reinicio", 503));
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(container.textContent).toContain("Conservamos tus borradores");
+    expect(container.querySelector("[role=log]")).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(5000));
+    expect(cargar.mock.lastCall?.[0]).toMatchObject({
+      conversacionId: "chat-2",
+    });
+    expect(container.querySelector("textarea")!.value).toBe(
+      "Borrador de Bruno",
+    );
+    expect(container.querySelector("[role=log]")!.textContent).toContain(
+      "Consulta de Bruno",
+    );
+    expect(enviar).toHaveBeenCalledTimes(intento ? 1 : 0);
+    if (intento) {
+      await act(async () =>
+        container
+          .querySelector("form")!
+          .dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
+          ),
+      );
+      expect(enviar.mock.calls[1][1].clave).toBe(clave);
+    }
+  },
+);
+
+it.each([401, 403])("descarta el borrador al revocar el acceso (%s)", async (status) => {
+  cargar.mockImplementation(async (q) => ({
+    ...general(q.conversacionId),
+    respuesta: {
+      habilitado: true,
+      abierta: true,
+      hasta: new Date(Date.now() + 3600000).toISOString(),
+      servidorEl: new Date().toISOString(),
+    },
+  }));
+  await render();
+  await abrir("Bruno");
+  const input = container.querySelector("textarea")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!
+      .set!.call(input, "Borrador privado");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  cargar.mockRejectedValueOnce(new ApiError("Acceso revocado", status));
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(container.textContent).toContain("Cambió tu sesión");
+  expect(container.querySelector("textarea, [role=log]")).toBeNull();
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(cargar.mock.lastCall?.[0].conversacionId).toBeUndefined();
+  await abrir("Bruno");
+  expect(container.querySelector("textarea")!.value).toBe("");
 });

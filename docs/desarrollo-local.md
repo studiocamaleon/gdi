@@ -1,5 +1,16 @@
 # Desarrollo local
 
+## Impresión rígida y corte — comprobación local del 01/10/2026
+
+La comprobación local descrita abajo se publicó posteriormente junto con el arreglo de primer ingreso en `b378ae41e`, desde `codex/acceso-clave-provisoria` y el PR #13. Staging y producción quedaron verificados; consultar los [resultados del despliegue](../deploy/produccion/VALIDACION.md). La compilación completa con tipos pasó en remoto. El worktree local conserva su rama y configuración de desarrollo.
+
+- Rama de desarrollo: `codex/layout-impresion-laser`, basada en `b7d4842e2`. Conserva la base de seguridad ya desplegada; depende del PR #12 todavía sin integrar. Un futuro PR debe declarar esa dependencia y ajustar su base cuando se integre.
+- La API del worktree `meta-cloud-base` ejecuta la corrección en `codex/local-layout-impresion-laser`, manteniendo su configuración local. Sin cambios de migraciones, datos maestros, credenciales, workers ni tareas programadas. Sin despliegue en staging o producción.
+- La impresión sobre placa considera antes del acomodo los cortes activos que usan el mismo material, incluidos extras y selección comercial de máquina. Mantiene las dimensiones físicas de la placa, las posiciones compartidas y el costeo del tramo realmente impreso.
+- Cuando estos límites cambian el acomodo, se conserva el cálculo individual de los componentes: la consolidación no puede volver a acomodar solamente la impresión. Si el corte no agrega restricciones, siguen vigentes las optimizaciones anteriores.
+- Comprobación: 128 pruebas en siete suites y revisión de tipos de los seis archivos modificados. La verificación global de tipos excedió el límite de memoria local; completarla en CI antes de desplegar. No se aumentó memoria de Docker ni se reinició.
+- Prueba visible: acrílico de 3 mm, nueve piezas de 400 × 400 mm, impresión CMYK y láser con área 1300 × 1000 mm y salida abierta en Y. Cotiza y muestra dos placas completas de 1220 × 1220 mm, seis piezas y tres piezas, conservando 220 mm sin cortes. Quedó en el formulario local, sin guardar ni emitir una OT.
+
 ## Acuerdo de trabajo
 
 Desarrollar y probar en esta Mac. Acumular un grupo manejable de cambios relacionados, revisarlo mediante PR y actualizar staging para la prueba final del conjunto. No hacer un despliegue cloud por cada ajuste visual o corrección pequeña. Los commits pueden seguir siendo pequeños e independientes.
@@ -106,3 +117,33 @@ En el mismo worktree y rama `codex/inbox-canal-pruebas`, se aplicó la migració
 ## Lectura y estados compartidos — 28/09
 
 Aplicada la migración aditiva `20260928200000_inbox_estados_lectura` sólo a desarrollo y tests: **298 migraciones**. Agrega lectura compartida por el equipo y estados Activa/Resuelta, sin tablas nuevas ni cambios de credenciales. Prisma regenerado, con Meta y cron reales apagados. No se ejecutaron seeds/reset ni se desplegó staging/producción. Presencia simulada únicamente en la demo; el indicador real permanece neutral hasta implementar sus señales de conexión.
+
+
+## Facturación por lote
+
+La API registra el lote y devuelve `202`. El worker de cálculos existente también
+procesa facturación, con una cola durable en PostgreSQL (`FacturacionLote` y sus
+items): Redis no interviene en la admisión ni en la recuperación del lote. Los
+PDF se generan en el proceso worker; cada aviso conserva la cola WhatsApp actual.
+
+Para aislar únicamente facturación en una terminal local, sin servidor HTTP ni
+cron, existe `npm --prefix apps/api run worker:facturacion:dev`. Usar Node 24 y
+las variables de desarrollo indicadas arriba. No levantarlo adicionalmente al
+worker general salvo que se esté comprobando la exclusión entre procesos.
+El lease de PostgreSQL admite un turno por empresa; cada turno procesa una
+factura o un paso de publicación. Un resultado fiscal incierto se consulta y,
+si no se confirma en tres minutos, detiene el resto del lote para revisión.
+
+Las pruebas HTTP usan la base **local de test** y un proveedor fiscal ficticio.
+No arrancar workers reales contra esa base durante las pruebas. El avance y la
+campanita se verifican con avisos ficticios: `pendiente` y `wati_aceptada` no se
+consideran enviados. La notificación personal de finalización se confirma en
+la misma transacción que cierra el lote y enlaza a su detalle.
+
+Para un despliegue posterior: aplicar la migración, actualizar el worker general
+y luego API y web. No hace falta crear otra máquina. El contrato POST ahora
+requiere `claveSolicitud` UUID; la web conserva esa clave al reintentar una
+solicitud sin respuesta. Una pestaña anterior debe actualizarse antes de iniciar
+un lote. Ni este cambio ni las pruebas locales verifican por sí solos la
+estabilidad de Redis en producción: ese incidente requiere correlacionar
+latencias, recursos y errores del entorno remoto.

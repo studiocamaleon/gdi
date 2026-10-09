@@ -686,6 +686,8 @@ export interface OperacionIncorporacionCosteada {
 }
 
 export interface PasoEjecutado {
+  /** Opcional según la configuración efectiva, incluso si se activó por dependencia. */
+  esOpcional?: boolean;
   requiereMaquina?: boolean;
   plantillaCodigo?: string | null;
   rutaPasoId: string;
@@ -867,6 +869,7 @@ export interface PasoEjecutado {
  * independiente en la OT.
  */
 export interface OperacionInternaCosteada {
+  esOpcional?: boolean;
   codigo: string;
   nombre: string;
   familiaCodigo: string;
@@ -905,6 +908,8 @@ export interface EstructuraBastidorEjecutada {
   /** Lado del caño usado en el despiece (el visor dibuja con este grosor).
    *  Ausente en snapshots anteriores al fix del espesor. */
   perfilLadoM?: number;
+  perfilProfundidadM?: number;
+  barras?: { cantidad: number; largoM: number; metrosUtiles: number; metrosComerciales: number; sobranteM: number };
   /** Separación efectiva de refuerzos (cm). El visor dibuja con la misma
    *  fórmula que el motor, así que recompone los MISMOS refuerzos. */
   sepRefuerzoVcm: number;
@@ -1063,6 +1068,9 @@ export interface NestingEjecutado {
  * separados porque la UI los muestra como dos cosas distintas.
  */
 export interface NestingVisualConfig {
+  /** Acomodo común ya validado para impresión y corte. No reagrupar sólo la
+   * impresión: se perderían los límites del paso posterior y su registro. */
+  restriccionCortePosterior?: { pasos: string[] };
   /** Margen de máquina, SIN la demasía. Ver el diagrama de arriba. */
   margins: {
     leftMm: number;
@@ -1163,7 +1171,7 @@ export interface NestingCostingPreview {
 export interface MaterialEjecutado {
   seleccionStock?: {
     politica: string;
-    estado: 'disponible' | 'requiere_reposicion';
+    estado: 'disponible' | 'requiere_reposicion' | 'sin_verificar_inicio';
     alternativas: Array<{ id: string; libre: number; necesario: number | null; unidad: string | null; alcanza: boolean }>;
   };
   /** Unidades y conversiones vigentes al cotizar; abastecimiento no relee el catálogo. */

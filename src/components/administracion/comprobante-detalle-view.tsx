@@ -75,7 +75,11 @@ export function ComprobanteDetalleView({
   comprobante: ComprobanteDetalle;
 }) {
   const router = useRouter();
-  const c = comprobante;
+  const [c, setComprobante] = React.useState(comprobante);
+  React.useEffect(() => setComprobante(comprobante), [comprobante]);
+  const [resultadoConsulta, setResultadoConsulta] = React.useState<
+    string | null
+  >(null);
   const fmt = (n: number) => formatearMonedaDoc(n, monedaDe(c.moneda));
   const [trabajando, setTrabajando] = React.useState(false);
   const [caeForm, setCaeForm] = React.useState<{
@@ -118,16 +122,20 @@ export function ComprobanteDetalleView({
 
   const consultar = async () => {
     setTrabajando(true);
+    setResultadoConsulta(null);
     try {
       const resultado = await consultarEmisionComprobante(c.id);
+      setComprobante(resultado.comprobante);
+      setResultadoConsulta(resultado.detalle ?? "Consulta terminada.");
       if (resultado.aplicada)
         toast.success("Resultado recuperado. El comprobante quedó registrado.");
       else toast.info(resultado.detalle ?? "Consulta terminada.");
       router.refresh();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "No se pudo consultar.",
-      );
+      const mensaje =
+        error instanceof Error ? error.message : "No se pudo consultar.";
+      setResultadoConsulta(mensaje);
+      toast.error(mensaje);
     } finally {
       setTrabajando(false);
     }
@@ -155,7 +163,7 @@ export function ComprobanteDetalleView({
 
   const scope = useDesignScope();
   const theme = useDesignTheme();
-  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeGestionar = usePuede("administracion.comprobantes.gestionar");
   const [tab, setTab] = React.useState("datos");
   const tabs = [
     {
@@ -274,10 +282,17 @@ export function ComprobanteDetalleView({
                 isPending={trabajando}
                 isDisabled={trabajando}
               >
-                Consultar resultado
+                {trabajando ? "Consultando resultado…" : "Consultar resultado"}
               </ActionButton>
             )}
           </AlertDescription>
+        </Alert>
+      )}
+      {resultadoConsulta && (
+        <Alert role="status" className={s.notice}>
+          <InfoIcon />
+          <AlertTitle>Resultado de la consulta</AlertTitle>
+          <AlertDescription>{resultadoConsulta}</AlertDescription>
         </Alert>
       )}
       {!fiscalDisponible && (

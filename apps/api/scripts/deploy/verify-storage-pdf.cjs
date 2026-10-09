@@ -20,6 +20,18 @@ async function main() {
   } finally { await storage.borrar(key); }
 
   const form = new FormData();
+  // Compose puede considerar iniciado el servicio antes de que Chromium esté listo.
+  let listo = false;
+  for (let intento = 0; intento < 30; intento++) {
+    try {
+      listo = (await fetch(`${process.env.PDF_RENDER_URL}/health`, {
+        signal: AbortSignal.timeout(2000),
+      })).ok;
+    } catch { /* arranque todavía en curso */ }
+    if (listo) break;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  assert.ok(listo, 'El generador PDF debe estar saludable antes del ensayo.');
   form.append('files', new Blob(['<!doctype html><html><body><h1>Ensayo Grafoprint</h1></body></html>'], { type: 'text/html' }), 'index.html');
   const rendered = await fetch(`${process.env.PDF_RENDER_URL}/forms/chromium/convert/html`, {
     method: 'POST', body: form, signal: AbortSignal.timeout(60000),

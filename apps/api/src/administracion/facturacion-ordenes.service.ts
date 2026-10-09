@@ -1,7 +1,16 @@
+import { contieneSinAcentos } from '../common/busqueda-texto';
+import type { FacturacionPaginaDto } from './dto/listado-fiscal.dto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { HISTORICO_SIN_ORDEN, saldoComercialCobro } from './saldo-comercial';
+import {
+  esFechaCalendario,
+  instanteDe,
+  sumarDiasAClave,
+  ZONA_DEFAULT,
+} from '../common/zona';
+import type { FacturacionPendientesQueryDto } from './dto/facturacion-pendientes.dto';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 /** Tolerancia subcentavo: un saldo de $0,01 también se aplica. */
@@ -604,20 +613,85 @@ export class FacturacionOrdenesService {
 
   /**
    * La vista Administración → Facturación: órdenes finalizadas/entregadas
-   * con saldo sin facturar. El filtro total>facturado se hace acá (Prisma
-   * no compara columnas entre sí); el volumen de finalizadas vivas lo
-   * aguanta de sobra.
+   * con saldo sin facturar. Los filtros se aplican en la base antes del
+   * límite del listado; el cobro completo nunca es un requisito por defecto.
    */
-  async pendientesFacturacion(tenantId: string) {
+  async pendientesFacturacion(
+    tenantId: string,
+    filtros: FacturacionPendientesQueryDto = {},
+  ) {
+    return (await this.consultarPendientes(tenantId, filtros)).items;
+  }
+
+  async pendientesFacturacionPagina(
+    tenantId: string,
+    filtros: FacturacionPaginaDto,
+  ) {
+    return this.consultarPendientes(tenantId, filtros, true);
+  }
+
+  private async consultarPendientes(
+    tenantId: string,
+    filtros: FacturacionPaginaDto,
+    paginado = false,
+  ) {
+    const { emisionDesde, emisionHasta, cobro } = filtros;
+    if (
+      (emisionDesde && !esFechaCalendario(emisionDesde)) ||
+      (emisionHasta && !esFechaCalendario(emisionHasta)) ||
+      (emisionDesde && emisionHasta && emisionDesde > emisionHasta)
+    ) {
+      throw new BadRequestException(
+        'Elegí un rango válido de fecha de emisión de la orden.',
+      );
+    }
+    const regional =
+      emisionDesde || emisionHasta
+        ? await this.prisma.datosEmpresa.findUnique({
+            where: { tenantId },
+            select: { zonaHoraria: true },
+          })
+        : null;
+    const zona = regional?.zonaHoraria ?? ZONA_DEFAULT;
+    const desde = emisionDesde ? instanteDe(emisionDesde, '00:00', zona) : null;
+    const hasta = emisionHasta
+      ? instanteDe(sumarDiasAClave(emisionHasta, 1), '00:00', zona)
+      : null;
+    // Misma tolerancia fiscal que facturarOrden/facturarLote. Resolver todos
+    // los filtros antes de LIMIT impide que registros no facturables oculten
+    // las coincidencias. Los valores siempre se parametrizan.
+    const where = Prisma.sql`      WHERE o."tenantId" = ${tenantId}::uuid
+        AND o."estado" IN ('finalizada', 'entregada')
+        AND o."tratamientoFiscal" = 'FISCAL'
+        AND o."total" > 0
+        AND o."total" - o."facturadoTotal" > 0.01
+        ${
+          cobro === 'cobradas_sin_facturar'
+            ? Prisma.sql`AND o."facturadoTotal" = 0 AND o."cobradoTotal" >= o."total"`
+            : Prisma.empty
+        }
+        ${desde ? Prisma.sql`AND o."fechaEmision" >= ${desde}` : Prisma.empty}
+        ${hasta ? Prisma.sql`AND o."fechaEmision" < ${hasta}` : Prisma.empty}
+
+      ${filtros.q?.trim() ? Prisma.sql`AND ${contieneSinAcentos(Prisma.sql`concat_ws(' ', o."numero", c."nombre")`, filtros.q)}` : Prisma.empty}
+    `;
+    const from = Prisma.sql`FROM "OrdenTrabajo" o LEFT JOIN "Cliente" c ON c."id" = o."clienteId" AND c."tenantId" = o."tenantId"`;
+    const [resumen] = await this.prisma.$queryRaw<
+      Array<{ total: number; importe: Prisma.Decimal; clientes: number }>
+    >(Prisma.sql`
+      SELECT count(*)::int AS total, coalesce(sum(o."total" - o."facturadoTotal"), 0) AS importe,
+        count(DISTINCT coalesce(o."clienteId"::text, 'CF'))::int AS clientes ${from} ${where}
+    `);
+    const tamanoPagina = paginado ? 25 : 500;
+    const paginas = Math.max(1, Math.ceil(resumen.total / tamanoPagina));
+    const pagina = Math.min(filtros.pagina ?? 1, paginas);
+    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT o."id" ${from} ${where}
+      ORDER BY o."fechaFinalizada" ASC, o."id" ASC
+      LIMIT ${tamanoPagina} OFFSET ${(pagina - 1) * tamanoPagina}
+    `);
     const ordenes = await this.prisma.ordenTrabajo.findMany({
-      where: {
-        tenantId,
-        estado: { in: ['finalizada', 'entregada'] },
-        total: { gt: 0 },
-        // Las órdenes sin comprobante fiscal quedan FUERA de la cola: no se
-        // facturan por error. Ver docs/margen-y-decisiones-de-precio.md §6.
-        tratamientoFiscal: 'FISCAL',
-      },
+      where: { tenantId, id: { in: ids.map((o) => o.id) } },
       select: {
         id: true,
         numero: true,
@@ -625,30 +699,37 @@ export class FacturacionOrdenesService {
         clienteId: true,
         cliente: { select: { nombre: true, condicionFiscal: true } },
         fechaFinalizada: true,
+        fechaEmision: true,
         total: true,
         facturadoTotal: true,
         cobradoTotal: true,
       },
-      orderBy: { fechaFinalizada: 'asc' },
-      take: 500,
+      orderBy: [{ fechaFinalizada: 'asc' }, { id: 'asc' }],
+      take: tamanoPagina,
     });
-    return ordenes
-      .filter((o) => Number(o.total ?? 0) - Number(o.facturadoTotal) > 0.01)
-      .map((o) => ({
-        ordenId: o.id,
-        numero: o.numero,
-        estado: o.estado,
-        clienteId: o.clienteId,
-        clienteNombre: o.cliente?.nombre ?? null,
-        clienteCondicionFiscal: o.cliente?.condicionFiscal ?? null,
-        fechaFinalizada: o.fechaFinalizada
-          ? o.fechaFinalizada.toISOString().slice(0, 10)
-          : null,
-        total: Number(o.total ?? 0),
-        facturado: Number(o.facturadoTotal),
-        cobrado: Number(o.cobradoTotal),
-        saldoSinFacturar: r2(Number(o.total ?? 0) - Number(o.facturadoTotal)),
-      }));
+    const items = ordenes.map((o) => ({
+      ordenId: o.id,
+      numero: o.numero,
+      estado: o.estado,
+      clienteId: o.clienteId,
+      clienteNombre: o.cliente?.nombre ?? null,
+      clienteCondicionFiscal: o.cliente?.condicionFiscal ?? null,
+      fechaEmision: o.fechaEmision?.toISOString() ?? null,
+      fechaFinalizada: o.fechaFinalizada
+        ? o.fechaFinalizada.toISOString().slice(0, 10)
+        : null,
+      total: Number(o.total ?? 0),
+      facturado: Number(o.facturadoTotal),
+      cobrado: Number(o.cobradoTotal),
+      saldoSinFacturar: r2(Number(o.total ?? 0) - Number(o.facturadoTotal)),
+    }));
+    return {
+      items,
+      total: resumen.total,
+      pagina,
+      tamanoPagina,
+      resumen: { importe: Number(resumen.importe), clientes: resumen.clientes },
+    };
   }
 
   // ── Primitivas privadas ────────────────────────────────────────────
@@ -768,9 +849,16 @@ export class FacturacionOrdenesService {
     const monto = r2(Math.min(libre, Number(actual.saldoPendiente), cupoOrden));
     if (monto <= EPS) return 0;
 
+    // Enviar un decimal exacto: un number viaja como float8 y puede quedar
+    // apenas por encima del saldo NUMERIC aunque ambos tengan los mismos centavos.
+    const montoDecimal = new Prisma.Decimal(monto.toFixed(2));
     const actualizado = await tx.comprobante.updateMany({
-      where: { id: factura.id, tenantId, saldoPendiente: { gte: monto } },
-      data: { saldoPendiente: { decrement: monto } },
+      where: {
+        id: factura.id,
+        tenantId,
+        saldoPendiente: { gte: montoDecimal },
+      },
+      data: { saldoPendiente: { decrement: montoDecimal } },
     });
     if (actualizado.count !== 1) {
       throw new BadRequestException(
@@ -834,9 +922,16 @@ export class FacturacionOrdenesService {
     );
     if (monto <= EPS) return 0;
 
+    // Enviar un decimal exacto: un number viaja como float8 y puede quedar
+    // apenas por encima del saldo NUMERIC aunque ambos tengan los mismos centavos.
+    const montoDecimal = new Prisma.Decimal(monto.toFixed(2));
     const actualizado = await tx.comprobante.updateMany({
-      where: { id: factura.id, tenantId, saldoPendiente: { gte: monto } },
-      data: { saldoPendiente: { decrement: monto } },
+      where: {
+        id: factura.id,
+        tenantId,
+        saldoPendiente: { gte: montoDecimal },
+      },
+      data: { saldoPendiente: { decrement: montoDecimal } },
     });
     if (actualizado.count !== 1) {
       throw new BadRequestException(

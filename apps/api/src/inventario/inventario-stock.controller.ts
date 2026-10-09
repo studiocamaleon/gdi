@@ -21,17 +21,18 @@ import { UpsertUbicacionDto } from './dto/upsert-ubicacion.dto';
 import { InventarioService } from './inventario.service';
 import { Permiso } from '../auth/permiso.decorator';
 
-@Permiso('inventario.ver')
+@Permiso("inventario.stock.ver")
 @Controller('inventario')
 export class InventarioStockController {
   constructor(private readonly inventarioService: InventarioService) {}
 
+  @Permiso('inventario.stock.ver', 'inventario.movimientos.ver', 'inventario.compras.ver')
   @Get('almacenes')
   getAlmacenes(@CurrentSession() auth: CurrentAuth) {
     return this.inventarioService.findAllAlmacenes(auth);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.stock.gestionar")
   @Post('almacenes')
   createAlmacen(
     @CurrentSession() auth: CurrentAuth,
@@ -40,7 +41,7 @@ export class InventarioStockController {
     return this.inventarioService.createAlmacen(auth, payload);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.stock.gestionar")
   @Put('almacenes/:id')
   updateAlmacen(
     @CurrentSession() auth: CurrentAuth,
@@ -50,12 +51,13 @@ export class InventarioStockController {
     return this.inventarioService.updateAlmacen(auth, id, payload);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.stock.gestionar")
   @Patch('almacenes/:id/toggle')
   toggleAlmacen(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.inventarioService.toggleAlmacen(auth, id);
   }
 
+  @Permiso('inventario.stock.ver', 'inventario.movimientos.ver', 'inventario.compras.ver')
   @Get('almacenes/:almacenId/ubicaciones')
   getUbicaciones(
     @CurrentSession() auth: CurrentAuth,
@@ -64,7 +66,7 @@ export class InventarioStockController {
     return this.inventarioService.findUbicacionesByAlmacen(auth, almacenId);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.stock.gestionar")
   @Post('almacenes/:almacenId/ubicaciones')
   createUbicacion(
     @CurrentSession() auth: CurrentAuth,
@@ -74,7 +76,7 @@ export class InventarioStockController {
     return this.inventarioService.createUbicacion(auth, almacenId, payload);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.stock.gestionar")
   @Put('ubicaciones/:id')
   updateUbicacion(
     @CurrentSession() auth: CurrentAuth,
@@ -84,7 +86,7 @@ export class InventarioStockController {
     return this.inventarioService.updateUbicacion(auth, id, payload);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.stock.gestionar")
   @Patch('ubicaciones/:id/toggle')
   toggleUbicacion(
     @CurrentSession() auth: CurrentAuth,
@@ -93,7 +95,7 @@ export class InventarioStockController {
     return this.inventarioService.toggleUbicacion(auth, id);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.movimientos.gestionar", "inventario.stock.gestionar")
   @Post('movimientos')
   registrarMovimiento(
     @CurrentSession() auth: CurrentAuth,
@@ -102,7 +104,7 @@ export class InventarioStockController {
     return this.inventarioService.registrarMovimiento(auth, payload);
   }
 
-  @Permiso('inventario.gestionar')
+  @Permiso("inventario.movimientos.gestionar", "inventario.stock.gestionar")
   @Post('movimientos/transferencia')
   registrarTransferencia(
     @CurrentSession() auth: CurrentAuth,
@@ -135,6 +137,7 @@ export class InventarioStockController {
     return this.inventarioService.getResumenStockMaterial(auth, id);
   }
 
+  @Permiso("inventario.movimientos.ver")
   @Get('kardex')
   getKardex(
     @CurrentSession() auth: CurrentAuth,

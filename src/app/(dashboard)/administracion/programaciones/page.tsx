@@ -9,12 +9,12 @@ import { getProveedores } from "@/lib/proveedores-api";
 export const dynamic = "force-dynamic";
 
 export default async function ProgramacionesAnterioresPage() {
-  if (!(await tienePermiso("administracion.ver")))
+  if (!(await tienePermiso("administracion.gastos.ver")))
     return <SinPermiso modulo="Programaciones anteriores" />;
   const [conCuentas, conFijos, configurar] = await Promise.all([
     tieneCapacidad("cuentas_pagar"),
     tieneCapacidad("gastos_fijos"),
-    tienePermiso("administracion.configurar"),
+    tienePermiso("administracion.gastos.ver"),
   ]);
   // La consulta del historial sigue disponible cuando cambia el plan.
   const [lista, categorias, proveedores, gastosFijos] = await Promise.all([

@@ -1,3 +1,5 @@
+import { normalizarTelefonoCliente } from '../common/telefono-cliente';
+import { contieneSinAcentos } from '../common/busqueda-texto';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -48,34 +50,41 @@ export class ClientesService {
       // Los inhabilitados quedan afuera salvo que los pidan: es lo que hace
       // que "inhabilitar" signifique algo en el resto del sistema.
       ...(pagination.incluirInactivos === 'true' ? {} : { activo: true }),
-      ...(query
-        ? {
-            OR: [
-              { nombre: { contains: query, mode: 'insensitive' } },
-              { razonSocial: { contains: query, mode: 'insensitive' } },
-              { emailPrincipal: { contains: query, mode: 'insensitive' } },
-              { telefonoNumero: { contains: query, mode: 'insensitive' } },
-              { documentoNumero: { contains: query, mode: 'insensitive' } },
-              { cuit: { contains: query, mode: 'insensitive' } },
-              {
-                contactos: {
-                  some: {
-                    OR: [
-                      { nombre: { contains: query, mode: 'insensitive' } },
-                      { email: { contains: query, mode: 'insensitive' } },
-                    ],
-                  },
-                },
-              },
-              {
-                direcciones: {
-                  some: { ciudad: { contains: query, mode: 'insensitive' } },
-                },
-              },
-            ],
-          }
-        : {}),
     };
+
+    let totalBusqueda: number | undefined;
+    if (query) {
+      // Normalizar antes de paginar conserva todas las coincidencias.
+      const contiene = (columna: Prisma.Sql) =>
+        contieneSinAcentos(columna, query);
+      const filtro = Prisma.sql`c."tenantId" = ${auth.tenantId}::uuid
+        ${pagination.incluirInactivos === 'true' ? Prisma.empty : Prisma.sql`AND c.activo = true`}
+        AND (${Prisma.join(
+          [
+            'nombre',
+            'razonSocial',
+            'emailPrincipal',
+            'telefonoNumero',
+            'documentoNumero',
+            'cuit',
+          ].map((campo) =>
+            contiene(Prisma.sql`c.${Prisma.raw('"' + campo + '"')}`),
+          ),
+          ' OR ',
+        )}
+          OR EXISTS (SELECT 1 FROM "ClienteContacto" co WHERE co."clienteId" = c.id AND co."tenantId" = c."tenantId" AND (${contiene(Prisma.sql`co.nombre`)} OR ${contiene(Prisma.sql`co.email`)}))
+          OR EXISTS (SELECT 1 FROM "ClienteDireccion" d WHERE d."clienteId" = c.id AND d."tenantId" = c."tenantId" AND ${contiene(Prisma.sql`d.ciudad`)}))`;
+      const [ids, conteo] = await this.prisma.$transaction([
+        this.prisma.$queryRaw<{ id: string }[]>(
+          Prisma.sql`SELECT c.id FROM "Cliente" c WHERE ${filtro} ORDER BY c.nombre, c.id LIMIT ${pagination.limit} OFFSET ${pagination.skip}`,
+        ),
+        this.prisma.$queryRaw<{ total: bigint }[]>(
+          Prisma.sql`SELECT count(*) AS total FROM "Cliente" c WHERE ${filtro}`,
+        ),
+      ]);
+      where.id = { in: ids.map((fila) => fila.id) };
+      totalBusqueda = Number(conteo[0].total);
+    }
 
     const [clientes, total] = await this.prisma.$transaction([
       this.prisma.cliente.findMany({
@@ -88,8 +97,8 @@ export class ClientesService {
             orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
           },
         },
-        orderBy: { nombre: 'asc' },
-        skip: pagination.skip,
+        orderBy: [{ nombre: 'asc' }, { id: 'asc' }],
+        skip: query ? 0 : pagination.skip,
         take: pagination.limit,
       }),
       this.prisma.cliente.count({ where }),
@@ -97,7 +106,7 @@ export class ClientesService {
 
     return paginatedResponse(
       clientes.map((cliente) => this.toResponse(cliente)),
-      total,
+      totalBusqueda ?? total,
       pagination,
     );
   }
@@ -153,13 +162,20 @@ export class ClientesService {
       // manda es el cargado —puede ser el bueno y el del mostrador un
       // celular prestado—.
       const telefonoNuevo = (payload.telefonoNumero ?? '').trim();
-      const completa =
-        telefonoNuevo && !existente.telefonoNumero.trim()
-          ? {
-              telefonoCodigo: (payload.telefonoCodigo ?? '+54').trim(),
-              telefonoNumero: telefonoNuevo,
-            }
-          : null;
+      let completa: { telefonoCodigo: string; telefonoNumero: string } | null =
+        null;
+      if (telefonoNuevo && !existente.telefonoNumero.trim()) {
+        const telefono = normalizarTelefonoCliente(
+          payload.telefonoCodigo ?? '54',
+          telefonoNuevo,
+          'AR',
+        );
+        if (!telefono.ok) throw new BadRequestException(telefono.error);
+        completa = {
+          telefonoCodigo: telefono.telefonoCodigo,
+          telefonoNumero: telefono.telefonoNumero,
+        };
+      }
       if (!completa) {
         return { cliente: this.toResponse(existente), yaExistia: true };
       }
@@ -181,7 +197,13 @@ export class ClientesService {
       return { cliente: this.toResponse(actualizado), yaExistia: true };
     }
 
-    const telefonoNumero = (payload.telefonoNumero ?? '').trim();
+    const telefono = normalizarTelefonoCliente(
+      payload.telefonoCodigo ?? '54',
+      payload.telefonoNumero ?? '',
+      'AR',
+    );
+    if (!telefono.ok) throw new BadRequestException(telefono.error);
+    const telefonoNumero = telefono.telefonoNumero;
     try {
       const cliente = await this.prisma.cliente.create({
         data: {
@@ -194,9 +216,7 @@ export class ClientesService {
           // con DNI, y define la letra del comprobante.
           condicionFiscal: 'consumidor_final',
           emailPrincipal: null,
-          telefonoCodigo: telefonoNumero
-            ? (payload.telefonoCodigo ?? '+54').trim()
-            : '',
+          telefonoCodigo: telefonoNumero ? telefono.telefonoCodigo : '',
           telefonoNumero,
           paisCodigo: 'AR',
           eventos: {
@@ -664,6 +684,12 @@ export class ClientesService {
       );
     }
 
+    const telefono = normalizarTelefonoCliente(
+      payload.telefonoCodigo ?? '',
+      payload.telefonoNumero ?? '',
+      payload.pais,
+    );
+    if (!telefono.ok) throw new BadRequestException(telefono.error);
     return {
       ...payload,
       nombre: payload.nombre.trim(),
@@ -682,28 +708,39 @@ export class ClientesService {
           : Math.trunc(payload.plazoCuentaCorrienteDias),
       email: payload.email?.trim().toLowerCase() || null,
       pais: payload.pais.trim().toUpperCase(),
-      telefonoCodigo: payload.telefonoCodigo?.trim() || '',
-      telefonoNumero: payload.telefonoNumero?.trim() || '',
+      telefonoCodigo: telefono.telefonoCodigo,
+      telefonoNumero: telefono.telefonoNumero,
       aceptaWhatsapp: payload.aceptaWhatsapp ?? null,
-      contactos: this.normalizeContactos(payload.contactos),
+      contactos: this.normalizeContactos(payload.contactos, payload.pais),
       direcciones: this.normalizeDirecciones(payload.direcciones),
     };
   }
 
-  private normalizeContactos(contactos: ClienteContactoDto[]) {
+  private normalizeContactos(contactos: ClienteContactoDto[], pais = 'AR') {
     if (contactos.length === 0) {
       return [];
     }
 
-    const base = contactos.map((contacto) => ({
-      ...contacto,
-      nombre: contacto.nombre.trim(),
-      cargo: contacto.cargo?.trim() || null,
-      email: contacto.email?.trim().toLowerCase() || null,
-      telefonoCodigo: contacto.telefonoCodigo?.trim() || null,
-      telefonoNumero: contacto.telefonoNumero?.trim() || null,
-      principal: contacto.principal,
-    }));
+    const base = contactos.map((contacto) => {
+      const telefono = normalizarTelefonoCliente(
+        contacto.telefonoCodigo ?? '',
+        contacto.telefonoNumero ?? '',
+        pais,
+      );
+      if (!telefono.ok)
+        throw new BadRequestException(
+          `Teléfono del contacto: ${telefono.error}`,
+        );
+      return {
+        ...contacto,
+        nombre: contacto.nombre.trim(),
+        cargo: contacto.cargo?.trim() || null,
+        email: contacto.email?.trim().toLowerCase() || null,
+        telefonoCodigo: telefono.telefonoCodigo,
+        telefonoNumero: telefono.telefonoNumero || null,
+        principal: contacto.principal,
+      };
+    });
 
     const principalIndex = base.findIndex((contacto) => contacto.principal);
 

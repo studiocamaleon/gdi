@@ -14,7 +14,9 @@ export type PresupuestoEstado =
   | "aprobado"
   | "rechazado"
   | "vencido"
-  | "convertido";
+  | "convertido"
+  | "descartado"
+  | "reemplazado";
 
 export const MOTIVOS_PERDIDA: Array<{ value: string; label: string }> = [
   { value: "precio", label: "Precio" },
@@ -49,6 +51,7 @@ export type PresupuestoCargoPayload = {
 };
 
 export type PresupuestoResumen = {
+  versionPresupuesto?: number;
   id: string;
   numero: string;
   estado: PresupuestoEstado;
@@ -77,7 +80,48 @@ export type PresupuestoEventoPanel = {
   origen: string;
 };
 
+export type PresupuestoVersion = {
+  id: string;
+  version: number;
+  vigente: boolean;
+  estado: PresupuestoEstado;
+  total: number;
+  creadaEl: string;
+  enviadaEl: string | null;
+  autor: string | null;
+};
+
+export type PresupuestoEdicion = {
+  id: string;
+  numero: string;
+  version: number;
+  actualizadaEl: string;
+  cliente: {
+    id: string;
+    nombre: string;
+    razonSocial: string;
+    email: string;
+    telefonoCodigo: string;
+    telefonoNumero: string;
+  } | null;
+  clienteId: string | null;
+  proyectoCampanaId: string | null;
+  vendedorEmpleadoId: string | null;
+  canalVenta: string | null;
+  fechaEntrega?: string;
+  validezDias?: number;
+  observaciones?: string | null;
+  senaSugeridaPct?: number;
+  fidelizacionCanjePuntos?: number;
+  fidelizacionCanjeMonto?: number;
+  cargos: import("./propuestas").PropuestaCargoDirecto[];
+  productos: import("./ordenes-trabajo").OrdenTrabajoProducto[];
+};
+
 export type PresupuestoDetalle = {
+  versionPresupuesto?: number;
+  versionVigente?: boolean;
+  versiones?: PresupuestoVersion[];
   pdfDisponible?: boolean;
   tipoCambio?: import("@/lib/tipo-cambio-api").TipoCambioSnapshot | null;
   id: string;
@@ -104,6 +148,7 @@ export type PresupuestoDetalle = {
   impuestos: number;
   total: number;
   cargosDirectos: number;
+  cargos?: PresupuestoPublico["cargos"];
   fechaEntrega: string | null;
   publicToken: string | null;
   ordenConvertida: string | null;
@@ -152,6 +197,7 @@ export type PresupuestosListado = {
 };
 
 export type PresupuestoPublico = {
+  versionPresupuesto?: number;
   numero: string;
   estado: PresupuestoEstado;
   negocio: string;
@@ -167,6 +213,11 @@ export type PresupuestoPublico = {
   subtotal: number;
   impuestos: number;
   cargosDirectos: number;
+  cargos?: Array<{
+    nombre: string;
+    descripcion: string | null;
+    total: number;
+  }>;
   total: number;
   /** Σ del descuento comercial de los items (0 = sin descuento). */
   descuentoTotal: number;
@@ -251,22 +302,72 @@ export function emitirPresupuesto(payload: {
   });
 }
 
-export type CorreoPresupuestoEntrada = { idempotencia: string; para: string; asunto: string; mensaje: string };
+/** Persiste un presupuesto sin emisión, enlace público ni avisos al cliente. */
+export function guardarBorradorPresupuesto(
+  payload: Parameters<typeof emitirPresupuesto>[0],
+) {
+  return apiRequest<PresupuestoDetalle>("/presupuestos/borradores", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type CorreoPresupuestoEntrada = {
+  idempotencia: string;
+  para: string;
+  asunto: string;
+  mensaje: string;
+};
 export type CorreoPresupuestoPreparacion = {
-  empresa: string; numero: string; para: string; responderA: string; remitente: string;
-  asunto: string; mensaje: string; disponible: boolean;
+  empresa: string;
+  numero: string;
+  para: string;
+  responderA: string;
+  remitente: string;
+  asunto: string;
+  mensaje: string;
+  disponible: boolean;
   contactos: Array<{ id: string; nombre: string; email: string }>;
 };
 export type CorreoPresupuestoEnvio = {
-  id: string; estado: "PENDIENTE" | "ENVIANDO" | "ENVIADO" | "FALLIDO";
-  para: string; responderA: string; asunto: string; mensaje: string;
-  createdAt: string; enviadoEl: string | null; error: string | null; puedeReintentar: boolean;
+  id: string;
+  estado: "PENDIENTE" | "ENVIANDO" | "ENVIADO" | "FALLIDO";
+  para: string;
+  responderA: string;
+  asunto: string;
+  mensaje: string;
+  createdAt: string;
+  enviadoEl: string | null;
+  error: string | null;
+  puedeReintentar: boolean;
 };
-export const prepararCorreoPresupuesto = (id: string) => apiRequest<CorreoPresupuestoPreparacion>(`/presupuestos/${id}/correo/preparar`);
-export const previsualizarCorreoPresupuesto = (id: string, payload: CorreoPresupuestoEntrada) => apiRequest<{ html: string }>(`/presupuestos/${id}/correo/vista-previa`, { method: "POST", body: JSON.stringify(payload) });
-export const enviarCorreoPresupuesto = (id: string, payload: CorreoPresupuestoEntrada) => apiRequest<CorreoPresupuestoEnvio>(`/presupuestos/${id}/correo`, { method: "POST", body: JSON.stringify(payload) });
-export const historialCorreosPresupuesto = (id: string) => apiRequest<CorreoPresupuestoEnvio[]>(`/presupuestos/${id}/correos`);
-export const reintentarCorreoPresupuesto = (id: string, correoId: string) => apiRequest<{ ok: true }>(`/presupuestos/${id}/correos/${correoId}/reintentar`, { method: "POST" });
+export const prepararCorreoPresupuesto = (id: string) =>
+  apiRequest<CorreoPresupuestoPreparacion>(
+    `/presupuestos/${id}/correo/preparar`,
+  );
+export const previsualizarCorreoPresupuesto = (
+  id: string,
+  payload: CorreoPresupuestoEntrada,
+) =>
+  apiRequest<{ html: string }>(`/presupuestos/${id}/correo/vista-previa`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+export const enviarCorreoPresupuesto = (
+  id: string,
+  payload: CorreoPresupuestoEntrada,
+) =>
+  apiRequest<CorreoPresupuestoEnvio>(`/presupuestos/${id}/correo`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+export const historialCorreosPresupuesto = (id: string) =>
+  apiRequest<CorreoPresupuestoEnvio[]>(`/presupuestos/${id}/correos`);
+export const reintentarCorreoPresupuesto = (id: string, correoId: string) =>
+  apiRequest<{ ok: true }>(
+    `/presupuestos/${id}/correos/${correoId}/reintentar`,
+    { method: "POST" },
+  );
 
 export function enviarPresupuesto(id: string) {
   return apiRequest<PresupuestoDetalle>(`/presupuestos/${id}/enviar`, {
@@ -384,4 +485,27 @@ export function presupuestoPublicPath(token: string): string {
 /** URL absoluta para compartir con el cliente (copiar, mandar por mail). */
 export function presupuestoPublicUrl(token: string): string {
   return enlacePublicoUrl("presupuesto", token);
+}
+
+export function getPresupuestoEdicion(id: string) {
+  return apiRequest<PresupuestoEdicion>(`/presupuestos/${id}/edicion`, {
+    method: "GET",
+  });
+}
+export function descartarPresupuesto(id: string) {
+  return apiRequest<PresupuestoDetalle>(`/presupuestos/${id}/descartar`, {
+    method: "PATCH",
+  });
+}
+export function crearVersionPresupuesto(
+  id: string,
+  payload: Parameters<typeof emitirPresupuesto>[0] & {
+    revisionBaseActualizadaEl: string;
+    enviar?: boolean;
+  },
+) {
+  return apiRequest<PresupuestoDetalle>(`/presupuestos/${id}/versiones`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

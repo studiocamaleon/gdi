@@ -172,3 +172,15 @@ it('la migración es explícita, conserva el vínculo anterior para no duplicar 
     ).planificacionPorEmpleados,
   ).toBe(true);
 });
+
+it('guarda apoyos por estación, conserva la modalidad en clientes anteriores y rechaza personal ajeno', async () => {
+  const creada = await service.createEstacion(auth, { ...payload('Con apoyo'), empleadoApoyoIds: [empleadoId] });
+  expect(creada.empleados[0].asignacionAutomatica).toBe(false);
+  const otra = await service.createEstacion(auth, payload('Habitual'));
+  expect(otra.empleados[0].asignacionAutomatica).toBe(true);
+  const conservada = await service.updateEstacion(auth, creada.id, payload('Nombre nuevo'));
+  expect(conservada.empleados[0].asignacionAutomatica).toBe(false);
+  await expect(service.updateEstacion(auth, creada.id, { ...payload('Ajena'), empleadoApoyoIds: [ajenoId] })).rejects.toThrow('habilitado');
+  const actualizada = await service.updateEstacion(auth, creada.id, { ...payload('Habitual ahora'), empleadoApoyoIds: [] });
+  expect(actualizada.empleados[0].asignacionAutomatica).toBe(true);
+});

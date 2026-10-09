@@ -1,5 +1,5 @@
 import { SinPermiso } from "@/components/navigation/sin-permiso";
-import { tienePermiso } from "@/lib/permisos-server";
+import { tieneSeccion, tienePermiso } from "@/lib/permisos-server";
 
 /**
  * Puerta del módulo. El sidebar ya lo esconde para quien no lo tiene, pero una
@@ -12,7 +12,7 @@ export default async function Layout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!(await tienePermiso("produccion.ver"))) {
+  if (!(await tieneSeccion("produccion").then(async v => v || await tienePermiso("comercial.ordenes.ver")))) {
     return <SinPermiso modulo="Producción" />;
   }
   return <>{children}</>;

@@ -8,9 +8,13 @@ import {
 import { Reflector } from '@nestjs/core';
 
 import { CurrentAuth } from './auth.types';
-import { PERMISO_KEY, SOLO_AUTENTICADO_KEY } from './permiso.decorator';
+import {
+  PERMISO_KEY,
+  SOLO_AUTENTICADO_KEY,
+  VISTA_KEY,
+} from './permiso.decorator';
 import { SIN_TENANT_KEY } from '../common/sin-tenant.decorator';
-import type { PermisoClave } from './permisos';
+import { expandir, type PermisoClave } from './permisos';
 
 /**
  * Guard de autorización por permiso. Corre después de AuthGuard, así que
@@ -48,18 +52,32 @@ export class PermisosGuard implements CanActivate {
     // Sin auth es una ruta @Public que AuthGuard dejó pasar: no hay permiso que
     // evaluar. (Si no fuera pública, AuthGuard ya habría tirado 401.)
     if (!auth) return true;
+    if (!auth.mcp) auth.permisos = expandir([...(auth.permisos ?? [])]);
+    const vistas = this.reflector.getAllAndOverride<PermisoClave[]>(VISTA_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (vistas && !vistas.some((p) => auth.permisos?.has(p))) {
+      throw new ForbiddenException('No tenés acceso a esta vista.');
+    }
 
-    const soloAutenticado = this.reflector.getAllAndOverride<boolean>(
-      SOLO_AUTENTICADO_KEY,
-      [context.getHandler(), context.getClass()],
-    );
-    if (soloAutenticado) return true;
+    // Resolver ambas reglas en el mismo nivel antes de heredar. Buscar cada
+    // clave por separado permitía que @SoloAutenticado del controller anulase
+    // un @Permiso más estricto del método. Si coinciden, prevalece el permiso,
+    // incluso vacío (denegación), independientemente del orden de decoradores.
+    let declarado: PermisoClave | PermisoClave[] | undefined;
+    for (const target of [context.getHandler(), context.getClass()]) {
+      declarado = this.reflector.get<PermisoClave | PermisoClave[]>(
+        PERMISO_KEY,
+        target,
+      );
+      if (declarado !== undefined) break;
+      if (this.reflector.get<boolean>(SOLO_AUTENTICADO_KEY, target) === true) {
+        return true;
+      }
+    }
 
-    // Puede venir uno solo (la forma vieja) o varios, y entonces alcanza con
-    // tener cualquiera.
-    const declarado = this.reflector.getAllAndOverride<
-      PermisoClave | PermisoClave[]
-    >(PERMISO_KEY, [context.getHandler(), context.getClass()]);
+    // Puede venir uno solo (la forma vieja) o varios: alcanza con cualquiera.
     const requerido = declarado
       ? Array.isArray(declarado)
         ? declarado

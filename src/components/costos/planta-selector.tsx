@@ -33,7 +33,7 @@ export function PlantaSelector({
   onAltaAbiertaChange?: (abierta: boolean) => void;
 }) {
   const id = useId();
-  const puedeGestionar = usePuede("costos.gestionar");
+  const puedeGestionar = usePuede("costos.maquinaria.gestionar");
   const maquinaria = useCapacidad("maquinaria");
   const centros = useCapacidad("centros_costo");
   const puedeCrear = puedeGestionar && (maquinaria || centros);

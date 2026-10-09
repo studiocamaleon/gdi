@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function GastosFijosPage() {
   if (!(await tieneCapacidad("gastos_fijos"))) return <FuncionNoIncluida />;
-  if (!(await tienePermiso("administracion.configurar"))) {
+  if (!(await tienePermiso("administracion.gastos.ver"))) {
     return <SinPermiso modulo="Gastos fijos" />;
   }
   return (

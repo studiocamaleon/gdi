@@ -44,7 +44,7 @@ export class SincronizarDto {
  * dueño, aunque estemos adentro asistiéndolo.
  * Ver docs/suscripciones-cobro-diseno.md
  */
-@Permiso('configuracion.ver')
+@Permiso("configuracion.suscripcion.ver")
 @PermitirSuscripcionInactiva()
 @Controller('suscripcion')
 export class SuscripcionController {
@@ -76,7 +76,7 @@ export class SuscripcionController {
    * prorrateo. Abrir un checkout crearía una SEGUNDA suscripción y le
    * cobrarían las dos.
    */
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.suscripcion.gestionar")
   @Post('cambiar-plan')
   @Roles(RolSistema.ADMINISTRADOR)
   @ProhibidoImpersonando()
@@ -93,7 +93,7 @@ export class SuscripcionController {
   }
 
   /** Cuánto se le cobra ahora por ese cambio, antes de confirmarlo. */
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.suscripcion.gestionar")
   @Post('cambiar-plan/previsualizar')
   @Roles(RolSistema.ADMINISTRADOR)
   @ProhibidoImpersonando()
@@ -112,7 +112,7 @@ export class SuscripcionController {
    * Trae el alta desde la pasarela apenas cierra el checkout, sin esperar el
    * webhook: el usuario pagó y tiene que ver el resultado ya.
    */
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.suscripcion.gestionar")
   @Post('sincronizar')
   @Roles(RolSistema.ADMINISTRADOR)
   @ProhibidoImpersonando()
@@ -144,7 +144,7 @@ export class SuscripcionController {
   }
 
   /** Deshace la cancelación pendiente. */
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.suscripcion.gestionar")
   @Post('reactivar')
   @Roles(RolSistema.ADMINISTRADOR)
   @ProhibidoImpersonando()
@@ -157,7 +157,7 @@ export class SuscripcionController {
    * la URL para que el front redirija; la sesión es de un solo uso y expira,
    * así que se pide en el momento y no se guarda.
    */
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.suscripcion.gestionar")
   @Post('portal')
   @Roles(RolSistema.ADMINISTRADOR)
   @ProhibidoImpersonando()

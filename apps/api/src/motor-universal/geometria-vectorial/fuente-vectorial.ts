@@ -1,4 +1,5 @@
-import { Helper } from 'dxf';
+import type { Helper } from 'dxf';
+import { crearHelperDxfSeguro, DxfSeguroError } from './dxf-seguro';
 import type { DiagnosticoSvg } from './tipos';
 import { analizarSvgFabricacion, SvgFabricacionError } from './svg-parser';
 
@@ -89,9 +90,17 @@ export function normalizarFuenteVectorial(input: {
 function normalizarDxf(contenido: string): FuenteVectorialNormalizada {
   let helper: Helper;
   try {
-    helper = new Helper(contenido);
-    void helper.parsed;
-  } catch {
+    helper = crearHelperDxfSeguro(contenido);
+  } catch (error) {
+    if (error instanceof DxfSeguroError) {
+      throw new FuenteVectorialError(error.message, [
+        {
+          codigo: 'dxf_fuente_no_admitida',
+          mensaje: error.message,
+          severidad: 'ERROR',
+        },
+      ]);
+    }
     throw new FuenteVectorialError('El archivo no contiene un DXF válido.', [
       {
         codigo: 'dxf_invalido',

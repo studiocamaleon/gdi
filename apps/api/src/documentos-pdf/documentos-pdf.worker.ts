@@ -1,3 +1,5 @@
+import { reportarFallo } from '../common/observabilidad';
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   ForbiddenException,
@@ -13,7 +15,10 @@ import { runWithTenant } from '../common/tenant-context';
 import { conLockDeCron } from '../common/cron-lock';
 import { ArchivosService } from '../archivos/archivos.service';
 import { PresupuestoRenderService } from '../presupuestos/pdf-piloto/presupuesto-render.service';
-import { VERSION_PRESUPUESTO_HTML } from '../presupuestos/pdf-piloto/presupuesto-html';
+import {
+  VERSION_PRESUPUESTO_HTML,
+  VERSION_PRESUPUESTO_HTML_ANTERIOR,
+} from '../presupuestos/pdf-piloto/presupuesto-html';
 import type { PresupuestoPdfDatos } from '../presupuestos/presupuesto-pdf.service';
 import { conexionRedisApi, conexionRedisWorker } from '../workers/redis';
 import {
@@ -76,6 +81,9 @@ export class DocumentosPdfWorker
       removeOnComplete: { age: 86400, count: 1000 },
       removeOnFail: { age: 7 * 86400, count: 2000 },
     });
+    this.worker.on('error', (error) =>
+      reportarFallo(error, { operacion: 'cola', cola: 'documentos-pdf' }),
+    );
     this.worker.on('error', () =>
       this.logger.warn('Conexión del worker PDF interrumpida; se reintentará.'),
     );
@@ -213,7 +221,7 @@ export class DocumentosPdfWorker
     } catch (error) {
       this.logger.warn({
         event: 'pdf_dispatch_unavailable',
-        message: error instanceof Error ? error.name : 'Error',
+        message: textoErrorLog(error),
       });
     } finally {
       this.despachando = false;
@@ -288,11 +296,16 @@ export class DocumentosPdfWorker
         renovar.unref();
         await this.capacidades.exigir(tenantId, 'documentos_pdf');
         const datos = doc.datosJson as unknown as PresupuestoPdfDatos;
-        if (doc.plantillaVersion !== VERSION_PRESUPUESTO_HTML)
+        if (
+          ![
+            VERSION_PRESUPUESTO_HTML,
+            VERSION_PRESUPUESTO_HTML_ANTERIOR,
+          ].includes(doc.plantillaVersion)
+        )
           throw new Error('PDF_VERSION_NO_SOPORTADA');
         if (hashDatosPdf(datos) !== doc.datosHash)
           throw new Error('PDF_SNAPSHOT_INVALIDO');
-        const pdf = await this.renderer.generar(datos);
+        const pdf = await this.renderer.generar(datos, doc.plantillaVersion);
         if (!(await this.tenants.renovar(lease)))
           throw new Error('PDF_LEASE_PERDIDO');
         await this.archivos.materializarVersionPdf({
@@ -331,6 +344,12 @@ export class DocumentosPdfWorker
           'code' in respuesta &&
           respuesta.code === 'CAPACIDAD_NO_DISPONIBLE';
         const cuota = error instanceof ForbiddenException && !sinCapacidad;
+        if (!cuota && (permanente || agotado))
+          reportarFallo(error, {
+            operacion: 'cola',
+            cola: 'documentos-pdf',
+            tenant_id: tenantId,
+          });
         await this.prisma.documentoPdf.updateMany({
           where: {
             id: documentoId,

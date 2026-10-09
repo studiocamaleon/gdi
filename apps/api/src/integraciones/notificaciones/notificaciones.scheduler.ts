@@ -1,3 +1,5 @@
+import { WatiEntregaService } from '../wati/wati-entrega.service';
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { EstadoIntegracion, ProveedorIntegracion } from '@prisma/client';
@@ -44,6 +46,7 @@ export class NotificacionesScheduler {
     private readonly despacho: DespachoService,
     private readonly resenas: NotificacionesResenasService,
     private readonly presupuestos: NotificacionesPresupuestosService,
+    private readonly seguimiento?: WatiEntregaService,
   ) {}
 
   @Cron('*/5 * * * *', { name: 'notificaciones-whatsapp' })
@@ -59,13 +62,14 @@ export class NotificacionesScheduler {
           await this.soltarReservasVencidas();
           for (const tenantId of await this.tenantsConWati()) {
             await this.drenarTenant(tenantId);
+            await this.seguimiento?.revisarTenant(tenantId);
           }
         },
       );
     } catch (error) {
       this.logger.error(
         'Falló el drenado de notificaciones.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     } finally {
       this.corriendo = false;
@@ -109,7 +113,7 @@ export class NotificacionesScheduler {
     } catch (error) {
       this.logger.error(
         'Falló el barrido de pedidos de reseña.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -136,7 +140,7 @@ export class NotificacionesScheduler {
     } catch (error) {
       this.logger.error(
         'Falló el barrido de presupuestos por vencer.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -197,11 +201,11 @@ export class NotificacionesScheduler {
       let enviadas = 0;
       for (const { id } of pendientes) {
         const res = await this.despacho.despachar(id, ahora);
-        if (res.estado === 'enviada') enviadas += 1;
+        if (res.estado === 'aceptada') enviadas += 1;
       }
 
       if (enviadas > 0) {
-        this.logger.log(`Tenant ${tenantId}: ${enviadas} WhatsApp enviados.`);
+        this.logger.log(`Tenant ${tenantId}: ${enviadas} avisos aceptados por Wati; entrega pendiente.`);
       }
     });
   }

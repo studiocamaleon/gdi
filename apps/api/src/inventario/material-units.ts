@@ -177,6 +177,7 @@ function resolveGraph(context: MaterialUnitContext, includeManual: boolean) {
       add('unidad', 'm2', width * height, 'medidas');
   }
   if (context.templateId === 'perfil_estructural_v1') {
+    add('barra', 'unidad', 1, 'medidas');
     const barLength = positive(attrs.largoBarra);
     if (barLength) add('unidad', 'metro_lineal', barLength, 'medidas');
   }
@@ -269,6 +270,9 @@ export function materialUnitConversion(
 export function validateMaterialUnits(
   context: MaterialUnitContext,
 ): string | null {
+  if ([context.unidadCompra, context.unidadStock, context.unidadUso, context.unidadPrecio].some((u) => u && normalizeMaterialUnit(u) === 'barra') &&
+      (context.templateId !== 'perfil_estructural_v1' || !positive(context.atributos?.largoBarra)))
+    return 'Para usar barras, indicá su largo comercial en metros en la variante del perfil.';
   const graph = resolveGraph(context, false);
   const relations = materialEquivalences(context);
   if (relations.length > 20)

@@ -1,3 +1,5 @@
+import { crearZipStream, nombreSeguroZip, validarPaqueteZip } from './descarga-zip';
+import { textoErrorLog } from '../common/log-seguro';
 import {
   BadRequestException,
   Inject,
@@ -65,6 +67,7 @@ const CAMPO_POR_SCOPE: Record<ArchivoScope, keyof Archivo | null> = {
   COBRO: 'cobroId',
   EGRESO: 'egresoId',
   PRODUCTO: 'productoId',
+  DISENO_COTIZACION: 'productoId',
   PROVEEDOR: 'proveedorId',
 };
 
@@ -171,6 +174,11 @@ export class ArchivosService {
       throw new BadRequestException(
         'El logo tiene que ser PNG, JPG, WEBP o SVG.',
       );
+    }
+
+    if (dto.scope === ArchivoScope.DISENO_COTIZACION &&
+      (!["svg", "dxf"].includes(ext) || dto.bytes > 524288 || dto.publico)) {
+      throw new BadRequestException("El diseño debe ser un SVG o DXF privado de hasta 512 KB.");
     }
 
     await this.verificarEntidad(dto.scope, dto.entidadId ?? null);
@@ -293,10 +301,13 @@ export class ArchivosService {
     }
 
     const ext = extensionDe(archivo.nombreOriginal);
-    if (meta.bytes > this.maxBytes) {
+    if (meta.bytes > this.maxBytes ||
+      (archivo.scope === ArchivoScope.DISENO_COTIZACION && meta.bytes > 524288)) {
       await this.cancelarPendiente(auth.tenantId, archivo.id);
       throw new BadRequestException(
-        `El archivo subido supera el máximo de ${Math.round(this.maxBytes / 1024 / 1024)} MB.`,
+        archivo.scope === ArchivoScope.DISENO_COTIZACION
+          ? 'El diseño subido supera el máximo de 512 KB.'
+          : `El archivo subido supera el máximo de ${Math.round(this.maxBytes / 1024 / 1024)} MB.`,
       );
     }
     if (meta.contentType && !mimeCoherente(ext, meta.contentType)) {
@@ -313,7 +324,12 @@ export class ArchivosService {
       archivo.key,
       BYTES_DE_FIRMA,
     );
-    if (cabecera && contenidoCoincide(ext, cabecera) === false) {
+    if (!cabecera?.length) {
+      throw new BadRequestException(
+        'No pude verificar el contenido del archivo. Volvé a intentar la confirmación.',
+      );
+    }
+    if (contenidoCoincide(ext, cabecera) === false) {
       await this.cancelarPendiente(auth.tenantId, archivo.id);
       throw new BadRequestException(
         `El archivo no es un .${ext} de verdad: su contenido no corresponde a ese formato.`,
@@ -711,6 +727,48 @@ export class ArchivosService {
     };
   }
 
+  async prepararDescargaZip(tenantId: string, destino: { ordenId: string } | { itemId: string }) {
+    // Empresa explícita también fuera del interceptor (tests, futuros callers).
+    let ordenId = 'ordenId' in destino ? destino.ordenId : null;
+    let idsItems: string[];
+    let nombre: string;
+    if (ordenId) {
+      const orden = await this.prisma.ordenTrabajo.findFirst({
+        where: { id: ordenId, tenantId },
+        select: { numero: true, items: { where: { tenantId }, select: { id: true }, orderBy: { ordenIndice: 'asc' } } },
+      });
+      if (!orden) throw new NotFoundException('Orden no encontrada.');
+      idsItems = orden.items.map((i) => i.id);
+      nombre = nombreSeguroZip(orden.numero || ordenId);
+    } else {
+      const item = await this.prisma.ordenTrabajoItem.findFirst({
+        where: { id: (destino as { itemId: string }).itemId, tenantId },
+        select: { id: true, nombre: true, ordenId: true },
+      });
+      if (!item) throw new NotFoundException('Trabajo no encontrado.');
+      idsItems = [item.id];
+      ordenId = item.ordenId;
+      nombre = nombreSeguroZip(item.nombre);
+    }
+    const archivos = await this.prisma.archivo.findMany({
+      where: {
+        tenantId, estado: ArchivoEstado.LISTO, generado: false,
+        OR: [
+          ...(ordenId ? [{ ordenId, scope: ArchivoScope.ORDEN }] : []),
+          { ordenItemId: { in: idsItems }, scope: ArchivoScope.ORDEN_ITEM },
+        ],
+      },
+      select: { key: true, nombreOriginal: true, bytes: true, ordenItemId: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const entradas = archivos.map((a, i) => ({
+      key: a.key, bytes: Number(a.bytes),
+      nombre: `${a.ordenItemId ? 'producto-' + (idsItems.indexOf(a.ordenItemId) + 1) : 'orden'}/${String(i + 1).padStart(3, '0')}_${nombreSeguroZip(a.nombreOriginal)}`,
+    }));
+    validarPaqueteZip(entradas);
+    return { nombre: `archivos-${nombre}.zip`, cantidad: entradas.length, stream: () => crearZipStream(entradas, this.storage) };
+  }
+
   /**
    * Convertir presupuesto → OT: los archivos del presupuesto pasan a colgar de
    * la orden. NO se copian bytes ni se duplican filas: se agrega `ordenId` y
@@ -738,7 +796,7 @@ export class ArchivosService {
       return count;
     } catch (error) {
       this.logger.warn(
-        `No pude re-vincular los archivos del presupuesto ${cotizacionId} a la orden ${ordenId}: ${error instanceof Error ? error.message : String(error)}`,
+        `No pude re-vincular los archivos del presupuesto ${cotizacionId} a la orden ${ordenId}: ${textoErrorLog(error)}`,
       );
       return 0;
     }
@@ -859,7 +917,10 @@ export class ArchivosService {
   // ── Edición y borrado ────────────────────────────────────────────────
 
   async actualizar(id: string, dto: ActualizarArchivoDto): Promise<ArchivoDto> {
-    await this.buscarPropio(id);
+    const archivo = await this.buscarPropio(id);
+    if (archivo.scope === ArchivoScope.DISENO_COTIZACION && dto.publico) {
+      throw new BadRequestException("Los diseños de cotización son privados.");
+    }
     const actualizado = await this.prisma.archivo.update({
       where: { id },
       data: {
@@ -1243,7 +1304,7 @@ export class ArchivosService {
         purgados += eliminado.count;
       } catch (error) {
         this.logger.warn(
-          `No pude purgar ${candidato.id}: ${error instanceof Error ? error.message : String(error)}`,
+          `No pude purgar ${candidato.id}: ${textoErrorLog(error)}`,
         );
       }
     }
@@ -1303,6 +1364,7 @@ export class ArchivosService {
           return this.prisma.comprobante.findFirst(where);
         case ArchivoScope.COBRO:
           return this.prisma.cobro.findFirst(where);
+        case ArchivoScope.DISENO_COTIZACION:
         case ArchivoScope.PRODUCTO:
           return this.prisma.producto.findFirst(where);
         case ArchivoScope.PROVEEDOR:

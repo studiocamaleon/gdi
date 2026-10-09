@@ -15,6 +15,7 @@ import { SinTenant } from '../common/sin-tenant.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaddleService } from './paddle.service';
 import { SuscripcionSyncService } from './suscripcion-sync.service';
+import { textoErrorLog } from '../common/log-seguro';
 
 /**
  * Webhooks de las pasarelas de cobro.
@@ -112,8 +113,7 @@ export class CobroWebhookController {
         { timeout: 30000 },
       );
     } catch (error) {
-      const detalle =
-        error instanceof Error ? error.message : 'error desconocido';
+      const detalle = textoErrorLog(error);
       await this.prisma.eventoCobro.updateMany({
         where: { id: registro.id, procesadoEl: null },
         data: { errorTexto: detalle, resultado: 'fallido' },

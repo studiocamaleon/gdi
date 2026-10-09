@@ -17,6 +17,7 @@ const ESTADOS = new Set<PresupuestoEstado>([
   "rechazado",
   "vencido",
   "convertido",
+  "descartado",
 ]);
 
 export default async function PresupuestosPage({

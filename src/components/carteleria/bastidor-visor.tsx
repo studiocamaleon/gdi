@@ -38,6 +38,7 @@ function vistaDeEstructura(e: EstructuraBastidor): CarteleriaVista {
     // El lado real del caño viene del despiece del motor (la variante elegida
     // en perfil_estructural); 40×40 sólo para snapshots anteriores al fix.
     perfilLadoM: e.perfilLadoM ?? 0.04,
+    perfilProfundidadM: e.perfilProfundidadM ?? e.perfilLadoM ?? 0.04,
     densidadLed: 1,
     coberturaLedM2: 0,
   };
@@ -125,7 +126,7 @@ export function BastidorVisor({
         <aside className={s.despiece}>
           <div className={s.despTtl}>
             Despiece
-            {estructura ? ` · ${estructura.despieceMm.length} barras` : ""}
+            {estructura ? ` · ${estructura.despieceMm.length} piezas` : ""}
           </div>
           <ul className={s.despList}>
             {despiece.map((d) => (
@@ -135,6 +136,13 @@ export function BastidorVisor({
               </li>
             ))}
           </ul>
+          {estructura?.barras ? (
+            <div className={s.meta}>
+              Para todo el trabajo:<br />
+              {estructura.barras.cantidad} barras de {estructura.barras.largoM} m · {estructura.barras.metrosComerciales.toLocaleString("es-AR")} m comerciales<br />
+              {estructura.barras.metrosUtiles.toLocaleString("es-AR", { maximumFractionDigits: 3 })} m de piezas · {estructura.barras.sobranteM.toLocaleString("es-AR", { maximumFractionDigits: 3 })} m de sobrantes, descontados los cortes
+            </div>
+          ) : null}
           {estructura ? (
             <div className={s.meta}>
               {estructura.refuerzosV + estructura.refuerzosH} refuerzos ·{" "}

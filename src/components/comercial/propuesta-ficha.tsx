@@ -81,6 +81,8 @@ import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-
 import { vincularFuentesFabricacion } from "@/lib/fabricacion-export";
 
 import * as React from "react";
+import { OrdenPersonalPrevisto } from "./orden-personal-previsto";
+import { OrdenAccionesMenus } from "./orden-acciones-menus";
 import issued from "./orden-issued.module.css";
 import { OrdenSectionHeading } from "./orden-section-heading";
 import { PlanificacionEntregas } from "./planificacion-entregas";
@@ -136,6 +138,7 @@ import { type NestingViewerInput } from "@/lib/productos-servicios-api";
 import {
   cambiarEstadoOrdenTrabajo,
   cancelarOrdenTrabajo,
+  descartarBorradorOrden,
   crearOrdenTrabajo,
   editarOrdenTrabajoLote,
   getOrdenTrabajo,
@@ -143,6 +146,9 @@ import {
 } from "@/lib/ordenes-trabajo-api";
 import {
   emitirPresupuesto,
+  guardarBorradorPresupuesto,
+  crearVersionPresupuesto,
+  type PresupuestoEdicion,
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
 import { type ValidarCuponResultado } from "@/lib/cupones-api";
@@ -199,7 +205,7 @@ import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiv
 import type { CobroDraft } from "@/components/administracion/cobro-formulario";
 import { PagosStagingTab } from "@/components/comercial/pagos-staging-tab";
 import { crearCobro } from "@/lib/administracion-api";
-import { ComprobantesOrdenTab } from "@/components/administracion/facturacion-orden";
+import { ComprobantesOrdenTab, FacturarOrdenAccion } from "@/components/administracion/facturacion-orden";
 import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
 import {
   EVENTO_ICONOS,
@@ -325,13 +331,41 @@ import {
 import { OrdenCuponField } from "./orden-cupon-field";
 import { ResumenBar, OrdenSaveActions } from "./orden-resumen-financiero";
 import { OrdenFinancialActions } from "./orden-financial-actions";
+import { CopiarTelefonoCliente } from "./copiar-telefono-cliente";
+import { DescuentosOrdenCreada } from "./descuentos-orden-creada";
 import { OrdenDatosSections } from "./orden-datos-sections";
 import { ClienteLista } from "./cliente-selector-orden";
+import { permiteAtajoDePagina } from "@/lib/atajos-pagina";
+import { ModoInicioInventario } from "@/components/inventario/modo-inicio-inventario";
 import { useClientesOrden } from "./use-clientes-orden";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { useFecha } from "@/components/navigation/config-regional-provider";
+
+function cargosDeOrden(orden?: OrdenTrabajoDetalle): PropuestaCargoDirecto[] {
+  return orden?.cargos?.length
+    ? orden.cargos
+    : orden && orden.cargosDirectos > 0
+      ? [
+          {
+            id: "ot-cargos",
+            cargoDirectoCatalogoId: "",
+            codigoSnapshot: "cargos_orden",
+            nombreSnapshot: "Cargos directos de la orden",
+            modoCalculoSnapshot: "MONTO_FIJO_PLANO",
+            configSnapshot: {},
+            baseCalculo: 0,
+            montoNeto: orden.cargosDirectos,
+            impuestoPorcentaje: 0,
+            impuestoMonto: 0,
+            total: orden.cargosDirectos,
+            detalle: "Persistido al emitir la orden",
+            createdAt: orden.creadaEl,
+          },
+        ]
+      : [];
+}
 
 type PropuestaFichaProps = {
   initialClientes?: ClienteDetalle[];
@@ -357,6 +391,7 @@ type PropuestaFichaProps = {
    */
   recienConvertida?: boolean;
   initialDocumentos?: EstadoDocumentalOrden | null;
+  presupuestoBase?: PresupuestoEdicion;
 };
 
 type InnerTab = "specs" | "costos" | "produccion" | "aprovechamiento";
@@ -398,7 +433,7 @@ function getCotizacionNeto(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioNetoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -406,7 +441,7 @@ function getCotizacionTotal(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioBrutoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -414,7 +449,7 @@ function getCotizacionUnitario(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioBrutoUnitario ??
     cotizacion.precio?.precioUnitario ??
-    cotizacion.costos.unitario
+    (cotizacion.costos?.unitario ?? 0)
   );
 }
 
@@ -1836,7 +1871,7 @@ function MaterialesPasoTable({
                 <td>
                   <strong>{getMaterialCosteoLabel(material)}</strong>
                   {material.seleccionStock ? <div className={itemCostStyles["cost-stock-note"]}>
-                    {material.seleccionStock.estado === "disponible" ? "Elegido con stock disponible al cotizar" : "Requiere reposición"}
+                    {material.seleccionStock.estado === "sin_verificar_inicio" ? "Modo de inicio · stock sin verificar" : material.seleccionStock.estado === "disponible" ? "Elegido con stock disponible al cotizar" : "Requiere reposición"}
                   </div> : null}
                 </td>
                 <td>
@@ -3888,7 +3923,8 @@ export function OrdenProductoDetalle({
     React.useState<VistaFabricacionItem | null>(null);
   const [briefAbierto, setBriefAbierto] = React.useState(false);
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
-  const costo = calcularCostoTotal(item);
+  const verMargenes = usePuede("finanzas.ver_margenes");
+  const costo = verMargenes ? calcularCostoTotal(item) : null;
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
   const optionalMaterialDetails = React.useMemo(
     () =>
@@ -3934,7 +3970,7 @@ export function OrdenProductoDetalle({
               label={`Detalle de ${item.productoNombre}`}
               items={[
                 { id: "specs", label: "Especificaciones", icon: <SlidersHorizontalIcon /> },
-                { id: "costos", label: "Costos", icon: <CircleDollarSignIcon /> },
+                ...(verMargenes && costo !== null ? [{ id: "costos", label: "Costos", icon: <CircleDollarSignIcon /> }] : []),
                 { id: "produccion", label: "Flujo de producción", icon: <FactoryIcon /> },
                 { id: "aprovechamiento", label: "Aprovechamiento", icon: <Grid2X2Icon /> },
               ]}
@@ -4192,14 +4228,14 @@ export function OrdenProductoDetalle({
             </div>
           </HeroTabs.Panel>
 
-          <HeroTabs.Panel id="costos" className={itemStyles.panel}>
+          {verMargenes && costo !== null ? <HeroTabs.Panel id="costos" className={itemStyles.panel}>
             <CostosItemView
               item={item}
               costo={costo}
               calculoPendiente={calculoPendiente}
               sinComprobante={sinComprobante}
             />
-          </HeroTabs.Panel>
+          </HeroTabs.Panel> : null}
 
           {(["produccion", "aprovechamiento"] as const).map((vista) => (
             <HeroTabs.Panel key={vista} id={vista} className={itemStyles.panel}>
@@ -4496,6 +4532,7 @@ function itemToOrdenItemPayload(
   const descuento = item.cotizacion.desglosePrecio?.descuento;
   return {
     cotizacionItemId,
+    ...(item.asignacionesPersonal !== undefined ? { asignacionesPersonal: item.asignacionesPersonal } : {}),
     fechaEntrega: item.fechaEntrega || undefined,
     ...(planEntrega ? { planEntrega } : {}),
     descuentoTipo: item.descuentoInput?.tipo ?? null,
@@ -4642,13 +4679,13 @@ function rehidratarOrdenItem(
     unidadMedida === "libros" ? cantidadLibrosCentroCopiado(jobContext) : null;
   const cantidadVisible = cantidadLibros ?? producto.cantidad;
 
-  const costosVacios = {
+  const costosHistoricos = snap?.costoTotal != null ? {
     tiempoTotal: 0,
     materialesTotal: 0,
     cargosDirectosTotal: 0,
     total: snap?.costoTotal ?? 0,
     unitario: snap?.costoUnitario ?? 0,
-  } as CotizacionPropuestaSnapshot["costos"];
+  } : undefined;
 
   const impuestosSnapshot = snap?.precioSnapshots.impuestos;
   const comisionesSnapshot = snap?.precioSnapshots.comisiones;
@@ -4701,8 +4738,8 @@ function rehidratarOrdenItem(
     (netoUnit * comisionesNetoPct) / 100 +
     (brutoUnit * comisionesBrutoPct) / 100;
   const precioBaseUnit = netoUnit - costosInternosUnit - comisionesUnit;
-  const costoUnit = snap?.costoUnitario ?? 0;
-  const margenEfectivoPct =
+  const costoUnit = snap?.costoUnitario;
+  const margenEfectivoPct = costoUnit == null ? undefined :
     netoUnit > 0 ? ((precioBaseUnit - costoUnit) / netoUnit) * 100 : 0;
   const totalImpuestosUnit =
     Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
@@ -4728,7 +4765,7 @@ function rehidratarOrdenItem(
       (resumen?.ejecucion
         ?.minimoComercialAplicado as CotizacionPropuestaSnapshot["minimoComercialAplicado"]) ??
       null,
-    costos: resumen?.ejecucion?.costos ?? costosVacios,
+    costos: resumen?.ejecucion?.costos ?? costosHistoricos,
     pasos: trazabilidad?.pasos ?? [],
     // La cotización persiste el árbol completo de componentes dentro de la
     // trazabilidad. Rehidratar sólo los pasos del producto raíz conservaba el
@@ -4782,6 +4819,7 @@ function rehidratarOrdenItem(
     // sólo para órdenes previas al campo.
     id: producto.id ?? `ot-item-${index}`,
     cotizacionItemId: producto.cotizacionItemId ?? undefined,
+    asignacionesPersonal: producto.asignacionesPersonal,
     fechaEntrega: producto.fechaEntrega ?? undefined,
     distribucionEntregas: producto.distribucionEntregas,
     productoNombre: producto.nombre,
@@ -4862,6 +4900,7 @@ function PropuestaFichaContenido({
   recienEmitida = false,
   recienConvertida = false,
   initialDocumentos = null,
+  presupuestoBase,
 }: PropuestaFichaProps) {
   const {
     cotizar,
@@ -4887,15 +4926,27 @@ function PropuestaFichaContenido({
       .catch(() => {});
   }, [ordenProp?.id]);
   const conCotizacion = useCapacidad("cotizacion");
+  const permisoOrdenes = usePuede("comercial.ordenes.gestionar");
+  const permisoPresupuestos = usePuede("comercial.presupuestos.gestionar");
+  const permisoCobrar = usePuede("administracion.cobrar");
+  const permisoGestionarCobros = usePuede("administracion.cobrar.gestionar");
+  const puedeRegistrarCobros = permisoCobrar || permisoGestionarCobros;
+  const puedeVerOrdenes = usePuede("comercial.ordenes.ver");
+  const puedeVerCobros = usePuede("administracion.cobrar.ver");
+  const mostrarPagos = orden ? puedeVerOrdenes || puedeVerCobros : puedeRegistrarCobros;
+  const puedeVerProduccion = usePuede("produccion.tablero.ver");
+  const puedeVerComprobantes = usePuede("administracion.comprobantes.ver");
+  const [refrescosComprobantes, setRefrescosComprobantes] = React.useState(0);
   const conOrdenes = useCapacidad("ordenes");
   const conPresupuestos = useCapacidad("presupuestos");
   const conCobros = useCapacidad("cobros");
   const modoOrden = Boolean(orden);
   const [editandoOrden, setEditandoOrden] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  const [precioOrdenPendiente, setPrecioOrdenPendiente] = React.useState(false);
   // Puerta de edición de los datos de la ficha. La entrega es una operación
   // independiente, con sus propios permisos y validación de estado.
-  const puedeEditarOrden = !orden || (editandoOrden && !guardandoEdicion && orden.estado !== "cancelada");
+  const puedeEditarOrden = orden ? permisoOrdenes && editandoOrden && !guardandoEdicion && !precioOrdenPendiente && orden.estado !== "cancelada" : permisoOrdenes || permisoPresupuestos;
   const permisoEdicionRef = React.useRef(puedeEditarOrden);
   React.useLayoutEffect(() => {
     permisoEdicionRef.current = puedeEditarOrden;
@@ -4985,7 +5036,7 @@ function PropuestaFichaContenido({
     if (!recienConvertida) return;
     window.history.replaceState(null, "", window.location.pathname);
   }, [recienConvertida]);
-  const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
+  const [tipo, setTipo] = React.useState<TipoPropuesta>(presupuestoBase ? "presupuesto" : permisoOrdenes ? "orden_trabajo" : "presupuesto");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>(
     ordenProp ? "productos" : "datos",
@@ -5005,9 +5056,11 @@ function PropuestaFichaContenido({
   const impresionDocumentos = useImpresionDocumentos();
   const [confirmarEmisionDocumentos, setConfirmarEmisionDocumentos] = React.useState<"nueva" | "borrador" | null>(null);
   const imprimirAlEmitirRef = React.useRef(false);
-  const puedeImprimirEtiqueta = usePuede("produccion.ver");
-  const puedeVerMaterialesComercial = usePuede("comercial.ver");
+  const puedeImprimirEtiqueta = usePuede("produccion.tablero.ver");
+  const puedeVerMaterialesComercial = usePuede("comercial.ordenes.ver");
   const puedeEjecutarProduccion = usePuede("produccion.ejecutar");
+  const puedeAsignarPersonal = usePuede("produccion.supervisar");
+  const conAsignacionPersonal = useCapacidad("asignacion_automatica");
   const puedeVerMateriales =
     puedeImprimirEtiqueta || puedeVerMaterialesComercial;
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
@@ -5024,46 +5077,25 @@ function PropuestaFichaContenido({
   // permiso que rige anular comprobantes.
   const verMargenes = usePuede("finanzas.ver_margenes");
   const puedeAnular = usePuede("administracion.anular");
-  const puedeEntregar = usePuede("produccion.gestionar");
+  const puedeEntregar = usePuede("produccion.tablero.gestionar");
   const puedeAbrirEntrega = orden?.estado === "finalizada" && puedeEntregar;
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
   const [cancelando, setCancelando] = React.useState(false);
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
-    orden ? orden.productos.map(rehidratarOrdenItem) : [],
+    orden ? orden.productos.map(rehidratarOrdenItem) : presupuestoBase?.productos.map((producto, index) => ({ ...rehidratarOrdenItem(producto, index), cotizacionItemId: undefined })) ?? [],
   );
   const documentosCentroCopiado = items.filter(item => metaCentroCopiado(item.jobContext)).length;
 
-  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(
-    () =>
-      orden?.cargos?.length
-        ? orden.cargos
-        : orden && orden.cargosDirectos > 0
-          ? [
-              {
-                id: "ot-cargos",
-                cargoDirectoCatalogoId: "",
-                codigoSnapshot: "cargos_orden",
-                nombreSnapshot: "Cargos directos de la orden",
-                modoCalculoSnapshot: "MONTO_FIJO_PLANO",
-                configSnapshot: {},
-                baseCalculo: 0,
-                montoNeto: orden.cargosDirectos,
-                impuestoPorcentaje: 0,
-                impuestoMonto: 0,
-                total: orden.cargosDirectos,
-                detalle: "Persistido al emitir la orden",
-                createdAt: orden.creadaEl,
-              },
-            ]
-          : [],
-  );
+  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(() => presupuestoBase?.cargos ?? cargosDeOrden(orden));
   const [fidelizacionCanjePuntos, setFidelizacionCanjePuntos] =
-    React.useState(0);
-  const [fidelizacionCanjeMonto, setFidelizacionCanjeMonto] = React.useState(0);
+    React.useState(presupuestoBase?.fidelizacionCanjePuntos ?? 0);
+  const [fidelizacionCanjeMonto, setFidelizacionCanjeMonto] = React.useState(presupuestoBase?.fidelizacionCanjeMonto ?? 0);
   const costosFidelizacion = React.useMemo(
-    () => consolidarCostosOrden(items, cargosOrden),
-    [items, cargosOrden],
+    () => verMargenes && items.every((item) => item.cotizacion.costos)
+      ? consolidarCostosOrden(items, cargosOrden)
+      : null,
+    [items, cargosOrden, verMargenes],
   );
   const totalPropuestaAntesCanje = React.useMemo(() => {
     const r = calcularResumenOrden(items, cargosOrden);
@@ -5132,9 +5164,9 @@ function PropuestaFichaContenido({
     paso: PanelEditorPaso;
   } | null>(null);
   const [panelSaving, setPanelSaving] = React.useState(false);
-  const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? "");
+  const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? presupuestoBase?.clienteId ?? "");
   const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
-    orden?.proyectoCampana?.id ?? "",
+    orden?.proyectoCampana?.id ?? presupuestoBase?.proyectoCampanaId ?? "",
   );
   const [campanasCliente, setCampanasCliente] = React.useState<
     CampanaReferencia[]
@@ -5195,9 +5227,26 @@ function PropuestaFichaContenido({
         : [...initialClientes, ...clientesEscaneados],
     [initialClientes, clientesEscaneados],
   );
+  const clientePersistido = React.useMemo(
+    () => orden?.clienteId ? {
+      id: orden.clienteId,
+      nombre: orden.clienteNombre,
+      razonSocial: "",
+      email: "",
+      telefonoCodigo: "",
+      telefonoNumero: orden.clienteTelefono ?? "",
+    } : presupuestoBase?.cliente ?? null,
+    [orden?.clienteId, orden?.clienteNombre, orden?.clienteTelefono, presupuestoBase?.cliente],
+  );
   // La caché sobrevive al cierre del panel de datos en móvil.
-  const selectorClientes = useClientesOrden(clientesDisponibles);
-  const [canalVenta, setCanalVenta] = React.useState(orden?.canalVenta ?? "");
+  const selectorClientes = useClientesOrden(clientesDisponibles, clientePersistido);
+  const clienteSeleccionado = selectorClientes.options.find((c) => c.id === clienteId);
+  const telefonoCliente = clienteId === orden?.clienteId
+    ? orden?.clienteTelefono
+    : clienteSeleccionado?.telefonoNumero?.trim()
+      ? [clienteSeleccionado.telefonoCodigo, clienteSeleccionado.telefonoNumero].filter(Boolean).join(" ").trim()
+      : null;
+  const [canalVenta, setCanalVenta] = React.useState(orden?.canalVenta ?? presupuestoBase?.canalVenta ?? "");
   const datosOrdenRef = React.useRef<OrdenWorkspaceHandle>(null);
   const canalSelectorId = React.useId();
   const [errorCanalVenta, setErrorCanalVenta] = React.useState(false);
@@ -5216,7 +5265,7 @@ function PropuestaFichaContenido({
     return false;
   }, [canalVenta, orden?.canalVenta, canalSelectorId]);
   const [fechaEstimada, setFechaEstimada] = React.useState(
-    () => orden?.fechaEntrega ?? offsetDate(7, zonaHoraria),
+    () => orden?.fechaEntrega ?? presupuestoBase?.fechaEntrega ?? offsetDate(7, zonaHoraria),
   );
   const creacionDefaultsRef = React.useRef({
     canalVenta,
@@ -5266,7 +5315,7 @@ function PropuestaFichaContenido({
   );
   const materialesFaltantesCount = conPrevisionMateriales && previsionMateriales.data
     ? previsionMateriales.data.materiales.filter((m) => (m.faltante ?? 0) > 0).length
-    : materialesOrden.data?.control?.habilitado
+    : materialesOrden.data?.control?.habilitado && !materialesOrden.data.control.inicioSinStock
       ? materialesOrden.data.control.materiales.filter((m) => !m.excluida && (m.faltante ?? 0) > 0).length
       : 0;
   const [colasTaller, setColasTaller] = React.useState<Awaited<
@@ -5302,7 +5351,7 @@ function PropuestaFichaContenido({
     if (!conDemoraSistema || !colasTaller || items.length === 0) return null;
     const nuevos = items.map((item) =>
       condicionarPorMateriales(
-        itemHipoteticoDesdeCotizacion(item.id, item.cotizacion),
+        itemHipoteticoDesdeCotizacion(item.id, item.cotizacion, item.asignacionesPersonal),
         previsionMateriales.data,
         previsionMateriales.error,
       ),
@@ -5481,6 +5530,9 @@ function PropuestaFichaContenido({
    * habilitan DENTRO del modo "Editar orden", igual que los field-cards.
    * TODO es staging local — nada pega en la base hasta "Guardar cambios".
    */
+  const puedeModificarCargos = puedeEditarOrden && conCotizacion && (!orden || (conOrdenes && orden.facturadoTotal === 0));
+  React.useEffect(() => { if (!puedeModificarCargos) setCargoOpen(false); }, [puedeModificarCargos]);
+  const cambiosCargos = Boolean(orden && editandoOrden && JSON.stringify(cargosOrden) !== JSON.stringify(cargosDeOrden(orden)));
   const itemsEnEdicion = conCotizacion && conOrdenes && puedeTocarItems && puedeEditarOrden;
   // Misma puerta para botones, atajos y confirmación de ambos sheets.
   const puedeModificarProductos =
@@ -5525,6 +5577,7 @@ function PropuestaFichaContenido({
     ordenSyncRef.current = orden;
     if (editandoOrden || !ordenCambio) return;
     setItems(orden.productos.map(rehidratarOrdenItem));
+    setCargosOrden(cargosDeOrden(orden));
     setFechaEstimada(orden.fechaEntrega ?? "");
     itemFechaTocadaRef.current = new Set(
       orden.productos.flatMap((p) => (p.id && p.fechaEntrega ? [p.id] : [])),
@@ -5586,7 +5639,21 @@ function PropuestaFichaContenido({
       Number(sinComprobante)
     : 0;
   const cambiosSinGuardar =
-    cambiosCreacion + cambiosItems.total + Object.keys(cambiosFields).length;
+    cambiosCreacion + cambiosItems.total + Object.keys(cambiosFields).length + Number(cambiosCargos);
+  // La confirmación del servidor protege esta revisión concreta. No vaciamos
+  // el formulario: si la navegación tarda y se edita de nuevo, vuelve el aviso.
+  const revisionPropuesta = React.useMemo(
+    () => ({
+      items, cargosOrden, cobrosStaged, clienteId, proyectoCampanaId, canalVenta,
+      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo,
+    }),
+    [items, cargosOrden, cobrosStaged, clienteId, proyectoCampanaId, canalVenta,
+      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo],
+  );
+  const presupuestoGuardadoRef = React.useRef<{
+    revision: typeof revisionPropuesta;
+    destino: string;
+  } | null>(null);
 
   /**
    * Qué le va a pasar a la orden al cancelarla. Se arma con los datos de ESTA
@@ -5604,12 +5671,15 @@ function PropuestaFichaContenido({
 
   const impactoCancelacion = React.useMemo(() => {
     if (!orden) return [];
-    const puntos = [
+    const puntos = orden.estado === "borrador" ? [
+      "Deja de aparecer en Todas y en los borradores activos.",
+      "Se conserva para consulta en el filtro Descartados, junto con su historial.",
+    ] : [
       "Sale del tablero del taller y de la capacidad comprometida.",
       "Deja de contar como venta en el panel y los reportes.",
       "El link de seguimiento del cliente deja de funcionar.",
     ];
-    if (acreditaYCancela) {
+    if (acreditaYCancela && orden.estado !== "borrador") {
       puntos.unshift(
         `Se emite la nota de crédito de ${formatCurrency(orden.facturadoTotal, moneda)} facturados: la factura queda acreditada ante ARCA.`,
       );
@@ -5633,20 +5703,24 @@ function PropuestaFichaContenido({
       if (!permisoEdicionRef.current || !orden || cancelando || cambiosSinGuardar > 0) return;
       setCancelando(true);
       try {
-        await cancelarOrdenTrabajo(orden.id, motivo, acreditaYCancela);
+        if (orden.estado === "borrador") await descartarBorradorOrden(orden.id);
+        else await cancelarOrdenTrabajo(orden.id, motivo, acreditaYCancela);
         setConfirmCancelar(false);
         setEditandoOrden(false);
         toast.success(
-          acreditaYCancela
+          orden.estado === "borrador"
+            ? `Borrador ${orden.numero} descartado y archivado.`
+            : acreditaYCancela
             ? `Orden ${orden.numero} cancelada y facturación acreditada.`
             : `Orden ${orden.numero} cancelada.`,
         );
+        if (orden.estado === "borrador") router.push("/produccion/ordenes");
         router.refresh();
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
-            : "No se pudo cancelar la orden.",
+            : orden.estado === "borrador" ? "No se pudo descartar el borrador." : "No se pudo cancelar la orden.",
         );
       } finally {
         setCancelando(false);
@@ -5923,7 +5997,7 @@ function PropuestaFichaContenido({
   }, []);
 
   const cancelarEdicion = React.useCallback(() => {
-    if (!orden || togglingFiscal || cancelando) return;
+    if (!orden || togglingFiscal || cancelando || precioOrdenPendiente) return;
     // Descarta TODO el staging: field-cards e items vuelven a lo persistido.
     setClienteId(orden.clienteId ?? "");
     setCanalVenta(orden.canalVenta ?? "");
@@ -5935,6 +6009,7 @@ function PropuestaFichaContenido({
       orden.productos.flatMap((p) => (p.id && p.fechaEntrega ? [p.id] : [])),
     );
     setItems(orden.productos.map(rehidratarOrdenItem));
+    setCargosOrden(cargosDeOrden(orden));
     cambioDocumento?.establecer(
       orden.productos
         .map(
@@ -5945,7 +6020,7 @@ function PropuestaFichaContenido({
     );
     setEditadosIds(new Set());
     setEditandoOrden(false);
-  }, [orden, togglingFiscal, cancelando, cambioDocumento]);
+  }, [orden, togglingFiscal, cancelando, cambioDocumento, precioOrdenPendiente]);
 
   /**
    * Commit atómico del staging. Los snapshots se recalculan primero y luego
@@ -6005,6 +6080,10 @@ function PropuestaFichaContenido({
           tipoCambioId: cambioAlGuardar?.id,
           ...cambiosFields,
           items: itemsFinales,
+          ...(cambiosCargos ? { cargos: cargosOrden.map(cargo => ({
+            ...cargoToOrdenInput(cargo),
+            ...(orden.cargos?.some(anterior => anterior.id === cargo.id) ? { id: cargo.id } : {}),
+          })) } : {}),
         });
 
         // Los binarios se publican post-commit y sólo para los ítems tocados;
@@ -6071,6 +6150,8 @@ function PropuestaFichaContenido({
       validarCanalVenta,
       cambiosSinGuardar,
       cambiosItems,
+      cambiosCargos,
+      cargosOrden,
       cambiosFields,
       items,
       prepararItemOrden,
@@ -6091,10 +6172,12 @@ function PropuestaFichaContenido({
   React.useEffect(() => {
     if (cambiosSinGuardar === 0) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (presupuestoGuardadoRef.current?.revision === revisionPropuesta) return;
       event.preventDefault();
       event.returnValue = "";
     };
     const onClickCapture = (event: MouseEvent) => {
+      if (presupuestoGuardadoRef.current?.revision === revisionPropuesta) return;
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
         return;
@@ -6112,7 +6195,7 @@ function PropuestaFichaContenido({
       window.removeEventListener("beforeunload", onBeforeUnload);
       document.removeEventListener("click", onClickCapture, true);
     };
-  }, [cambiosSinGuardar]);
+  }, [cambiosSinGuardar, revisionPropuesta]);
 
   /**
    * Emitir un borrador guardado (borrador → pendiente): la salida comercial
@@ -6280,7 +6363,7 @@ function PropuestaFichaContenido({
         itemsConSnapshot.push({ item, ...previa });
         continue;
       }
-      if (item.cotizacionItemId) {
+      if (item.cotizacionItemId && ordenTipo !== "presupuesto") {
         itemsConSnapshot.push({
           item,
           cotizacionItemId: item.cotizacionItemId,
@@ -6370,8 +6453,14 @@ function PropuestaFichaContenido({
    * proyección de items para convertir después. No crea ninguna OT.
    */
   const [emitiendoPresupuesto, setEmitiendoPresupuesto] = React.useState(false);
+  const emisionPresupuestoEnCursoRef = React.useRef(false);
   const [canalPresupuestoAbierto, setCanalPresupuestoAbierto] = React.useState(false);
   const emitirPresupuestoCb = React.useCallback(async (canal: CanalPresupuesto = "whatsapp") => {
+    if (emisionPresupuestoEnCursoRef.current) return;
+    if (presupuestoGuardadoRef.current?.revision === revisionPropuesta) {
+      router.replace(presupuestoGuardadoRef.current.destino);
+      return;
+    }
     if (!conPresupuestos || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -6387,6 +6476,7 @@ function PropuestaFichaContenido({
       toast.error("Asigná un cliente: el presupuesto es para alguien.");
       return;
     }
+    emisionPresupuestoEnCursoRef.current = true;
     setEmitiendoPresupuesto(true);
     try {
       const { itemsConSnapshot, cotizacionId } =
@@ -6394,7 +6484,12 @@ function PropuestaFichaContenido({
       if (!cotizacionId) {
         throw new Error("No se pudo persistir la cotización del presupuesto.");
       }
-      const presupuesto = await emitirPresupuesto({
+      const guardar = presupuestoBase ? (payload: Parameters<typeof emitirPresupuesto>[0]) => crearVersionPresupuesto(presupuestoBase.id, { ...payload, revisionBaseActualizadaEl: presupuestoBase.actualizadaEl, enviar: true }) : emitirPresupuesto;
+      const presupuesto = await guardar({
+        validezDias: presupuestoBase?.validezDias,
+        observaciones: presupuestoBase?.observaciones ?? undefined,
+        senaSugeridaPct: presupuestoBase?.senaSugeridaPct,
+        vendedorEmpleadoId: presupuestoBase?.vendedorEmpleadoId ?? undefined,
         notificarWhatsapp: canal === "whatsapp",
         cotizacionId,
         clienteId,
@@ -6420,8 +6515,12 @@ function PropuestaFichaContenido({
             : canal === "whatsapp" ? `Presupuesto ${presupuesto.numero} emitido y enviado.` : `Presupuesto ${presupuesto.numero} emitido. Revisá el correo antes de enviarlo.`,
         );
       }
+      const destino = `/comercial/presupuestos/${presupuesto.id}${canal === "whatsapp" ? "" : `?correo=${canal}`}`;
+      // Sin esperar al próximo render: Next puede necesitar una carga completa
+      // y disparar beforeunload en la misma llamada de navegación.
+      presupuestoGuardadoRef.current = { revision: revisionPropuesta, destino };
       setCanalPresupuestoAbierto(false);
-      router.push(canal === "whatsapp" ? "/comercial/presupuestos" : `/comercial/presupuestos/${presupuesto.id}?correo=${canal}`);
+      router.replace(destino);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -6429,9 +6528,12 @@ function PropuestaFichaContenido({
           : "No se pudo emitir el presupuesto.",
       );
     } finally {
+      emisionPresupuestoEnCursoRef.current = false;
       setEmitiendoPresupuesto(false);
     }
   }, [
+    presupuestoBase,
+    revisionPropuesta,
     conPresupuestos,
     conCotizacion,
     items,
@@ -6605,7 +6707,7 @@ function PropuestaFichaContenido({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
-    if (!conOrdenes || !conCotizacion) {
+    if (!(ordenTipo === "presupuesto" ? conPresupuestos : conOrdenes) || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
     }
@@ -6614,12 +6716,35 @@ function PropuestaFichaContenido({
       toast.error("Agregá al menos un producto antes de guardar el borrador.");
       return;
     }
+    if (ordenTipo === "presupuesto" && !clienteId) {
+      toast.error("Asigná un cliente para guardar el presupuesto.");
+      return;
+    }
     setGuardandoBorrador(true);
     setConfirmBorradorConCobros(false);
     try {
       const { itemsConSnapshot, cotizacionId } =
         await persistirSnapshotsItems();
       const fechaEntrega = fechaEntregaOrden();
+      if (ordenTipo === "presupuesto") {
+        if (!cotizacionId) throw new Error("No se pudo guardar la cotización del presupuesto.");
+        const guardar = presupuestoBase ? (payload: Parameters<typeof emitirPresupuesto>[0]) => crearVersionPresupuesto(presupuestoBase.id, { ...payload, revisionBaseActualizadaEl: presupuestoBase.actualizadaEl }) : guardarBorradorPresupuesto;
+        const presupuesto = await guardar({
+          validezDias: presupuestoBase?.validezDias,
+          observaciones: presupuestoBase?.observaciones ?? undefined,
+          senaSugeridaPct: presupuestoBase?.senaSugeridaPct,
+          vendedorEmpleadoId: presupuestoBase?.vendedorEmpleadoId ?? undefined,
+          cotizacionId, clienteId, canalVenta,
+          proyectoCampanaId: proyectoCampanaId || undefined,
+          fechaEntrega: fechaEntrega || undefined,
+          fidelizacionCanjePuntos,
+          cargos: cargosOrden.map(cargoToOrdenInput),
+          items: itemsConSnapshot.map(({ item, cotizacionItemId, planEntrega }) => itemToOrdenItemPayload(item, cotizacionItemId, planEntrega)),
+        });
+        toast.success(`Presupuesto ${presupuesto.numero} guardado en borrador, sin enviar al cliente.`);
+        router.push(`/comercial/presupuestos/${presupuesto.id}`);
+        return;
+      }
       const idempotencyKey =
         borradorIdempotencyRef.current ?? crypto.randomUUID();
       borradorIdempotencyRef.current = idempotencyKey;
@@ -6660,7 +6785,7 @@ function PropuestaFichaContenido({
         );
       }
       toast.success(
-        `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
+        "Borrador guardado. El número de OT se asignará al emitir.",
       );
       router.push(`/produccion/ordenes/${orden.id}`);
     } catch (error) {
@@ -6673,7 +6798,10 @@ function PropuestaFichaContenido({
       setGuardandoBorrador(false);
     }
   }, [
+    presupuestoBase,
     conOrdenes,
+    conPresupuestos,
+    ordenTipo,
     conCotizacion,
     items,
     cargosOrden,
@@ -7210,21 +7338,8 @@ function PropuestaFichaContenido({
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!puedeModificarProductos || event.defaultPrevented || event.repeat)
+      if (!puedeModificarProductos || !permiteAtajoDePagina(event))
         return;
-      const target = event.target as HTMLElement | null;
-      const isEditableTarget =
-        target?.closest("input, textarea, select, [contenteditable='true']") !=
-        null;
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.shiftKey ||
-        isEditableTarget
-      ) {
-        return;
-      }
       const key = event.key.toLowerCase();
       // P = agregar producto · C = centro de copiado (si el módulo está activo).
       if (key !== "p" && key !== "c") return;
@@ -7443,7 +7558,8 @@ function PropuestaFichaContenido({
                 verMargenes={verMargenes}
                 count={items.length}
                 historialCount={orden ? orden.eventosTotal : undefined}
-                comprobantesCount={orden ? 0 : undefined}
+                comprobantesCount={orden && puedeVerComprobantes ? 0 : undefined}
+                mostrarPagos={mostrarPagos}
                 mostrarMateriales={puedeVerMateriales && (Boolean(orden) || conPrevisionMateriales)}
                 materialesFaltantesCount={materialesFaltantesCount}
                 archivosCount={archivosCount}
@@ -7454,11 +7570,8 @@ function PropuestaFichaContenido({
             }
             summary={
               <OrdenSummaryDetails
-                cliente={
-                  orden?.clienteNombre ??
-                  selectorClientes.options.find((c) => c.id === clienteId)
-                    ?.nombre
-                }
+                clienteTelefono={telefonoCliente}
+                cliente={clienteSeleccionado?.nombre}
                 campana={
                   campanasCliente.find((c) => c.id === proyectoCampanaId)
                     ?.nombre ??
@@ -7483,13 +7596,34 @@ function PropuestaFichaContenido({
                   editable={puedeModificarProductos}
                   onAplicar={aplicarTipoCambio}
                 />
+                {orden && permisoOrdenes && conOrdenes &&
+                  orden.estado !== "cancelada" && (
+                    <DescuentosOrdenCreada
+                      orden={orden}
+                      items={items}
+                      conCupones={conCupones}
+                      sinComprobante={sinComprobante}
+                      togglingFiscal={togglingFiscal}
+                      onToggleTratamientoFiscal={
+                        puedeToggleFiscal ? toggleTratamientoFiscal : undefined
+                      }
+                      editando={editandoOrden}
+                      onPendienteChange={setPrecioOrdenPendiente}
+                      bloqueado={guardandoEdicion ||
+                        cambiosSinGuardar > 0 || togglingFiscal || cancelando}
+                      onActualizada={(actualizada) => {
+                        setOrden(actualizada);
+                        setItems(actualizada.productos.map(rehidratarOrdenItem));
+                      }}
+                    />
+                  )}
                 <OrdenFinancialActions
                   empty={items.length === 0}
                   emitiendo={emitiendo || emitiendoPresupuesto}
                   guardandoBorrador={guardandoBorrador}
                   sinComprobante={sinComprobante}
                   onAgregarCargo={
-                    !modoOrden ? () => setCargoOpen(true) : undefined
+                    puedeModificarCargos ? () => setCargoOpen(true) : undefined
                   }
                   onDescuentoOrden={
                     modoOrden
@@ -7506,7 +7640,8 @@ function PropuestaFichaContenido({
                   cuponFieldId="orden-cupon"
                   operacionPendiente={cuponValidando || descuentoAplicando}
                   onToggleTratamientoFiscal={
-                    puedeToggleFiscal ? toggleTratamientoFiscal : undefined
+                    puedeToggleFiscal && !(orden && permisoOrdenes && conOrdenes)
+                      ? toggleTratamientoFiscal : undefined
                   }
                   togglingFiscal={togglingFiscal}
                 />
@@ -7529,7 +7664,7 @@ function PropuestaFichaContenido({
                   cargosOrden={cargosOrden}
                   sinComprobante={sinComprobante}
                   fidelizacionCanjeMonto={fidelizacionCanjeMonto}
-                  readOnly={modoOrden}
+                  readOnly={modoOrden && !editandoOrden}
                   resumenPersistido={
                     orden
                       ? {
@@ -7556,7 +7691,7 @@ function PropuestaFichaContenido({
                     <Link href="/produccion/ordenes">Órdenes de trabajo</Link>
                     <ChevronRightIcon />
                     <span aria-current="page">
-                      {orden?.numero ?? "Nueva orden"}
+                      {orden?.numero ?? (presupuestoBase ? `${presupuestoBase.numero} · Nueva versión ${presupuestoBase.version + 1}` : "Nueva orden")}
                     </span>
                   </nav>
                   {orden ? (
@@ -7564,7 +7699,7 @@ function PropuestaFichaContenido({
                       <span className={workspaceStyles.titleText}>
                         {orden.numero}
                       </span>
-                      <EstadoOtBadge estado={orden.estado} />
+                      <EstadoOtBadge estado={orden.estado} borradorDescartado={orden.borradorDescartado} />
                       {sinComprobante ? <ChipSinComprobante /> : null}
                       {mostrarRecienEmitida ? (
                         <Chip size="sm" color="success" variant="soft">
@@ -7598,8 +7733,9 @@ function PropuestaFichaContenido({
                     </p>
                   )}
                 </div>
-                <div className={workspaceStyles.identity}>
-                  {!modoOrden ? (
+                <div className={workspaceStyles.quickActions}>
+                  {orden && <FacturarOrdenAccion ordenId={orden.id} numero={orden.numero} total={orden.total} facturado={orden.facturadoTotal} descuentoTotal={orden.descuentoTotal} habilitada={!["borrador", "cancelada"].includes(orden.estado) && !sinComprobante} bloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando} onFacturada={() => { recargarOrden(); setRefrescosComprobantes((n) => n + 1); }} />}
+                  {!modoOrden && puedeEditarOrden ? (
                     <OrdenSaveActions
                       operacionPendiente={cuponValidando || descuentoAplicando}
                       tipo={ordenTipo}
@@ -7619,7 +7755,7 @@ function PropuestaFichaContenido({
                           : void guardarBorrador()
                       }
                     />
-                  ) : orden && orden.estado !== "cancelada" ? (
+                  ) : orden && permisoOrdenes && orden.estado !== "cancelada" ? (
                     // Acciones de la orden en la cabecera fija; facturación en Comprobantes.
                     <div className={workspaceStyles.quickActions}>
                       {editandoOrden ? (
@@ -7629,7 +7765,7 @@ function PropuestaFichaContenido({
                             variant="tertiary"
                             size="sm"
                             onPress={cancelarEdicion}
-                            isDisabled={guardandoEdicion || togglingFiscal || cancelando || emitiendoBorrador}
+                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
                           >
                             Cancelar
                           </HeroButton>
@@ -7638,7 +7774,7 @@ function PropuestaFichaContenido({
                             variant="primary"
                             size="sm"
                             onPress={() => void guardarEdicion()}
-                            isDisabled={guardandoEdicion || togglingFiscal || cancelando || emitiendoBorrador}
+                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
                           >
                             <CheckIcon />
                             {guardandoEdicion
@@ -7669,7 +7805,9 @@ function PropuestaFichaContenido({
                           onPress={() => setConfirmCancelar(true)}
                           isDisabled={cancelando || cambiosSinGuardar > 0 || (facturaViva && !puedeAnular)}
                           title={
-                            facturaViva && !puedeAnular
+                            orden.estado === "borrador"
+                              ? "Descartar y archivar el borrador: deja de aparecer en el listado habitual"
+                              : facturaViva && !puedeAnular
                               ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
                               : acreditaYCancela
                                 ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
@@ -7677,7 +7815,7 @@ function PropuestaFichaContenido({
                           }
                         >
                           <XCircleIcon />
-                          Cancelar orden
+                          {orden.estado === "borrador" ? "Descartar borrador" : "Cancelar orden"}
                         </HeroButton>
                       ) : null}
                       {puedeEditarOrden && orden.estado === "borrador" ? (
@@ -7707,72 +7845,32 @@ function PropuestaFichaContenido({
                         </HeroButton>
                       ) : null}
                       {puedeAbrirEntrega ? (
-                        <Button
-                          size="lg"
-                          onClick={() => setEntregaManualOpen(true)}
-                          disabled={guardandoEdicion || cancelando || cambiosSinGuardar > 0}
+                        <HeroButton
+                          size="sm"
+                          variant="primary"
+                          onPress={() => setEntregaManualOpen(true)}
+                          aria-label="Registrar la entrega al cliente"
+                          isDisabled={guardandoEdicion || cancelando || cambiosSinGuardar > 0}
                           title={cambiosSinGuardar > 0
                             ? "Guardá o descartá los cambios antes de entregar"
                             : "Registrar la entrega al cliente"}
                         >
-                          <PackageCheckIcon data-icon="inline-start" />
+                          <PackageCheckIcon />
                           Entregar
-                        </Button>
-                      ) : null}
-                      {colasImpresion &&
-                        orden &&
-                        items.some((item) =>
-                          metaCentroCopiado(item.jobContext),
-                        ) &&
-                        !["borrador", "cancelada"].includes(orden.estado) && (
-                          <HeroButton
-                            variant="tertiary"
-                            onPress={() => impresionDocumentos.abrir(orden.id)}
-                          >
-                            <PrinterIcon />
-                            Impresión de documentos
-                          </HeroButton>
-                        )}
-                      {orden?.tieneHistorialImpresion && (puedeVerMateriales || puedeEjecutarProduccion) && (
-                        <HeroButton variant="tertiary" onPress={() => setHistorialImpresionOpen(true)}>
-                          <PrinterIcon />Historial de impresión
-                        </HeroButton>
-                      )}
-                      {(impresionDirecta || conEtiquetasPdf) && puedeImprimirEtiqueta &&
-                        orden &&
-                        !["borrador", "cancelada"].includes(orden.estado) && (
-                          <HeroButton
-                            variant="tertiary"
-                            onPress={() => setEtiquetaOpen(true)}
-                          >
-                            <PrinterIcon />
-                            {impresionDirecta
-                              ? "Imprimir etiqueta"
-                              : "Descargar etiqueta"}
-                          </HeroButton>
-                        )}
-                      {publicToken ? (
-                        <HeroButton
-                          type="button"
-                          variant="tertiary"
-                          size="sm"
-                          onPress={compartirSeguimiento}
-                          title="Copiar el link público de seguimiento para el cliente"
-                        >
-                          {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
-                          {trackCopiado ? "Copiado" : "Seguimiento"}
                         </HeroButton>
                       ) : null}
-                      <HeroButton
-                        type="button"
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => setQrRetiroOpen(true)}
-                        title="QR que el cliente presenta para retirar el trabajo"
-                      >
-                        <QrCodeIcon />
-                        QR
-                      </HeroButton>
+                      <OrdenAccionesMenus
+                        documentos={colasImpresion && orden && items.some(item => metaCentroCopiado(item.jobContext)) && !["borrador", "cancelada"].includes(orden.estado)
+                          ? () => impresionDocumentos.abrir(orden.id) : undefined}
+                        etiqueta={(impresionDirecta || conEtiquetasPdf) && puedeImprimirEtiqueta && orden && !["borrador", "cancelada"].includes(orden.estado)
+                          ? () => setEtiquetaOpen(true) : undefined}
+                        historial={orden?.tieneHistorialImpresion && (puedeVerMateriales || puedeEjecutarProduccion)
+                          ? () => setHistorialImpresionOpen(true) : undefined}
+                        seguimiento={publicToken ? compartirSeguimiento : undefined}
+                        qr={() => setQrRetiroOpen(true)}
+                        copiado={trackCopiado}
+                        impresionDirecta={impresionDirecta}
+                      />
                     </div>
                   ) : null}
                 </div>
@@ -7787,8 +7885,8 @@ function PropuestaFichaContenido({
                   <div className="prf-cancelada">
                     <div className="prf-cancelada-t">
                       <XCircleIcon width={15} height={15} />
-                      Cancelada
-                      {orden.cancelacion.estadoAlCancelar
+                      {orden.borradorDescartado ? "Borrador descartado y archivado" : "Cancelada"}
+                      {!orden.borradorDescartado && orden.cancelacion.estadoAlCancelar
                         ? ` cuando estaba ${(
                             ORDEN_TRABAJO_ESTADOS[
                               orden.cancelacion
@@ -7825,16 +7923,17 @@ function PropuestaFichaContenido({
                   </div>
                 ) : null}
 
+                {presupuestoBase && <p className="text-sm text-muted-foreground">Estás preparando la versión {presupuestoBase.version + 1}. Al guardar, la anterior queda en el historial y deja de admitir aprobaciones. Los productos se vuelven a cotizar con la configuración vigente.</p>}
                 <OrdenDatosSections
                   tipo={
-                    !modoOrden ? (
+                    !modoOrden && !presupuestoBase && permisoOrdenes && permisoPresupuestos ? (
                       <OrdenSegmented
                         value={ordenTipo}
                         onChange={(value) => setTipo(fromOrdenTipo(value))}
                       />
                     ) : (
                       <span className="text-sm font-medium">
-                        Orden de trabajo
+                        {!modoOrden && (!permisoOrdenes || presupuestoBase) ? "Presupuesto" : "Orden de trabajo"}
                       </span>
                     )
                   }
@@ -7867,17 +7966,20 @@ function PropuestaFichaContenido({
                   }
                   cliente={
                     <FieldCard label="Cliente" icon={<UserIcon />}>
-                      {campoEditable("clienteId") ? (
-                        <ClienteLista
-                          value={clienteId}
-                          onChange={setClienteId}
-                          {...selectorClientes}
-                        />
-                      ) : (
-                        <div className="text-sm text-foreground">
-                          <span>{orden?.clienteNombre}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 text-sm text-foreground">
+                        {campoEditable("clienteId") && !presupuestoBase ? (
+                          <div className="min-w-0 flex-1">
+                            <ClienteLista
+                              value={clienteId}
+                              onChange={setClienteId}
+                              {...selectorClientes}
+                            />
+                          </div>
+                        ) : (
+                          <span>{clienteSeleccionado?.nombre ?? "Sin cliente"}</span>
+                        )}
+                        {clienteId && <CopiarTelefonoCliente telefono={telefonoCliente} />}
+                      </div>
                     </FieldCard>
                   }
                   campana={conProyectos ? (
@@ -8182,7 +8284,7 @@ function PropuestaFichaContenido({
                     fechaEstimada={fechaEstimada}
                     readOnly={modoOrden}
                     editarFecha={itemsEnEdicion}
-                    prepararCorte={modoOrden && puedeEditarOrden && persistedItemIds.has(item.id)}
+                    prepararCorte={modoOrden && puedeEditarOrden && puedeVerProduccion && persistedItemIds.has(item.id)}
                     onDistribucionGuardada={
                       orden ? () => {
                         void getOrdenTrabajo(orden.id).then((actualizada) => {
@@ -8219,7 +8321,7 @@ function PropuestaFichaContenido({
                 cargos={cargosOrden}
                 isDisabled={cuponValidando || descuentoAplicando}
                 onRemove={
-                  modoOrden
+                  !puedeModificarCargos
                     ? undefined
                     : (id) =>
                         setCargosOrden((current) =>
@@ -8230,7 +8332,27 @@ function PropuestaFichaContenido({
             )}
 
             {tab === "produccion" ? (
-              orden?.produccionControlada === false ? (
+              (!orden || orden.estado === "borrador") && ordenTipo === "orden" && puedeAsignarPersonal && conAsignacionPersonal ? (
+                <OrdenPersonalPrevisto
+                  productos={items.map(item => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId: item.cotizacionItemId, asignacionesPersonal: item.asignacionesPersonal }))}
+                  disabled={!puedeEditarOrden}
+                  preparar={async () => {
+                    const originales = itemsRef.current;
+                    const { itemsConSnapshot } = await persistirSnapshotsItems();
+                    if (originales.length !== itemsRef.current.length || originales.some(previo => !itemsRef.current.some(actual => actual.id === previo.id && actual.cotizacion === previo.cotizacion && actual.jobContext === previo.jobContext && actual.cotizacionItemId === previo.cotizacionItemId)))
+                      throw new Error("Los productos cambiaron mientras se preparaban los operadores. Volvé a intentar.");
+                    if (itemsConSnapshot.some(i => i.planEntrega || i.item.distribucionEntregas)) throw new Error("Los operadores de productos divididos en lotes se asignan desde Producción después de emitir.");
+                    const ids = new Map(itemsConSnapshot.map(i => [i.item.id, i.cotizacionItemId]));
+                    setItems(actual => actual.map(item => ({ ...item, cotizacionItemId: ids.get(item.id) ?? item.cotizacionItemId })));
+                    return itemsConSnapshot.map(({ item, cotizacionItemId }) => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId,
+                      ordenItemId: orden?.productos.some(p => p.id === item.id) ? item.id : undefined, asignacionesPersonal: item.asignacionesPersonal }));
+                  }}
+                  onChange={elecciones => {
+                    setItems(actual => actual.map(item => elecciones.has(item.id) ? { ...item, asignacionesPersonal: elecciones.get(item.id) } : item));
+                    setEditadosIds(actual => new Set([...actual, ...elecciones.keys()]));
+                  }}
+                />
+              ) : orden?.produccionControlada === false ? (
                 <EmptyTab title="Seguimiento manual" description="Esta orden se emitió sin tablero de tareas. Verificá el trabajo antes de confirmar su entrega desde el mostrador." />
               ) : orden ? (
                 <ProduccionOrdenTab
@@ -8247,6 +8369,9 @@ function PropuestaFichaContenido({
             ) : null}
             {tab === "materiales" && puedeVerMateriales ? (
               <>
+                {cotizando && (!conPrevisionMateriales || !items.length) && (
+                  <ModoInicioInventario />
+                )}
                 {conPrevisionMateriales && items.length > 0 && (
                   <PrevisionMaterialesPanel
                     data={previsionMateriales.data}
@@ -8269,14 +8394,14 @@ function PropuestaFichaContenido({
                 ) : null}
               </>
             ) : null}
-            {tab === "pagos" ? (
+            {tab === "pagos" && mostrarPagos ? (
               orden ? (
                 <div className="otd-page" style={{ padding: 0 }}>
                   <PagosTab
                     pago={orden.pago}
                     total={orden.total}
                     ordenId={orden.id}
-                    puedeCobrar={orden.estado !== "borrador" && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
+                    puedeCobrar={puedeRegistrarCobros && orden.estado !== "borrador" && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
                     soloLectura={!puedeEditarOrden}
                     sinComprobante={
                       orden.tratamientoFiscal === "SIN_COMPROBANTE"
@@ -8301,7 +8426,7 @@ function PropuestaFichaContenido({
                 </div>
               )
             ) : null}
-            {tab === "comprobantes" && orden ? (
+            {tab === "comprobantes" && orden && puedeVerComprobantes ? (
               <div className="otd-page" style={{ padding: 0 }}>
                 <ComprobantesOrdenTab
                   ordenId={orden.id}
@@ -8309,9 +8434,11 @@ function PropuestaFichaContenido({
                   total={orden.total}
                   facturadoInicial={orden.facturadoTotal}
                   cobradoInicial={orden.cobradoTotal}
-                  puedeFacturar={orden.estado !== "borrador"}
+                  puedeFacturar={!["borrador", "cancelada"].includes(orden.estado) && !sinComprobante}
+                  facturacionBloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando}
+                  onFacturada={recargarOrden}
                   soloLectura={!puedeEditarOrden}
-                  recargarToken={0}
+                  recargarToken={refrescosComprobantes}
                 />
               </div>
             ) : null}
@@ -8320,6 +8447,10 @@ function PropuestaFichaContenido({
                 <ArchivosOrdenTab
                   ordenId={orden.id}
                   estadoDocumental={initialDocumentos}
+                  tomos={Object.fromEntries(orden.productos.map((p) => [
+                    p.id,
+                    metaCentroCopiado(p.snapshot?.jobContext as Record<string, unknown> | undefined),
+                  ]))}
                   soloLectura={!puedeEditarOrden}
                   onTotalCambio={setArchivosCount}
                 />
@@ -8333,7 +8464,7 @@ function PropuestaFichaContenido({
                 />
               )
             ) : null}
-            {tab === "costos" ? (
+            {tab === "costos" && verMargenes ? (
               <CostosOrdenTab
                 items={items}
                 cargosOrden={cargosOrden}
@@ -8393,10 +8524,11 @@ function PropuestaFichaContenido({
                     </div>
                   </div>
                 ) : null}
-                {!modoOrden && conFidelizacion ? (
+                {!modoOrden && conFidelizacion && permisoOrdenes ? (
                   <FidelizacionCotizador
                     clienteId={clienteId}
-                    margen={costosFidelizacion.margenMonto}
+                    presupuestoBaseId={presupuestoBase?.id}
+                    margen={costosFidelizacion?.margenMonto}
                     total={totalPropuestaAntesCanje}
                     moneda={moneda}
                     value={fidelizacionCanjePuntos}
@@ -8488,20 +8620,23 @@ function PropuestaFichaContenido({
         <ConfirmacionDestructiva
           open={puedeEditarOrden && confirmCancelar}
           onOpenChange={setConfirmCancelar}
-          titulo={`Cancelar la orden ${orden?.numero ?? ""}`}
+          apariencia="heroui"
+          titulo={orden?.estado === "borrador" ? `Descartar el borrador ${orden.numero}` : `Cancelar la orden ${orden?.numero ?? ""}`}
           descripcion={
-            acreditaYCancela
+            orden?.estado === "borrador"
+              ? "Este borrador se archivará y dejará de aparecer en el listado habitual. Sus datos e historial se conservan para consulta en Descartados."
+              : acreditaYCancela
               ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
               : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
           }
           impacto={impactoCancelacion}
           requiereTipear={false}
-          motivo={{
+          motivo={orden?.estado === "borrador" ? undefined : {
             label: "¿Por qué se cancela? Queda en el historial de la orden.",
             placeholder:
               "Ej.: el cliente se arrepintió · error de carga · no aprobó el arte",
           }}
-          accionLabel="Cancelar la orden"
+          accionLabel={orden?.estado === "borrador" ? "Descartar y archivar" : "Cancelar la orden"}
           onConfirmar={(motivo) => cancelarOrden(motivo)}
         />
 
@@ -8532,6 +8667,8 @@ function PropuestaFichaContenido({
           }}
           onSaveItem={(item) => {
             if (!permisoProductosRef.current) return false;
+            // Recalcular dimensiones o precios conserva la decisión de personal.
+            item = { ...item, asignacionesPersonal: items.find(candidate => candidate.id === item.id)?.asignacionesPersonal };
             // El sheet recotiza SIN descuento: si la línea tenía uno, se reaplica
             // sobre la nueva config (recotización) para no perderlo.
             const descuentoPrevio =
@@ -8584,6 +8721,7 @@ function PropuestaFichaContenido({
           open={copiadoOpen && puedeModificarProductos}
           clienteId={clienteId || null}
           editItems={copiadoEditItems}
+          persistedItemIds={persistedItemIds}
           onOpenChange={(open) => {
             if (open && !permisoProductosRef.current) return;
             setCopiadoOpen(open);
@@ -8596,18 +8734,12 @@ function PropuestaFichaContenido({
             const cargaEditada = copiadoEditItems?.length
               ? cargaDeItem(copiadoEditItems[0])
               : null;
-            const nuevosConHerencia = cargaEditada
-              ? nuevos.map((nuevo, indice) => ({
-                  ...nuevo,
-                  archivosOrigenItemIds: copiadoEditItems!
-                    .filter(
-                      (_, origenIndice) =>
-                        Math.min(origenIndice, nuevos.length - 1) === indice,
-                    )
-                    .map((origen) => origen.id)
-                    .filter((id) => persistedItemIds.has(id)),
-                }))
-              : nuevos;
+            if (copiadoEditItems?.some(item => item.asignacionesPersonal?.length))
+              toast.info("Se reconstruyeron los trabajos de copiado. Elegí nuevamente sus operadores en Producción antes de emitir.");
+            const nuevosConHerencia = nuevos.map((nuevo) => ({
+              ...nuevo,
+              archivosOrigenItemIds: nuevo.archivosOrigenItemIds?.filter((id) => persistedItemIds.has(id)),
+            }));
             setItems((current) => {
               const base = cargaEditada
                 ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
@@ -8633,6 +8765,11 @@ function PropuestaFichaContenido({
           subtotalBase={calcularResumen(items).subtotal}
           onClose={() => setCargoOpen(false)}
           onAdd={(cargo) => {
+            if (!puedeModificarCargos) return;
+            if (cargosOrden.some(actual => actual.cargoDirectoCatalogoId === cargo.cargoDirectoCatalogoId)) {
+              toast.error("Ese cargo ya está agregado. Quitalo antes de reemplazarlo.");
+              return;
+            }
             setCargosOrden((current) => [...current, cargo]);
             setCargoOpen(false);
             toast.success(`${cargo.nombreSnapshot} agregado a la orden.`);

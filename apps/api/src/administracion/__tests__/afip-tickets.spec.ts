@@ -1,3 +1,4 @@
+import type { CredencialesArcaService } from '../../fiscal-plataforma/credenciales-arca.service';
 import { AfipSdkProvider } from '../invoicing/afip-sdk.provider';
 
 const instante = Date.parse('2026-09-22T12:00:00Z');
@@ -88,8 +89,47 @@ it('un fallo de autorización no envenena los intentos posteriores', async () =>
   expect(peticiones('/auth')).toHaveLength(2);
 });
 
+it('al rotar el certificado deja de usar el TA de la revisión anterior', async () => {
+  process.env.AFIPSDK_ENVIRONMENT = 'prod';
+  const material = {
+    cert: 'cert-ficticio',
+    key: 'clave-ficticia',
+    cuit: '30000000007',
+    revision: 'revision-1',
+  };
+  const credenciales = {
+    material: jest.fn(() => Promise.resolve({ ...material })),
+  } as unknown as CredencialesArcaService;
+  const svc = new AfipSdkProvider(credenciales);
+  await consultar(svc);
+  await consultar(svc);
+  expect(peticiones('/auth')).toHaveLength(1);
+  material.revision = 'revision-2';
+  material.cert = 'cert-nuevo-ficticio';
+  material.key = 'clave-nueva-ficticia';
+  await consultar(svc);
+  expect(peticiones('/auth')).toHaveLength(2);
+  expect(peticiones('/auth')[1].body).toMatchObject({
+    cert: material.cert,
+    key: material.key,
+  });
+  // El emisor se conserva, aunque sea otro CUIT que el titular del certificado.
+  expect(peticiones('/requests')[2].body.params).toMatchObject({
+    Auth: { Cuit: '20000000001' },
+  });
+});
+
 it('separa emisores, ambientes y rotación de credencial', async () => {
-  const svc = new AfipSdkProvider();
+  const material = {
+    cert: 'cert-ficticio',
+    key: 'key-ficticia',
+    cuit: '30000000007',
+    revision: 'rev-1',
+  };
+  const svc = new AfipSdkProvider({
+    material: (ambiente: string) =>
+      Promise.resolve(ambiente === 'prod' ? material : null),
+  } as CredencialesArcaService);
   await consultar(svc);
   await consultar(svc, '20000000002');
   process.env.AFIPSDK_ENVIRONMENT = 'prod';
@@ -99,8 +139,20 @@ it('separa emisores, ambientes y rotación de credencial', async () => {
   expect(peticiones('/auth').map((r) => r.body)).toEqual([
     { environment: 'dev', tax_id: '20000000001', wsid: 'wsfe' },
     { environment: 'dev', tax_id: '20000000002', wsid: 'wsfe' },
-    { environment: 'prod', tax_id: '20000000001', wsid: 'wsfe' },
-    { environment: 'prod', tax_id: '20000000001', wsid: 'wsfe' },
+    {
+      environment: 'prod',
+      tax_id: '20000000001',
+      wsid: 'wsfe',
+      cert: 'cert-ficticio',
+      key: 'key-ficticia',
+    },
+    {
+      environment: 'prod',
+      tax_id: '20000000001',
+      wsid: 'wsfe',
+      cert: 'cert-ficticio',
+      key: 'key-ficticia',
+    },
   ]);
   expect(peticiones('/requests')[3].headers).toMatchObject({
     Authorization: 'Bearer credencial-simulada-dos',

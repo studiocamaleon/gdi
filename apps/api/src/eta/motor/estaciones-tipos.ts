@@ -17,6 +17,7 @@ export type EquipoProduccion = {
 };
 
 export type PersonaProduccion = {
+  asignacionAutomatica?: boolean;
   id: string;
   activo?: boolean;
   calendario: CalendarioEstacion | null;
@@ -27,6 +28,7 @@ export type Estacion = {
   equipoProduccionId?: string | null;
   equipoProduccion?: EquipoProduccion | null;
   empleados?: Array<{
+    asignacionAutomatica?: boolean;
     id: string;
     activo?: boolean;
     calendario?: CalendarioEstacion | null;

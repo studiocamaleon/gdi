@@ -74,6 +74,7 @@ export type ControlMaterial = {
   reservas: Array<{ ubicacionId: string; nombre: string; cantidad: number }>;
 };
 export type ControlMateriales = {
+  inicioSinStock?: boolean;
   modoReserva?: "AL_EMITIR" | "MANUAL";
   habilitado: boolean;
   iniciado: boolean;
@@ -128,4 +129,15 @@ export function getReservasStock(varianteId: string, ubicacionId: string) {
   return apiRequest<ReservaStock[]>(
     `/inventario/reservas/${varianteId}?ubicacionId=${ubicacionId}`,
   );
+}
+
+export type InicioInventario = { activo: boolean; version: number };
+export function getInicioInventario() {
+  return apiRequest<InicioInventario>("/inventario/inicio");
+}
+export function saveInicioInventario(data: InicioInventario) {
+  return apiRequest<InicioInventario>("/inventario/inicio", {
+    method: "PUT",
+    body: JSON.stringify({ activo: data.activo, version: data.version }),
+  });
 }

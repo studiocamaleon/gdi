@@ -155,17 +155,16 @@ describe('WatiClient', () => {
       }) as unknown as typeof fetch;
     });
 
-    it('adjunta el header de imagen cuando hay media', async () => {
+    it('envía la imagen mediante la variable del encabezado, sin header ignorado por Wati', async () => {
       await client.enviarPlantilla(cred, {
         telefono: '5491150000000',
         plantilla: 'grafo_orden_lista_qr_v1',
         parametros: { nombre_cliente: 'Ana' },
         mediaHeaderUrl: 'https://r2.example/qr.png',
+        mediaHeaderParam: 'qr_url',
       });
-      expect(cuerpoEnviado().header).toEqual({
-        type: 'IMAGE',
-        link: 'https://r2.example/qr.png',
-      });
+      expect(cuerpoEnviado().parameters).toContainEqual({ name: 'qr_url', value: 'https://r2.example/qr.png' });
+      expect(cuerpoEnviado()).not.toHaveProperty('header');
     });
 
     it('no manda header en las de texto puro', async () => {
@@ -263,5 +262,32 @@ describe('minutosDeEspera', () => {
     expect(
       minutosDeEspera('Wati tuvo un error interno (500).'),
     ).toBeUndefined();
+  });
+});
+
+describe('contrato de imagen variable y aceptación v2', () => {
+  const cred = { endpoint: 'https://live-mt-server.wati.io', tenantId: '123456', token: 'ficticio' };
+  const envio = { telefono: '5491150000000', plantilla: 'qr_ficticio', parametros: { numero_orden: 'OT-QA' } };
+  afterEach(() => jest.restoreAllMocks());
+  it('bloquea la imagen estática antes de cualquier POST', async () => {
+    const fetch = jest.spyOn(global, 'fetch');
+    expect(await new WatiClient().enviarPlantilla(cred, { ...envio, mediaHeaderUrl: 'https://example.test/qr.png' })).toMatchObject({ ok: false, incierto: false });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('conserva el localMessageId del destinatario y usa el endpoint v2', async () => {
+    const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ result: true, receivers: [{ waId: envio.telefono, localMessageId: 'id-ficticio', isValidWhatsAppNumber: true, errors: [] }] })));
+    expect(await new WatiClient().enviarPlantilla(cred, envio)).toEqual({ ok: true, id: 'id-ficticio' });
+    expect(fetch.mock.calls[0][0]).toContain('/123456/api/v2/sendTemplateMessage?');
+  });
+  it('no trata un destinatario inválido como aceptación', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ result: true, receivers: [{ waId: envio.telefono, isValidWhatsAppNumber: false, errors: [] }] })));
+    expect(await new WatiClient().enviarPlantilla(cred, envio)).toMatchObject({ ok: false, incierto: false });
+  });
+  it('crea el encabezado variable y su muestra sólo para aprobación', async () => {
+    const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(new Response('{"ok":true}'));
+    await new WatiClient().crearPlantilla(cred, { codigo: 'qr_ficticio', categoria: 'UTILITY', idioma: 'es_AR', cuerpo: 'Orden {{1}}', footer: 'QA', parametros: [{ nombre: 'orden', ejemplo: 'OT-QA' }], encabezado: { tipo: 'IMAGE', ejemploUrl: 'https://example.test/muestra.png' } });
+    const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
+    expect(body.header.link).toBe('{{qr_url}}');
+    expect(body.customParams).toContainEqual({ paramName: 'qr_url', paramValue: 'https://example.test/muestra.png' });
   });
 });

@@ -1,4 +1,15 @@
 "use client";
+import { RetencionesConfigEditor } from "./retenciones-config-editor";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+} from "@/components/ui/field";
+import { SelectField } from "@/components/design-system/select-field";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RETENCION_REGIMEN_LABELS } from "@/lib/administracion";
 import { CuentaDialog } from "./cuenta-fondos-dialog";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
@@ -49,11 +60,20 @@ import { useConfigRegional } from "@/components/navigation/config-regional-provi
 import { formatearMoneda } from "@/lib/moneda";
 
 const BASE_SIMULACION = 100_000;
+function useFechaSimulacion() {
+  const { zonaHoraria } = useConfigRegional();
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: zonaHoraria,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 /** El formateador de la vista, en la moneda del tenant (fila y sheet lo usan). */
 function useFmt() {
   const { moneda } = useConfigRegional();
-  return (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
+  return (n: number) => formatearMoneda(n, moneda);
 }
 
 type SheetDraft = UpsertMetodoPagoPayload & { id?: string };
@@ -66,6 +86,10 @@ function draftDesdeMetodo(metodo: MetodoPago): SheetDraft {
     comisionPct: metodo.comisionPct,
     ivaComisionPct: metodo.ivaComisionPct,
     plazoAcreditacionDias: metodo.plazoAcreditacionDias,
+    calendarioAcreditacion:
+      metodo.calendarioAcreditacion ?? "habiles_bancarios",
+    feriadosAdicionales: metodo.feriadosAdicionales ?? [],
+    retencionesConfig: metodo.retencionesConfig ?? [],
     sufreRetencion: metodo.sufreRetencion,
     cuentaDestinoId: metodo.cuentaDestinoId,
     activo: metodo.activo,
@@ -79,6 +103,9 @@ function draftNuevo(): SheetDraft {
     comisionPct: 0,
     ivaComisionPct: 0,
     plazoAcreditacionDias: 0,
+    calendarioAcreditacion: "habiles_bancarios",
+    feriadosAdicionales: [],
+    retencionesConfig: [],
     sufreRetencion: false,
     cuentaDestinoId: null,
     activo: true,
@@ -97,7 +124,8 @@ function FilaMetodo({
   onEditar: () => void;
 }) {
   const fmt = useFmt();
-  const sim = simularMetodo(metodo, BASE_SIMULACION);
+  const fechaSimulacion = useFechaSimulacion();
+  const sim = simularMetodo(metodo, BASE_SIMULACION, fechaSimulacion);
   return (
     <>
       <div
@@ -158,14 +186,16 @@ function FilaMetodo({
           {metodo.plazoAcreditacionDias === 0 ? (
             <span className="inst">Inmediato</span>
           ) : (
-            `${metodo.plazoAcreditacionDias} d`
+            `${metodo.plazoAcreditacionDias} ${metodo.calendarioAcreditacion === "corridos" ? "d. corridos" : "d. hábiles"}`
           )}
         </span>
         <span>
           {metodo.sufreRetencion ? (
             <span className="apm-ret-y">
               <ShieldCheckIcon />
-              Sufre ret.
+              {metodo.retencionesConfig?.length
+                ? "Configurada"
+                : "Por configurar"}
             </span>
           ) : (
             <span className="apm-ret-n">No</span>
@@ -218,17 +248,32 @@ function FilaMetodo({
                   </div>
                 </>
               ) : null}
+              {sim.retencionesTotal > 0 ? (
+                <>
+                  <span className="apm-calc-arrow">−</span>
+                  <div className="apm-calc-step neg">
+                    <span className="l">Retenciones estimadas</span>
+                    <span className="v">{fmt(sim.retencionesTotal)}</span>
+                  </div>
+                </>
+              ) : null}
               <span className="apm-calc-arrow">→</span>
               <div className="apm-calc-step net">
-                <span className="l">Neto acreditado</span>
-                <span className="v">{fmt(sim.neto)}</span>
+                <span className="l">A recibir estimado</span>
+                <span className="v">{fmt(sim.disponible)}</span>
               </div>
             </div>
             <div className="apm-calc-note">
-              Sobre <b>{fmt(sim.base)}</b> acreditás <b>{fmt(sim.neto)}</b>
+              Sobre <b>{fmt(sim.base)}</b> recibirías{" "}
+              <b>{fmt(sim.disponible)}</b>
               <br />
-              {plazoAcreditacionLabel(metodo.plazoAcreditacionDias)}
-              {metodo.sufreRetencion ? " · aplica retención" : ""}
+              {plazoAcreditacionLabel(
+                metodo.plazoAcreditacionDias,
+                metodo.calendarioAcreditacion,
+              )}
+              {metodo.sufreRetencion && !metodo.retencionesConfig?.length
+                ? " · falta configurar retenciones"
+                : ""}
             </div>
           </div>
         </div>
@@ -253,7 +298,8 @@ function SheetMetodo({
   const conValores = useCapacidad("valores");
   const fmt = useFmt();
   const [form, setForm] = React.useState<SheetDraft>(draft);
-  const sim = simularMetodo(form, BASE_SIMULACION);
+  const fechaSimulacion = useFechaSimulacion();
+  const sim = simularMetodo(form, BASE_SIMULACION, fechaSimulacion);
   const esCheque = form.tipo === "cheque_echeq";
   const set = <K extends keyof SheetDraft>(campo: K, valor: SheetDraft[K]) =>
     setForm((prev) => ({ ...prev, [campo]: valor }));
@@ -394,10 +440,57 @@ function SheetMetodo({
             )}
           </div>
         </div>
+        {!esCheque ? (
+          <FieldGroup>
+            <Field>
+              <FieldLabel>Cómputo del plazo</FieldLabel>
+              <SelectField
+                aria-label="Cómputo del plazo"
+                value={form.calendarioAcreditacion ?? "habiles_bancarios"}
+                onChange={(v) =>
+                  set(
+                    "calendarioAcreditacion",
+                    v as "habiles_bancarios" | "corridos",
+                  )
+                }
+                options={[
+                  {
+                    value: "habiles_bancarios",
+                    label: "Días hábiles bancarios",
+                  },
+                  { value: "corridos", label: "Días corridos" },
+                ]}
+              />
+              <FieldDescription>
+                En Argentina se usa el calendario BCRA 2026. La fecha es una
+                previsión; confirmá la acreditación cuando el dinero ingrese.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="metodo-feriados">
+                Fechas adicionales sin acreditación
+              </FieldLabel>
+              <Textarea
+                id="metodo-feriados"
+                placeholder="2026-11-06"
+                value={(form.feriadosAdicionales ?? []).join("\n")}
+                onChange={(e) =>
+                  set("feriadosAdicionales", e.target.value.split("\n"))
+                }
+              />
+              <FieldDescription>
+                Opcional: una fecha AAAA-MM-DD por línea, según el calendario
+                del proveedor.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+        ) : null}
         <div className="apm-toggle-field">
           <div>
             <div className="t">Sufre retención</div>
-            <div className="s">SIRCREB, IIBB, ganancias u otros regímenes.</div>
+            <div className="s">
+              Configurá las deducciones previstas para este medio.
+            </div>
           </div>
           <button
             type="button"
@@ -408,6 +501,13 @@ function SheetMetodo({
             aria-label="Sufre retención"
           />
         </div>
+        {form.sufreRetencion ? (
+          <RetencionesConfigEditor
+            soloCliente={esCheque}
+            reglas={form.retencionesConfig ?? []}
+            onChange={(reglas) => set("retencionesConfig", reglas)}
+          />
+        ) : null}
         <div className="apm-toggle-field">
           <div>
             <div className="t">Método activo</div>
@@ -440,12 +540,32 @@ function SheetMetodo({
               <span className="v">−{fmt(sim.ivaComision)}</span>
             </div>
           ) : null}
+          {sim.retenciones.map((r, i) => (
+            <div className="apm-sc-row neg" key={i}>
+              <span className="l">
+                − {RETENCION_REGIMEN_LABELS[r.regimen]} ({r.alicuota}%) ·{" "}
+                {r.jurisdiccion}
+              </span>
+              <span className="v">−{fmt(r.monto)}</span>
+            </div>
+          ))}
+          {form.sufreRetencion && !form.retencionesConfig?.length ? (
+            <Alert>
+              <AlertDescription>
+                Falta configurar la retención. El importe previsto todavía no la
+                descuenta.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="apm-sc-row total">
             <span className="l">
-              Neto acreditado ·{" "}
-              {plazoAcreditacionLabel(form.plazoAcreditacionDias)}
+              A recibir estimado ·{" "}
+              {plazoAcreditacionLabel(
+                form.plazoAcreditacionDias,
+                form.calendarioAcreditacion,
+              )}
             </span>
-            <span className="v">{fmt(sim.neto)}</span>
+            <span className="v">{fmt(sim.disponible)}</span>
           </div>
         </div>
       </div>
@@ -463,7 +583,7 @@ export function MetodosPagoView({
   const [metodos, setMetodos] = React.useState(initialMetodos);
   const [cuentas, setCuentas] = React.useState(initialCuentas);
   const conValores = useCapacidad("valores");
-  const puedeCrearCuenta = usePuede("administracion.gestionar");
+  const puedeCrearCuenta = usePuede("administracion.tesoreria.gestionar");
   const { moneda } = useConfigRegional();
   const [nuevaCuenta, setNuevaCuenta] = React.useState(false);
   const [guardandoCuenta, setGuardandoCuenta] = React.useState(false);
@@ -501,6 +621,11 @@ export function MetodosPagoView({
         comisionPct: draft.comisionPct,
         ivaComisionPct: draft.ivaComisionPct,
         plazoAcreditacionDias: draft.plazoAcreditacionDias,
+        calendarioAcreditacion: draft.calendarioAcreditacion,
+        feriadosAdicionales: draft.feriadosAdicionales
+          ?.map((f) => f.trim())
+          .filter(Boolean),
+        retencionesConfig: draft.retencionesConfig,
         sufreRetencion: draft.sufreRetencion,
         cuentaDestinoId:
           draft.tipo === "cheque_echeq"
@@ -618,10 +743,10 @@ export function MetodosPagoView({
           <div className="c">
             <div className="n">
               <span className="dot" style={{ background: "var(--ink)" }} />
-              Facturado
+              Bruto cobrado
             </div>
             <div className="d">
-              Lo que factura la orden. <b>El total nominal</b> del comprobante.
+              El importe <b>pagado por el cliente</b>, antes de deducciones.
             </div>
           </div>
           <div className="c">
@@ -630,20 +755,20 @@ export function MetodosPagoView({
                 className="dot"
                 style={{ background: "var(--accent-soft-foreground)" }}
               />
-              Neto acreditado
+              Neto antes de retenciones
             </div>
             <div className="d">
-              Lo que <b>entra a la cuenta</b> tras comisión e IVA del método.
+              Bruto menos <b>comisión e IVA de la comisión</b>.
             </div>
           </div>
           <div className="c">
             <div className="n">
-              <span className="dot" style={{ background: "var(--ok)" }} />
-              Disponible real
+              <span className="dot" style={{ background: "var(--ok)" }} />A
+              recibir estimado
             </div>
             <div className="d">
-              Neto menos <b>retenciones y percepciones</b> — plata que podés
-              usar.
+              Neto menos <b>retenciones</b>. Confirmá el ingreso con la
+              liquidación real.
             </div>
           </div>
         </div>

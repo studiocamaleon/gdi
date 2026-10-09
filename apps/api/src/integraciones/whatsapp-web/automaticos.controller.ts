@@ -12,6 +12,7 @@ import {
 import { RolSistema } from '@prisma/client';
 import { Roles } from '../../auth/roles.decorator';
 import { Permiso } from '../../auth/permiso.decorator';
+import { ProhibidoImpersonando } from '../../auth/prohibido-impersonando.decorator';
 import { CurrentSession } from '../../auth/current-auth.decorator';
 import type { CurrentAuth } from '../../auth/auth.types';
 import {
@@ -22,7 +23,7 @@ import {
 } from './automaticos.dto';
 import { AutomaticosWebService } from './automaticos.service';
 
-@Permiso('configuracion.gestionar')
+@Permiso("configuracion.integraciones.gestionar")
 @Roles(RolSistema.ADMINISTRADOR)
 @Controller('chrome-whatsapp/automaticos')
 export class AutomaticosWebController {
@@ -32,6 +33,7 @@ export class AutomaticosWebController {
   estado(@CurrentSession() auth: CurrentAuth) {
     return this.service.estado(auth.tenantId);
   }
+  @ProhibidoImpersonando()
   @Put('configuracion')
   configurar(
     @CurrentSession() auth: CurrentAuth,
@@ -39,11 +41,13 @@ export class AutomaticosWebController {
   ) {
     return this.service.configurar(auth.tenantId, dto);
   }
+  @ProhibidoImpersonando()
   @RequiereCapacidad('whatsapp_web')
   @Post('prueba')
   prueba(@CurrentSession() auth: CurrentAuth, @Body() dto: DispositivoWebDto) {
     return this.service.prueba(auth.tenantId, dto);
   }
+  @ProhibidoImpersonando()
   @RequiereCapacidad('whatsapp_web')
   @Post('reservar')
   reservar(
@@ -52,6 +56,7 @@ export class AutomaticosWebController {
   ) {
     return this.service.reservar(auth.tenantId, dto);
   }
+  @ProhibidoImpersonando()
   @RequiereCapacidad('whatsapp_web')
   @Post(':id/iniciar')
   iniciar(
@@ -61,6 +66,7 @@ export class AutomaticosWebController {
   ) {
     return this.service.iniciar(auth.tenantId, id, dto);
   }
+  @ProhibidoImpersonando()
   @Post(':id/resultado')
   resultado(
     @CurrentSession() auth: CurrentAuth,

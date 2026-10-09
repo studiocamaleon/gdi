@@ -1,6 +1,21 @@
 /** El editor conserva la geometría completa. Al cotizar sólo viaja la identidad
  * de las interpretaciones guardadas; el servidor recupera sus capas y medidas. */
 export function serializarCotizacion(request: unknown): string {
+  if (request && typeof request === "object" && !Array.isArray(request)) {
+    const payload = request as Record<string, unknown>;
+    if (Array.isArray(payload.contextoMateriales)) {
+      // La previsión incluye marcas internas (por ejemplo consumible). El DTO
+      // de cotización sólo acepta identidad, cantidad y unidad; no mutar la UI.
+      request = {
+        ...payload,
+        contextoMateriales: payload.contextoMateriales.map((material: unknown) => {
+          if (!material || typeof material !== "object" || Array.isArray(material)) return material;
+          const { varianteId, cantidad, unidad } = material as Record<string, unknown>;
+          return { varianteId, cantidad, unidad };
+        }),
+      };
+    }
+  }
   return JSON.stringify(request, (_key, value: unknown) => {
     if (!value || typeof value !== "object" || Array.isArray(value))
       return value;

@@ -12,13 +12,13 @@ import {
 import type { Response } from 'express';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import {
   PreparacionesRecorridoService,
   type SeleccionRecorrido,
 } from './preparaciones-recorrido.service';
 
-@Permiso('produccion.ver')
+@Permiso("produccion.tablero.ver")
 @Controller('recorridos-vectoriales')
 export class PreparacionesRecorridoController {
   constructor(private readonly preparations: PreparacionesRecorridoService) {}
@@ -124,7 +124,8 @@ export class PreparacionesRecorridoController {
     response.end(file.bytes);
   }
 
-  @Permiso('produccion.supervisar')
+  @Permiso("produccion.supervisar")
+  @RequiereVista("produccion.tablero.ver")
   @Post('items/:itemId/corte/regenerar')
   regenerate(
     @CurrentSession() auth: CurrentAuth,
@@ -139,7 +140,8 @@ export class PreparacionesRecorridoController {
     );
   }
 
-  @Permiso('produccion.supervisar')
+  @Permiso("produccion.supervisar")
+  @RequiereVista("produccion.tablero.ver")
   @Patch('revisiones/:revisionId/estado')
   state(
     @CurrentSession() auth: CurrentAuth,

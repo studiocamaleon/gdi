@@ -88,7 +88,7 @@ export async function materializarLotesEntrega(
           iniciadoEl: true,
           estadoCompra: true,
           mesaUsuarioId: true,
-          gatesOperativos: { select: { estado: true } },
+          gatesOperativos: { select: { tipo: true, estado: true } },
         },
       },
     },
@@ -110,7 +110,11 @@ export async function materializarLotesEntrega(
           p.iniciadoEl ||
           p.mesaUsuarioId ||
           (p.estadoCompra && p.estadoCompra !== 'pendiente') ||
-          p.gatesOperativos.some((g) => g.estado !== 'PENDIENTE'),
+          p.gatesOperativos.some(
+            (g) =>
+              g.estado !== 'PENDIENTE' &&
+              !(g.tipo === 'MATERIAL' && g.estado === 'OMITIDO_INICIO'),
+          ),
       )
     )
       throw new ConflictException(

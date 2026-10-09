@@ -9,6 +9,7 @@ const auth: CurrentAuth = {
   sessionId: 'sesion-qa',
   membershipId: 'cccccccc-cccc-4ccc-accc-cccccccccccc',
   role: RolSistema.ADMINISTRADOR,
+  permisos: new Set(['panel.ver']),
   email: 'admin@grafo.test',
 };
 
@@ -57,7 +58,10 @@ describe('EventosSistemaService', () => {
       topicos: [],
     });
     expect(findMany).not.toHaveBeenCalled();
-    expect(create.mock.calls[0][0].data.notificaciones).toBeUndefined();
+    const [creado] = create.mock.calls[0] as [
+      { data: { notificaciones?: unknown } },
+    ];
+    expect(creado.data.notificaciones).toBeUndefined();
   });
 
   describe('canal en vivo', () => {
@@ -79,7 +83,7 @@ describe('EventosSistemaService', () => {
       const { service } = preparar();
       const eventos: MessageEvent[] = [];
       const suscripcion = service
-        .stream(auth)
+        .stream(auth, () => Promise.resolve(auth))
         .subscribe((evento) => eventos.push(evento));
       try {
         await jest.advanceTimersByTimeAsync(15_000);
@@ -110,7 +114,7 @@ describe('EventosSistemaService', () => {
       ]);
       const eventos: MessageEvent[] = [];
       const suscripcion = service
-        .stream(auth, '40')
+        .stream(auth, () => Promise.resolve(auth), '40')
         .subscribe((evento) => eventos.push(evento));
       try {
         await jest.advanceTimersByTimeAsync(15_000);
@@ -129,6 +133,55 @@ describe('EventosSistemaService', () => {
       } finally {
         suscripcion.unsubscribe();
       }
+    });
+
+    it('si falla la revalidación cierra sin eventos ni detalles de base y libera los timers', async () => {
+      const { service, prisma } = preparar();
+      const eventos: MessageEvent[] = [];
+      const revalidar = jest
+        .fn()
+        .mockRejectedValue(new Error('Detalle interno ficticio'));
+      const sub = service
+        .stream(auth, revalidar)
+        .subscribe((e) => eventos.push(e));
+      await jest.advanceTimersByTimeAsync(16000);
+      expect(sub.closed).toBe(true);
+      expect(eventos).toEqual([]);
+      expect(prisma.eventoSistema.findFirst).not.toHaveBeenCalled();
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('si retiran permisos mientras lee eventos no entrega el lote que ya había consultado', async () => {
+      const { service, prisma } = preparar();
+      let actual = auth;
+      const eventos: MessageEvent[] = [];
+      const sub = service
+        .stream(auth, () => Promise.resolve(actual))
+        .subscribe((e) => eventos.push(e));
+      await jest.advanceTimersByTimeAsync(0);
+      prisma.eventoSistema.findMany.mockImplementationOnce(() => {
+        actual = { ...auth, permisos: new Set() };
+        return Promise.resolve([
+          {
+            id: 41n,
+            tipo: 'privado',
+            topicos: ['privado'],
+            createdAt: new Date(),
+          },
+        ]);
+      });
+      await jest.advanceTimersByTimeAsync(16000);
+      expect(sub.closed).toBe(true);
+      expect(eventos.map((e) => e.type)).toEqual(['ready']);
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('renueva la conexión a los cinco minutos y no deja timers vivos', async () => {
+      const { service } = preparar();
+      const sub = service.stream(auth, () => Promise.resolve(auth)).subscribe();
+      await jest.advanceTimersByTimeAsync(300000);
+      expect(sub.closed).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
     });
   });
 
@@ -169,7 +222,7 @@ describe('EventosSistemaService', () => {
           memberships: {
             some: { tenantId: auth.tenantId, activa: true },
           },
-        }),
+        }) as unknown,
       }),
     );
     expect(create).toHaveBeenCalledWith({
@@ -184,7 +237,7 @@ describe('EventosSistemaService', () => {
             },
           ],
         },
-      }),
+      }) as unknown,
     });
   });
 
@@ -202,6 +255,7 @@ describe('EventosSistemaService', () => {
           mensaje: 'Paso completado.',
           href: '/produccion/ordenes/1',
           severidad: 'EXITO',
+          lecturas: [],
           createdAt: new Date('2026-08-29T22:00:00.000Z'),
         },
       },
@@ -218,6 +272,7 @@ describe('EventosSistemaService', () => {
           tenantId: auth.tenantId,
           userId: auth.userId,
           archivadaEl: null,
+          evento: { tenantId: auth.tenantId },
         },
         take: 100,
       }),
@@ -226,21 +281,26 @@ describe('EventosSistemaService', () => {
   });
 
   it('no permite marcar una notificación ajena como leída', async () => {
-    const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const updateManyAndReturn = jest.fn();
+    const tx = { notificacionInterna: { findFirst, updateManyAndReturn } };
     const service = new EventosSistemaService({
-      notificacionInterna: { updateMany },
+      $transaction: (fn: (db: typeof tx) => unknown) => fn(tx),
     } as never);
 
     await expect(
       service.marcarLeida(auth, 'ffffffff-ffff-4fff-afff-ffffffffffff'),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(updateMany).toHaveBeenCalledWith({
+    expect(findFirst).toHaveBeenCalledWith({
       where: {
         id: 'ffffffff-ffff-4fff-afff-ffffffffffff',
         tenantId: auth.tenantId,
         userId: auth.userId,
+        archivadaEl: null,
+        evento: { tenantId: auth.tenantId },
       },
-      data: { leidaEl: expect.any(Date) },
+      select: { id: true },
     });
+    expect(updateManyAndReturn).not.toHaveBeenCalled();
   });
 });

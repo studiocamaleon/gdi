@@ -31,6 +31,8 @@ export const ETIQUETAS_VALOR_PARAM: Record<string, string> = {
   solo_esquinas: "Sólo cuatro esquinas",
   simple: "Simple (marco plano)",
   doble: "Doble (cajón)",
+  ancho_al_frente: "Ancho al frente",
+  alto_al_frente: "Alto al frente",
   area: "Por área (grilla sobre la cara)",
   recorrido: "Por recorrido (siguiendo el trazo)",
 };

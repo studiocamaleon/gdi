@@ -1,3 +1,4 @@
+import { validarMargenOpcionales } from '../margen-opcionales';
 import { CapacidadesEmpresaService } from '../../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -46,6 +47,7 @@ export class PreciosEspecialesClientesService {
     productoId: string,
     dto: CrearPrecioEspecialClienteDto,
   ) {
+    validarMargenOpcionales(dto.configJson);
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.capacidades.exigirOperacionTx(
@@ -87,6 +89,7 @@ export class PreciosEspecialesClientesService {
     id: string,
     dto: ActualizarPrecioEspecialClienteDto,
   ) {
+    validarMargenOpcionales(dto.configJson);
     return this.prisma.$transaction(async (tx) => {
       await this.capacidades.exigirOperacionTx(
         tx,

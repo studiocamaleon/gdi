@@ -1,5 +1,8 @@
 # Grafoprint: publicación de la web y despliegue del sistema
 
+> Antecedente de la publicación inicial del 24/09. Para el estado actual de staging consultar [VALIDACION.md](../deploy/staging/VALIDACION.md); para la siguiente etapa, [preparación de producción](preparacion-produccion.md). Las menciones a infraestructura o PR pendientes más abajo corresponden a esa fecha.
+
+
 Plan revisado el **24/09/2026** con el repositorio y documentación oficial.
 Decisiones del titular incorporadas. La web comercial ya está publicada en
 Vercel con el dominio definitivo y HTTPS. La infraestructura del SaaS sigue

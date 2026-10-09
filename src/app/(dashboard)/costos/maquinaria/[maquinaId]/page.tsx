@@ -50,7 +50,7 @@ async function MaquinariaDetalleContent({
       }),
       getPlantas(),
       getCentrosCosto(),
-      puedeConfigurar("maquinaria", "costos.gestionar"),
+      puedeConfigurar("maquinaria", "costos.maquinaria.gestionar"),
     ]);
 
   return (

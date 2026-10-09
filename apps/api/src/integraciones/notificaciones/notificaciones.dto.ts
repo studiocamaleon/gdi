@@ -73,3 +73,9 @@ export class ResolverAvisoDto {
   @IsString() @Length(1, 32) estadoEsperado!: string;
   @IsString() @Length(5, 500) motivo!: string;
 }
+
+export class ReintentarAvisoDto {
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/)
+  version!: string;
+}

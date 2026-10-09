@@ -1,8 +1,10 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { jsPDF } from 'jspdf';
 import { formatearMonedaDoc, monedaDe, type Moneda } from '../common/moneda';
+import type { PresupuestoCargoVisible } from './presupuesto-cargos';
 
 /**
  * PDF del presupuesto, dibujado con jsPDF.
@@ -64,7 +66,7 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
     };
   } catch (e) {
     log.warn(
-      `No pude cargar Geist para el PDF del presupuesto (${e instanceof Error ? e.message : e}). Sale en Helvetica.`,
+      `No pude cargar Geist para el PDF del presupuesto (${textoErrorLog(e)}). Sale en Helvetica.`,
     );
     geistCache = null;
   }
@@ -124,6 +126,7 @@ export type PresupuestoPdfDatos = {
   subtotal: number;
   impuestos: number;
   cargosDirectos: number;
+  cargos?: PresupuestoCargoVisible[];
   total: number;
   /** Σ del descuento comercial (0 = sin descuento; no se dibuja nada). */
   descuentoTotal?: number;
@@ -248,7 +251,7 @@ export class PresupuestoPdfService {
         pdf.addImage(logo, MARGEN, y, lado, lado, undefined, 'FAST');
       } catch (e) {
         this.log.warn(
-          `No pude dibujar el logo (${e instanceof Error ? e.message : e}); van las iniciales.`,
+          `No pude dibujar el logo (${textoErrorLog(e)}); van las iniciales.`,
         );
         this.cuadradoIniciales(pdf, MARGEN, y, lado, d.negocio);
       }
@@ -510,10 +513,23 @@ export class PresupuestoPdfService {
   }
 
   private detalle(pdf: jsPDF, d: PresupuestoPdfDatos, y0: number): number {
-    this.calcularColumnas(pdf, d.items);
+    const filas: PresupuestoPdfDatos['items'] = [
+      ...d.items,
+      ...(d.cargos ?? []).map((cargo) => ({
+        nombre: cargo.nombre,
+        cantidad: 1,
+        cantidadUnidad: 'cargo',
+        total: cargo.total,
+        specs: cargo.descripcion
+          ? [{ etiqueta: 'Descripción', valor: cargo.descripcion }]
+          : [],
+        adicionales: [],
+      })),
+    ];
+    this.calcularColumnas(pdf, filas);
     let y = this.encabezadoTabla(pdf, y0);
 
-    d.items.forEach((item, i) => {
+    filas.forEach((item, i) => {
       const alto = this.medirItem(pdf, item);
       // Un renglón no se parte entre páginas: media descripción arriba y el
       // precio abajo es peor que dejar un hueco. El margen inferior es el
@@ -527,7 +543,7 @@ export class PresupuestoPdfService {
 
       // Hairline entre renglones, no después del último: ahí cierra el borde
       // de la banda de totales.
-      if (i < d.items.length - 1) {
+      if (i < filas.length - 1) {
         pdf.setDrawColor(...HAIRLINE);
         pdf.setLineWidth(0.2);
         pdf.line(MARGEN, y, ANCHO - MARGEN, y);

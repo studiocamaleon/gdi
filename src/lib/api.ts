@@ -2,12 +2,24 @@ import { getSessionToken } from "@/lib/session";
 // Codec puro compartido con el API; este módulo no importa Nest ni Node.
 import { restaurarJson } from "../../apps/api/src/common/json-compartido";
 
+function reportarFalloApi(path: string, status: number) {
+  if (typeof window !== "undefined" && status >= 500) {
+    void import("./observabilidad-cliente")
+      .then((m) => m.reportarErrorApi(path, status))
+      .catch(() => {});
+  }
+}
+
 const DEFAULT_API_URL = "http://localhost:3001/api";
 
 export class ApiError extends Error {
   status: number;
 
-  constructor(message: string, status: number, readonly retryAfterSeconds?: number) {
+  constructor(
+    message: string,
+    status: number,
+    readonly retryAfterSeconds?: number,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -16,7 +28,9 @@ export class ApiError extends Error {
 
 function getApiBaseUrl() {
   if (typeof window === "undefined") {
-    return process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
+    return (
+      process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL
+    );
   }
 
   // En el navegador vamos same-origin al proxy BFF, que adjunta el token
@@ -32,7 +46,10 @@ export async function apiRequest<T>(
   const headers = new Headers(init?.headers ?? {});
   headers.set("Content-Type", "application/json");
   if (!headers.has("Accept")) {
-    headers.set("Accept", "application/vnd.grafoprint.snapshot+json, application/json");
+    headers.set(
+      "Accept",
+      "application/vnd.grafoprint.snapshot+json, application/json",
+    );
   }
 
   // Del lado servidor adjuntamos el token directamente (leyendo la cookie
@@ -46,10 +63,18 @@ export async function apiRequest<T>(
     }
   }
 
-  if (typeof window === "undefined" && process.env.STAGING_PRIVATE === "true") {
-    const { headers: requestHeaders } = await import("next/headers");
-    const { cabecerasBackendStaging } = await import("./staging-access");
-    cabecerasBackendStaging(await requestHeaders(), headers);
+  const canalPrivado =
+    typeof window === "undefined" &&
+    (process.env.STAGING_PRIVATE === "true" ||
+      process.env.GRAFO_DEPLOY_ENV === "production");
+  // Mantener la condición de servidor explícita: Next elimina este bloque
+  // del bundle del navegador, incluidos los módulos exclusivos de Node.
+  if (typeof window === "undefined") {
+    if (canalPrivado) {
+      const { headers: requestHeaders } = await import("next/headers");
+      const { cabecerasBackendStaging } = await import("./staging-access");
+      cabecerasBackendStaging(await requestHeaders(), headers);
+    }
   }
 
   let response: Response;
@@ -60,11 +85,10 @@ export async function apiRequest<T>(
       ...init,
       headers,
       // Un redirect del API nunca debe llevar la credencial interna a otro host.
-      ...(typeof window === "undefined" && process.env.STAGING_PRIVATE === "true"
-        ? { redirect: "manual" as const }
-        : {}),
+      ...(canalPrivado ? { redirect: "manual" as const } : {}),
     });
   } catch {
+    if (!init?.signal?.aborted) reportarFalloApi(path, 503);
     throw new ApiError(
       "No se pudo conectar con el API. Verifica que el backend este levantado y la URL configurada.",
       503,
@@ -72,6 +96,7 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
+    reportarFalloApi(path, response.status);
     let message = `Error ${response.status}: ${response.statusText || "No se pudo completar la solicitud."}`;
 
     try {
@@ -91,11 +116,14 @@ export async function apiRequest<T>(
     }
 
     const retryAfter = response.headers.get("retry-after");
-    const retryAfterSeconds = retryAfter === null ? undefined : Number(retryAfter);
+    const retryAfterSeconds =
+      retryAfter === null ? undefined : Number(retryAfter);
     throw new ApiError(
       message,
       response.status,
-      retryAfterSeconds !== undefined && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      retryAfterSeconds !== undefined &&
+        Number.isFinite(retryAfterSeconds) &&
+        retryAfterSeconds > 0
         ? retryAfterSeconds
         : undefined,
     );
@@ -107,7 +135,17 @@ export async function apiRequest<T>(
 
   // Algunas acciones exitosas no devuelven cuerpo, incluso con 200/201.
   // Sólo se omite el parseo si está vacío: un JSON truncado sigue siendo error.
-  const body = await response.text();
+  let body: string;
+  try {
+    body = await response.text();
+  } catch {
+    // La conexión también puede cortarse después de recibir las cabeceras.
+    // Mantenerlo como error temporal, sin confundirlo con sesión revocada.
+    throw new ApiError(
+      "Se interrumpió la respuesta de Grafo. Volvé a intentar.",
+      503,
+    );
+  }
   if (!body.trim()) return undefined as T;
 
   return restaurarJson<T>(JSON.parse(body));

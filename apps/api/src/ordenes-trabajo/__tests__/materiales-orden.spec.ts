@@ -477,3 +477,11 @@ describe('Necesidades de materiales de la OT (C0)', () => {
     expect(JSON.stringify(result)).not.toMatch(/precio|costo|12345|61725/);
   });
 });
+
+it('reserva tres barras de 6 m cuando el bastidor cotiza 18 m comerciales', () => {
+  const result = run(item([material({ materialVarianteId: 'perfil', cantidad: 18, unidad: 'metro_lineal', contextoUnidadesSnapshot: {
+    unidadStock: 'BARRA', unidadCompra: 'BARRA', unidadUso: 'METRO_LINEAL', templateId: 'perfil_estructural_v1', atributos: { largoBarra: 6 },
+  } })]));
+  expect(result.necesidades[0]).toMatchObject({ varianteId: 'perfil', cantidad: 3, unidad: 'barra' });
+  expect(result.pendientes).toEqual([]);
+});

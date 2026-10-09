@@ -136,7 +136,7 @@ export function PresupuestoPublicoView({
           <div>
             <dt>Presupuesto</dt>
             <dd>
-              <code>{d.numero}</code>
+              <code>{d.numero}{(d.versionPresupuesto ?? 1) > 1 ? ` · v${d.versionPresupuesto}` : ""}</code>
             </dd>
           </div>
           <div>
@@ -152,7 +152,13 @@ export function PresupuestoPublicoView({
         </dl>
       </section>
 
-      {aprobado ? (
+      {d.estado === "reemplazado" ? (
+        <Alert role="status" className={p.notice}>
+          <Clock3Icon />
+          <AlertTitle>Esta es una versión anterior</AlertTitle>
+          <AlertDescription>Conservamos lo cotizado como referencia. Pedile a {d.negocio} el enlace de la nueva versión para aprobarla.</AlertDescription>
+        </Alert>
+      ) : aprobado ? (
         <Alert role="status" className={p.notice} data-tone="success">
           <CircleCheckIcon />
           <AlertTitle>Presupuesto aprobado</AlertTitle>
@@ -185,7 +191,7 @@ export function PresupuestoPublicoView({
           <SeccionPublica
             titulo="Detalle del trabajo"
             icon={FileTextIcon}
-            detalle={`${d.items.length} ${d.items.length === 1 ? "producto" : "productos"}`}
+            detalle={`${d.items.length} ${d.items.length === 1 ? "producto" : "productos"}${d.cargos?.length ? ` · ${d.cargos.length} ${d.cargos.length === 1 ? "cargo" : "cargos"}` : ""}`}
           >
             <div className={s.items}>
               {d.items.map((item, idx) => (
@@ -239,6 +245,30 @@ export function PresupuestoPublicoView({
                         ))}
                       </div>
                     </div>
+                  ) : null}
+                </article>
+              ))}
+              {d.cargos?.map((cargo, idx) => (
+                <article key={`cargo-${idx}`} className={s.item}>
+                  <div className={s.itemHead}>
+                    <span className={s.itemNumber}>
+                      {String(d.items.length + idx + 1).padStart(2, "0")}
+                    </span>
+                    <div className={s.itemIdentity}>
+                      <h3>{cargo.nombre}</h3>
+                      <p>Cargo adicional</p>
+                    </div>
+                    <div className={s.itemPrice}>
+                      <strong>{fmt(cargo.total)}</strong>
+                    </div>
+                  </div>
+                  {cargo.descripcion ? (
+                    <dl className={p.specs}>
+                      <div>
+                        <dt>Descripción</dt>
+                        <dd>{cargo.descripcion}</dd>
+                      </div>
+                    </dl>
                   ) : null}
                 </article>
               ))}
@@ -381,7 +411,7 @@ export function PresupuestoPublicoView({
             <dl className={s.confirmationSummary}>
               <div>
                 <dt>Presupuesto</dt>
-                <dd>{d.numero}</dd>
+                <dd>{d.numero}{(d.versionPresupuesto ?? 1) > 1 ? ` · v${d.versionPresupuesto}` : ""}</dd>
               </div>
               <div>
                 <dt>Total</dt>

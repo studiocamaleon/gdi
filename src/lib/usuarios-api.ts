@@ -17,6 +17,7 @@ export type UsuarioDelTenant = {
   rolNombre: string;
   /** Vacío = entra desde cualquier lado. IP exacta o CIDR v4. */
   ipsPermitidas: string[];
+  accesoCuentas?: AccesoCuentas;
   activa: boolean;
   empleado: { id: string; nombreCompleto: string } | null;
   estado: EstadoUsuario;
@@ -60,6 +61,7 @@ export type CatalogoPermisos = {
     label: string;
     descripcion: string;
     enElPlan: boolean;
+    vistas?: Array<{ clave: string; label: string; permiteGestion: boolean }>;
   }>;
   transversales: Array<{ clave: string; label: string; descripcion: string }>;
   features: { afip: boolean; whatsapp: boolean };
@@ -208,4 +210,11 @@ export async function eliminarRol(
     method: "DELETE",
     body: JSON.stringify({ destinoId }),
   });
+}
+
+export type AccesoCuentas = { restringidas: boolean; operables: string[]; destinos: string[] };
+export type CuentaAsignable = { id: string; nombre: string; moneda: string };
+export function getCuentasAsignables(): Promise<CuentaAsignable[]> { return apiRequest('/usuarios/cuentas-disponibles'); }
+export function guardarCuentasUsuario(userId: string, acceso: AccesoCuentas): Promise<AccesoCuentas> {
+  return apiRequest(`/usuarios/${encodeURIComponent(userId)}/cuentas`, { method: 'PUT', body: JSON.stringify(acceso) });
 }

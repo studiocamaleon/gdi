@@ -115,13 +115,13 @@ describe('DespachoService — un hecho, un mensaje', () => {
     ]);
 
     expect(enviarPlantilla).toHaveBeenCalledTimes(1);
-    expect([a.estado, b.estado].sort()).toEqual(['enviada', 'nada']);
+    expect([a.estado, b.estado].sort()).toEqual(['aceptada', 'nada']);
 
     const fila = await prisma.notificacionWhatsapp.findUnique({
       where: { id },
       select: { estado: true, intentos: true, reservadaEl: true },
     });
-    expect(fila?.estado).toBe(ESTADOS.enviada);
+    expect(fila?.estado).toBe(ESTADOS.aceptada);
     expect(fila?.intentos).toBe(1);
     // La reserva se limpia al terminar: si quedara puesta, el barrido la
     // soltaría más tarde y el cliente recibiría el mensaje otra vez.
@@ -136,7 +136,7 @@ describe('DespachoService — un hecho, un mensaje', () => {
     );
 
     expect(enviarPlantilla).toHaveBeenCalledTimes(1);
-    expect(res.filter((r) => r.estado === 'enviada')).toHaveLength(1);
+    expect(res.filter((r) => r.estado === 'aceptada')).toHaveLength(1);
   });
 
   it('una vez enviada, volver a despacharla no manda nada', async () => {
@@ -221,4 +221,13 @@ describe('DespachoService — un hecho, un mensaje', () => {
     });
     expect(enviarPlantilla).not.toHaveBeenCalled();
   });
+  it('descarta un aviso pendiente de una versión reemplazada sin enviarlo a Wati', async () => {
+    const presupuesto = await prisma.cotizacion.create({ data: { tenantId, numero: `PRES-QA-${randomUUID()}`, estado: 'enviado', versionVigente: false } });
+    const id = await encolar();
+    await prisma.notificacionWhatsapp.update({ where: { id }, data: { cotizacionId: presupuesto.id, evento: 'presupuesto_enviado' } });
+    expect(await despachar(id, DENTRO_DE_VENTANA)).toMatchObject({ estado: 'descartada' });
+    expect(enviarPlantilla).not.toHaveBeenCalled();
+    expect((await prisma.notificacionWhatsapp.findUniqueOrThrow({ where: { id } })).estado).toBe(ESTADOS.descartada);
+  });
+
 });

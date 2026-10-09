@@ -1,9 +1,11 @@
 "use client";
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import { MetaPilotoCard } from './meta-piloto-card';
 import type { EstadoMetaPiloto } from '@/lib/meta-piloto-api';
 import { MetaRecepcionCard } from './meta-recepcion-card';
 import type { RecepcionMeta } from '@/lib/meta-recepcion-api';
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
   ConfiguracionPage,
@@ -46,6 +48,7 @@ import {
   cambiarEventoNotificacion,
   getLogNotificaciones,
   resolverAviso,
+  reintentarAviso,
   getNotificaciones,
   guardarConfigNotificaciones,
   type AfipIntegracion,
@@ -245,6 +248,8 @@ export function IntegracionesView({
   mcp?: { inicial: CredencialMcp[]; mcpUrl: string };
 }) {
   const conWati = useCapacidad("whatsapp_automatico");
+  const puedeGestionar = usePuede("configuracion.integraciones.gestionar");
+  const puedeVerFiscal = usePuede("configuracion.fiscal.ver");
   const [datos, setDatos] = React.useState(inicial);
   const [abierta, setAbierta] = React.useState<ProveedorIntegracion | null>(
     null,
@@ -271,6 +276,7 @@ export function IntegracionesView({
   // AFIP se carga on-demand al abrir (la lista no trae su detalle enriquecido);
   // el resto abre directo por estado.
   const abrir = React.useCallback((p: ProveedorIntegracion) => {
+    if (p === "AFIP" ? !puedeVerFiscal : !puedeGestionar) return;
     if (p !== "AFIP") {
       setAbierta(p);
       return;
@@ -283,7 +289,7 @@ export function IntegracionesView({
       .catch(() => {
         // El botón sigue disponible; no rompemos la grilla por esto.
       });
-  }, []);
+  }, [puedeVerFiscal, puedeGestionar]);
 
   const recargar = React.useCallback(async () => {
     try {
@@ -396,6 +402,7 @@ export function IntegracionesView({
                 (i) => i.proveedor === c.proveedor,
               )}
               onAbrir={abrir}
+              puedeAbrir={c.proveedor === "AFIP" ? puedeVerFiscal : puedeGestionar}
             />
           ))}
         </Seccion>
@@ -410,6 +417,7 @@ export function IntegracionesView({
               (i) => i.proveedor === c.proveedor,
             )}
             onAbrir={abrir}
+            puedeAbrir={c.proveedor === "AFIP" ? puedeVerFiscal : puedeGestionar}
           />
         ))}
       </Seccion>
@@ -451,12 +459,15 @@ function Card({
   item,
   integracion,
   onAbrir,
+  puedeAbrir,
 }: {
   item: CatalogoItem;
   integracion?: Integracion;
   onAbrir: (p: ProveedorIntegracion) => void;
+  puedeAbrir: boolean;
 }) {
   const { fechaNumerica } = useFecha();
+  const interactiva = item.disponible && puedeAbrir;
   const estado = integracion?.estado ?? "DESCONECTADA";
   const clase = item.disponible
     ? estado === "CONECTADA"
@@ -467,11 +478,11 @@ function Card({
   return (
     <div
       className={`int-card ${clase}`}
-      onClick={() => item.disponible && onAbrir(item.proveedor)}
-      role={item.disponible ? "button" : undefined}
-      tabIndex={item.disponible ? 0 : undefined}
+      onClick={() => interactiva && onAbrir(item.proveedor)}
+      role={interactiva ? "button" : undefined}
+      tabIndex={interactiva ? 0 : undefined}
       onKeyDown={(e) => {
-        if (item.disponible && (e.key === "Enter" || e.key === " ")) {
+        if (interactiva && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onAbrir(item.proveedor);
         }
@@ -503,7 +514,7 @@ function Card({
             ? `Desde el ${fechaNumerica(integracion.conectadaEl)}`
             : ETIQUETA_ESTADO[estado]}
         </span>
-        {item.disponible && (
+        {interactiva && (
           <span className="cta">
             {estado === "CONECTADA" ? "Administrar" : "Conectar"}
             <Ico.Arr />
@@ -1481,7 +1492,8 @@ function NotificacionesTab() {
         <h3>Qué se avisa</h3>
         <p>
           Los textos los escribe y mantiene Grafo. Acá elegís cuáles de tus
-          clientes reciben.
+          clientes reciben. Si activás la variante con QR de una orden lista,
+          se usa en lugar del aviso sin imagen: se envía un solo mensaje.
         </p>
       </div>
       <div className="int-tpl-list" style={{ marginBottom: 26 }}>
@@ -1552,7 +1564,10 @@ function NotificacionesTab() {
  * porque si una fila se queda ahí, eso mismo es el síntoma.
  */
 const ESTADOS_MSJ = [
+  { valor: "aceptada", label: "Aceptados por Wati" },
   { valor: "enviada", label: "Enviados" },
+  { valor: "entregada", label: "Entregados" },
+  { valor: "leida", label: "Leídos" },
   { valor: "pendiente", label: "En espera" },
   { valor: "enviando", label: "Saliendo" },
   { valor: "incierta", label: "Por confirmar" },
@@ -1560,6 +1575,7 @@ const ESTADOS_MSJ = [
   { valor: "descartada", label: "Descartados" },
 ] as const;
 const GRUPOS_ESTADO: Record<string, string> = {
+  wati_aceptada: "aceptada",
   wati_reservada: "pendiente",
   web_reservada: "pendiente",
   web_enviando: "enviando",
@@ -1567,6 +1583,15 @@ const GRUPOS_ESTADO: Record<string, string> = {
   web_incierta: "incierta",
 };
 const estadoMensaje = (estado: string) => GRUPOS_ESTADO[estado] ?? estado;
+const estadoFila = (fila: LineaLog) => {
+  if (fila.canal === 'WATI' || !fila.canal) {
+    if (fila.estadoEntrega === 'leido') return 'leida';
+    if (fila.estadoEntrega === 'entregado') return 'entregada';
+    if (fila.estadoEntrega === 'fallido') return 'fallida';
+    if (fila.estado === 'enviada' && !fila.estadoEntrega) return 'aceptada';
+  }
+  return estadoMensaje(fila.estado);
+};
 
 const PASOS_LIMITE = [100, 250, 500];
 
@@ -1584,6 +1609,8 @@ export function MensajesTab({
   puedeResolver?: boolean;
 }) {
   const operativa = useCapacidad("identidad");
+  const conEnvios = useCapacidad("whatsapp_automatico");
+  const [reintento, setReintento] = React.useState<LineaLog | null>(null);
   const [resolucion, setResolucion] = React.useState<{
     fila: LineaLog;
     accion: "descartar" | "confirmar_enviada";
@@ -1617,18 +1644,18 @@ export function MensajesTab({
   // sobre cuántos mensajes está hecha la cuenta.
   const conteos = new Map<string, number>();
   for (const l of log) {
-    const estado = estadoMensaje(l.estado);
+    const estado = estadoFila(l);
     conteos.set(estado, (conteos.get(estado) ?? 0) + 1);
   }
 
-  const q = busqueda.trim().toLowerCase();
+  const q = normalizarBusqueda(busqueda);
   const visibles = log.filter(
     (l) =>
-      (!filtro || estadoMensaje(l.estado) === filtro) &&
+      (!filtro || estadoFila(l) === filtro) &&
       (!q ||
-        (l.cliente ?? "").toLowerCase().includes(q) ||
-        l.telefono.toLowerCase().includes(q) ||
-        l.titulo.toLowerCase().includes(q)),
+        normalizarBusqueda(l.cliente ?? "").includes(q) ||
+        normalizarBusqueda(l.telefono).includes(q) ||
+        normalizarBusqueda(l.titulo).includes(q)),
   );
 
   if (cargando && log.length === 0) {
@@ -1747,8 +1774,8 @@ export function MensajesTab({
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <span className={`int-pill ${pillLog(l.estado)}`}>
-                  {ESTADOS_MSJ.find((e) => e.valor === estadoMensaje(l.estado))
+                <span className={`int-pill ${pillLog(estadoFila(l))}`}>
+                  {ESTADOS_MSJ.find((e) => e.valor === estadoFila(l))
                     ?.label ?? l.estado}
                 </span>
                 <small>
@@ -1766,7 +1793,15 @@ export function MensajesTab({
                     "web_incierta",
                   ].includes(l.estado) && (
                     <div className="flex flex-wrap justify-end gap-2">
-                      {estadoMensaje(l.estado) === "incierta" && (
+                      {l.versionReintento && conEnvios && (
+                        <ActionButton
+                          variant="outline"
+                          onPress={() => setReintento(l)}
+                        >
+                          Reintentar envío
+                        </ActionButton>
+                      )}
+                      {estadoFila(l) === "incierta" && (
                         <ActionButton
                           variant="outline"
                           onPress={() =>
@@ -1794,6 +1829,39 @@ export function MensajesTab({
           ))
         )}
       </div>
+
+      <ConfirmacionDestructiva
+        apariencia="heroui"
+        open={reintento !== null}
+        onOpenChange={(open) => {
+          if (!open) setReintento(null);
+        }}
+        titulo="Reintentar envío"
+        descripcion={
+          reintento
+            ? `${reintento.titulo} · ${reintento.cliente ?? "Cliente"} · ${reintento.telefono}. Se intentará enviar nuevamente el mensaje original, respetando tus horarios de envío. Revisá antes la causa del fallo y que la información del aviso siga vigente.`
+            : ""
+        }
+        requiereTipear={false}
+        accionLabel="Reintentar envío"
+        onConfirmar={async () => {
+          if (!reintento?.versionReintento) return;
+          try {
+            await reintentarAviso(reintento.id, reintento.versionReintento);
+            setReintento(null);
+            toast.success(
+              "Reintento solicitado. Consultá el resultado en el historial.",
+            );
+            await cargar();
+          } catch (e) {
+            toast.error(
+              e instanceof Error ? e.message : "No se pudo reintentar el aviso.",
+            );
+            setReintento(null);
+            await cargar();
+          }
+        }}
+      />
 
       <ConfirmacionDestructiva
         apariencia="heroui"
@@ -1858,8 +1926,8 @@ export function MensajesTab({
 /** Enviada verde, fallida roja, el resto neutro. */
 function pillLog(valor: string): string {
   const estado = estadoMensaje(valor);
-  if (estado === "enviada") return "int-pill-ok";
+  if (["enviada", "entregada", "leida"].includes(estado)) return "int-pill-ok";
   if (estado === "fallida") return "int-pill-bad";
-  if (estado === "pendiente" || estado === "incierta") return "int-pill-warn";
+  if (estado === "pendiente" || estado === "incierta" || estado === "aceptada") return "int-pill-warn";
   return "";
 }

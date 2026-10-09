@@ -1,3 +1,4 @@
+import { validarPerfilesNiveles } from './validar-perfiles-niveles';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -52,6 +53,7 @@ export class ConfigPasosService {
     dto: UpsertProductoConfigPasoDto,
   ) {
     this.familias.validarConfigPasoContraFamilia(familiaCodigo, dto);
+    await validarPerfilesNiveles(this.prisma, tenantId, familiaCodigo, dto);
     this.validarReglaActivacion(
       dto.modoActivacion,
       dto.condicionActivacionJson,
@@ -180,6 +182,12 @@ export class ConfigPasosService {
       );
     }
     this.familias.validarConfigPasoContraFamilia(rutaPaso.familiaCodigo, dto);
+    await validarPerfilesNiveles(
+      this.prisma,
+      tenantId,
+      rutaPaso.familiaCodigo,
+      dto,
+    );
     this.validarReglaActivacion(
       dto.modoActivacion,
       dto.condicionActivacionJson,

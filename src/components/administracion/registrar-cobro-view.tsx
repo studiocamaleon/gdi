@@ -1,4 +1,5 @@
 "use client";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
@@ -44,7 +45,9 @@ export function RegistrarCobroView({
   cuentas: CuentaFondosResumen[];
 }) {
   const router = useRouter();
-  const conCuentasCobrar = useCapacidad("cuentas_cobrar");
+  const capacidadCuentasCobrar = useCapacidad("cuentas_cobrar");
+  const permisoCuentaCorriente = usePuede("administracion.cobrar.ver");
+  const conCuentasCobrar = capacidadCuentasCobrar && permisoCuentaCorriente;
   const { moneda } = useConfigRegional();
   const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const esOrden = contexto.tipo === "orden";

@@ -1,15 +1,24 @@
 "use client";
-import { Input, NativeButton } from "./nodos-ui";
+import { Input, NativeButton, HumanSelect } from "./nodos-ui";
 
 import * as React from "react";
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
-
 
 import {
   type NivelPasoOpcion,
   leerNivelesPaso,
   nombreNivel,
+  nivelesDesdePerfiles,
+  type MaquinaParaNiveles,
+  type NivelesPasoConfig,
 } from "@/lib/niveles-paso";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+} from "@/components/ui/field";
+import { unidadProduccionLabels } from "@/lib/labels-humanos";
 import { leerTiemposExtra } from "@/lib/tiempos-extra-paso";
 
 /**
@@ -27,14 +36,25 @@ import { leerTiemposExtra } from "@/lib/tiempos-extra-paso";
 export function NivelesPasoFields({
   params,
   dotacionDelPaso,
+  maquinas = [],
+  tiempoDeMaquina = false,
+  nivelesAnteriores = null,
+  perfilesPorOperacion = false,
   onChange,
 }: {
   params: Record<string, unknown>;
   dotacionDelPaso: number;
+  maquinas?: MaquinaParaNiveles[];
+  tiempoDeMaquina?: boolean;
+  nivelesAnteriores?: NivelesPasoConfig | null;
+  perfilesPorOperacion?: boolean;
   /** Patch shallow sobre `paramsPasoJson`. */
   onChange: (patch: Record<string, unknown>) => void;
 }) {
-  const config = leerNivelesPaso(params);
+  const config =
+    leerNivelesPaso(params) ??
+    (params.nivelesUnificados === true ? null : nivelesAnteriores);
+  const idForm = React.useId();
   // Sin filtrar por minutos: si no, la columna del bloque desaparecía mientras
   // se vaciaba su campo en la card de arriba.
   const bloques = leerTiemposExtra(params);
@@ -43,16 +63,31 @@ export function NivelesPasoFields({
   const guardar = (etiqueta: string, opciones: NivelPasoOpcion[]) =>
     onChange({
       niveles: opciones.length >= 2 ? { etiqueta, opciones } : null,
+      nivelesUnificados: true,
     });
 
   if (!config) {
     return (
       <div className="pasos-sections">
         <p className="text-muted-foreground text-sm">
-          Este paso corre siempre igual. Si el mismo trabajo se cobra distinto
-          según dónde o con qué dificultad se haga, declaralo como niveles: el
-          comercial elige uno al cotizar y no hay que modelar un paso por caso.
+          Definí las variantes que podrá elegir el comercial. Cada nivel puede
+          usar un perfil de máquina o ajustar el trabajo manual y sus tiempos
+          adicionales.
         </p>
+        {!perfilesPorOperacion &&
+        maquinas.length === 1 &&
+        maquinas[0].perfiles.length >= 2 ? (
+          <NativeButton
+            type="button"
+            className="btn btn-outline btn-sm w-fit mb-2"
+            onClick={() => {
+              const propuesta = nivelesDesdePerfiles(maquinas[0]);
+              if (propuesta) guardar(propuesta.etiqueta, propuesta.opciones);
+            }}
+          >
+            Crear niveles con los perfiles de la máquina
+          </NativeButton>
+        ) : null}
         <NativeButton
           type="button"
           className="btn btn-outline btn-sm w-fit"
@@ -105,7 +140,11 @@ export function NivelesPasoFields({
     actualizarOpcion(indice, { overrides });
   };
 
-  const setMinutosBloque = (indice: number, bloqueId: string, valor: string) => {
+  const setMinutosBloque = (
+    indice: number,
+    bloqueId: string,
+    valor: string,
+  ) => {
     const overrides = { ...opciones[indice].overrides };
     const minutos = { ...(overrides.tiemposExtraMin ?? {}) };
     if (valor === "") delete minutos[bloqueId];
@@ -129,9 +168,21 @@ export function NivelesPasoFields({
   const describir = (nivel: NivelPasoOpcion) => {
     const partes: string[] = [];
     const { overrides } = nivel;
+    for (const maquina of maquinas) {
+      const perfilId =
+        overrides.perfilesPorMaquina?.[maquina.id] ?? maquina.perfilDefaultId;
+      const perfil = maquina.perfiles.find((p) => p.id === perfilId);
+      partes.push(
+        `${maquinas.length > 1 ? `${maquina.nombre}: ` : ""}${perfil?.nombre ?? (perfilId ? "Perfil no disponible" : "Perfil del paso")}`,
+      );
+    }
     if (overrides.tiempoFijoMin != null) {
       partes.push(`${overrides.tiempoFijoMin} min`);
-    } else if (Number.isFinite(ritmoDelPaso) && ritmoDelPaso > 0) {
+    } else if (
+      !tiempoDeMaquina &&
+      Number.isFinite(ritmoDelPaso) &&
+      ritmoDelPaso > 0
+    ) {
       partes.push(`ritmo ${overrides.productividadHora ?? ritmoDelPaso}/h`);
     }
     const extraMin = bloques.reduce(
@@ -173,16 +224,14 @@ export function NivelesPasoFields({
             <div className="flex items-start gap-2">
               <input
                 type="radio"
-                name="nivel-default"
-                className="mt-1 shrink-0"
+                name={`${idForm}-nivel-default`}
+                className="mt-1 shrink-0 accent-[var(--brand-accent,#ff6b3d)]"
                 checked={opcion.esDefault}
                 onChange={() => marcarDefault(indice)}
                 aria-label={`${nombreNivel(opcion)} viene marcado por defecto`}
               />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">
-                  {nombreNivel(opcion)}
-                </div>
+                <div className="text-sm font-medium">{nombreNivel(opcion)}</div>
                 <div className="text-muted-foreground mt-0.5 text-xs">
                   {describir(opcion)}
                 </div>
@@ -230,10 +279,84 @@ export function NivelesPasoFields({
                     }
                   />
                 </div>
+                {maquinas.length > 0 && !perfilesPorOperacion ? (
+                  <FieldGroup>
+                    {maquinas.map((maquina) => {
+                      const value =
+                        opcion.overrides.perfilesPorMaquina?.[maquina.id] ?? "";
+                      const perfil = maquina.perfiles.find(
+                        (p) => p.id === (value || maquina.perfilDefaultId),
+                      );
+                      const invalido = Boolean(value && !perfil);
+                      return (
+                        <Field key={maquina.id} data-invalid={invalido}>
+                          <FieldLabel
+                            htmlFor={`${idForm}-${opcion.codigo}-${maquina.id}`}
+                          >
+                            {maquinas.length === 1
+                              ? "Perfil de máquina"
+                              : `Perfil de ${maquina.nombre}`}
+                          </FieldLabel>
+                          <HumanSelect
+                            id={`${idForm}-${opcion.codigo}-${maquina.id}`}
+                            placeholder={`Perfil de ${maquina.nombre}`}
+                            value={value || "__paso__"}
+                            options={[
+                              {
+                                value: "__paso__",
+                                label: "Usar el perfil del paso",
+                              },
+                              ...maquina.perfiles.map((p) => ({
+                                value: p.id,
+                                label: p.nombre,
+                              })),
+                            ]}
+                            onValueChange={(perfilId) => {
+                              const perfiles = {
+                                ...opcion.overrides.perfilesPorMaquina,
+                              };
+                              if (perfilId === "__paso__")
+                                delete perfiles[maquina.id];
+                              else perfiles[maquina.id] = perfilId;
+                              actualizarOpcion(indice, {
+                                overrides: {
+                                  ...opcion.overrides,
+                                  perfilesPorMaquina: perfiles,
+                                },
+                              });
+                            }}
+                          />
+                          <FieldDescription>
+                            {invalido
+                              ? "Este perfil ya no está disponible. Elegí otro antes de cotizar."
+                              : perfil
+                                ? `${perfil.nombre}${perfil.productivityValue ? ` · ${perfil.productivityValue} ${unidadProduccionLabels[perfil.productivityUnit?.toLowerCase() ?? ""]?.label ?? perfil.productivityUnit ?? ""}` : ""}. La velocidad y preparación provienen del perfil.`
+                                : "Conserva la selección configurada para esta máquina."}
+                          </FieldDescription>
+                        </Field>
+                      );
+                    })}
+                  </FieldGroup>
+                ) : null}
+                {perfilesPorOperacion ? (
+                  <p className="text-muted-foreground text-xs">
+                    Este paso elige perfiles por operación vectorial. Los
+                    niveles permiten ajustar sus tiempos adicionales; los
+                    perfiles se configuran en cada operación.
+                  </p>
+                ) : null}
+                {tiempoDeMaquina ? (
+                  <p className="text-muted-foreground text-xs">
+                    El ritmo lo define el perfil elegido. Los minutos
+                    adicionales se suman al trabajo de la máquina.
+                  </p>
+                ) : null}
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                   <div className="flex flex-col gap-1">
                     <label className="text-muted-foreground text-xs">
-                      Trabajo (min)
+                      {tiempoDeMaquina
+                        ? "Tiempo adicional (min)"
+                        : "Trabajo (min)"}
                     </label>
                     <Input
                       type="number"
@@ -245,21 +368,27 @@ export function NivelesPasoFields({
                       }
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-muted-foreground text-xs">
-                      Ritmo (por hora)
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={opcion.overrides.productividadHora ?? ""}
-                      placeholder="el del paso"
-                      onChange={(e) =>
-                        setOverride(indice, "productividadHora", e.target.value)
-                      }
-                    />
-                  </div>
+                  {!tiempoDeMaquina ? (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-muted-foreground text-xs">
+                        Ritmo (por hora)
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        value={opcion.overrides.productividadHora ?? ""}
+                        placeholder="el del paso"
+                        onChange={(e) =>
+                          setOverride(
+                            indice,
+                            "productividadHora",
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </div>
+                  ) : null}
                   <div className="flex flex-col gap-1">
                     <label className="text-muted-foreground text-xs">
                       Personas
@@ -287,7 +416,9 @@ export function NivelesPasoFields({
                         type="number"
                         min={0}
                         step={5}
-                        value={opcion.overrides.tiemposExtraMin?.[bloque.id] ?? ""}
+                        value={
+                          opcion.overrides.tiemposExtraMin?.[bloque.id] ?? ""
+                        }
                         placeholder={String(bloque.minutos)}
                         onChange={(e) =>
                           setMinutosBloque(indice, bloque.id, e.target.value)
@@ -346,7 +477,7 @@ export function NivelesPasoFields({
           className="btn btn-ghost btn-sm text-muted-foreground shrink-0 hover:text-red-600"
           onClick={() => {
             setEditando(null);
-            onChange({ niveles: null });
+            onChange({ niveles: null, nivelesUnificados: true });
           }}
         >
           Quitar los niveles

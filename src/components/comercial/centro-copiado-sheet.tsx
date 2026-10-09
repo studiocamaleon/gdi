@@ -15,11 +15,14 @@ import { SelectField } from "@/components/design-system/select-field";
 import { Select, ListBox, Tabs } from "@heroui/react";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import {
+  ArrowUp,
+  ArrowDown,
   FileText,
   Upload,
   Plus,
   Trash2,
   Layers,
+  Ungroup,
   Printer,
   SlidersHorizontal,
 } from "lucide-react";
@@ -44,6 +47,8 @@ import {
   type PerfilCadCopiado,
   type MedidaPagina,
 } from "@/lib/centro-copiado-cad";
+import { recuperarOriginalesTomo } from "@/lib/tomo-pdf";
+import { TomoPdfPreview } from "./tomo-pdf-preview";
 import { DetallePaginasCad } from "./detalle-paginas-cad";
 import { resolverRangoPaginas } from "@/lib/rangos-paginas";
 
@@ -110,6 +115,7 @@ type DocRow = TamanoFila & {
   tipoAnillo: string;
   /** Archivo original subido (para persistir en R2 al guardar la orden). */
   file: File | null;
+  origenItemIds?: string[];
   grupoId: string | null;
 };
 
@@ -138,6 +144,7 @@ interface Props {
   clienteId?: string | null;
   /** Edición: la CARGA completa (todos los renglones que entraron juntos). */
   editItems?: PropuestaItem[] | null;
+  persistedItemIds?: ReadonlySet<string>;
 }
 
 let seqRow = 0;
@@ -323,6 +330,7 @@ function CentroCopiadoContenido({
   onAgregar,
   clienteId,
   editItems,
+  persistedItemIds,
 }: Props) {
   const conCopiado = useCapacidad("centro_copiado");
   const conCad = useCapacidad("cotizacion_cad");
@@ -547,6 +555,9 @@ function CentroCopiadoContenido({
     for (const it of editItems) {
       const meta = metaCentroCopiado(it.jobContext);
       if (!meta) continue;
+      const origenItemIds = persistedItemIds?.has(it.id)
+        ? [it.id]
+        : it.archivosOrigenItemIds;
       // El renglón de anillado se re-deriva de la terminación del doc/tomo.
       if (meta.esAnillado) continue;
       if (meta.esTomo && meta.segmentos?.length) {
@@ -557,7 +568,7 @@ function CentroCopiadoContenido({
           terminaciones: meta.terminaciones ?? ["Anillado"],
           tipoAnillo: meta.tipoAnillo ?? "",
         };
-        for (const [segmentoIndex, seg] of meta.segmentos.entries()) {
+        for (const seg of meta.segmentos) {
           const tn = seg.tamano ?? "A4";
           const d = dims(tn, seg.tamanoAnchoMm, seg.tamanoAltoMm);
           nuevosDocs.push({
@@ -585,7 +596,11 @@ function CentroCopiadoContenido({
             tipoAnillo: "",
             // Si la carga todavía no se guardó, conserva el File en memoria.
             // En cargas persistidas queda null porque el original ya vive en R2.
-            file: it.archivosPendientes?.[segmentoIndex] ?? null,
+            file:
+              it.archivosPendientes?.find(
+                (f) => f.name === (seg.archivoNombre ?? seg.nombre),
+              ) ?? null,
+            origenItemIds,
             grupoId: gid,
           });
         }
@@ -641,6 +656,7 @@ function CentroCopiadoContenido({
           terminaciones: meta.terminaciones ?? [],
           tipoAnillo: meta.tipoAnillo ?? "",
           file: it.archivosPendientes?.[0] ?? null,
+          origenItemIds,
           grupoId: null,
         });
       }
@@ -648,7 +664,7 @@ function CentroCopiadoContenido({
     setDocs(nuevosDocs);
     setTab(nuevosDocs[0]?.modo ?? "HOJAS");
     setGrupos(nuevosGrupos);
-  }, [open, editItems]);
+  }, [open, editItems, persistedItemIds]);
 
   // Cerrar: si hay carga, confirmar para no perderla.
   const intentarCerrar = React.useCallback(() => {
@@ -817,6 +833,27 @@ function CentroCopiadoContenido({
           "Planos CAD admite archivos PDF. Cargá Word o Excel en Documentos.",
         );
       if (!lista.length) return;
+      // Un original se identifica por su nombre al guardar: asignar uno único
+      // antes de leer/cotizar evita reemplazar silenciosamente otro PDF.
+      const nombres = new Set(
+        docs.map((d) => d.file?.name ?? d.archivoNombre).filter(Boolean),
+      );
+      for (let i = 0; i < lista.length; i++) {
+        const file = lista[i];
+        const punto = file.name.lastIndexOf(".");
+        const base = punto > 0 ? file.name.slice(0, punto) : file.name;
+        const extension = punto > 0 ? file.name.slice(punto) : "";
+        let nombre = file.name,
+          numero = 2;
+        while (nombres.has(nombre))
+          nombre = `${base} (${numero++})${extension}`;
+        nombres.add(nombre);
+        if (nombre !== file.name)
+          lista[i] = new File([file], nombre, {
+            type: file.type,
+            lastModified: file.lastModified,
+          });
+      }
       setLeyendo(true);
       try {
         const lecturas = await leerMedidasPdf(lista);
@@ -852,7 +889,7 @@ function CentroCopiadoContenido({
         setLeyendo(false);
       }
     },
-    [agregarDocs, leyendo, guardando, cargandoHojas, cargandoCad, tab],
+    [agregarDocs, leyendo, guardando, cargandoHojas, cargandoCad, tab, docs],
   );
 
   const agregarFilaManual = React.useCallback(() => {
@@ -1013,9 +1050,27 @@ function CentroCopiadoContenido({
     setSel(new Set());
   }, [sel, docs, terminacionesDisp, tiposAnilloDisp, conTerminaciones]);
 
+  const moverDocumento = (id: string, direccion: -1 | 1) => {
+    setDocs((prev) => {
+      const actual = prev.findIndex((d) => d.id === id);
+      const miembros = prev
+        .map((d, i) => ({ d, i }))
+        .filter(({ d }) => d.grupoId === prev[actual]?.grupoId);
+      const lugar = miembros.findIndex(({ d }) => d.id === id);
+      const destino = miembros[lugar + direccion]?.i;
+      if (destino == null) return prev;
+      const next = [...prev];
+      [next[actual], next[destino]] = [next[destino], next[actual]];
+      return next;
+    });
+  };
+
   const desagrupar = (gid: string) => {
+    const juegos = grupos[gid]?.juegos ?? 1;
     setDocs((prev) =>
-      prev.map((d) => (d.grupoId === gid ? { ...d, grupoId: null } : d)),
+      prev.map((d) =>
+        d.grupoId === gid ? { ...d, grupoId: null, copias: juegos } : d,
+      ),
     );
     setGrupos((prev) => {
       const n = { ...prev };
@@ -1120,11 +1175,38 @@ function CentroCopiadoContenido({
           .map((d) => d.file)
           .filter((f): f is File => !!f);
       };
-      const items = r.items.map((ic) => {
+      const items: PropuestaItem[] = [];
+      const origenesAsignados = new Set<string>();
+      for (const ic of r.items) {
         const pi = itemConstruidoAPropuestaItem(ic);
         const files = filesDe(ic);
-        return files.length ? { ...pi, archivosPendientes: files } : pi;
-      });
+        const miembros = docs.filter(
+          (d) => d.id === ic.documentoId || d.grupoId === ic.documentoId,
+        );
+        const origenItemIds = [
+          ...new Set(miembros.flatMap((d) => d.origenItemIds ?? [])),
+        ];
+        const transferibles = origenItemIds.filter(
+          (id) => !origenesAsignados.has(id),
+        );
+        const separados = miembros.filter(
+          (d) =>
+            !d.file && d.origenItemIds?.some((id) => origenesAsignados.has(id)),
+        );
+        const copias = await recuperarOriginalesTomo(
+          separados.map((d) => ({
+            ...d,
+            paginas: seleccionDe(d).paginas,
+            paginasOriginales: d.paginas,
+          })),
+        );
+        for (const id of transferibles) origenesAsignados.add(id);
+        items.push({
+          ...pi,
+          archivosPendientes: [...files, ...copias],
+          archivosOrigenItemIds: transferibles,
+        });
+      }
       if (onAgregar(items) === false) return;
       toast.success(
         `${items.length} renglón(es) agregados desde el centro de copiado.`,
@@ -1263,7 +1345,33 @@ function CentroCopiadoContenido({
                 aria-label={`Seleccionar ${nombre}`}
               />
             ) : (
-              <Layers className={s.grupoIcon} aria-hidden="true" />
+              <span className={s.ordenDocumento}>
+                <ActionButton
+                  variant="ghost"
+                  size="sm"
+                  isIconOnly
+                  aria-label={`Subir ${nombre}`}
+                  isDisabled={
+                    docs.find((v) => v.grupoId === d.grupoId)?.id === d.id
+                  }
+                  onPress={() => moverDocumento(d.id, -1)}
+                >
+                  <ArrowUp />
+                </ActionButton>
+                <ActionButton
+                  variant="ghost"
+                  size="sm"
+                  isIconOnly
+                  aria-label={`Bajar ${nombre}`}
+                  isDisabled={
+                    docs.filter((v) => v.grupoId === d.grupoId).at(-1)?.id ===
+                    d.id
+                  }
+                  onPress={() => moverDocumento(d.id, 1)}
+                >
+                  <ArrowDown />
+                </ActionButton>
+              </span>
             )}
           </td>
           <td>
@@ -2115,20 +2223,11 @@ function CentroCopiadoContenido({
                           type="button"
                           variant="outline"
                           onPress={anillarJuntos}
-                          isDisabled={
-                            sel.size < 2 ||
-                            !terminacionesDisp.includes("Anillado")
-                          }
-                          title={
-                            !terminacionesDisp.includes("Anillado")
-                              ? "Configurá una anilladora y anillos para crear tomos"
-                              : sel.size < 2
-                                ? "Seleccioná dos o más"
-                                : "Anillar juntos"
-                          }
+                          isDisabled={sel.size < 2}
+                          title="Seleccioná dos o más documentos para crear un tomo"
                         >
                           <Layers data-icon="inline-start" />
-                          Anillar juntos ({sel.size})
+                          Crear tomo ({sel.size})
                         </ActionButton>
                       )}
                     </div>
@@ -2228,9 +2327,7 @@ function CentroCopiadoContenido({
                                 <tr className={s.tomoRow}>
                                   <td colSpan={12}>
                                     <div className={s.tomoHead}>
-                                      <span className={s.tomoTitle}>
-                                        Tomo anillado
-                                      </span>
+                                      <span className={s.tomoTitle}>Tomo</span>
                                       <input
                                         type="text"
                                         value={grupos[gid]?.nombre ?? ""}
@@ -2336,14 +2433,36 @@ function CentroCopiadoContenido({
                                       </span>
                                       <ActionButton
                                         type="button"
-                                        variant="tertiary"
-                                        isIconOnly
+                                        variant="outline"
                                         onPress={() => desagrupar(gid)}
-                                        aria-label="Desagrupar tomo"
+                                        isDisabled={guardando || leyendo}
+                                        title="Se conservan los archivos, rangos y juegos. El precio se recalcula por documento."
                                       >
-                                        <Trash2 data-icon="inline-start" />
+                                        <Ungroup data-icon="inline-start" />
+                                        Deshacer tomo
                                       </ActionButton>
                                     </div>
+                                    <TomoPdfPreview
+                                      nombre={grupos[gid]?.nombre || "Tomo"}
+                                      configuracionMixta={
+                                        new Set(
+                                          miembros.map(
+                                            (d) =>
+                                              `${d.papelMateriaPrimaId}|${d.gramaje}|${d.tamano}|${d.color}|${d.faz}`,
+                                          ),
+                                        ).size > 1
+                                      }
+                                      segmentos={miembros.map((d) => ({
+                                        nombre: d.nombre,
+                                        archivoNombre: d.archivoNombre,
+                                        paginas: seleccionDe(d).paginas,
+                                        paginasOriginales: d.paginas,
+                                        rangoPaginas: d.rangoPaginas,
+                                        faz: d.faz,
+                                        file: d.file,
+                                        origenItemIds: d.origenItemIds,
+                                      }))}
+                                    />
                                     {gprev?.anillado &&
                                       (gprev.anillado.error ? (
                                         <div className={s.tomoAnilladoWarn}>

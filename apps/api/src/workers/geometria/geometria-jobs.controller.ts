@@ -19,7 +19,7 @@ interface RequestConTenant extends Request {
   auth?: { tenantId: string; userId: string };
 }
 
-@Permiso('comercial.ver')
+@Permiso("comercial.ordenes.ver", "comercial.presupuestos.ver")
 @Controller('trabajos-geometria')
 export class GeometriaJobsController {
   constructor(private readonly jobs: GeometriaJobsService) {}

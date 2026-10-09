@@ -4,13 +4,24 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { IntegracionesView, MensajesTab } from "./integraciones-view";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
-import { getLogNotificaciones, resolverAviso } from "@/lib/integraciones-api";
+import { PermisosProvider } from "@/components/navigation/permisos-provider";
+import {
+  getLogNotificaciones,
+  resolverAviso,
+  reintentarAviso,
+} from "@/lib/integraciones-api";
 import type { LineaLog } from "@/lib/integraciones";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
 
 vi.mock("@/lib/integraciones-api", async (original) => ({
   ...(await original<typeof import("@/lib/integraciones-api")>()),
   getLogNotificaciones: vi.fn(),
   resolverAviso: vi.fn(),
+  reintentarAviso: vi.fn(),
 }));
 vi.mock("@/components/navigation/config-regional-provider", () => ({
   useFecha: () => ({ fechaHora: (v: string) => v }),
@@ -47,16 +58,18 @@ vi.mock("@/components/ui/confirmacion-destructiva", () => ({
     open,
     descripcion,
     onConfirmar,
+    accionLabel,
   }: {
     open: boolean;
     descripcion: ReactNode;
     onConfirmar: (m: string) => Promise<void>;
+    accionLabel: string;
   }) =>
     open ? (
       <div role="dialog">
         {descripcion}
         <button onClick={() => void onConfirmar("Verificado en WhatsApp")}>
-          Guardar resolución
+          {accionLabel}
         </button>
       </div>
     ) : null,
@@ -98,6 +111,42 @@ const boton = (texto: string) =>
   [...container.querySelectorAll("button")].find(
     (b) => b.textContent === texto,
   )!;
+
+it("lectura de Integraciones muestra estados sin abrir credenciales ni la ficha fiscal", async () => {
+  await act(async () =>
+    root.render(
+      <PermisosProvider
+        permisos={["acceso.por_vista", "configuracion.integraciones.ver"]}
+      >
+        <IntegracionesView
+          inicial={{ integraciones: [], cifradoDisponible: true }}
+        />
+      </PermisosProvider>,
+    ),
+  );
+  expect(container.querySelector('.int-card[role="button"]')).toBeNull();
+  expect(container.querySelector(".int-card .cta")).toBeNull();
+  expect(boton("Historial de avisos")).toBeDefined();
+});
+
+it("gestionar Integraciones no concede implícitamente acceso a configuración fiscal", async () => {
+  await act(async () =>
+    root.render(
+      <PermisosProvider
+        permisos={["acceso.por_vista", "configuracion.integraciones.gestionar"]}
+      >
+        <IntegracionesView
+          inicial={{ integraciones: [], cifradoDisponible: true }}
+        />
+      </PermisosProvider>,
+    ),
+  );
+  const fiscal = [...container.querySelectorAll(".int-card")].find((c) =>
+    c.textContent?.includes("ARCA"),
+  )!;
+  expect(fiscal).toBeDefined();
+  expect(fiscal.getAttribute("role")).toBeNull();
+});
 
 it("conserva acceso al historial aunque los dos canales estén fuera del plan", async () => {
   await act(async () =>
@@ -159,4 +208,104 @@ it("una empresa en sólo lectura conserva el historial sin acciones de resoluci�
   expect(container.textContent).toContain("Por confirmar");
   expect(boton("Confirmar enviada")).toBeUndefined();
   expect(boton("Descartar")).toBeUndefined();
+});
+
+it("ofrece reintento sólo al administrador y pide confirmar el destinatario antes del POST", async () => {
+  const fallido = { ...fila("fallida"), versionReintento: "a".repeat(64) };
+  vi.mocked(getLogNotificaciones).mockResolvedValue([
+    fallido,
+    fila("wati_incierta"),
+    fila("enviada"),
+  ]);
+  vi.mocked(reintentarAviso).mockResolvedValue({ ok: true });
+  await act(async () =>
+    root.render(
+      <CapacidadesProvider
+        capacidades={{
+          funciones: { identidad: true, whatsapp_automatico: true },
+        }}
+      >
+        <MensajesTab puedeResolver />
+      </CapacidadesProvider>,
+    ),
+  );
+  expect(
+    [...container.querySelectorAll("button")].filter(
+      (b) => b.textContent === "Reintentar envío",
+    ),
+  ).toHaveLength(1);
+  await act(async () => boton("Reintentar envío").click());
+  expect(reintentarAviso).not.toHaveBeenCalled();
+  const dialog = container.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain(fallido.telefono);
+  expect(dialog.textContent).toContain("mensaje original");
+  await act(async () => dialog.querySelector("button")!.click());
+  expect(reintentarAviso).toHaveBeenCalledWith("fallida", "a".repeat(64));
+  expect(getLogNotificaciones).toHaveBeenCalledTimes(2);
+});
+
+it.each([false, true])(
+  "sin permiso o sin canal contratado no ofrece reintento (%s)",
+  async (permiso) => {
+    vi.mocked(getLogNotificaciones).mockResolvedValue([
+      { ...fila("fallida"), versionReintento: "a".repeat(64) },
+    ]);
+    await act(async () =>
+      root.render(
+        <CapacidadesProvider
+          capacidades={{
+            funciones: { identidad: true, whatsapp_automatico: !permiso },
+          }}
+        >
+          <MensajesTab puedeResolver={permiso} />
+        </CapacidadesProvider>,
+      ),
+    );
+    expect(boton("Reintentar envío")).toBeUndefined();
+  },
+);
+
+it("muestra el rechazo del reintento y refresca el historial sin repetir el envío", async () => {
+  vi.mocked(getLogNotificaciones)
+    .mockResolvedValueOnce([
+      { ...fila("fallida"), versionReintento: "a".repeat(64) },
+    ])
+    .mockResolvedValueOnce([fila("enviada")]);
+  vi.mocked(reintentarAviso).mockRejectedValueOnce(
+    new Error("El aviso cambió. Actualizá el historial."),
+  );
+  await act(async () =>
+    root.render(
+      <CapacidadesProvider
+        capacidades={{ funciones: { identidad: true, whatsapp_automatico: true } }}
+      >
+        <MensajesTab puedeResolver />
+      </CapacidadesProvider>,
+    ),
+  );
+  await act(async () => boton("Reintentar envío").click());
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[role="dialog"] button')!.click(),
+  );
+  expect(toast.error).toHaveBeenCalledWith(
+    "El aviso cambió. Actualizá el historial.",
+  );
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(reintentarAviso).toHaveBeenCalledTimes(1);
+  expect(getLogNotificaciones).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(boton("Reintentar envío")).toBeUndefined();
+});
+
+it.each([
+  { estado: 'wati_aceptada', entrega: 'aceptado', etiqueta: 'Aceptados por Wati' },
+  { estado: 'enviada', entrega: null, etiqueta: 'Aceptados por Wati' },
+  { estado: 'enviada', entrega: 'entregado', etiqueta: 'Entregados' },
+  { estado: 'enviada', entrega: 'leido', etiqueta: 'Leídos' },
+])('distingue aceptación y entrega en el historial: $entrega', async ({ estado, entrega, etiqueta }) => {
+  vi.mocked(getLogNotificaciones).mockResolvedValue([{ ...fila(estado), estadoEntrega: entrega }]);
+  await act(async () => root.render(<MensajesTab puedeResolver />));
+  const registro = container.querySelector('.int-nt-log-fila')!;
+  expect(registro.querySelector('.int-pill')?.textContent).toBe(etiqueta);
+  expect(registro.textContent).not.toContain('Reintentar envío');
 });

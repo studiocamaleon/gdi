@@ -337,6 +337,9 @@ export function hayPliegosImpresosHeredados(jobContext: JobContext): boolean {
 
 /** Hooks async que el motor puede inyectar al dispatcher. */
 export interface NestingDispatchOpts {
+  /** Pasos activos, con máquina/perfil resueltos por el servidor, que cortarán
+   * este mismo sustrato. No provienen del JobContext enviado por el cliente. */
+  pasosCortePosteriores?: PasoCargado[];
   /** Autorización del contrato, incluso cuando se reutiliza una solución. */
   exigirNestingIrregular?: () => Promise<void>;
   /**
@@ -654,21 +657,120 @@ async function despacharNesting(
       config,
     );
   }
+  const configImpresion = config;
+  const cortes = paso.familiaCodigo === 'impresion_por_area'
+    ? opts?.pasosCortePosteriores ?? [] : [];
+  const configCompartida = limitarImpresionPorCorte(configImpresion, cortes, jobContext, materialResuelto);
+  const finalizar = (resultado: NestingDispatchResult | null) =>
+    finalizarImpresionCompartida(resultado, configImpresion, configCompartida, cortes);
   // Hoja/placa finita: la medida sale del material del slot (o de la mesa de
   // la máquina) vía resolveNestingConfig. Piezas uniformes caen solas a
   // grid-2d-single (poses + imposición completa) dentro del multi.
   if (jobContext.modoCotizacionVectorial === 'placas' && paso.familiaCodigo === 'impresion_por_area') {
     // Imprimir las placas declaradas también consume material y tiempo. No
     // inventamos medidas de pieza ni placements para una estimación sin arte.
-    return runIrregularPlaca(jobContext, materialResuelto, config);
+    return finalizar(await runIrregularPlaca(jobContext, materialResuelto, configCompartida));
   }
   if (jobContext.disenosVectoriales?.length && paso.familiaCodigo === 'impresion_por_area') {
     await opts?.exigirNestingIrregular?.();
     if (config.pieceBleedMm !== 0) throw new NestingIrregularError('La colección de piezas requiere impresión sin sangrado para conservar el registro del corte.');
-    const resultado = await runIrregularPlaca(jobContext, materialResuelto, {...config, permitirSegmentacionVectorial:false, preservarComposicionOriginalSiEntra:false}, opts?.resolveIrregularNesting);
-    return resultado ? {...resultado, layoutVinculadoGeometriaVectorial:true} : null;
+    const resultado = await runIrregularPlaca(jobContext, materialResuelto, {...configCompartida, permitirSegmentacionVectorial:false, preservarComposicionOriginalSiEntra:false}, opts?.resolveIrregularNesting);
+    return finalizar(resultado ? {...resultado, layoutVinculadoGeometriaVectorial:true} : null);
   }
-  return runGrid2DMultiForArea(paso, jobContext, config);
+  return finalizar(runGrid2DMultiForArea(paso, jobContext, configCompartida));
+}
+
+/** El acomodo sigue expresado sobre la placa comprada. Los márgenes del
+ * algoritmo delimitan la intersección alcanzable, sin inventar otro material. */
+function limitarImpresionPorCorte(
+  impresion: NestingConfigResolved,
+  cortes: PasoCargado[],
+  ctx: JobContext,
+  material: MaterialResueltoParaNesting | null,
+): NestingConfigResolved {
+  if (!cortes.length || !impresion.sheetWidthMm || !impresion.sheetHeightMm)
+    return impresion;
+  const config = { ...impresion, margins: { ...impresion.margins } };
+  for (const limite of [
+    impresion,
+    ...cortes.map((corte) => resolveNestingConfig(corte, ctx, material)),
+  ]) {
+    const area = resolverSuperficieTrabajoPlaca(limite);
+    config.margins.leftMm = Math.max(
+      config.margins.leftMm,
+      limite.margins.leftMm,
+    );
+    config.margins.topMm = Math.max(config.margins.topMm, limite.margins.topMm);
+    config.margins.rightMm = Math.max(
+      config.margins.rightMm,
+      impresion.sheetWidthMm - area.workWidthMm + limite.margins.rightMm,
+    );
+    config.margins.bottomMm = Math.max(
+      config.margins.bottomMm,
+      impresion.sheetHeightMm - area.workHeightMm + limite.margins.bottomMm,
+    );
+    config.separationHMm = Math.max(config.separationHMm, limite.separationHMm);
+    config.separationVMm = Math.max(config.separationVMm, limite.separationVMm);
+    config.allowRotation = config.allowRotation && limite.allowRotation;
+  }
+  const cambia = config.allowRotation !== impresion.allowRotation ||
+    config.separationHMm !== impresion.separationHMm ||
+    config.separationVMm !== impresion.separationVMm ||
+    (Object.keys(config.margins) as Array<keyof typeof config.margins>)
+      .some(lado => config.margins[lado] !== impresion.margins[lado]);
+  return cambia ? config : impresion;
+}
+
+function finalizarImpresionCompartida(
+  result: NestingDispatchResult | null,
+  impresion: NestingConfigResolved,
+  conjunta: NestingConfigResolved,
+  cortes: PasoCargado[],
+): NestingDispatchResult | null {
+  if (conjunta === impresion) return result;
+  if (!result)
+    throw new NestingIrregularError(
+      `Las piezas no caben en el área común de impresión y corte (${Math.max(0, conjunta.sheetWidthMm! - conjunta.margins.leftMm - conjunta.margins.rightMm)} × ${Math.max(0, conjunta.sheetHeightMm! - conjunta.margins.topMm - conjunta.margins.bottomMm)} mm). Revisá las medidas, la orientación o las máquinas elegidas.`,
+    );
+  if (result.visualConfig)
+    result.visualConfig.restriccionCortePosterior = {
+      pasos: cortes.map((p) => p.configPasoId),
+    };
+  // La zona inaccesible limita posiciones, pero no es tinta ni avance impreso.
+  // El costeo por tramos conserva el margen físico original de la impresora.
+  if (result.placements.length) {
+    const trailingMarginMm =
+      resolvePlateAxes({
+        widthMm: impresion.sheetWidthMm!,
+        heightMm: impresion.sheetHeightMm!,
+      }).longAxis === 'x'
+        ? impresion.margins.rightMm
+        : impresion.margins.bottomMm;
+    const perSubstrate = result.substrates.map((s, index) => ({
+      ...result.metricasRaw.perSubstrate?.[index],
+      areaUtilMm2:
+        result.metricasRaw.perSubstrate?.[index]?.areaUtilMm2 ??
+        result.placements
+          .filter((p) => p.substrateIndex === index)
+          .reduce((a, p) => a + p.widthMm * p.heightMm, 0),
+      consumedLengthMm: consumedLengthFromPlacements(
+        result.placements.filter((p) => p.substrateIndex === index),
+        {
+          widthMm: s.widthMm,
+          heightMm: impresion.sheetHeightMm!,
+          trailingMarginMm,
+          advanceAlongLongSide: true,
+        },
+      ),
+    }));
+    result.metricasRaw = {
+      ...result.metricasRaw,
+      perSubstrate,
+      trailingMarginMm,
+      largoConsumidoMm: perSubstrate.at(-1)?.consumedLengthMm ?? 0,
+    };
+  }
+  return result;
 }
 
 type EstrategiaNestingFn = (
@@ -724,12 +826,22 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
       layout.substrates.some(s => s.kind === 'roll')) {
       return conservarRolloImpreso(paso, layout, materialResuelto, config);
     }
-    return runShelfRollo(
+    const resultado = runShelfRollo(
       paso,
       jobContext,
       materialResuelto,
       disablePanelizado(config),
     );
+    if (!resultado && (jobContext.piezas?.length ?? 0) > 0) {
+      // En rollo no se puede continuar con el fallback m²: el slot de
+      // sustrato consume metros lineales. El fallback sigue siendo válido
+      // para corte sobre hojas y pliegos heredados, resueltos arriba.
+      throw new MotorCotizacionError(
+        'corte_rollo_sin_layout',
+        'No se pudo acomodar el trabajo en el rollo del plotter. Revisá el ancho del material, las medidas y los márgenes de corte.',
+      );
+    }
+    return resultado;
   },
 
   /** Laminado en rollo sobre pliegos ya impresos. */
@@ -2251,7 +2363,12 @@ function runShelfRollo(
     marginEndMm: config.margins.endMm,
     separacionHorizontalMm: config.separationHMm,
     separacionVerticalMm: config.separationVMm,
-    permitirRotacion: config.allowRotation,
+    // Por metros se vende una franja, no una pieza que pueda girarse para
+    // intercambiar el ancho del rollo con el largo solicitado.
+    permitirRotacion:
+      jobContext.modoCotizacionLineal === 'directo'
+        ? false
+        : config.allowRotation,
     medidas: piezas.map((p, idx) => ({
       id: `pieza_${idx}`,
       cantidad: p.cantidad,
@@ -2365,7 +2482,7 @@ function runShelfRollo(
       pieceBleedMm: config.pieceBleedMm,
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
-      allowRotation: config.allowRotation,
+      allowRotation: baseShelfInput.permitirRotacion,
       substrateLabel: 'Rollo',
       panelizado: {
         enabled: result.panelizado,

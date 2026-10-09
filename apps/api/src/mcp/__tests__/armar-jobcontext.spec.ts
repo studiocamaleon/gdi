@@ -52,6 +52,42 @@ function formularioBase(): FormularioParaJobContext {
 const medida = { anchoMm: 3000, altoMm: 1500 };
 
 describe('armarJobContext', () => {
+  it.each([
+    'configPasoRuntime.cp-qa.__proto__.grafoQaMcpPollution',
+    'tercerizado_cp-qa.__proto__.grafoQaMcpPollution',
+    'configPasoRuntime.cp-qa.constructor.prototype.grafoQaMcpPollution',
+    '__proto__.grafoQaMcpPollution',
+  ])(
+    'rechaza rutas de respuesta reservadas sin contaminar otros objetos: %s',
+    (key) => {
+      const form = formularioBase();
+      form.preguntas.push({
+        tipo: 'param',
+        tipoDato: 'number',
+        jobContextKey: key,
+      });
+      try {
+        expect(() =>
+          armarJobContext(form, {
+            cantidad: 1,
+            ...medida,
+            respuestas: { [key]: 731 },
+          }),
+        ).toThrow(RespuestasInvalidasError);
+        expect(
+          Object.getOwnPropertyDescriptor(
+            Object.prototype,
+            'grafoQaMcpPollution',
+          ),
+        ).toBeUndefined();
+      } finally {
+        // Sólo la marca ficticia de este ensayo aislado; no dejar contaminación
+        // cuando se ejecuta deliberadamente contra la implementación anterior.
+        Reflect.deleteProperty(Object.prototype, 'grafoQaMcpPollution');
+      }
+    },
+  );
+
   it('caso feliz: piezas, área, perímetro, material default y caras default', () => {
     const jc = armarJobContext(formularioBase(), { cantidad: 2, ...medida });
     expect(jc.cantidad).toBe(2);
@@ -122,14 +158,18 @@ describe('armarJobContext', () => {
 
   it('medida en 0 se rechaza ANTES del motor (guard anti-OOM)', () => {
     expect(() =>
-      armarJobContext(formularioBase(), { cantidad: 1, anchoMm: 0, altoMm: 1500 }),
+      armarJobContext(formularioBase(), {
+        cantidad: 1,
+        anchoMm: 0,
+        altoMm: 1500,
+      }),
     ).toThrow(/mayores a 0/);
   });
 
   it('producto por medida sin ancho/alto pide los mm', () => {
-    expect(() =>
-      armarJobContext(formularioBase(), { cantidad: 1 }),
-    ).toThrow(/anchoMm.*altoMm.*milímetros/);
+    expect(() => armarJobContext(formularioBase(), { cantidad: 1 })).toThrow(
+      /anchoMm.*altoMm.*milímetros/,
+    );
   });
 
   it('cantidad no entera o negativa se rechaza', () => {
@@ -156,7 +196,9 @@ describe('armarJobContext', () => {
       armarJobContext(formularioBase(), {
         cantidad: 1,
         ...medida,
-        respuestas: { 'slotMateriales.cp-1_sustrato_principal': 'var-hackeada' },
+        respuestas: {
+          'slotMateriales.cp-1_sustrato_principal': 'var-hackeada',
+        },
       }),
     ).toThrow(/no es una opción.*var-440.*var-340/s);
   });
@@ -246,7 +288,11 @@ describe('armarJobContext', () => {
     });
     expect(jc.opcionalesActivados).toEqual({ 'cp-ojales': true });
     expect(() =>
-      armarJobContext(form, { cantidad: 1, ...medida, adicionales: ['cp-cond'] }),
+      armarJobContext(form, {
+        cantidad: 1,
+        ...medida,
+        adicionales: ['cp-cond'],
+      }),
     ).toThrow(/no existe en este producto/);
   });
 
@@ -254,7 +300,11 @@ describe('armarJobContext', () => {
     // El caso taza/remera: el motor cortaba con requires_piezas porque la
     // pieza que se imprime ES la estampa y nadie la declaraba.
     const form = formularioBase();
-    form.medidas = { instruccion: 'no_preguntar', predefinidas: [], default: null };
+    form.medidas = {
+      instruccion: 'no_preguntar',
+      predefinidas: [],
+      default: null,
+    };
     form.preguntas = [];
     form.multiplicadores = [];
     form.personalizaciones = [
@@ -272,14 +322,18 @@ describe('armarJobContext', () => {
     expect(jc.piezas).toEqual([{ cantidad: 20, anchoMm: 120, altoMm: 80 }]);
     expect(jc.personalizacion_pers_1_areaM2).toBeCloseTo(0.192); // 0.0096 × 20
     expect(jc.medidaCustomMm).toEqual({ anchoMm: 120, altoMm: 80 });
-    expect(
-      (jc.personalizaciones as Array<{ codigo: string }>)[0].codigo,
-    ).toBe('pers_1');
+    expect((jc.personalizaciones as Array<{ codigo: string }>)[0].codigo).toBe(
+      'pers_1',
+    );
   });
 
   it('personalización CLIENTE: la medida viene en la respuesta; sin medida es faltante', () => {
     const form = formularioBase();
-    form.medidas = { instruccion: 'no_preguntar', predefinidas: [], default: null };
+    form.medidas = {
+      instruccion: 'no_preguntar',
+      predefinidas: [],
+      default: null,
+    };
     form.preguntas = [];
     form.multiplicadores = [];
     form.personalizaciones = [

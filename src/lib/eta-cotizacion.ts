@@ -22,7 +22,9 @@ function exigir(ok: unknown, mensaje: string): asserts ok {
 export function itemHipoteticoDesdeCotizacion(
   id: string,
   cotizacion: unknown,
+  elecciones: readonly { nodoClave: string; empleadoIds: string[] }[] = [],
 ): ItemHipotetico {
+  const eleccionesAplicadas = new Set<string>();
   const nodos = new Map<string, Set<string>>();
   const activos = new Map<string, PasoHipotetico>();
   const fusiones: Array<{
@@ -81,6 +83,7 @@ export function itemHipoteticoDesdeCotizacion(
     const raices = ids.filter((k) => nodos.get(k)!.size === 0);
     const terminales = ids.filter((k) => !salientes.has(k));
     const porRuta = new Map<string, string>();
+    let indiceActivo = 0;
     pasos.forEach((p, i) => {
       if (p.activado !== true) return;
       const opciones = publicados.length
@@ -96,7 +99,12 @@ export function itemHipoteticoDesdeCotizacion(
         t = registro(p.tiempo);
       exigir(!activos.has(k), "Hay operaciones duplicadas en la receta.");
       const familia = texto(p.familiaCodigo) ?? "trabajo_manual";
+      const claveEleccion = texto(p.rutaPasoId) ? opciones[0] : `paso:${indiceActivo + 1}:${familia}`;
+      indiceActivo++;
+      const eleccion = profundidad === 0 ? elecciones.find(e => e.nodoClave === claveEleccion) : undefined;
+      if (eleccion) eleccionesAplicadas.add(eleccion.nodoClave);
       activos.set(k, {
+        personalFijo: eleccion ? { empleadoIds: [...eleccion.empleadoIds] } : undefined,
         clave: k,
         predecesoras: [],
         familiaCodigo: familia,
@@ -221,6 +229,7 @@ export function itemHipoteticoDesdeCotizacion(
       resueltos.add(k);
       pendientes.delete(k);
     }
+    exigir(elecciones.every(e => eleccionesAplicadas.has(e.nodoClave)), "Cambió un paso con operador elegido. Revisá los operadores del trabajo.");
     return { id, pasos };
   } catch (error) {
     if (!(error instanceof ProyeccionIncompleta)) throw error;

@@ -2,8 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { MembershipRole } from "@/lib/auth";
 import type { PresupuestoDetalle } from "@/lib/presupuestos-api";
+import { PresupuestosView } from "./presupuestos-view";
 import { PresupuestoDetalleView } from "./presupuesto-detalle-view";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
+import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { OrdenSaveActions } from "./orden-resumen-financiero";
 import { funcionesCompatibles } from "@/lib/capacidades";
 
@@ -72,7 +74,9 @@ const render = (
   rol: MembershipRole = "operador",
 ) =>
   renderToStaticMarkup(
-    <PresupuestoDetalleView inicial={{ ...inicial, ...overrides }} rol={rol} />,
+    <PermisosProvider permisos={["acceso.por_vista", "comercial.presupuestos.gestionar", "comercial.ordenes.gestionar", ...(rol === "operador" ? [] : ["comercial.aprobar_descuento"])]}>
+      <PresupuestoDetalleView inicial={{ ...inicial, ...overrides }} />
+    </PermisosProvider>,
   );
 const button = (html: string, label: string) =>
   [...html.matchAll(/<button\b[^>]*>[\s\S]*?<\/button>/g)].find(([markup]) =>
@@ -80,13 +84,19 @@ const button = (html: string, label: string) =>
   )?.[0];
 
 describe("acciones y datos de la ficha de presupuesto", () => {
+  it("muestra el desglose de cargos en el detalle interno", () => {
+    const html = render({ cargos: [{ nombre: "Instalación", descripcion: "Colocación en el local", total: 955900 }] });
+    expect(html).toContain("Instalación");
+    expect(html).toContain("Colocación en el local");
+    expect(html).toContain("955.900");
+  });
   const sinFunciones = (props: Partial<PresupuestoDetalle> = {}) =>
     renderToStaticMarkup(
       <CapacidadesProvider capacidades={{ funciones: {
         ...funcionesCompatibles, presupuestos: false, ordenes: false,
         aprobacion_presupuestos: false, documentos_pdf: false,
       } }}>
-        <PresupuestoDetalleView inicial={{ ...inicial, ...props }} rol="administrador" />
+        <PresupuestoDetalleView inicial={{ ...inicial, ...props }} />
       </CapacidadesProvider>,
     );
 
@@ -122,7 +132,7 @@ describe("acciones y datos de la ficha de presupuesto", () => {
       </CapacidadesProvider>,
     );
     expect(button(html, tipo === "orden" ? "Emitir OT" : "Emitir presupuesto")).toContain("disabled");
-    if (tipo === "orden") expect(button(html, "Guardar borrador")).toContain("disabled");
+    expect(button(html, "Guardar borrador")).toContain("disabled");
   });
 
   it("ofrece una única descarga con preparación asíncrona", () => {
@@ -171,7 +181,7 @@ describe("acciones y datos de la ficha de presupuesto", () => {
     },
   );
 
-  it("la aprobación interna sólo ofrece acciones a administrador y supervisor", () => {
+  it("la aprobación interna respeta los permisos de los roles predefinidos", () => {
     const pendiente: Partial<PresupuestoDetalle> = {
       estado: "pendiente_aprobacion",
       aprobacionMotivos: [
@@ -229,4 +239,60 @@ describe("acciones y datos de la ficha de presupuesto", () => {
       expect(button(html, "Convertir en orden")).toBeUndefined();
     }
   });
+});
+
+
+describe("aprobación con permisos personalizados", () => {
+  const ficha = (permisos: string[]) => renderToStaticMarkup(
+    <PermisosProvider permisos={["acceso.por_vista", ...permisos]}>
+      <PresupuestoDetalleView inicial={{ ...inicial, estado: "pendiente_aprobacion" }} />
+    </PermisosProvider>,
+  );
+  it("un operador puede aprobar con lectura y aprobación delegada, sin gestionar presupuestos", () => {
+    const html = ficha(["comercial.presupuestos.ver", "comercial.aprobar_descuento"]);
+    expect(button(html, "Aprobar y enviar")).toBeDefined();
+    expect(button(html, "Devolver")).toBeDefined();
+  });
+  it("un supervisor sin el permiso no puede aprobar aunque gestione presupuestos", () => {
+    const html = ficha(["comercial.presupuestos.gestionar"]);
+    expect(button(html, "Aprobar y enviar")).toBeUndefined();
+    expect(button(html, "Devolver")).toBeUndefined();
+  });
+});
+
+
+describe("edición por versiones y descarte", () => {
+  it.each(["borrador", "enviado", "rechazado", "vencido"] as const)("permite preparar otra versión de %s", (estado) => {
+    expect(render({ estado })).toContain("Editar · nueva versión");
+  });
+  it.each(["aprobado", "convertido", "pendiente_aprobacion"] as const)("no ofrece versionar %s", (estado) => {
+    expect(render({ estado })).not.toContain("Editar · nueva versión");
+  });
+  it("una versión histórica se puede consultar pero no modificar ni enviar", () => {
+    const html = render({ versionVigente: false, versionPresupuesto: 1 });
+    expect(html).not.toContain("Editar · nueva versión");
+    expect(html).not.toContain("Descartar borrador");
+    expect(html).not.toContain("Registrar aprobación");
+    expect(html).toContain("Versiones");
+  });
+  it("descarta borradores, nunca documentos ya emitidos", () => {
+    expect(render({ estado: "borrador" })).toContain("Descartar borrador");
+    expect(render({ estado: "enviado" })).not.toContain("Descartar borrador");
+  });
+  it("un lector no puede descartar ni crear versiones", () => {
+    const html = renderToStaticMarkup(<PermisosProvider permisos={["acceso.por_vista", "comercial.presupuestos.ver"]}>
+      <PresupuestoDetalleView inicial={{ ...inicial, estado: "borrador" }} />
+    </PermisosProvider>);
+    expect(html).not.toContain("Editar · nueva versión");
+    expect(html).not.toContain("Descartar borrador");
+  });
+});
+
+
+it("el listado renderiza el filtro Descartados con su icono", () => {
+  const html = renderToStaticMarkup(<PresupuestosView rol="operador" filtroInicial="descartado" initial={{
+    presupuestos: [], stats: [{ estado: "descartado", cantidad: 1, total: 100 }],
+    paginacion: { skip: 0, limit: 50, total: 1, hayMas: false },
+  }} />);
+  expect(button(html, "Descartados")).toContain('aria-pressed="true"');
 });

@@ -17,6 +17,7 @@ export const PREFIJO_ENLACE: Record<TipoEnlacePublico, string> = {
   COBRO: 'c',
   ENCUESTA: 'e',
   APROBACION_DOCUMENTAL: 'a',
+  ALTA_CLIENTE: 'alta-cliente',
 };
 
 /** La primera de FRONTEND_URL: es la que ve el cliente final. */

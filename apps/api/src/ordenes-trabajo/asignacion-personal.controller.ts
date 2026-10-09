@@ -16,7 +16,7 @@ import {
   SimularAsignacionPersonalDto,
 } from './dto/asignacion-personal.dto';
 
-@Permiso('produccion.supervisar')
+@Permiso("produccion.supervisar")
 @RequiereCapacidad('asignacion_automatica')
 @Controller('ordenes-trabajo/tablero/pasos/:pasoId/asignacion-personal')
 export class AsignacionPersonalController {

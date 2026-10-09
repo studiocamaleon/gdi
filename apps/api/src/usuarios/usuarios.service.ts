@@ -1,6 +1,9 @@
+import { VISTAS } from '../auth/vistas';
+import { textoErrorLog } from '../common/log-seguro';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -17,6 +20,8 @@ import * as bcrypt from 'bcryptjs';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionCacheService } from '../auth/session-cache.service';
+import { bloquearIdentidad } from '../auth/mfa.service';
+import { revocarAccesoEmpresa } from '../auth/revocar-acceso-empresa';
 import { SuscripcionesService } from '../suscripciones/suscripciones.service';
 import { esIpOrangoValido, ipPermitida } from '../auth/ip';
 import {
@@ -28,6 +33,7 @@ import {
 } from '../auth/permisos';
 import type { CurrentAuth } from '../auth/auth.types';
 import type {
+  CambiarCuentasDto,
   CrearRolDto,
   CrearUsuarioDto,
   EditarRolDto,
@@ -52,6 +58,78 @@ export class UsuariosService {
     private readonly sessionCache: SessionCacheService,
     private readonly suscripciones: SuscripcionesService,
   ) {}
+
+  async cuentasDisponibles(auth: CurrentAuth) {
+    return this.prisma.cuentaFondos.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        activo: true,
+        tipo: { in: ['caja', 'banco', 'billetera'] },
+      },
+      select: { id: true, nombre: true, moneda: true },
+      orderBy: { nombre: 'asc' },
+    });
+  }
+
+  async cambiarCuentas(
+    auth: CurrentAuth,
+    userId: string,
+    dto: CambiarCuentasDto,
+  ) {
+    const operables = dto.restringidas ? [...new Set(dto.operables)] : [];
+    const destinos = dto.restringidas ? [...new Set(dto.destinos)] : [];
+    await this.prisma.$transaction(
+      async (tx) => {
+        const miembro = await tx.membership.findFirst({
+          where: { tenantId: auth.tenantId, userId },
+        });
+        if (!miembro) throw new NotFoundException('Ese usuario no existe acá.');
+        const ids = [...new Set([...operables, ...destinos])];
+        const cuentas = await tx.cuentaFondos.count({
+          where: {
+            tenantId: auth.tenantId,
+            id: { in: ids },
+            activo: true,
+            tipo: { in: ['caja', 'banco', 'billetera'] },
+          },
+        });
+        if (cuentas !== ids.length)
+          throw new BadRequestException(
+            'Hay cuentas que no están disponibles en esta empresa.',
+          );
+        await tx.membership.update({
+          where: { id: miembro.id },
+          data: {
+            cuentasRestringidas: dto.restringidas,
+            cuentasOperablesIds: operables,
+            cuentasDestinoIds: destinos,
+          },
+        });
+        await tx.eventoAcceso.create({
+          data: {
+            tenantId: auth.tenantId,
+            actorUserId: auth.userId,
+            actorNombre: auth.impersonacion?.actorNombre ?? auth.email,
+            usuarioAfectadoId: userId,
+            tipo: 'cuentas_asignadas',
+            descripcion:
+              'Actualizó las cuentas de trabajo y los destinos permitidos.',
+            datosJson: {
+              anterior: {
+                restringidas: miembro.cuentasRestringidas,
+                operables: miembro.cuentasOperablesIds,
+                destinos: miembro.cuentasDestinoIds,
+              },
+              nuevo: { restringidas: dto.restringidas, operables, destinos },
+            },
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    this.sessionCache.invalidarTenant(auth.tenantId);
+    return { restringidas: dto.restringidas, operables, destinos };
+  }
 
   // ── Usuarios ────────────────────────────────────────────────────────
 
@@ -95,6 +173,11 @@ export class UsuariosService {
             rolNombre: m.rolDelTenant?.nombre ?? this.nombreDelEnum(m.rol),
             /** Vacío = entra desde cualquier lado. */
             ipsPermitidas: m.ipsPermitidas,
+            accesoCuentas: {
+              restringidas: m.cuentasRestringidas,
+              operables: m.cuentasOperablesIds,
+              destinos: m.cuentasDestinoIds,
+            },
             activa: m.activa,
             empleado: m.user.empleados[0] ?? null,
             /**
@@ -170,15 +253,18 @@ export class UsuariosService {
           },
         }));
 
-      // Vale también para el que YA tenía cuenta en otra empresa: la clave se
-      // le pisa con la provisoria y la cambia al entrar.
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          passwordHash,
-          debeCambiarPassword: true,
-        },
-      });
+      // La identidad es global: dar acceso a ESTA empresa no autoriza a
+      // cambiar la contraseña personal que sirve en las demás.
+      if (!existente) {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { passwordHash, debeCambiarPassword: true },
+        });
+      } else if (!existente.passwordHash) {
+        throw new ConflictException(
+          'Esta cuenta tiene una activación pendiente. Su titular debe completar la invitación original antes de agregar otro acceso.',
+        );
+      }
 
       await tx.membership.upsert({
         where: {
@@ -224,7 +310,7 @@ export class UsuariosService {
     });
 
     return {
-      provisoria,
+      provisoria: yaTeniaCuenta ? null : provisoria,
       yaTeniaCuenta,
     };
   }
@@ -269,6 +355,7 @@ export class UsuariosService {
 
   async editar(auth: CurrentAuth, userId: string, dto: EditarUsuarioDto) {
     const { membership, rol } = await this.prisma.$transaction(async (tx) => {
+      if (dto.activa === false) await bloquearIdentidad(tx, userId);
       await bloquearCupoUsuarios(tx, auth.tenantId);
       const membership = await tx.membership.findUnique({
         where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
@@ -312,6 +399,7 @@ export class UsuariosService {
       }
 
       if (dto.activa === false) {
+        await revocarAccesoEmpresa(tx, auth.tenantId, userId);
         await tx.invitation.updateMany({
           where: {
             tenantId: auth.tenantId,
@@ -332,14 +420,6 @@ export class UsuariosService {
     // hasta el TTL del cache de sesión, que es justo cuando el admin está
     // mirando si funcionó.
     this.sessionCache.invalidarTenant(auth.tenantId);
-
-    // Desactivar tiene que cortar de verdad: las sesiones abiertas se revocan.
-    if (dto.activa === false) {
-      await this.prisma.authSession.updateMany({
-        where: { userId, currentTenantId: auth.tenantId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    }
 
     const quien = membership.user.nombreCompleto || membership.user.email;
     if (rol) {
@@ -379,23 +459,39 @@ export class UsuariosService {
    * estuviera abierto en otra máquina deja de valer.
    */
   async restablecerPassword(auth: CurrentAuth, userId: string) {
-    const membership = await this.prisma.membership.findUnique({
-      where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
-      include: { user: { select: { email: true, nombreCompleto: true } } },
-    });
-    if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
-
     const provisoria = generarProvisoria();
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        passwordHash: await bcrypt.hash(provisoria, 10),
-        debeCambiarPassword: true,
-      },
-    });
-    await this.prisma.authSession.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
+    const passwordHash = await bcrypt.hash(provisoria, 10);
+    const membership = await this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, userId);
+      const propio = await tx.membership.findUnique({
+        where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
+        include: {
+          user: {
+            select: { email: true, nombreCompleto: true, rolPlataforma: true },
+          },
+        },
+      });
+      if (!propio) throw new NotFoundException('Ese usuario no existe acá.');
+      // Incluye accesos inactivos: desactivar la otra membresía no debe
+      // convertir una identidad compartida en propiedad de este administrador.
+      const accesoAjeno = await tx.membership.findFirst({
+        where: { userId, tenantId: { not: auth.tenantId } },
+        select: { id: true },
+      });
+      if (propio.user.rolPlataforma || accesoAjeno) {
+        throw new ForbiddenException(
+          'Esta contraseña pertenece a una cuenta personal con otros accesos. Debe cambiarla su titular; esta empresa no puede restablecerla.',
+        );
+      }
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash, debeCambiarPassword: true },
+      });
+      await tx.authSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return propio;
     });
     this.sessionCache.invalidarTenant(auth.tenantId);
 
@@ -420,6 +516,11 @@ export class UsuariosService {
     ]);
     return {
       modulos: MODULOS.map((m) => ({
+        vistas: VISTAS.filter((v) => v.modulo === m.clave).map((v) => ({
+          clave: v.clave,
+          label: v.label,
+          permiteGestion: !!v.gestionAnterior,
+        })),
         clave: m.clave,
         label: m.label,
         descripcion: m.descripcion,
@@ -430,7 +531,15 @@ export class UsuariosService {
          */
         enElPlan: true,
       })),
-      transversales: PERMISOS_TRANSVERSALES.map((p) => ({ ...p })),
+      transversales: PERMISOS_TRANSVERSALES.filter(
+        (p) =>
+          ![
+            'registros.gestionar_empleados',
+            'crm.configurar_fidelizacion',
+            'reportes.ver_resumen',
+            'administracion.configurar',
+          ].includes(p.clave),
+      ).map((p) => ({ ...p })),
       /** Para el aviso del editor: qué features tiene el plan. */
       features: { afip, whatsapp },
     };
@@ -763,7 +872,7 @@ export class UsuariosService {
     } catch (error) {
       this.logger.error(
         `No pude registrar el evento de acceso ${evento.tipo}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -792,6 +901,18 @@ export class UsuariosService {
    *  matrices que se ven distintas y hacen lo mismo. */
   private limpiarPermisos(permisos: string[]): string[] {
     const validos = permisos.filter((p) => esPermisoValido(p));
+    if (
+      validos.includes('acceso.por_vista') &&
+      validos.some((p) =>
+        /^(comercial|crm|registros|costos|produccion|administracion|inventario|reportes|configuracion)\.(ver|gestionar)$/.test(
+          p,
+        ),
+      )
+    ) {
+      throw new BadRequestException(
+        'Elegí permisos por vista; no los combines con accesos globales de sección.',
+      );
+    }
     const gestion = new Set(
       validos
         .filter((p) => p.endsWith('.gestionar'))
@@ -834,7 +955,7 @@ export class UsuariosService {
     permisosNuevos: string[],
   ) {
     const sigueTeniendo = expandir(permisosNuevos).has(
-      'configuracion.gestionar',
+      'configuracion.usuarios.gestionar',
     );
     if (sigueTeniendo) return;
 
@@ -843,7 +964,14 @@ export class UsuariosService {
         tenantId: auth.tenantId,
         activa: true,
         rolId: { not: rolIdQueCambia },
-        rolDelTenant: { permisos: { has: 'configuracion.gestionar' } },
+        rolDelTenant: {
+          permisos: {
+            hasSome: [
+              'configuracion.gestionar',
+              'configuracion.usuarios.gestionar',
+            ],
+          },
+        },
       },
     });
     if (conLlaves === 0) {
@@ -875,7 +1003,7 @@ export class UsuariosService {
     const predefinido = ROLES_PREDEFINIDOS.find((r) => r.codigo === codigo);
     if (predefinido) return predefinido.rolBase;
     const efectivos = expandir(permisos);
-    if (efectivos.has('configuracion.gestionar'))
+    if (efectivos.has('configuracion.usuarios.gestionar'))
       return RolSistema.ADMINISTRADOR;
     if (efectivos.size <= 2 && efectivos.has('produccion.ver')) {
       return RolSistema.OPERADOR;

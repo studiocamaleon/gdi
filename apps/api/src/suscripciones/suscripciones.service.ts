@@ -270,7 +270,10 @@ export class SuscripcionesService {
         ? (p.publico || p.id === suscripcion?.planId) &&
           p.ofertaActual?.entorno ===
             (process.env.PADDLE_ENV === 'production' ? 'production' : 'sandbox')
-        : !suscripcion?.planVersionId &&
+        : suscripcion?.proveedor === 'paddle' &&
+          !!suscripcion.referenciaExterna &&
+          suscripcion.estado !== 'baja' &&
+          !suscripcion.planVersionId &&
           p.paddlePriceId !== null &&
           !p.precioAConsultar,
     );
@@ -389,9 +392,8 @@ export class SuscripcionesService {
           anual,
         };
       }),
-      // Lo que el front le pasa a Paddle.js. El tenantId sale de la SESIÓN,
-      // no de la pantalla: es lo que el webhook usa para saber a quién
-      // corresponde la suscripción que se acaba de crear.
+      // Contexto de presentación. Las altas se autorizan con la contratación
+      // persistida en el servidor; custom_data no es prueba de pertenencia.
       checkout: { tenantId, email },
       facturas,
       tarjeta,
