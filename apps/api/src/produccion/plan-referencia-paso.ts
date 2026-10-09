@@ -7,6 +7,8 @@ export type ReferenciaPaso = {
 };
 export type PlanReferenciaPaso = ReferenciaPaso & {
   version: 1;
+  /** Restricción previa sin ventana final (p. ej. disponibilidad de materiales). */
+  inicioMinimo?: string;
   historial: ReferenciaPaso[];
 };
 
@@ -22,6 +24,9 @@ export function leerPlanReferencia(value: unknown): PlanReferenciaPaso | null {
     Date.parse(r.fin) >= Date.parse(r.inicio);
   return p.version === 1 &&
     valido(p) &&
+    (p.inicioMinimo === undefined ||
+      (typeof p.inicioMinimo === 'string' &&
+        Number.isFinite(Date.parse(p.inicioMinimo)))) &&
     Array.isArray(p.historial) &&
     p.historial.every(valido)
     ? p
@@ -59,6 +64,7 @@ export function fijarPlanReferencia(
     : [];
   return {
     version: 1,
+    ...(anterior?.inicioMinimo ? { inicioMinimo: anterior.inicioMinimo } : {}),
     inicio,
     fin,
     origen,

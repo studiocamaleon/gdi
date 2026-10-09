@@ -1,3 +1,5 @@
+import { ReprogramacionController } from './reprogramacion.controller';
+import { ReprogramacionService } from './reprogramacion.service';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { AsignacionPersonalController } from './asignacion-personal.controller';
 import { AsignacionPersonalService } from './asignacion-personal.service';
@@ -31,9 +33,10 @@ import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-
     RecorridosVectorialesModule,
     DesarrolloDocumentalModule,
   ],
-  controllers: [AsignacionPersonalController, OrdenesTrabajoController, AccionesColaController],
+  controllers: [ReprogramacionController, AsignacionPersonalController, OrdenesTrabajoController, AccionesColaController],
   providers: [
     OrdenesTrabajoService,
+    ReprogramacionService,
     EntregaService,
     AsignacionPersonalService,
     MaterialesOrdenService,

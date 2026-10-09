@@ -114,7 +114,7 @@ export class EtaService {
     tenantId: string,
     db: Prisma.TransactionClient = this.prisma,
     recuperarHistoricos: boolean | 'lectura' = 'lectura',
-    finalidad: 'eta_capacidad' | 'asignacion_automatica' = 'eta_capacidad',
+    finalidad: 'eta_capacidad' | 'asignacion_automatica' | 'planificacion_avanzada' = 'eta_capacidad',
   ) {
     // El motor se comparte; asignar personal no requiere contratar la ETA.
     await this.capacidades.exigirIncluida(tenantId, finalidad, db);
