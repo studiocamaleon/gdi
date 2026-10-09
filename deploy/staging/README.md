@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-09, 00:59 UTC.** API y ambos workers ejecutan `cdeab2cf9`; web `a2999b333` (PR #50, dependiente de #49; sin fusionar). Facturación y Comprobantes tienen páginas de 25, búsqueda y filtros en el servidor, indicadores globales y selección de hasta 100 OT entre páginas. Local, CI y staging aprobados; salud, recursos, revisión, navegación y respaldo posterior comprobados. Sin nuevas migraciones: 312 aplicadas. Se conservan autoregistro/teléfonos, historial de lotes, cargos, borradores y facturación durable/campanita. Ver [VALIDACION.md](./VALIDACION.md).
+> **Estado vigente: 2026-10-09, 01:31 UTC.** API y ambos workers ejecutan `afd1148ea`; web conserva `a2999b333` (PR #51, dependiente de #50; sin fusionar). Corregida la lectura del IVA congelado ante redondeo comercial unitario, conservando el importe pactado. Local, CI y cálculo con datos ficticios en API/worker aprobados; salud, recursos y respaldo posterior comprobados. Sin nuevas migraciones: 312 aplicadas. Ver [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
