@@ -224,6 +224,10 @@ it("conserva la selección entre páginas y busca en el servidor desde la primer
   const otra = { ...orden, ordenId: "otra", numero: "OT-OTRA" };
   await render({}, "administracion.gestionar", [otra], 2);
   expect(container.textContent).toContain("1 orden seleccionada");
+  expect(container.textContent).toContain(
+    "1 orden seleccionada está en otra página.",
+  );
+  expect(container.textContent).not.toContain("no coincide con la búsqueda");
   await act(async () =>
     container
       .querySelector<HTMLInputElement>('[aria-label="Seleccionar OT-OTRA"]')!

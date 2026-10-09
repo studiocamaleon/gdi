@@ -768,10 +768,13 @@ export function FacturacionView({
                     {ocultas > 0 && (
                       <p className={s.selectionHint}>
                         {ocultas}{" "}
-                        {ocultas === 1
-                          ? "orden seleccionada no coincide"
-                          : "órdenes seleccionadas no coinciden"}{" "}
-                        con la búsqueda actual.
+                        {paginacion
+                          ? ocultas === 1
+                            ? "orden seleccionada está en otra página."
+                            : "órdenes seleccionadas están en otras páginas."
+                          : ocultas === 1
+                            ? "orden seleccionada no coincide con la búsqueda actual."
+                            : "órdenes seleccionadas no coinciden con la búsqueda actual."}
                       </p>
                     )}
                     <div className={s.mode}>
