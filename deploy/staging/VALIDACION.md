@@ -1323,3 +1323,27 @@ Chrome autenticado en la empresa demo: a **1134×647**, el área visible de la t
 Fuente exacta cifrada y custodiada por 31 días; inventario de recuperación actualizado con las imágenes realmente activas. Copia previa `068751b3-cf4e-4c53-b330-103c4a844807` (2026-10-09T18:01:02.465Z); posterior `c0c3731a-bdb9-4829-a34c-837c33e4d614` (2026-10-09T18:33:38.941Z): firma válida, manifiesto descifrado, revisión, fuentes y digests comprobados; 312 migraciones y 24 archivos. El primer sondeo todavía encontró la copia anterior. **No se repitió restauración SQL.**
 
 Reversión sólo de web: `registry.fly.io/grafoprint-staging-web@sha256:42af339be2249afa3208db43fa6dd5261dcc9ff89ca87e347dcdd2c231b4f079` (`a2999b333`), sin modificar esquema ni registros. Actualizar también el inventario del copiador si se revierte.
+
+
+## 2026-10-09, 20:50 UTC — Reprogramar producción y entrega desde Planificación (PR #53)
+
+Código `4697aafee656d90a96cdc945b37d9a8cdef71f05`, [PR #53](https://github.com/studiocamaleon/gdi/pull/53), dependiente de #52, sin fusionar. Publicación solicitada únicamente en staging; producción conservada.
+
+- API y ambos workers: `registry.fly.io/grafoprint-staging-api@sha256:f21eecdc319aec5dceed3c14c127446029e04977d04b3530eb9498bcc7abf632`.
+- Web: `registry.fly.io/grafoprint-staging-web@sha256:0fe9d8385b862a9b627de9746536853acf67a690891c0722268eed432850018d`.
+- PDF y copiador conservan sus imágenes. Seis máquinas iniciadas, tamaños conservados; HTTPS web/API 200, API privada 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados en los cuatro servicios actualizados.
+- Sin cambios de esquema, dependencias, secretos de la aplicación ni configuración fiscal: 312 migraciones aplicadas. No se ejecutaron seeds ni se enviaron mensajes.
+
+### Validación
+
+Local: 54 casos API en siete suites y 92 de frontend en cinco suites, tipos dirigidos, ESLint, CSS guard y diff aprobados. Persistencia, aislamiento, permisos, ventanas de producción, promesas de entrega, propuestas vencidas y concurrencia cubiertos en la base local de pruebas. Interfaz local a 1920 px y 390 × 844. [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37980197221) y [CI permisos/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37980197247) aprobados en el código publicado.
+
+Chrome autenticado en la empresa demo de staging: Planificación → seleccionar un paso pendiente → Ver detalle → Fechas de producción y entrega. Se comprobaron ambas acciones visibles, modificación de fecha, selección de paso o ítem completo, invalidación de la propuesta al editar y simulaciones contra la API desplegada. Producción devolvió horarios anteriores/propuestos, efectos en la carga y aviso de entrega vencida. Entrega devolvió compromiso anterior/nuevo y cierre de la OT. Ambas habilitaron «Confirmar cambio»; se cancelaron y se verificó que el compromiso original se conserva. **No se confirmó una reprogramación sobre las órdenes existentes en staging**; no se presenta esta comprobación como ensayo de persistencia cloud. Consola sin advertencias ni errores durante el recorrido. Evidencia visual privada fuera de Git.
+
+Las compilaciones completas se hicieron en el constructor remoto, con TypeScript habilitado. Ambas subidas finalizaron correctamente en el primer intento. La optimización de la web tardó 9,3 minutos y su revisión de tipos 3,6 minutos; el proceso mantuvo actividad durante la espera. Se eliminó únicamente el constructor temporal propio `fly-builder-serene-sandbar-3853`. Docker local y otros proyectos conservados.
+
+### Recuperación y reversión
+
+Fuente exacta archivada, cifrada y custodiada por 31 días; inventario del copiador actualizado con las imágenes activas. Copia previa `60e30712-6e24-41f4-bedf-321875e80603`, completada `2026-10-09T20:01:00.302Z`; posterior `6356c288-e704-48bc-8996-bcc18a5aff84`, completada `2026-10-09T20:48:36.712Z`: firma válida, manifiesto descifrado, revisión, fuentes y digests comprobados; 312 migraciones y 24 archivos. **No se repitió restauración SQL.**
+
+Reversión de código a API/ambos workers `registry.fly.io/grafoprint-staging-api@sha256:b8c76956f068ee35e73fc06302c80c71a5381d397ed218999b8a330ba339ddad` (`afd1148ea`) y web `registry.fly.io/grafoprint-staging-web@sha256:d6d06dc4d88a34640a65bfd01684e939d603981353e86bc2f0002b28998a131e` (`50e069b08`). No requiere revertir esquema. Si ya se confirmaron reprogramaciones, conservar sus fechas e historial y revisar el tratamiento del inicio mínimo antes de volver al motor anterior; no restaurar la base para deshacer código. Actualizar también el inventario del copiador al revertir.

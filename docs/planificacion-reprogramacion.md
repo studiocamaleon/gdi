@@ -79,3 +79,16 @@ Rama `codex/planificacion-reprogramacion`, dependiente del PR #52
 (`codex/colas-pantallas-pequenas`). La base conserva la versión desplegada y sus
 correcciones previas todavía sin integrar en `main`. Al integrar esa cadena,
 actualizar la base del PR y revisar el diff.
+
+## Staging — 09/10/2026
+
+Versión `4697aafee` publicada en web, API y ambos workers, sin migraciones ni
+cambios de recursos. Desde Planificación se comprobó en Chrome la apertura del
+editor, modificación de fecha, selección de paso o ítem, invalidación de una
+propuesta anterior y simulación de producción y entrega contra la API real.
+Las simulaciones se cancelaron; no se confirmó un cambio sobre las órdenes
+existentes. La persistencia y las protecciones de concurrencia quedan cubiertas
+por las pruebas de integración locales. Consola sin errores ni advertencias.
+
+Compilación remota con TypeScript habilitado y CI aprobados. Imágenes, recuperación
+y alcance detallados en [la validación de staging](../deploy/staging/VALIDACION.md).
