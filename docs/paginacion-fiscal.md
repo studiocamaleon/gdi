@@ -9,3 +9,5 @@ Facturación conserva la selección entre páginas, permite hasta 100 OT por lot
 Pruebas: más de 500 OT y 200 comprobantes ficticios, búsqueda de registros fuera del límite antiguo, orden estable, agregados, CAE, vacío, página inválida, aislamiento HTTP y selección entre páginas. El CI de separación incluye las regresiones nuevas. Dependencia temporal: PR #49; rama `codex/paginacion-facturacion-comprobantes`.
 
 La publicación y las comprobaciones por entorno se registran en `deploy/staging/VALIDACION.md` y `deploy/produccion/VALIDACION.md`.
+
+Publicado en staging y producción con backend `cdeab2cf9a4611d1882adca64a0b6f897169a140` y web `a2999b3337d670e8572b033476f6c600aa97addb`, con las mismas imágenes verificadas y sin nuevas migraciones. Chrome comprobó la selección entre páginas y búsqueda histórica en staging; producción se recorrió sin emitir ni enviar comprobantes. La evidencia completa, versiones y respaldos figuran en los registros por entorno.
