@@ -1,6 +1,8 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ComercialPanel, MetaPanel } from "@/lib/panel-api";
+import { filasVisibles } from "./reporte-export-button";
 import { ReporteComercial } from "./reporte-comercial";
 
 const datos: ComercialPanel & { meta: MetaPanel } = {
@@ -53,6 +55,55 @@ const datos: ComercialPanel & { meta: MetaPanel } = {
 const render = (d = datos) => renderToStaticMarkup(<ReporteComercial d={d} />);
 
 describe("Reporte Comercial", () => {
+  it("muestra el IVA informado como referencia y lo conserva en la exportación, sin estimarlo", () => {
+    const html = render({
+      ...datos,
+      kpis: { ...datos.kpis, ventasConIva: 89.75, ticketPromedioConIva: 44.88 },
+      rankingClientes: [
+        { ...datos.rankingClientes[0], facturadoConIva: 89.75 },
+      ],
+      mixCategoria: [{ ...datos.mixCategoria[0], montoConIva: 89.75 }],
+    });
+    const document = new DOMParser().parseFromString(html, "text/html");
+    expect(
+      document.querySelector("[data-reporte-alcance]")?.textContent,
+    ).toContain("No incluye cargos extra");
+    const kpis = [...document.querySelectorAll("[data-reporte-indicador]")];
+    const ventas = kpis.find(
+      (k) =>
+        k.querySelector("[data-reporte-etiqueta]")?.textContent === "Ventas",
+    )!;
+    expect(ventas.querySelector("[data-reporte-valor]")?.textContent).toBe(
+      "$ 81",
+    );
+    expect(ventas.querySelector("[data-reporte-iva]")?.textContent).toContain(
+      "89,75 con IVA",
+    );
+    const ordenes = kpis.find(
+      (k) =>
+        k.querySelector("[data-reporte-etiqueta]")?.textContent === "Órdenes",
+    )!;
+    expect(ordenes.querySelector("[data-reporte-iva]")).toBeNull();
+    const filas = filasVisibles("Comercial", document.body);
+    expect(filas.find((f) => f[0] === "Alcance")?.[1]).toContain(
+      "No incluye cargos extra",
+    );
+    expect(filas.find((f) => f[0] === "Ventas")?.[2]).toContain(
+      "89,75 con IVA",
+    );
+    expect(
+      filas.find((f) => f[0] === "Cliente de prueba")?.join(" "),
+    ).toContain("89,75 con IVA");
+    expect(
+      filas.some(
+        (f) =>
+          f.join(" ").includes("80,50 sin IVA ·") &&
+          f.join(" ").includes("89,75 con IVA"),
+      ),
+    ).toBe(true);
+    // API previa: no inventar un 21 % ni mostrar NaN mientras se actualiza.
+    expect(render()).not.toContain("data-reporte-iva");
+  });
   it("diferencia los contadores de clientes de una variación porcentual", () => {
     const html = render();
     expect(html).toContain("Primera compra en el período");

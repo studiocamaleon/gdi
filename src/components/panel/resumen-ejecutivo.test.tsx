@@ -55,6 +55,17 @@ const render = (
   );
 
 describe("Resumen ejecutivo", () => {
+  it("la referencia con IVA no cambia la pérdida ni el margen de la serie", () => {
+    const html = render({
+      ...datos,
+      rentabilidad: { ...datos.rentabilidad, ventasConIva: 97.41 },
+      serie: [{ fecha: "2026-09-01", monto: 80.5, montoConIva: 97.41, costo: 100.25 }],
+    });
+    expect(html).toContain("No incluye cargos extra");
+    expect(html).toContain("97,41 con IVA");
+    expect(html).toContain("-19,75");
+    expect(html).not.toContain("-2,84");
+  });
   it.each([0, 1, 2])("los enlaces a análisis detallado respetan el plan %s", indice => {
     const html = render(datos, ["reportes.ver", "reportes.ver_resumen", "finanzas.ver_margenes"], PROPUESTA_PLANES[indice].contenido.funciones);
     for (const texto of ["Analizar clientes", "Analizar productos", "Analizar finanzas"])

@@ -25,7 +25,7 @@ import {
   type ModoEmbudo,
 } from "@/lib/reporte-embudo";
 import { cn } from "@/lib/utils";
-import { Metric, NoData, ReportCard, ReportSource } from "./reportes-ui";
+import { Metric, NoData, ReportCard, ReportSource, IvaReference, SalesScopeNote, sumarReferencias } from "./reportes-ui";
 import shared from "./reportes.module.css";
 import styles from "./reporte-embudo.module.css";
 
@@ -90,6 +90,7 @@ export function ReporteEmbudo({ d }: { d: TabPanel<EmbudoPanel> }) {
         <span>Del presupuesto a la entrega</span>
         <span>Seguimiento de los presupuestos emitidos en el período</span>
       </div>
+      <SalesScopeNote />
       <div className={cn(shared.metrics, styles.metrics)}>
         <Metric
           featured
@@ -122,7 +123,9 @@ export function ReporteEmbudo({ d }: { d: TabPanel<EmbudoPanel> }) {
           detail={`${numero(k.pipelineAbiertoCantidad)} ${k.pipelineAbiertoCantidad === 1 ? "presupuesto" : "presupuestos"} · ${money(k.pipelineAbiertoMonto)} sin IVA`}
           hint="Presupuestos formales enviados que siguen sin resolver hoy, de cualquier período. No depende del filtro de fechas."
           icon={<HourglassIcon />}
-        />
+        >
+          <IvaReference value={k.pipelineAbiertoMontoConIva} />
+        </Metric>
         <Metric
           label="Ciclo hasta finalización"
           value={
@@ -209,6 +212,7 @@ export function ReporteEmbudo({ d }: { d: TabPanel<EmbudoPanel> }) {
                           ? money(e.monto) + " sin IVA"
                           : `${numero(e.cantidad)} ${e.cantidad === 1 ? "presupuesto" : "presupuestos"}`}
                       </small>
+                      <IvaReference value={e.montoConIva} />
                     </div>
                     <div className={styles.stageProgress}>
                       <div className={styles.track} aria-hidden="true">
@@ -274,7 +278,7 @@ export function ReporteEmbudo({ d }: { d: TabPanel<EmbudoPanel> }) {
                         <td>{numero(e.cantidad)}</td>
                         <td>{porcentaje(e.share)}</td>
                         <td>{porcentaje(e.conversion)}</td>
-                        <td>{money(e.monto)}</td>
+                        <td>{money(e.monto)}<IvaReference value={e.montoConIva} /></td>
                         <td>{porcentaje(montos[i].share)}</td>
                         <td>{porcentaje(montos[i].conversion)}</td>
                       </tr>
@@ -326,7 +330,7 @@ export function ReporteEmbudo({ d }: { d: TabPanel<EmbudoPanel> }) {
                       ? "presupuesto sin aprobar"
                       : "presupuestos sin aprobar"}
                   </span>
-                  <small>{money(importeSinAprobar)} sin IVA</small>
+                  <small>{money(importeSinAprobar)} sin IVA</small><IvaReference value={sumarReferencias(d.fugas.map((f) => f.montoConIva))} />
                 </div>
               </div>
               <Scroll label="Presupuestos pendientes y pérdidas">
@@ -361,7 +365,7 @@ export function ReporteEmbudo({ d }: { d: TabPanel<EmbudoPanel> }) {
                           </div>
                         </th>
                         <td>{numero(f.cantidad)}</td>
-                        <td>{money(f.monto)}</td>
+                        <td>{money(f.monto)}<IvaReference value={f.montoConIva} /></td>
                       </tr>
                     ))}
                   </tbody>

@@ -24,7 +24,7 @@ import type {
 } from "@/lib/panel-api";
 import { cn } from "@/lib/utils";
 import { TremorBarChart } from "./charts/tremor-charts";
-import { Metric, NoData, ReportCard, ReportSource } from "./reportes-ui";
+import { Metric, NoData, ReportCard, ReportSource, IvaReference, SalesScopeNote, sumarReferencias } from "./reportes-ui";
 import shared from "./reportes.module.css";
 import styles from "./reporte-clientes.module.css";
 
@@ -128,6 +128,7 @@ export function ReporteClientes({ d }: { d: TabPanel<ClientesPanel> }) {
         <span>Lectura de clientes</span>
         <span>Ventas y actividad del período seleccionado</span>
       </div>
+      <SalesScopeNote />
       <div className={shared.metrics}>
         <Metric
           featured
@@ -188,11 +189,11 @@ export function ReporteClientes({ d }: { d: TabPanel<ClientesPanel> }) {
             <div className={styles.salesSummary}>
               <div>
                 <span>Ventas de nuevos</span>
-                <strong>{money(ventasNuevos)}</strong>
+                <strong>{money(ventasNuevos)}</strong><IvaReference value={sumarReferencias(serie.map((s) => s.nuevosConIva))} />
               </div>
               <div>
                 <span>Ventas de recurrentes</span>
-                <strong>{money(ventasRecurrentes)}</strong>
+                <strong>{money(ventasRecurrentes)}</strong><IvaReference value={sumarReferencias(serie.map((s) => s.recurrentesConIva))} />
               </div>
               <span className={styles.scopeTag}>Período seleccionado</span>
             </div>
@@ -241,8 +242,8 @@ export function ReporteClientes({ d }: { d: TabPanel<ClientesPanel> }) {
                         <th scope="row">
                           {fechaDelReporte(s.fecha, gran, true)}
                         </th>
-                        <td>{money(s.nuevos)}</td>
-                        <td>{money(s.recurrentes)}</td>
+                        <td>{money(s.nuevos)}<IvaReference value={s.nuevosConIva} /></td>
+                        <td>{money(s.recurrentes)}<IvaReference value={s.recurrentesConIva} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -295,7 +296,7 @@ export function ReporteClientes({ d }: { d: TabPanel<ClientesPanel> }) {
                         <Track value={c.pct} />
                       </th>
                       <td>{numero(c.ordenes)}</td>
-                      <td className={styles.amount}>{money(c.facturado)}</td>
+                      <td className={styles.amount}>{money(c.facturado)}<IvaReference value={c.facturadoConIva} /></td>
                       <td>{porcentaje(c.pct)}</td>
                       <td>
                         <span className={styles.accumulated}>
@@ -357,7 +358,7 @@ export function ReporteClientes({ d }: { d: TabPanel<ClientesPanel> }) {
                             <Cliente nombre={c.cliente} detail={detail} />
                           </th>
                           <td>{numero(c.ordenes)}</td>
-                          <td>{money(c.ventas)}</td>
+                          <td>{money(c.ventas)}<IvaReference value={c.ventasConIva} /></td>
                           <td data-negative={c.margen < 0}>
                             {money(c.margen)}
                           </td>
@@ -450,7 +451,7 @@ export function ReporteClientes({ d }: { d: TabPanel<ClientesPanel> }) {
                           />
                         </th>
                         <td>{numero(s.clientes)}</td>
-                        <td>{money(s.facturado)}</td>
+                        <td>{money(s.facturado)}<IvaReference value={s.facturadoConIva} /></td>
                       </tr>
                     );
                   })}
@@ -517,7 +518,7 @@ export function ReporteClientes({ d }: { d: TabPanel<ClientesPanel> }) {
                               {numero(c.diasSinComprar)} días
                             </span>
                           </td>
-                          <td>{money(c.facturadoHistorico)}</td>
+                          <td>{money(c.facturadoHistorico)}<IvaReference value={c.facturadoHistoricoConIva} /></td>
                         </tr>
                       );
                     })}

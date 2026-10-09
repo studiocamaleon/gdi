@@ -14,7 +14,7 @@ import { abreviarMoneda, formatearMoneda } from "@/lib/moneda";
 import { fechaDelReporte } from "@/lib/reporte-resumen";
 import type { FinanzasData, FranjaAgingPanel } from "@/lib/panel-api";
 import { cn } from "@/lib/utils";
-import { Metric, NoData, ReportCard, ReportSource } from "./reportes-ui";
+import { Metric, NoData, ReportCard, ReportSource, IvaReference, SalesScopeNote } from "./reportes-ui";
 import { TremorBarChart } from "./charts/tremor-charts";
 import shared from "./reportes.module.css";
 import styles from "./reporte-finanzas.module.css";
@@ -69,7 +69,7 @@ export function ReporteFinanzas({ d }: { d: FinanzasData }) {
   const hasComparison =
     r.ventas !== 0 || (r.costoTotal != null && r.costoTotal !== 0);
   const resultRows = [
-    { label: "Ventas", value: r.ventas, detail: "Órdenes emitidas · sin IVA" },
+    { label: "Ventas", value: r.ventas, conIva: r.ventasConIva, detail: "Órdenes emitidas · sin IVA" },
     {
       label: "Costo directo",
       value: r.costoTotal,
@@ -111,6 +111,7 @@ export function ReporteFinanzas({ d }: { d: FinanzasData }) {
         <span>Lectura financiera</span>
         <span data-reporte-periodo>{range}</span>
       </div>
+      <SalesScopeNote />
       <div className={shared.metrics}>
         <Metric
           label="Ventas"
@@ -123,7 +124,9 @@ export function ReporteFinanzas({ d }: { d: FinanzasData }) {
           delta={r.ventasDeltaPct}
           icon={<ChartNoAxesCombinedIcon />}
           featured
-        />
+        >
+          <IvaReference value={r.ventasConIva} />
+        </Metric>
         <Metric
           label="Contribución"
           value={porcentaje(r.contribucionPct)}
@@ -175,7 +178,7 @@ export function ReporteFinanzas({ d }: { d: FinanzasData }) {
           <div className={cn(shared.chartSummary, styles.comparisonSummary)}>
             <div>
               <span>Ventas</span>
-              <strong>{money(r.ventas)}</strong>
+              <strong>{money(r.ventas)}</strong><IvaReference value={r.ventasConIva} />
             </div>
             <div>
               <span>Costo directo</span>
@@ -243,7 +246,7 @@ export function ReporteFinanzas({ d }: { d: FinanzasData }) {
                     <tr key={row.label}>
                       <th scope="row">{row.label}</th>
                       <td data-negative={row.value != null && row.value < 0}>
-                        {money(row.value)}
+                        {money(row.value)}<IvaReference value={row.conIva} />
                       </td>
                       <td className={styles.reference}>{row.detail}</td>
                     </tr>

@@ -24,7 +24,7 @@ import { prepararMixProducto } from "@/lib/reporte-producto";
 import { fechaDelReporte } from "@/lib/reporte-resumen";
 import { cn } from "@/lib/utils";
 import { TremorBarChart } from "./charts/tremor-charts";
-import { NoData, ReportCard } from "./reportes-ui";
+import { NoData, ReportCard, IvaReference, sumarReferencias } from "./reportes-ui";
 import shared from "./reportes.module.css";
 import styles from "./reporte-producto.module.css";
 
@@ -87,7 +87,7 @@ export function VentasProductoTabla({
               <th scope="row">{p.nombre}</th>
               <td>{numero(p.items)}</td>
               <td className={styles.salesAmount}>
-                {formatearMoneda(p.ventas, moneda)}
+                {formatearMoneda(p.ventas, moneda)}<IvaReference value={p.ventasConIva} />
               </td>
               {margenes ? (
                 <>
@@ -150,7 +150,7 @@ function MixChart({
       <div className={styles.mixSummary}>
         <div>
           <span>Ventas del alcance seleccionado · sin IVA</span>
-          <strong>{money(total)}</strong>
+          <strong>{money(total)}</strong><IvaReference value={sumarReferencias(puntos.map((p) => p.montoConIva))} />
         </div>
         <span>
           Agrupado por{" "}
@@ -209,7 +209,7 @@ function MixChart({
                 <tr key={`${p.fecha}:${p.nombre}:${i}`}>
                   <th scope="row">{fecha(p.fecha, true)}</th>
                   <td className={styles.textCell}>{p.nombre}</td>
-                  <td>{money(p.monto)}</td>
+                  <td>{money(p.monto)}<IvaReference value={p.montoConIva} /></td>
                 </tr>
               ))}
             </tbody>

@@ -24,6 +24,49 @@ import {
 import { cn } from "@/lib/utils";
 import type { MetaPanel } from "@/lib/panel-api";
 import styles from "./reportes.module.css";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { formatearMoneda } from "@/lib/moneda";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+
+/** Referencia del mismo alcance comercial. No estima una alícuota faltante. */
+export function IvaReference({ value }: { value?: number | null }) {
+  const { moneda } = useConfigRegional();
+  if (value == null || !Number.isFinite(value)) return null;
+  return (
+    <small className={styles.ivaReference} data-reporte-iva>
+      {" "}
+      {formatearMoneda(value, moneda)} con IVA
+    </small>
+  );
+}
+
+export function SalesScopeNote() {
+  const descripcion =
+    "Ventas y presupuestos: importes de productos sin IVA. Debajo, la referencia con IVA según el tratamiento de cada documento.";
+  return (
+    <Alert
+      role="note"
+      className={styles.salesScope}
+      data-reporte-alcance
+      data-reporte-exportar={`No incluye cargos extra. ${descripcion}`}
+    >
+      <InfoIcon />
+      <AlertTitle>No incluye cargos extra</AlertTitle>
+      <AlertDescription>{descripcion}</AlertDescription>
+    </Alert>
+  );
+}
+
+/** No presentar un total parcial si la API anterior aún no envía referencias. */
+export function sumarReferencias(
+  valores: Array<number | undefined>,
+): number | undefined {
+  return valores.every(
+    (valor): valor is number => valor != null && Number.isFinite(valor),
+  )
+    ? valores.reduce((total, valor) => total + valor, 0)
+    : undefined;
+}
 
 export function ReportCard({
   title,

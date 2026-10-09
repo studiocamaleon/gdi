@@ -25,7 +25,7 @@ import { fechaDelReporte, serieDelResumen } from "@/lib/reporte-resumen";
 import { cn } from "@/lib/utils";
 import type { ResumenData } from "@/lib/panel-api";
 import { TremorBarChart, TremorSparkAreaChart } from "./charts/tremor-charts";
-import { ReportCard, Metric, NoData, ReportSource } from "./reportes-ui";
+import { ReportCard, Metric, NoData, ReportSource, IvaReference, SalesScopeNote } from "./reportes-ui";
 import styles from "./reportes.module.css";
 
 const porcentaje = (valor: number | null | undefined) =>
@@ -67,6 +67,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
         <span>Lectura del período</span>
         <span data-reporte-periodo>{rango}</span>
       </div>
+      <SalesScopeNote />
       <div className={styles.metrics}>
         <Metric
           label="Ventas"
@@ -80,6 +81,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
           icon={<ChartNoAxesCombinedIcon />}
           featured
         >
+          <IvaReference value={r.ventasConIva} />
           <div className={styles.metricSpark}>
             <TremorSparkAreaChart
               data={serie}
@@ -147,7 +149,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
               <div className={styles.chartSummary}>
                 <div>
                   <span>Ventas del período</span>
-                  <strong>{monto(r.ventas)}</strong>
+                  <strong>{monto(r.ventas)}</strong><IvaReference value={r.ventasConIva} />
                 </div>
                 <div>
                   <span>Margen bruto</span>
@@ -207,7 +209,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
                               true,
                             )}
                           </th>
-                          <td>{montoExacto(p.ventas)}</td>
+                          <td>{montoExacto(p.ventas)}<IvaReference value={p.ventasConIva} /></td>
                           <td>{montoExacto(p.costo)}</td>
                           <td data-negative={p.margen < 0}>
                             {montoExacto(p.margen)}
@@ -279,7 +281,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
                 </div>
                 <div>
                   <dt>Ventas actuales</dt>
-                  <dd>{monto(r.ventas)}</dd>
+                  <dd>{monto(r.ventas)}<IvaReference value={r.ventasConIva} /></dd>
                 </div>
                 <div>
                   <dt>Costos fijos</dt>
@@ -361,7 +363,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
                         </div>
                       </th>
                       <td>{c.ordenes}</td>
-                      <td>{monto(c.facturado)}</td>
+                      <td>{monto(c.facturado)}<IvaReference value={c.facturadoConIva} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -411,7 +413,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
                           {porcentaje(p.margenPct)}
                         </span>
                       </td>
-                      <td>{monto(p.ventas)}</td>
+                      <td>{monto(p.ventas)}<IvaReference value={p.ventasConIva} /></td>
                     </tr>
                   ))}
                 </tbody>

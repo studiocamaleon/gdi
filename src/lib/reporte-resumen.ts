@@ -2,11 +2,12 @@ import type { MetaPanel } from "./panel-api";
 
 /** El margen negativo es un resultado real; nunca recortarlo para el gráfico. */
 export function serieDelResumen(
-  serie: Array<{ fecha: string; monto: number; costo: number }>,
+  serie: Array<{ fecha: string; monto: number; montoConIva?: number; costo: number }>,
 ) {
   return serie.map((punto) => ({
     fecha: punto.fecha,
     ventas: punto.monto,
+    ventasConIva: punto.montoConIva ?? null,
     costo: punto.costo,
     margen: punto.monto - punto.costo,
   }));

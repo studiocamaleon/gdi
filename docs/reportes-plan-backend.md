@@ -13,6 +13,33 @@
 > backend ya deja el gancho (cada tab es un endpoint independiente, fácil
 > de gatear después).
 
+## Alcance vigente de los importes (2026-10-09)
+
+El Centro de análisis muestra **«No incluye cargos extra»** en las vistas
+comerciales. Las ventas siguen siendo el subtotal de los productos raíz de
+órdenes emitidas; no se incorporan los cargos generales de la orden. Se difiere
+su inclusión hasta definir cómo registrar sus costos y calcular un margen real.
+
+Se agrega una referencia secundaria **con IVA** en indicadores, tablas y CSV:
+se usan los totales guardados de esos mismos productos, con sus alícuotas,
+descuentos y redondeos. En órdenes `SIN_COMPROBANTE` se conserva el neto. En el
+embudo se suman subtotal e impuestos de los productos del presupuesto o de la
+orden, según la etapa; nunca el total del documento que contiene cargos.
+
+Los costos, márgenes, contribución, punto de equilibrio, porcentajes, deltas y
+bases de los gráficos conservan su cálculo neto. Cobranza mantiene su alcance
+actual (total de la orden). Los campos nuevos de referencia son aditivos; si una
+API anterior todavía no los devuelve, la interfaz omite la referencia sin
+estimar una alícuota.
+
+Comprobado en PostgreSQL local de tests con datos ficticios y rollback: mezcla
+de IVA 21 %, 10,5 %, exentos y sin comprobante; cargos excluidos, componentes
+internos no duplicados, filtros de empresa/estado/período y márgenes netos.
+Muestra de UI de desarrollo: `/dev/diseno/reportes-iva`, con datos ficticios y
+sin llamadas a la API; se verificó en escritorio y a 390 px de ancho. La ruta
+conserva el control de sesión habitual. Sin migraciones ni despliegue en este
+bloque.
+
 ## 1. Principios
 
 - **Agregar en SQL, no en JS**: cada card es una (o pocas) queries
