@@ -92,6 +92,138 @@ describe('Detalle fiscal de productos y cargos', () => {
     expect(items[0].cantidad).toBe(5000);
     expect(calcularTotales('B', items).total).toBe(12100.37);
   });
+  it.each(['A', 'B'] as const)(
+    '%s usa el IVA congelado aunque el redondeo unitario acumule diferencias',
+    (letra) => {
+      const cantidad = 600;
+      const total = 146.88 * cantidad;
+      const o: OrdenParaFactura = {
+        numero: 'OT-FICTICIA-REDONDEO',
+        total,
+        facturadoTotal: 0,
+        items: [
+          {
+            nombre: 'Impresos de prueba',
+            cantidad,
+            subtotal: 121.39 * cantidad,
+            total,
+            descuentoMonto: 0,
+            cotizacionItem: {
+              impuestosSnapshotJson: [
+                { traslado: 'POR_DENTRO', porcentaje: 3.5 },
+                { traslado: 'POR_FUERA', porcentaje: 21 },
+              ],
+            },
+          },
+        ],
+      };
+      expect(
+        Math.abs(total - Number(o.items[0].subtotal) * 1.21),
+      ).toBeGreaterThan(0.51);
+      for (const detalle of ['items', 'orden'] as const) {
+        const lineas = renglonesFacturaOrden(o, letra, total, detalle);
+        expect(lineas[0].alicuotaIva).toBe(21);
+        expect(calcularTotales(letra, lineas).total).toBe(total);
+      }
+      const parcial = renglonesFacturaOrden(o, letra, 1000, 'items');
+      expect(parcial[0].alicuotaIva).toBe(21);
+      expect(calcularTotales(letra, parcial).total).toBe(1000);
+    },
+  );
+  it('respeta el IVA congelado con redondeo comercial a pesos enteros', () => {
+    const total = 1450;
+    const o: OrdenParaFactura = {
+      numero: 'OT-FICTICIA-ENTEROS',
+      total,
+      facturadoTotal: 0,
+      items: [
+        {
+          nombre: 'Prueba entera',
+          cantidad: 10,
+          subtotal: 1200,
+          total,
+          descuentoMonto: 0,
+          cotizacionItem: {
+            impuestosSnapshotJson: [
+              { traslado: 'POR_FUERA', porcentaje: '21' },
+            ],
+          },
+        },
+      ],
+    };
+    const lineas = renglonesFacturaOrden(o, 'A', total, 'items');
+    expect(lineas[0].alicuotaIva).toBe(21);
+    expect(calcularTotales('A', lineas).total).toBe(total);
+  });
+  it('rechaza importes históricos ambiguos sin inventar una alícuota', () => {
+    const o = {
+      ...orden,
+      total: 0.1,
+      cargosDirectosJson: null,
+      items: [
+        {
+          nombre: 'Prueba histórica',
+          cantidad: 1,
+          subtotal: 0.07,
+          total: 0.1,
+          descuentoMonto: 0,
+        },
+      ],
+    };
+    expect(() => renglonesFacturaOrden(o, 'A', 0.1, 'items')).toThrow(
+      'No se pudo determinar el IVA',
+    );
+  });
+  it.each([7, null, 'no-numero'])(
+    'rechaza una alícuota congelada inválida (%s), sin reemplazarla por otra',
+    (porcentaje) => {
+      const o = {
+        ...orden,
+        total: 121,
+        cargosDirectosJson: null,
+        items: [
+          {
+            nombre: 'Prueba',
+            cantidad: 1,
+            subtotal: 100,
+            total: 121,
+            descuentoMonto: 0,
+            cotizacionItem: {
+              impuestosSnapshotJson: [{ traslado: 'POR_FUERA', porcentaje }],
+            },
+          },
+        ],
+      };
+      expect(() => renglonesFacturaOrden(o, 'A', 121, 'items')).toThrow(
+        'No se pudo determinar el IVA',
+      );
+    },
+  );
+  it('no infiere otra alícuota cuando hay varios impuestos externos', () => {
+    const o = {
+      ...orden,
+      total: 121,
+      cargosDirectosJson: null,
+      items: [
+        {
+          nombre: 'Prueba',
+          cantidad: 1,
+          subtotal: 100,
+          total: 121,
+          descuentoMonto: 0,
+          cotizacionItem: {
+            impuestosSnapshotJson: [
+              { traslado: 'POR_FUERA', porcentaje: 21 },
+              { traslado: 'POR_FUERA', porcentaje: 10.5 },
+            ],
+          },
+        },
+      ],
+    };
+    expect(() => renglonesFacturaOrden(o, 'B', 121, 'items')).toThrow(
+      'No se pudo determinar el IVA',
+    );
+  });
   it('el resumen conserva alícuotas y total del detalle', () => {
     const items = renglonesFacturaOrden(orden, 'A', 1783.5, 'orden');
     expect(items).toHaveLength(2);

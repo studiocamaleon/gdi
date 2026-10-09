@@ -36,27 +36,39 @@ function alicuota(
   const externos = Array.isArray(snapshot)
     ? snapshot.map(objeto).filter((i) => i.traslado === 'POR_FUERA')
     : [];
-  const guardada =
-    externos.length === 1 ? Number(externos[0].porcentaje) : null;
-  if (
-    guardada !== null &&
-    IVA_ID[guardada] !== undefined &&
-    Math.abs(total - neto * (1 + guardada / 100)) <= 0.51
-  )
+  const fallo = () =>
+    new BadRequestException(
+      `No se pudo determinar el IVA de «${nombre}». Revisá los importes de la orden antes de facturar.`,
+    );
+  if (externos.length) {
+    const porcentaje = externos[0].porcentaje;
+    const guardada =
+      typeof porcentaje === 'number' ||
+      (typeof porcentaje === 'string' && porcentaje.trim() !== '')
+        ? Number(porcentaje)
+        : NaN;
+    if (
+      externos.length !== 1 ||
+      !Number.isFinite(guardada) ||
+      IVA_ID[guardada] === undefined
+    )
+      throw fallo();
+    // El pricing redondea neto e impuesto por unidad antes de multiplicar.
+    // Comparar sus totales con una tolerancia fija pierde la alícuota válida
+    // en tiradas grandes (y con redondeo a enteros). El snapshot fiscal manda;
+    // la base fiscal se reconstruye más abajo desde el bruto pactado.
     return guardada;
-  // Órdenes históricas sin snapshot: sólo aceptar una alícuota compatible
-  // con los importes guardados; nunca consultar precios actuales del catálogo.
-  if (neto === 0 && total === 0)
-    return guardada !== null && IVA_ID[guardada] !== undefined ? guardada : 21;
+  }
+  // Órdenes históricas sin alícuota: sólo aceptar una compatible con los
+  // importes guardados; nunca consultar precios actuales del catálogo.
+  if (neto === 0 && total === 0) return 21;
   const candidatas = Object.keys(IVA_ID)
     .map(Number)
     .filter((a) => Math.abs(total - neto * (1 + a / 100)) <= 0.51);
   if (candidatas.length === 1) return candidatas[0];
   if (Math.abs(total - neto * 1.21) < 0.005) return 21;
   if (Math.abs(total - neto) < 0.005) return 0;
-  throw new BadRequestException(
-    `No se pudo determinar el IVA de «${nombre}». Revisá los importes de la orden antes de facturar.`,
-  );
+  throw fallo();
 }
 
 /** Concilia el redondeo fiscal global sin redondear cada precio unitario.
