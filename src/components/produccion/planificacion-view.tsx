@@ -29,9 +29,11 @@ import { type DatosPlanificacion, usePlanificacion } from "./use-planificacion";
 import styles from "./planificacion-view.module.css";
 import header from "./planificacion-header.module.css";
 
+import { ReprogramacionSheet } from "./reprogramacion-sheet";
+
 const NIVELES_ZOOM = [25, 50, 75, 100, 150, 200, 300, 400];
 
-export function PlanificacionView(inicial: DatosPlanificacion) {
+export function PlanificacionView(inicial: DatosPlanificacion & { puedeReprogramar?: boolean; puedeCambiarEntrega?: boolean }) {
   const scope = useDesignScope();
   const designTheme = useDesignTheme();
   const { className: legacyTheme, ...legacyScope } = useLegacyDesignScope();
@@ -45,6 +47,7 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
   const [volverAlInicio, setVolverAlInicio] = useState(0);
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
   const [seleccionId, setSeleccionId] = useState<string | null>(null);
+  const [edicionFecha, setEdicionFecha] = useState<"produccion" | "entrega" | null>(null);
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [verPendientes, setVerPendientes] = useState(false);
   const [mostrarDependencias, setMostrarDependencias] = useState(true);
@@ -253,6 +256,10 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
               <dt>Fin previsto de la OT</dt><dd>{fechaHora(etaOrden.finEstimado)}</dd>
               <dt>Entrega final comprometida</dt><dd className={plazoOrden.vencida || plazoOrden.fueraDeFecha ? styles.fechaFueraDePlazo : undefined}>{fechaPlan(entregaOrden)}</dd>
             </dl>
+              {(inicial.puedeReprogramar || inicial.puedeCambiarEntrega) && <div className={styles.selectionActions}>
+                {inicial.puedeReprogramar && <ActionButton variant="outline" size="sm" onPress={() => { setPanelAbierto(false); setEdicionFecha("produccion"); }}><CalendarDays size={16} aria-hidden />Reprogramar producción</ActionButton>}
+                {inicial.puedeCambiarEntrega && <ActionButton variant="outline" size="sm" onPress={() => { setPanelAbierto(false); setEdicionFecha("entrega"); }}>Cambiar entrega</ActionButton>}
+              </div>}
               {plazoSeleccion.vencida ? <Alert variant="destructive"><TriangleAlert /><AlertTitle>La fecha de entrega ya venció</AlertTitle><AlertDescription>El compromiso guardado es el {fechaPlan(entregaSeleccion)} y todavía hay producción pendiente.{etaSeleccion.finEstimado && ` Con la planificación actual, el fin productivo se estima para ${fechaHora(etaSeleccion.finEstimado)}.`}</AlertDescription></Alert> : plazoSeleccion.fueraDeFecha ? <Alert variant="destructive"><TriangleAlert /><AlertTitle>La producción proyectada supera la entrega</AlertTitle><AlertDescription>El compromiso es el {fechaPlan(entregaSeleccion)}; el fin productivo se estima para {fechaHora(etaSeleccion.finEstimado)}.</AlertDescription></Alert> : entregaSeleccion && estadoSeleccion === "prevista" ? <p className={styles.note}>La producción proyectada termina dentro de la fecha comprometida.</p> : !entregaSeleccion ? <p className={styles.note}>Este producto todavía no tiene una fecha de entrega comprometida.</p> : null}
               {(plazoOrden.vencida && !plazoSeleccion.vencida || plazoOrden.fueraDeFecha && !plazoSeleccion.fueraDeFecha) && <Alert variant="destructive"><TriangleAlert /><AlertTitle>Revisá también la entrega final de la OT</AlertTitle><AlertDescription>La OT tiene una entrega comprometida para el {fechaPlan(entregaOrden)} y su fin productivo se estima para {fechaHora(etaOrden.finEstimado)}.</AlertDescription></Alert>}
               {estadoSeleccion === "revision" && <Alert><Info /><AlertTitle>Proyección orientativa</AlertTitle><AlertDescription>{motivosRevisionSeleccion.length ? motivosRevisionSeleccion.join(" ") : "Faltan datos o hay dependencias sin confirmar."} Esta estimación puede cambiar al completar esos datos.</AlertDescription></Alert>}
@@ -282,6 +289,11 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
         </>}
       </SheetContent>
     </Sheet>
+
+    {edicionFecha && seleccion && <ReprogramacionSheet key={`${seleccion.id}-${edicionFecha}`} pasoId={seleccion.id} paso={seleccion.paso.nombre}
+      trabajo={`${seleccion.item.ordenNumero} · ${seleccion.item.loteEntrega?.nombre ?? seleccion.productoNombre}`} zona={zona} inicio={seleccion.agenda?.inicio ?? null}
+      entrega={entregaSeleccion} tipo={edicionFecha} onClose={() => { setEdicionFecha(null); setPanelAbierto(true); }}
+      onSaved={() => { setEdicionFecha(null); setPanelAbierto(true); void actualizar(); }} />}
 
     <Sheet open={verPendientes} onOpenChange={setVerPendientes}><SheetContent {...scope} {...legacyScope} className={`${legacyTheme ?? designTheme} ${styles.detailPanel}`} overlayClassName={`${designTheme} ${styles.detailOverlay}`} initialFocus={tituloEstado}>
       <SheetHeader className={styles.detailHeader}><SheetTitle ref={tituloEstado} tabIndex={-1}>Estado de la planificación</SheetTitle><SheetDescription>Datos pendientes de las órdenes accesibles. Cambiar la vista o los filtros no los elimina del cálculo.</SheetDescription></SheetHeader>
