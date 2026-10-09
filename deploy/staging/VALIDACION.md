@@ -1347,3 +1347,29 @@ Las compilaciones completas se hicieron en el constructor remoto, con TypeScript
 Fuente exacta archivada, cifrada y custodiada por 31 días; inventario del copiador actualizado con las imágenes activas. Copia previa `60e30712-6e24-41f4-bedf-321875e80603`, completada `2026-10-09T20:01:00.302Z`; posterior `6356c288-e704-48bc-8996-bcc18a5aff84`, completada `2026-10-09T20:48:36.712Z`: firma válida, manifiesto descifrado, revisión, fuentes y digests comprobados; 312 migraciones y 24 archivos. **No se repitió restauración SQL.**
 
 Reversión de código a API/ambos workers `registry.fly.io/grafoprint-staging-api@sha256:b8c76956f068ee35e73fc06302c80c71a5381d397ed218999b8a330ba339ddad` (`afd1148ea`) y web `registry.fly.io/grafoprint-staging-web@sha256:d6d06dc4d88a34640a65bfd01684e939d603981353e86bc2f0002b28998a131e` (`50e069b08`). No requiere revertir esquema. Si ya se confirmaron reprogramaciones, conservar sus fechas e historial y revisar el tratamiento del inicio mínimo antes de volver al motor anterior; no restaurar la base para deshacer código. Actualizar también el inventario del copiador al revertir.
+
+
+## 2026-10-09, 22:16 UTC — Fecha acordada y producción en un único formulario (PR #53)
+
+Código `c9f30c26ede2508dbd6441d261403342cff23580`, [PR #53](https://github.com/studiocamaleon/gdi/pull/53), dependiente de #52 y todavía en borrador. Publicación solicitada sólo en staging; producción sin cambios. Planificación → Ver detalle → Reprogramar permite acompañar la fecha acordada con un ajuste automático, un inicio manual o la conservación de producción. Para un paso, Automático exige realizarlo dentro del día acordado; para el ítem/lote pendiente busca un inicio factible cercano. Compromiso y producción se confirman en una misma transacción.
+
+- API y ambos workers: `registry.fly.io/grafoprint-staging-api@sha256:817b8a8d2614aae9801c0843c3c1264dfae68c8c610d92d0279905ca5b56ce5d`.
+- Web: `registry.fly.io/grafoprint-staging-web@sha256:6df466b1d70f36ffa7989d0a53b889eaad3598030e47408a8233b2a469307c0d`.
+- PDF y copiador conservan sus imágenes. Revisión exacta y Sentry habilitado comprobados en los cuatro servicios actualizados. Seis máquinas iniciadas con los mismos tamaños; HTTPS web/API 200, API privada 403 y BFF anónimo 401.
+- Sin nuevas migraciones, dependencias ni cambios fiscales: 312 migraciones aplicadas. Sin seeds, cambios en las órdenes ni envíos de prueba.
+
+### Validación y límites
+
+Local: 59 pruebas API en siete suites y 45 de frontend en cuatro suites. Incluyen instalación pospuesta con paso previo terminado, agenda sin disponibilidad, ítem que debe comenzar antes de la entrega, ajuste manual, permisos combinados, lotes hermanos y concurrencia sin guardar parcialmente el compromiso. Tipos dirigidos, ESLint, CSS guard y diff correctos. Chrome local en escritorio y móvil con datos ficticios.
+
+Ambas compilaciones completas terminaron en Fly con TypeScript habilitado. Nest compiló en 49,4 segundos; la web optimizó en 17,5 minutos, comprobó tipos en 3,9 minutos y generó sus 43 páginas estáticas. **CI de GitHub sigue pendiente por infraestructura:** [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37992533641) y [permisos/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/37992533691), tercer intento, fallaron antes de ejecutar el código por límite de descargas de Docker Hub y tiempos de espera/504 al obtener imágenes o tokens. La compilación en Fly y las pruebas locales no se presentan como aprobación de esos workflows.
+
+Chrome autenticado en la empresa demo de staging: el formulario unificado abrió desde un paso pendiente. Al cambiar el compromiso del 16 al 19 de octubre, Automático propuso el paso el 19 de 10:00 a 10:16 y mostró el cambio de cierre de la OT. Elegir inicio permitió comenzar el 13 de octubre a las 10:05 conservando el compromiso del 19. Conservar mantuvo la producción original del 12. Las propuestas anteriores se invalidaron al cambiar de modo. Se cancelaron las simulaciones y se verificó que la fecha original se conserva. **No se confirmó una reprogramación sobre las órdenes existentes en staging**; persistencia y concurrencia están cubiertas por integración local. Consola sin errores ni advertencias. Formulario abierto para prueba del usuario; evidencia visual privada fuera de Git.
+
+La publicación requirió renovar la autenticación normal del registro y reutilizar las imágenes ya compiladas después de fallos de subida. Se mantuvo activo únicamente el constructor temporal propio durante la transferencia final; se eliminó `fly-builder-dawn-driftwood-1085` al terminar. Sin compilaciones de producción en la Mac, cambios en Docker local ni alteración de otros proyectos.
+
+### Recuperación y reversión
+
+Fuente exacta cifrada y custodiada por 31 días; inventario del copiador actualizado con fuentes e imágenes activas. Copia previa `00b2b50d-8f7b-4712-a595-1e3627d20938`, completada `2026-10-09T21:00:58.809Z`; posterior `c3dbe486-fbe2-434c-aa31-2b505fea19c7`, completada `2026-10-09T22:14:38.100Z`. Firma válida y manifiesto descifrado, fuentes/digests exactos, 312 migraciones y 24 archivos. El primer sondeo encontró la copia anterior y el siguiente verificó la nueva. **No se repitió la restauración SQL aislada; esta verificación no constituye un nuevo ensayo de restauración completa.**
+
+Reversión a `4697aafee`: API y ambos workers `registry.fly.io/grafoprint-staging-api@sha256:f21eecdc319aec5dceed3c14c127446029e04977d04b3530eb9498bcc7abf632`; web `registry.fly.io/grafoprint-staging-web@sha256:0fe9d8385b862a9b627de9746536853acf67a690891c0722268eed432850018d`. Restablece las acciones separadas sin modificar esquema. Conservar fechas e historial ya confirmados; no restaurar la base para deshacer código. Actualizar también el inventario de recuperación.

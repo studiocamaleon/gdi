@@ -95,8 +95,8 @@ al ajuste manual; se rechazan las combinaciones incompatibles.
   invalidación de la propuesta al editar, vista previa y confirmación de una
   instalación ficticia en memoria. Acciones disponibles en móvil y consola sin
   errores ni advertencias.
-- Este refinamiento todavía no está desplegado. El registro de staging siguiente
-  corresponde a la versión inicial con las dos acciones separadas.
+- Este refinamiento se publicó en staging como `c9f30c26e`. La versión inicial
+  con dos acciones separadas queda registrada abajo como antecedente.
 
 ## Validación local del 09/10/2026
 
@@ -118,7 +118,7 @@ Rama `codex/planificacion-reprogramacion`, dependiente del PR #52
 correcciones previas todavía sin integrar en `main`. Al integrar esa cadena,
 actualizar la base del PR y revisar el diff.
 
-## Staging — 09/10/2026
+## Staging inicial — 09/10/2026, 20:50 UTC
 
 Versión `4697aafee` publicada en web, API y ambos workers, sin migraciones ni
 cambios de recursos. Desde Planificación se comprobó en Chrome la apertura del
@@ -130,3 +130,22 @@ por las pruebas de integración locales. Consola sin errores ni advertencias.
 
 Compilación remota con TypeScript habilitado y CI aprobados. Imágenes, recuperación
 y alcance detallados en [la validación de staging](../deploy/staging/VALIDACION.md).
+
+## Staging unificado — 09/10/2026, 22:16 UTC
+
+Versión `c9f30c26e` en web, API y ambos workers. Compilaciones completas en Fly
+con TypeScript habilitado. Se conservaron los tamaños de las seis máquinas y
+las 312 migraciones; salud, accesos restringidos y respaldo posterior verificados.
+
+Desde Planificación → Ver detalle → Reprogramar se simularon los tres modos
+en la empresa demo. Automático ubicó el paso dentro de la nueva fecha acordada;
+Elegir inicio permitió un comienzo anterior; Conservar mantuvo la producción.
+Cada cambio invalidó la propuesta anterior. Las simulaciones se cancelaron y
+se comprobó la fecha original. No se confirmó una reprogramación sobre las
+órdenes existentes; la persistencia está cubierta por la integración local.
+Consola sin errores ni advertencias durante el recorrido.
+
+Los workflows de GitHub no pudieron ejecutar sus comprobaciones: Docker Hub
+devolvió límite de descargas y errores de autenticación/tiempo de espera al
+obtener imágenes. Se conserva esa limitación en el PR, aunque ambas imágenes
+completaron su compilación y revisión de tipos en Fly. Producción sin cambios.
