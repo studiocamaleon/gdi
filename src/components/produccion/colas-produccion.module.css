@@ -169,6 +169,8 @@
   .header .actions { gap: 6px; }
   .refreshButton { min-width: 32px; padding-inline: 8px; }
   .refreshButton span { display: none; }
+  .expandButton { min-width: 32px; padding-inline: 8px; }
+  .expandButton span { display: none; }
 }
 @container (max-width: 600px) {
   .searchToolbar { flex-wrap: nowrap; padding-inline: 12px; }
@@ -185,4 +187,37 @@
 }
 @container list-page (max-width: 480px) {
   .planningLink { display: none; }
+}
+
+/* El portal ocupa el viewport; sólo la tabla se desplaza dentro del modal. */
+.expandedDialog[data-slot="dialog-content"] {
+  top: 0;
+  left: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: 100dvh;
+  translate: none;
+  transform: none;
+  animation: none;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  gap: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.expandedHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; flex: none; }
+.expandedTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.expandedDialog .queue { flex: 1; }
+.expandedDialog .mobileMachine, .expandedDialog .queueHeader { display: none; }
+.expandedDialog .toolbar, .expandedDialog .searchToolbar { padding: 0 16px 8px; }
+.expandedDialog .footer { padding: 6px 16px; }
+@media (max-width: 600px) {
+  .expandedHeader { padding: 10px 12px; gap: 8px; }
+  .expandedHeader .actions { gap: 6px; }
+  .expandedDialog .toolbar, .expandedDialog .searchToolbar { padding-inline: 12px; }
+  .expandedDialog .footer { padding-inline: 12px; }
 }

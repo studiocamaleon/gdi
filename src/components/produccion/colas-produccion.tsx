@@ -2,7 +2,7 @@
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from 'react';
-import { ArrowUpRight, Ban, ChevronLeft, ChevronRight, CircleCheck, CirclePause, Clock3, Factory, Layers, Scan, LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, Ban, ChevronLeft, ChevronRight, CircleCheck, CirclePause, Clock3, Factory, Layers, Scan, LoaderCircle, LockKeyhole, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { Button, Card, Checkbox, Chip, SearchField, Tabs } from '@heroui/react';
 import { ActionButton } from '@/components/design-system/action-button';
 import { ActionLink } from '@/components/design-system/action-link';
@@ -14,6 +14,7 @@ import focus from '@/components/design-system/field-focus.module.css';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import workspaceTheme from '@/components/ui/workspace-theme.module.css';
 import { PasoAccionesProduccion, ETIQUETAS_ACCION } from './paso-acciones';
@@ -147,6 +148,8 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
   const [maquinaId, setMaquinaId] = React.useState(initialMaquinaId ?? initialResumen.maquinas.find(m => m.pendientes > 0)?.id ?? initialResumen.maquinas[0]?.id ?? '');
   const [filtro, setFiltro] = React.useState({ estado: 'todos' as EstadoCola, q: '', page: 1 });
   const [buscarMaquina, setBuscarMaquina] = React.useState('');
+  const [tablaAmpliada, setTablaAmpliada] = React.useState(false);
+  const ampliarRef = React.useRef<HTMLButtonElement>(null);
   const [datos, setDatos] = React.useState<DatosCola | null>(null);
   const [errorResumen, setErrorResumen] = React.useState(initialError);
   const [errorDetalle, setErrorDetalle] = React.useState<string | null>(null);
@@ -270,13 +273,63 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
   const totalMaquina = datos?.totales.todos ?? maquina?.pendientes ?? 0;
   const maquinas = resumen.maquinas.filter(m => `${m.nombre} ${m.estacion?.nombre ?? ''}`.toLocaleLowerCase('es').includes(buscarMaquina.toLocaleLowerCase('es')));
 
-  return <div {...scope} data-visual="brand" className={cn(designTheme, layout.page, s.page)}>
+  const contenidoCola = <section className={s.queue} aria-label="Trabajo de la máquina">
     {revisionTiempos && <CompletarSeleccionCola items={revisionTiempos} onConfirmar={completar} onCancelar={() => setRevisionTiempos(null)} />}
     {simulacionIds && <SimularNestingCola maquinaId={maquinaId} pasoIds={simulacionIds} onCerrar={() => setSimulacionIds(null)} />}
+    <div className={s.mobileMachine}>
+      <div className={s.machinePicker}>
+        <SelectField aria-label="Seleccionar máquina" value={maquinaId} onChange={id => { if (id) seleccionar(id); }} options={resumen.maquinas.length ? resumen.maquinas.map(m => ({ value: m.id, label: `${m.nombre} · ${m.pendientes}` })) : [{ value: '', label: 'Sin máquinas con trabajo' }]} />
+      </div>
+      {resumen.sinMaquina > 0 && <ActionLink variant="ghost" className={s.mobileUnassigned} href="/produccion/tablero">{resumen.sinMaquina} sin máquina<ArrowUpRight size={15} aria-hidden /></ActionLink>}
+    </div>
+    <div className={s.queueHeader}>
+      <div><span className={s.queueEyebrow}>Cola de producción</span><h2 className={s.sectionTitle}>{maquina?.nombre ?? 'Trabajo por máquina'}</h2><p>{maquina?.estacion?.nombre ?? 'Seleccioná una máquina para ver su cola.'}</p></div>
+      {maquina && <div className={s.queueTotal}><strong>{totalMaquina}</strong><span>{totalMaquina === 1 ? 'operación' : 'operaciones'}</span></div>}
+    </div>
+    <Tabs selectedKey={filtro.estado} onSelectionChange={v => filtrar({ estado: v as EstadoCola, page: 1 })} className={s.tabs}>
+      <div className={s.toolbar}>
+        <NavigationTabList className={s.statusTabs} variant="compact" tone="graphite" label="Estado de los trabajos" items={ESTADOS.map(e => {
+          const Icono = e.id === 'todos' ? Layers : ICONO_ESTADO[e.id];
+          return { id: e.id, label: e.label, icon: <Icono aria-hidden />, count: datos?.totales[e.id] };
+        })} />
+      </div>
+      <div className={s.searchToolbar}>
+        <div className={s.context}><Layers aria-hidden="true" /><span>Agrupados por material</span><span className={s.contextSource}>Plan de fabricación vigente</span></div>
+        <SearchField className={s.search} aria-label="Buscar OT, cliente, lote o trabajo" value={filtro.q} onChange={value => filtrar({ q: value, page: 1 })}>
+          <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
+            <SearchField.SearchIcon /><SearchField.Input placeholder="Buscar OT, cliente o trabajo…" maxLength={120} />
+          </SearchField.Group>
+        </SearchField>
+      </div>
+      <Tabs.Panel id={filtro.estado} className={s.content}>
+        <div className={s.selectionBar} data-selected={haySeleccion || undefined}>
+          <div className={s.selectionCopy}><strong aria-live="polite">{haySeleccion ? `${seleccion.ids.length} ${seleccion.ids.length === 1 ? 'trabajo seleccionado' : 'trabajos seleccionados'}` : 'Sin trabajos seleccionados'}</strong>
+            <span id="motivo-nesting-cola" aria-live="polite" title={detalleSeleccion}>{detalleSeleccion}</span>
+          </div>
+          <div className={s.actions}><ActionButton variant="ghost" isDisabled={!haySeleccion || ocupado} onPress={() => { setSeleccion(SELECCION_COLA_VACIA); setErrorAccion(null); }}>Limpiar</ActionButton>
+            <ActionButton variant="outline" isDisabled={!haySeleccion || Boolean(motivoNesting) || cargando || ocupado} aria-describedby="motivo-nesting-cola" onPress={() => { if (!motivoNesting) setSimulacionIds([...seleccion.ids]); }}><Scan data-icon="inline-start" />Simular nesting</ActionButton>
+            {puedeCompletar && <ActionButton isDisabled={!haySeleccion || !seleccionVigente || cargando || ocupado} onPress={prepararCompletado}><CircleCheck data-icon="inline-start" />{completando ? 'Completando…' : 'Completar seleccionados'}</ActionButton>}</div>
+        </div>
+        {errorAccion && <Alert className={legacyTheme ?? workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo registrar la acción</AlertTitle><AlertDescription>{errorAccion}</AlertDescription></Alert>}
+        <div className={s.tableScroll} aria-busy={cargando}>
+          {cargando ? <div className={s.loading} role="status" aria-label="Cargando trabajos">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className={`${legacyTheme ?? workspaceTheme.theme} h-16 w-full`} />)}</div>
+            : datos?.items.length ? <TablaCola datos={datos} seleccion={seleccion} ocupado={ocupado} onAccion={puedeCompletar ? ejecutarAccion : undefined} onTomarMesa={puedeCompletar ? item => void tomarMesa(item) : undefined} onAlternar={item => setSeleccion(actual => alternarSeleccionCola(actual, item))} onGrupo={seleccionarGrupo} />
+            : !error && <Empty className={legacyTheme ?? workspaceTheme.theme}><EmptyHeader><EmptyMedia variant="icon"><Factory /></EmptyMedia><EmptyTitle>{maquinaId ? 'No hay trabajos en esta selección' : 'No hay trabajo pendiente en máquinas'}</EmptyTitle><EmptyDescription>{filtro.estado === 'listos' ? 'Podés revisar En espera para ver qué falta antes de producir.' : 'Las operaciones de las órdenes emitidas aparecerán en la máquina que tienen asignada.'}</EmptyDescription></EmptyHeader></Empty>}
+        </div>
+      </Tabs.Panel>
+    </Tabs>
+    <footer className={s.footer} aria-live="polite"><span>{datos ? `${datos.total} ${datos.total === 1 ? 'operación' : 'operaciones'} · Página ${datos.page} de ${datos.pages}` : cargando ? 'Cargando…' : 'Sin resultados'}</span>
+      <div className={s.actions}><ActionButton isIconOnly variant="outline" aria-label="Página anterior" isDisabled={cargando || !datos || datos.page <= 1} onPress={() => filtrar({ page: (datos?.page ?? 1) - 1 })}><ChevronLeft size={16} /></ActionButton>
+        <ActionButton isIconOnly variant="outline" aria-label="Página siguiente" isDisabled={cargando || !datos || datos.page >= datos.pages} onPress={() => filtrar({ page: (datos?.page ?? 1) + 1 })}><ChevronRight size={16} /></ActionButton></div>
+    </footer>
+  </section>;
+
+  return <div {...scope} data-visual="brand" className={cn(designTheme, layout.page, s.page)}>
     <header className={cn(layout.header, s.header)}>
       <div className={s.title}><span className={s.eyebrow}><Factory size={12} aria-hidden />Producción · Máquinas</span><h1>Colas de trabajo<span className={s.titleDot}>.</span></h1></div>
       <div className={s.actions}>
         <ActionLink variant="outline" className={s.planningLink} href="/produccion/planificacion">Planificación<ArrowUpRight size={15} aria-hidden /></ActionLink>
+        <ActionButton ref={ampliarRef} variant="outline" className={s.expandButton} aria-label="Ampliar tabla" title="Ampliar tabla" aria-haspopup="dialog" onPress={() => setTablaAmpliada(true)}><Maximize2 data-icon="inline-start" /><span>Ampliar tabla</span></ActionButton>
         <ActionButton variant="outline" aria-label="Actualizar colas" className={s.refreshButton} onPress={() => void refrescar()} isDisabled={refrescando}>{refrescando ? <GdiSpinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}<span>Actualizar</span></ActionButton>
       </div>
     </header>
@@ -303,54 +356,21 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
         </div>
         {resumen.sinMaquina > 0 && <div className={s.unassigned}><span>{resumen.sinMaquina} operaciones sin máquina</span><ActionLink variant="ghost" href="/produccion/tablero">Ver en Operación diaria<ArrowUpRight size={15} aria-hidden /></ActionLink></div>}
       </aside>
-      <section className={s.queue} aria-label="Trabajo de la máquina">
-        <div className={s.mobileMachine}>
-          <div className={s.machinePicker}>
-            <SelectField aria-label="Seleccionar máquina" value={maquinaId} onChange={id => { if (id) seleccionar(id); }} options={resumen.maquinas.length ? resumen.maquinas.map(m => ({ value: m.id, label: `${m.nombre} · ${m.pendientes}` })) : [{ value: '', label: 'Sin máquinas con trabajo' }]} />
-          </div>
-          {resumen.sinMaquina > 0 && <ActionLink variant="ghost" className={s.mobileUnassigned} href="/produccion/tablero">{resumen.sinMaquina} sin máquina<ArrowUpRight size={15} aria-hidden /></ActionLink>}
-        </div>
-        <div className={s.queueHeader}>
-          <div><span className={s.queueEyebrow}>Cola de producción</span><h2 className={s.sectionTitle}>{maquina?.nombre ?? 'Trabajo por máquina'}</h2><p>{maquina?.estacion?.nombre ?? 'Seleccioná una máquina para ver su cola.'}</p></div>
-          {maquina && <div className={s.queueTotal}><strong>{totalMaquina}</strong><span>{totalMaquina === 1 ? 'operación' : 'operaciones'}</span></div>}
-        </div>
-        <Tabs selectedKey={filtro.estado} onSelectionChange={v => filtrar({ estado: v as EstadoCola, page: 1 })} className={s.tabs}>
-          <div className={s.toolbar}>
-            <NavigationTabList className={s.statusTabs} variant="compact" tone="graphite" label="Estado de los trabajos" items={ESTADOS.map(e => {
-              const Icono = e.id === 'todos' ? Layers : ICONO_ESTADO[e.id];
-              return { id: e.id, label: e.label, icon: <Icono aria-hidden />, count: datos?.totales[e.id] };
-            })} />
-          </div>
-          <div className={s.searchToolbar}>
-            <div className={s.context}><Layers aria-hidden="true" /><span>Agrupados por material</span><span className={s.contextSource}>Plan de fabricación vigente</span></div>
-            <SearchField className={s.search} aria-label="Buscar OT, cliente, lote o trabajo" value={filtro.q} onChange={value => filtrar({ q: value, page: 1 })}>
-              <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
-                <SearchField.SearchIcon /><SearchField.Input placeholder="Buscar OT, cliente o trabajo…" maxLength={120} />
-              </SearchField.Group>
-            </SearchField>
-          </div>
-          <Tabs.Panel id={filtro.estado} className={s.content}>
-            <div className={s.selectionBar} data-selected={haySeleccion || undefined}>
-              <div className={s.selectionCopy}><strong aria-live="polite">{haySeleccion ? `${seleccion.ids.length} ${seleccion.ids.length === 1 ? 'trabajo seleccionado' : 'trabajos seleccionados'}` : 'Sin trabajos seleccionados'}</strong>
-                <span id="motivo-nesting-cola" aria-live="polite" title={detalleSeleccion}>{detalleSeleccion}</span>
-              </div>
-              <div className={s.actions}><ActionButton variant="ghost" isDisabled={!haySeleccion || ocupado} onPress={() => { setSeleccion(SELECCION_COLA_VACIA); setErrorAccion(null); }}>Limpiar</ActionButton>
-                <ActionButton variant="outline" isDisabled={!haySeleccion || Boolean(motivoNesting) || cargando || ocupado} aria-describedby="motivo-nesting-cola" onPress={() => { if (!motivoNesting) setSimulacionIds([...seleccion.ids]); }}><Scan data-icon="inline-start" />Simular nesting</ActionButton>
-                {puedeCompletar && <ActionButton isDisabled={!haySeleccion || !seleccionVigente || cargando || ocupado} onPress={prepararCompletado}><CircleCheck data-icon="inline-start" />{completando ? 'Completando…' : 'Completar seleccionados'}</ActionButton>}</div>
-            </div>
-            {errorAccion && <Alert className={legacyTheme ?? workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo registrar la acción</AlertTitle><AlertDescription>{errorAccion}</AlertDescription></Alert>}
-            <div className={s.tableScroll} aria-busy={cargando}>
-              {cargando ? <div className={s.loading} role="status" aria-label="Cargando trabajos">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className={`${legacyTheme ?? workspaceTheme.theme} h-16 w-full`} />)}</div>
-                : datos?.items.length ? <TablaCola datos={datos} seleccion={seleccion} ocupado={ocupado} onAccion={puedeCompletar ? ejecutarAccion : undefined} onTomarMesa={puedeCompletar ? item => void tomarMesa(item) : undefined} onAlternar={item => setSeleccion(actual => alternarSeleccionCola(actual, item))} onGrupo={seleccionarGrupo} />
-                : !error && <Empty className={legacyTheme ?? workspaceTheme.theme}><EmptyHeader><EmptyMedia variant="icon"><Factory /></EmptyMedia><EmptyTitle>{maquinaId ? 'No hay trabajos en esta selección' : 'No hay trabajo pendiente en máquinas'}</EmptyTitle><EmptyDescription>{filtro.estado === 'listos' ? 'Podés revisar En espera para ver qué falta antes de producir.' : 'Las operaciones de las órdenes emitidas aparecerán en la máquina que tienen asignada.'}</EmptyDescription></EmptyHeader></Empty>}
-            </div>
-          </Tabs.Panel>
-        </Tabs>
-        <footer className={s.footer} aria-live="polite"><span>{datos ? `${datos.total} ${datos.total === 1 ? 'operación' : 'operaciones'} · Página ${datos.page} de ${datos.pages}` : cargando ? 'Cargando…' : 'Sin resultados'}</span>
-          <div className={s.actions}><ActionButton isIconOnly variant="outline" aria-label="Página anterior" isDisabled={cargando || !datos || datos.page <= 1} onPress={() => filtrar({ page: (datos?.page ?? 1) - 1 })}><ChevronLeft size={16} /></ActionButton>
-            <ActionButton isIconOnly variant="outline" aria-label="Página siguiente" isDisabled={cargando || !datos || datos.page >= datos.pages} onPress={() => filtrar({ page: (datos?.page ?? 1) + 1 })}><ChevronRight size={16} /></ActionButton></div>
-        </footer>
-      </section>
+      {!tablaAmpliada && contenidoCola}
     </Card>
+    <Dialog open={tablaAmpliada} onOpenChange={setTablaAmpliada}>
+      <DialogContent {...scope} className={cn(designTheme, s.expandedDialog)} showCloseButton={false} finalFocus={ampliarRef}>
+        <header className={s.expandedHeader}>
+          <DialogTitle className={s.expandedTitle}>{maquina?.nombre ?? 'Cola de trabajo'}</DialogTitle>
+          <DialogDescription className="sr-only">Tabla de trabajos a pantalla completa, con los mismos filtros, selección y acciones.</DialogDescription>
+          <div className={s.actions}>
+            <ActionButton isIconOnly variant="outline" aria-label="Actualizar colas" onPress={() => void refrescar()} isDisabled={refrescando}>{refrescando ? <GdiSpinner /> : <RefreshCw />}</ActionButton>
+            <ActionButton variant="outline" aria-label="Salir de pantalla completa" onPress={() => setTablaAmpliada(false)}><Minimize2 data-icon="inline-start" />Cerrar</ActionButton>
+          </div>
+        </header>
+        {error && <Alert className={legacyTheme ?? workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo actualizar la vista</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+        {tablaAmpliada && contenidoCola}
+      </DialogContent>
+    </Dialog>
   </div>;
 }
