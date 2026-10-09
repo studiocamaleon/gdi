@@ -115,6 +115,7 @@ export class ReportesController {
       }),
       rentabilidad: {
         ventas: actual.ventas,
+        ventasConIva: actual.ventasConIva,
         ventasDeltaPct: deltas.ventasPct,
         margenBruto: actual.margenBruto,
         margenBrutoPct: actual.margenBrutoPct,
@@ -226,6 +227,7 @@ export class ReportesController {
       }),
       rentabilidad: {
         ventas: actual.ventas,
+        ventasConIva: actual.ventasConIva,
         ventasDeltaPct: deltas.ventasPct,
         costoTotal: actual.costoTotal,
         margenBruto: actual.margenBruto,

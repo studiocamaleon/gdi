@@ -229,6 +229,7 @@ describe('proyecciones comerciales y económicas de F4 (PostgreSQL)', () => {
             };
             expect(await ventas.totales(tenantId, rango)).toEqual({
               ventas: 400,
+              ventasConIva: 400,
               ordenes: 1,
               items: 1,
             });

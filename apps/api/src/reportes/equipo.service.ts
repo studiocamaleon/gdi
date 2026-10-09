@@ -1,8 +1,8 @@
+import { PRODUCTO_CON_IVA_SQL } from './importes-referencia-sql';
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolverFamilia } from '../productos-servicios/pasos/familias';
-import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
-import { etiquetaMotivoFin } from '../ordenes-trabajo/ordenes-trabajo.types';
 import { finExclusivo, type Rango } from './periodo';
 
 /**
@@ -63,7 +63,9 @@ export type VendedorEquipo = {
   nombre: string;
   ordenes: number;
   facturado: number;
+  facturadoConIva: number;
   ticketPromedio: number;
+  ticketPromedioConIva: number;
   margen: number | null;
   margenPct: number | null;
   itemsSinCosto: number;
@@ -338,6 +340,7 @@ export class EquipoService {
           nombre: string;
           ordenes: number;
           facturado: number;
+          facturadoConIva: number;
           ventasconcosto: number;
           costo: number;
           sincosto: number;
@@ -346,6 +349,7 @@ export class EquipoService {
         SELECT ot."vendedorEmpleadoId" AS id, COALESCE(e."nombreCompleto", 'Sin vendedor') AS nombre,
                COUNT(DISTINCT ot.id)::int AS ordenes,
                COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado,
+               COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "facturadoConIva",
                COALESCE(SUM(oti.subtotal) FILTER (WHERE ci.id IS NOT NULL), 0)::float8 AS ventasconcosto,
                COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo,
                COUNT(*) FILTER (WHERE ci.id IS NULL)::int AS sincosto
@@ -386,6 +390,8 @@ export class EquipoService {
         nombre: v.nombre,
         ordenes: v.ordenes,
         facturado: r2(v.facturado),
+        facturadoConIva: r2(v.facturadoConIva),
+        ticketPromedioConIva: v.ordenes > 0 ? r2(v.facturadoConIva / v.ordenes) : 0,
         ticketPromedio: v.ordenes > 0 ? r2(v.facturado / v.ordenes) : 0,
         margen: margen != null ? r2(margen) : null,
         margenPct: margen != null && v.ventasconcosto > 0 ? r2((margen / v.ventasconcosto) * 100) : null,

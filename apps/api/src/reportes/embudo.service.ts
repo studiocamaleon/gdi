@@ -32,16 +32,18 @@ export type EmbudoEtapa = {
   label: string;
   cantidad: number;
   monto: number;
+  montoConIva: number;
   sharePct: number;
   conversionPct: number | null;
 };
-export type EmbudoFuga = { motivo: string; cantidad: number; monto: number };
+export type EmbudoFuga = { motivo: string; cantidad: number; monto: number; montoConIva: number };
 export type EmbudoVelocidad = { tramo: string; diasPromedio: number | null };
 
 type CotizacionCohorte = {
   id: string;
   estado: string;
   subtotal: unknown;
+  impuestos: unknown;
   fechaEnvio: Date | null;
   fechaResuelto: Date | null;
   motivoPerdida: string | null;
@@ -51,6 +53,7 @@ type OrdenCohorte = {
   id: string;
   estado: string;
   subtotal: unknown;
+  impuestos: unknown;
   fechaEmision: Date | null;
   fechaFinalizada: Date | null;
 };
@@ -94,6 +97,7 @@ export class EmbudoService {
         id: true,
         estado: true,
         subtotal: true,
+        impuestos: true,
         fechaEnvio: true,
         fechaResuelto: true,
         motivoPerdida: true,
@@ -112,6 +116,7 @@ export class EmbudoService {
             id: true,
             estado: true,
             subtotal: true,
+            impuestos: true,
             fechaEmision: true,
             fechaFinalizada: true,
           },
@@ -125,7 +130,7 @@ export class EmbudoService {
     const pipeline = await this.prisma.cotizacion.aggregate({
       where: { tenantId, numero: { not: null }, versionVigente: true, estado: 'enviado' },
       _count: { _all: true },
-      _sum: { subtotal: true },
+      _sum: { subtotal: true, impuestos: true },
     });
 
     // 4) Comparativa (tasa de aprobación anterior) + OTs manuales sin
@@ -181,11 +186,20 @@ export class EmbudoService {
     const sumOt = (xs: CotizacionCohorte[]) =>
       r2(xs.reduce((a, c) => a + num(otDe(c)?.subtotal ?? c.subtotal), 0));
 
+    // Sólo los productos: total del documento también contiene cargos extra.
+    const sumCotConIva = (xs: CotizacionCohorte[]) =>
+      r2(xs.reduce((a, c) => a + num(c.subtotal) + num(c.impuestos), 0));
+    const sumOtConIva = (xs: CotizacionCohorte[]) =>
+      r2(xs.reduce((a, c) => {
+        const fuente = otDe(c) ?? c;
+        return a + num(fuente.subtotal) + num(fuente.impuestos);
+      }, 0));
+
     const crudas: Array<Omit<EmbudoEtapa, 'sharePct' | 'conversionPct'>> = [
-      { clave: 'emitidas', label: 'Cotizaciones emitidas', cantidad: emitidas.length, monto: sumCot(emitidas) },
-      { clave: 'aprobadas', label: 'Aprobadas', cantidad: aprobadas.length, monto: sumCot(aprobadas) },
-      { clave: 'produccion', label: 'En producción', cantidad: enProduccion.length, monto: sumOt(enProduccion) },
-      { clave: 'entregadas', label: 'Entregadas', cantidad: entregadas.length, monto: sumOt(entregadas) },
+      { clave: 'emitidas', label: 'Cotizaciones emitidas', cantidad: emitidas.length, monto: sumCot(emitidas), montoConIva: sumCotConIva(emitidas) },
+      { clave: 'aprobadas', label: 'Aprobadas', cantidad: aprobadas.length, monto: sumCot(aprobadas), montoConIva: sumCotConIva(aprobadas) },
+      { clave: 'produccion', label: 'En producción', cantidad: enProduccion.length, monto: sumOt(enProduccion), montoConIva: sumOtConIva(enProduccion) },
+      { clave: 'entregadas', label: 'Entregadas', cantidad: entregadas.length, monto: sumOt(entregadas), montoConIva: sumOtConIva(entregadas) },
     ];
     const base = crudas[0].cantidad;
     const funnel: EmbudoEtapa[] = crudas.map((e, i) => ({
@@ -200,7 +214,7 @@ export class EmbudoService {
     }));
 
     // ── Dónde se pierde: no aprobados, por motivo (reconcilia a emitidas−aprobadas) ──
-    const fugasMap = new Map<string, { cantidad: number; monto: number }>();
+    const fugasMap = new Map<string, { cantidad: number; monto: number; montoConIva: number }>();
     for (const c of cotizaciones) {
       if (ESTADOS_APROBADO.includes(c.estado)) continue;
       const motivo =
@@ -209,9 +223,10 @@ export class EmbudoService {
           : c.estado === 'enviado'
             ? 'en_gestion'
             : (c.motivoPerdida ?? 'otro');
-      const acc = fugasMap.get(motivo) ?? { cantidad: 0, monto: 0 };
+      const acc = fugasMap.get(motivo) ?? { cantidad: 0, monto: 0, montoConIva: 0 };
       acc.cantidad += 1;
       acc.monto += num(c.subtotal);
+      acc.montoConIva += num(c.subtotal) + num(c.impuestos);
       fugasMap.set(motivo, acc);
     }
     const fugas: EmbudoFuga[] = [...fugasMap.entries()]
@@ -219,6 +234,7 @@ export class EmbudoService {
         motivo: LABEL_FUGA[motivo] ?? motivo,
         cantidad: v.cantidad,
         monto: r2(v.monto),
+        montoConIva: r2(v.montoConIva),
       }))
       .sort((a, b) => b.cantidad - a.cantidad);
 
@@ -259,6 +275,7 @@ export class EmbudoService {
         tasaEntrega: base > 0 ? r2((entregadas.length / base) * 100) : 0,
         pipelineAbiertoCantidad: pipeline._count._all,
         pipelineAbiertoMonto: r2(num(pipeline._sum.subtotal)),
+        pipelineAbiertoMontoConIva: r2(num(pipeline._sum.subtotal) + num(pipeline._sum.impuestos)),
         cicloPromedioDias: promedio(tCicloTotal),
       },
       funnel,
