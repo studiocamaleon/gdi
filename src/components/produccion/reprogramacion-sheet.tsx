@@ -13,6 +13,7 @@ import {
 } from "@/lib/reprogramacion-api";
 import { ActionButton } from "@/components/design-system/action-button";
 import { FormSheet } from "@/components/design-system/form-sheet";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
 import { SelectField } from "@/components/design-system/select-field";
 import {
   Field,
@@ -52,7 +53,9 @@ export function ReprogramacionSheet({
   zona,
   inicio,
   entrega,
-  tipo,
+  tipo: tipoInicial = "entrega",
+  puedeReprogramar = true,
+  puedeCambiarEntrega = true,
   onClose,
   onSaved,
   acciones = API,
@@ -63,12 +66,18 @@ export function ReprogramacionSheet({
   zona: string;
   inicio: Date | null;
   entrega: string | null;
-  tipo: SolicitudReprogramacion["tipo"];
+  tipo?: SolicitudReprogramacion["tipo"];
+  puedeReprogramar?: boolean;
+  puedeCambiarEntrega?: boolean;
   onClose: () => void;
   onSaved: () => void;
   acciones?: typeof API;
 }) {
   const id = useId();
+  const [tipo, setTipo] = useState(tipoInicial);
+  const [ajuste, setAjuste] = useState<"automatico" | "manual" | "mantener">(
+    puedeReprogramar ? "automatico" : "mantener",
+  );
   const [ahora, setAhora] = useState(() => Date.now());
   const fechaInicial =
     inicio && inicio.getTime() > ahora
@@ -83,9 +92,12 @@ export function ReprogramacionSheet({
     const p = partesEnZona(fechaInicial, zona);
     return `${String(p.hh).padStart(2, "0")}:${String(p.mm).padStart(2, "0")}`;
   });
-  const [alcance, setAlcance] = useState<"paso" | "item">(
-    tipo === "entrega" ? "item" : "paso",
+  const [alcance, setAlcance] = useState<"paso" | "item">("paso");
+  const [diaProduccion, setDiaProduccion] = useState(() =>
+    claveFechaEnZona(fechaInicial, zona),
   );
+  const mueveProduccion = tipo === "produccion" || ajuste !== "mantener";
+  const inicioManual = tipo === "produccion" || ajuste === "manual";
   const [motivo, setMotivo] = useState("");
   const [revision, setRevision] = useState<RevisionReprogramacion | null>(null);
   const [ocupado, setOcupado] = useState<"simular" | "confirmar" | null>(null);
@@ -114,9 +126,19 @@ export function ReprogramacionSheet({
       setRevision(
         await acciones.simular(pasoId, {
           tipo,
-          alcance,
-          fecha: dia,
-          ...(tipo === "produccion" ? { hora } : {}),
+          alcance: tipo === "entrega" ? "item" : alcance,
+          fecha: tipo === "produccion" ? diaProduccion : dia,
+          ...(tipo === "produccion"
+            ? { hora }
+            : {
+                ajusteProduccion: ajuste,
+                ...(ajuste !== "mantener"
+                  ? { alcanceProduccion: alcance }
+                  : {}),
+                ...(ajuste === "manual"
+                  ? { fechaProduccion: diaProduccion, horaProduccion: hora }
+                  : {}),
+              }),
         }),
       );
     } catch (e) {
@@ -142,9 +164,11 @@ export function ReprogramacionSheet({
         motivo.trim() || undefined,
       );
       toast.success(
-        tipo === "produccion"
-          ? "Producción reprogramada"
-          : "Entrega actualizada",
+        tipo === "entrega" && ajuste !== "mantener"
+          ? "Fecha acordada y producción actualizadas"
+          : tipo === "produccion"
+            ? "Producción reprogramada"
+            : "Entrega actualizada",
       );
       onSaved();
     } catch (e) {
@@ -161,11 +185,7 @@ export function ReprogramacionSheet({
   }
   return (
     <FormSheet
-      title={
-        tipo === "produccion"
-          ? "Reprogramar producción"
-          : "Cambiar entrega comprometida"
-      }
+      title="Reprogramar trabajo"
       description={`${trabajo} · ${paso}`}
       onClose={onClose}
       busy={!!ocupado}
@@ -190,7 +210,11 @@ export function ReprogramacionSheet({
             <ActionButton
               type="submit"
               form={`${id}-form`}
-              isDisabled={!!ocupado || !dia || (tipo === "produccion" && !hora)}
+              isDisabled={
+                !!ocupado ||
+                (tipo === "entrega" && !dia) ||
+                (inicioManual && (!diaProduccion || !hora))
+              }
               isPending={ocupado === "simular"}
             >
               {vencida ? "Actualizar propuesta" : "Revisar impacto"}
@@ -212,40 +236,39 @@ export function ReprogramacionSheet({
           <p>
             {tipo === "produccion"
               ? "Elegí desde cuándo querés producir. Te mostraremos el horario posible y los pasos afectados antes de guardar."
-              : "Este cambio modifica la fecha acordada para el ítem o lote seleccionado."}
+              : "Cambiá la fecha acordada con el cliente y elegí cómo acompañarla en producción. Revisamos todo junto antes de guardar."}
             <span>Horario del taller · {zona.replaceAll("_", " ")}</span>
           </p>
         </div>
         <FieldGroup>
-          {tipo === "produccion" && (
+          {puedeReprogramar && puedeCambiarEntrega && (
             <Field>
-              <FieldLabel id={`${id}-alcance`}>
-                Qué querés reprogramar
-              </FieldLabel>
-              <SelectField
-                aria-label="Qué querés reprogramar"
-                value={alcance}
-                disabled={!!ocupado}
+              <FieldLabel id={`${id}-tipo`}>Qué necesitás cambiar</FieldLabel>
+              <SegmentedControl
+                aria-labelledby={`${id}-tipo`}
+                value={tipo}
+                isDisabled={!!ocupado}
                 options={[
-                  { value: "paso", label: "Sólo este paso y sus siguientes" },
-                  { value: "item", label: "Todo el ítem o lote pendiente" },
+                  {
+                    value: "entrega",
+                    label: "Fecha con el cliente",
+                    icon: null,
+                  },
+                  { value: "produccion", label: "Sólo producción", icon: null },
                 ]}
                 onChange={(valor) => {
-                  if (valor === "paso" || valor === "item") {
-                    setAlcance(valor);
+                  if (valor === "produccion" || valor === "entrega") {
+                    setTipo(valor);
                     editar();
                   }
                 }}
               />
-              <FieldDescription>
-                Los pasos ya iniciados conservan sus registros.
-              </FieldDescription>
             </Field>
           )}
-          <div className={s.fields}>
+          {tipo === "entrega" && (
             <Field>
               <FieldLabel htmlFor={`${id}-fecha`}>
-                {tipo === "produccion" ? "Fecha de inicio" : "Nueva entrega"}
+                Nueva fecha acordada
               </FieldLabel>
               <Input
                 id={`${id}-fecha`}
@@ -253,7 +276,7 @@ export function ReprogramacionSheet({
                 required
                 min={claveFechaEnZona(new Date(ahora), zona)}
                 max={
-                  tipo === "produccion"
+                  mueveProduccion
                     ? sumarDiasAClave(
                         claveFechaEnZona(new Date(ahora), zona),
                         119,
@@ -267,8 +290,107 @@ export function ReprogramacionSheet({
                   editar();
                 }}
               />
+              <FieldDescription>
+                Entrega o instalación acordada para este producto o lote.
+              </FieldDescription>
             </Field>
-            {tipo === "produccion" && (
+          )}
+          {tipo === "entrega" && puedeReprogramar && (
+            <Field>
+              <FieldLabel id={`${id}-ajuste`}>
+                Cómo acompañar la fecha en producción
+              </FieldLabel>
+              <SegmentedControl
+                aria-labelledby={`${id}-ajuste`}
+                value={ajuste}
+                isDisabled={!!ocupado}
+                options={[
+                  { value: "automatico", label: "Automático", icon: null },
+                  { value: "manual", label: "Elegir inicio", icon: null },
+                  { value: "mantener", label: "Conservar", icon: null },
+                ]}
+                onChange={(valor) => {
+                  if (
+                    valor === "automatico" ||
+                    valor === "manual" ||
+                    valor === "mantener"
+                  ) {
+                    setAjuste(valor);
+                    editar();
+                  }
+                }}
+              />
+              <FieldDescription>
+                {ajuste === "automatico"
+                  ? "Te proponemos un horario según el calendario, los recursos y los pasos pendientes."
+                  : ajuste === "manual"
+                    ? "Elegí el inicio; comprobaremos si el trabajo llega a la fecha acordada."
+                    : "Se cambia el compromiso y se conservan los horarios de producción guardados."}
+              </FieldDescription>
+            </Field>
+          )}
+          {tipo === "entrega" && !puedeReprogramar && (
+            <FieldDescription>
+              Se conserva la producción. Para ajustarla también necesitás
+              permiso de supervisión.
+            </FieldDescription>
+          )}
+          {mueveProduccion && (
+            <Field>
+              <FieldLabel id={`${id}-alcance`}>
+                Trabajo a reprogramar
+              </FieldLabel>
+              <SelectField
+                aria-label="Trabajo a reprogramar"
+                value={alcance}
+                disabled={!!ocupado}
+                options={[
+                  { value: "paso", label: `Este paso: ${paso}` },
+                  { value: "item", label: "Todo el ítem o lote pendiente" },
+                ]}
+                onChange={(valor) => {
+                  if (valor === "paso" || valor === "item") {
+                    setAlcance(valor);
+                    editar();
+                  }
+                }}
+              />
+              <FieldDescription>
+                {tipo === "entrega" && ajuste === "automatico"
+                  ? alcance === "paso"
+                    ? `${paso} se programa dentro del día acordado. Los pasos previos se conservan. Si no hay lugar, te avisamos.`
+                    : "El trabajo pendiente se acomoda cerca de la entrega, respetando su secuencia. Lo ya iniciado se conserva."
+                  : "Se mueven los pasos pendientes elegidos y sus siguientes; lo ya iniciado se conserva."}
+              </FieldDescription>
+            </Field>
+          )}
+          {inicioManual && (
+            <div className={s.fields}>
+              <Field>
+                <FieldLabel htmlFor={`${id}-inicio`}>
+                  Fecha de inicio
+                </FieldLabel>
+                <Input
+                  id={`${id}-inicio`}
+                  type="date"
+                  required
+                  min={claveFechaEnZona(new Date(ahora), zona)}
+                  max={
+                    tipo === "entrega"
+                      ? dia
+                      : sumarDiasAClave(
+                          claveFechaEnZona(new Date(ahora), zona),
+                          119,
+                        )
+                  }
+                  value={diaProduccion}
+                  disabled={!!ocupado}
+                  onChange={(e) => {
+                    setDiaProduccion(e.target.value);
+                    editar();
+                  }}
+                />
+              </Field>
               <Field>
                 <FieldLabel htmlFor={`${id}-hora`}>Hora de inicio</FieldLabel>
                 <Input
@@ -283,8 +405,8 @@ export function ReprogramacionSheet({
                   }}
                 />
               </Field>
-            )}
-          </div>
+            </div>
+          )}
           <Field>
             <FieldLabel htmlFor={`${id}-motivo`}>
               Motivo del cambio <span>(opcional)</span>

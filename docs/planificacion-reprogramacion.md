@@ -1,14 +1,27 @@
 # Cambiar fechas desde Planificación
 
 La vista permite seleccionar una operación, abrir **Ver detalle** y, en
-**Fechas de producción y entrega**, elegir:
+**Fechas de producción y entrega**, pulsar **Reprogramar**. El formulario abre
+**Fecha con el cliente** y permite acompañar esa fecha en producción:
 
-- **Reprogramar producción**: cambiar fecha y hora de inicio del paso y sus
-  sucesores, o de todo el ítem/lote que todavía está pendiente. La hora corresponde
-  a la zona del taller. Es el inicio más temprano solicitado; el calendario, los
-  recursos disponibles y las dependencias determinan el horario posible.
-- **Cambiar entrega**: modificar explícitamente el compromiso del producto o del
-  lote elegido. La vista previa muestra también la entrega final de la OT.
+- **Automático**: propone horarios según el calendario y la capacidad. Para
+  **Este paso**, exige que la operación se realice dentro del día acordado.
+  Para **Todo el ítem o lote pendiente**, busca un inicio cercano que permita
+  terminar a tiempo. Conserva el trabajo ya iniciado.
+- **Elegir inicio**: permite indicar fecha y hora de inicio de producción y
+  comprueba que el trabajo llegue al compromiso. Es el inicio más temprano
+  solicitado; el horario posible aparece en la propuesta.
+- **Conservar**: cambia el compromiso y conserva las ventanas de producción.
+
+Por ejemplo, para una instalación pospuesta diez días, seleccionar su paso,
+abrir **Reprogramar**, elegir la nueva fecha y mantener **Automático → Este
+paso**. La vista previa muestra juntos el cambio de instalación y el compromiso.
+Si ese día no tiene capacidad u horario, no traslada la visita silenciosamente
+al día siguiente: informa que la propuesta no se puede confirmar.
+
+**Sólo producción** permite ajustar el inicio del paso y sus sucesores, o de
+todo el ítem/lote pendiente, conservando la fecha con el cliente. Los horarios
+siempre corresponden a la zona del taller.
 
 **Revisar impacto** no escribe. Muestra horarios anteriores y propuestos,
 operaciones afectadas, restricciones y entregas que requieren revisión. Cambiar
@@ -17,8 +30,13 @@ propuesta y actualiza el calendario. El motivo es opcional y queda en el histori
 
 ## Reglas
 
-- Reprogramar producción conserva las promesas comerciales, duraciones cotizadas,
-  requisitos operativos, estados y registros de ejecución.
+- Reprogramar conserva duraciones cotizadas, requisitos operativos, estados y
+  registros de ejecución. **Sólo producción** conserva las promesas comerciales;
+  el ajuste combinado guarda producción y compromiso en una misma transacción.
+- El ajuste automático de un ítem busca una propuesta factible por días, con
+  un máximo de ocho simulaciones candidatas, reutilizando el motor de capacidad.
+  No es un optimizador global del taller. El ajuste de un paso conserva las
+  ventanas previas y mueve los sucesores pendientes cuando corresponde.
 - El ítem completo incluye sus componentes. Si el paso pertenece a un lote de
   entrega, se cambia ese lote, no sus hermanos. Los sucesores se recalculan con
   las precedencias del motor, incluidas las rutas antiguas por índice.
@@ -46,8 +64,10 @@ propuesta y actualiza el calendario. El motivo es opcional y queda en el histori
 Las rutas `POST /ordenes-trabajo/tablero/pasos/:pasoId/reprogramacion/simular` y
 `/confirmar` requieren acceso a Planificación y la capacidad
 `planificacion_avanzada`. Producción requiere `produccion.supervisar`; cambiar una
-entrega requiere `comercial.ordenes.gestionar`. Se comprueba también el permiso al
-confirmar, aunque el formulario se hubiera abierto antes.
+entrega requiere `comercial.ordenes.gestionar`; el ajuste combinado exige ambos.
+Se comprueba también el permiso al confirmar, aunque el formulario se hubiera
+abierto antes. Si el usuario sólo puede gestionar órdenes, puede cambiar la fecha
+conservando producción, pero no ajustar sus horarios.
 
 La revisión vence en dos minutos. Está firmada y vinculada al usuario, empresa,
 paso, solicitud, contexto e impacto. La confirmación vuelve a consultar y simular
@@ -57,8 +77,26 @@ publica un segundo cambio.
 
 Se guardan ventanas y atención planificada en los campos existentes, referencia
 con historial, evento de la OT con diferencias e invalidación interna del tablero.
-No hay migraciones, servicios nuevos ni envíos a clientes. La entrega y la
-producción se editan por separado.
+No hay migraciones, servicios nuevos ni envíos a clientes. El contrato acepta las
+solicitudes anteriores y agrega `ajusteProduccion`, `alcanceProduccion`,
+`fechaProduccion` y `horaProduccion`. La fecha y hora manuales sólo corresponden
+al ajuste manual; se rechazan las combinaciones incompatibles.
+
+## Refinamiento local — fecha acordada y producción
+
+- API: 59 pruebas en siete suites. Frontend: 45 pruebas en cuatro suites.
+  Tipos de los nueve archivos de código modificados, ESLint, `css:guard` y
+  comprobación de espacios del diff sin errores.
+- Pruebas nuevas: instalación diez días después con un paso previo terminado,
+  ítem completo con trabajo que necesita empezar el día hábil anterior, fecha
+  sin horario disponible, ajuste manual, permisos combinados, lotes hermanos y
+  rechazo por inicio concurrente sin guardar parcialmente el compromiso.
+- Chrome local a 1920 px y 390 × 844: selección automática, manual y conservación,
+  invalidación de la propuesta al editar, vista previa y confirmación de una
+  instalación ficticia en memoria. Acciones disponibles en móvil y consola sin
+  errores ni advertencias.
+- Este refinamiento todavía no está desplegado. El registro de staging siguiente
+  corresponde a la versión inicial con las dos acciones separadas.
 
 ## Validación local del 09/10/2026
 

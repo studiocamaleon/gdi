@@ -63,6 +63,34 @@ vi.mock("@/components/design-system/select-field", () => ({
     </select>
   ),
 }));
+vi.mock("@/components/design-system/choice-controls", () => ({
+  SegmentedControl: ({
+    options,
+    value,
+    onChange,
+    isDisabled,
+    ...props
+  }: {
+    options: Array<{ value: string; label: string }>;
+    value: string;
+    onChange: (v: string) => void;
+    isDisabled: boolean;
+  }) => (
+    <div {...props}>
+      {options.map((o) => (
+        <button
+          type="button"
+          key={o.value}
+          aria-pressed={o.value === value}
+          disabled={isDisabled}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  ),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 let root: Root, contenedor: HTMLDivElement;
 const acciones = { simular: vi.fn(), confirmar: vi.fn() };
@@ -111,7 +139,10 @@ const boton = (texto: string) =>
   [...contenedor.querySelectorAll("button")].find(
     (b) => b.textContent === texto,
   )!;
-const montar = async (tipo: "produccion" | "entrega" = "produccion") =>
+const montar = async (
+  tipo: "produccion" | "entrega" = "produccion",
+  permisos = { puedeReprogramar: true, puedeCambiarEntrega: true },
+) =>
   act(async () =>
     root.render(
       <ReprogramacionSheet
@@ -122,6 +153,7 @@ const montar = async (tipo: "produccion" | "entrega" = "produccion") =>
         inicio={new Date("2099-01-10T13:00:00Z")}
         entrega="2099-01-15"
         tipo={tipo}
+        {...permisos}
         onClose={vi.fn()}
         onSaved={onSaved}
         acciones={acciones}
@@ -168,7 +200,7 @@ it("descarta la revisión anterior al cambiar el alcance", async () => {
   );
 });
 
-it("la entrega se revisa sin hora y un conflicto exige otra revisión", async () => {
+it("la fecha acordada propone producción automática y un conflicto exige otra revisión", async () => {
   await montar("entrega");
   expect(contenedor.querySelector("input[type=time]")).toBeNull();
   await act(async () => boton("Revisar impacto").click());
@@ -176,6 +208,8 @@ it("la entrega se revisa sin hora y un conflicto exige otra revisión", async ()
     tipo: "entrega",
     alcance: "item",
     fecha: "2099-01-15",
+    ajusteProduccion: "automatico",
+    alcanceProduccion: "paso",
   });
   acciones.confirmar.mockRejectedValueOnce(new Error("conflicto QA"));
   await act(async () => boton("Confirmar cambio").click());
@@ -204,4 +238,60 @@ it("una revisión vencida o inviable no ofrece confirmar", async () => {
   await act(async () => boton("Actualizar propuesta").click());
   expect(contenedor.textContent).toContain("No hay horario disponible");
   expect(boton("Confirmar cambio")).toBeUndefined();
+});
+
+it("permite acompañar la fecha con inicio manual o conservar producción, descartando cada propuesta anterior", async () => {
+  await montar("entrega");
+  await act(async () => boton("Revisar impacto").click());
+  await act(async () => boton("Elegir inicio").click());
+  expect(boton("Confirmar cambio")).toBeUndefined();
+  expect(contenedor.querySelector("input[type=time]")).not.toBeNull();
+  await act(async () => boton("Revisar impacto").click());
+  expect(acciones.simular).toHaveBeenLastCalledWith("paso-qa", {
+    tipo: "entrega",
+    alcance: "item",
+    fecha: "2099-01-15",
+    ajusteProduccion: "manual",
+    alcanceProduccion: "paso",
+    fechaProduccion: "2099-01-10",
+    horaProduccion: "10:00",
+  });
+  await act(async () => boton("Conservar").click());
+  expect(boton("Confirmar cambio")).toBeUndefined();
+  expect(contenedor.querySelector("input[type=time]")).toBeNull();
+  await act(async () => boton("Revisar impacto").click());
+  expect(acciones.simular).toHaveBeenLastCalledWith("paso-qa", {
+    tipo: "entrega",
+    alcance: "item",
+    fecha: "2099-01-15",
+    ajusteProduccion: "mantener",
+  });
+});
+
+it("cambiar sólo producción conserva un contrato independiente sin arrastrar la fecha acordada", async () => {
+  await montar("entrega");
+  await act(async () => boton("Sólo producción").click());
+  await act(async () => boton("Revisar impacto").click());
+  expect(acciones.simular).toHaveBeenLastCalledWith("paso-qa", {
+    tipo: "produccion",
+    alcance: "paso",
+    fecha: "2099-01-10",
+    hora: "10:00",
+  });
+});
+
+it("un usuario comercial puede cambiar el compromiso conservando producción", async () => {
+  await montar("entrega", {
+    puedeReprogramar: false,
+    puedeCambiarEntrega: true,
+  });
+  expect(boton("Automático")).toBeUndefined();
+  expect(boton("Sólo producción")).toBeUndefined();
+  await act(async () => boton("Revisar impacto").click());
+  expect(acciones.simular).toHaveBeenLastCalledWith("paso-qa", {
+    tipo: "entrega",
+    alcance: "item",
+    fecha: "2099-01-15",
+    ajusteProduccion: "mantener",
+  });
 });

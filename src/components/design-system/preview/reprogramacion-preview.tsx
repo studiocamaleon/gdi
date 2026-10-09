@@ -15,7 +15,11 @@ const simular = async (
   _id: string,
   s: SolicitudReprogramacion,
 ): Promise<RevisionReprogramacion> => {
-  const inicio = instanteDe(s.fecha, s.hora ?? "09:00", zona);
+  const inicio = instanteDe(
+    s.fechaProduccion ?? s.fecha,
+    s.horaProduccion ?? s.hora ?? "09:00",
+    zona,
+  );
   const fin = new Date(inicio.getTime() + 90 * 60_000);
   return {
     token: "muestra-local",
@@ -24,24 +28,26 @@ const simular = async (
     viable: true,
     motivos: [],
     alcance:
-      s.alcance === "paso" ? "Impresión digital" : "Folletos institucionales",
+      s.alcance === "paso" ? "Instalación de vinilos" : "Vinilos de muestra",
     solicitado: s.tipo === "produccion" ? inicio.toISOString() : s.fecha,
     advertencias: [
       s.tipo === "produccion"
         ? "La entrega comprometida se conserva. El inicio solicitado es un límite: el calendario y las dependencias pueden ubicar el trabajo más tarde."
-        : "Se cambia el compromiso del ítem o lote. La entrega final de la OT refleja el último compromiso cuando todos sus productos tienen fecha.",
+        : s.ajusteProduccion === "mantener"
+          ? "Se conserva la producción y se cambia la fecha acordada."
+          : "Se guardan juntos la fecha acordada y la planificación. Los pasos previos realizados se conservan.",
     ],
     pasos: [
       {
         id: "paso-qa",
         orden: "OT-QA-001",
-        trabajo: "Folletos institucionales",
-        paso: "Impresión digital",
+        trabajo: "Vinilos de muestra",
+        paso: "Instalación de vinilos",
         inicioActual: new Date(inicio.getTime() - 86400000).toISOString(),
         finActual: new Date(fin.getTime() - 86400000).toISOString(),
         inicioPropuesto: inicio.toISOString(),
         finPropuesto: fin.toISOString(),
-        seGuarda: s.tipo === "produccion",
+        seGuarda: s.tipo === "produccion" || s.ajusteProduccion !== "mantener",
       },
     ],
     entregaOrden: { actual: s.fecha, propuesta: s.fecha },
@@ -49,7 +55,7 @@ const simular = async (
       {
         id: "item-qa",
         orden: "OT-QA-001",
-        trabajo: "Folletos institucionales",
+        trabajo: "Vinilos de muestra",
         actual: s.fecha,
         propuesta: s.fecha,
         finPropuesto: fin.toISOString(),
@@ -60,11 +66,9 @@ const simular = async (
 };
 /** Laboratorio con datos ficticios: no llama a la API ni modifica órdenes. */
 export function ReprogramacionPreview() {
-  const [tipo, setTipo] = useState<"produccion" | "entrega" | null>(
-    "produccion",
-  );
+  const [tipo, setTipo] = useState<"produccion" | "entrega" | null>("entrega");
   const [guardado, setGuardado] = useState(false);
-  const dia = sumarDiasAClave(claveFechaEnZona(new Date(), zona), 3);
+  const dia = sumarDiasAClave(claveFechaEnZona(new Date(), zona), 10);
   return (
     <DesignSystemProvider theme="brand" appearance="light">
       <main
@@ -74,19 +78,16 @@ export function ReprogramacionPreview() {
       >
         <h1>Planificación · Reprogramación</h1>
         <p>Muestra local con una orden ficticia.</p>
-        <ActionButton onPress={() => setTipo("produccion")}>
-          Reprogramar producción
-        </ActionButton>
-        <ActionButton variant="outline" onPress={() => setTipo("entrega")}>
-          Cambiar entrega
+        <ActionButton onPress={() => setTipo("entrega")}>
+          Reprogramar
         </ActionButton>
         {guardado && <p role="status">Cambio confirmado en la muestra.</p>}
         {tipo && (
           <ReprogramacionSheet
             key={tipo}
             pasoId="paso-qa"
-            paso="Impresión digital"
-            trabajo="OT-QA-001 · Folletos institucionales"
+            paso="Instalación de vinilos"
+            trabajo="OT-QA-001 · Vinilos de muestra"
             zona={zona}
             inicio={instanteDe(dia, "10:00", zona)}
             entrega={dia}
