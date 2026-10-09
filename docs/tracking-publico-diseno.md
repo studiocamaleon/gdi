@@ -1,5 +1,14 @@
 # Seguimiento público de OT (cliente) — diseño
 
+## Nombres de trabajos manuales — 2026-10-09
+
+Los pasos de la familia `trabajo_manual`, incluidos los pasos propios que
+heredan esa plantilla, muestran el nombre guardado del paso de la orden
+(por ejemplo, «Encolado de talonarios»). Se aplica tanto a la línea de tiempo
+como al paso actual del encabezado del producto. Si el nombre está vacío,
+se conserva «Trabajo manual». Las demás familias mantienen sus textos
+amigables. La API ya entrega ese nombre: no se cambian datos ni contratos.
+
 ## Ajuste de presentación — 2026-09-14
 
 La vista pública muestra el seguimiento de producción mediante los pasos de

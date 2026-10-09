@@ -14,7 +14,7 @@ export type TrackingPasoEstado =
 
 export type TrackingPaso = {
   indice: number;
-  /** Nombre técnico del paso (línea "tec" del diseño). */
+  /** Nombre guardado del paso; título público para tareas manuales. */
   nombre: string;
   familiaCodigo: string;
   /** Si es un paso propio del tenant, de qué plantilla hereda su copy. */
@@ -201,17 +201,19 @@ const COPY_DEFAULT: CopyPaso = {
   desc: "Avanzamos en la producción de tu pedido.",
 };
 
-export function copyDePaso(
-  familiaCodigo: string,
-  plantillaCodigo?: string | null,
-): CopyPaso {
-  // Un paso propio del tenant tiene por código un UUID: el copy público cae
-  // al de la plantilla de la que hereda antes que al genérico.
-  return (
-    COPY_FAMILIA[familiaCodigo] ??
-    (plantillaCodigo ? COPY_FAMILIA[plantillaCodigo] : undefined) ??
-    COPY_DEFAULT
-  );
+export function copyDePaso({
+  familiaCodigo,
+  plantillaCodigo,
+  nombre,
+}: Pick<TrackingPaso, "familiaCodigo" | "plantillaCodigo" | "nombre">): CopyPaso {
+  // Los pasos propios heredan el texto de su plantilla. En trabajo manual,
+  // el nombre identifica la operación concreta (por ejemplo, "Encolado").
+  const codigo = COPY_FAMILIA[familiaCodigo] ? familiaCodigo : plantillaCodigo;
+  const copy = (codigo ? COPY_FAMILIA[codigo] : undefined) ?? COPY_DEFAULT;
+  const nombreReal = nombre.trim();
+  return codigo === "trabajo_manual" && nombreReal
+    ? { ...copy, simple: nombreReal }
+    : copy;
 }
 
 // ── Derivados de presentación ────────────────────────────────────────────
