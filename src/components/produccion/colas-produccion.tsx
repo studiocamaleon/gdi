@@ -276,8 +276,8 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
     <header className={cn(layout.header, s.header)}>
       <div className={s.title}><span className={s.eyebrow}><Factory size={12} aria-hidden />Producción · Máquinas</span><h1>Colas de trabajo<span className={s.titleDot}>.</span></h1></div>
       <div className={s.actions}>
-        <ActionLink variant="outline" href="/produccion/planificacion">Planificación<ArrowUpRight size={15} aria-hidden /></ActionLink>
-        <ActionButton variant="outline" onPress={() => void refrescar()} isDisabled={refrescando}>{refrescando ? <GdiSpinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}Actualizar</ActionButton>
+        <ActionLink variant="outline" className={s.planningLink} href="/produccion/planificacion">Planificación<ArrowUpRight size={15} aria-hidden /></ActionLink>
+        <ActionButton variant="outline" aria-label="Actualizar colas" className={s.refreshButton} onPress={() => void refrescar()} isDisabled={refrescando}>{refrescando ? <GdiSpinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}<span>Actualizar</span></ActionButton>
       </div>
     </header>
     {error && <Alert className={legacyTheme ?? workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo actualizar la vista</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
@@ -304,14 +304,19 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
         {resumen.sinMaquina > 0 && <div className={s.unassigned}><span>{resumen.sinMaquina} operaciones sin máquina</span><ActionLink variant="ghost" href="/produccion/tablero">Ver en Operación diaria<ArrowUpRight size={15} aria-hidden /></ActionLink></div>}
       </aside>
       <section className={s.queue} aria-label="Trabajo de la máquina">
-        <div className={s.mobileMachine}><SelectField aria-label="Seleccionar máquina" value={maquinaId} onChange={id => { if (id) seleccionar(id); }} options={resumen.maquinas.length ? resumen.maquinas.map(m => ({ value: m.id, label: m.nombre })) : [{ value: '', label: 'Sin máquinas con trabajo' }]} /></div>
+        <div className={s.mobileMachine}>
+          <div className={s.machinePicker}>
+            <SelectField aria-label="Seleccionar máquina" value={maquinaId} onChange={id => { if (id) seleccionar(id); }} options={resumen.maquinas.length ? resumen.maquinas.map(m => ({ value: m.id, label: `${m.nombre} · ${m.pendientes}` })) : [{ value: '', label: 'Sin máquinas con trabajo' }]} />
+          </div>
+          {resumen.sinMaquina > 0 && <ActionLink variant="ghost" className={s.mobileUnassigned} href="/produccion/tablero">{resumen.sinMaquina} sin máquina<ArrowUpRight size={15} aria-hidden /></ActionLink>}
+        </div>
         <div className={s.queueHeader}>
           <div><span className={s.queueEyebrow}>Cola de producción</span><h2 className={s.sectionTitle}>{maquina?.nombre ?? 'Trabajo por máquina'}</h2><p>{maquina?.estacion?.nombre ?? 'Seleccioná una máquina para ver su cola.'}</p></div>
           {maquina && <div className={s.queueTotal}><strong>{totalMaquina}</strong><span>{totalMaquina === 1 ? 'operación' : 'operaciones'}</span></div>}
         </div>
         <Tabs selectedKey={filtro.estado} onSelectionChange={v => filtrar({ estado: v as EstadoCola, page: 1 })} className={s.tabs}>
           <div className={s.toolbar}>
-            <NavigationTabList className={s.statusTabs} variant="detailed" tone="graphite" label="Estado de los trabajos" items={ESTADOS.map(e => {
+            <NavigationTabList className={s.statusTabs} variant="compact" tone="graphite" label="Estado de los trabajos" items={ESTADOS.map(e => {
               const Icono = e.id === 'todos' ? Layers : ICONO_ESTADO[e.id];
               return { id: e.id, label: e.label, icon: <Icono aria-hidden />, count: datos?.totales[e.id] };
             })} />
