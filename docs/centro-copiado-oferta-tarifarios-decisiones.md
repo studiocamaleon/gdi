@@ -37,6 +37,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D19 | Los mínimos se configuran por tarifario: «Sin mínimo» como opción inicial y «Mínimo de importe por pedido» como alternativa. Se aplica una sola vez sobre impresión más preparación de Centro de copiado; las terminaciones se agregan aparte. Sólo se cobra la diferencia necesaria para alcanzar el mínimo, sin alterar cantidades reales ni tramos. Completa P06 junto con D16 a D18. | 2026-10-10 |
 | D20 | El tarifario del canal es la base; el acuerdo del cliente tiene prioridad dentro de su alcance. Los descuentos adicionales son explícitos y sujetos a permisos, sin acumulación automática. El precio manual es una excepción autorizada, con motivo y registro del importe anterior, que reemplaza el importe elegido sin volver a aplicarle el descuento previo. Se respeta el mínimo de D19 después de descuentos o precios manuales. Resuelve P07. | 2026-10-10 |
 | D21 | Ante una combinación ofrecida sin precio aplicable, la opción inicial es «Precio pendiente», con bloqueo del cierre. Cada tarifario puede configurar explícitamente un respaldo a otro tarifario compatible o al motor. Si el respaldo tampoco resuelve el precio, permanece pendiente. Se conserva el borrador y se identifica el origen del precio resuelto; el respaldo mantiene las reglas de preparación y mínimos del tarifario activo. Resuelve P08. | 2026-10-10 |
+| D22 | Centro de copiado tiene una política general, motor o tarifario predeterminado, que los canales heredan por defecto. Cada canal puede elegir un tarifario activo específico o usar el motor. Todo el pedido usa un canal y una política principal; cambiar el canal de un borrador recalcula Centro de copiado y muestra el impacto antes de confirmar. Los documentos emitidos conservan sus precios. Resuelve P09. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -273,10 +274,10 @@ separar ambos conceptos: hoy el indicador de cobro también permite omitir los
 tiempos de preparación y limpieza del costo del motor.
 
 Cobrar por archivo o por configuración de impresión no forma parte de las
-modalidades acordadas. Si P09 habilita varios tarifarios dentro de un pedido,
-deberá definir cuál determina el único cargo de preparación, sin multiplicarlo
-automáticamente por cada tarifario. La preparación integra el importe que se
-compara con el mínimo según D19.
+modalidades acordadas. D22 establece una única política principal por pedido:
+cuando usa un tarifario, éste determina el cargo único de preparación. Un
+tarifario de respaldo no agrega otro cargo. La preparación integra el importe
+que se compara con el mínimo según D19.
 
 ### Mínimo de importe por pedido
 
@@ -313,9 +314,9 @@ conservan en producción y en el cálculo del tramo.
 
 La comparación debe usar importes en la misma moneda y sobre la misma base de
 IVA, respetando D17 y la configuración fiscal del sistema. El mínimo se respeta
-después de descuentos y precios manuales según D20. Si P09
-habilita varios tarifarios dentro del pedido, deberá resolver cuál determina
-el mínimo único.
+después de descuentos y precios manuales según D20. El tarifario principal
+del pedido determina el mínimo único según D22; consultar un respaldo no
+incorpora el mínimo de esa otra fuente.
 
 El mínimo de hojas facturables por documento existente no es una modalidad del
 nuevo esquema acordado. Su migración y la habilitación de los tarifarios se
@@ -415,6 +416,54 @@ del cálculo; no se confunde un precio por carilla con uno por hoja, ni un impor
 neto con uno final. Las validaciones de compatibilidad se precisarán en el diseño
 técnico.
 
+### Elección de la política por canal
+
+**Confirmado en D22:** el tenant define una política general para Centro de
+copiado: usar el motor o un tarifario predeterminado. Cada canal tiene estas
+opciones:
+
+| Configuración del canal | Resultado |
+| --- | --- |
+| Usar la política general, opción inicial | Heredar la política configurada para Centro de copiado. |
+| Usar un tarifario específico | Aplicar el tarifario activo elegido para ese canal. |
+| Usar el motor | Cotizar con el motor, aunque la política general use una matriz. |
+
+Varios canales pueden compartir el mismo tarifario sin duplicarlo. Ejemplo
+ficticio con Tarifario General como política general:
+
+| Canal | Configuración | Política efectiva |
+| --- | --- | --- |
+| Presencial | Usar la política general | Tarifario General |
+| WhatsApp | Usar la política general | Tarifario General |
+| Web | Usar un tarifario específico | Tarifario Online |
+| Correo electrónico | Usar el motor | Motor |
+
+El sistema resuelve automáticamente la política a partir del canal del pedido.
+Todo Centro de copiado del pedido usa un único canal y una única política
+principal, también para los archivos que se agreguen después. Si una celda usa
+un respaldo según D21, éste aporta el precio faltante; la preparación y el
+mínimo siguen perteneciendo al tarifario principal.
+
+Si el pedido ya tiene canal, el módulo lo toma. Si falta, se puede preparar la
+carga, pero hay que elegirlo antes de obtener una cotización válida. En el futuro
+portal, el servidor asigna el canal correspondiente al origen del pedido. El
+dispositivo no lo determina: comprar desde un celular en el portal sigue siendo
+una compra Web.
+
+Cambiar el canal de un borrador recalcula todo Centro de copiado y muestra el
+importe anterior y el nuevo antes de confirmar el cambio. Se vuelven a evaluar
+los acuerdos del cliente y se señalan descuentos y precios manuales para revisar
+su vigencia en el nuevo canal. Si el recálculo deja un precio pendiente, se aplica
+D21 y no se presenta un total parcial como una cotización completa.
+
+Ejemplo ficticio, con preparación incluida y sin mínimo: 100 hojas cuestan
+$10.000 en Presencial y $8.000 en Web. Al cambiar el canal del borrador, el
+sistema muestra ese efecto sobre el conjunto de Centro de copiado del pedido.
+
+Los documentos emitidos conservan sus precios. La vigencia de versiones y el
+tratamiento de cambios posteriores en los tarifarios se completarán en P11.
+La habilitación de estas políticas para tenants actuales conserva P15.
+
 ## Base actual del módulo
 
 La implementación revisada permite configurar por tenant papeles y gramajes,
@@ -499,26 +548,11 @@ conserva el pendiente P10.
 
 ### Asignación por canal
 
-Separar la identidad del tarifario de su asignación a canales permite compartir
-una misma matriz. Ejemplo ficticio:
-
-| Canal | Política propuesta |
-| --- | --- |
-| Presencial | Tarifario general |
-| WhatsApp | Tarifario general |
-| Web | Tarifario online |
-| Aplicación móvil | Tarifario online |
-| Correo electrónico | Precio calculado por el motor |
-
-Se propone que un canal pueda heredar la política general, elegir un tarifario
-o usar el motor. Las opciones exactas y el comportamiento cuando todavía no se
-eligió canal siguen pendientes en P09. Los precios faltantes y el respaldo
-explícito se resuelven según D21.
-
-Para el portal, el servidor debería determinar el canal según el origen del
-pedido y usar el mismo cálculo que la operación interna. El dispositivo desde
-el que compra la persona no determina por sí solo el canal: un portal abierto
-en un celular puede seguir siendo una compra Web.
+La política general heredada, las excepciones por canal y la política principal
+única por pedido están confirmadas en D22. Separar el tarifario de su asignación
+permite compartir una matriz entre canales. La interfaz para configurar esa
+relación se diseñará junto con Oferta y Tarifarios; los precios faltantes y su
+respaldo explícito siguen D21.
 
 ### Configuración y explicación del precio
 
@@ -533,12 +567,11 @@ Los costos y márgenes conservarían sus permisos de acceso.
 ## Decisiones pendientes
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
-en D15, P06 en D16 a D19, P07 en D20 y P08 en D21. Las preguntas restantes
-deben resolverse antes de activar el recorrido completo.
+en D15, P06 en D16 a D19, P07 en D20, P08 en D21 y P09 en D22. Las preguntas
+restantes deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P09 | ¿Cómo se elige la política por canal y qué pasa si se cambia el canal de una propuesta? | Definir la política general, la recotización de borradores y el tratamiento de documentos emitidos. Si se habilitan varios tarifarios dentro del pedido, resolver cuál determina el único cargo de preparación de D18 y el mínimo de D19. |
 | P10 | ¿Cómo se crean y actualizan los precios? | Elegir el alcance inicial entre carga manual, copia, sugerencias del motor, ajustes por porcentaje, redondeo e importación. |
 | P11 | ¿Cuándo entra en vigencia una versión y qué pasa con cotizaciones en curso? | Proponer borrador y versión activa, conservar la aplicada en documentos emitidos y detectar cambios entre vista previa y guardado. |
 | P12 | ¿Qué ocurre si el precio deja un margen insuficiente o negativo? | Evaluar aviso, bloqueo o autorización según permisos. |
@@ -580,7 +613,10 @@ del archivo original.
 | Límite de tramo | Tarifa ficticia de $100 por hoja de 1 a 99, y $80 desde 100. | D13 determina $9.900 para 99 hojas, $8.000 para 100 y $8.080 para 101. El aviso del simulador sigue como propuesta; no se acordó corregir automáticamente el descenso. |
 | Aplicación a todo el grupo | Dos archivos de 60 hojas de la misma combinación, tarifa ficticia de $80 desde 100. | Por combinación, las 120 hojas se cobran a $80: $4.800 por archivo y $9.600 en total. |
 | Rangos propios | Tarifario con rangos generales 1–49, 50–199 y 200+, y una combinación con rangos propios 1–19, 20–99 y 100+. | Cada combinación busca su tramo en los rangos que le corresponden. La excepción conserva sus límites cuando cambian los generales. Compartir límites no comparte precios ni volumen. |
-| Cambio de canal | La misma carga en Presencial y Web. | Aplicar la política de cada canal y definir qué sucede al cambiarlo antes de guardar. |
+| Canal heredado o específico | Política general con Tarifario General; Presencial y WhatsApp heredan, Web elige Tarifario Online y Correo electrónico el motor. | Se resuelve una política principal por pedido según su canal. Los canales heredados comparten el tarifario sin duplicarlo. |
+| Canal pendiente | Carga de archivos en un pedido sin canal. | Se permite preparar la carga, pero se requiere elegir canal para obtener una cotización válida. El portal asigna su canal desde el servidor. |
+| Cambio de canal | Borrador con 100 hojas, preparación incluida y sin mínimo: $10.000 en Presencial y $8.000 en Web. | Se recalcula todo Centro de copiado y se muestra el cambio de importe antes de confirmarlo. Se reevalúan acuerdos del cliente y se señalan descuentos y precios manuales para revisar su vigencia. |
+| Respaldo y política principal | El tarifario principal necesita un precio de otro tarifario configurado como respaldo. | El respaldo aporta ese precio; preparación y mínimo siguen siendo los del principal. No se convierte en una segunda política del pedido. |
 | Cambio de tarifa | Cotización con una versión y posterior activación de otra. | Definir conservación de emitidos y recotización de borradores. |
 | Oferta incompleta | Papel habilitado con un tamaño no ofrecido, o combinación ofrecida sin precio aplicable. | El tamaño no ofrecido no se puede seleccionar ni habilitar con un precio manual. La combinación ofrecida sigue D21: precio pendiente inicialmente o respaldo explícito. |
 | Precio pendiente | 120 hojas A3, Ilustración 150 g, CMYK y doble faz; celda del tramo 100–199 vacía y sin respaldo ni acuerdo aplicable. | Se conserva el borrador con aviso de precio pendiente, sin tratar la celda como $0 ni usar el mínimo para completar el precio. No se permite confirmar o cobrar el pedido como completo. |
@@ -624,6 +660,13 @@ compatibilidad y evitar referencias circulares entre tarifarios. Usar el motor
 como respaldo no debe agregar nuevamente preparación, mínimos o terminaciones
 que se resuelven por separado en el tarifario activo.
 
+La política de D22 debe resolverse en el servidor a partir del canal del pedido,
+incluida la herencia general. La vista previa, las cargas posteriores y el
+guardado deben usar esa misma política principal. El cambio de canal de un
+borrador exige recalcular el conjunto y comprobar acuerdos y ajustes vigentes,
+sin conservar accidentalmente importes de canales diferentes ni alterar precios
+de documentos emitidos.
+
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
 desglose comercial y las validaciones de oferta deben conservarse en todos los
@@ -631,7 +674,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P08 resueltos en D09 a D21 y completar las reglas comerciales
+1. Partir de P01 a P09 resueltos en D09 a D22 y completar las reglas comerciales
    pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
@@ -675,3 +718,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | P06 resuelto: sin mínimo como opción inicial y mínimo de importe por pedido como alternativa por tarifario, sobre impresión más preparación y con terminaciones aparte. Incorporación de D19 y ejemplos del ajuste por la diferencia, sin alterar cantidades ni tramos. La prioridad frente a descuentos y ajustes se conserva en P07. | Confirmado |
 | 2026-10-10 | P07 resuelto: acuerdo del cliente prioritario dentro de su alcance, descuentos explícitos y precio manual autorizado, respetando el mínimo. Incorporación de D20, orden de aplicación y ejemplos por canal, descuento y ajuste manual. | Confirmado |
 | 2026-10-10 | P08 resuelto: precio pendiente con bloqueo del cierre como opción inicial y respaldo explícito a otro tarifario compatible o al motor como alternativa por tarifario. Incorporación de D21, conservación del borrador y ejemplos de respaldo, acuerdo aplicable y última hoja sin tarifa. | Confirmado |
+| 2026-10-10 | P09 resuelto: política general heredada por defecto, excepciones por canal y una política principal por pedido, con recálculo al cambiar el canal del borrador. Incorporación de D22 y ejemplos; preparación y mínimo pertenecen al tarifario principal, y los documentos emitidos conservan sus precios. | Confirmado |
