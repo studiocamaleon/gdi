@@ -1469,3 +1469,32 @@ Corrección independiente `250b8643ab0ca6269c4d0e58a2d1ef45cf602d8e`, sobre `mai
 - **Compilación y publicación:** build remoto de la imagen web con comprobación de tipos aprobada; Fly actualizó la máquina web existente y confirmó salud y DNS. Imagen instalada: `registry.fly.io/grafoprint-staging-web@sha256:5e2c1bf5640e2fab26cf5e5ff769bacdbb82bc5cb1a3345b6da5ef4460ae3ab6`.
 - **Ensayo HTTP real a las 13:54 UTC:** `/login` y `/salir` sin la clave de staging siguen exigiendo Basic; con ella, el login devuelve `200`. Una cookie ficticia no firmada atraviesa sólo el ruteo visual y es rechazada por la API; el recorrido `/` → `/salir?motivo=sesion` → `/login?motivo=sesion` termina en `200`, elimina esa cookie y conserva siempre el dominio público. El BFF sin sesión devuelve `401` sin iniciar otro desafío Basic.
 - **Alcance:** sólo se desplegó la aplicación web. API, workers, Gotenberg, datos y las 298 migraciones se conservan. El builder temporal `fly-builder-cool-night-8372` se eliminó después de completar la imagen; evidencias y claves permanecen fuera de Git.
+
+## 2026-10-10, 05:42 UTC — Regularización de main y pendientes #21, #57 y #58
+
+Revisión ejecutada **`bbc881d4d704189fd69b8d0a45f22fac669b07f5`**, agrupada en [PR #59](https://github.com/studiocamaleon/gdi/pull/59). El titular autorizó integrar y cerrar la cadena de PR y aprobó la prueba del #58. Misma imagen por digest entre staging y producción, sin recompilar durante la promoción. Los commits documentales posteriores no cambian el código ejecutado.
+
+| Servicio | Imagen |
+| --- | --- |
+| API / worker / worker-pdf | `registry.fly.io/grafoprint-staging-api@sha256:a28ee9c0bbd573f646cda5ad9310a4125f2c6c107b045674c0ff26238561c126` |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:d9ea0620d4f9d30bd29353a1d29ff2379e20ed90b4c00259b8c39c708ab9fc99` |
+
+**312 migraciones; ninguna nueva.** Se conservan las seis máquinas y sus tamaños, incluida la API performance de producción, y las imágenes de PDF y respaldo. Salud web/API 200, API privada directa 403 y BFF sin sesión 401. Revisión y Sentry comprobados en los cuatro procesos. Sin seeds, resets ni emisiones o comunicaciones de prueba. Antes de publicar, producción tenía cero lotes fiscales activos.
+
+### Alcance y comprobaciones
+
+- Revisión de CodeQL: destino de Graph validado también antes de la petición, claves reservadas comprobadas junto a cada acceso anidado, recorte de separadores sin cuantificadores y parser DOM en la prueba de botones. 73 pruebas de API y 7 de interfaz adicionales aprobadas; las fronteras de Meta y escaneo se agregaron al CI. Tres alertas dejaron de señalarse; la #6 de Meta se revisó y cerró como falso positivo: origen literal, IDs/rutas restringidos, parámetros codificados, guardia explícita de destino y redirecciones prohibidas. Cinco pruebas rechazan destinos no permitidos sin tráfico de red. No se desactivó CodeQL ni se quitaron protecciones.
+- #21: la sesión de Plataforma rechazada pasa por `/salir?acceso=plataforma`, elimina la cookie y vuelve a `/backoffice`. «Acceso de empresa» realiza navegación completa por `/salir`. Verificación HTTP real con cookie sintética inválida: sin bucle, destinos relativos, cookie borrada, `no-store` y rechazo de destino externo. Se conserva la sesión real del navegador.
+- #57: carga general de hasta 500 MB (524.288.000 bytes). Ambos entornos carecían de un override `ARCHIVOS_MAX_BYTES`. Comprobada la frontera inclusiva y el rechazo de un byte adicional en la interfaz y el servicio local; reserva/multipart con almacenamiento en memoria. La API desplegada confirma el mismo máximo y rechazo. No se transfirió un archivo real de 500 MB. Se conservan cuotas y límites independientes de WhatsApp y procesamiento de tomos PDF.
+- #58: Planificación compacta y ampliada, con la prueba de staging aprobada por Lucas; nueva comprobación visual del calendario y su ampliación sin guardar reprogramaciones.
+- Pruebas locales: 80 de web/sesión/archivos/Planificación, 20 de archivos de API, 18 de marketing y 429 de Grafo3D. ESLint enfocado, guardia CSS y diff correctos. Grafo3D requirió instalar sus dependencias locales antes de ejecutar su suite; el intento previo sin ellas no se considera aprobado.
+- CI del candidato: [HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/38025743900), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/38025743913), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/38025743904) y check de alertas CodeQL aprobados. Build remoto completo con tipos. Preview Vercel correcta: marketing y Grafo3D abren, generan el modelo y no registran errores de consola.
+- La primera subida de la imagen web al registro de Fly falló después de compilar; el reintento reutilizó la caché y terminó correctamente. Se publicó únicamente el digest final. Constructor temporal `fly-builder-serene-summit-8307` retirado al terminar la promoción; ningún recurso de otro proyecto fue modificado.
+
+### Respaldo y reversión
+
+Fuentes exactas cifradas y protegidas 31 días; copiador actualizado. Copia posterior **`00f05628-d456-4b8d-b2ec-4f013caecea1`**, completada **2026-10-10T05:35:45.599Z**, 312 migraciones y 24 archivos: firma, huella, descifrado del manifiesto y referencias de código/imágenes comprobados. No se repitió una restauración SQL completa. Evidencia privada fuera de Git.
+
+La revisión anterior de producción era `15014c464`: API/workers `sha256:c769f370c500ba40706b110a543c51691886f9b5b6cdaa143ab95fd519e6cc5f`, web `sha256:e6aaaebc6c7194bc81d24303bac0da7185633a2325e41f9df087bca80a6272d0`. En staging la web anterior era `53ba3fc53`, digest `sha256:5e847ce622cca4eba049457adac608685f334e19c7513a6ca210998d4cfbf521`; backend igual a producción anterior. Revertir imágenes conserva la base y vuelve a introducir los límites/comportamientos previos; no revertir migraciones ni borrar archivos.
+
+El cierre de la cadena y su evidencia de inclusión se registran en [regularización de PR](../../docs/regularizacion-prs-2026-10-10.md) y en #59. No confundir los merges del historial con PR cerrados por equivalencia.

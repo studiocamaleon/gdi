@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-10, 04:05 UTC.** Web en `53ba3fc53` ([PR #58](https://github.com/studiocamaleon/gdi/pull/58), dependiente de #56; sin fusionar). API y ambos workers conservan `15014c464`. Incluye Planificación compacta en pantallas pequeñas, controles secundarios agrupados y ampliación del calendario a pantalla completa. Comprobación local, CI, compilación remota con tipos y recorrido autenticado en staging aprobados. Seis máquinas con los mismos tamaños, 312 migraciones y respaldo posterior verificado. Producción conserva sus versiones; promoción pendiente de la prueba de Lucas. Ver [VALIDACION.md](./VALIDACION.md).
+> **Estado vigente: 2026-10-10, 05:42 UTC.** Web, API y ambos workers ejecutan `bbc881d4d` ([PR #59](https://github.com/studiocamaleon/gdi/pull/59)): recuperación de sesión, límite general de 500 MB y Planificación compacta/ampliada aprobada por el titular. Misma imagen comprobada entre entornos; CI, salud, versiones y respaldo verificados. Seis máquinas con los mismos tamaños y 312 migraciones. La regularización de `main` y cierre de los PR incluidos se completa en #59. Ver [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
@@ -160,7 +160,7 @@ Desde Fly ya se comprobaron login HTTP, cookies Secure, IP observada, rechazo de
 
 ## 4. Git, Vercel y WhatsApp
 
-`main` es la base estable y la rama de producción de la web comercial. El trabajo nuevo se propone en una rama `codex/…` y PR. Las previews de Vercel no equivalen al staging de toda la aplicación. No cambiar el proyecto Vercel para ejecutar API o workers. Definir posteriormente el flujo de promoción de imágenes entre staging y producción y ejecutar migraciones como paso explícito, con una sola ejecución a la vez.
+`main` es la base estable y la rama de producción de la web comercial. El trabajo nuevo se propone en una rama `codex/…` y PR. Las previews de Vercel no equivalen al staging de toda la aplicación. No cambiar el proyecto Vercel para ejecutar API o workers. Promover entre entornos las imágenes verificadas por digest, siguiendo `deploy/produccion/README.md` y el cierre de `docs/flujo-pull-requests.md`. Ejecutar migraciones como paso explícito, con una sola ejecución a la vez.
 
 El [piloto interno de WhatsApp](../../docs/meta-cloud-piloto.md) ya tiene código y configuración en staging: envío de una plantilla de prueba, webhooks firmados y estados por empresa. El ensayo real desde Grafo llegó a «Entregado», confirmado por webhook de Meta. El Inbox ya funciona con el canal oficial de prueba y plantillas aprobadas. Embedded Signup con un número de cliente, coexistencia e importación de historial todavía requieren ensayo real; las notificaciones automáticas necesitan su propia validación. Las credenciales de WATI u otros servicios reales no se copian automáticamente. El resultado de la revisión de Meta es una condición externa independiente del despliegue.
 

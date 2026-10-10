@@ -2,7 +2,7 @@
 
 Estado al 01/10/2026: infraestructura desplegada y primera recuperación de base, archivo y código comprobada; administrador con clave personal y MFA, certificado ARCA cifrado y consulta WSFE de producción verificada. HTTPS, origen web definitivo y acceso de la primera empresa comprobados; invitación entregada y aceptada, Founder manual activo. Posteriormente se trasladó la configuración operativa local autorizada, sin historial comercial/fiscal ni stock; el informe detallado es privado. La configuración fiscal de esa empresa está guardada y la integración de producción quedó activa con autorización del titular, sin emitir comprobantes. **Los recorridos funcionales y las comprobaciones posteriores se registran por fecha en VALIDACION.md.** Consultar el registro vigente en [VALIDACION.md](VALIDACION.md). La web comercial permanece en Vercel. La aplicación y sus servicios usan Fly; cada entorno tiene bases, depósitos y credenciales propias.
 
-**Estado vigente: 2026-10-10, 00:33 UTC (09/10 en Argentina).** Web, API y ambos workers ejecutan `15014c464` ([PR #56](https://github.com/studiocamaleon/gdi/pull/56), dependiente de #54; sin fusionar), con Análisis que aclara «No incluye cargos extra» y muestra referencias con IVA, seguimiento con nombres reales de pasos manuales y reprogramación unificada de entrega/producción. Promoción de las mismas imágenes verificadas en staging. Totales netos y márgenes conservados; CI, navegador, salud y consulta fiscal de sólo lectura aprobados. Tamaños conservados, incluida la API performance; 312 migraciones. Ver [VALIDACION.md](./VALIDACION.md).
+**Estado vigente: 2026-10-10, 05:42 UTC.** Web, API y ambos workers ejecutan `bbc881d4d` ([PR #59](https://github.com/studiocamaleon/gdi/pull/59)): recuperación de sesión, límite general de 500 MB y Planificación compacta/ampliada aprobada por el titular. Misma imagen comprobada entre entornos; CI, salud, versiones y respaldo verificados. Seis máquinas con los mismos tamaños y 312 migraciones. La regularización de `main` y cierre de los PR incluidos se completa en #59. Ver [VALIDACION.md](./VALIDACION.md).
 
 ## Alcance del primer lanzamiento
 
@@ -62,7 +62,7 @@ El control compara ambiente y huellas en memoria, sin imprimir secretos ni huell
 
 ## Registro y vuelta atrás
 
-Registrar revisión Git, digest por servicio, migraciones, recursos, pruebas y fecha en `VALIDACION.md`. Un PR abierto no fusiona ni despliega. Esta preparación depende del PR de seguridad hasta que se integre; las verificaciones también se ejecutan en PR dirigidos a ramas `codex/**`, sin secretos cloud.
+Registrar revisión Git, digest por servicio, migraciones, recursos, pruebas y fecha en `VALIDACION.md`. Un PR abierto no fusiona ni despliega. El ciclo de integración y cierre se completa según `docs/flujo-pull-requests.md`; las verificaciones también cubren dependencias declaradas hacia `codex/**`, sin secretos cloud.
 
 Conservar la versión anterior y comprobar compatibilidad del esquema antes de revertir código. Una reversión de imagen no revierte datos ni migraciones. Si hay daño de datos, congelar escrituras, restaurar en recursos nuevos y comprobarlos antes de cambiar dominios; no restaurar encima de la única base disponible.
 

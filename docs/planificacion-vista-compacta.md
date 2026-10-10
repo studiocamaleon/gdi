@@ -36,4 +36,4 @@ Chrome autenticado con la empresa demo: en 1134 × 647 el calendario pasó de 13
 
 En 390 × 844, la barra superior real ocupa dos filas. Se corrigió el límite de altura para que Referencias, Estado y las acciones de la tarea seleccionada permanezcan visibles, sin desborde horizontal de página. Se volvió a comprobar notebook y ampliación con la imagen final. Consola sin errores ni advertencias. Evidencia visual fuera de Git y registro operativo en [VALIDACION.md](../deploy/staging/VALIDACION.md).
 
-Producción conserva sus versiones. La promoción queda pendiente de la prueba de Lucas en staging.
+Lucas aprobó la prueba. La vista se publicó en producción dentro de `bbc881d4d` y el PR #59, junto con #21 y #57. Ver el [registro de producción](../deploy/produccion/VALIDACION.md).
