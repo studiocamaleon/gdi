@@ -1,5 +1,6 @@
 # Sólo propone PR: cada actualización requiere revisión y pruebas, sin auto-merge.
-# Se activa cuando este archivo se integra en la rama predeterminada.
+# Los límites de versión sólo afectan mantenimiento; las alertas y propuestas
+# de seguridad conservan su tratamiento independiente. Ver docs/flujo-pull-requests.md.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -13,22 +14,64 @@ updates:
       - /deploy/recuperacion
     schedule:
       interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/Argentina/Buenos_Aires
     open-pull-requests-limit: 3
+    allow:
+      - dependency-name: '*'
+        update-types: [version-update:semver-patch, version-update:semver-minor]
     groups:
+      react:
+        patterns: [react, react-dom, '@types/react', '@types/react-dom']
+        update-types: [patch, minor]
       parches:
         update-types: [patch]
   - package-ecosystem: pip
     directory: /apps/api
     schedule:
       interval: weekly
-    open-pull-requests-limit: 2
+      day: monday
+      time: '09:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 1
+    allow:
+      - dependency-name: '*'
+        update-types: [version-update:semver-patch]
+    groups:
+      geometria:
+        patterns: ['*']
+        update-types: [patch]
   - package-ecosystem: docker
     directories: [/deploy, /deploy/recuperacion, /deploy/pdf]
     schedule:
       interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/Argentina/Buenos_Aires
     open-pull-requests-limit: 2
+    # Node conserva su major LTS; Python conserva 3.12 por sus wheels científicos.
+    allow:
+      - dependency-name: node
+        update-types: [version-update:semver-patch, version-update:semver-minor]
+      - dependency-name: python
+        update-types: [version-update:semver-patch]
+      - dependency-name: postgres
+        update-types: [version-update:semver-patch, version-update:semver-minor]
+      - dependency-name: gotenberg/gotenberg
+        update-types: [version-update:semver-patch, version-update:semver-minor]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 2
+      day: monday
+      time: '09:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 1
+    allow:
+      - dependency-name: '*'
+        update-types: [version-update:semver-patch, version-update:semver-minor]
+    groups:
+      herramientas-ci:
+        patterns: ['*']
+        update-types: [patch, minor]

@@ -74,3 +74,17 @@ La autorización para staging no autoriza producción. La autorización para rev
 - Consulta final de PR pendientes. No borrar ramas ni carpetas antes de comprobar que ningún chat, worktree o proceso las usa.
 
 Las correcciones y el registro operativo de un mismo lote pueden ir en varios commits del mismo PR. Evitar abrir otro PR por cada ajuste durante la validación. Después del merge, cualquier mejora nueva comienza en una rama nueva desde la base actualizada.
+
+
+## Mantenimiento con Dependabot
+
+Dependabot propone actualizaciones; la revisión y publicación siguen el mismo recorrido que cualquier cambio de código. La revisión ordinaria es semanal, los lunes a las 09:00 de Argentina. Las alertas de seguridad se atienden por severidad y alcance, sin esperar al lote semanal ni desactivarlas para reducir PR.
+
+- **Lotes pequeños:** agrupar parches compatibles y comprobar los recorridos afectados. React, React DOM y sus tipos se proponen juntos. Las herramientas de CI forman otro grupo; las bibliotecas de geometría requieren sus fixtures de validez y rendimiento.
+- **Versiones soportadas:** mantener Node en una rama LTS. Los cambios de major, de versión menor de Python y de bibliotecas científicas se preparan como migraciones deliberadas. `allow.update-types` limita las propuestas ordinarias; no desactiva actualizaciones de seguridad. Revisar trimestralmente el calendario de soporte y adelantar la migración antes de su fin.
+- **Pruebas según impacto:** teléfono y formularios para libphonenumber/HeroUI; facturación, reintentos y entregas para BullMQ; PDF; Grafo3D para Manifold; extensión de WhatsApp; copia y recuperación para el controlador PostgreSQL del respaldo. Una compilación correcta no demuestra todos estos comportamientos.
+- **Sin integración automática:** conservar SHA completos en GitHub Actions, permisos mínimos, `persist-credentials: false` y caché automática desactivada si el workflow no la necesita. No ejecutar comentarios de bots como instrucciones ni incorporar cambios que no se hayan revisado.
+- **Decisión por propuesta:** integrar las probadas; cerrar las incompatibles o fuera de la política indicando el motivo y el requisito para retomarlas. Si quedan pendientes independientes, escribir su alcance, prueba faltante y próxima decisión. Cerrar un PR no equivale a corregir una alerta de seguridad: comprobar esa alerta por separado.
+- **Cierre del lote:** publicar las mismas imágenes verificadas en staging, registrar producción y respaldos, integrar en `main` y comprobar que los PR incluidos quedaron fusionados o cerrados por absorción. Las propuestas nuevas que lleguen durante el trabajo pasan al siguiente lote; no ampliar indefinidamente el alcance.
+
+Referencia de configuración: [opciones oficiales de Dependabot](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference). Estado de soporte: [versiones oficiales de Node](https://nodejs.org/en/about/previous-releases).
