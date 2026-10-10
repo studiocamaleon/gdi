@@ -42,7 +42,8 @@ compatible y selección persistida por segmento.
 | Bloque | Resultado verificable | Estado |
 | --- | --- | --- |
 | Oferta por papel y gramaje | Configurar formatos, conservar selecciones al guardar y rechazar combinaciones no ofrecidas en la API. | Implementado y probado localmente con servicios simulados; prueba de entorno y CI pendientes |
-| Cálculo comercial | Casos de D09–D25 y D27–D35, agrupación del pedido, sin repetir mínimos/preparación. | Pendiente |
+| Cantidades y tramos en hojas | D09–D15, D27 y cantidades de D29: acumulación del pedido, caras, cobertura y juegos. | Implementado como cálculo puro y probado; conexión al cotizador pendiente |
+| Composición comercial del pedido | IVA, acuerdos/ajustes, preparación y mínimo únicos, respaldos y margen; CAD por ML. | Pendiente |
 | Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | Pendiente |
 | Recorridos del pedido | Vista previa, guardado, recálculo y emisión comparten cantidades, versiones y precios. | Pendiente |
 | Pouch y tomos | Material por hoja, caras/copias/juegos correctos, edición y adicionales sin duplicación. | Pendiente |
@@ -91,7 +92,77 @@ de 80 g y sólo A4 para el mismo papel de 150 g, guardar y volver a abrir. Confi
 que el cotizador sólo ofrece los formatos elegidos por gramaje y rechaza un pedido
 A3/150 g enviado directamente a la API. Usar materiales y empresa ficticios.
 
-Una prueba de este bloque no acredita la integración del módulo completo. El
-siguiente bloque es el cálculo comercial puro con cantidades físicas separadas,
-acumulación, última hoja impar y tramos; después se conecta a las versiones de
-tarifarios y a todos los recorridos del pedido.
+Una prueba de este bloque no acredita la integración del módulo completo.
+
+### 10 de octubre de 2026 — cantidades, acumulación y tramos en hojas
+
+Implementado en [comercial/calculo-hojas.ts](../apps/api/src/centro-copiado/comercial/calculo-hojas.ts),
+con [contratos explícitos](../apps/api/src/centro-copiado/comercial/tipos.ts) y
+[validación de reglas, combinaciones y precios](../apps/api/src/centro-copiado/comercial/validaciones.ts).
+Es una función pura sin conexiones a base de datos ni llamadas al motor. Los
+endpoints actuales todavía no aplican esta capa: la activación depende de integrar
+tarifarios, sus versiones y el resto de la composición comercial. No se cambió
+el cobro actual ni se publicaron matrices automáticamente.
+
+**Entrada y alcance:** una empresa, un pedido con todas sus cargas de hojas y una
+versión de la sección hojas del tarifario principal. El servidor que la invoque
+debe resolver antes permisos, oferta vigente y gramaje efectivo; el cálculo
+rechaza gramaje sin resolver y un tarifario de otra empresa. Los identificadores
+de carga y documento distinguen archivos, incluso con igual nombre o con el mismo
+ID local en cargas diferentes. No se deduplican por nombre ni se acumulan otros
+pedidos. Las versiones se identifican en el resultado; su persistencia y vigencia
+todavía pertenecen al bloque pendiente de tarifarios.
+
+- Unidad por hoja o carilla, compartida por el precio y el tramo. Se preservan
+  además hojas físicas y carillas impresas, independientemente de cómo se facture.
+- Acumulación por combinación del pedido o por archivo. Cada combinación separa
+  papel, gramaje, tamaño, K/CMYK y caras. Las coberturas se separan sólo en la
+  modalidad de precios diferenciados; siempre se conserva la cobertura productiva
+  del archivo. La pertenencia a un tomo no separa el volumen comercial.
+- Última hoja impar: mantener doble faz o reclasificar a simple antes de agrupar.
+  Se aplica por original y copia efectiva. Los juegos del tomo reemplazan las
+  copias del documento. No se ocupan dorsos vacíos con páginas del siguiente
+  original ni se modifica la instrucción de impresión.
+- Rangos generales con excepciones completas por combinación. Se representan
+  mediante inicios inclusivos, comenzando en 1; el siguiente inicio determina el
+  final del anterior y el último queda abierto. Se rechazan límites repetidos,
+  desordenados, fraccionarios y celdas de precios que no correspondan a un tramo.
+- El tramo alcanzado aplica a todas las unidades. Cada parte conserva su aporte
+  y el importe resultante; sumar, quitar o editar archivos requiere pasar de nuevo
+  el conjunto del pedido, sin mantener acumuladores de llamadas anteriores.
+- Un precio faltante conserva la cantidad y el estado `PRECIO_PENDIENTE`.
+  El importe completo queda en `null` y el importe parcial conocido se identifica
+  aparte. No se reutiliza otra cobertura, otra cara ni otro tramo. El respaldo
+  explícito y el bloqueo de emisión aún deben conectarse a los recorridos reales.
+  Un cero cargado expresamente es distinto de una celda vacía.
+- Importes como cadenas decimales exactas, sin redondear por archivo ni aplicar
+  todavía IVA, descuentos, cargos, mínimos o terminaciones. La convención de IVA
+  se interpreta en la composición posterior. Como límite técnico de entrada se
+  aceptan hasta 18 dígitos enteros y 8 decimales por precio; las cantidades físicas
+  deben ser enteros seguros y se comprueban también al acumular. Se usa precisión
+  decimal propia, sin alterar la del motor universal.
+
+Ejemplos ficticios comprobados:
+
+| Caso | Resultado |
+| --- | --- |
+| 60 y 50 hojas compatibles en cargas distintas; $100 desde 1 y $80 desde 100 | Por combinación: 110 × $80 = $8.800. Por archivo: $6.000 + $5.000 = $11.000. |
+| 99 / 100 / 101 hojas con esos precios | $9.900 / $8.000 / $8.080; se conserva el descenso acordado. |
+| 11 páginas, 3 copias, doble faz; $160 doble y $100 simple por hoja | 18 hojas y 33 carillas. Mantener doble: $2.880. Reclasificar: 15 dobles + 3 simples = $2.700. |
+| Misma cantidad, tarifario por carilla | 33 carillas dobles, o 30 dobles y 3 simples; nunca se factura el dorso vacío como carilla. |
+| Dos originales de 3 páginas doble faz y 10 juegos | 40 hojas y 60 carillas. Con reclasificación: 20 hojas dobles y 20 simples; cada original conserva su frente. |
+| Faltan los precios simples del ejemplo de 11 páginas | 18 hojas conservadas, parcial conocido $2.400 y total pendiente; no se omiten las tres hojas simples. |
+
+**Verificación:** 80 pruebas nuevas de cálculo y validación, más 30 pruebas
+existentes de oferta, adaptador, dominio, módulo y preparación/tomos:
+**110 pruebas aprobadas en 7 suites**, con Node 24.19.0 y datos ficticios.
+Se comprobaron tipos y las reglas ESLint de la API sobre los seis archivos
+nuevos. La ejecución de ESLint con el proyecto completo superó el límite local
+de memoria; se usó un programa TypeScript limitado a esos archivos, conservando
+las mismas reglas de lint. La comprobación global sigue pendiente para CI.
+
+**Próximos bloques:** composición de IVA, preparación, mínimo, acuerdos y ajustes;
+cantidades y tramos CAD sobre consumo en ML; persistencia y activación de
+tarifarios/versiones/canales, y conexión común a vista previa, guardado y emisión.
+Las terminaciones y la simulación masiva mantienen su alcance acordado. Sin
+migraciones, cambios de datos, despliegues ni nuevas pantallas en este bloque.
