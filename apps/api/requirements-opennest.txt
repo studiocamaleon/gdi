@@ -6,4 +6,4 @@ compas_nest==0.1.1.post4
 scipy==1.13.1
 
 # Inventario y exportación de entidades CAD con sus capas originales.
-ezdxf==1.4.2
+ezdxf==1.4.4
