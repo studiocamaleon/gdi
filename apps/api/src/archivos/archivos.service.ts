@@ -43,10 +43,9 @@ import type {
 
 /**
  * Tope por archivo. Con multipart ya no lo limita el tamaño de un request:
- * 2 GB cubre un arte de gran formato a resolución real sin volverse una
- * invitación a usar el storage de backup.
+ * 500 MB coincide con el límite general de carga de la interfaz.
  */
-const MAX_BYTES_DEFAULT = 2 * 1024 * 1024 * 1024;
+const MAX_BYTES_DEFAULT = 500 * 1024 * 1024;
 /** Una subida abandonada deja la fila PENDIENTE; se limpia al día siguiente. */
 const HORAS_PARA_BARRER_PENDIENTES = 24;
 /** Papelera: el objeto sobrevive un mes al borrado lógico. */
