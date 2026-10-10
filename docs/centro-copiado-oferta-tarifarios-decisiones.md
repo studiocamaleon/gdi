@@ -1545,3 +1545,29 @@ con última hoja a simple, el volumen doble debe ser par: se usa el primer par
 del tramo, o se informa que esa celda no tiene referencia representable.
 Los errores de configuración y los recorridos detenidos permanecen explícitos.
 Detalles, límites técnicos y pruebas en el registro de implementación.
+
+
+### Avance de implementación: sugerencias y control económico de referencias (10/10/2026)
+
+D23 dispone de propuestas del motor con revisión antes de aplicar: precios
+anteriores/nuevos, redondeo opcional, márgenes por cobertura, celdas omitidas y
+canales compartidos. Precio único usa el mayor precio sugerido entre las tres
+coberturas; una simulación incompleta no genera propuestas. Preparación aparte
+se descuenta antes de convertir a precio unitario, con IVA coherente. El mínimo
+sigue siendo un piso de pedido. Un mínimo de origen aplicado por el motor se
+informa para revisar la propuesta. Aceptar modifica sólo el borrador editable;
+publicar sigue siendo explícito. Las propuestas se invalidan si cambia su contexto.
+
+El margen de la simulación ahora **incluye comisiones e impuestos internos**,
+con la base de cada carga tomada del motor. Reemplaza la comparación solamente
+productiva del avance anterior. El mínimo porcentual y la conducta ante margen
+insuficiente se guardan por tarifario y versión; no se inventa un piso para
+versiones anteriores. Una fuente incompleta queda sin verificar.
+
+El editor conserva la estética GRAFO y separa matrices, reglas y simulación sin
+perder ediciones. Este avance cubre el cálculo y la revisión económica de
+referencias; **la autorización auditable y el bloqueo en la emisión de pedidos
+reales de D25 siguen pendientes de integración**, junto con la activación
+operativa de tarifarios. No se cambian las decisiones confirmadas ni se activa
+la matriz por guardar o publicar. Alcance y evidencia en el
+[registro de implementación](centro-copiado-tarifarios-plan-implementacion.md).

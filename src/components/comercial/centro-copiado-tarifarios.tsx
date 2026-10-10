@@ -1,4 +1,6 @@
 "use client";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { useEffect, useRef, useState } from "react";
 import { Copy, Plus, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -81,6 +83,7 @@ export function CentroCopiadoTarifarios({
   ofertaSinGuardar: boolean;
   onGuardado: () => void;
 }) {
+  const verMargenes = usePuede("finanzas.ver_margenes");
   const { moneda, zonaHoraria } = useConfigRegional();
   const [lista, setLista] = useState<api.ResumenTarifario[]>([]);
   const [base, setBase] = useState<api.BorradorTarifario | null>(null);
@@ -474,98 +477,144 @@ export function CentroCopiadoTarifarios({
               )}
             </CardContent>
           </Card>
-          <ReglasTarifario
-            contenido={contenido}
-            disabled={soloLectura}
-            onChange={cambiar}
-          />
-          <SimulacionTarifario
-            key={`simulacion-${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}`}
-            tarifarioId={base?.id ?? null}
-            revision={base?.revision}
-            versionId={version?.id}
-            contenido={contenido}
-            guardado={version?.contenido ?? base?.contenido ?? null}
-            nombres={nombres}
-            perfiles={perfiles}
-            disabled={ocupado || recargaRequerida || ofertaSinGuardar}
-            onChange={soloLectura ? undefined : cambiar}
-          />
-          {ofertaSinGuardar && (
-            <Alert>
-              <AlertTitle>Hay cambios de configuración sin guardar</AlertTitle>
-              <AlertDescription>
-                La generación usa la oferta guardada. Guardá la configuración de
-                Oferta antes de agregar combinaciones nuevas.
-              </AlertDescription>
-            </Alert>
-          )}
-          {contenido.hojas && (
-            <EditorMatriz
-              key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-hojas`}
-              matriz={contenido.hojas}
-              nombres={nombres}
-              disabled={soloLectura}
-              generando={ocupado}
-              onGenerar={() => void generar("hojas")}
-              onChange={(m) =>
-                cambiar({ ...contenido, hojas: m as MatrizHojas })
-              }
-            />
-          )}
-          {contenido.cad && (
-            <EditorMatriz
-              key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-cad`}
-              matriz={contenido.cad}
-              nombres={nombres}
-              disabled={soloLectura}
-              generando={ocupado}
-              permiteGenerar={permiteCad}
-              onGenerar={() => void generar("cad")}
-              onChange={(m) => cambiar({ ...contenido, cad: m as MatrizCad })}
-            />
-          )}
-          {!soloLectura && (
-            <div className="flex flex-wrap gap-2">
-              {!contenido.hojas && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const hojas = contenidoInicial(
-                      contenido.monedaCodigo,
-                    ).hojas!;
-                    hojas.reglas.cobertura = contenido.cad!.reglas.cobertura;
-                    cambiar({ ...contenido, hojas });
-                  }}
-                >
-                  Agregar matriz de hojas
-                </Button>
-              )}
-              {!contenido.cad && permiteCad && (
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    cambiar({
-                      ...contenido,
-                      cad: cadInicial(contenido.hojas!.reglas.cobertura),
-                    })
-                  }
-                >
-                  Agregar matriz CAD por ML
-                </Button>
-              )}
-              {contenido.hojas && contenido.cad && (
-                <>
-                  <Button variant="ghost" onClick={() => setRetirar("hojas")}>
-                    Quitar matriz de hojas
-                  </Button>
-                  <Button variant="ghost" onClick={() => setRetirar("cad")}>
-                    Quitar matriz CAD
-                  </Button>
-                </>
-              )}
+          <Tabs
+            className="min-w-0"
+            defaultValue="matrices"
+            key={`editor-${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}`}
+          >
+            <div className="overflow-x-auto pb-2">
+              <TabsList variant="line" aria-label="Editor del tarifario">
+                <TabsTrigger value="matrices">Matrices</TabsTrigger>
+                <TabsTrigger value="reglas">Reglas y márgenes</TabsTrigger>
+                {verMargenes && (
+                  <TabsTrigger value="simulacion">
+                    Costos y sugerencias
+                  </TabsTrigger>
+                )}
+              </TabsList>
             </div>
-          )}
+            <TabsContent
+              value="matrices"
+              keepMounted
+              className="pt-4 flex flex-col gap-4 data-[hidden]:hidden"
+            >
+              {ofertaSinGuardar && (
+                <Alert>
+                  <AlertTitle>
+                    Hay cambios de configuración sin guardar
+                  </AlertTitle>
+                  <AlertDescription>
+                    La generación usa la oferta guardada. Guardá la
+                    configuración de Oferta antes de agregar combinaciones
+                    nuevas.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {contenido.hojas && (
+                <EditorMatriz
+                  key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-hojas`}
+                  matriz={contenido.hojas}
+                  nombres={nombres}
+                  disabled={soloLectura}
+                  generando={ocupado}
+                  onGenerar={() => void generar("hojas")}
+                  onChange={(m) =>
+                    cambiar({ ...contenido, hojas: m as MatrizHojas })
+                  }
+                />
+              )}
+              {contenido.cad && (
+                <EditorMatriz
+                  key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-cad`}
+                  matriz={contenido.cad}
+                  nombres={nombres}
+                  disabled={soloLectura}
+                  generando={ocupado}
+                  permiteGenerar={permiteCad}
+                  onGenerar={() => void generar("cad")}
+                  onChange={(m) =>
+                    cambiar({ ...contenido, cad: m as MatrizCad })
+                  }
+                />
+              )}
+              {!soloLectura && (
+                <div className="flex flex-wrap gap-2">
+                  {!contenido.hojas && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const hojas = contenidoInicial(
+                          contenido.monedaCodigo,
+                        ).hojas!;
+                        hojas.reglas.cobertura =
+                          contenido.cad!.reglas.cobertura;
+                        cambiar({ ...contenido, hojas });
+                      }}
+                    >
+                      Agregar matriz de hojas
+                    </Button>
+                  )}
+                  {!contenido.cad && permiteCad && (
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        cambiar({
+                          ...contenido,
+                          cad: cadInicial(contenido.hojas!.reglas.cobertura),
+                        })
+                      }
+                    >
+                      Agregar matriz CAD por ML
+                    </Button>
+                  )}
+                  {contenido.hojas && contenido.cad && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setRetirar("hojas")}
+                      >
+                        Quitar matriz de hojas
+                      </Button>
+                      <Button variant="ghost" onClick={() => setRetirar("cad")}>
+                        Quitar matriz CAD
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent
+              value="reglas"
+              keepMounted
+              className="pt-4 data-[hidden]:hidden"
+            >
+              <ReglasTarifario
+                contenido={contenido}
+                disabled={soloLectura}
+                onChange={cambiar}
+              />
+            </TabsContent>
+            {verMargenes && (
+              <TabsContent
+                value="simulacion"
+                keepMounted
+                className="pt-4 data-[hidden]:hidden"
+              >
+                <SimulacionTarifario
+                  key={`simulacion-${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}`}
+                  tarifarioId={base?.id ?? null}
+                  revision={base?.revision}
+                  versionId={version?.id}
+                  contenido={contenido}
+                  guardado={version?.contenido ?? base?.contenido ?? null}
+                  nombres={nombres}
+                  perfiles={perfiles}
+                  disabled={ocupado || recargaRequerida || ofertaSinGuardar}
+                  onChange={soloLectura ? undefined : cambiar}
+                />
+              </TabsContent>
+            )}
+          </Tabs>
           {base && (
             <Card>
               <CardHeader>

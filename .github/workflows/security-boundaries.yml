@@ -162,6 +162,7 @@ jobs:
           npm ci --include=dev --no-audit --no-fund
           node node_modules/vitest/vitest.mjs run \
             src/lib/centro-copiado-tarifarios-editor.test.ts \
+            src/lib/centro-copiado-tarifarios-sugerencias.test.ts \
             src/components/comercial/centro-copiado-tarifarios.test.tsx \
             src/components/comercial/centro-copiado-tarifarios-simulacion.test.tsx \
             src/components/comercial/centro-copiado-config-view.test.tsx
@@ -172,6 +173,7 @@ jobs:
             src/centro-copiado/tarifarios/__tests__/contenido-tarifario.spec.ts \
             src/centro-copiado/tarifarios/__tests__/politica-precios.spec.ts \
             src/centro-copiado/tarifarios/__tests__/simulacion.spec.ts \
+            src/centro-copiado/comercial/__tests__/control-margen.spec.ts \
             src/centro-copiado/comercial/__tests__/calculo-hojas.spec.ts \
             src/centro-copiado/comercial/__tests__/validaciones.spec.ts \
             src/centro-copiado/comercial/__tests__/calculo-cad.spec.ts \

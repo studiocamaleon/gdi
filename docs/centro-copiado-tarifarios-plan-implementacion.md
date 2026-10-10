@@ -45,12 +45,12 @@ compatible y selección persistida por segmento.
 | Oferta por papel y gramaje | Configurar formatos, conservar selecciones al guardar y rechazar combinaciones no ofrecidas en la API. | Implementado y probado localmente con servicios simulados; prueba de entorno y CI pendientes |
 | Cantidades y tramos en hojas | D09–D15, D27 y cantidades de D29: acumulación del pedido, caras, cobertura y juegos. | Implementado como cálculo puro y probado; conexión al cotizador pendiente |
 | Composición comercial del pedido | IVA, preparación y mínimo únicos, terminaciones aparte. | Implementado como cálculo puro y probado; resolución fiscal e integración pendientes |
-| Prioridad y controles comerciales | Acuerdos/ajustes autorizados, respaldos y margen. | Pendiente; la composición recibe importes ya resueltos |
+| Prioridad y controles comerciales | Acuerdos/ajustes autorizados, respaldos y margen. | Margen con costos y cargas implementado para referencias; acuerdos, respaldos y autorización al emitir pendientes |
 | Cantidades y tramos CAD | Consumo real en ML, acumulación, tramo y redondeo comercial del grupo. | Implementado como cálculo puro y probado con el planificador actual; conexión al cotizador pendiente |
 | Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | API y editor de tarifarios, versiones y política general/canales comprobados localmente; activación operativa pendiente |
 | Recorridos del pedido | Vista previa, guardado, recálculo y emisión comparten cantidades, versiones y precios. | Pendiente |
 | Pouch y tomos | Material por hoja, caras/copias/juegos correctos, edición y adicionales sin duplicación. | Pendiente |
-| Herramientas de precios | Matriz, pegado, duplicación, ajustes masivos y simulación de todas las celdas. | Editor y simulación de costos productivos implementados localmente; sugerencias del motor y cargos comerciales completos pendientes |
+| Herramientas de precios | Matriz, pegado, duplicación, ajustes masivos y simulación de todas las celdas. | Editor, simulación, sugerencias revisables y margen con cargas comerciales implementados localmente |
 | Validación del conjunto | Empresas sin activar, permisos, históricos y casos funcionales; después CI y staging autorizado. | Pendiente |
 
 Las pruebas usan datos ficticios. Las suites que necesitan PostgreSQL se
@@ -641,3 +641,69 @@ antes de aplicarlas (D23) y cargos/control completo de márgenes (D25). Siguen
 pendientes acuerdos, descuentos/autorizaciones, respaldos, pouch y conexión
 operativa del tarifario con cotizar/guardar/recotizar/emitir. No se activaron
 matrices en pedidos ni se desplegó staging o producción.
+
+
+### 10 de octubre de 2026 — sugerencias y margen con cargas comerciales
+
+Implementado en el editor, conservando el estado **en preparación** y sin activar
+matrices en pedidos:
+
+- El resultado del motor aporta su venta neta sugerida y un snapshot de las tasas
+  de impuestos internos/comisiones, con sus bases NETO o BRUTO_COBRADO. La API
+  comprueba que el IVA y las cargas de los segmentos coincidan. Si falta el
+  desglose, no se infieren porcentajes desde importes ni se inventan cargas cero:
+  se conserva el costo productivo y se informa **margen sin verificar**.
+- La comparación usa la venta de impresión + preparación + ajuste por mínimo,
+  sin IVA. Resta producción (que ya incluye preparación y cargos directos),
+  impuestos internos y comisiones una sola vez. Las cargas sobre bruto usan el
+  total con IVA. Se acumulan por carga antes de redondear; las terminaciones
+  quedan fuera de esta referencia. El evaluador acepta partidas con distintas
+  cargas, ventas ya ajustadas y costos separados, para su posterior integración
+  con pedidos reales. El umbral se compara sin redondear el porcentaje visible.
+- Cada borrador puede configurar su margen mínimo (0 a menos de 100%, hasta
+  cuatro decimales) y la conducta AUTORIZACION o BLOQUEO. Se conserva en las
+  publicaciones inmutables. Las versiones anteriores sin política siguen
+  intactas: no se les asigna silenciosamente un piso cero. La interfaz pide
+  configurar el piso para clasificar el resultado. No se suben precios
+  automáticamente para alcanzarlo.
+- Las sugerencias parten del precio neto de la corrida del motor y lo convierten
+  a la convención de IVA y unidad del tarifario. Restan la preparación comercial
+  cuando se cobra aparte y dividen por cantidad facturable (incluido redondeo
+  de ML). El mínimo del pedido no se usa para reducir el precio unitario. Si el
+  motor aplicó su propio mínimo de origen, se advierte expresamente. Es una
+  referencia editable, no una promesa de margen para todo el tramo.
+- Una celda de cobertura única exige las tres simulaciones completas y propone
+  el mayor de sus precios. Las diferenciadas conservan su propia cobertura.
+  Se permiten celdas previamente vacías y precio cero explícito; si preparación
+  absorbe toda la propuesta, se advierte antes de aplicarla. Los errores o
+  referencias que distribuyen venta entre varias celdas se omiten con motivo.
+- Revisión sobre filtradas o selección: precio anterior/nuevo, controles por
+  cobertura, redondeo opcional hacia arriba, omitidas, canales que comparten el
+  tarifario en la política guardada y caídas de total entre tramos de las filas
+  afectadas. Las caídas incluyen preparación y mínimo; CAD compara el límite
+  del tramo respetando redondeo de ML. Se puede cancelar o aplicar al borrador;
+  guardar y publicar siguen siendo pasos explícitos. Si cambia contenido,
+  selección o simulaciones mientras está abierta, la propuesta no se aplica.
+- Estética GRAFO: pestañas Matrices / Reglas y márgenes / Costos y sugerencias,
+  estado conservado al navegar, indicadores de revisión y tarjetas por cobertura.
+  Usa los tokens de marca y el contexto existente para que los diálogos mantengan
+  el mismo tema. CSS acotado al módulo. Revisado en escritorio y a 390 × 844;
+  tablas desplazables dentro del panel, sin desbordar la página, y foco inicial
+  en el título de la revisión para que se vea el contexto antes de aplicar.
+
+**Validación:** 345 pruebas API y 63 de frontend. Incluye 28 de persistencia/HTTP
+con PostgreSQL real y sesiones/permisos reales. La base exclusiva
+`grafo_copiado_margenes_20261010_test` se creó vacía, se migró sin seed, quedó con
+cero empresas y usuarios y se eliminó. Las pruebas de UI y las cuentas de
+sugerencias usan datos ficticios; el navegador ejecuta los componentes reales
+con API de prueba. No acredita todavía un recorrido integral con catálogo de
+producción. TypeScript se comprueba sobre archivos afectados, respetando el
+límite local de memoria; no se ejecutó compilación de producción.
+
+**Pendiente operativo de D25:** conectar este evaluador a cotizar/guardar/
+recotizar/emitir; registrar responsable y motivo con permiso de aprobación
+separado del precio manual; vincular la autorización a la revisión exacta del
+pedido y recalcular al cambiarlo; aplicar bloqueo estricto en el servidor y
+control independiente de terminaciones. Los estados del simulador son diagnósticos,
+no autorizaciones. También siguen pendientes acuerdos/descuentos/respaldo,
+activación por canal, pouch y cierre del recorrido operativo. Sin despliegues.

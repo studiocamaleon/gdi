@@ -1,0 +1,200 @@
+import type {
+  ContenidoTarifario,
+  PoliticaPrecios,
+} from "./centro-copiado-tarifarios-api";
+import type {
+  CeldaSimulacion,
+  ResultadoCeldaSimulacion,
+} from "../../apps/api/src/centro-copiado/tarifarios/simulacion-tarifario.types";
+import { DecimalComercial as D } from "../../apps/api/src/centro-copiado/comercial/validaciones";
+import { compararSimulacion } from "../../apps/api/src/centro-copiado/comercial/comparacion-simulacion";
+import { ajustarPrecio, claveRango } from "./centro-copiado-tarifarios-editor";
+
+export function precioCelda(c: ContenidoTarifario, celda: CeldaSimulacion) {
+  const matriz = c[celda.seccion];
+  const fila = matriz?.filas[celda.fila];
+  const desde = (fila?.rangosPropios ?? matriz?.rangosGenerales)?.[celda.tramo];
+  if (!fila || desde == null) throw new Error("La celda ya no existe.");
+  return {
+    desde,
+    fila,
+    precio:
+      fila.precios.find(
+        (p) => claveRango(p.desdeCantidad) === claveRango(desde),
+      )?.precioUnitario ?? null,
+  };
+}
+
+export function ponerPrecio(
+  c: ContenidoTarifario,
+  celda: CeldaSimulacion,
+  valor: string,
+) {
+  const { fila, desde } = precioCelda(c, celda);
+  const precio = fila.precios.find(
+    (p) => claveRango(p.desdeCantidad) === claveRango(desde),
+  );
+  if (precio) precio.precioUnitario = valor;
+  else if (celda.seccion === "hojas")
+    c.hojas!.filas[celda.fila].precios.push({
+      desdeCantidad: Number(desde),
+      precioUnitario: valor,
+    });
+  else
+    c.cad!.filas[celda.fila].precios.push({
+      desdeCantidad: String(desde),
+      precioUnitario: valor,
+    });
+}
+
+/** Precio fijo en la unidad comercial. Usa el precio neto real del motor;
+ * descuenta la preparación cobrada aparte antes de dividir y convierte IVA una vez.
+ * El mínimo es un piso de pedido, no una rebaja del precio unitario sugerido.
+ */
+export function sugerirCelda(
+  c: ContenidoTarifario,
+  r: ResultadoCeldaSimulacion,
+  redondeo?: string,
+) {
+  const { fila, desde, precio } = precioCelda(c, r.celda);
+  const coberturas = fila.combinacion.cobertura
+    ? [fila.combinacion.cobertura]
+    : ["borrador", "normal", "alta"];
+  if (
+    r.escenarios.length !== coberturas.length ||
+    coberturas.some(
+      (v) => r.escenarios.filter((e) => e.cobertura === v).length !== 1,
+    )
+  )
+    throw new Error(
+      "Simulá todas las coberturas de la celda antes de sugerir.",
+    );
+  const avisos: string[] = [];
+  let mayor = new D(0);
+  for (const e of r.escenarios) {
+    if (e.estado !== "CALCULADO")
+      throw new Error("Hay una cobertura sin costo verificable.");
+    if (e.comercial?.ventaMotorNeta == null || e.comercial.cargas == null)
+      throw new Error(
+        e.comercial?.motivo ??
+          "Volvé a simular para obtener el precio del motor.",
+      );
+    if (
+      e.grupos.length !== 1 ||
+      e.grupos[0].fila !== r.celda.fila ||
+      !new D(e.grupos[0].desdeCantidad).eq(desde)
+    )
+      throw new Error(
+        "La referencia distribuye la venta entre varias celdas; elegí otra referencia.",
+      );
+    avisos.push(...e.avisos);
+    const factor = new D(1).plus(new D(e.ivaPorcentaje).div(100));
+    const enConvencion = new D(e.comercial.ventaMotorNeta).times(
+      c.composicion.iva === "INCLUIDO" ? factor : 1,
+    );
+    const preparacion =
+      c.composicion.preparacion.modalidad === "FIJA_PEDIDO"
+        ? new D(c.composicion.preparacion.importe)
+        : new D(0);
+    const cantidad = new D(e.cantidadFacturable);
+    if (!cantidad.gt(0) || !enConvencion.isFinite() || enConvencion.lt(0))
+      throw new Error("El motor devolvió una referencia inválida.");
+    const valor = D.max(0, enConvencion.minus(preparacion))
+      .div(cantidad)
+      .toDecimalPlaces(8, D.ROUND_CEIL);
+    mayor = D.max(mayor, valor);
+    if (preparacion.gte(enConvencion))
+      avisos.push(
+        "La preparación cubre el precio de referencia del motor; revisá el precio cero sugerido.",
+      );
+  }
+  const nuevo = redondeo
+    ? ajustarPrecio(mayor.toFixed(), "IMPORTE", "0", redondeo)
+    : mayor.toFixed();
+  if (nuevo == null || !/^\d{1,18}(\.\d{1,8})?$/.test(nuevo))
+    throw new Error("El precio sugerido supera el importe admitido.");
+  const controles = r.escenarios.flatMap((e) =>
+    e.estado === "CALCULADO"
+      ? [
+          {
+            ...compararSimulacion(c, r.celda.seccion, e, nuevo).control,
+            cobertura: e.cobertura,
+          },
+        ]
+      : [],
+  );
+  if (coberturas.length > 1)
+    avisos.push(
+      "Precio único: se usa la mayor sugerencia de las tres coberturas.",
+    );
+  return { anterior: precio, nuevo, controles, avisos: [...new Set(avisos)] };
+}
+
+export function canalesDelTarifario(p: PoliticaPrecios, id: string) {
+  return Object.entries(p.canales).flatMap(([canal, regla]) => {
+    const efectiva = regla.modalidad === "HEREDAR" ? p.general : regla;
+    return efectiva.modalidad === "TARIFARIO" && efectiva.tarifarioId === id
+      ? [canal]
+      : [];
+  });
+}
+
+/** Alerta comercial en la frontera: compara impresión + preparación + mínimo.
+ * En CAD se compara el límite por la izquierda con el nuevo tramo, respetando
+ * el redondeo de ML. Con IVA común, el sentido de la caída no cambia.
+ */
+export function caidasEntreTramos(c: ContenidoTarifario) {
+  const avisos: { seccion: "hojas" | "cad"; fila: number; desde: string }[] =
+    [];
+  const prep =
+    c.composicion.preparacion.modalidad === "FIJA_PEDIDO"
+      ? c.composicion.preparacion.importe
+      : "0";
+  const minimo =
+    c.composicion.minimo.modalidad === "IMPORTE_PEDIDO"
+      ? c.composicion.minimo.importe
+      : "0";
+  for (const seccion of ["hojas", "cad"] as const) {
+    const m = c[seccion];
+    m?.filas.forEach((f, fila) => {
+      const rangos = f.rangosPropios ?? m.rangosGenerales;
+      for (let i = 1; i < rangos.length; i++) {
+        const anterior = precioCelda(c, { seccion, fila, tramo: i - 1 }).precio;
+        const actual = precioCelda(c, { seccion, fila, tramo: i }).precio;
+        if (anterior == null || actual == null) continue;
+        const limite = new D(rangos[i]);
+        let antes = seccion === "hojas" ? limite.minus(1) : limite;
+        let despues = limite;
+        if (
+          seccion === "hojas" &&
+          "faz" in f.combinacion &&
+          f.combinacion.faz === 2 &&
+          c.hojas?.reglas.unidad === "CARILLA" &&
+          c.hojas.reglas.ultimaHojaImpar === "COBRAR_SIMPLE"
+        ) {
+          // La cara suelta acumula en simple faz: este grupo sólo admite pares.
+          antes = antes.div(2).floor().times(2);
+          despues = despues.div(2).ceil().times(2);
+          if (
+            antes.lt(rangos[i - 1]) ||
+            (rangos[i + 1] != null && despues.gte(rangos[i + 1]))
+          )
+            continue;
+        }
+        if (
+          seccion === "cad" &&
+          c.cad?.reglas.redondeo.modalidad === "HACIA_ARRIBA"
+        ) {
+          const incremento = new D(c.cad.reglas.redondeo.incrementoMl);
+          antes = antes.div(incremento).ceil().times(incremento);
+          despues = despues.div(incremento).ceil().times(incremento);
+        }
+        const total = (cantidad: InstanceType<typeof D>, precio: string) =>
+          D.max(minimo, cantidad.times(precio).plus(prep));
+        if (total(despues, actual).lt(total(antes, anterior)))
+          avisos.push({ seccion, fila, desde: limite.toFixed() });
+      }
+    });
+  }
+  return avisos;
+}

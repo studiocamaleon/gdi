@@ -11,11 +11,13 @@ import {
 import { configTarifarios } from "@/lib/__fixtures__/tarifarios";
 import {
   simularCeldasTarifario,
+  leerPoliticaTarifarios,
   type ContenidoTarifario,
 } from "@/lib/centro-copiado-tarifarios-api";
 import type { SolicitudSimulacion } from "../../../apps/api/src/centro-copiado/tarifarios/simulacion-tarifario.types";
 vi.mock("@/lib/centro-copiado-tarifarios-api", () => ({
   simularCeldasTarifario: vi.fn(),
+  leerPoliticaTarifarios: vi.fn(),
 }));
 vi.mock("./centro-copiado-tarifarios-controles", async (original) => ({
   ...(await original<object>()),
@@ -54,6 +56,12 @@ function respuesta(s: SolicitudSimulacion) {
           estado: "CALCULADO" as const,
           cobertura: "normal" as const,
           calculadoEl: "2026-10-10T15:00:00Z",
+          comercial: {
+            cargas: [],
+            ventaMotorNeta: "100",
+            metodosMotor: ["por_margen"],
+            motivo: null,
+          },
           costoTotal: "60",
           costoUnitario: "60",
           cantidadReferencia: "1",
@@ -243,4 +251,122 @@ it("selección explícita envía sólo la celda elegida y su cantidad ajustada",
   expect(vi.mocked(simularCeldasTarifario).mock.calls[0][1].celdas).toEqual([
     { seccion: "hojas", fila: 0, tramo: 0, cantidadReferencia: "50" },
   ]);
+});
+
+function respuestaCompleta(s: SolicitudSimulacion) {
+  const r = respuesta(s);
+  r.resultados.forEach((celda) => {
+    celda.escenarios = (["borrador", "normal", "alta"] as const).map(
+      (cobertura) => ({
+        ...celda.escenarios[0],
+        cobertura,
+        comercial: {
+          cargas: [],
+          ventaMotorNeta: "200",
+          metodosMotor: ["por_margen"],
+          motivo: null,
+        },
+      }),
+    ) as typeof celda.escenarios;
+  });
+  return r;
+}
+it("revisa sugerencias con coberturas completas, permite cancelar y aplica sólo al confirmar", async () => {
+  vi.mocked(simularCeldasTarifario).mockImplementation(async (_id, s) =>
+    respuestaCompleta(s),
+  );
+  vi.mocked(leerPoliticaTarifarios).mockRejectedValue(
+    new Error("Sin conexión de prueba"),
+  );
+  await montar();
+  await click("Simular matriz (6)");
+  await click("Revisar sugerencias (6)");
+  expect(document.body.textContent).toContain("6 precios para aplicar");
+  expect(document.body.textContent).toContain(
+    "No se pudieron consultar los canales",
+  );
+  expect(
+    [...el.querySelectorAll("input")].filter((i) => i.value === "121"),
+  ).toHaveLength(6);
+  await click("Cancelar");
+  expect(
+    [...el.querySelectorAll("input")].filter((i) => i.value === "121"),
+  ).toHaveLength(6);
+  await click("Revisar sugerencias (6)");
+  await click("Aplicar 6 precios al borrador");
+  expect(
+    [...el.querySelectorAll("input")].filter((i) => i.value === "242"),
+  ).toHaveLength(6);
+  expect(simularCeldasTarifario).toHaveBeenCalledTimes(2);
+});
+it("una revisión abierta no sobrescribe un borrador que cambió", async () => {
+  vi.mocked(simularCeldasTarifario).mockImplementation(async (_id, s) =>
+    respuestaCompleta(s),
+  );
+  await montar();
+  await click("Simular matriz (6)");
+  await click("Revisar sugerencias (6)");
+  await escribir(
+    [...el.querySelectorAll("input")].find((i) => i.value === "121")!,
+    "150",
+  );
+  expect(document.body.textContent).toContain("El borrador cambió");
+  expect(boton("Aplicar 6 precios al borrador").disabled).toBe(true);
+});
+it("omite celdas sin simular y no habilita una aplicación vacía", async () => {
+  await montar();
+  await click("Revisar sugerencias (6)");
+  expect(document.body.textContent).toContain("6 celdas omitidas");
+  expect(boton("Aplicar 0 precios al borrador").disabled).toBe(true);
+});
+
+it("invalida una propuesta pendiente si llega una simulación más reciente", async () => {
+  vi.mocked(simularCeldasTarifario).mockImplementation(async (_id, s) =>
+    respuestaCompleta(s),
+  );
+  let resolver!: (
+    valor: Awaited<ReturnType<typeof leerPoliticaTarifarios>>,
+  ) => void;
+  vi.mocked(leerPoliticaTarifarios).mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        resolver = r;
+      }),
+  );
+  await montar();
+  await click("Simular matriz (6)");
+  await click("Revisar sugerencias (6)");
+  vi.mocked(simularCeldasTarifario).mockImplementation(async (_id, s) => {
+    const r = respuestaCompleta(s);
+    r.resultados.forEach((celda) =>
+      celda.escenarios.forEach((e) => {
+        e.comercial.ventaMotorNeta = "300";
+      }),
+    );
+    return r;
+  });
+  await click("Simular matriz (6)");
+  await act(async () =>
+    resolver({
+      estado: "BORRADOR",
+      operativa: false,
+      revision: 1,
+      actualizadoEl: null,
+      contenido: {
+        esquema: 1,
+        general: { modalidad: "MOTOR" },
+        canales: {
+          mostrador: { modalidad: "HEREDAR" },
+          whatsapp: { modalidad: "HEREDAR" },
+          email: { modalidad: "HEREDAR" },
+          web: { modalidad: "HEREDAR" },
+          app_movil: { modalidad: "HEREDAR" },
+        },
+      },
+    }),
+  );
+  expect(document.body.textContent).toContain(
+    "Cambió el contenido, la selección o una simulación",
+  );
+  expect(boton("Aplicar 6 precios al borrador").disabled).toBe(true);
 });

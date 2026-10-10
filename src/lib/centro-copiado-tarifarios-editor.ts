@@ -230,6 +230,12 @@ export function normalizarContenido(
   contenido: ContenidoTarifario,
 ): ContenidoTarifario {
   const c = structuredClone(contenido);
+  if (c.margen) {
+    const minimo = decimalEditor(c.margen.minimoPorcentaje, 4, 2);
+    if (minimo === null)
+      throw new Error("Completá el margen mínimo del tarifario.");
+    c.margen.minimoPorcentaje = minimo;
+  }
   for (const matriz of [c.hojas, c.cad])
     if (matriz)
       for (const fila of matriz.filas)

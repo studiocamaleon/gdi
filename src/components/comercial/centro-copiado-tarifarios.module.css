@@ -1,0 +1,78 @@
+/* Tokens compartidos de GRAFO: la matriz vive dentro del workspace de Configuración. */
+.suggestions {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+}
+.eyebrow {
+  margin-bottom: 6px;
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--border);
+}
+.metric {
+  padding: 16px 18px;
+  background: var(--surface);
+}
+.metric dt {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.metric dd {
+  margin-top: 7px;
+  font: 22px/1.2 var(--brand-mono);
+  font-variant-numeric: tabular-nums;
+}
+.scenarioGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 12px;
+}
+.scenario {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.scenario[data-negative="true"] {
+  border-color: var(--destructive);
+}
+.amounts {
+  display: grid;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.amounts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.amounts dt {
+  color: var(--muted-text);
+}
+.amounts dd {
+  font-family: var(--brand-mono);
+}
+.amounts > div:last-child {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}

@@ -1,4 +1,6 @@
 "use client";
+import { SugerenciasTarifario } from "./centro-copiado-tarifarios-sugerencias";
+import styles from "./centro-copiado-tarifarios.module.css";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Play, Square } from "lucide-react";
 import { usePuede } from "@/components/navigation/permisos-provider";
@@ -345,67 +347,101 @@ function Simulador({
     } catch {
       /* Edición incompleta: no mostrar un margen previo. */
     }
+    const control = comparacion?.control;
+    const estado = control?.estado ?? "NO_VERIFICABLE";
+    const etiqueta = {
+      CUMPLE: "Cumple el mínimo",
+      REQUIERE_AUTORIZACION: "Requiere autorización",
+      BLOQUEADO: "Bloqueado",
+      NO_VERIFICABLE: "Margen sin verificar",
+    }[estado];
     return (
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <div
+        className={styles.scenario}
+        data-negative={control?.negativo ?? false}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Badge variant="outline">{escenario.cobertura}</Badge>
-          <span>
-            {escenario.cantidadReferencia}{" "}
-            {escenario.unidad === "HOJA"
-              ? "hojas"
-              : escenario.unidad === "CARILLA"
-                ? "carillas"
-                : "ML consumidos"}
-          </span>
-          <span className="text-muted-foreground">
-            {fecha(escenario.calculadoEl)}
-          </span>
+          <Badge
+            variant={
+              estado === "CUMPLE"
+                ? "secondary"
+                : estado === "NO_VERIFICABLE"
+                  ? "outline"
+                  : "destructive"
+            }
+          >
+            {etiqueta}
+          </Badge>
         </div>
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-3">
+        <p className="text-xs text-muted-foreground">
+          {escenario.cantidadReferencia}{" "}
+          {escenario.unidad === "HOJA"
+            ? "hojas"
+            : escenario.unidad === "CARILLA"
+              ? "carillas"
+              : "ML consumidos"}{" "}
+          · {fecha(escenario.calculadoEl)}
+        </p>
+        <dl className={styles.amounts}>
           <div>
-            <dt className="text-muted-foreground">Costo productivo</dt>
-            <dd className="font-medium tabular-nums">
-              {dinero(escenario.costoTotal)}{" "}
-              <span className="font-normal">
-                ({dinero(escenario.costoUnitario)} /{" "}
-                {escenario.unidad.toLowerCase()})
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Venta sin IVA</dt>
-            <dd className="font-medium tabular-nums">
+            <dt>Venta sin IVA</dt>
+            <dd>
               {comparacion?.composicion.total
                 ? dinero(comparacion.composicion.total.neto)
-                : "Precio pendiente o incompleto"}
+                : "Precio pendiente"}
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Margen productivo</dt>
-            <dd
-              className={`font-medium tabular-nums ${comparacion?.costoSuperaVenta ? "text-destructive" : ""}`}
-            >
-              {comparacion?.utilidad != null
-                ? `${dinero(comparacion.utilidad)}${comparacion.margenPorcentaje != null ? ` · ${comparacion.margenPorcentaje}%` : " · porcentaje no definido"}`
+            <dt>Costo productivo</dt>
+            <dd>{dinero(escenario.costoTotal)}</dd>
+          </div>
+          <div>
+            <dt>Cargas comerciales</dt>
+            <dd>
+              {control?.cargasTotal != null
+                ? dinero(control.cargasTotal)
+                : "Sin verificar"}
+            </dd>
+          </div>
+          <div>
+            <dt>Margen final</dt>
+            <dd>
+              {control?.utilidad != null
+                ? `${dinero(control.utilidad)}${control.porcentaje != null ? ` · ${control.porcentaje}%` : " · sin porcentaje"}`
                 : "Sin verificar"}
             </dd>
           </div>
         </dl>
+        <p className="text-xs text-muted-foreground">
+          {escenario.comercial?.motivo ??
+            control?.motivo ??
+            "Completá los precios para comparar."}
+        </p>
         {escenario.avisos.map((aviso) => (
-          <p className="text-amber-700 dark:text-amber-400" key={aviso}>
+          <p className="text-xs text-muted-foreground" key={aviso}>
             {aviso}
           </p>
         ))}
         <details>
           <summary className="cursor-pointer text-muted-foreground">
-            Referencia y composición
+            Ver composición y referencia
           </summary>
-          <div className="mt-2 space-y-1 text-muted-foreground">
+          <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground">
             <p>{escenario.referencia}</p>
             <p>
-              Cantidad facturable: {escenario.cantidadFacturable}{" "}
-              {escenario.unidad}. IVA resuelto: {escenario.ivaPorcentaje}%.
+              Costo por {escenario.unidad.toLowerCase()}:{" "}
+              {dinero(escenario.costoUnitario)}. Facturable:{" "}
+              {escenario.cantidadFacturable} {escenario.unidad}. IVA:{" "}
+              {escenario.ivaPorcentaje}%.
             </p>
+            {control?.cargas.map((c) => (
+              <p key={JSON.stringify(c)}>
+                {c.nombre}: {c.porcentaje}% sobre{" "}
+                {c.base === "NETO" ? "neto" : "total con IVA"} ·{" "}
+                {dinero(c.importe)}
+              </p>
+            ))}
             {comparacion && (
               <p>
                 Preparación:{" "}
@@ -424,6 +460,12 @@ function Simulador({
                   ? dinero(comparacion.composicion.total.total)
                   : "pendiente"}
                 .
+              </p>
+            )}
+            {escenario.comercial?.ventaMotorNeta != null && (
+              <p>
+                Referencia del motor sin IVA:{" "}
+                {dinero(escenario.comercial.ventaMotorNeta)}.
               </p>
             )}
             {escenario.trazas.map((t, i) => (
@@ -451,22 +493,61 @@ function Simulador({
     .flatMap((r) => r.resultado.escenarios)
     .filter((e) => e.estado === "ERROR").length;
 
+  const fuenteSugerencia = (c: Celda) => {
+    const r = resultados[claveCeldaSimulacion(c)];
+    return {
+      celda: c,
+      etiqueta: `${c.etiqueta} · desde ${c.desde}`,
+      resultado: r?.estructura === estructura ? r.resultado : undefined,
+    };
+  };
+  const resumen = useMemo(() => {
+    const resumen = { cumplen: 0, insuficientes: 0, pendientes: 0 };
+    for (const c of celdas) {
+      const guardadoCelda = resultados[claveCeldaSimulacion(c)];
+      const r =
+        guardadoCelda?.estructura === estructura
+          ? guardadoCelda.resultado
+          : undefined;
+      if (!r) {
+        resumen.pendientes +=
+          contenido[c.seccion]!.reglas.cobertura === "UNICA" ? 3 : 1;
+        continue;
+      }
+      for (const e of r.escenarios) {
+        try {
+          const estado =
+            e.estado === "CALCULADO" && normalizado
+              ? compararSimulacion(normalizado, c.seccion, e).control.estado
+              : "NO_VERIFICABLE";
+          if (estado === "CUMPLE") resumen.cumplen++;
+          else if (estado === "NO_VERIFICABLE") resumen.pendientes++;
+          else resumen.insuficientes++;
+        } catch {
+          resumen.pendientes++;
+        }
+      }
+    }
+    return resumen;
+  }, [celdas, resultados, estructura, normalizado, contenido]);
+
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader>
-        <CardTitle>Simular costos de la matriz</CardTitle>
+        <CardTitle>Costos, sugerencias y márgenes</CardTitle>
         <CardDescription>
           Compará los precios con pedidos de referencia. Incluye papel,
           impresión y preparación productiva; las terminaciones se cotizan
           aparte.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="min-w-0 flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
-          Cada celda usa una cantidad dentro de su tramo. El margen compara la
-          venta sin IVA con el costo productivo del motor, antes de comisiones y
-          otros gastos comerciales. Los costos corresponden al momento de la
-          simulación, también al consultar una versión histórica.
+          Cada celda representa un pedido con una cantidad dentro del tramo. El
+          margen final descuenta costos productivos, comisiones e impuestos
+          internos de la venta sin IVA. Estos resultados corresponden a la fecha
+          de simulación; cada pedido real necesitará su propio control antes de
+          emitirse.
         </p>
         {estructura !== estructuraGuardada && (
           <Alert>
@@ -478,6 +559,24 @@ function Simulador({
             </AlertDescription>
           </Alert>
         )}
+        <dl className={styles.metrics}>
+          <div className={styles.metric}>
+            <dt>Celdas en la matriz</dt>
+            <dd>{celdas.length}</dd>
+          </div>
+          <div className={styles.metric}>
+            <dt>Referencias verificadas</dt>
+            <dd>{resumen.cumplen}</dd>
+          </div>
+          <div className={styles.metric}>
+            <dt>Margen insuficiente</dt>
+            <dd>{resumen.insuficientes}</dd>
+          </div>
+          <div className={styles.metric}>
+            <dt>Referencias sin verificar</dt>
+            <dd>{resumen.pendientes}</dd>
+          </div>
+        </dl>
         <TextoTarifa
           etiqueta="Filtrar simulación"
           valor={filtro}
@@ -544,6 +643,16 @@ function Simulador({
           </p>
         )}
         <ErrorTarifa error={error} />
+        <SugerenciasTarifario
+          contenido={contenido}
+          tarifarioId={tarifarioId}
+          fuentes={filtradas.map(fuenteSugerencia)}
+          seleccionadas={celdas
+            .filter((c) => seleccion.has(claveCeldaSimulacion(c)))
+            .map(fuenteSugerencia)}
+          disabled={disabled || ocupada}
+          onChange={onChange}
+        />
         <Table>
           <TableHeader>
             <TableRow>
@@ -643,7 +752,7 @@ function Simulador({
                       colSpan={4}
                       className="whitespace-normal bg-muted/20"
                     >
-                      <div className="space-y-4 py-2 text-sm">
+                      <div className={styles.scenarioGrid}>
                         {vigente ? (
                           guardadoCelda.resultado.escenarios.map((e) => (
                             <div key={e.cobertura}>
