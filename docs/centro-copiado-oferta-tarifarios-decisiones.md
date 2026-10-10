@@ -31,7 +31,8 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D13 | El precio unitario del tramo alcanzado se aplica a todas las unidades del grupo comercial. En la alternativa por archivo, se aplica a todas las unidades de cada combinación comercial de ese archivo. La regla vale por hoja o por carilla según el tarifario; no se cobra progresivamente. Resuelve P03; D15 precisa la separación de la última hoja cuando corresponda. | 2026-10-10 |
 | D14 | Cada tarifario tiene rangos generales que las combinaciones usan inicialmente. Se pueden definir rangos propios como excepción por combinación. Compartir rangos no implica compartir precios ni acumular volumen entre combinaciones distintas. Resuelve P04. | 2026-10-10 |
 | D15 | El tratamiento de la última hoja con una sola cara impresa se configura por tarifario: «Mantener tarifa doble faz» como opción inicial y «Última hoja a simple faz» como alternativa. Se aplica por copia física, también a un archivo de una sola página configurado doble faz. Resuelve P05. | 2026-10-10 |
-| D16 | Cada precio de la matriz incluye el papel elegido y la impresión según color y caras. Las terminaciones se cobran aparte cuando se seleccionan, incluidos sus materiales. Aplica a tarifarios por hoja y por carilla. Resuelve parcialmente P06; IVA, preparación y mínimos siguen pendientes. | 2026-10-10 |
+| D16 | Cada precio de la matriz incluye el papel elegido y la impresión según color y caras. Las terminaciones se cobran aparte cuando se seleccionan, incluidos sus materiales. Aplica a tarifarios por hoja y por carilla. Resuelve parcialmente P06; el IVA se define en D17 y preparación y mínimos siguen pendientes. | 2026-10-10 |
+| D17 | La interpretación del precio cargado se elige por tarifario: «IVA incluido» como opción inicial y «Más IVA» como alternativa. Aplica a todas sus combinaciones, incluidas las que tienen rangos propios. Resuelve el IVA dentro de P06; preparación y mínimos siguen pendientes. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -124,7 +125,8 @@ Esta modalidad puede producir descensos del total al cambiar de tramo. En el
 ejemplo, 99 hojas cuestan $9.900, 100 cuestan $8.000 y 101 cuestan $8.080. P03
 queda resuelto con esos resultados; no se acordó una corrección automática de
 los saltos. Los ejemplos muestran la aplicación de la tarifa, que incluye papel
-e impresión según D16. IVA, preparación y mínimos conservan el pendiente P06.
+e impresión según D16. El IVA sigue D17; preparación y mínimos conservan el
+pendiente P06.
 
 ### Rangos generales y excepciones por combinación
 
@@ -205,9 +207,40 @@ se vuelve a sumar al precio comercial de la matriz. Tampoco se duplican los
 materiales de una terminación al agregar su importe. La visualización del
 desglose no cambia qué conceptos están incluidos.
 
-P06 queda parcialmente resuelto. Faltan la interpretación del IVA en el precio
-cargado, la preparación y los mínimos. La política para calcular el precio de
-las terminaciones y su integración con tomos se completará en P14.
+P06 queda parcialmente resuelto. El IVA se define en D17; faltan la preparación
+y los mínimos. La política para calcular el precio de las terminaciones y su
+integración con tomos se completará en P14.
+
+### IVA en los precios del tarifario
+
+**Confirmado en D17:** cada tarifario permite elegir cómo se interpreta el
+importe cargado en sus celdas:
+
+- **IVA incluido**, como opción inicial: el importe ya contiene el IVA que
+  corresponda. No se vuelve a sumar al cobrar.
+- **Más IVA**, como alternativa: el importe es neto y se agrega el IVA que
+  corresponda para obtener el precio final.
+
+La elección es común a todas las combinaciones y tramos del tarifario, también
+a las excepciones de rangos de D14, y se debe mostrar al cargar y consultar
+precios. Aplica tanto a precios por hoja como por carilla.
+
+Ejemplo ficticio con un precio cargado de $121 por unidad y una alícuota
+hipotética del 21 %, sólo para ilustrar el cálculo:
+
+| Modalidad | Precio neto | IVA | Precio final por unidad |
+| --- | --- | --- | --- |
+| IVA incluido | $100 | $21 | $121 |
+| Más IVA | $121 | $25,41 | $146,41 |
+
+Esta decisión define cómo se carga el precio; no fija una alícuota ni determina
+si corresponde aplicar IVA. Eso debe respetar la configuración fiscal vigente
+del sistema. Las terminaciones mantienen su tratamiento fiscal correspondiente
+y se agregan por separado según D16, sin duplicar el impuesto.
+
+Como propuesta para P10 y P11, cambiar esta modalidad en un tarifario con
+precios cargados debería mostrar su impacto antes de guardar. La conversión de
+esos precios y el tratamiento de cotizaciones existentes siguen pendientes.
 
 ## Base actual del módulo
 
@@ -326,12 +359,12 @@ Los costos y márgenes conservarían sus permisos de acceso.
 ## Decisiones pendientes
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
-en D15. P06 está parcialmente resuelto en D16. Las preguntas restantes deben
+en D15. P06 está parcialmente resuelto en D16 y D17. Las preguntas restantes deben
 resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P06 | ¿Cómo se trata el IVA, la preparación y los mínimos en el precio cargado? | Parcialmente resuelto en D16: papel e impresión incluidos y terminaciones aparte. Falta definir IVA, preparación y mínimos para evitar cobros duplicados. |
+| P06 | ¿Cómo se cobran la preparación y los mínimos? | Parcialmente resuelto en D16 y D17: papel e impresión incluidos, terminaciones aparte e IVA incluido inicialmente, con más IVA como alternativa por tarifario. Falta definir preparación y mínimos para evitar cobros duplicados. |
 | P07 | ¿Qué prioridad tienen el tarifario, los acuerdos por cliente, descuentos y ajustes manuales? | Definir una prioridad única, permisos y explicación del resultado. |
 | P08 | ¿Qué ocurre ante una combinación sin precio? | Mostrar la falta de tarifa. Usar el motor o heredar otra matriz sólo si la política elegida lo permite explícitamente. |
 | P09 | ¿Cómo se elige la política por canal y qué pasa si se cambia el canal de una propuesta? | Definir la política general, la recotización de borradores y el tratamiento de documentos emitidos. |
@@ -360,7 +393,8 @@ del archivo original.
 | Páginas y copias | Un archivo de 100 páginas con una copia frente a uno de 10 páginas con diez copias, simple faz. | Ambos aportan 100 unidades, por hoja o por carilla. A igualdad de combinación y tarifario y sin otros archivos, tienen la misma cantidad para buscar el tramo. |
 | Cantidades en doble faz | Un archivo de 10 páginas con una copia frente a diez archivos de una página, todos configurados en doble faz. | Suman 10 carillas, pero usan 5 y 10 hojas. La opción inicial conserva tarifa doble para todos; la alternativa reclasifica como simples las diez hojas de los archivos de una página. La acumulación sigue D11. |
 | Separación dentro de un archivo | Un archivo de 11 páginas con 3 copias, modo por archivo y última hoja a simple faz. | Busca el tramo doble con 15 hojas y el simple con 3; en un tarifario por carilla usa 30 y 3 respectivamente. No acumula otros archivos. |
-| Conceptos incluidos | Impresión en A4, Obra 80 g y K, con anillado seleccionado. | La matriz cubre papel e impresión. El anillado y sus materiales se agregan aparte una sola vez. Los costos de papel e impresión no se suman nuevamente al precio. IVA, preparación y mínimos conservan P06. |
+| Conceptos incluidos | Impresión en A4, Obra 80 g y K, con anillado seleccionado. | La matriz cubre papel e impresión. El anillado y sus materiales se agregan aparte una sola vez. Los costos de papel e impresión no se suman nuevamente al precio. El IVA sigue D17; preparación y mínimos conservan P06. |
+| IVA incluido o adicional | Precio cargado de $121 por unidad, con una alícuota hipotética del 21 %. | IVA incluido: $100 netos + $21 de IVA = $121 finales. Más IVA: $121 netos + $25,41 de IVA = $146,41 finales. La alícuota y su aplicación provienen de la configuración fiscal, no de este ejemplo. |
 | Impresión mixta | Un pedido con K y CMYK, o con papeles distintos. | Por combinación, cada grupo acumula por separado según D12; por archivo, cada uno usa sus propias unidades. |
 | Varias cargas | Un archivo de 60 hojas y otro de 50 con la misma combinación, agregados en distintas aperturas de Centro de copiado al mismo pedido. | Por combinación, suman 110. Por archivo, mantienen 60 y 50. Agregar o quitar uno actualiza el volumen del grupo en el borrador. |
 | Rango de páginas | Imprimir sólo 10 páginas seleccionadas de un PDF de 100 páginas. | Distinguir la selección de páginas del tramo comercial por cantidad. |
@@ -395,7 +429,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 ## Orden de trabajo propuesto
 
 1. Partir de P01 a P05 resueltos en D09 a D15 y de P06 parcialmente resuelto en
-   D16; completar las reglas comerciales pendientes que condicionan el primer
+   D16 y D17; completar las reglas comerciales pendientes que condicionan el primer
    alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
@@ -434,3 +468,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | P04 resuelto: rangos generales por tarifario con excepciones por combinación. Incorporación de D14 y ejemplos; precios y acumulación permanecen independientes entre combinaciones. | Confirmado |
 | 2026-10-10 | P05 resuelto: mantener tarifa doble faz inicialmente, con última hoja a simple faz como alternativa por tarifario. Incorporación de D15; precisión de D13 y de la acumulación al separar partes del mismo archivo. Actualización de ejemplos por hoja y por carilla. | Confirmado |
 | 2026-10-10 | P06 parcialmente resuelto: papel e impresión incluidos en la tarifa; terminaciones y sus materiales aparte al seleccionarlas. Incorporación de D16. IVA, preparación y mínimos siguen pendientes. | Confirmado parcial |
+| 2026-10-10 | IVA resuelto dentro de P06: IVA incluido como opción inicial y más IVA como alternativa por tarifario. Incorporación de D17 y ejemplo de cálculo. Preparación y mínimos siguen pendientes. | Confirmado parcial |
