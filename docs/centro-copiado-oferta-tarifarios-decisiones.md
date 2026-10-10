@@ -40,6 +40,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D22 | Centro de copiado tiene una política general, motor o tarifario predeterminado, que los canales heredan por defecto. Cada canal puede elegir un tarifario activo específico o usar el motor. Todo el pedido usa un canal y una política principal; cambiar el canal de un borrador recalcula Centro de copiado y muestra el impacto antes de confirmar. Los documentos emitidos conservan sus precios. Resuelve P09. | 2026-10-10 |
 | D23 | El alcance inicial para crear y actualizar precios incluye generación de la estructura, carga manual, pegado desde Excel, duplicación independiente de tarifarios, sugerencias del motor y ajustes masivos por porcentaje o importe por unidad, con redondeo opcional. Los cambios se preparan en borrador y se revisan antes de aplicarlos y activarlos. La importación de archivos Excel/CSV queda para una segunda etapa. Resuelve el alcance de P10; la vigencia sigue D24. | 2026-10-10 |
 | D24 | Las versiones publicadas del tarifario son inmutables y se activan inmediatamente o de forma programada. Las cotizaciones nuevas usan la versión vigente; los borradores anteriores requieren actualización explícita antes de emitir. Se respetan los presupuestos emitidos durante su validez y los importes ya aprobados u órdenes emitidas. Se conserva el histórico y se revisa cualquier cambio de versión entre vista previa y confirmación. Resuelve P11. | 2026-10-10 |
+| D25 | Cada tarifario tiene un mínimo de margen configurable. Por debajo se exige autorización con motivo como opción inicial, incluido el margen negativo; el bloqueo estricto es la alternativa. Se evalúa impresión más preparación después de ajustes comerciales y mínimo de importe, con terminaciones aparte. No se elevan automáticamente los precios de la matriz. El margen no verificable requiere revisión y las aprobaciones corresponden al cálculo revisado. Se respetan los compromisos de D24. Resuelve P12. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -370,7 +371,7 @@ ajuste de $100 y se cobran $1.000 antes de terminaciones. No se acordó una
 excepción que permita ignorar ese mínimo.
 
 Los permisos concretos y su implementación se definirán al diseñar el recorrido;
-la política ante márgenes insuficientes o negativos conserva P12. D21 define
+la política ante márgenes insuficientes o negativos sigue D25. D21 define
 qué hacer si no se puede obtener un precio, y D24 la conservación o revisión de
 estos valores al cambiar una cotización. El cálculo y desglose fiscal deben
 seguir D17 y las reglas del sistema, sin duplicar descuentos ni impuestos.
@@ -568,6 +569,57 @@ El recorrido se integra con las [versiones de presupuestos](presupuestos-version
 y la [conversión de presupuestos a órdenes](presupuestos-conversion-ot.md), que
 conserva los importes aceptados. No se sobrescriben documentos históricos.
 
+### Márgenes insuficientes o negativos
+
+**Confirmado en D25:** el mínimo de margen es configurable por tarifario.
+La opción inicial exige autorización con motivo cuando el resultado queda por
+debajo de ese mínimo, también si es negativo. Como alternativa, el tarifario
+puede establecer un bloqueo estricto que impida emitir mientras no se alcance
+el mínimo. En ambos casos se conserva el borrador y se muestra el problema.
+El control no aumenta automáticamente los precios cargados en la matriz.
+
+El mínimo de importe de D19 y el mínimo de margen son controles distintos:
+alcanzar el importe mínimo no garantiza rentabilidad. El margen se evalúa sobre
+el conjunto de impresión más preparación del pedido, después de acuerdos,
+descuentos, precios manuales y ajuste por mínimo. Se considera la venta sin IVA,
+los costos de producción y preparación y los cargos aplicables, sin duplicarlos.
+Las terminaciones se controlan aparte; su ganancia no compensa una pérdida de
+impresión para superar este control.
+
+Para una venta neta positiva, el margen porcentual es la diferencia entre venta
+neta y costos y cargos aplicables, dividida por la venta neta, por cien. No debe
+confundirse con un porcentaje de recargo sobre el costo.
+
+Ejemplo ficticio con una venta neta de $10.000 y un mínimo de margen del 15 %:
+
+| Costos y cargos | Resultado | Margen y tratamiento |
+| --- | --- | --- |
+| $8.000 | Quedan $2.000 | 20 %: supera este control. |
+| $9.200 | Quedan $800 | 8 %: requiere autorización o queda bloqueado, según la política. |
+| $10.500 | Se pierden $500 | −5 %: requiere autorización o queda bloqueado, según la política. |
+
+El 15 % es sólo ilustrativo: no se fija un porcentaje universal. Un permiso para
+modificar el precio manualmente no equivale a autorizar una excepción de margen.
+La autorización debe identificar al responsable, su motivo y el cálculo
+revisado. Si cambia el pedido o los valores de ese cálculo antes de emitir,
+se vuelve a evaluar; no se conserva una aprobación para un resultado diferente.
+
+El problema debe mostrarse tanto al revisar el tarifario como al cotizar un
+pedido. La revisión de la matriz usa las referencias del cálculo; no garantiza
+el margen de todos los trabajos posibles. La cotización evalúa las cantidades
+y costos del pedido concreto. Si falta costeo, se indica «Margen no verificable»
+y se exige revisión, sin asumir que el costo es cero.
+
+La autorización, cuando corresponda, debe resolverse antes de emitir el
+presupuesto o la orden. En el futuro portal, el pedido queda pendiente de
+revisión antes de permitir su cierre y pago. Este control no resuelve precios
+pendientes de D21 ni habilita combinaciones no ofrecidas.
+
+Los presupuestos emitidos y vigentes y los importes ya aprobados u órdenes
+emitidas conservan el tratamiento de D24. Una suba posterior de costos puede
+generar una alerta interna, pero no modifica el precio comprometido ni lo
+somete retroactivamente a este bloqueo.
+
 ## Base actual del módulo
 
 La implementación revisada permite configurar por tenant papeles y gramajes,
@@ -629,7 +681,8 @@ sugerencias del motor y actualizaciones masivas están confirmadas en D23.
 
 El motor seguiría calculando los costos y la producción. El tarifario
 determinaría el precio de venta, con el desglose comercial correspondiente. La
-rentabilidad se recalcularía usando ese precio y los costos y cargos aplicables.
+rentabilidad se recalcula usando ese precio y los costos y cargos aplicables;
+su control sigue D25, sin elevar automáticamente el precio de la matriz.
 
 Una actualización de costos podría señalar qué tarifas necesitan revisión.
 Los precios publicados no cambian automáticamente al actualizar costos según
@@ -664,12 +717,11 @@ Los costos y márgenes conservarían sus permisos de acceso.
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
 en D15, P06 en D16 a D19, P07 en D20, P08 en D21, P09 en D22 y el alcance de P10
-en D23; P11 queda resuelto en D24. Las preguntas restantes deben resolverse antes
+en D23, P11 en D24 y P12 en D25. Las preguntas restantes deben resolverse antes
 de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P12 | ¿Qué ocurre si el precio deja un margen insuficiente o negativo? | Evaluar aviso, bloqueo o autorización según permisos. |
 | P13 | ¿La cobertura de impresión afecta el tarifario o solamente el costo? | La cobertura ya existe en el módulo; definir su relación con la matriz. |
 | P14 | ¿Cuál es el alcance inicial de tomos, terminaciones y planos CAD? | Proponer tarifas para impresión en hojas e integrar correctamente tomos y terminaciones existentes; evaluar un tarifario CAD por separado. |
 | P15 | ¿Cómo se habilita la nueva oferta en tenants existentes? | Proponer conservar su comportamiento hasta que configuren y activen los cambios. Definir el tratamiento de combinaciones nuevas o retiradas. |
@@ -720,6 +772,12 @@ del archivo original.
 | Activación programada | Una versión está programada para una fecha y hora del tenant. | La versión anterior sigue vigente hasta ese momento. Al activarse la nueva, se usa para cotizaciones nuevas sin sobrescribir el histórico. |
 | Presupuesto vencido | Presupuesto de $10.000 ya vencido y sin aceptar; versión vigente cotiza a $12.000. | El presupuesto anterior conserva sus importes. Para continuar se prepara una nueva revisión con precios vigentes, sin modificar el documento anterior. |
 | Cambio durante la confirmación | La vista previa usa una versión que se reemplaza antes de confirmar. | El sistema avisa y exige revisar el nuevo cálculo; no confirma silenciosamente un importe diferente. |
+| Margen insuficiente | Venta neta de impresión más preparación de $10.000, costos y cargos de $9.200 y mínimo de margen del 15 %. | El 8 % requiere autorización con motivo como opción inicial; con bloqueo estricto no se emite. No se aumenta automáticamente el precio. |
+| Margen negativo | La misma venta neta, con costos y cargos de $10.500. | El −5 % sigue D25: autorización o bloqueo estricto. Un precio manual autorizado no aprueba por sí solo esta excepción. |
+| Terminación con ganancia | Impresión más preparación quedan debajo del mínimo de margen, pero el anillado permite que el pedido completo lo supere. | La ganancia del anillado no elimina el control de margen sobre impresión más preparación. Las terminaciones se controlan aparte. |
+| Costeo incompleto | Existe precio de venta, pero faltan costos necesarios para verificar el margen. | Se muestra «Margen no verificable» y se exige revisión; no se reemplazan costos desconocidos por cero. |
+| Pedido modificado tras autorizar | Un borrador recibe aprobación de margen y luego cambian cantidades, precio o costos del cálculo. | Se reevalúa el margen; la aprobación anterior no autoriza un resultado distinto. Un presupuesto ya emitido conserva D24. |
+| Costos posteriores a la emisión | Aumenta el costo de un trabajo con presupuesto emitido todavía válido. | Puede mostrarse una alerta interna; se mantiene el precio comprometido sin aplicar retroactivamente el bloqueo de D25. |
 | Oferta incompleta | Papel habilitado con un tamaño no ofrecido, o combinación ofrecida sin precio aplicable. | El tamaño no ofrecido no se puede seleccionar ni habilitar con un precio manual. La combinación ofrecida sigue D21: precio pendiente inicialmente o respaldo explícito. |
 | Precio pendiente | 120 hojas A3, Ilustración 150 g, CMYK y doble faz; celda del tramo 100–199 vacía y sin respaldo ni acuerdo aplicable. | Se conserva el borrador con aviso de precio pendiente, sin tratar la celda como $0 ni usar el mínimo para completar el precio. No se permite confirmar o cobrar el pedido como completo. |
 | Respaldo válido | El caso anterior con otro tarifario compatible o el motor elegidos explícitamente como respaldo. | Si la fuente resuelve el precio, se usa y se identifica su origen. Se mantienen la preparación y el mínimo del tarifario activo, sin duplicar cargos. Si no lo resuelve, continúa pendiente. |
@@ -785,6 +843,15 @@ borrador debe operar sobre todo Centro de copiado, sin mezclar versiones; los
 presupuestos emitidos o aprobados conservan sus importes según su estado y
 validez. La aprobación y conversión existentes deben usar esos valores guardados.
 
+El control de D25 debe aplicarse en el servidor a todos los recorridos que
+emiten presupuestos u órdenes o cierran y cobran pedidos. Debe distinguir el
+precio de venta del piso de margen que hoy puede elevar precios calculados,
+y aprovechar el recorrido existente de aprobación comercial sin confundir su
+margen bruto con el margen que contempla los costos y cargos de D25. El diseño
+debe precisar la integración con los permisos y controles generales del tenant,
+conservar el cálculo autorizado y reevaluar los borradores modificados. No se
+deben alterar importes históricos ni compromisos vigentes de D24.
+
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
 desglose comercial y las validaciones de oferta deben conservarse en todos los
@@ -792,7 +859,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P11 resueltos en D09 a D24 y completar las reglas comerciales
+1. Partir de P01 a P12 resueltos en D09 a D25 y completar las reglas comerciales
    pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
@@ -839,3 +906,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | P09 resuelto: política general heredada por defecto, excepciones por canal y una política principal por pedido, con recálculo al cambiar el canal del borrador. Incorporación de D22 y ejemplos; preparación y mínimo pertenecen al tarifario principal, y los documentos emitidos conservan sus precios. | Confirmado |
 | 2026-10-10 | Alcance de P10 resuelto: carga manual, pegado desde Excel, duplicación, sugerencias del motor y ajustes masivos con redondeo; importación de archivos para una segunda etapa. Incorporación de D23, cantidad de referencia por tramo, revisión de cambios y ejemplos. La vigencia se conserva en P11. | Confirmado |
 | 2026-10-10 | P11 resuelto: versiones publicadas inmutables, activación inmediata o programada y actualización explícita de borradores antes de emitir. Incorporación de D24, respeto de presupuestos vigentes y de importes aprobados, ejemplos y control de cambios entre vista previa y confirmación. | Confirmado |
+| 2026-10-10 | P12 resuelto: mínimo de margen configurable por tarifario, autorización con motivo por debajo del mínimo incluido el margen negativo y bloqueo estricto como alternativa. Incorporación de D25, cálculo sobre impresión más preparación, terminaciones aparte, revisión del costeo incompleto y de pedidos modificados, sin cambiar automáticamente los precios ni alterar compromisos vigentes. | Confirmado |
