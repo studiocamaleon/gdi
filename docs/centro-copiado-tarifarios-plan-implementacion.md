@@ -43,7 +43,9 @@ compatible y selección persistida por segmento.
 | --- | --- | --- |
 | Oferta por papel y gramaje | Configurar formatos, conservar selecciones al guardar y rechazar combinaciones no ofrecidas en la API. | Implementado y probado localmente con servicios simulados; prueba de entorno y CI pendientes |
 | Cantidades y tramos en hojas | D09–D15, D27 y cantidades de D29: acumulación del pedido, caras, cobertura y juegos. | Implementado como cálculo puro y probado; conexión al cotizador pendiente |
-| Composición comercial del pedido | IVA, acuerdos/ajustes, preparación y mínimo únicos, respaldos y margen; CAD por ML. | Pendiente |
+| Composición comercial del pedido | IVA, preparación y mínimo únicos, terminaciones aparte. | Implementado como cálculo puro y probado; resolución fiscal e integración pendientes |
+| Prioridad y controles comerciales | Acuerdos/ajustes autorizados, respaldos y margen. | Pendiente; la composición recibe importes ya resueltos |
+| Cantidades y tramos CAD | Consumo real en ML, acumulación, tramo y redondeo comercial del grupo. | Pendiente |
 | Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | Pendiente |
 | Recorridos del pedido | Vista previa, guardado, recálculo y emisión comparten cantidades, versiones y precios. | Pendiente |
 | Pouch y tomos | Material por hoja, caras/copias/juegos correctos, edición y adicionales sin duplicación. | Pendiente |
@@ -166,3 +168,76 @@ cantidades y tramos CAD sobre consumo en ML; persistencia y activación de
 tarifarios/versiones/canales, y conexión común a vista previa, guardado y emisión.
 Las terminaciones y la simulación masiva mantienen su alcance acordado. Sin
 migraciones, cambios de datos, despliegues ni nuevas pantallas en este bloque.
+
+### 10 de octubre de 2026 — IVA, preparación y mínimo del pedido
+
+Implementado en [comercial/composicion-pedido.ts](../apps/api/src/centro-copiado/comercial/composicion-pedido.ts),
+con [contratos internos](../apps/api/src/centro-copiado/comercial/composicion-pedido.types.ts).
+Este bloque implementa la aritmética de D17–D19. Recibe todos los conceptos de
+impresión del pedido con sus importes resueltos y una única versión de la política
+principal. Comprueba coincidencia de empresa, tarifario, versión y moneda; rechaza
+conceptos duplicados. No es un DTO público ni recibe directamente precios del
+navegador. Las pruebas conectan la salida del cálculo de hojas con esta composición.
+
+- **IVA:** incluido por defecto o más IVA. Se exige una alícuota explícita por
+  concepto, preparación y ajuste al mínimo; cero también es explícito. La función
+  interpreta la convención comercial pero no decide qué alícuota corresponde,
+  no presupone 21 % y no sustituye la configuración fiscal existente. Admite
+  alícuotas distintas y conserva neto + IVA = total.
+- **Preparación:** incluida o cargo fijo una sola vez en el pedido. Cargas,
+  combinaciones, caras, archivos y tomos no multiplican el adicional. El importe
+  configurado se conserva separado del importe ajustado cuando el servidor ya
+  resolvió un ajuste autorizado. Este cálculo no recibe ni modifica los costos o
+  tiempos de preparación productiva.
+- **Mínimo:** se compara impresión más preparación en la misma convención de IVA,
+  después de los ajustes recibidos y del redondeo monetario. Se agrega sólo la
+  diferencia, como concepto separado; las cantidades y tramos no se modifican.
+  Un respaldo no aporta otra preparación ni otro mínimo. Sin impresiones, ambos
+  cargos son cero; un trabajo con precio explícito cero sí conserva sus cargos.
+- **Terminaciones:** se agregan después del mínimo con su propio desglose fiscal
+  ya calculado. No se les aplica nuevamente el IVA del tarifario. Se comprueba
+  que neto e IVA sumen su total y que tengan la precisión monetaria del pedido.
+  Un precio de terminación pendiente deja el total del pedido pendiente.
+- **Precios faltantes:** un mínimo o cargo conocido nunca completa una impresión
+  sin precio. Los conceptos, subtotales y total que dependen del precio faltante
+  quedan en `null`; se expone aparte el parcial conocido. `CALCULADO` sólo indica
+  que la composición tiene importes completos, no que se haya autorizado emitir.
+
+**Redondeo e integración:** se recibe la precisión monetaria resuelta del tenant
+(de 0 a 6 decimales), con redondeo de mitades hacia arriba. Se redondea una vez
+por grupo comercial después de acumular y resolver su importe, no por archivo ni
+unidad. Los subtotales suman los conceptos redondeados; el mínimo se redondea con
+la misma precisión y se compara contra esa suma cobrable. Con IVA incluido se
+conserva el total y el IVA es la diferencia con el neto redondeado; con más IVA se
+calcula sobre el neto redondeado. No se aplica este redondeo a las cantidades CAD.
+Se aceptan importes resueltos de hasta 34 enteros y 12 decimales; preparación y
+mínimo configurados admiten hasta 18 enteros. La aritmética decimal evita convertir
+los importes a `Number` y rechaza el desbordamiento de las sumas.
+
+Ejemplos ficticios comprobados:
+
+| Caso | Resultado |
+| --- | --- |
+| Precio $121, IVA incluido, alícuota de prueba 21 % | Neto $100 + IVA $21 = $121. |
+| Precio $121, más IVA, alícuota de prueba 21 % | Neto $121 + IVA $25,41 = $146,41. |
+| Impresión $300 + preparación $500; mínimo $1.000; terminación final $1.200 | Ajuste de $200; total final $2.200 con tarifario de IVA incluido. |
+| Mismos importes de impresión/preparación/mínimo netos, más IVA de prueba 21 % | Ajuste neto $200; $1.210 antes de terminación y $2.410 finales. |
+| Impresión ya ajustada a $8.100 y preparación ajustada a $400; mínimo $9.000 | Ajuste $500; total $9.000, sin repetir descuentos. |
+| Dos cargas con un tomo de 3 juegos y reclasificación de la última hoja impar | 20 hojas reales; impresión $2.900, una preparación de $500 y ajuste $600 para mínimo $4.000. |
+| Impresión conocida $100 y otra sin precio, preparación $500, terminación $1.200 | Parcial conocido $1.800; mínimo y total pendientes. |
+
+**Verificación:** 67 pruebas nuevas más las 110 de los bloques anteriores:
+**177 pruebas aprobadas en 8 suites**, con Node 24.19.0. Tipos y ESLint sin errores
+ni advertencias en los tres archivos nuevos, usando el programa TypeScript
+limitado y las reglas reales de la API para respetar los recursos de la Mac.
+Sin conexiones a bases de datos ni operaciones sobre staging o producción.
+
+**Pendientes:** seleccionar acuerdos y respaldos por alcance, aplicar descuentos
+y precios manuales con permisos/motivo/auditoría, resolver alícuotas desde la
+configuración fiscal real, controlar costos/márgenes y conectar la composición a
+cotizar/guardar/emitir. El contrato ya admite importes finales ajustados; las
+pruebas de esos importes no acreditan la implementación del resolvedor ni de sus
+permisos. CAD por ML, publicación de versiones/canales, pouch y simulación de
+todas las celdas siguen dentro del alcance inicial pendiente. No se activó el
+nuevo esquema en tenants actuales. Comprobación global en CI y apertura del PR
+pendientes; la sesión no dispone de GitHub autenticado para crearlo.
