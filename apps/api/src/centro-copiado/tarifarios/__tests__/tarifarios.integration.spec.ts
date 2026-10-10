@@ -251,6 +251,37 @@ describe('Tarifarios: persistencia, vigencia y aislamiento', () => {
     ]);
   });
 
+  it('congela el margen mínimo y la conducta por versión sin alterar las versiones previas', async () => {
+    const b = await crear();
+    const anterior = await publicar(b.id, 1);
+    const c = {
+      ...contenido(),
+      margen: { minimoPorcentaje: '25.5', anteInsuficiente: 'BLOQUEO' },
+    };
+    await request(app.getHttpServer())
+      .put(`/centro-copiado/tarifarios/${b.id}`)
+      .auth(tokens.gestor, { type: 'bearer' })
+      .send({ revision: 2, nombre: 'Con margen ficticio', contenido: c })
+      .expect(200);
+    const v = await publicar(b.id, 3);
+    expect(validarContenidoTarifario(v.contenido).margen).toEqual(c.margen);
+    expect(
+      validarContenidoTarifario(
+        (await servicio.version(tenants[0], b.id, anterior.id)).contenido,
+      ).margen,
+    ).toBeUndefined();
+    await request(app.getHttpServer())
+      .put(`/centro-copiado/tarifarios/${b.id}`)
+      .auth(tokens.gestor, { type: 'bearer' })
+      .send({
+        revision: 4,
+        nombre: 'Inválido',
+        contenido: { ...c, margen: { ...c.margen, minimoPorcentaje: '100' } },
+      })
+      .expect(400);
+    expect((await servicio.obtener(tenants[0], b.id)).revision).toBe(4);
+  });
+
   it('una pestaña vieja no sobrescribe ni publica cambios que no revisó', async () => {
     const b = await crear();
     await servicio.editar(tenants[0], b.id, users[0], {

@@ -1,3 +1,4 @@
+import type { CargaMargen } from '../comercial/control-margen';
 import type { ContenidoTarifario } from './contenido-tarifario';
 import type { CentroCopiadoCobertura } from '../centro-copiado.domain';
 
@@ -23,6 +24,12 @@ export type EscenarioSimulado = {
   cobertura: CentroCopiadoCobertura;
   calculadoEl: string;
   estado: 'CALCULADO';
+  comercial?: {
+    cargas: CargaMargen[] | null;
+    ventaMotorNeta: string | null;
+    metodosMotor: string[];
+    motivo: string | null;
+  };
   costoTotal: string;
   costoUnitario: string;
   cantidadReferencia: string;

@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { referenciaComercialMotor } from './referencia-comercial-motor';
 import { PrismaService } from '../../prisma/prisma.service';
 import { regionalDelTenant } from '../../common/regional';
 import { CentroCopiadoService } from '../centro-copiado.service';
@@ -441,6 +442,10 @@ export class CentroCopiadoSimulacionService {
       avisos.push(
         'El motor devolvió costo cero. Revisá las tarifas e insumos antes de fijar el precio.',
       );
+    if (cotizaciones.some((c) => c.minimoComercialAplicado?.aplicado))
+      avisos.push(
+        'La propuesta del motor incluye su mínimo comercial de origen. Revisala junto con el mínimo propio del tarifario.',
+      );
     const alicuotas = await Promise.all(
       cotizaciones.map((c) => this.iva(tenantId, c.productoId)),
     );
@@ -450,6 +455,7 @@ export class CentroCopiadoSimulacionService {
       );
     return {
       estado: 'CALCULADO',
+      comercial: referenciaComercialMotor(cotizaciones, alicuotas[0]),
       cobertura,
       calculadoEl: new Date().toISOString(),
       costoTotal: costo.toFixed(),

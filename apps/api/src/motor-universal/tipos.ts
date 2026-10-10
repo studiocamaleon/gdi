@@ -561,6 +561,8 @@ export interface CotizacionResultado {
       nombre: string;
       porcentaje: number;
       orden: number;
+      baseCalculo?: 'NETO' | 'BRUTO_COBRADO';
+      traslado?: 'POR_FUERA' | 'POR_DENTRO';
       desglosarCliente?: boolean;
     }>;
     /** Lista de comisiones aplicadas. */
@@ -570,6 +572,7 @@ export interface CotizacionResultado {
       nombre: string;
       porcentaje: number;
       orden: number;
+      baseCalculo?: 'NETO' | 'BRUTO_COBRADO';
     }>;
     /** Si el cliente tenía precio especial activo, snapshot del override. */
     precioEspecialCliente: {

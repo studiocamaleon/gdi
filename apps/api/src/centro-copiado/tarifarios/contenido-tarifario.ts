@@ -116,6 +116,14 @@ const contenidoSchema = z
       })
       .strict()
       .nullable(),
+    // Opcional para conservar las versiones previas; ausencia nunca equivale a piso cero.
+    margen: z
+      .object({
+        minimoPorcentaje: z.string().regex(/^\d{1,2}(\.\d{1,4})?$/),
+        anteInsuficiente: z.enum(['AUTORIZACION', 'BLOQUEO']),
+      })
+      .strict()
+      .optional(),
     composicion: z
       .object({
         iva: z.enum(['INCLUIDO', 'MAS_IVA']),

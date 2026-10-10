@@ -18,6 +18,20 @@ function entorno() {
     periodoTarifario: '2026-10',
     costos: { total: 60 },
     precio: { precioTotal: 99999 },
+    desglosePrecio: {
+      precioNetoTotal: 100,
+      precioConfig: { metodoCalculo: 'por_margen', detalle: {} },
+      impuestos: [
+        {
+          catalogoId: 'iva-ficticio',
+          nombre: 'IVA de prueba',
+          porcentaje: 21,
+          traslado: 'POR_FUERA',
+          baseCalculo: 'NETO',
+        },
+      ],
+      comisiones: [],
+    },
   };
   const prisma = {
     datosEmpresa: { findUnique: jest.fn(() => Promise.resolve(null)) },
