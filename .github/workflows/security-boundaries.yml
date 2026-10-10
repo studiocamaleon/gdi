@@ -144,6 +144,8 @@ jobs:
             src/panel-general/__tests__/panel-general.spec.ts \
             src/panel-general/__tests__/entregas-estados.integration.spec.ts \
             src/gastos-fijos/__tests__/programacion.integration.spec.ts \
+            src/integraciones/meta/meta-conexion.client.spec.ts \
+            src/ordenes-trabajo/__tests__/normalizar-numero-orden.spec.ts \
             src/integraciones/meta/meta-inbox.spec.ts \
             src/integraciones/meta/meta-inbox-general.integration.spec.ts \
             src/egresos/__tests__/egresos-entradas.spec.ts \
