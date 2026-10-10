@@ -9,6 +9,8 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
 import { CentroCopiadoSaludService } from './centro-copiado-salud.service';
 import { CentroCopiadoAuditoriaService } from './centro-copiado-auditoria.service';
 import { CentroCopiadoIdempotenciaService } from './centro-copiado-idempotencia.service';
+import { CentroCopiadoTarifariosService } from './tarifarios/centro-copiado-tarifarios.service';
+import { CentroCopiadoTarifariosController } from './tarifarios/centro-copiado-tarifarios.controller';
 
 /**
  * TPV Centro de copiado. Consume el motor universal (via MotorUniversalModule)
@@ -22,19 +24,21 @@ import { CentroCopiadoIdempotenciaService } from './centro-copiado-idempotencia.
     CapacidadesEmpresaModule,
     CatalogoCadModule,
   ],
-  controllers: [CentroCopiadoController],
+  controllers: [CentroCopiadoController, CentroCopiadoTarifariosController],
   providers: [
     CentroCopiadoCadService,
     CentroCopiadoService,
     CentroCopiadoSaludService,
     CentroCopiadoAuditoriaService,
     CentroCopiadoIdempotenciaService,
+    CentroCopiadoTarifariosService,
   ],
   exports: [
     CentroCopiadoService,
     CentroCopiadoSaludService,
     CentroCopiadoAuditoriaService,
     CentroCopiadoIdempotenciaService,
+    CentroCopiadoTarifariosService,
   ],
 })
 export class CentroCopiadoModule {}

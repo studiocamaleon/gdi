@@ -896,6 +896,8 @@ model Tenant {
   centroCopiadoConfig                              CentroCopiadoConfig?
   centroCopiadoEventos                             CentroCopiadoEvento[]
   centroCopiadoOperaciones                         CentroCopiadoOperacion[]
+  centroCopiadoTarifarios                          CentroCopiadoTarifario[]
+  centroCopiadoTarifarioVersiones                  CentroCopiadoTarifarioVersion[]
   destinosImpresion                                ImpresionDestino[]
   bandejasImpresion                                ImpresionBandeja[]
   perfilesImpresion                                ImpresionPerfil[]
@@ -1028,6 +1030,48 @@ model CentroCopiadoEvento {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
+}
+
+/// Identidad del tarifario y su borrador editable. No asigna políticas a canales.
+model CentroCopiadoTarifario {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  nombre       String   @db.VarChar(120)
+  revision     Int      @default(1)
+  ultimoNumero Int      @default(0)
+  contenido    Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant    Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versiones CentroCopiadoTarifarioVersion[]
+
+  @@unique([id, tenantId])
+  @@index([tenantId, createdAt])
+}
+
+/// Snapshot inmutable; la vigencia sólo selecciona versiones dentro del tarifario.
+/// Activar su uso en la operación requiere una política general/canal explícita.
+model CentroCopiadoTarifarioVersion {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  tarifarioId      String   @db.Uuid
+  numero           Int
+  revisionBorrador Int
+  nombre           String   @db.VarChar(120)
+  contenido        Json
+  tipoVigencia     String   @db.VarChar(20)
+  vigenteDesde     DateTime @db.Timestamptz(3)
+  publicadoPorId   String   @db.Uuid
+  publicadoEl      DateTime @default(now())
+
+  tenant    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tarifario CentroCopiadoTarifario @relation(fields: [tarifarioId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([tarifarioId, revisionBorrador])
+  @@unique([tarifarioId, numero])
+  @@unique([tarifarioId, vigenteDesde])
+  @@index([tenantId, tarifarioId, vigenteDesde])
 }
 
 /// Resultado de mutaciones reintentables del módulo. La clave es aportada por
