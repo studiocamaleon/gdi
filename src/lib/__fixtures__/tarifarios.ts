@@ -1,0 +1,48 @@
+import type { CentroCopiadoConfig } from "../centro-copiado-api";
+export const configTarifarios: CentroCopiadoConfig = {
+  productoId: null,
+  version: 1,
+  actualizadoEl: null,
+  activo: true,
+  cobraSetup: false,
+  margenPct: 40,
+  margenMinimoPct: 25,
+  politicaPrecio: "MARGEN_FIJO",
+  tramosMargen: [{ desdeCantidad: 1, margenPct: 40 }],
+  minimoHojasFacturables: 0,
+  setupMin: 0,
+  cleanupMin: 0,
+  papeles: null,
+  tamanos: null,
+  terminaciones: [],
+  tiposAnillo: [],
+  maquinaColorId: null,
+  maquinaBnId: null,
+  maquinaAnilladoraId: null,
+  tapaFrontalMateriaPrimaId: null,
+  tapaContratapaMateriaPrimaId: null,
+  disponibles: {
+    papeles: [
+      {
+        materiaPrimaId: "00000000-0000-4000-8000-000000000001",
+        nombre: "Obra de prueba",
+        gramajes: [80, 150],
+        formatosProducibles: ["A4", "A3"],
+        formatosPorGramaje: [
+          { gramaje: 80, tamanos: ["A4", "A3"] },
+          { gramaje: 150, tamanos: ["A4"] },
+        ],
+      },
+    ],
+    formatos: [
+      { nombre: "A4", anchoMm: 210, altoMm: 297 },
+      { nombre: "A3", anchoMm: 297, altoMm: 420 },
+    ],
+    maquinas: [],
+    anilladoras: [],
+    tapas: [],
+    tiposAnillo: [],
+    terminaciones: [],
+    terminacionesCatalogo: [],
+  },
+};
