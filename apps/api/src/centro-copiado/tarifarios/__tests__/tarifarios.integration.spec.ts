@@ -23,12 +23,25 @@ import { contenidoEjemplo } from './fixtures';
 import { validarContenidoTarifario } from '../contenido-tarifario';
 import { calcularComercialHojas } from '../../comercial/calculo-hojas';
 import { documento } from '../../comercial/__tests__/fixtures';
+import { CentroCopiadoSimulacionController } from '../centro-copiado-simulacion.controller';
+import { CentroCopiadoSimulacionService } from '../centro-copiado-simulacion.service';
 
 /** PostgreSQL, transacciones y guardas HTTP reales. Sólo la suscripción está sustituida. */
 describe('Tarifarios: persistencia, vigencia y aislamiento', () => {
   const prisma = new PrismaService();
   const auditoria = new CentroCopiadoAuditoriaService(prisma);
   const servicio = new CentroCopiadoTarifariosService(prisma, auditoria);
+  const costeador = {
+    simularCostoHojas: jest.fn(() =>
+      Promise.reject(new BadRequestException('Motor ficticio sin configurar.')),
+    ),
+  };
+  const simulacion = new CentroCopiadoSimulacionService(
+    prisma,
+    servicio,
+    costeador as never,
+    {} as never,
+  );
   const jwtSecretAnterior = process.env.JWT_SECRET;
   const jwtSecret = randomUUID();
   const jwt = new JwtService({ secret: jwtSecret });
@@ -88,6 +101,12 @@ describe('Tarifarios: persistencia, vigencia y aislamiento', () => {
       ['gestor', 'OPERADOR', ['configuracion.copiado.gestionar']],
       ['lector', 'OPERADOR', ['configuracion.copiado.ver']],
       [
+        'con-margenes',
+        'OPERADOR',
+        ['configuracion.copiado.ver', 'finanzas.ver_margenes'],
+      ],
+      ['solo-margenes', 'OPERADOR', ['finanzas.ver_margenes']],
+      [
         'administrador-limitado',
         'ADMINISTRADOR',
         ['configuracion.copiado.ver'],
@@ -126,9 +145,13 @@ describe('Tarifarios: persistencia, vigencia y aislamiento', () => {
       });
     }
     const modulo = await Test.createTestingModule({
-      controllers: [CentroCopiadoTarifariosController],
+      controllers: [
+        CentroCopiadoTarifariosController,
+        CentroCopiadoSimulacionController,
+      ],
       providers: [
         { provide: CentroCopiadoTarifariosService, useValue: servicio },
+        { provide: CentroCopiadoSimulacionService, useValue: simulacion },
         { provide: CapacidadesEmpresaService, useValue: capacidades },
       ],
     }).compile();
@@ -626,5 +649,66 @@ describe('Tarifarios: persistencia, vigencia y aislamiento', () => {
         .auth(tokens.lector, { type: 'bearer' })
         .expect(400);
     }
+  });
+
+  it('la simulación exige configuración y márgenes a la vez, incluso al administrador limitado', async () => {
+    const b = await crear();
+    costeador.simularCostoHojas.mockClear();
+    for (const actor of [
+      'lector',
+      'gestor',
+      'solo-margenes',
+      'administrador-limitado',
+    ]) {
+      await request(app.getHttpServer())
+        .post(`/centro-copiado/tarifarios/${b.id}/simulaciones`)
+        .auth(tokens[actor], { type: 'bearer' })
+        .send({
+          revision: b.revision,
+          celdas: [{ seccion: 'hojas', fila: 0, tramo: 0 }],
+        })
+        .expect(403);
+    }
+    expect(costeador.simularCostoHojas).not.toHaveBeenCalled();
+    await request(app.getHttpServer())
+      .post(`/centro-copiado/tarifarios/${b.id}/simulaciones`)
+      .auth(tokens['con-margenes'], { type: 'bearer' })
+      .send({
+        revision: b.revision,
+        celdas: [{ seccion: 'hojas', fila: 0, tramo: 0 }],
+      })
+      .expect(201);
+    expect(costeador.simularCostoHojas).toHaveBeenCalledTimes(3);
+    expect(costeador.simularCostoHojas).toHaveBeenCalledWith(
+      tenants[0],
+      expect.any(Object),
+    );
+  });
+
+  it('no simula tarifarios ni versiones de otra empresa aun falsificando el encabezado', async () => {
+    const ajeno = await servicio.crear(tenants[1], users[0], {
+      nombre: 'Otra empresa ficticia',
+      contenido: contenidoEjemplo(papeles[1]),
+    });
+    const versionAjena = await servicio.publicar(
+      tenants[1],
+      ajeno.id,
+      users[0],
+      inmediata(ajeno.revision),
+    );
+    const propio = await crear();
+    costeador.simularCostoHojas.mockClear();
+    for (const [id, fuente] of [
+      [ajeno.id, { revision: ajeno.revision }],
+      [propio.id, { versionId: versionAjena.id }],
+    ] as const) {
+      await request(app.getHttpServer())
+        .post(`/centro-copiado/tarifarios/${id}/simulaciones`)
+        .auth(tokens['con-margenes'], { type: 'bearer' })
+        .set('x-tenant-id', tenants[1])
+        .send({ ...fuente, celdas: [{ seccion: 'hojas', fila: 0, tramo: 0 }] })
+        .expect(404);
+    }
+    expect(costeador.simularCostoHojas).not.toHaveBeenCalled();
   });
 });

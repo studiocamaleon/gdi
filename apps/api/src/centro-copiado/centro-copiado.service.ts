@@ -1391,9 +1391,10 @@ export class CentroCopiadoService {
     tenantId: string,
     dto: CotizarCentroCopiadoDto,
     ctx: Ctx,
+    simulacion = false,
   ): Promise<void> {
     const config = await this.configDe(tenantId);
-    if (!config.activo) {
+    if (!config.activo && !simulacion) {
       throw new BadRequestException('El Centro de Copiado está pausado.');
     }
 
@@ -1527,6 +1528,85 @@ export class CentroCopiadoService {
         );
       }
     }
+  }
+
+  /** Costeo de referencia sin persistir pedidos ni tocar la configuración.
+   * La preparación productiva se incluye aunque comercialmente esté incluida.
+   * Una última cara impar no consume impresión del dorso; setup se cuenta una vez.
+   */
+  async simularCostoHojas(tenantId: string, doc: DocumentoInput) {
+    await this.capacidades.exigirIncluida(tenantId, 'centro_copiado');
+    const ctx = await this.contexto(tenantId);
+    if (doc.modo === 'CAD' || doc.terminaciones?.length || doc.grupoId)
+      throw new BadRequestException(
+        'La referencia debe contener sólo impresión en hojas.',
+      );
+    await this.validarOperacion(
+      tenantId,
+      {
+        documentos: [
+          {
+            ...doc,
+            gramaje: doc.gramaje ?? undefined,
+            cobertura: doc.cobertura ?? undefined,
+            tipoAnillo: doc.tipoAnillo ?? undefined,
+          },
+        ],
+      },
+      ctx,
+      true,
+    );
+    if (
+      doc.gramaje == null &&
+      ctx.papeles
+        .find((p) => p.materiaPrimaId === doc.papelMateriaPrimaId)
+        ?.variantes.some((v) => v.gramajeGr != null)
+    )
+      throw new BadRequestException(
+        'Definí el gramaje de esta combinación antes de simular su costo.',
+      );
+    const papel = this.resolverPapel(
+      ctx.papeles,
+      doc.papelMateriaPrimaId,
+      pliegoDeDoc(doc),
+      doc.gramaje,
+    );
+    if (!papel.varianteId)
+      throw new BadRequestException(
+        'No hay una variante de papel compatible con esta combinación.',
+      );
+    const partes =
+      doc.faz === 2 && doc.paginas % 2 === 1
+        ? [
+            ...(doc.paginas > 1 ? [{ ...doc, paginas: doc.paginas - 1 }] : []),
+            { ...doc, paginas: 1, faz: 1 as const },
+          ]
+        : [doc];
+    const resultados: CotizarOutput[] = [];
+    for (const [i, parte] of partes.entries()) {
+      const segmento = construirSegmento(
+        parte,
+        { ...ctx, cobraSetup: i === 0 },
+        parte.copias,
+        papel.varianteId,
+      );
+      const resultado = await this.motor.cotizar({
+        tenantId,
+        tipoCambioId: resultados[0]?.cotizacion?.tipoCambio?.id,
+        productoId: ctx.productoId,
+        rutaAlternativaId: ctx.rutaAlternativaId,
+        jobContext: segmento.jobContext as Parameters<
+          MotorUniversalService['cotizar']
+        >[0]['jobContext'],
+      });
+      if (!resultado.exitoso || !resultado.cotizacion)
+        throw new BadRequestException(
+          resultado.errores.map((e) => e.mensaje).join(' ') ||
+            'El motor no pudo calcular el costo.',
+        );
+      resultados.push(resultado);
+    }
+    return resultados;
   }
 
   private async cotizarDocumento(
