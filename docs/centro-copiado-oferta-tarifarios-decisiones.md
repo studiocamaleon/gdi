@@ -46,7 +46,8 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D28 | El alcance inicial incluye simular con el motor los costos de todas las celdas de las matrices, para todas las combinaciones ofrecidas y tramos, incluso antes de cargar precios de venta. La matriz debe permitir comparar costos, precios y márgenes para decidir los importes comerciales. Cada simulación identifica sus cantidades y supuestos; no modifica automáticamente precios ni garantiza el margen de todo pedido posible. Amplía D23. | 2026-10-10 |
 | D29 | Los tomos se integran desde el alcance inicial: su impresión se calcula con la matriz y las terminaciones se agregan aparte según ejemplares y materiales. Los juegos determinan las copias efectivas de los archivos. Se conservan las reglas de acumulación del tarifario, preparación y mínimo por pedido, las reglas físicas de doble faz y los costos reales de preparación y armado. Resuelve tomos y terminaciones de P14; el alcance y las unidades CAD se definen en D30. | 2026-10-10 |
 | D30 | CAD forma parte del alcance inicial con una sección propia dentro del tarifario. Ofrece precio por plano y formato como opción inicial, y por m² o metro lineal (ML) como alternativas configurables. ML es un requisito obligatorio desde la primera entrega y puede quedar guardado como modo habitual del tarifario. Precio y tramos usan la misma unidad CAD, sin acumular hojas. Se mantiene una política principal por pedido, preparación y mínimo únicos, y simulación de costos de todas las celdas. La base facturable en ML se define en D31; las demás reglas de medidas y acumulación CAD continúan en P14. | 2026-10-10 |
-| D31 | En CAD por ML se cobra el largo de papel consumido previsto para producir el trabajo, incluidos los márgenes de avance de la configuración productiva. Se determina según el rollo y la orientación de impresión y se multiplica por las copias efectivas. Es la base del precio y del tramo; no se ofrece el largo del plano sin márgenes como modalidad de cobro. El redondeo comercial y la base facturable de m² siguen pendientes en P14. | 2026-10-10 |
+| D31 | En CAD por ML se cobra el largo de papel consumido previsto para producir el trabajo, incluidos los márgenes de avance de la configuración productiva. Se determina según el rollo y la orientación de impresión y se multiplica por las copias efectivas. Es la base del precio y del tramo; no se ofrece el largo del plano sin márgenes como modalidad de cobro. El redondeo comercial se define en D32; la base facturable de m² sigue pendiente en P14. | 2026-10-10 |
+| D32 | En CAD por ML, «Sin redondeo comercial» es la opción inicial y «Redondear hacia arriba» es la alternativa configurable por tarifario, con un incremento positivo expresado en ML. Se conservan por separado el consumo previsto y la cantidad facturada tras el redondeo. El alcance de la acumulación, el momento de aplicar el redondeo y su relación con la selección del tramo se completarán en P14. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -820,9 +821,10 @@ y la configuración productiva. Todas las celdas CAD, incluidas las expresadas
 en ML, deben poder simularse según D28. El precio comercial no cambia las
 medidas físicas del plano. Se conserva el recorrido actual de simple faz.
 
-La medida facturable en ML sigue D31. P14 continúa abierto para definir la
-base facturable en m², redondeos, formatos personalizados sin precio por plano,
-acumulación entre tamaños y archivos y el detalle de las combinaciones CAD.
+La medida facturable en ML sigue D31 y la modalidad de redondeo, D32. P14
+continúa abierto para definir la base facturable en m², formatos personalizados
+sin precio por plano, acumulación entre tamaños y archivos, aplicación del
+redondeo a esos grupos y detalle de las combinaciones CAD.
 
 ### Largo facturable de papel en CAD por ML
 
@@ -836,15 +838,17 @@ del plano sin ellos.
 Ejemplo ficticio: un plano de 600 × 1.200 mm se imprime con los 600 mm a lo ancho
 de un rollo compatible. Con 5 mm de margen al comienzo y 5 mm al final, consume
 1.210 mm de avance, equivalentes a **1,21 ML**. A una tarifa aplicable de $5.000
-por ML, la impresión cuesta **$6.050** antes de los demás ajustes del pedido.
+por ML y sin redondeo comercial, la impresión cuesta **$6.050** antes de los
+demás ajustes del pedido.
 Los márgenes del ejemplo son ilustrativos; se usan los de la configuración
 productiva correspondiente.
 
 Cada copia aporta su largo de salida previsto. Dos copias del ejemplo aportan
 2,42 ML. Ese consumo es la base para determinar el tramo y multiplicar el
 precio unitario que corresponda. La agrupación de distintos tamaños o archivos
-y el eventual redondeo comercial todavía se resolverán en P14; esta decisión
-no redondea automáticamente la longitud a metros enteros ni a otro incremento.
+y el momento de aplicar el redondeo se resolverán en P14. D32 establece la
+opción inicial sin redondeo y la alternativa con incremento configurable;
+el consumo previsto se conserva en ambas modalidades.
 
 La cotización debe mostrar la medida original, el rollo y orientación previstos,
 los márgenes y los ML resultantes. El ancho identifica el material y la tarifa;
@@ -855,6 +859,37 @@ Los importes comprometidos siguen las reglas de vigencia de D24.
 Esta decisión define el largo facturable en ML. No determina por sí sola si la
 modalidad m² cobra superficie del plano o superficie de papel consumido; esa
 elección continúa pendiente.
+
+### Redondeo comercial de cantidades CAD
+
+**Confirmado en D32:** en CAD por ML se utiliza «Sin redondeo comercial» como
+opción inicial. Se cobra la cantidad obtenida del consumo previsto de D31,
+sin elevarla automáticamente a metros enteros o a otro incremento.
+
+Como alternativa, cada tarifario puede configurar «Redondear hacia arriba» e
+indicar el incremento en ML. El incremento debe ser positivo y su unidad debe
+estar visible. La cantidad a cobrar es el menor múltiplo del incremento que
+alcanza o supera la cantidad evaluada. Si ya coincide con un múltiplo, no se
+agrega otro incremento.
+
+Ejemplos ficticios de la transformación de una cantidad base:
+
+| Cantidad base | Modalidad | Cantidad facturada |
+| --- | --- | --- |
+| 1,21 ML | Sin redondeo comercial | 1,21 ML |
+| 1,21 ML | Hacia arriba cada 0,10 ML | 1,30 ML |
+| 1,21 ML | Hacia arriba cada 0,50 ML | 1,50 ML |
+| 1,30 ML | Hacia arriba cada 0,10 ML | 1,30 ML |
+
+El consumo físico y el costo de producción no aumentan por un redondeo
+comercial. Se deben conservar y mostrar por separado el consumo previsto,
+la regla de redondeo y la cantidad facturada, también en la simulación de D28.
+El redondeo de cantidades de D32 es distinto del redondeo de precios de D23.
+
+La decisión confirma las modalidades y la configuración por tarifario. Al
+resolver la acumulación CAD en P14 se precisará si se redondea por ejemplar,
+archivo o grupo, y qué cantidad determina el tramo. Estos detalles no quedan
+implícitamente aprobados por habilitar la alternativa de redondeo.
 
 ## Base actual del módulo
 
@@ -969,13 +1004,14 @@ en D15, P06 en D16 a D19, P07 en D20, P08 en D21, P09 en D22 y el alcance de P10
 en D23, P11 en D24, P12 en D25 y P13 en D26 y D27. D28 amplía el alcance inicial
 con la simulación de costos de todas las celdas de las matrices. D29 resuelve
 tomos y terminaciones de P14, D30 el alcance y las unidades de CAD y D31 el
-largo de papel consumido como base facturable en ML. P14 conserva las reglas
-restantes de CAD.
+largo de papel consumido como base facturable en ML. D32 define las modalidades
+de redondeo comercial; P14 conserva su aplicación a los grupos y las demás
+reglas restantes de CAD.
 Las preguntas restantes deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P14 | ¿Cómo se completan las reglas de medidas y volumen CAD? | D30 confirma las tres unidades y D31 el cobro por largo de papel consumido en ML. Definir redondeo comercial, base facturable en m², formatos personalizados no tarifados, acumulación y detalle de combinaciones. Mantener la simulación de costos con el motor. |
+| P14 | ¿Cómo se completan las reglas de medidas y volumen CAD? | D30 confirma las tres unidades, D31 el consumo facturable en ML y D32 las modalidades de redondeo. Definir acumulación, momento de redondear y cantidad para el tramo, base facturable en m², formatos personalizados no tarifados y detalle de combinaciones. Mantener la simulación de costos con el motor. |
 | P15 | ¿Cómo se habilita la nueva oferta en tenants existentes? | Proponer conservar su comportamiento hasta que configuren y activen los cambios. Definir el tratamiento de combinaciones nuevas o retiradas. |
 
 ## Casos para acordar resultados
@@ -1044,8 +1080,9 @@ del archivo original.
 | Volumen entre tomos y sueltos | Dos tomos y un documento suelto contienen archivos de la misma combinación comercial. | En acumulación por combinación suman sus unidades efectivas dentro del pedido. En modalidad por archivo, cada original conserva su grupo aunque se genere un PDF unificado del tomo. |
 | Tomo con originales impares | Dos originales de 3 páginas cada uno, ambos doble faz, con 10 juegos. | Cada original comienza en frente: 4 hojas por juego, 40 hojas y 60 carillas impresas en total. D15 define su clasificación comercial; no se reutilizan los dorsos vacíos entre originales. |
 | CAD en ML | Cantidad comercial de 3 ML, con precio aplicable de $2.500 por ML para su material y ancho de rollo. | Impresión: $7.500. El tramo se busca con 3 ML; se conservan aparte las cantidades físicas y medidas del trabajo. |
-| CAD personalizado con márgenes | Plano de 600 × 1.200 mm, con 600 mm a lo ancho de un rollo compatible y 5 mm de margen al comienzo y al final. | Se cobran 1,21 ML de papel consumido según D31; a $5.000 por ML son $6.050 de impresión. Los 1,20 m del plano no sustituyen el largo de salida. |
-| Copias en ML | Dos copias del plano anterior, con la misma configuración productiva. | Aportan 2,42 ML de papel consumido como base del tramo y del precio. El eventual redondeo comercial conserva P14. |
+| CAD personalizado con márgenes | Plano de 600 × 1.200 mm, con 600 mm a lo ancho de un rollo compatible y 5 mm de margen al comienzo y al final. | Sin redondeo comercial, se cobran 1,21 ML de papel consumido según D31; a $5.000 por ML son $6.050 de impresión. Los 1,20 m del plano no sustituyen el largo de salida. |
+| Copias en ML | Dos copias del plano anterior, con la misma configuración productiva. | Aportan 2,42 ML de papel consumido como base del tramo y del precio. D32 define las modalidades de redondeo; su momento de aplicación se resolverá con la acumulación en P14. |
+| Redondeo comercial en ML | Cantidad base de 1,21 ML y tarifa aplicable de $5.000 por ML. | Sin redondeo: 1,21 ML y $6.050. Con incremento de 0,10 ML: 1,30 ML y $6.500. El consumo productivo sigue siendo 1,21 ML; D32 no modifica la geometría ni el costo por ese ajuste comercial. |
 | Modalidad CAD guardada | Un tarifario tiene CAD configurado por metro lineal y se abre un pedido nuevo que lo utiliza. | Se aplica ML sin volver a la opción inicial por plano/formato ni pedir que se elija otra vez. |
 | Pedido mixto | Documentos por hoja y planos por ML dentro del mismo pedido y política principal. | Los tramos se calculan por separado en sus unidades. Preparación y mínimo siguen siendo únicos para el pedido; las celdas de ambas secciones pueden simularse con el motor. |
 
@@ -1148,7 +1185,15 @@ valores guardados de forma silenciosa. En ML, D31 requiere obtener la cantidad
 comercial del largo de salida previsto por página y sus copias efectivas,
 incluidos los márgenes de avance, conservando por separado las dimensiones del
 original. La simulación, vista previa y guardado deben compartir ese cálculo.
-La base facturable de m², los redondeos y las agrupaciones se completarán en P14.
+La base facturable de m², las agrupaciones y el momento del redondeo se
+completarán en P14.
+
+La configuración de D32 debe pertenecer a la versión del tarifario y conservar
+la cantidad previa y posterior al ajuste comercial. El cálculo debe manejar
+los incrementos decimales sin agregar un paso de redondeo cuando ya se alcanza
+un múltiplo exacto. No debe modificar las medidas ni los consumos usados para
+costear, ni repetir el ajuste en vista previa, guardado o recotización. La
+relación entre redondeo, acumulación y selección del tramo se completará en P14.
 
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
@@ -1159,7 +1204,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 1. Partir de P01 a P13 resueltos en D09 a D27 y del alcance de simulación de D28,
    incorporar tomos y terminaciones según D29, CAD y sus unidades según D30
-   y el largo facturable en ML según D31,
+   y el largo facturable y modalidades de redondeo en ML según D31 y D32,
    y completar las reglas comerciales pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluida la simulación
    de costos de todas las celdas de las matrices.
@@ -1215,3 +1260,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | Incorporación de D29: tomos desde el alcance inicial, impresión por matriz y terminaciones aparte por ejemplares y materiales. Se conservan acumulación, preparación y mínimo por pedido, armado físico y costeo real. Se actualizan ejemplos; P14 continúa abierto para planos CAD. | Confirmado parcial |
 | 2026-10-10 | Incorporación de D30: CAD desde el inicio, por plano y formato como opción inicial y por m² o ML como alternativas. ML queda explícitamente obligatorio, configurable y persistente como modo habitual. Se precisa la separación respecto de las unidades de hojas, la política principal del pedido y la simulación completa. P14 conserva medidas personalizadas y demás reglas CAD. | Confirmado parcial |
 | 2026-10-10 | Incorporación de D31: en ML se cobra el largo de papel consumido previsto, incluidos los márgenes de avance, según rollo, orientación y copias. Se descarta cobrar sólo el largo del plano como modalidad. Se agregan ejemplos; redondeos y base facturable de m² permanecen pendientes en P14. | Confirmado parcial |
+| 2026-10-10 | Incorporación de D32: sin redondeo comercial como opción inicial en ML y redondeo hacia arriba por incremento configurable por tarifario como alternativa. Se conservan consumo y cantidad facturada por separado. El momento del redondeo y la cantidad para seleccionar el tramo se resolverán con la acumulación CAD en P14. | Confirmado parcial |
