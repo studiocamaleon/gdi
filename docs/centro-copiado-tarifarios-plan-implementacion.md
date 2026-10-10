@@ -47,7 +47,7 @@ compatible y selección persistida por segmento.
 | Composición comercial del pedido | IVA, preparación y mínimo únicos, terminaciones aparte. | Implementado como cálculo puro y probado; resolución fiscal e integración pendientes |
 | Prioridad y controles comerciales | Acuerdos/ajustes autorizados, respaldos y margen. | Pendiente; la composición recibe importes ya resueltos |
 | Cantidades y tramos CAD | Consumo real en ML, acumulación, tramo y redondeo comercial del grupo. | Implementado como cálculo puro y probado con el planificador actual; conexión al cotizador pendiente |
-| Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | Persistencia y versiones implementadas en la API y comprobadas con PostgreSQL; interfaz, asignación a canales y activación operativa pendientes |
+| Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | API de tarifarios, versiones y política general/canales en borrador con vista previa comprobada; interfaz y activación operativa pendientes |
 | Recorridos del pedido | Vista previa, guardado, recálculo y emisión comparten cantidades, versiones y precios. | Pendiente |
 | Pouch y tomos | Material por hoja, caras/copias/juegos correctos, edición y adicionales sin duplicación. | Pendiente |
 | Herramientas de precios | Matriz, pegado, duplicación, ajustes masivos y simulación de todas las celdas. | Pendiente |
@@ -413,3 +413,84 @@ recorridos operativos, herramientas de carga/simulación de todas las celdas y
 pouch. Permanecen dentro del alcance inicial. No se aplicó la migración sobre
 bases de desarrollo con datos, staging ni producción. CI global y apertura de
 PR pendientes por falta de GitHub autenticado en la sesión.
+
+### 10 de octubre de 2026 — política general y excepciones por canal en preparación
+
+Implementada la configuración en borrador de D22 y su resolución contra las
+versiones publicadas de D24 en
+[centro-copiado-politica.service.ts](../apps/api/src/centro-copiado/tarifarios/centro-copiado-politica.service.ts).
+La migración aditiva crea `CentroCopiadoPoliticaBorrador`, separado de la
+configuración que usa hoy el cotizador. Toda respuesta de configuración identifica
+su estado `BORRADOR` y `operativa: false`; no existe un endpoint de activación.
+
+- Política general: motor o tarifario. Cada canal permite heredar, usar motor o
+  elegir un tarifario específico. Se reutiliza el catálogo de canales actual:
+  mostrador, WhatsApp, email, Web y app móvil. No se deduce el canal del dispositivo.
+  Los canales históricos no se asignan como nuevos en este recorrido; sus pedidos
+  existentes conservan el funcionamiento anterior hasta integrar la migración.
+- Una empresa sin configuración obtiene virtualmente motor como política general
+  y herencia en todos los canales, con revisión cero. Consultar o previsualizar no
+  escribe filas, eventos ni configuraciones. El primer guardado explícito crea la
+  revisión uno y los posteriores exigen la revisión que se está editando.
+- El guardado reemplaza el documento completo y exige las cinco opciones de canal,
+  para que una omisión accidental no borre una excepción. Se rechazan propiedades
+  desconocidas, modalidades ambiguas e identificadores de tarifarios ajenos o
+  inexistentes, también en las excepciones. Compartir una matriz no la duplica.
+- Se permite preparar la asignación de un tarifario todavía sin publicación. La
+  vista previa lo muestra pendiente hasta que tenga una versión vigente; no usa el
+  borrador como precio ni lo sustituye por el motor. Si falta la referencia
+  persistida, también queda pendiente, sin revelar datos de otra empresa.
+- La selección usa la última fecha de vigencia que ya comenzó. Una publicación
+  futura entra exactamente en su fecha; editar el borrador del tarifario no afecta
+  la versión seleccionada. Los cinco canales de una vista previa usan una misma
+  revisión de política y una lectura consistente de PostgreSQL.
+- Se compara la moneda del tarifario con la configurada para la empresa, usando el
+  valor predeterminado del sistema cuando todavía no hay datos de empresa. Una
+  diferencia queda pendiente como `MONEDA_INCOMPATIBLE`: no se convierten precios
+  automáticamente ni se cambia el origen al motor.
+- La referencia de selección conserva empresa, revisión de política, canal,
+  moneda, tarifario y versión cuando corresponde. La comprobación interna detecta
+  cambios en cualquiera de ellos, incluso cambiar de canal cuando ambos usan el
+  mismo motor o tarifario. Exige revisar la preparación; no autoriza importes ni
+  confirma una venta. El guardado del pedido deberá repetir ese control dentro de
+  su transacción al integrar la emisión, junto con los controles restantes.
+- La vista previa expone el origen general/canal, estado motor/tarifario/pendiente
+  y un resumen de la versión, sin repetir las celdas en cada canal. El resolvedor
+  interno entrega la sección completa de esa versión para alimentar el cálculo.
+- El guardado tiene control de revisión y auditoría transaccional. Dos primeros
+  guardados simultáneos o dos ediciones de la misma revisión sólo aceptan uno;
+  un fallo de auditoría revierte toda la escritura. La auditoría conserva la
+  política completa y su autor, además de la revisión.
+
+**API:** `GET/PUT /centro-copiado/politica-precios/borrador` y
+`GET /centro-copiado/politica-precios/borrador/previsualizacion`.
+Lectura con `configuracion.copiado.ver`; escritura con
+`configuracion.copiado.gestionar`, siempre con la capacidad Centro de copiado.
+Empresa y autor provienen de la sesión. No se acepta activar ni cambiar empresa o
+usuario mediante el cuerpo o un encabezado. El resolvedor interno exige un canal
+válido también para motor; esa exigencia aún no modifica las rutas operativas.
+
+**Verificación:** 50 pruebas nuevas y 342 anteriores: **392 pruebas aprobadas en
+17 suites** con Node 24.19.0. Se aplicaron las 314 migraciones desde cero en una
+base local exclusiva de test, sin seeds, retirada al finalizar después de comprobar
+la limpieza de sus datos ficticios. Pruebas de HTTP con sesiones, roles y
+permisos reales, incluida la revocación de gestión sin renovar la sesión;
+concurrencia, aislamiento, moneda, vigencia y protección del borrador. Tipos y
+ESLint sin errores ni advertencias en los seis archivos nuevos; esquema Prisma y
+YAML de CI válidos, y dependencias del módulo comprobadas. Las dos suites nuevas
+quedan incorporadas al workflow existente.
+
+Ejemplo ficticio comprobado con matrices publicadas: dos archivos de 100 carillas
+cada uno, doble faz, acumulan **100 hojas físicas** en un único grupo. Mostrador
+hereda la matriz general a $100/hoja y obtiene $10.000; Web usa su excepción a
+$80/hoja y obtiene $8.000. La prueba resuelve cada canal desde PostgreSQL y aplica
+su versión al cálculo del pedido completo. No demuestra todavía el cambio de
+canal desde la pantalla ni su confirmación en un pedido real.
+
+**Pendientes:** interfaz para editar la política y ver sus efectos; activación
+explícita después de completar acuerdos, respaldos, márgenes y revisión del
+cálculo; conexión con cotizar/guardar/recotizar/emitir sin mezclar versiones ni
+alterar compromisos vigentes. La simulación de todas las celdas y pouch siguen en
+el alcance inicial. Este bloque no cambia el cotizador actual, ni aplica la
+migración en desarrollo con datos, staging o producción. PR y CI remota siguen
+pendientes por falta de GitHub autenticado en la sesión.
