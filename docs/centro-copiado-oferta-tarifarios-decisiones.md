@@ -28,8 +28,9 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D10 | El precio y los tramos usan la misma unidad elegida en el tarifario. Un tramo de 100 en un tarifario por hoja significa 100 hojas físicas, también en doble faz. Resuelve P01 junto con D09. | 2026-10-10 |
 | D11 | La acumulación se configura por tarifario: por combinación dentro del pedido como opción inicial y por archivo como alternativa. | 2026-10-10 |
 | D12 | La combinación reúne el mismo papel y gramaje, tamaño, K/CMYK, simple/doble faz y tarifario. Se considera todo el pedido, incluidas distintas cargas de Centro de copiado. Resuelve P02 junto con D11. | 2026-10-10 |
-| D13 | El precio unitario del tramo alcanzado se aplica a todas las unidades del grupo comercial. En la alternativa por archivo, se aplica a todas las unidades de ese archivo. La regla vale por hoja o por carilla según el tarifario; no se cobra progresivamente. Resuelve P03. | 2026-10-10 |
+| D13 | El precio unitario del tramo alcanzado se aplica a todas las unidades del grupo comercial. En la alternativa por archivo, se aplica a todas las unidades de cada combinación comercial de ese archivo. La regla vale por hoja o por carilla según el tarifario; no se cobra progresivamente. Resuelve P03; D15 precisa la separación de la última hoja cuando corresponda. | 2026-10-10 |
 | D14 | Cada tarifario tiene rangos generales que las combinaciones usan inicialmente. Se pueden definir rangos propios como excepción por combinación. Compartir rangos no implica compartir precios ni acumular volumen entre combinaciones distintas. Resuelve P04. | 2026-10-10 |
+| D15 | El tratamiento de la última hoja con una sola cara impresa se configura por tarifario: «Mantener tarifa doble faz» como opción inicial y «Última hoja a simple faz» como alternativa. Se aplica por copia física, también a un archivo de una sola página configurado doble faz. Resuelve P05. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -59,9 +60,9 @@ Cada copia comienza en un frente. El conteo incluye las copias y sólo las pági
 seleccionadas para imprimir. «100 doble faz» en el tarifario inicial significa
 100 hojas físicas, con hasta 200 caras impresas.
 
-P01 queda resuelto. El cobro de la última hoja con una sola cara impresa (P05)
-sigue pendiente. Mezclar una unidad para el precio y otra para los tramos no
-forma parte de la modalidad inicial acordada.
+P01 queda resuelto. El cobro de la última hoja con una sola cara impresa sigue
+D15. Mezclar una unidad para el precio y otra para los tramos no forma parte de
+la modalidad inicial acordada.
 
 ### Acumulación del volumen entre archivos
 
@@ -73,7 +74,9 @@ igual que K y CMYK. La unidad de acumulación sigue D09 y D10.
 
 Como alternativa por tarifario, el tenant puede elegir «Por archivo». En ese
 modo cada archivo determina su tramo con sus propias unidades, incluidas sus
-copias o juegos efectivos, sin sumar las de otros archivos.
+copias o juegos efectivos, sin sumar las de otros archivos. Si D15 reclasifica
+la última hoja como simple faz, las partes simple y doble de ese archivo buscan
+sus tramos por separado.
 
 Ejemplo ficticio con A4, Obra 80 g, simple faz y el mismo tarifario por hoja. Las
 cantidades ya incluyen las copias:
@@ -98,9 +101,10 @@ acordadas.
 ### Aplicación del precio del tramo
 
 **Confirmado en D13:** se elige el tramo usando la cantidad determinada por D09
-a D12 y se aplica su precio unitario a todas las unidades de ese grupo. Cada
-archivo se cobra por su propia cantidad multiplicada por ese precio común. En
-la modalidad «Por archivo», cada uno busca el tramo con su propia cantidad.
+a D12, con la clasificación de caras de D15, y se aplica su precio unitario a
+todas las unidades de ese grupo. Cada parte del archivo se cobra por su propia
+cantidad multiplicada por el precio de su grupo. En la modalidad «Por archivo»,
+cada combinación comercial busca el tramo con su cantidad dentro de ese archivo.
 
 Ejemplo ficticio de una combinación con tarifa por hoja:
 
@@ -143,6 +147,42 @@ Las combinaciones con rangos propios conservan sus límites al modificar los
 generales; las que usan los generales siguen esa definición. P04 queda resuelto.
 La edición de límites y la carga de precios afectados deben considerarse juntas
 para que el tarifario mantenga una interpretación clara.
+
+### Última hoja con una sola cara impresa
+
+**Confirmado en D15:** el tarifario usa inicialmente «Mantener tarifa doble faz».
+Todas las hojas del trabajo conservan esa clasificación comercial, incluida la
+última con el dorso vacío. En un tarifario por carilla sólo se cuentan las caras
+impresas; el dorso vacío no agrega una unidad.
+
+La alternativa «Última hoja a simple faz» reclasifica comercialmente esa hoja
+como simple. Se aplica antes de acumular volumen y buscar los tramos: las partes
+simple y doble usan sus propias combinaciones, rangos y precios. En el modo por
+combinación pueden acumular con otros archivos compatibles; en el modo por
+archivo se mantienen separadas dentro de cada archivo, sin sumar otros.
+
+Ejemplo ficticio de 11 páginas seleccionadas y 3 copias doble faz, cada una
+iniciada en una hoja nueva: 18 hojas físicas, de las cuales 15 están impresas de
+ambos lados y 3 de un solo lado; en total, 33 carillas impresas.
+
+| Política del tarifario | Clasificación por hoja | Clasificación por carilla |
+| --- | --- | --- |
+| Mantener tarifa doble faz | 18 doble faz | 33 doble faz |
+| Última hoja a simple faz | 15 doble faz y 3 simple faz | 30 doble faz y 3 simple faz |
+
+Con precios ficticios por hoja de $160 doble y $100 simple para los tramos
+aplicables, los importes son $2.880 y $2.700 respectivamente. Reclasificar no
+garantiza un descuento: puede cambiar los tramos y, por carilla, la tarifa simple
+puede ser mayor que la doble. Se aplica el precio propio de cada combinación;
+no se divide automáticamente la tarifa doble por dos.
+
+La política se evalúa por cada copia física según el armado efectivo. Acumular
+volumen comercial no une originales ni permite reutilizar dorsos vacíos entre
+archivos. Un archivo de una sola página configurado doble faz conserva la tarifa
+doble en la opción inicial y pasa a simple en la alternativa. La reclasificación
+afecta al precio; no cambia las instrucciones físicas de impresión ni el consumo
+real de papel. La integración del armado de tomos conserva el pendiente P14 y
+la ausencia de una tarifa simple necesaria se resolverá según P08.
 
 ## Base actual del módulo
 
@@ -260,13 +300,12 @@ Los costos y márgenes conservarían sus permisos de acceso.
 
 ## Decisiones pendientes
 
-P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13 y P04 en D14. P05
-completa la definición inicial de cómo contar y cobrar las caras. Las demás
-preguntas deben resolverse antes de activar el recorrido completo.
+P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
+en D15. Las preguntas restantes deben resolverse antes de activar el recorrido
+completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P05 | En doble faz, ¿cómo se cobra la última hoja cuando tiene una sola cara impresa? | Confirmar si toda la tirada lleva tarifa doble faz o si la última hoja usa tarifa simple. D04 no resuelve este caso. |
 | P06 | ¿Qué incluye el precio cargado? | Precisar papel, impresión, IVA, preparación, mínimos y terminaciones para evitar cobros duplicados. |
 | P07 | ¿Qué prioridad tienen el tarifario, los acuerdos por cliente, descuentos y ajustes manuales? | Definir una prioridad única, permisos y explicación del resultado. |
 | P08 | ¿Qué ocurre ante una combinación sin precio? | Mostrar la falta de tarifa. Usar el motor o heredar otra matriz sólo si la política elegida lo permite explícitamente. |
@@ -283,17 +322,19 @@ preguntas deben resolverse antes de activar el recorrido completo.
 Todos los ejemplos son ficticios. Los conteos describen documentos separados
 cuyas copias comienzan en un frente. La unidad sigue D09 y D10 y la acumulación,
 D11 y D12. El precio del tramo se aplica según D13 y los rangos siguen D14.
-Las demás reglas conservan los pendientes indicados en cada caso.
+La clasificación comercial de la última hoja sigue D15. Las demás reglas
+conservan los pendientes indicados en cada caso.
 Las páginas son las seleccionadas para imprimir, no necesariamente todas las
 del archivo original.
 
 | Caso | Entrada | Resultado acordado o decisión pendiente |
 | --- | --- | --- |
 | Simple y doble faz | El mismo documento de 10 páginas, una copia, A4 y K, en ambas opciones. | Tarifario por hoja: 10 unidades simple y 5 doble. Por carilla: 10 en ambas modalidades. Precios independientes según D04. |
-| Última cara vacía | 11 páginas, 3 copias, doble faz. | Conteo: 33 carillas y 18 hojas. D09 y D10 fijan la unidad; P05 debe resolver el tratamiento comercial de las 3 hojas finales con una cara sin imprimir. |
+| Última cara vacía | 11 páginas, 3 copias, doble faz. | Opción inicial: 18 hojas o 33 carillas a tarifa doble. Alternativa: 15 hojas dobles y 3 simples, o 30 carillas dobles y 3 simples. Cada parte busca su tramo según D15. |
 | Volumen entre archivos | Un archivo de 100 páginas frente a dos de 50, una copia, simple faz y la misma combinación y tarifario. | Por combinación, ambos escenarios consideran 100 hojas y aplican la tarifa alcanzada a todas ellas. Por archivo, consideran 100 frente a 50 por archivo. La preparación conserva su pendiente. |
 | Páginas y copias | Un archivo de 100 páginas con una copia frente a uno de 10 páginas con diez copias, simple faz. | Ambos aportan 100 unidades, por hoja o por carilla. A igualdad de combinación y tarifario y sin otros archivos, tienen la misma cantidad para buscar el tramo. |
-| Cantidades en doble faz | Un archivo de 10 páginas con una copia frente a diez archivos de una página, todos configurados en doble faz. | Aunque sumen 10 carillas, usan 5 y 10 hojas respectivamente. D11 define cómo acumularlas; P05 conserva el tratamiento comercial de las hojas con una cara vacía. |
+| Cantidades en doble faz | Un archivo de 10 páginas con una copia frente a diez archivos de una página, todos configurados en doble faz. | Suman 10 carillas, pero usan 5 y 10 hojas. La opción inicial conserva tarifa doble para todos; la alternativa reclasifica como simples las diez hojas de los archivos de una página. La acumulación sigue D11. |
+| Separación dentro de un archivo | Un archivo de 11 páginas con 3 copias, modo por archivo y última hoja a simple faz. | Busca el tramo doble con 15 hojas y el simple con 3; en un tarifario por carilla usa 30 y 3 respectivamente. No acumula otros archivos. |
 | Impresión mixta | Un pedido con K y CMYK, o con papeles distintos. | Por combinación, cada grupo acumula por separado según D12; por archivo, cada uno usa sus propias unidades. |
 | Varias cargas | Un archivo de 60 hojas y otro de 50 con la misma combinación, agregados en distintas aperturas de Centro de copiado al mismo pedido. | Por combinación, suman 110. Por archivo, mantienen 60 y 50. Agregar o quitar uno actualiza el volumen del grupo en el borrador. |
 | Rango de páginas | Imprimir sólo 10 páginas seleccionadas de un PDF de 100 páginas. | Distinguir la selección de páginas del tramo comercial por cantidad. |
@@ -316,8 +357,9 @@ Se propone conservar en cada cotización el canal, tarifario y versión aplicado
 la combinación, el tramo, las cantidades y unidades usadas, y el origen del
 precio. Así se puede explicar el cálculo histórico. En la modalidad por
 combinación confirmada en D11, la recotización debe considerar al conjunto
-afectado y aplicar a cada archivo el precio unitario común sobre sus propias
-unidades, según D13.
+afectado y aplicar a cada parte del archivo el precio unitario de su grupo sobre
+sus propias unidades, según D13 y D15. La clasificación de caras debe resolverse
+antes de acumular volumen y seleccionar los tramos.
 
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
@@ -326,8 +368,8 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P04 resueltos en D09 a D14, resolver P05 con ejemplos y
-   completar las reglas comerciales que condicionan el primer alcance.
+1. Partir de P01 a P05 resueltos en D09 a D15 y completar las reglas comerciales
+   pendientes desde P06 que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
    configuraciones existentes.
@@ -363,3 +405,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | P02 resuelto: acumulación por combinación dentro del pedido como opción inicial y por archivo como alternativa por tarifario. Incluye distintas cargas del mismo pedido y recálculo de los grupos afectados en borradores. Incorporación de D11 y D12 y actualización de ejemplos. | Confirmado |
 | 2026-10-10 | P03 resuelto: el precio unitario del tramo alcanzado se aplica a todas las unidades del grupo o archivo, según la modalidad de acumulación. Incorporación de D13 y ejemplos de cálculo y límites. El aviso del simulador conserva su estado de propuesta. | Confirmado |
 | 2026-10-10 | P04 resuelto: rangos generales por tarifario con excepciones por combinación. Incorporación de D14 y ejemplos; precios y acumulación permanecen independientes entre combinaciones. | Confirmado |
+| 2026-10-10 | P05 resuelto: mantener tarifa doble faz inicialmente, con última hoja a simple faz como alternativa por tarifario. Incorporación de D15; precisión de D13 y de la acumulación al separar partes del mismo archivo. Actualización de ejemplos por hoja y por carilla. | Confirmado |
