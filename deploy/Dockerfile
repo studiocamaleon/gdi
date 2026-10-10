@@ -71,7 +71,7 @@ RUN curl --fail --location --proto '=https' https://ffmpeg.org/releases/ffmpeg-9
        --enable-filter=abuffer,abuffersink,aformat,anull,aresample,atrim,asetpts \
     && make -j2 && make install
 
-FROM python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS backend
+FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS backend
 # compas_nest publica su wheel Linux para Python >= 3.12 (x86_64).
 COPY --from=base /usr/local/bin/node /usr/local/bin/node
 # Sharp rasteriza los textos de las etiquetas mediante las fuentes del sistema.
