@@ -117,6 +117,7 @@ jobs:
             src/auth/__tests__/costos-maquinaria-http.integration.spec.ts \
             src/centro-copiado/__tests__/permisos-http.integration.spec.ts \
             src/centro-copiado/tarifarios/__tests__/tarifarios.integration.spec.ts \
+            src/centro-copiado/tarifarios/__tests__/politica-precios.integration.spec.ts \
             src/archivos/__tests__/permisos-http.integration.spec.ts \
             src/clientes/__tests__/solicitudes-alta.http.integration.spec.ts \
             src/eventos-sistema/eventos-sistema-lecturas.integration.spec.ts \
@@ -161,6 +162,7 @@ jobs:
         run: |
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
             src/centro-copiado/tarifarios/__tests__/contenido-tarifario.spec.ts \
+            src/centro-copiado/tarifarios/__tests__/politica-precios.spec.ts \
             src/centro-copiado/comercial/__tests__/calculo-hojas.spec.ts \
             src/centro-copiado/comercial/__tests__/validaciones.spec.ts \
             src/centro-copiado/comercial/__tests__/calculo-cad.spec.ts \

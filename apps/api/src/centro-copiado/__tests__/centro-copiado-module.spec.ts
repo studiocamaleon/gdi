@@ -9,6 +9,8 @@ import { CentroCopiadoController } from '../centro-copiado.controller';
 import { CentroCopiadoService } from '../centro-copiado.service';
 import { CentroCopiadoTarifariosController } from '../tarifarios/centro-copiado-tarifarios.controller';
 import { CentroCopiadoTarifariosService } from '../tarifarios/centro-copiado-tarifarios.service';
+import { CentroCopiadoPoliticaController } from '../tarifarios/centro-copiado-politica.controller';
+import { CentroCopiadoPoliticaService } from '../tarifarios/centro-copiado-politica.service';
 
 it('el módulo resuelve controller y service', async () => {
   const moduleRef = await Test.createTestingModule({
@@ -26,6 +28,12 @@ it('el módulo resuelve controller y service', async () => {
   );
   expect(moduleRef.get(CentroCopiadoTarifariosService)).toBeInstanceOf(
     CentroCopiadoTarifariosService,
+  );
+  expect(moduleRef.get(CentroCopiadoPoliticaController)).toBeInstanceOf(
+    CentroCopiadoPoliticaController,
+  );
+  expect(moduleRef.get(CentroCopiadoPoliticaService)).toBeInstanceOf(
+    CentroCopiadoPoliticaService,
   );
 
   await moduleRef.close();

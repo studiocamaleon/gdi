@@ -898,6 +898,7 @@ model Tenant {
   centroCopiadoOperaciones                         CentroCopiadoOperacion[]
   centroCopiadoTarifarios                          CentroCopiadoTarifario[]
   centroCopiadoTarifarioVersiones                  CentroCopiadoTarifarioVersion[]
+  centroCopiadoPoliticaBorrador                     CentroCopiadoPoliticaBorrador?
   destinosImpresion                                ImpresionDestino[]
   bandejasImpresion                                ImpresionBandeja[]
   perfilesImpresion                                ImpresionPerfil[]
@@ -1072,6 +1073,17 @@ model CentroCopiadoTarifarioVersion {
   @@unique([tarifarioId, numero])
   @@unique([tarifarioId, vigenteDesde])
   @@index([tenantId, tarifarioId, vigenteDesde])
+}
+
+/// Configuración comercial en preparación: guardarla no activa matrices en pedidos.
+model CentroCopiadoPoliticaBorrador {
+  tenantId         String   @id @db.Uuid
+  revision         Int      @default(1)
+  contenido        Json
+  actualizadoPorId String   @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 /// Resultado de mutaciones reintentables del módulo. La clave es aportada por
