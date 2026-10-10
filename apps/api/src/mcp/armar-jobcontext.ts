@@ -441,27 +441,22 @@ function setAnidado(
   valor: unknown,
 ): void {
   const partes = key.split('.');
-  // El formulario también deriva nombres de campos de configuración del
-  // tenant. Un nombre declarado no autoriza recorrer prototipos compartidos.
-  if (
-    partes.some(
-      (parte) =>
-        parte === '__proto__' ||
-        parte === 'constructor' ||
-        parte === 'prototype',
-    )
-  )
+  const ultima = partes.pop()!;
+  // Comprobar cada segmento junto a su acceso, incluido el último. Los
+  // nombres de campos del tenant no autorizan recorrer prototipos compartidos.
+  if (ultima === '__proto__' || ultima === 'constructor' || ultima === 'prototype')
     fail('El campo de respuesta contiene una clave reservada.');
   let nodo = jobContext;
-  for (let i = 0; i < partes.length - 1; i++) {
-    const parte = partes[i];
+  for (const parte of partes) {
+    if (parte === '__proto__' || parte === 'constructor' || parte === 'prototype')
+      fail('El campo de respuesta contiene una clave reservada.');
     const actual = Object.hasOwn(nodo, parte) ? nodo[parte] : undefined;
     if (typeof actual !== 'object' || actual === null) {
       nodo[parte] = Object.create(null) as Record<string, unknown>;
     }
     nodo = nodo[parte] as Record<string, unknown>;
   }
-  nodo[partes[partes.length - 1]] = valor;
+  nodo[ultima] = valor;
 }
 
 function aplicarPregunta(

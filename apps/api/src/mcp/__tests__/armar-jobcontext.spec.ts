@@ -57,6 +57,9 @@ describe('armarJobContext', () => {
     'tercerizado_cp-qa.__proto__.grafoQaMcpPollution',
     'configPasoRuntime.cp-qa.constructor.prototype.grafoQaMcpPollution',
     '__proto__.grafoQaMcpPollution',
+    'configPasoRuntime.cp-qa.__proto__',
+    'configPasoRuntime.cp-qa.constructor',
+    'configPasoRuntime.cp-qa.prototype',
   ])(
     'rechaza rutas de respuesta reservadas sin contaminar otros objetos: %s',
     (key) => {

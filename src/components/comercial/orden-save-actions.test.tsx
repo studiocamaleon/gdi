@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ComponentProps } from "react";
 import { describe, expect, it } from "vitest";
@@ -12,12 +13,11 @@ function botones(props: Partial<ComponentProps<typeof OrdenSaveActions>>) {
       {...props}
     />,
   );
-  return [...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].map(
-    ([, atributos, contenido]) => ({
-      texto: contenido.replace(/<[^>]*>/g, ""),
-      deshabilitado: /\bdisabled(?:=|\s|$)/.test(atributos),
-    }),
-  );
+  const documento = new DOMParser().parseFromString(html, "text/html");
+  return [...documento.querySelectorAll("button")].map((boton) => ({
+    texto: boton.textContent,
+    deshabilitado: boton.disabled,
+  }));
 }
 
 describe("acciones de emisión en la cabecera", () => {

@@ -64,6 +64,16 @@ export class MetaConexionClient {
   }
 
   private async leer(url: URL, token?: string): Promise<Json> {
+    // Verificar el destino también en el punto de salida; nunca seguir URLs
+    // libres ni enviar credenciales fuera del origen fijo de Graph.
+    if (
+      url.hostname !== 'graph.facebook.com' ||
+      url.protocol !== 'https:' ||
+      url.port !== '' ||
+      url.username !== '' ||
+      url.password !== ''
+    )
+      throw new ErrorConexionMeta('DATOS_INVALIDOS');
     try {
       const res = await fetch(url, {
         redirect: 'error',

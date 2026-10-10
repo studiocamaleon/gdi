@@ -30,7 +30,8 @@ export function normalizarNumeroOrden(crudo: string): string {
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    // La sustitución anterior ya colapsó cada grupo a un solo separador.
+    .replace(/^-|-$/g, '');
 }
 
 /**
