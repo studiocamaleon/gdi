@@ -27,7 +27,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D09 | La unidad se elige por tarifario: hoja física como opción inicial y carilla impresa como alternativa. | 2026-10-10 |
 | D10 | El precio y los tramos usan la misma unidad elegida en el tarifario. Un tramo de 100 en un tarifario por hoja significa 100 hojas físicas, también en doble faz. Resuelve P01 junto con D09. | 2026-10-10 |
 | D11 | La acumulación se configura por tarifario: por combinación dentro del pedido como opción inicial y por archivo como alternativa. | 2026-10-10 |
-| D12 | La combinación reúne el mismo papel y gramaje, tamaño, K/CMYK, simple/doble faz y tarifario. Se considera todo el pedido, incluidas distintas cargas de Centro de copiado. Resuelve P02 junto con D11. | 2026-10-10 |
+| D12 | La combinación reúne el mismo papel y gramaje, tamaño, K/CMYK, simple/doble faz y tarifario; D27 incorpora la cobertura cuando se cobra diferenciada. Se considera todo el pedido, incluidas distintas cargas de Centro de copiado. Resuelve P02 junto con D11. | 2026-10-10 |
 | D13 | El precio unitario del tramo alcanzado se aplica a todas las unidades del grupo comercial. En la alternativa por archivo, se aplica a todas las unidades de cada combinación comercial de ese archivo. La regla vale por hoja o por carilla según el tarifario; no se cobra progresivamente. Resuelve P03; D15 precisa la separación de la última hoja cuando corresponda. | 2026-10-10 |
 | D14 | Cada tarifario tiene rangos generales que las combinaciones usan inicialmente. Se pueden definir rangos propios como excepción por combinación. Compartir rangos no implica compartir precios ni acumular volumen entre combinaciones distintas. Resuelve P04. | 2026-10-10 |
 | D15 | El tratamiento de la última hoja con una sola cara impresa se configura por tarifario: «Mantener tarifa doble faz» como opción inicial y «Última hoja a simple faz» como alternativa. Se aplica por copia física, también a un archivo de una sola página configurado doble faz. Resuelve P05. | 2026-10-10 |
@@ -41,7 +41,9 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D23 | El alcance inicial para crear y actualizar precios incluye generación de la estructura, carga manual, pegado desde Excel, duplicación independiente de tarifarios, sugerencias del motor y ajustes masivos por porcentaje o importe por unidad, con redondeo opcional. Los cambios se preparan en borrador y se revisan antes de aplicarlos y activarlos. La importación de archivos Excel/CSV queda para una segunda etapa. Resuelve el alcance de P10; la vigencia sigue D24. | 2026-10-10 |
 | D24 | Las versiones publicadas del tarifario son inmutables y se activan inmediatamente o de forma programada. Las cotizaciones nuevas usan la versión vigente; los borradores anteriores requieren actualización explícita antes de emitir. Se respetan los presupuestos emitidos durante su validez y los importes ya aprobados u órdenes emitidas. Se conserva el histórico y se revisa cualquier cambio de versión entre vista previa y confirmación. Resuelve P11. | 2026-10-10 |
 | D25 | Cada tarifario tiene un mínimo de margen configurable. Por debajo se exige autorización con motivo como opción inicial, incluido el margen negativo; el bloqueo estricto es la alternativa. Se evalúa impresión más preparación después de ajustes comerciales y mínimo de importe, con terminaciones aparte. No se elevan automáticamente los precios de la matriz. El margen no verificable requiere revisión y las aprobaciones corresponden al cálculo revisado. Se respetan los compromisos de D24. Resuelve P12. | 2026-10-10 |
-| D26 | Los precios diferenciados por cobertura forman parte del alcance inicial. Quedan por resolver en P13 su configuración por tarifario y el efecto de la cobertura en la acumulación de volumen. | 2026-10-10 |
+| D26 | Los precios diferenciados por cobertura forman parte del alcance inicial. Su configuración por tarifario y el efecto sobre la acumulación de volumen se completan en D27. | 2026-10-10 |
+| D27 | Cada tarifario puede usar «Precio único para todas las coberturas» como opción inicial o «Precios por cobertura», ambas disponibles desde la primera entrega. En la segunda modalidad los importes por nivel son independientes y la cobertura separa la acumulación de volumen. Con precio único se comparte el grupo comercial y se conserva el costeo por cobertura de cada archivo. Resuelve P13 junto con D26. | 2026-10-10 |
+| D28 | El alcance inicial incluye simular con el motor los costos de todas las celdas de las matrices, para todas las combinaciones ofrecidas y tramos, incluso antes de cargar precios de venta. La matriz debe permitir comparar costos, precios y márgenes para decidir los importes comerciales. Cada simulación identifica sus cantidades y supuestos; no modifica automáticamente precios ni garantiza el margen de todo pedido posible. Amplía D23. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -83,9 +85,10 @@ dentro del mismo pedido. Cada archivo conserva su cantidad; el volumen del
 grupo determina el tramo comercial. Simple y doble faz acumulan por separado,
 igual que K y CMYK. La unidad de acumulación sigue D09 y D10.
 
-La incorporación de precios por cobertura al alcance inicial está confirmada
-en D26. Su efecto sobre la agrupación de D12 se resolverá en P13; los ejemplos
-de esta sección comparan archivos con la misma cobertura.
+Según D26 y D27, la cobertura también separa los grupos cuando el tarifario
+cobra precios diferenciados por nivel. Con precio único para todas las
+coberturas, no separa la acumulación comercial, aunque cada archivo conserva
+su costeo. Los ejemplos de esta sección comparan archivos con la misma cobertura.
 
 Como alternativa por tarifario, el tenant puede elegir «Por archivo». En ese
 modo cada archivo determina su tramo con sus propias unidades, incluidas sus
@@ -117,10 +120,11 @@ acordadas.
 ### Aplicación del precio del tramo
 
 **Confirmado en D13:** se elige el tramo usando la cantidad determinada por D09
-a D12, con la clasificación de caras de D15, y se aplica su precio unitario a
-todas las unidades de ese grupo. Cada parte del archivo se cobra por su propia
-cantidad multiplicada por el precio de su grupo. En la modalidad «Por archivo»,
-cada combinación comercial busca el tramo con su cantidad dentro de ese archivo.
+a D12, con la clasificación de caras de D15 y la cobertura de D27, y se aplica
+su precio unitario a todas las unidades de ese grupo. Cada parte del archivo
+se cobra por su propia cantidad multiplicada por el precio de su grupo. En la
+modalidad «Por archivo», cada combinación comercial busca el tramo con su
+cantidad dentro de ese archivo.
 
 Ejemplo ficticio de una combinación con tarifa por hoja:
 
@@ -480,9 +484,9 @@ La habilitación de estas políticas para tenants actuales conserva P15.
 completar los importes y revisar los cambios antes de aplicarlos.
 
 La estructura se genera a partir de papeles y tamaños ofrecidos, K/CMYK,
-simple/doble faz y rangos configurados, incluidas las excepciones de D14. Las
-celdas comienzan vacías, como precios pendientes según D21. Los importes de
-simple y doble faz conservan su independencia.
+simple/doble faz, cobertura según D27 y rangos configurados, incluidas las
+excepciones de D14. Las celdas comienzan vacías, como precios pendientes según
+D21. Los importes de simple y doble faz conservan su independencia.
 
 Las herramientas iniciales para completar precios se pueden combinar:
 
@@ -490,6 +494,7 @@ Las herramientas iniciales para completar precios se pueden combinar:
 | --- | --- |
 | Carga manual y pegado desde Excel | Trasladar los precios que el tenant ya utiliza a las celdas de la matriz. |
 | Duplicar un tarifario | Crear una copia independiente y ajustar sus valores, por ejemplo Online a partir de General. |
+| Simular costos de la matriz completa | Calcular con el motor todas sus celdas y comparar costos, precios y márgenes según D28, incluso si aún no hay precios cargados. |
 | Sugerir precios con el motor | Obtener una base calculada que el tenant revisa y puede modificar. |
 
 Actualizar General no modifica automáticamente su copia Online. Duplicar es
@@ -502,6 +507,8 @@ para 200+, 200. Son hojas o carillas según D09 y D10. El resultado es un precio
 fijo editable, coherente con los conceptos incluidos y el tratamiento de IVA
 del tarifario. Un cambio posterior de costos no modifica automáticamente los
 precios publicados; se pueden pedir nuevas sugerencias para revisarlos.
+La simulación de costos de todas las celdas sigue D28 y está disponible aunque
+el tenant prefiera cargar sus precios manualmente en lugar de aceptar sugerencias.
 
 Para actualizar precios se seleccionan celdas y se puede:
 
@@ -631,31 +638,81 @@ somete retroactivamente a este bloqueo.
 cobertura. La configuración debe permitir representar su efecto comercial
 además de conservar su uso para calcular costos y margen.
 
-**Propuesta pendiente de confirmar en P13:** ofrecer dos modalidades por
+**Confirmado en D27:** se ofrecen dos modalidades por
 tarifario desde la primera entrega: «Precio único para todas las coberturas»
 como opción inicial y «Precios por cobertura» como alternativa. La primera
 mantiene una celda por combinación y tramo; la segunda permite cargar importes
-independientes para los niveles existentes Borrador, Normal y Alta. No se
-propone imponer un recargo porcentual entre niveles. Las ayudas de copia y
-ajuste masivo de D23 podrían facilitar la carga de esos importes.
+independientes para los niveles existentes Borrador, Normal y Alta. No se impone
+un recargo porcentual entre niveles. Las ayudas de copia y ajuste masivo de D23
+permiten facilitar la carga de esos importes.
 
-En la modalidad con precios diferenciados se propone sumar la cobertura a la
+En la modalidad con precios diferenciados se suma la cobertura a la
 combinación comercial de D12: cada nivel acumula su propio volumen y busca su
-tramo. Con precio único, la cobertura no separaría la acumulación comercial,
-pero cada archivo conservaría su costeo. La alternativa por archivo de D11
-seguiría sin sumar unidades de otros archivos.
+tramo. Con precio único, la cobertura no separa la acumulación comercial,
+pero cada archivo conserva su costeo. La alternativa por archivo de D11
+sigue sin sumar unidades de otros archivos.
 
-Ejemplo propuesto: 60 hojas con cobertura Normal y 50 con cobertura Alta,
+Ejemplo ficticio: 60 hojas con cobertura Normal y 50 con cobertura Alta,
 con el mismo papel, tamaño, color y caras, en acumulación por combinación.
-Con precios diferenciados buscarían sus tramos con 60 y 50 hojas, respectivamente.
-Con precio único buscarían el tramo con 110 hojas, manteniendo los costos de
-cada archivo. Esta regla de acumulación todavía requiere confirmación.
+Con precios diferenciados buscan sus tramos con 60 y 50 hojas, respectivamente.
+Con precio único buscan el tramo con 110 hojas, manteniendo los costos de
+cada archivo. Dos archivos de 60 y 50 hojas con la misma cobertura y los demás
+atributos iguales suman 110 en ambas modalidades.
 
-El diseño deberá precisar la selección y el registro de cobertura, su uso en
-las sugerencias del motor y su compatibilidad con rangos propios, acuerdos,
-respaldo de precios y versiones. El futuro portal debe poder identificar el
-nivel que determina el precio sin presuponer que el archivo ya fue analizado
-automáticamente.
+La cobertura se conserva por archivo y debe quedar identificada al explicar
+un precio diferenciado. Los rangos propios siguen D14, los acuerdos D20 y las
+versiones D24. Si falta un precio para el nivel solicitado, se aplica D21; no se
+sustituye por otro nivel de forma implícita. El diseño deberá precisar los
+controles de selección y registro, incluida la compatibilidad de los respaldos.
+El futuro portal deberá resolver cómo se determina la cobertura antes de
+confirmar el precio, sin presuponer un análisis automático del archivo.
+
+### Simulación de costos de todas las matrices
+
+**Confirmado en D28:** desde el alcance inicial, el usuario debe poder simular
+con el motor los costos de todas las celdas de cada tarifario. Esto incluye cada
+papel y gramaje, tamaño ofrecido, K/CMYK, simple/doble faz, cobertura y tramo,
+con sus rangos generales o propios. La simulación está disponible para todas
+las matrices del tenant, incluidos los tarifarios específicos de canales.
+
+El recorrido debe permitir calcular la matriz completa y volver a calcular una
+selección al revisar precios. También deben poder simularse las celdas vacías:
+el costo sirve como referencia para decidir un precio, sin obligar a aceptarlo
+desde el motor. Los resultados deben mostrar el costo estimado por unidad y
+total del escenario, el precio de venta si existe, y el margen resultante. Un
+precio pendiente conserva ese estado; conocer su costo no completa la celda.
+
+Cada resultado usa una cantidad de referencia dentro de su tramo, según D23:
+inicialmente el comienzo, editable dentro del rango. Por ejemplo, la celda
+50–199 se simula inicialmente con 50 unidades y permite comprobar 100 o 199;
+la celda 200+ comienza con 200. Esto cubre todas las celdas de la matriz, sin
+presentar una simulación a una cantidad como garantía para todo el tramo.
+Las unidades siguen siendo hojas o carillas según el tarifario.
+
+Los supuestos deben quedar visibles: cantidad, cobertura, caras y composición
+del pedido de referencia. El cálculo debe respetar los costos operativos aunque
+la preparación esté incluida, y mostrar cómo inciden preparación y mínimo en
+el precio total del escenario, una sola vez por pedido. Los costos, cargos y
+márgenes se comparan sobre bases coherentes según D17 y D25, sin considerar el
+IVA como ganancia. Las terminaciones se mantienen aparte según D16.
+
+En tarifarios con precios diferenciados se simula cada nivel. Con precio único
+también deben poder compararse los costos de Borrador, Normal y Alta frente al
+mismo precio de venta, para detectar el impacto de la cobertura en el margen.
+Cambiar el precio que se está evaluando debe permitir ver el nuevo margen, sin
+confundir ese ajuste comercial con un cambio en el costo de producción.
+
+El motor usa la configuración productiva y los costos del tenant; no se crea
+una fórmula paralela de costos para las matrices. Se debe identificar cuándo
+se calculó cada resultado y con qué referencias. Si falta configuración o el
+motor no puede costear una celda, se muestra el motivo sin reemplazarlo por
+cero ni presentar su margen como verificado. Una simulación parcial no se
+presenta como completa.
+
+Simular no cambia precios cargados, activa versiones ni aprueba excepciones de
+margen. Las sugerencias y su aceptación siguen D23, la publicación D24 y los
+controles de margen D25. Los costos y márgenes mantienen sus permisos internos;
+no se muestran al cliente por el hecho de tener un tarifario online.
 
 ## Base actual del módulo
 
@@ -711,8 +768,8 @@ La estructura propuesta es:
 **Papel y gramaje × tamaño × K o CMYK × simple o doble faz × cobertura × tramo de cantidad.**
 
 La disponibilidad de precios por cobertura desde el alcance inicial sigue D26.
-La modalidad de precio único y el efecto sobre la acumulación conservan su
-estado de propuesta en P13.
+La modalidad de precio único y el efecto sobre la acumulación siguen D27:
+la cobertura es un eje comercial sólo cuando se cobra de forma diferenciada.
 
 La unidad del precio y de los tramos se elige por tarifario según D09 y D10:
 hoja física inicialmente, con carilla impresa como alternativa. Los rangos son
@@ -720,6 +777,7 @@ generales por tarifario, con excepciones por combinación según D14.
 
 La generación de estructura, carga manual, pegado desde Excel, duplicación,
 sugerencias del motor y actualizaciones masivas están confirmadas en D23.
+La simulación con el motor de los costos de todas sus celdas sigue D28.
 
 El motor seguiría calculando los costos y la producción. El tarifario
 determinaría el precio de venta, con el desglose comercial correspondiente. La
@@ -748,8 +806,9 @@ respaldo explícito siguen D21.
 ### Configuración y explicación del precio
 
 Se propone organizar la configuración en Oferta, Tarifarios y Canales, con un
-acceso desde Centro de copiado según los permisos del usuario. Un simulador
-permitiría comprobar ejemplos antes de activar una matriz.
+acceso desde Centro de copiado según los permisos del usuario. La simulación
+de costos de la matriz completa es parte del alcance inicial confirmado en D28;
+la presentación de resultados y los controles se definirán al diseñar la interfaz.
 
 Durante la venta se mostrarían las opciones habilitadas y el origen del precio,
 por ejemplo: «Tarifario online · A4 · Obra 80 g · K · doble faz · tramo 100–499».
@@ -759,13 +818,12 @@ Los costos y márgenes conservarían sus permisos de acceso.
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
 en D15, P06 en D16 a D19, P07 en D20, P08 en D21, P09 en D22 y el alcance de P10
-en D23, P11 en D24 y P12 en D25. D26 confirma que los precios por cobertura
-entran en el alcance inicial; P13 conserva las reglas restantes por resolver.
+en D23, P11 en D24, P12 en D25 y P13 en D26 y D27. D28 amplía el alcance inicial
+con la simulación de costos de todas las celdas de las matrices.
 Las preguntas restantes deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P13 | ¿Cómo se configuran los precios por cobertura y cómo acumulan volumen? | D26 confirma su inclusión inicial. Propuesta: precio único o importes independientes por nivel, configurables por tarifario; separar la acumulación por cobertura sólo en la modalidad diferenciada. Precisar selección del nivel e integración con las demás reglas. |
 | P14 | ¿Cuál es el alcance inicial de tomos, terminaciones y planos CAD? | Proponer tarifas para impresión en hojas e integrar correctamente tomos y terminaciones existentes; evaluar un tarifario CAD por separado. |
 | P15 | ¿Cómo se habilita la nueva oferta en tenants existentes? | Proponer conservar su comportamiento hasta que configuren y activen los cambios. Definir el tratamiento de combinaciones nuevas o retiradas. |
 
@@ -773,7 +831,8 @@ Las preguntas restantes deben resolverse antes de activar el recorrido completo.
 
 Todos los ejemplos son ficticios. Los conteos describen documentos separados
 cuyas copias comienzan en un frente. La unidad sigue D09 y D10 y la acumulación,
-D11 y D12. El precio del tramo se aplica según D13 y los rangos siguen D14.
+D11 y D12, con cobertura diferenciada según D27. El precio del tramo se aplica
+según D13 y los rangos siguen D14.
 La clasificación comercial de la última hoja sigue D15. Las demás reglas
 conservan los pendientes indicados en cada caso.
 Las páginas son las seleccionadas para imprimir, no necesariamente todas las
@@ -821,7 +880,10 @@ del archivo original.
 | Costeo incompleto | Existe precio de venta, pero faltan costos necesarios para verificar el margen. | Se muestra «Margen no verificable» y se exige revisión; no se reemplazan costos desconocidos por cero. |
 | Pedido modificado tras autorizar | Un borrador recibe aprobación de margen y luego cambian cantidades, precio o costos del cálculo. | Se reevalúa el margen; la aprobación anterior no autoriza un resultado distinto. Un presupuesto ya emitido conserva D24. |
 | Costos posteriores a la emisión | Aumenta el costo de un trabajo con presupuesto emitido todavía válido. | Puede mostrarse una alerta interna; se mantiene el precio comprometido sin aplicar retroactivamente el bloqueo de D25. |
-| Coberturas distintas | 60 hojas con cobertura Normal y 50 con cobertura Alta, iguales los demás atributos, en acumulación por combinación. | Precios por cobertura disponibles desde el alcance inicial según D26. Pendiente P13: se propone acumular 60 y 50 por separado con precios diferenciados, o 110 con precio único, manteniendo los costos de cada archivo. |
+| Coberturas distintas | 60 hojas con cobertura Normal y 50 con cobertura Alta, iguales los demás atributos, en acumulación por combinación. | Se acumulan 60 y 50 por separado con precios diferenciados, o 110 con precio único, manteniendo los costos de cada archivo, según D27. |
+| Simulación de matriz completa | Tarifario con varios papeles, tamaños, colores, caras, coberturas y tramos, con celdas cargadas y vacías. | Se pueden simular los costos de todas las celdas con el motor según D28. Cada resultado identifica su cantidad de referencia; las celdas vacías muestran costo, pero siguen sin precio ni margen de venta verificable. |
+| Simulación con precio único | Una celda tiene el mismo precio para todas las coberturas. | Se pueden comparar los costos y márgenes de Borrador, Normal y Alta frente a ese precio; no se crean precios comerciales diferenciados por simularlos. |
+| Simulación incompleta | El motor puede costear algunas combinaciones, pero una carece de configuración necesaria. | Se identifica la celda y el motivo pendiente; no se informa costo cero ni se presenta la matriz completa como verificada. |
 | Oferta incompleta | Papel habilitado con un tamaño no ofrecido, o combinación ofrecida sin precio aplicable. | El tamaño no ofrecido no se puede seleccionar ni habilitar con un precio manual. La combinación ofrecida sigue D21: precio pendiente inicialmente o respaldo explícito. |
 | Precio pendiente | 120 hojas A3, Ilustración 150 g, CMYK y doble faz; celda del tramo 100–199 vacía y sin respaldo ni acuerdo aplicable. | Se conserva el borrador con aviso de precio pendiente, sin tratar la celda como $0 ni usar el mínimo para completar el precio. No se permite confirmar o cobrar el pedido como completo. |
 | Respaldo válido | El caso anterior con otro tarifario compatible o el motor elegidos explícitamente como respaldo. | Si la fuente resuelve el precio, se usa y se identifica su origen. Se mantienen la preparación y el mínimo del tarifario activo, sin duplicar cargos. Si no lo resuelve, continúa pendiente. |
@@ -896,10 +958,19 @@ debe precisar la integración con los permisos y controles generales del tenant,
 conservar el cálculo autorizado y reevaluar los borradores modificados. No se
 deben alterar importes históricos ni compromisos vigentes de D24.
 
-El diseño inicial debe contemplar los precios por cobertura de D26 en la
+El diseño inicial debe contemplar los precios por cobertura de D26 y D27 en la
 estructura, edición, resolución de precios y guardado del cálculo histórico.
-La composición de los grupos comerciales y la selección del nivel se
-completarán al resolver P13.
+La cobertura integra la clave comercial sólo en la modalidad diferenciada y
+se conserva para el costeo de cada archivo en ambas modalidades. Los respaldos
+y acuerdos deben respetar el nivel solicitado cuando forme parte del precio.
+
+La simulación de D28 debe reutilizar el motor y alcanzar todas las celdas,
+registrando resultados y errores por combinación y cantidad de referencia.
+La ejecución completa o por selección, el progreso y la actualización de
+resultados ante cambios de costos deben diseñarse sin sobrescribir precios ni
+confundir un resultado anterior con una simulación actual. Las cantidades de
+referencia, unidades y supuestos productivos deben ser coherentes con D23,
+incluido el desglose de preparación, mínimo y cargos para evaluar D25.
 
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
@@ -908,9 +979,10 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P12 resueltos en D09 a D25 y completar las reglas comerciales
-   pendientes que condicionan el primer alcance.
-2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
+1. Partir de P01 a P13 resueltos en D09 a D27 y del alcance de simulación de D28,
+   y completar las reglas comerciales pendientes que condicionan el primer alcance.
+2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluida la simulación
+   de costos de todas las celdas de las matrices.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
    configuraciones existentes.
 4. Implementar matrices y asignación por canal como un conjunto, incorporando
@@ -957,3 +1029,5 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | P11 resuelto: versiones publicadas inmutables, activación inmediata o programada y actualización explícita de borradores antes de emitir. Incorporación de D24, respeto de presupuestos vigentes y de importes aprobados, ejemplos y control de cambios entre vista previa y confirmación. | Confirmado |
 | 2026-10-10 | P12 resuelto: mínimo de margen configurable por tarifario, autorización con motivo por debajo del mínimo incluido el margen negativo y bloqueo estricto como alternativa. Incorporación de D25, cálculo sobre impresión más preparación, terminaciones aparte, revisión del costeo incompleto y de pedidos modificados, sin cambiar automáticamente los precios ni alterar compromisos vigentes. | Confirmado |
 | 2026-10-10 | Incorporación de D26: precios por cobertura dentro del alcance inicial. P13 se precisa para resolver modalidades por tarifario, selección de cobertura y acumulación de volumen; se incorpora una propuesta con ejemplo, todavía sin confirmar esas reglas. | Confirmado parcial |
+| 2026-10-10 | P13 resuelto con D27: precio único como opción inicial y precios independientes por cobertura como alternativa desde la primera entrega; la cobertura separa volumen sólo cuando se cobra diferenciada. Se actualizan D12, D26 y ejemplos. | Confirmado |
+| 2026-10-10 | Incorporación de D28: simulación con el motor de los costos de todas las celdas de las matrices desde el alcance inicial, incluidas las celdas sin precio. Comparación de costo, venta y margen con cantidades de referencia explícitas, sin modificar automáticamente precios. | Confirmado |
