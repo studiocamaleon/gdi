@@ -1434,3 +1434,26 @@ Chrome reproducía `/login → /plataforma → /backoffice`: la cookie de una se
 Corrección preparada en `codex/acceso-empresa-sesion`, dependiente del PR #20: ante un 401, la consola pasa por la salida antes de regresar a su propio acceso. «Acceso de empresa» usa una navegación completa por `/salir`, sin precarga. La salida sólo permite los dos destinos internos previstos. Pasaron 57 pruebas locales de redirecciones, limpieza de sesión, formulario y protección de staging, además del lint enfocado. Un 403 conserva el rechazo por permisos y un fallo 503 no cierra la sesión.
 
 **El acceso del navegador quedó recuperado; el cambio de código todavía no está desplegado.** La versión publicada continúa siendo `b030b6ab7`. Preparado para el siguiente lote de staging; producción sin cambios.
+
+
+## 03/10/2026 — Deshacer tomo (PR #19)
+
+Web **`061a7587379f22c8af228d00419f3fc0461474de`**, dependiente de #18. Publicación solicitada por Lucas, primero en staging y después en producción con idéntica imagen. Sin fusionar PR, tocar la web comercial ni modificar migraciones o tamaños.
+
+| Servicio | Imagen vigente |
+| --- | --- |
+| Web | `registry.fly.io/grafoprint-staging-web@sha256:adf8dfd9f5b386b6cea2bd785c4cad2fa4fd465303ab3edbd7a948d49d2d3b9f` |
+| API / ambos workers | `registry.fly.io/grafoprint-staging-api@sha256:bc61b4374bc023f0660554ba52936468e05e93b3db32fbfc940977da7036d6a6` |
+
+Backend conserva `e11e431b3`; PDF conserva `2fee01704` y su digest anterior. 305 migraciones. Para revertir sólo web: digest anterior `5e4c38bf4eb45b2cb4b845e66bf05a48ac02c99384970a612b11c8ec3e6eb971`; no borrar documentos ni restaurar la base.
+
+- Botón visible **Deshacer tomo**; los juegos actuales pasan a ser copias de cada original. El ensayo de staging encontró un rechazo al guardar por campos internos de `contextoMateriales`; la proyección de transporte los excluye y tiene regresión.
+- 23 pruebas locales (16 formulario, 4 originales, 3 transporte), lint, compilación remota con tipos. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/37092088659) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/37092088678) aprobados para la revisión publicada.
+- Chrome staging: reabrir tomo guardado, pasar de diez juegos a siete, separar, guardar el formulario y la OT, recargar. Dos documentos con rangos `1,3,5` y `2`, doble faz y siete copias; 21 hojas, 28 carillas, total ficticio $2.137,38. Preparaciones individuales activas. Ambos PDF originales de cinco páginas descargados mediante el acceso normal y comparados byte por byte.
+- Empresa, operador y archivos ficticios retirados de staging. Producción: nueva orden y opciones del Centro de copiado cargan sin guardar datos comerciales. Salud web/API 200, acceso directo protegido 403 y BFF sin sesión 401; seis máquinas iniciadas y tamaños conservados.
+- La máquina temporal de compilación no pudo reactivarse por capacidad. La promoción se completó copiando el manifiesto en el registro, verificando el mismo digest, sin recompilar. Builder temporal eliminado. Docker local y otros proyectos intactos.
+- Fuentes exactas cifradas y protegidas 31 días; copiador actualizado al inventario mixto web/backend. Copia **`e5884730-402a-42df-963c-90d8d7d548b5`**, completada **2026-10-03T03:25:13.252Z**, 305 migraciones y 15 archivos: firma, huella, descifrado del manifiesto y referencias de código/imágenes comprobados. No se repitió una restauración SQL completa.
+
+Sentry se prepara en otra rama y no forma parte de esta publicación.
+
+La copia citada precede a la retirada de las fixtures de este ensayo; incluye archivos ficticios. Las copias horarias posteriores recogerán su limpieza.
