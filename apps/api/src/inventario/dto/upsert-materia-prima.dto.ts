@@ -99,6 +99,7 @@ export enum UnidadMateriaPrimaDto {
   placa = 'placa',
   pliego = 'pliego',
   resma = 'resma',
+  barra = 'barra',
   rollo = 'rollo',
   metro_lineal = 'metro_lineal',
   m2 = 'm2',

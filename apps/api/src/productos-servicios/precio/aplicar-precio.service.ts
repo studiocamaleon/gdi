@@ -1,3 +1,5 @@
+import { escalarCostosPasos } from './costos-pasos-precio';
+import { validarMargenOpcionales } from './margen-opcionales';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   AplicarPrecioInput,
@@ -89,15 +91,10 @@ export class AplicarPrecioService {
 
     const cargas = this.normalizarCargas(input.impuestos, input.comisiones);
 
-    const costoSinMargen = input.costoSinMargenUnitario ?? 0;
-    const costoConMargen = Math.max(0, input.costoUnitario - costoSinMargen);
-    const netoMargenableLista = this.calcularNeto(
-      input.precioConfig,
-      costoConMargen,
-      input.cantidad,
+    const { netoMargenableLista, trasladoSinMargen } = this.calcularLista(
+      input,
       cargas,
     );
-    const trasladoSinMargen = this.netoSinMargen(costoSinMargen, cargas);
     const netoLista = this.r(netoMargenableLista + trasladoSinMargen);
 
     // Descuento comercial: sale del neto de lista, ANTES del IVA. Como todo lo
@@ -196,24 +193,22 @@ export class AplicarPrecioService {
       const costoSinMargenTotal = bloque.costoSinMargenTotal ?? 0;
       const costoUnitario = bloque.costoTotal / bloque.cantidad;
       const costoSinMargenUnitario = costoSinMargenTotal / bloque.cantidad;
-      this.validarInput({
+      const precioInput: AplicarPrecioInput = {
         costoUnitario,
         costoSinMargenUnitario,
+        costosPasosUnitarios: bloque.costosPasosTotales
+          ? escalarCostosPasos(bloque.costosPasosTotales, 1 / bloque.cantidad)
+          : undefined,
         cantidad: bloque.cantidad,
         precioConfig: bloque.precioConfig,
         impuestos: input.impuestos,
         comisiones: input.comisiones,
-      });
-      const netoMargenableUnitario = this.calcularNeto(
-        bloque.precioConfig,
-        Math.max(0, costoUnitario - costoSinMargenUnitario),
-        bloque.cantidad,
-        cargas,
-      );
-      const trasladoSinMargenUnitario = this.netoSinMargen(
-        costoSinMargenUnitario,
-        cargas,
-      );
+      };
+      this.validarInput(precioInput);
+      const {
+        netoMargenableLista: netoMargenableUnitario,
+        trasladoSinMargen: trasladoSinMargenUnitario,
+      } = this.calcularLista(precioInput, cargas);
       return {
         ...bloque,
         costoSinMargenTotal,
@@ -724,6 +719,67 @@ export class AplicarPrecioService {
     return this.r(costo / (1 - tasa));
   }
 
+  /** Separa lo incluido en un precio fijo de los opcionales efectivamente activados. */
+  private calcularLista(input: AplicarPrecioInput, cargas: CargasNormalizadas) {
+    const costos = input.costosPasosUnitarios;
+    const fijo = [
+      'precio_fijo',
+      'precio_fijo_para_margen_minimo',
+      'fijado_por_cantidad',
+      'variable_por_cantidad',
+    ].includes(input.precioConfig.metodoCalculo);
+    const costoSinMargen = input.costoSinMargenUnitario ?? 0;
+    if (!fijo || !costos) {
+      return {
+        netoMargenableLista: this.calcularNeto(
+          input.precioConfig,
+          Math.max(0, input.costoUnitario - costoSinMargen),
+          input.cantidad,
+          cargas,
+        ),
+        trasladoSinMargen: this.netoSinMargen(costoSinMargen, cargas),
+      };
+    }
+
+    // Los cargos de los pasos obligatorios también están incluidos. Los cargos
+    // globales sin margen conservan su traslado; los del opcional se suman una vez.
+    const globalSinMargen = Math.max(
+      0,
+      costoSinMargen - costos.incluidosSinMargen - costos.opcionalesSinMargen,
+    );
+    const costoIncluido = Math.max(
+      0,
+      input.costoUnitario - costos.opcionales - globalSinMargen,
+    );
+    const base = this.calcularNeto(
+      input.precioConfig,
+      costoIncluido,
+      input.cantidad,
+      cargas,
+    );
+    const costoOpcionalMargenable = Math.max(
+      0,
+      costos.opcionales - costos.opcionalesSinMargen,
+    );
+    const opcionales =
+      costoOpcionalMargenable > 0
+        ? this.netoDesdeMargenObjetivo(
+            costoOpcionalMargenable,
+            (input.precioConfig.detalle.margenOpcionalesPct as
+              | number
+              | undefined) ?? 0,
+            cargas,
+          )
+        : 0;
+    return {
+      netoMargenableLista: base + opcionales,
+      trasladoSinMargen: this.netoSinMargen(
+        globalSinMargen + costos.opcionalesSinMargen,
+        cargas,
+      ),
+    };
+  }
+
   // ── Validaciones ────────────────────────────────────────────────────
 
   private validarInput(input: AplicarPrecioInput): void {
@@ -759,6 +815,21 @@ export class AplicarPrecioService {
       throw new BadRequestException(
         `metodoCalculo inválido: ${input.precioConfig.metodoCalculo}`,
       );
+    }
+    validarMargenOpcionales(input.precioConfig);
+    const pasos = input.costosPasosUnitarios;
+    if (pasos) {
+      const tolerancia = Math.max(1, input.costoUnitario) * 1e-9;
+      if (
+        Object.values(pasos).some((v) => !Number.isFinite(v) || v < 0) ||
+        pasos.opcionalesSinMargen > pasos.opcionales + tolerancia ||
+        pasos.opcionales + pasos.incluidosSinMargen >
+          input.costoUnitario + tolerancia
+      ) {
+        throw new BadRequestException(
+          'Los costos de pasos opcionales e incluidos no coinciden con el costo del producto.',
+        );
+      }
     }
     // Porcentajes razonables
     for (const i of input.impuestos) {

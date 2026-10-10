@@ -1,3 +1,4 @@
+import { PRODUCTO_CON_IVA_SQL } from './importes-referencia-sql';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -30,6 +31,7 @@ export type ClienteRfm = {
   cliente: string;
   ordenes: number;
   facturadoHistorico: number;
+  facturadoHistoricoConIva: number;
   ultimaCompra: string;
   diasSinComprar: number;
 };
@@ -39,6 +41,7 @@ export type MargenCliente = {
   cliente: string;
   ordenes: number;
   ventas: number;
+  ventasConIva: number;
   /** Margen sólo sobre los items CON costo snapshoteado. */
   margen: number;
   margenPct: number | null;
@@ -50,10 +53,12 @@ type HistoriaCliente = {
   nombre: string;
   ordenes: number;
   facturado: number;
+  facturadoConIva: number;
   primera: Date;
   ultima: Date;
   ordenesRango: number;
   facturadoRango: number;
+  facturadoRangoConIva: number;
   ordenesAnterior: number;
 };
 
@@ -75,10 +80,14 @@ export class ClientesService {
         SELECT ot."clienteId" AS id, COALESCE(c.nombre, 'Sin cliente') AS nombre,
                COUNT(DISTINCT ot.id)::int AS ordenes,
                COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado,
+               COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "facturadoConIva",
                MIN(ot."fechaEmision") AS primera, MAX(ot."fechaEmision") AS ultima,
                COUNT(DISTINCT ot.id) FILTER (
                  WHERE ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${hastaExcl}
                )::int AS "ordenesRango",
+               COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}) FILTER (
+                 WHERE ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${hastaExcl}
+               ), 0)::float8 AS "facturadoRangoConIva",
                COALESCE(SUM(oti.subtotal) FILTER (
                  WHERE ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${hastaExcl}
                ), 0)::float8 AS "facturadoRango",
@@ -110,13 +119,13 @@ export class ClientesService {
       // Serie del rango: venta de clientes NUEVOS (adquiridos en ese
       // bucket) vs. RECURRENTES. La primera compra se busca en TODA la
       // historia, no sólo en el rango.
-      this.prisma.$queryRaw<Array<{ fecha: string; nuevos: number; recurrentes: number }>>`
+      this.prisma.$queryRaw<Array<{ fecha: string; nuevos: number; recurrentes: number; nuevosConIva: number; recurrentesConIva: number }>>`
         WITH ord AS (
           SELECT ot.id, ot."clienteId" AS cid, ot."fechaEmision" AS f,
                  -- La misma fecha en el reloj del TENANT: los buckets y la
                  -- "primera compra" se comparan en su pared, no en UTC.
                  (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona} AS fl,
-                 SUM(oti.subtotal) AS total
+                 SUM(oti.subtotal) AS total, SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}) AS total_con_iva
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
           WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
@@ -130,10 +139,18 @@ export class ClientesService {
                  WHERE date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, primera)
                      = date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, fl)
                ), 0)::float8 AS nuevos,
+               COALESCE(SUM(total_con_iva) FILTER (
+                 WHERE date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, primera)
+                     = date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, fl)
+               ), 0)::float8 AS "nuevosConIva",
                COALESCE(SUM(total) FILTER (
                  WHERE date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, primera)
                      < date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, fl)
-               ), 0)::float8 AS recurrentes
+               ), 0)::float8 AS recurrentes,
+               COALESCE(SUM(total_con_iva) FILTER (
+                 WHERE date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, primera)
+                     < date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, fl)
+               ), 0)::float8 AS "recurrentesConIva"
         FROM marcada
         WHERE f >= ${rango.desde} AND f < ${hastaExcl}
         GROUP BY 1 ORDER BY 1
@@ -146,6 +163,7 @@ export class ClientesService {
           nombre: string;
           ordenes: number;
           ventas: number;
+          ventasConIva: number;
           ventasconcosto: number;
           costo: number;
           sincosto: number;
@@ -154,6 +172,7 @@ export class ClientesService {
         SELECT ot."clienteId" AS id, COALESCE(c.nombre, 'Sin cliente') AS nombre,
                COUNT(DISTINCT ot.id)::int AS ordenes,
                COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
+               COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "ventasConIva",
                COALESCE(SUM(oti.subtotal) FILTER (WHERE ci.id IS NOT NULL), 0)::float8 AS ventasconcosto,
                COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo,
                COUNT(*) FILTER (WHERE ci.id IS NULL)::int AS sincosto
@@ -192,6 +211,7 @@ export class ClientesService {
         cliente: h.nombre,
         ordenes: h.ordenesRango,
         facturado: r2(h.facturadoRango),
+        facturadoConIva: r2(h.facturadoRangoConIva),
         pct: totalRango > 0 ? r2((h.facturadoRango / totalRango) * 100) : 0,
         pctAcumulado: totalRango > 0 ? r2((acumulado / totalRango) * 100) : 0,
       };
@@ -200,13 +220,13 @@ export class ClientesService {
 
     // Segmentos RFM sobre TODO el historial. Reglas declaradas (v1):
     // activo = compró hace ≤ diasActivo; perdido = > 3× diasActivo.
-    const segmentos: Record<SegmentoRfm, { clientes: number; facturado: number }> = {
-      campeones: { clientes: 0, facturado: 0 },
-      leales: { clientes: 0, facturado: 0 },
-      nuevos: { clientes: 0, facturado: 0 },
-      en_riesgo: { clientes: 0, facturado: 0 },
-      perdidos: { clientes: 0, facturado: 0 },
-      ocasionales: { clientes: 0, facturado: 0 },
+    const segmentos: Record<SegmentoRfm, { clientes: number; facturado: number; facturadoConIva: number }> = {
+      campeones: { clientes: 0, facturado: 0, facturadoConIva: 0 },
+      leales: { clientes: 0, facturado: 0, facturadoConIva: 0 },
+      nuevos: { clientes: 0, facturado: 0, facturadoConIva: 0 },
+      en_riesgo: { clientes: 0, facturado: 0, facturadoConIva: 0 },
+      perdidos: { clientes: 0, facturado: 0, facturadoConIva: 0 },
+      ocasionales: { clientes: 0, facturado: 0, facturadoConIva: 0 },
     };
     const enRiesgo: ClienteRfm[] = [];
     for (const h of historia) {
@@ -221,12 +241,14 @@ export class ClientesService {
       }
       segmentos[seg].clientes += 1;
       segmentos[seg].facturado += h.facturado;
+      segmentos[seg].facturadoConIva += h.facturadoConIva;
       if (seg === 'en_riesgo') {
         enRiesgo.push({
           clienteId: h.id,
           cliente: h.nombre,
           ordenes: h.ordenes,
           facturadoHistorico: r2(h.facturado),
+          facturadoHistoricoConIva: r2(h.facturadoConIva),
           ultimaCompra: claveFechaEnZona(h.ultima, rango.zona),
           diasSinComprar: dias,
         });
@@ -257,6 +279,8 @@ export class ClientesService {
         fecha: s.fecha,
         nuevos: r2(s.nuevos),
         recurrentes: r2(s.recurrentes),
+        nuevosConIva: r2(s.nuevosConIva),
+        recurrentesConIva: r2(s.recurrentesConIva),
       })),
       rfm: {
         diasActivo,
@@ -264,6 +288,7 @@ export class ClientesService {
           segmento: seg,
           clientes: segmentos[seg].clientes,
           facturado: r2(segmentos[seg].facturado),
+          facturadoConIva: r2(segmentos[seg].facturadoConIva),
         })),
         enRiesgo: enRiesgo.slice(0, 8),
       },
@@ -274,6 +299,7 @@ export class ClientesService {
           cliente: m.nombre,
           ordenes: m.ordenes,
           ventas: r2(m.ventas),
+          ventasConIva: r2(m.ventasConIva),
           margen: r2(margen),
           margenPct: m.ventasconcosto > 0 ? r2((margen / m.ventasconcosto) * 100) : null,
           itemsSinCosto: m.sincosto,

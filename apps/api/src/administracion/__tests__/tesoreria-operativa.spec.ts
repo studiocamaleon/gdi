@@ -69,10 +69,13 @@ describe('Tesorería operativa', () => {
         slug: `tesoreria-${tenantId}`,
       },
     });
+    await prisma.user.create({ data: { id: auth.userId, email: auth.email } });
+    await prisma.membership.create({ data: { id: auth.membershipId, userId: auth.userId, tenantId, rol: 'ADMINISTRADOR' } });
   });
 
   afterAll(async () => {
     await prisma.tenant.delete({ where: { id: tenantId } });
+    await prisma.user.delete({ where: { id: auth.userId } });
     await prisma.$disconnect();
   });
 
@@ -322,8 +325,24 @@ describe('Tesorería operativa', () => {
     });
 
     const resultado = await Promise.allSettled([
-      cobros.acreditar(auth, cobro.id),
-      cobros.acreditar(auth, cobro.id),
+      cobros.acreditar(auth, cobro.id, {
+        fecha: '2026-03-02',
+        referencia: 'LIQ-TEST',
+        comisionMonto: 100,
+        comisionIvaMonto: 21,
+        retenciones: [
+          { regimen: 'otro', base: 1000, alicuota: 7.9, monto: 79 },
+        ],
+      }),
+      cobros.acreditar(auth, cobro.id, {
+        fecha: '2026-03-02',
+        referencia: 'LIQ-TEST',
+        comisionMonto: 100,
+        comisionIvaMonto: 21,
+        retenciones: [
+          { regimen: 'otro', base: 1000, alicuota: 7.9, monto: 79 },
+        ],
+      }),
     ]);
     const actual = await prisma.cuentaFondos.findUniqueOrThrow({
       where: { id: cuentaId },

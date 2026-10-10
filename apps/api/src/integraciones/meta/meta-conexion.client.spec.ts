@@ -346,3 +346,18 @@ it.each(['sin-suscripcion', 'sin-vencimiento'])(
     );
   },
 );
+
+
+it.each([
+  'http://graph.facebook.com/v26.0/debug_token',
+  'https://graph.facebook.com.ajeno.example.invalid/debug_token',
+  'https://127.0.0.1/debug_token',
+  'https://graph.facebook.com:8443/debug_token',
+  'https://usuario:clave@graph.facebook.com/debug_token',
+])('rechaza el destino no permitido antes de enviar credenciales: %s', async (destino) => {
+  const client = new MetaConexionClient();
+  // Se comprueba además la frontera interna de salida, sin llamadas de red.
+  const leer = client as unknown as { leer(url: URL, token: string): Promise<unknown> };
+  await expect(leer.leer(new URL(destino), token)).rejects.toThrow('DATOS_INVALIDOS');
+  expect(fetchMock).not.toHaveBeenCalled();
+});

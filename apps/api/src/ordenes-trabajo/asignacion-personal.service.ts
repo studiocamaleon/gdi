@@ -177,6 +177,7 @@ export class AsignacionPersonalService {
         return {
           id: e.id,
           nombre: e.nombreCompleto,
+          asignacionAutomatica: estacion.empleados?.find(p => p.id === e.id)?.asignacionAutomatica !== false,
           tieneHorario:
             !!calendario &&
             Object.values(calendario.dias).some((f) => f?.length),

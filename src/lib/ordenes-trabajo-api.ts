@@ -17,6 +17,7 @@ import type {
  */
 
 export type CrearOrdenTrabajoItemPayload = {
+  asignacionesPersonal?: import("../../apps/api/src/ordenes-trabajo/personal-previsto.contrato").EleccionPersonal[];
   fechaEntrega?: string;
   cotizacionItemId?: string;
   planEntrega?: import("./planificacion-entregas").VinculoPlanEntrega;
@@ -117,6 +118,14 @@ export async function getOrdenTrabajo(
   return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}`);
 }
 
+export type { DetalleOperativoItem } from "../../apps/api/src/ordenes-trabajo/detalle-operativo";
+
+export async function getDetalleItemTablero(itemId: string) {
+  return apiRequest<import("../../apps/api/src/ordenes-trabajo/detalle-operativo").DetalleOperativoItem>(
+    `/ordenes-trabajo/tablero/items/${itemId}/detalle`,
+  );
+}
+
 export async function crearOrdenTrabajo(
   payload: CrearOrdenTrabajoPayload,
 ): Promise<OrdenTrabajoDetalle> {
@@ -146,6 +155,7 @@ export async function editarOrdenTrabajo(
 }
 
 export type EditarOrdenTrabajoLotePayload = EditarOrdenTrabajoPayload & {
+  cargos?: Array<NonNullable<CrearOrdenTrabajoPayload["cargos"]>[number] & { id?: string }>;
   tipoCambioId?: string;
   expectedVersion: string;
   /** Conjunto final completo; con `id` actualiza, sin `id` crea. */
@@ -390,4 +400,23 @@ export async function cambiarEstadoOrdenTrabajo(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export type DescuentoOrdenPayload = {
+  expectedVersion: string;
+  modo: "manual" | "cupon" | "quitar";
+  tipo?: "PORCENTAJE" | "MONTO";
+  valor?: number;
+  codigo?: string;
+};
+
+export function aplicarDescuentoOrden(id: string, payload: DescuentoOrdenPayload) {
+  return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}/descuento`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function descartarBorradorOrden(id: string) {
+  return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}/descartar`, { method: "POST" });
 }

@@ -20,7 +20,7 @@ import type {
   MaquinariaTemplateField,
 } from "@/lib/maquinaria";
 import { getMaquinariaTemplate } from "@/lib/maquinaria-templates";
-import { getMateriasPrimas } from "@/lib/materias-primas-api";
+import { getMateriasPrimasMaquinaria } from "@/lib/materias-primas-api";
 import type { MateriaPrima } from "@/lib/materias-primas";
 
 import {
@@ -79,7 +79,7 @@ export function useMaquinaEditor({
     }
     materiasIntentadas.current = true;
     setLoadingMaterias(true);
-    getMateriasPrimas()
+    getMateriasPrimasMaquinaria()
       .then(setMateriasPrimas)
       .catch((err) => {
         toast.error(

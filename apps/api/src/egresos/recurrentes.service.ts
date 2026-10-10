@@ -17,6 +17,7 @@ import type {
   EditarRecurrenteDto,
 } from './dto/recurrente.dto';
 import { exigirProveedorActivoDelTenant } from '../proveedores/proveedor-validacion';
+import { exigirMetodoPagoDelTenant } from '../administracion/metodo-pago-validacion';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const dec = (v: Prisma.Decimal | null | undefined) => (v ? Number(v) : 0);
@@ -157,6 +158,7 @@ export class RecurrentesService {
         );
       }
       await exigirProveedorActivoDelTenant(tx, auth.tenantId, dto.proveedorId);
+      await exigirMetodoPagoDelTenant(tx, auth.tenantId, dto.metodoPagoId);
       await this.validarGastoFijoDelTenant(auth, dto.gastoFijoEstructuraId, tx);
       if (
         dto.gastoFijoEstructuraId &&

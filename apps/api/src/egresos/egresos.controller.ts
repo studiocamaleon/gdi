@@ -17,7 +17,7 @@ import type { Response } from 'express';
 
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 import { EgresosService } from './egresos.service';
 import { RecurrentesService } from './recurrentes.service';
@@ -46,7 +46,7 @@ import {
  * Ver docs/egresos-y-cuentas-por-pagar-diseno.md
  */
 @OcultaMargenes()
-@Permiso('administracion.ver')
+@Permiso("administracion.egresos.ver")
 // Las lecturas conservan el historial al retirar el módulo del plan.
 @Controller('egresos')
 export class EgresosController {
@@ -57,12 +57,13 @@ export class EgresosController {
 
   // ── Gastos recurrentes (F3) ────────────────────────────────────────────
 
+  @Permiso("administracion.gastos.ver")
   @Get('recurrentes')
   listarRecurrentes(@CurrentSession() auth: CurrentAuth) {
     return this.recurrentes.listar(auth);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.gastos.gestionar")
   @RequiereCapacidades('cuentas_pagar', 'gastos_recurrentes')
   @Post('recurrentes')
   crearRecurrente(
@@ -73,7 +74,7 @@ export class EgresosController {
   }
 
   /** Emitir a mano lo pendiente, sin esperar al cron de la madrugada. */
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.gastos.gestionar")
   @RequiereCapacidades('cuentas_pagar', 'gastos_recurrentes')
   @Post('recurrentes/generar')
   generarRecurrentes(@CurrentSession() auth: CurrentAuth) {
@@ -82,6 +83,7 @@ export class EgresosController {
 
   /** Presupuestado vs. real de la estructura (journey E4). */
   @RequiereCapacidades('cuentas_pagar', 'gastos_recurrentes')
+  @Permiso("administracion.pagar.ver")
   @Get('presupuestado')
   presupuestadoVsReal(
     @CurrentSession() auth: CurrentAuth,
@@ -90,7 +92,7 @@ export class EgresosController {
     return this.recurrentes.presupuestadoVsReal(auth, periodo);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.gastos.gestionar")
   @RequiereCapacidades('cuentas_pagar', 'gastos_recurrentes')
   @Patch('recurrentes/:id')
   editarRecurrente(
@@ -101,7 +103,7 @@ export class EgresosController {
     return this.recurrentes.editar(auth, id, body);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.gastos.gestionar")
   @RequiereCapacidades('cuentas_pagar', 'gastos_recurrentes')
   @Delete('recurrentes/:id')
   borrarRecurrente(
@@ -113,12 +115,14 @@ export class EgresosController {
 
   // ── Categorías ─────────────────────────────────────────────────────────
 
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver', 'administracion.gastos.ver')
   @Get('categorias')
   categorias(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.categorias(auth);
   }
 
-  @Permiso('administracion.configurar')
+  @Permiso("administracion.egresos.gestionar")
+  @RequiereVista("administracion.egresos.ver")
   @RequiereCapacidad('cuentas_pagar')
   @Post('categorias')
   crearCategoria(
@@ -128,7 +132,8 @@ export class EgresosController {
     return this.egresos.crearCategoria(auth, body);
   }
 
-  @Permiso('administracion.configurar')
+  @Permiso("administracion.egresos.gestionar")
+  @RequiereVista("administracion.egresos.ver")
   @RequiereCapacidad('cuentas_pagar')
   @Patch('categorias/:id')
   editarCategoria(
@@ -139,7 +144,8 @@ export class EgresosController {
     return this.egresos.editarCategoria(auth, id, body);
   }
 
-  @Permiso('administracion.configurar')
+  @Permiso("administracion.egresos.gestionar")
+  @RequiereVista("administracion.egresos.ver")
   @RequiereCapacidad('cuentas_pagar')
   @Delete('categorias/:id')
   borrarCategoria(
@@ -152,12 +158,14 @@ export class EgresosController {
   // ── Resumen ────────────────────────────────────────────────────────────
 
   /** Los números de la cabecera: qué hay que pagar, qué está vencido. */
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver')
   @Get('resumen')
   resumen(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.resumen(auth);
   }
 
   /** Saldo por proveedor con antigüedad: el espejo de la matriz de deudores. */
+  @Permiso("administracion.pagar.ver")
   @Get('proveedores')
   saldosPorProveedor(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.saldosPorProveedor(auth);
@@ -165,12 +173,13 @@ export class EgresosController {
 
   /** Los cheques de terceros que están en cartera, para poder endosarlos. */
   @RequiereCapacidades('cuentas_pagar', 'valores')
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver')
   @Get('valores-en-cartera')
   valoresEnCartera(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.valoresEnCartera(auth);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.egresos.gestionar")
   @RequiereCapacidades('cuentas_pagar', 'valores')
   @Post('valores/:id/debitar')
   debitarValor(
@@ -181,7 +190,8 @@ export class EgresosController {
     return this.egresos.debitarValor(auth, id, body);
   }
 
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.egresos.ver")
   @RequiereCapacidades('cuentas_pagar', 'valores')
   @Post('valores/:id/rechazar')
   rechazarValorPropio(
@@ -205,7 +215,7 @@ export class EgresosController {
 
   // ── Pagos ──────────────────────────────────────────────────────────────
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.pagar.gestionar")
   @RequiereCapacidad('cuentas_pagar')
   @Post('pagos')
   registrarPago(
@@ -220,6 +230,7 @@ export class EgresosController {
    * no se guarda en el storage porque no se comparte por link, se descarga.
    */
   @RequiereCapacidad('documentos_pdf')
+  @Permiso("administracion.pagar.ver")
   @Get('pagos/:id/orden-pago.pdf')
   async ordenDePagoPdf(
     @CurrentSession() auth: CurrentAuth,
@@ -235,7 +246,8 @@ export class EgresosController {
     res.end(pdf);
   }
 
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.pagar.ver")
   @RequiereCapacidad('cuentas_pagar')
   @Patch('pagos/:id/anular')
   anularPago(
@@ -248,6 +260,7 @@ export class EgresosController {
 
   // ── Egresos ────────────────────────────────────────────────────────────
 
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver')
   @Get()
   listar(
     @CurrentSession() auth: CurrentAuth,
@@ -267,24 +280,26 @@ export class EgresosController {
       desde,
       hasta,
       eje,
-      soloPendientes,
+      // Pagar sólo consulta deudas pendientes; no abre el registro completo.
+      soloPendientes: auth.permisos?.has('administracion.egresos.ver') ? soloPendientes : 'true',
       texto,
     });
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.egresos.gestionar")
   @RequiereCapacidad('cuentas_pagar')
   @Post()
   crear(@CurrentSession() auth: CurrentAuth, @Body() body: CrearEgresoDto) {
     return this.egresos.crear(auth, body);
   }
 
+  @Permiso('administracion.egresos.ver', 'administracion.pagar.ver')
   @Get(':id/pagos')
   pagosDeEgreso(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.egresos.pagosDeEgreso(auth, id);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso("administracion.egresos.gestionar")
   @RequiereCapacidad('cuentas_pagar')
   @Patch(':id')
   editar(
@@ -295,7 +310,8 @@ export class EgresosController {
     return this.egresos.editar(auth, id, body);
   }
 
-  @Permiso('administracion.anular')
+  @Permiso("administracion.anular")
+  @RequiereVista("administracion.egresos.ver")
   @RequiereCapacidad('cuentas_pagar')
   @Patch(':id/anular')
   anular(

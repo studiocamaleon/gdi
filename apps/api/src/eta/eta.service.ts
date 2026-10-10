@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { sincronizarAsignaciones } from './asignacion-automatica';
 import { personalFijoDelPaso } from '../produccion/asignacion-personal';
@@ -113,7 +114,7 @@ export class EtaService {
     tenantId: string,
     db: Prisma.TransactionClient = this.prisma,
     recuperarHistoricos: boolean | 'lectura' = 'lectura',
-    finalidad: 'eta_capacidad' | 'asignacion_automatica' = 'eta_capacidad',
+    finalidad: 'eta_capacidad' | 'asignacion_automatica' | 'planificacion_avanzada' = 'eta_capacidad',
   ) {
     // El motor se comparte; asignar personal no requiere contratar la ETA.
     await this.capacidades.exigirIncluida(tenantId, finalidad, db);
@@ -389,7 +390,7 @@ export class EtaService {
       if (this.esRetiradaEta(error)) return;
       this.logger.error(
         `No se pudo correr el motor para la promesa de emisión (orden ${ordenId}).`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
 

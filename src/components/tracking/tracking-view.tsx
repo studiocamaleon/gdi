@@ -67,7 +67,7 @@ function ItemTimeline({ item }: { item: TrackingItem }) {
             : paso.estado === "en_curso" || paso.estado === "pausado"
               ? "current"
               : "pending";
-        const copy = copyDePaso(paso.familiaCodigo, paso.plantillaCodigo);
+        const copy = copyDePaso(paso);
         return (
           <li key={`${paso.indice}-${i}`} className={s.step} data-state={state}>
             <span className={s.stepDot} aria-hidden>
@@ -181,8 +181,7 @@ function ItemPanel({
               {listo
                 ? "Completado"
                 : item.pasoActual && actual
-                  ? copyDePaso(actual.familiaCodigo, actual.plantillaCodigo)
-                      .simple
+                  ? copyDePaso(actual).simple
                   : "Por iniciar"}
             </span>
           </span>

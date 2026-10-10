@@ -1157,7 +1157,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(e!.mensaje.toLowerCase()).toContain('cantidad');
     expect(result.metadata).toMatchObject({
       quoteRunId: expect.any(String),
-      motorVersion: 'motor-universal-v5',
+      motorVersion: 'motor-universal-v6',
       durationMs: expect.any(Number),
     });
   });
@@ -1940,7 +1940,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(snap).toHaveProperty('ejecucion');
     expect(snap).toMatchObject({
       motor: {
-        contractVersion: 'motor-universal-v5',
+        contractVersion: 'motor-universal-v6',
         inputHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         periodoTarifario: '2026-06',
       },

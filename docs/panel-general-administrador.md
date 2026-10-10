@@ -34,22 +34,32 @@ Compartir la presentación no cambia los permisos ni el alcance de datos.
 `vistasDisponibles` ni `previsualizando`. El controlador y la página ignoran
 cualquier antiguo `?vista=...`; no hay sustitución de permisos por otro rol.
 
-`entregas` divide las órdenes autorizadas en `hoy`, `atrasada` y `proxima`
+`entregas` divide las órdenes autorizadas en `hoy`, `atrasada`, `proxima` y `lista`
 **antes** del límite: cada grupo devuelve hasta seis órdenes y su total. Una
 cola de atrasadas no oculta las entregas de hoy. Se conservan tenant, permisos,
 alcance comercial, zona horaria y fechas de la consulta existente. Próximas
 abarca desde mañana hasta siete días inclusive. Sin acceso a ese resumen, la
 API devuelve `entregas: null` y la vista no ofrece el bloque ni sus enlaces.
+
+Desde la corrección del 07/10/2026, las tres categorías por fecha sólo contienen
+órdenes pendientes o en producción. «Atrasadas» significa que la fecha prometida
+ya pasó y todavía no se terminó el trabajo; se usa el día local de la empresa.
+El KPI y la alerta de atraso aplican ese mismo criterio.
+
+Las finalizadas aparecen en `lista` («Para retirar»), incluso si no tienen fecha,
+su fecha ya pasó o está a más de siete días. El estado «Lista para retirar» sale
+del cierre de la OT, no de un porcentaje redondeado de avance. Al entregar la OT
+sale del grupo. El historial de cumplimiento conserva si el trabajo se terminó
+a tiempo o tarde; este cambio sólo corrige la prioridad operativa actual.
 Se retiraron el resumen de entregas anterior y los campos exclusivos de las
 vistas eliminadas (`trabajoPersonal`, resumen administrativo duplicado y metadatos
 de selección). Los accesos a Producción/Mi mesa siguen siendo acciones existentes,
 no variantes del Panel.
 
 El pie explicita cuántas órdenes se muestran. «Ver órdenes» abre el listado
-completo, que también contiene las finalizadas pendientes de entrega; el filtro
-heredado `urgencia=atrasadas` del listado sólo contempla pendiente/producción y
-no representa todo este grupo de entregas. Los enlaces existentes de KPIs y
-alertas se conservan.
+completo, que también contiene las finalizadas pendientes de entrega. El filtro
+`urgencia=atrasadas` del listado contempla pendiente/producción y coincide con
+el criterio del panel. Los enlaces existentes de KPIs y alertas se conservan.
 
 ## Qué mide cada bloque
 

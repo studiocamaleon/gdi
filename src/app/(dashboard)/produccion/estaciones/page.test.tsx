@@ -41,7 +41,7 @@ beforeEach(() => {
 describe("acceso a Estaciones", () => {
   it("permite consultar producción sin solicitar recursos reservados al editor", async () => {
     vi.mocked(tienePermiso).mockImplementation(
-      async (p) => p === "produccion.ver",
+      async (p) => p === "produccion.estaciones.ver",
     );
     const page = (await Page()).props.children;
     expect(page.type).toBe(EstacionesView);

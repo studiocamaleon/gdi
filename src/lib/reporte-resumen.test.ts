@@ -8,8 +8,8 @@ describe("presentación de la serie del Resumen ejecutivo", () => {
       { fecha: "2026-09-02", monto: 0, costo: 0 },
     ];
     expect(serieDelResumen(original)).toEqual([
-      { fecha: "2026-09-01", ventas: 80.5, costo: 100.25, margen: -19.75 },
-      { fecha: "2026-09-02", ventas: 0, costo: 0, margen: 0 },
+      { fecha: "2026-09-01", ventas: 80.5, ventasConIva: null, costo: 100.25, margen: -19.75 },
+      { fecha: "2026-09-02", ventas: 0, ventasConIva: null, costo: 0, margen: 0 },
     ]);
     expect(original[0]).not.toHaveProperty("margen");
   });

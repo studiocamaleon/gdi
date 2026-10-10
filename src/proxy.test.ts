@@ -108,3 +108,35 @@ describe("cambio de clave según la sesión", () => {
     );
   });
 });
+
+describe("recuperación de identidad", () => {
+  it.each([undefined, "empresa", "plataforma", "vencida"] as const)("permite el enlace sin depender de una sesión %s", tipo => {
+    expect(proxy(request("/recuperar-acceso", tipo)).headers.get("x-middleware-next")).toBe("1");
+  });
+  it("no abre rutas con un prefijo similar", () => {
+    expect(proxy(request("/recuperar-acceso-admin")).headers.get("location")).toBe("http://localhost:3000/login");
+  });
+});
+
+describe("registro público de clientes", () => {
+  it.each([undefined, "empresa", "plataforma", "vencida"] as const)(
+    "permite el enlace con sesión %s",
+    (tipo) => {
+      expect(
+        proxy(request("/alta-cliente/TokenPublicoFicticio", tipo)).headers.get(
+          "x-middleware-next",
+        ),
+      ).toBe("1");
+    },
+  );
+  it("no abre prefijos parecidos ni la bandeja privada", () => {
+    for (const path of [
+      "/alta-cliente-admin/token",
+      "/alta-cliente/token/admin",
+      "/crm/clientes/solicitudes",
+    ])
+      expect(proxy(request(path)).headers.get("location")).toBe(
+        "http://localhost:3000/login",
+      );
+  });
+});

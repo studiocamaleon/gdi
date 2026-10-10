@@ -1,0 +1,264 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import { CalendarDays, ChevronDown, PlusIcon, Trash2Icon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import styles from "./retenciones-config-editor.module.css";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+  FieldSet,
+  FieldLegend,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/design-system/select-field";
+import {
+  RETENCION_REGIMENES,
+  RETENCION_REGIMEN_LABELS,
+  type ReglaRetencion,
+} from "@/lib/administracion";
+
+export const AGENTES_RETENCION = [
+  { value: "procesador", label: "Procesador de pagos" },
+  { value: "banco", label: "Banco" },
+  { value: "cliente", label: "Cliente" },
+];
+
+function VigenciaRetencion({
+  regla,
+  children,
+}: {
+  regla: ReglaRetencion;
+  children: ReactNode;
+}) {
+  const [abierta, setAbierta] = useState(
+    !!(regla.vigenteDesde || regla.vigenteHasta),
+  );
+  return (
+    <Collapsible
+      open={abierta}
+      onOpenChange={setAbierta}
+      className={styles.vigencia}
+    >
+      <CollapsibleTrigger
+        render={<Button type="button" variant="ghost" size="sm" />}
+        className={styles.desplegar}
+      >
+        <CalendarDays data-icon="inline-start" />
+        Vigencia
+        <span>
+          {regla.vigenteDesde || regla.vigenteHasta
+            ? "Fechas configuradas"
+            : "Sin límite de fechas"}
+        </span>
+        <ChevronDown data-icon="inline-end" className={styles.flecha} />
+      </CollapsibleTrigger>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+export function RetencionesConfigEditor({
+  reglas,
+  onChange,
+  soloCliente = false,
+}: {
+  reglas: ReglaRetencion[];
+  soloCliente?: boolean;
+  onChange: (reglas: ReglaRetencion[]) => void;
+}) {
+  const editar = (id: string, patch: Partial<ReglaRetencion>) =>
+    onChange(reglas.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  return (
+    <FieldGroup className={styles.editor}>
+      {reglas.map((r, i) => (
+        <FieldSet key={r.id} className={styles.regla}>
+          <FieldLegend className="sr-only">Retención {i + 1}</FieldLegend>
+          <div className={styles.cabecera}>
+            <span className={styles.numero}>
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <div className={styles.identidad}>
+              <span className={styles.etiqueta}>Retención estimada</span>
+              <strong>{RETENCION_REGIMEN_LABELS[r.regimen]}</strong>
+            </div>
+            <span className={styles.tasa}>
+              {r.alicuota.toLocaleString("es-AR", { maximumFractionDigits: 3 })}
+              <small>%</small>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Quitar retención ${i + 1}`}
+              title={`Quitar retención ${i + 1}`}
+              onClick={() => onChange(reglas.filter((x) => x.id !== r.id))}
+            >
+              <Trash2Icon />
+            </Button>
+          </div>
+          <FieldGroup className={styles.campos}>
+            <div className={styles.grilla}>
+              <Field>
+                <FieldLabel htmlFor={`${r.id}-regimen`}>Régimen</FieldLabel>
+                <SelectField
+                  id={`${r.id}-regimen`}
+                  aria-label="Régimen de retención"
+                  value={r.regimen}
+                  onChange={(v) => editar(r.id, { regimen: v })}
+                  options={[...RETENCION_REGIMENES, "otro"].map((value) => ({
+                    value,
+                    label: RETENCION_REGIMEN_LABELS[value],
+                  }))}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${r.id}-agente`}>
+                  Quién retiene
+                </FieldLabel>
+                <SelectField
+                  id={`${r.id}-agente`}
+                  aria-label="Quién retiene"
+                  value={r.agente}
+                  onChange={(v) =>
+                    editar(r.id, { agente: v as ReglaRetencion["agente"] })
+                  }
+                  options={
+                    soloCliente
+                      ? AGENTES_RETENCION.filter((a) => a.value === "cliente")
+                      : AGENTES_RETENCION
+                  }
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${r.id}-jurisdiccion`}>
+                  Jurisdicción
+                </FieldLabel>
+                <Input
+                  id={`${r.id}-jurisdiccion`}
+                  value={r.jurisdiccion}
+                  maxLength={60}
+                  placeholder="Ej. Santa Cruz"
+                  onChange={(e) =>
+                    editar(r.id, { jurisdiccion: e.target.value })
+                  }
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${r.id}-alicuota`}>
+                  Alícuota (%)
+                </FieldLabel>
+                <div className={styles.porcentaje}>
+                  <Input
+                    id={`${r.id}-alicuota`}
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.001"
+                    value={r.alicuota}
+                    onChange={(e) =>
+                      editar(r.id, { alicuota: Number(e.target.value) })
+                    }
+                  />
+                  <span aria-hidden="true">%</span>
+                </div>
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel htmlFor={`${r.id}-base`}>Calcular sobre</FieldLabel>
+              <SelectField
+                id={`${r.id}-base`}
+                aria-label="Base de la retención"
+                value={r.baseCalculo}
+                onChange={(v) =>
+                  editar(r.id, {
+                    baseCalculo: v as ReglaRetencion["baseCalculo"],
+                  })
+                }
+                options={[
+                  { value: "bruto", label: "Total cobrado al cliente" },
+                  {
+                    value: "neto_liquidacion",
+                    label: "Cobrado menos comisión e IVA de la comisión",
+                  },
+                ]}
+              />
+              <FieldDescription>
+                Elegí la base de tu liquidación. Si el régimen usa otra base,
+                cargá su importe manualmente al registrar el cobro.
+              </FieldDescription>
+            </Field>
+            <VigenciaRetencion regla={r}>
+              <div className={styles.grilla}>
+                <Field>
+                  <FieldLabel htmlFor={`${r.id}-desde`}>
+                    Vigente desde
+                  </FieldLabel>
+                  <Input
+                    id={`${r.id}-desde`}
+                    type="date"
+                    value={r.vigenteDesde ?? ""}
+                    onChange={(e) =>
+                      editar(r.id, {
+                        vigenteDesde: e.target.value || undefined,
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`${r.id}-hasta`}>
+                    Vigente hasta
+                  </FieldLabel>
+                  <Input
+                    id={`${r.id}-hasta`}
+                    type="date"
+                    value={r.vigenteHasta ?? ""}
+                    onChange={(e) =>
+                      editar(r.id, {
+                        vigenteHasta: e.target.value || undefined,
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </VigenciaRetencion>
+          </FieldGroup>
+        </FieldSet>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        className={styles.agregar}
+        disabled={reglas.length >= 20}
+        onClick={() =>
+          onChange([
+            ...reglas,
+            {
+              id: crypto.randomUUID(),
+              regimen: "SIRTAC",
+              jurisdiccion: "",
+              agente: soloCliente ? "cliente" : "procesador",
+              alicuota: 0,
+              baseCalculo: "bruto",
+            },
+          ])
+        }
+      >
+        <PlusIcon data-icon="inline-start" />
+        Agregar retención
+      </Button>
+      <FieldDescription className={styles.ayuda}>
+        Usá la alícuota informada por el agente. Son anticipos fiscales: reducen
+        el dinero recibido sin volver a sumar IIBB al costo del producto. Sin
+        reglas, las retenciones se cargan manualmente.
+      </FieldDescription>
+    </FieldGroup>
+  );
+}

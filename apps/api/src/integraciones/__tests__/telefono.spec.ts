@@ -21,6 +21,7 @@ describe('teléfono a E.164', () => {
       ['341', '15 555 1840', 'con el 15 de celular y espacios'],
       ['0341', '15-555-1840', 'con 0, 15 y guiones'],
       ['+54 9 341', '555 1840', 'ya internacional'],
+      ['54', '+54 9 341 555 1840', 'prefijo repetido entre columnas'],
       ['54', '9 341 555 1840', 'código de país en la primera columna'],
       ['', '0341 15 555 1840', 'todo junto en la segunda columna'],
     ])('%s / %s — %s', (codigo, numero) => {
@@ -51,9 +52,9 @@ describe('teléfono a E.164', () => {
     });
 
     it('área de 4 dígitos', () => {
-      expect(ar('02346', '15 123456')).toEqual({
+      expect(ar('02346', '15 456789')).toEqual({
         ok: true,
-        e164: '5492346123456',
+        e164: '5492346456789',
       });
     });
   });
@@ -98,10 +99,11 @@ describe('teléfono a E.164', () => {
       expect(ar('341', '5551840999999').ok).toBe(false);
     });
 
-    it('el motivo dice qué número falló, para poder corregirlo', () => {
+    it('el motivo explica cómo corregir la ficha sin exponer el número', () => {
       const r = ar('341', '123');
       expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.motivo).toContain('123');
+      if (!r.ok) expect(r.motivo).toContain('código de área');
+      if (!r.ok) expect(r.motivo).not.toContain('123');
     });
   });
 

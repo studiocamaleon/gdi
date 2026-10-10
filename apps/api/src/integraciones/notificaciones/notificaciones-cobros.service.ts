@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { TipoEnlacePublico } from '@prisma/client';
 
@@ -37,7 +38,7 @@ export class NotificacionesCobrosService {
     } catch (error) {
       this.logger.error(
         `Falló al avisar el cobro ${cobroId}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }

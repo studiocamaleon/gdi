@@ -18,7 +18,7 @@ export class WhatsappContextoController {
     return this.servicio.sesion(auth);
   }
 
-  @Permiso('crm.ver')
+  @Permiso("crm.clientes.ver")
   @Get('contexto')
   @Header('Cache-Control', 'no-store')
   contexto(

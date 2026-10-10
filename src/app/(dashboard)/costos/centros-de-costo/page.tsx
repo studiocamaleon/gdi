@@ -19,7 +19,7 @@ export default function CentrosDeCostoPage() {
 async function CentrosDeCostoPageContent() {
   const [centros, puedeGestionar] = await Promise.all([
     getCentrosCosto(),
-    puedeConfigurar("centros_costo", "costos.gestionar"),
+    puedeConfigurar("centros_costo", "costos.centros.gestionar"),
   ]);
 
   return (

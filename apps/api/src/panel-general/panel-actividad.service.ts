@@ -21,18 +21,19 @@ type FilaActividad = {
 export function puedeConsultarActividadGeneral(auth: CurrentAuth) {
   const p = auth.permisos ?? new Set<string>();
   const comercialSoloPropio =
-    p.has('comercial.gestionar') &&
-    !p.has('administracion.gestionar') &&
-    !p.has('produccion.gestionar') &&
-    !p.has('reportes.ver_resumen');
+    p.has('comercial.ordenes.gestionar') &&
+    !p.has('administracion.facturacion.gestionar') &&
+    !p.has('produccion.tablero.gestionar') &&
+    !p.has('reportes.resumen.ver');
   const perfilSoloProductivo =
-    p.has('produccion.ver') &&
-    (p.has('produccion.gestionar') || p.has('produccion.ejecutar')) &&
-    !p.has('comercial.ver') &&
-    !p.has('administracion.gestionar');
+    p.has('produccion.tablero.ver') &&
+    (p.has('produccion.tablero.gestionar') || p.has('produccion.ejecutar')) &&
+    !p.has('comercial.ordenes.ver') &&
+    !p.has('administracion.facturacion.gestionar');
   return (
     auth.role === RolSistema.ADMINISTRADOR &&
     p.has('panel.ver') &&
+    p.has('reportes.resumen.ver') &&
     !comercialSoloPropio &&
     !perfilSoloProductivo
   );
@@ -54,13 +55,16 @@ export class PanelActividadService {
     let cursor: { fecha: string; id: string } | null = null;
     if (cursorRaw) {
       try {
-        if (cursorRaw.length > 512) throw new Error();
+        if (typeof cursorRaw !== 'string' || cursorRaw.length > 512)
+          throw new Error();
         cursor = JSON.parse(Buffer.from(cursorRaw, 'base64url').toString()) as {
           fecha: string;
           id: string;
         };
         if (
           !cursor ||
+          typeof cursor.fecha !== 'string' ||
+          typeof cursor.id !== 'string' ||
           !/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(cursor.fecha) ||
           !Number.isFinite(Date.parse(cursor.fecha)) ||
           !/^(orden|cliente|sistema):[a-f0-9-]{1,40}$/.test(cursor.id)
@@ -70,8 +74,8 @@ export class PanelActividadService {
         throw new BadRequestException('El cursor de actividad no es válido.');
       }
     }
-    const comercial = auth.permisos?.has('comercial.ver');
-    const produccion = auth.permisos?.has('produccion.ver');
+    const comercial = auth.permisos?.has('comercial.ordenes.ver');
+    const produccion = auth.permisos?.has('produccion.tablero.ver');
     const fuentes: Prisma.Sql[] = [];
     if (comercial || produccion) {
       const tipos = comercial

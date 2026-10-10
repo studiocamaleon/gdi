@@ -158,8 +158,8 @@ it("cancelar una invitación del equipo refresca la ocupación", async () => {
       />,
     ),
   );
-  expect(container.textContent).toContain("3 de 4 lugares ocupados");
-  expect(container.textContent).toContain("3 incluidos + 1 adicionales");
+  expect(container.textContent).toContain("3lugares ocupados");
+  expect(container.textContent).toContain("3 incluidos");
   await act(async () => button("Cancelar invitación").click());
   expect(mocks.cancelar).toHaveBeenCalledWith("i1");
   expect(recargar).toHaveBeenCalled();

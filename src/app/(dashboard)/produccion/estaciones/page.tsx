@@ -9,7 +9,7 @@ import { DesignSystemProvider } from "@/components/design-system/appearance";
 export const dynamic = "force-dynamic";
 
 export default async function EstacionesPage() {
-  if (!(await tienePermiso("produccion.ver")))
+  if (!(await tienePermiso("produccion.estaciones.ver")))
     return <SinPermiso modulo="Estaciones de producción" />;
   const puedeConfigurar = await puedeConfigurarFuncion(
     "estaciones",

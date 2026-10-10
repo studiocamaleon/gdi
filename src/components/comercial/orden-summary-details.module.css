@@ -43,6 +43,14 @@
   align-items: center;
   justify-content: space-between;
 }
+.client {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.client button {
+  flex: none;
+}
 .date button {
   width: 24px;
   height: 24px;

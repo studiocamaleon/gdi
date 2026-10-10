@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Inject,
   Param,
   ParseUUIDPipe,
@@ -77,7 +78,7 @@ class InterpretarDto extends ArchivoGeometriaDto {
 
 @Controller('productos-servicios/productos/:productoId/geometrias')
 // Interpretaciones inmutables para recetas y cotizaciones; no modifica el producto.
-@Permiso('costos.gestionar', 'comercial.gestionar')
+@Permiso("costos.catalogo.gestionar", "comercial.ordenes.gestionar", "comercial.presupuestos.gestionar")
 export class GeometriasProductoController {
   constructor(
     private readonly prisma: PrismaService,
@@ -97,7 +98,7 @@ export class GeometriasProductoController {
         id: archivoId,
         tenantId: auth.tenantId,
         productoId,
-        scope: 'PRODUCTO',
+        scope: { in: ['PRODUCTO', 'DISENO_COTIZACION'] },
         estado: 'LISTO',
       },
     });
@@ -105,6 +106,12 @@ export class GeometriasProductoController {
       throw new BadRequestException(
         'Subí un vector de hasta 512 KB a este producto.',
       );
+    if (
+      archivo.scope === 'DISENO_COTIZACION' &&
+      !auth.permisos?.has('comercial.ordenes.gestionar') &&
+      !auth.permisos?.has('comercial.presupuestos.gestionar')
+    )
+      throw new ForbiddenException('No tenés permiso para interpretar diseños de cotizaciones.');
     const bytes = await this.storage.leer(archivo.key);
     if (!bytes || bytes.length > 524288)
       throw new BadRequestException('No se pudo leer el archivo original.');

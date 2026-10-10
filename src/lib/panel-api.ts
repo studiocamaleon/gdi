@@ -32,6 +32,7 @@ export type CategoriaGastoPanel = { categoria: string; monto: number; pct: numbe
  */
 export type RentabilidadPanel = {
   ventas: number;
+  ventasConIva?: number;
   ventasDeltaPct: number | null;
   margenBruto: number;
   margenBrutoPct: number;
@@ -63,8 +64,8 @@ function qs(rango?: RangoPanel): string {
 }
 
 /** Ventas (tab Comercial + top clientes del Resumen). */
-export type RankingPanel = { id: string | null; nombre: string; ordenes: number; facturado: number };
-export type MixPanel = { nombre: string; monto: number; pct: number };
+export type RankingPanel = { id: string | null; nombre: string; ordenes: number; facturado: number; facturadoConIva?: number };
+export type MixPanel = { nombre: string; monto: number; montoConIva?: number; pct: number };
 export type ClienteDormidoPanel = {
   clienteId: string | null;
   cliente: string;
@@ -76,24 +77,28 @@ export type PuntoTicketPanel = {
   fecha: string;
   ordenes: number;
   ticketPromedio: number;
+  ticketPromedioConIva?: number;
   ticketMediana: number;
+  ticketMedianaConIva?: number;
 };
 /** Celda del heatmap categoría × mes (últimos 12 meses). */
-export type CeldaEstacionalidadPanel = { categoria: string; mes: string; monto: number };
+export type CeldaEstacionalidadPanel = { categoria: string; mes: string; monto: number; montoConIva?: number };
 export type ComercialPanel = {
   kpis: {
     ventas: number;
+    ventasConIva?: number;
     ventasDeltaPct: number | null;
     /** vs. mismo período del año anterior; null hasta tener esa historia. */
     ventasDeltaAnualPct: number | null;
     ordenes: number;
     ordenesDeltaPct: number | null;
     ticketPromedio: number;
+    ticketPromedioConIva?: number;
     itemsPorOrden: number;
     nuevosClientes: number;
     clientesDormidos: number;
   };
-  serie: Array<{ fecha: string; monto: number }>;
+  serie: Array<{ fecha: string; monto: number; montoConIva?: number }>;
   /** Evolución del ticket por orden: promedio y mediana por bucket. */
   serieTicket: PuntoTicketPanel[];
   estacionalidad: CeldaEstacionalidadPanel[];
@@ -111,12 +116,13 @@ export type EmbudoEtapaPanel = {
   label: string;
   cantidad: number;
   monto: number;
+  montoConIva?: number;
   /** Etapa / cohorte total (barra). */
   sharePct: number;
   /** Etapa / etapa anterior (paso a paso); null en la 1ª. */
   conversionPct: number | null;
 };
-export type EmbudoFugaPanel = { motivo: string; cantidad: number; monto: number };
+export type EmbudoFugaPanel = { motivo: string; cantidad: number; monto: number; montoConIva?: number };
 export type EmbudoVelocidadPanel = { tramo: string; diasPromedio: number | null };
 export type EmbudoPanel = {
   sinComparativa: boolean;
@@ -126,6 +132,7 @@ export type EmbudoPanel = {
     tasaEntrega: number;
     pipelineAbiertoCantidad: number;
     pipelineAbiertoMonto: number;
+    pipelineAbiertoMontoConIva?: number;
     cicloPromedioDias: number | null;
   };
   funnel: EmbudoEtapaPanel[];
@@ -204,6 +211,7 @@ export type ProduccionPanel = {
 export type ProductoMargenPanel = {
   nombre: string;
   ventas: number;
+  ventasConIva?: number;
   costo?: number;
   margen?: number;
   margenPct?: number;
@@ -241,12 +249,13 @@ export type MedidasResumenPanel = {
   topEstandar: Array<{ nombre: string; items: number }>;
 };
 /** Punto de la serie evolutiva del mix (bucket × categoría o producto). */
-export type PuntoMixPanel = { fecha: string; nombre: string; monto: number };
+export type PuntoMixPanel = { fecha: string; nombre: string; monto: number; montoConIva?: number };
 export type AdicionalUsoPanel = {
   etiqueta: string;
   items: number;
   pctItems: number;
   ventas: number;
+  ventasConIva?: number;
 };
 export type ProductoAdicionalesPanel = {
   nombre: string;
@@ -260,7 +269,9 @@ export type AdicionalesPanel = {
   itemsCon: number;
   pctCon: number;
   ticketItemCon: number;
+  ticketItemConConIva?: number;
   ticketItemSin: number;
+  ticketItemSinConIva?: number;
   porAdicional: AdicionalUsoPanel[];
   porProducto: ProductoAdicionalesPanel[];
 };
@@ -300,6 +311,7 @@ export type ClienteRfmPanel = {
   cliente: string;
   ordenes: number;
   facturadoHistorico: number;
+  facturadoHistoricoConIva?: number;
   ultimaCompra: string;
   diasSinComprar: number;
 };
@@ -308,6 +320,7 @@ export type ParetoClientePanel = {
   cliente: string;
   ordenes: number;
   facturado: number;
+  facturadoConIva?: number;
   pct: number;
   pctAcumulado: number;
 };
@@ -316,6 +329,7 @@ export type MargenClientePanel = {
   cliente: string;
   ordenes: number;
   ventas: number;
+  ventasConIva?: number;
   margen: number;
   margenPct: number | null;
   itemsSinCosto: number;
@@ -360,7 +374,9 @@ export type VendedorEquipoPanel = {
   nombre: string;
   ordenes: number;
   facturado: number;
+  facturadoConIva?: number;
   ticketPromedio: number;
+  ticketPromedioConIva?: number;
   margen?: number | null;
   margenPct?: number | null;
   itemsSinCosto: number;
@@ -396,10 +412,10 @@ export type ClientesPanel = {
     concentracionTop3Pct: number | null;
   };
   pareto: ParetoClientePanel[];
-  serieNuevosRecurrentes: Array<{ fecha: string; nuevos: number; recurrentes: number }>;
+  serieNuevosRecurrentes: Array<{ fecha: string; nuevos: number; recurrentes: number; nuevosConIva?: number; recurrentesConIva?: number }>;
   rfm: {
     diasActivo: number;
-    segmentos: Array<{ segmento: SegmentoRfmPanel; clientes: number; facturado: number }>;
+    segmentos: Array<{ segmento: SegmentoRfmPanel; clientes: number; facturado: number; facturadoConIva?: number }>;
     enRiesgo: ClienteRfmPanel[];
   };
   margenClientes?: MargenClientePanel[];
@@ -451,11 +467,12 @@ export function getPanelResumen(rango?: RangoPanel) {
     TabPanel<{
       rentabilidad: RentabilidadPanel;
       produccion: ResumenProduccionKpis;
-      serie: Array<{ fecha: string; monto: number; costo: number }>;
+      serie: Array<{ fecha: string; monto: number; montoConIva?: number; costo: number }>;
       topClientes: RankingPanel[];
       topProductos: Array<{
         nombre: string;
         ventas: number;
+        ventasConIva?: number;
         margenPct: number;
         items: number;
       }>;

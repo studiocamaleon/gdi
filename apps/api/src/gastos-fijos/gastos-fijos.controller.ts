@@ -16,7 +16,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolSistema } from '@prisma/client';
 import { GastosFijosService } from './gastos-fijos.service';
 import { UpsertGastoFijoDto } from './dto/upsert-gasto-fijo.dto';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 
 /*
   Permiso `administracion.configurar` y no `costos.*`.
@@ -32,7 +32,7 @@ import { Permiso } from '../auth/permiso.decorator';
   necesita— y el Administrativo, que es quien carga estos números, PASA a
   poder hacerlo. Antes no podía: no tenía `costos.ver`.
 */
-@Permiso('administracion.configurar')
+@Permiso("administracion.gastos.ver")
 @RequiereCapacidad('gastos_fijos')
 @Controller('gastos-fijos')
 @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
@@ -44,7 +44,8 @@ export class GastosFijosController {
     return this.gastosFijos.listar(auth);
   }
 
-  @Permiso('administracion.configurar')
+  @Permiso("administracion.gastos.gestionar")
+  @RequiereVista("administracion.gastos.ver")
   @Post()
   crear(
     @CurrentSession() auth: CurrentAuth,
@@ -56,7 +57,8 @@ export class GastosFijosController {
 
 
 
-  @Permiso('administracion.configurar')
+  @Permiso("administracion.gastos.gestionar")
+  @RequiereVista("administracion.gastos.ver")
   @Put(':id')
   actualizar(
     @CurrentSession() auth: CurrentAuth,
@@ -66,13 +68,15 @@ export class GastosFijosController {
     return this.gastosFijos.actualizar(auth, id, payload);
   }
 
-  @Permiso('administracion.configurar')
+  @Permiso("administracion.gastos.gestionar")
+  @RequiereVista("administracion.gastos.ver")
   @Patch(':id/toggle')
   alternar(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.gastosFijos.alternarActivo(auth, id);
   }
 
-  @Permiso('administracion.configurar')
+  @Permiso("administracion.gastos.gestionar")
+  @RequiereVista("administracion.gastos.ver")
   @Delete(':id')
   eliminar(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.gastosFijos.eliminar(auth, id);

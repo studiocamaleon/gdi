@@ -193,6 +193,7 @@ export type PagoDeEgreso = {
   monto: number;
   metodoNombre: string;
   cuentaNombre: string;
+  puedeAbrirComprobante?: boolean;
   referencia: string | null;
   anuladoEl: string | null;
   motivoAnulacion: string | null;

@@ -1,0 +1,8 @@
+{
+  "name": "grafoprint-respaldo",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": { "test": "node --test *.test.mjs", "respaldo": "node ejecutar.mjs", "recuperar": "node recuperar.mjs" },
+  "dependencies": { "@aws-sdk/client-s3": "3.1143.0", "pg": "8.23.0" }
+}

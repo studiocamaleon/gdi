@@ -25,7 +25,7 @@ import {
   SolicitarAprobacionDocumentoDto,
 } from './dto/desarrollo-documental.dto';
 
-@Permiso('comercial.ver')
+@Permiso("comercial.campanas.ver")
 @Controller('desarrollo-documental')
 export class DesarrolloDocumentalController {
   constructor(private readonly service: DesarrolloDocumentalService) {}
@@ -63,7 +63,7 @@ export class DesarrolloDocumentalController {
     return this.service.listarCampana(auth, campanaId);
   }
 
-  @Permiso('produccion.ver', 'comercial.ver')
+  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver")
   @Get('ordenes/:ordenId/documentos')
   listarOrden(
     @CurrentSession() auth: CurrentAuth,
@@ -72,7 +72,7 @@ export class DesarrolloDocumentalController {
     return this.service.listarOrden(auth, ordenId);
   }
 
-  @Permiso('produccion.ver', 'comercial.ver')
+  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver")
   @Get('ordenes/:ordenId')
   estadoOrden(
     @CurrentSession() auth: CurrentAuth,
@@ -82,7 +82,7 @@ export class DesarrolloDocumentalController {
   }
 
   @RequiereCapacidad('aprobacion_arte')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post('maestros')
   crearMaestro(
     @CurrentSession() auth: CurrentAuth,
@@ -92,7 +92,7 @@ export class DesarrolloDocumentalController {
   }
 
   @RequiereCapacidad('aprobacion_arte')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post('maestros/:maestroId/revisiones')
   crearRevision(
     @CurrentSession() auth: CurrentAuth,
@@ -103,7 +103,7 @@ export class DesarrolloDocumentalController {
   }
 
   @RequiereCapacidad('aprobacion_arte')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post('revisiones/:revisionId/solicitudes')
   solicitar(
     @CurrentSession() auth: CurrentAuth,
@@ -114,7 +114,7 @@ export class DesarrolloDocumentalController {
   }
 
   @RequiereCapacidad('aprobacion_arte')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post('solicitudes/:solicitudId/link')
   emitirLink(
     @CurrentSession() auth: CurrentAuth,
@@ -124,7 +124,7 @@ export class DesarrolloDocumentalController {
     return this.service.emitirLink(auth, solicitudId, dto);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Delete('solicitudes/:solicitudId/link')
   revocarLink(
     @CurrentSession() auth: CurrentAuth,
@@ -133,7 +133,7 @@ export class DesarrolloDocumentalController {
     return this.service.revocarLink(auth, solicitudId);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post('solicitudes/:solicitudId/decision')
   decidir(
     @CurrentSession() auth: CurrentAuth,
@@ -144,7 +144,7 @@ export class DesarrolloDocumentalController {
   }
 
   @RequiereCapacidad('aprobacion_arte')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post('revisiones/:revisionId/liberar')
   liberar(
     @CurrentSession() auth: CurrentAuth,
@@ -154,7 +154,7 @@ export class DesarrolloDocumentalController {
   }
 
   @RequiereCapacidad('aprobacion_arte')
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Post('gates')
   crearGate(
     @CurrentSession() auth: CurrentAuth,
@@ -163,7 +163,7 @@ export class DesarrolloDocumentalController {
     return this.service.crearGate(auth, dto);
   }
 
-  @Permiso('comercial.gestionar')
+  @Permiso("comercial.campanas.gestionar")
   @Delete('gates/:gateId')
   eliminarGate(
     @CurrentSession() auth: CurrentAuth,

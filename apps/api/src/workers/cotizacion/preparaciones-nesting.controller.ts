@@ -35,7 +35,7 @@ export class PrepararNestingsDto {
   rutaAlternativaId?: string;
 }
 
-@Permiso('costos.ver')
+@Permiso("costos.catalogo.ver")
 @Controller('productos-servicios/productos/:productoId/nestings')
 export class PreparacionesNestingController {
   constructor(private readonly preparaciones: PreparacionesNestingService) {}
@@ -49,7 +49,7 @@ export class PreparacionesNestingController {
   }
 
   @Post()
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   preparar(
     @CurrentSession() auth: CurrentAuth,
     @Param('productoId', ParseUUIDPipe) productoId: string,

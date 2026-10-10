@@ -414,6 +414,13 @@ export class MaquinariaService {
     ),
   ) {}
 
+  opciones(auth: CurrentAuth) {
+    return this.prisma.maquina.findMany({
+      where: { tenantId: auth.tenantId, activo: true },
+      select: { id: true, nombre: true }, orderBy: { nombre: 'asc' },
+    });
+  }
+
   async findAll(auth: CurrentAuth, pagination: ListMaquinasQueryDto) {
     const search = pagination.search?.trim();
     const where: Prisma.MaquinaWhereInput = {

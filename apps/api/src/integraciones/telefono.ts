@@ -1,8 +1,4 @@
-import {
-  parsePhoneNumberFromString,
-  type CountryCode,
-} from 'libphonenumber-js';
-
+import { normalizarTelefonoCliente } from '../common/telefono-cliente';
 /**
  * Teléfono a E.164, que es lo único que WhatsApp acepta.
  *
@@ -25,11 +21,10 @@ import {
  */
 
 export type ResultadoTelefono =
-  | { ok: true; e164: string }
-  | { ok: false; motivo: string };
+  { ok: true; e164: string } | { ok: false; motivo: string };
 
 /** País por defecto cuando la fila no lo trae. El sistema es argentino. */
-const PAIS_DEFAULT: CountryCode = 'AR';
+const PAIS_DEFAULT = 'AR';
 
 export function aE164(datos: {
   telefonoCodigo?: string | null;
@@ -44,23 +39,21 @@ export function aE164(datos: {
     return { ok: false, motivo: 'El cliente no tiene teléfono cargado.' };
   }
 
-  const pais = normalizarPais(datos.paisCodigo);
-  const parsed = parsePhoneNumberFromString(crudo, pais);
-
-  if (!parsed) {
-    return { ok: false, motivo: `No pude interpretar "${crudo}".` };
-  }
-  if (!parsed.isValid()) {
+  const parsed = normalizarTelefonoCliente(
+    datos.telefonoCodigo ?? '',
+    datos.telefonoNumero ?? '',
+    normalizarPais(datos.paisCodigo),
+  );
+  if (!parsed.ok || !parsed.telefonoNumero)
     return {
       ok: false,
-      motivo: `"${crudo}" no es un número válido para ${parsed.country ?? pais}.`,
+      motivo:
+        'El teléfono del cliente no es válido. Revisá el país, código de área y número en su ficha.',
     };
-  }
-
   const e164 =
-    parsed.country === 'AR'
-      ? forzarMovilAr(parsed.nationalNumber)
-      : parsed.number.replace(/^\+/, '');
+    parsed.pais === 'AR'
+      ? forzarMovilAr(parsed.telefonoNumero)
+      : `${parsed.telefonoCodigo}${parsed.telefonoNumero}`;
 
   return { ok: true, e164 };
 }
@@ -87,9 +80,9 @@ function forzarMovilAr(nacional: string): string {
 }
 
 /** `AR`, `ar`, `argentina`, vacío → CountryCode válido. */
-function normalizarPais(pais?: string | null): CountryCode {
+function normalizarPais(pais?: string | null): string {
   const p = (pais ?? '').trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(p) ? (p as CountryCode) : PAIS_DEFAULT;
+  return /^[A-Z]{2}$/.test(p) ? p : PAIS_DEFAULT;
 }
 
 /**

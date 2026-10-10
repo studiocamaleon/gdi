@@ -1,3 +1,4 @@
+import { PRODUCTO_CON_IVA_SQL } from './importes-referencia-sql';
 import { Injectable } from '@nestjs/common';
 import { PASOS_ECONOMICOS_SQL, COSTO_VARIABLE_PASO_SQL } from './costos-snapshot-sql';
 import { PrismaService } from '../prisma/prisma.service';
@@ -31,6 +32,7 @@ const DIM_PRODUCTO = 'COALESCE(p.nombre, oti.nombre)';
 export type ProductoMargen = {
   nombre: string;
   ventas: number;
+  ventasConIva: number;
   costo: number;
   margen: number;
   margenPct: number;
@@ -71,8 +73,8 @@ export type MedidasResumen = {
   topEstandar: Array<{ nombre: string; items: number }>;
 };
 /** Punto de la serie evolutiva de una dimensión (categoría o producto). */
-export type PuntoMix = { fecha: string; nombre: string; monto: number };
-export type AdicionalUso = { etiqueta: string; items: number; pctItems: number; ventas: number };
+export type PuntoMix = { fecha: string; nombre: string; monto: number; montoConIva: number };
+export type AdicionalUso = { etiqueta: string; items: number; pctItems: number; ventas: number; ventasConIva: number };
 export type ProductoAdicionales = {
   nombre: string;
   items: number;
@@ -86,6 +88,8 @@ export type ResumenAdicionales = {
   /** Subtotal promedio POR ITEM, con vs. sin adicionales. */
   ticketItemCon: number;
   ticketItemSin: number;
+  ticketItemConConIva: number;
+  ticketItemSinConIva: number;
   porAdicional: AdicionalUso[];
   porProducto: ProductoAdicionales[];
 };
@@ -159,7 +163,8 @@ export class ProductoService {
       `
       SELECT to_char(date_trunc('${TRUNC[gran]}', (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE $4), 'YYYY-MM-DD') AS fecha,
              ${dimension} AS nombre,
-             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
+             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto,
+             COALESCE(SUM(${PRODUCTO_CON_IVA_SQL}), 0)::float8 AS "montoConIva"
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
@@ -173,7 +178,7 @@ export class ProductoService {
         ? [f.tenantId, f.desde, f.hastaExcl, zona, categoria]
         : [f.tenantId, f.desde, f.hastaExcl, zona]),
     );
-    return rows.map((r) => ({ ...r, monto: r2(r.monto) }));
+    return rows.map((r) => ({ ...r, monto: r2(r.monto), montoConIva: r2(r.montoConIva) }));
   }
 
   /**
@@ -191,12 +196,14 @@ export class ProductoService {
     const conAdic = `(${esArray} AND jsonb_array_length(oti."adicionalesJson") > 0)`;
     const [resumenRows, porAdicional, porProducto] = await Promise.all([
       this.prisma.$queryRawUnsafe<
-        Array<{ items: number; con: number; ticketcon: number; ticketsin: number }>
+        Array<{ items: number; con: number; ticketcon: number; ticketsin: number; ticketconiva: number; ticketsiniva: number }>
       >(
         `
         SELECT COUNT(*)::int AS items,
                COUNT(*) FILTER (WHERE ${conAdic})::int AS con,
                COALESCE(AVG(oti.subtotal) FILTER (WHERE ${conAdic}), 0)::float8 AS ticketcon,
+               COALESCE(AVG(${PRODUCTO_CON_IVA_SQL}) FILTER (WHERE ${conAdic}), 0)::float8 AS ticketconiva,
+               COALESCE(AVG(${PRODUCTO_CON_IVA_SQL}) FILTER (WHERE NOT ${conAdic}), 0)::float8 AS ticketsiniva,
                COALESCE(AVG(oti.subtotal) FILTER (WHERE NOT ${conAdic}), 0)::float8 AS ticketsin
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
@@ -207,10 +214,11 @@ export class ProductoService {
         f.desde,
         f.hastaExcl,
       ),
-      this.prisma.$queryRawUnsafe<Array<{ etiqueta: string; items: number; ventas: number }>>(
+      this.prisma.$queryRawUnsafe<Array<{ etiqueta: string; items: number; ventas: number; ventasConIva: number }>>(
         `
         SELECT et.etiqueta, COUNT(*)::int AS items,
-               COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas
+               COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
+             COALESCE(SUM(${PRODUCTO_CON_IVA_SQL}), 0)::float8 AS "ventasConIva"
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         CROSS JOIN LATERAL jsonb_array_elements_text(oti."adicionalesJson") et(etiqueta)
@@ -240,18 +248,21 @@ export class ProductoService {
         f.hastaExcl,
       ),
     ]);
-    const resumen = resumenRows[0] ?? { items: 0, con: 0, ticketcon: 0, ticketsin: 0 };
+    const resumen = resumenRows[0] ?? { items: 0, con: 0, ticketcon: 0, ticketsin: 0, ticketconiva: 0, ticketsiniva: 0 };
     return {
       itemsTotales: resumen.items,
       itemsCon: resumen.con,
       pctCon: resumen.items > 0 ? r2((resumen.con / resumen.items) * 100) : 0,
       ticketItemCon: r2(resumen.ticketcon),
       ticketItemSin: r2(resumen.ticketsin),
+      ticketItemConConIva: r2(resumen.ticketconiva),
+      ticketItemSinConIva: r2(resumen.ticketsiniva),
       porAdicional: porAdicional.map((a) => ({
         etiqueta: a.etiqueta,
         items: a.items,
         pctItems: resumen.items > 0 ? r2((a.items / resumen.items) * 100) : 0,
         ventas: r2(a.ventas),
+        ventasConIva: r2(a.ventasConIva),
       })),
       porProducto: porProducto.map((p) => ({
         nombre: p.nombre,
@@ -279,11 +290,12 @@ export class ProductoService {
     categoria?: string,
   ): Promise<ProductoMargen[]> {
     const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ nombre: string; ventas: number; costo: number; variables: number; items: number }>
+      Array<{ nombre: string; ventas: number; ventasConIva: number; costo: number; variables: number; items: number }>
     >(
       `
       SELECT ${dimensionSql} AS nombre,
              COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
+             COALESCE(SUM(${PRODUCTO_CON_IVA_SQL}), 0)::float8 AS "ventasConIva",
              COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo,
              COALESCE(SUM(v.variables), 0)::float8 AS variables,
              COUNT(*)::int AS items
@@ -314,6 +326,7 @@ export class ProductoService {
       return {
         nombre: r.nombre,
         ventas: r2(r.ventas),
+        ventasConIva: r2(r.ventasConIva),
         costo: r2(r.costo),
         margen: r2(margen),
         margenPct: r.ventas > 0 ? r2((margen / r.ventas) * 100) : 0,
@@ -478,11 +491,12 @@ export class ProductoService {
     tenantId: string;
     desde: Date;
     hastaExcl: Date;
-  }): Promise<Array<{ nombre: string; monto: number; pct: number }>> {
-    const rows = await this.prisma.$queryRawUnsafe<Array<{ nombre: string; monto: number }>>(
+  }): Promise<Array<{ nombre: string; monto: number; montoConIva: number; pct: number }>> {
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ nombre: string; monto: number; montoConIva: number }>>(
       `
       SELECT COALESCE(ci."jobContextJson"->>'tecnologia', 'Sin especificar') AS nombre,
-             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
+             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto,
+             COALESCE(SUM(${PRODUCTO_CON_IVA_SQL}), 0)::float8 AS "montoConIva"
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
@@ -498,6 +512,7 @@ export class ProductoService {
     return rows.map((r) => ({
       nombre: r.nombre,
       monto: r2(r.monto),
+      montoConIva: r2(r.montoConIva),
       pct: total > 0 ? r2((r.monto / total) * 100) : 0,
     }));
   }

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * que cambia con cada subida y no vale la pena congelarlo en el render.
  */
 export default async function AlmacenamientoPage() {
-  if (!(await tienePermiso("configuracion.ver"))) {
+  if (!(await tienePermiso("configuracion.almacenamiento.ver"))) {
     return <SinPermiso modulo="Almacenamiento" />;
   }
 

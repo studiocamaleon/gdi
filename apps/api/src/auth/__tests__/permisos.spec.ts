@@ -14,13 +14,14 @@ import {
 } from '../permisos';
 import { PermisosGuard } from '../permisos.guard';
 import { PERMISO_KEY, SOLO_AUTENTICADO_KEY } from '../permiso.decorator';
+import { VISTAS } from '../vistas';
 import { SIN_TENANT_KEY } from '../../common/sin-tenant.decorator';
 import type { CurrentAuth } from '../auth.types';
 
 describe('catálogo de permisos', () => {
   it('tiene ver y gestionar por cada módulo, más los transversales', () => {
     expect(PERMISOS).toHaveLength(
-      MODULOS.length * 2 + PERMISOS_TRANSVERSALES.length,
+      1 + VISTAS.reduce((n,v) => n + (v.gestionAnterior ? 2 : 1), 0) + MODULOS.length * 2 + PERMISOS_TRANSVERSALES.length,
     );
     expect(esPermisoValido('costos.gestionar')).toBe(true);
     expect(esPermisoValido('costos.borrar')).toBe(false);
@@ -49,7 +50,8 @@ describe('catálogo de permisos', () => {
      */
     it('ignora claves que ya no existen', () => {
       const efectivos = expandir(['modulo_viejo.ver', 'reportes.ver']);
-      expect([...efectivos]).toEqual(['reportes.ver']);
+      expect(efectivos.has('reportes.ver')).toBe(true);
+      expect(efectivos.has('modulo_viejo.ver')).toBe(false);
     });
   });
 
@@ -138,6 +140,7 @@ function contexto(auth?: CurrentAuth): ExecutionContext {
 function guardCon(metadatos: Record<string, unknown>) {
   const reflector = {
     getAllAndOverride: (key: string) => metadatos[key],
+    get: (key: string) => metadatos[key],
   } as unknown as Reflector;
   return new PermisosGuard(reflector);
 }

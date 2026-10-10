@@ -1,3 +1,4 @@
+import { podarPlata } from "../../../apps/api/src/auth/margenes";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -12,6 +13,8 @@ import type { Archivo } from "@/lib/archivos";
 import { NotificacionesProvider } from "@/components/notificaciones/notificaciones-provider";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { PropuestaFicha } from "./propuesta-ficha";
+import { CostosOrdenTab } from "./costos-orden-tab";
+import type { PropuestaItem } from "@/lib/propuestas";
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
@@ -176,4 +179,36 @@ describe("controles que respetan el modo consulta de la OT", () => {
     expect(render(true)).not.toContain("/administracion/cobros/nuevo");
     expect(render(false)).toContain("/administracion/cobros/nuevo");
   });
+});
+
+it("reabre una OT con el contrato sin costos de un usuario comercial", () => {
+  const orden = podarPlata(getMockOrdenDetalle("mock-0184")!);
+  const html = renderToStaticMarkup(<PermisosProvider permisos={["acceso.por_vista", "comercial.ordenes.gestionar"]}>
+    <NotificacionesProvider><PropuestaFicha orden={orden} /></NotificacionesProvider>
+  </PermisosProvider>);
+  expect(html).toContain("Editar orden");
+  expect(html).not.toContain("NaN");
+  expect(html).not.toContain('id="tab-costos"');
+});
+
+it("Producción consulta la OT sin ofrecer cobros ni comprobantes ajenos", () => {
+  const orden = podarPlata(getMockOrdenDetalle("mock-0184")!);
+  const html = renderToStaticMarkup(
+    <PermisosProvider permisos={["acceso.por_vista", "produccion.tablero.ver"]}>
+      <NotificacionesProvider><PropuestaFicha orden={orden} /></NotificacionesProvider>
+    </PermisosProvider>,
+  );
+  expect(html).not.toContain('id="tab-pagos"');
+  expect(html).not.toContain('id="tab-comprobantes"');
+  expect(html).not.toContain("Editar orden");
+});
+
+it.each([{ permisos: [] }, { permisos: ["finanzas.ver_margenes"] }])("costos ausentes no se interpretan como costo cero ni rompen su panel (%j)", ({ permisos }) => {
+  const html = renderToStaticMarkup(
+    <PermisosProvider permisos={permisos}>
+      <CostosOrdenTab items={[{ cotizacion: { precio: { precioTotal: 1210 } } } as PropuestaItem]} cargosOrden={[]} />
+    </PermisosProvider>,
+  );
+  expect(html).toContain("Costos no disponibles");
+  expect(html).not.toContain("NaN");
 });

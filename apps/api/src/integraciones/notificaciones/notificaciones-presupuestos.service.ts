@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { TipoEnlacePublico } from '@prisma/client';
 
@@ -44,7 +45,7 @@ export class NotificacionesPresupuestosService {
     } catch (error) {
       this.logger.error(
         `Falló al sincronizar avisos del presupuesto ${cotizacionId}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -66,6 +67,7 @@ export class NotificacionesPresupuestosService {
       where: {
         tenantId,
         estado: 'enviado',
+        versionVigente: true,
         notificarWhatsapp: true,
         clienteId: { not: null },
         publicToken: { not: null },
@@ -75,6 +77,7 @@ export class NotificacionesPresupuestosService {
       select: {
         id: true,
         numero: true,
+        versionPresupuesto: true,
         clienteId: true,
         publicToken: true,
         fechaValidez: true,
@@ -93,7 +96,7 @@ export class NotificacionesPresupuestosService {
           cotizacionId: presupuesto.id,
           parametros: [
             nombreDelCliente(presupuesto.cliente?.razonSocial),
-            presupuesto.numero ?? '',
+            presupuesto.versionPresupuesto > 1 ? `${presupuesto.numero} · v${presupuesto.versionPresupuesto}` : presupuesto.numero ?? '',
             fechaLegible(presupuesto.fechaValidez, zonaHoraria),
             urlEnlacePublico(
               TipoEnlacePublico.PRESUPUESTO,
@@ -109,12 +112,13 @@ export class NotificacionesPresupuestosService {
 
   private async intentar(cotizacionId: string): Promise<void> {
     const p = await this.prisma.cotizacion.findFirst({
-      where: { id: cotizacionId },
+      where: { id: cotizacionId, versionVigente: true },
       select: {
         tenantId: true,
         notificarWhatsapp: true,
         id: true,
         numero: true,
+        versionPresupuesto: true,
         estado: true,
         total: true,
         fechaValidez: true,
@@ -144,10 +148,11 @@ export class NotificacionesPresupuestosService {
     const total = numeroMoneda(Number(p.total ?? 0), moneda);
     const fecha = (d: Date | null) => fechaLegible(d, zonaHoraria);
 
+    const numero = p.versionPresupuesto > 1 ? `${p.numero} · v${p.versionPresupuesto}` : p.numero;
     const parametros =
       evento === 'presupuesto_enviado'
-        ? [nombre, p.numero, total, fecha(p.fechaValidez), url]
-        : [nombre, p.numero, total, url];
+        ? [nombre, numero, total, fecha(p.fechaValidez), url]
+        : [nombre, numero, total, url];
 
     // La aprobación llega desde el link público, que no tiene contexto de
     // tenant. Sin esto el encolado falla y el aviso se pierde callado.

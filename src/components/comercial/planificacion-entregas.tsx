@@ -88,7 +88,7 @@ export function PlanificacionEntregas({
   React.useEffect(() => {
     setVistaLocal(undefined);
   }, [distribucion]);
-  const puede = usePuede("comercial.gestionar");
+  const puede = usePuede("comercial.ordenes.gestionar");
   const resumen = previa
     ? previa.distribucion
     : vistaLocal !== undefined

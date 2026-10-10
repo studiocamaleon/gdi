@@ -593,10 +593,9 @@ export class EmpleadosService {
   }
 
   private puedeVerComisiones(auth: CurrentAuth) {
-    return (
-      auth.role === RolSistema.ADMINISTRADOR ||
-      Boolean(auth.permisos?.has('registros.ver_comisiones'))
-    );
+    // El enum de compatibilidad no concede permisos que el rol personal
+    // excluye. AuthGuard ya resuelve también los permisos del administrador.
+    return Boolean(auth.permisos?.has('registros.ver_comisiones'));
   }
 
   private toResponse(empleado: EmpleadoCompleto, incluirComisiones: boolean) {

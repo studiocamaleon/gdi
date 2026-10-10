@@ -80,6 +80,8 @@ function armar(opts: {
     get disponible() {
       return opts.disponible ?? true;
     },
+    representanteCuit: () =>
+      Promise.resolve(process.env.AFIP_REPRESENTANTE_CUIT?.trim() || null),
     verificarDelegacion,
   } as unknown as AfipSdkProvider;
 

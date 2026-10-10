@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { monedaDe } from "./monedas";
 import { buildCargoOrdenSnapshot, getCargoDefaultMonto } from "./cargos-orden";
 import type { CargoDirectoCatalogo } from "./productos-servicios";
+import { cargoParaOrden } from "../../apps/api/src/productos-servicios/cargo-orden-comercial";
 
 const cargo: CargoDirectoCatalogo = {
   id: "envio",
@@ -68,6 +69,32 @@ describe("cargos de la orden al migrar el formulario", () => {
       total: 1815,
       detalle: "Zona Centro",
       configSnapshot: { zonaAplicada: { codigo: "centro", monto: 1500 } },
+    });
+  });
+
+  it("conserva la zona al armar el cargo desde la respuesta comercial de la API", () => {
+    const publicado = cargoParaOrden({
+      ...cargo,
+      modoCalculo: "MONTO_FIJO_PLANO",
+      modosActivacionSoportados: ["OPCIONAL"],
+      configJson: {
+        zonas: [{ codigo: "CENTRO", nombre: "Centro", monto: 1500 }],
+      },
+    });
+    const cargoRecibido = { ...cargo, ...publicado };
+    expect(getCargoDefaultMonto(cargoRecibido)).toBe(1500);
+    const snapshot = buildCargoOrdenSnapshot({
+      ...opciones,
+      cargo: cargoRecibido,
+      zonaCodigo: "CENTRO",
+      monto: getCargoDefaultMonto(cargoRecibido),
+    });
+    expect(snapshot).toMatchObject({
+      montoNeto: 1500,
+      total: 1815,
+      configSnapshot: {
+        zonaAplicada: { codigo: "CENTRO", nombre: "Centro", monto: 1500 },
+      },
     });
   });
 });

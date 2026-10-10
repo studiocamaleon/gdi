@@ -20,7 +20,7 @@ import type {
   RankingPanel,
 } from "@/lib/panel-api";
 import { cn } from "@/lib/utils";
-import { Metric, NoData, ReportCard, ReportSource } from "./reportes-ui";
+import { Metric, NoData, ReportCard, ReportSource, IvaReference, SalesScopeNote } from "./reportes-ui";
 import { TremorAreaChart, TremorSparkAreaChart } from "./charts/tremor-charts";
 import shared from "./reportes.module.css";
 import styles from "./reporte-comercial.module.css";
@@ -94,10 +94,10 @@ function SalesMix({
                   </div>
                 </th>
                 <td
-                  data-reporte-exportar={`${porcentaje(m.pct)} · ${formatearMoneda(m.monto, moneda)}`}
+                  data-reporte-exportar={`${porcentaje(m.pct)} · ${formatearMoneda(m.monto, moneda)} sin IVA${m.montoConIva == null ? "" : ` · ${formatearMoneda(m.montoConIva, moneda)} con IVA`}`}
                 >
                   <strong>{porcentaje(m.pct)}</strong>
-                  <small>{formatearMoneda(m.monto, moneda)}</small>
+                  <small>{formatearMoneda(m.monto, moneda)}</small><IvaReference value={m.montoConIva} />
                 </td>
               </tr>
             );
@@ -159,9 +159,9 @@ function Ranking({ rows, label }: { rows: RankingPanel[]; label: string }) {
                 {formatearMoneda(
                   r.ordenes > 0 ? r.facturado / r.ordenes : 0,
                   moneda,
-                )}
+                )}<IvaReference value={r.facturadoConIva == null ? undefined : r.ordenes > 0 ? r.facturadoConIva / r.ordenes : 0} />
               </td>
-              <td>{formatearMoneda(r.facturado, moneda)}</td>
+              <td>{formatearMoneda(r.facturado, moneda)}<IvaReference value={r.facturadoConIva} /></td>
             </tr>
           ))}
         </tbody>
@@ -175,7 +175,9 @@ function Seasonality({ cells }: { cells: ComercialPanel["estacionalidad"] }) {
   const months = [...new Set(cells.map((c) => c.mes))].sort();
   const totals = new Map<string, number>();
   const values = new Map<string, Map<string, number>>();
+  const references = new Map<string, number | undefined>();
   for (const c of cells) {
+    references.set(JSON.stringify([c.categoria, c.mes]), c.montoConIva);
     totals.set(c.categoria, (totals.get(c.categoria) ?? 0) + c.monto);
     if (!values.has(c.categoria)) values.set(c.categoria, new Map());
     const row = values.get(c.categoria)!;
@@ -219,11 +221,13 @@ function Seasonality({ cells }: { cells: ComercialPanel["estacionalidad"] }) {
                   const intensity =
                     value > 0 ? 8 + 22 * Math.min(1, value / max) : 0;
                   const exact = formatearMoneda(value, moneda);
+                  const reference = references.get(JSON.stringify([category, month]));
+                  const conIva = reference == null ? "" : ` · ${formatearMoneda(reference, moneda)} con IVA`;
                   return (
                     <td
                       key={month}
-                      data-reporte-exportar={exact}
-                      title={`${category} · ${fechaDelReporte(`${month}-01`, "mes")}: ${exact}`}
+                      data-reporte-exportar={`${exact} sin IVA${conIva}`}
+                      title={`${category} · ${fechaDelReporte(`${month}-01`, "mes")}: ${exact} sin IVA${conIva}`}
                     >
                       <span
                         className={styles.heatCell}
@@ -282,6 +286,7 @@ export function ReporteComercial({
         <span>Lectura comercial</span>
         <span data-reporte-periodo>{range}</span>
       </div>
+      <SalesScopeNote />
       <div className={shared.metrics}>
         <Metric
           label="Ventas"
@@ -291,6 +296,7 @@ export function ReporteComercial({
           icon={<ChartNoAxesCombinedIcon />}
           featured
         >
+          <IvaReference value={k.ventasConIva} />
           <div className={shared.metricSpark}>
             <TremorSparkAreaChart
               data={d.serie}
@@ -316,7 +322,9 @@ export function ReporteComercial({
           detail={`${numero(k.itemsPorOrden)} ítems por orden · sin IVA`}
           icon={<LayersIcon />}
           hint="Ventas netas divididas por la cantidad de órdenes del período."
-        />
+        >
+          <IvaReference value={k.ticketPromedioConIva} />
+        </Metric>
         <Metric
           label="Clientes nuevos"
           value={numero(k.nuevosClientes)}
@@ -346,7 +354,7 @@ export function ReporteComercial({
           <div className={shared.chartSummary}>
             <div>
               <span>Total de ventas</span>
-              <strong>{money(k.ventas)}</strong>
+              <strong>{money(k.ventas)}</strong><IvaReference value={k.ventasConIva} />
             </div>
             <div>
               <span>Órdenes emitidas</span>
@@ -381,7 +389,7 @@ export function ReporteComercial({
                     {d.serie.map((p) => (
                       <tr key={p.fecha}>
                         <th scope="row">{date(p.fecha)}</th>
-                        <td>{money(p.monto)}</td>
+                        <td>{money(p.monto)}<IvaReference value={p.montoConIva} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -451,8 +459,8 @@ export function ReporteComercial({
                       <tr key={p.fecha}>
                         <th scope="row">{date(p.fecha)}</th>
                         <td>{numero(p.ordenes)}</td>
-                        <td>{money(p.ticketPromedio)}</td>
-                        <td>{money(p.ticketMediana)}</td>
+                        <td>{money(p.ticketPromedio)}<IvaReference value={p.ticketPromedioConIva} /></td>
+                        <td>{money(p.ticketMediana)}<IvaReference value={p.ticketMedianaConIva} /></td>
                       </tr>
                     ))}
                   </tbody>

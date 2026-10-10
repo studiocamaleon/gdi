@@ -109,7 +109,7 @@ export class ProveedoresService {
         condicionPagoDias: true,
         reposicionDias: true,
         reposicionTipo: true,
-        cbuAlias: true,
+        cbuAlias: !!auth.permisos?.has('registros.proveedores.ver') || !!auth.permisos?.has('administracion.pagar.ver') || !!auth.permisos?.has('administracion.egresos.ver'),
       },
       orderBy: { nombre: 'asc' },
     });

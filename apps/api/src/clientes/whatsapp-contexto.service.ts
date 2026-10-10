@@ -32,19 +32,19 @@ export class WhatsappContextoService {
     return {
       empresa,
       permisos: {
-        clientes: auth.permisos?.has('crm.ver') === true,
+        clientes: auth.permisos?.has('crm.clientes.ver') === true,
         ordenes: [
-          'produccion.ver',
-          'comercial.ver',
-          'administracion.ver',
-          'administracion.gestionar',
+          'produccion.tablero.ver',
+          'comercial.ordenes.ver',
+          'administracion.facturacion.ver',
+          'administracion.facturacion.gestionar',
         ].some((permiso) => auth.permisos?.has(permiso)),
       },
     };
   }
 
   async contexto(auth: CurrentAuth, input: WhatsappContextoDto) {
-    if (!auth.permisos?.has('crm.ver'))
+    if (!auth.permisos?.has('crm.clientes.ver'))
       throw new ForbiddenException('No tenés permiso para consultar clientes.');
     if (!/^\+[\d\s().-]{7,39}$/.test(input.telefono))
       throw new BadRequestException(

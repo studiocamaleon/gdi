@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   ForbiddenException,
@@ -244,9 +245,9 @@ export class RecibosService {
           return;
       }
       this.logger.warn(
-        `No pude materializar el PDF del recibo de ${cobroId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `No pude materializar el PDF del recibo de ${cobroId}: ${textoErrorLog(
+          error,
+        )}`,
       );
     });
   }

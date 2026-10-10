@@ -1,4 +1,11 @@
+import type { ComprobantesPaginaDto } from './dto/listado-fiscal.dto';
+import {
+  contieneSinAcentos,
+  normalizarBusqueda,
+} from '../common/busqueda-texto';
+import { textoErrorLog } from '../common/log-seguro';
 import { EmisionFiscalService } from './emision-fiscal.service';
+import { puedeOperarComprobante } from './permisos-comprobantes';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -54,9 +61,9 @@ import {
   type ItemCalculo,
 } from './invoicing/totales-comprobante';
 import {
-  renglonesDetalladosOrden,
-  itemsOrdenConDescuento,
-} from './invoicing/items-orden-descuento';
+  renglonesFacturaOrden,
+  conciliarRenglones,
+} from './invoicing/items-factura-orden';
 
 type ItemPersistido = ItemCalculo & { descripcion: string };
 
@@ -164,7 +171,7 @@ export class ComprobantesService {
       await this.materializarPdf(tenantId, id);
     } catch (error) {
       this.logger.warn(
-        `No pude congelar el PDF del comprobante ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        `No pude congelar el PDF del comprobante ${id}: ${textoErrorLog(error)}`,
       );
     }
   }
@@ -207,10 +214,12 @@ export class ComprobantesService {
       clienteId?: string;
       ordenId?: string;
       q?: string;
+      ids?: string[];
     },
   ) {
     const where: Prisma.ComprobanteWhereInput = {
       tenantId: auth.tenantId,
+      ...(filtros.ids ? { id: { in: filtros.ids } } : {}),
       ...(filtros.estado ? { estado: filtros.estado } : {}),
       ...(filtros.tipo ? { tipo: filtros.tipo } : {}),
       ...(filtros.clienteId ? { clienteId: filtros.clienteId } : {}),
@@ -243,19 +252,95 @@ export class ComprobantesService {
           select: { id: true },
         },
       },
-      orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
       take: 200,
     });
-    const q = filtros.q?.trim().toLowerCase();
+    const q = normalizarBusqueda(filtros.q ?? '');
     const lista = comprobantes.map((c) => this.toResponse(c));
     if (!q) return lista;
     return lista.filter((c) =>
-      [c.numeroCompleto, c.clienteNombre, c.clienteCuit, c.ordenNumero, c.letra]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q),
+      normalizarBusqueda(
+        [
+          c.numeroCompleto,
+          c.clienteNombre,
+          c.clienteCuit,
+          c.ordenNumero,
+          c.letra,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      ).includes(q),
     );
+  }
+
+  async listarPagina(auth: CurrentAuth, filtros: ComprobantesPaginaDto) {
+    const from = Prisma.sql`FROM "Comprobante" c
+      JOIN "PuntoVenta" pv ON pv."id" = c."puntoVentaId" AND pv."tenantId" = c."tenantId"
+      LEFT JOIN "Cliente" cl ON cl."id" = c."clienteId" AND cl."tenantId" = c."tenantId"
+      LEFT JOIN "OrdenTrabajo" ot ON ot."id" = c."ordenId" AND ot."tenantId" = c."tenantId"`;
+    const texto = Prisma.sql`concat_ws(' ',
+      coalesce(cl."nombre", nullif(c."receptorSnapshot"->>'nombre', ''), 'Consumidor Final'),
+      coalesce(cl."cuit", c."receptorSnapshot"->>'cuit'),
+      c."letra" || ' ' || lpad(pv."numero"::text, 4, '0') || '-' || coalesce(lpad(c."numero"::text, 8, '0'), '—'),
+      ot."numero",
+      (SELECT string_agg(o."numero", ' ') FROM "ComprobanteOrden" co
+       JOIN "OrdenTrabajo" o ON o."id" = co."ordenId" AND o."tenantId" = co."tenantId"
+       WHERE co."comprobanteId" = c."id" AND co."tenantId" = c."tenantId"))`;
+    const where = Prisma.sql`WHERE c."tenantId" = ${auth.tenantId}::uuid
+      ${filtros.tipo && filtros.tipo !== 'todos' ? Prisma.sql`AND c."tipo" = ${filtros.tipo}` : Prisma.empty}
+      ${
+        filtros.estado === 'cae'
+          ? Prisma.sql`AND c."estado" = 'emitido' AND coalesce(c."cae", '') <> ''`
+          : filtros.estado === 'emitido'
+            ? Prisma.sql`AND c."estado" = 'emitido' AND coalesce(c."cae", '') = ''`
+            : filtros.estado && filtros.estado !== 'todos'
+              ? Prisma.sql`AND c."estado" = ${filtros.estado}`
+              : Prisma.empty
+      }
+      ${filtros.q?.trim() ? Prisma.sql`AND ${contieneSinAcentos(texto, filtros.q)}` : Prisma.empty}`;
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const mes = claveFechaEnZona(new Date(), regional.zonaHoraria).slice(0, 7);
+    const pesos = (col: Prisma.Sql) =>
+      Prisma.sql`${col} * CASE WHEN c."moneda" = 'USD' AND c."cotizacion" IS NOT NULL THEN c."cotizacion" ELSE 1 END`;
+    const [r] = await this.prisma.$queryRaw<
+      Array<{
+        total: number;
+        facturado: Prisma.Decimal;
+        pendiente: Prisma.Decimal;
+        facturasMes: number;
+        notasMes: number;
+      }>
+    >(Prisma.sql`
+      SELECT count(*)::int AS total,
+        coalesce(sum(CASE WHEN c."estado" = 'emitido' THEN ${pesos(Prisma.sql`c."total"`)} * CASE WHEN c."tipo" = 'nota_credito' THEN -1 ELSE 1 END ELSE 0 END), 0) AS facturado,
+        coalesce(sum(CASE WHEN c."estado" = 'emitido' AND c."tipo" <> 'nota_credito' THEN ${pesos(Prisma.sql`c."saldoPendiente"`)} ELSE 0 END), 0) AS pendiente,
+        count(*) FILTER (WHERE c."estado" = 'emitido' AND c."tipo" = 'factura' AND to_char(c."fecha", 'YYYY-MM') = ${mes})::int AS "facturasMes",
+        count(*) FILTER (WHERE c."estado" = 'emitido' AND c."tipo" = 'nota_credito' AND to_char(c."fecha", 'YYYY-MM') = ${mes})::int AS "notasMes"
+      ${from} ${where}
+    `);
+    const tamanoPagina = 25;
+    const pagina = Math.min(
+      filtros.pagina ?? 1,
+      Math.max(1, Math.ceil(r.total / tamanoPagina)),
+    );
+    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT c."id" ${from} ${where}
+      ORDER BY c."fecha" DESC, c."createdAt" DESC, c."id" DESC
+      LIMIT ${tamanoPagina} OFFSET ${(pagina - 1) * tamanoPagina}
+    `);
+    const items = await this.listar(auth, { ids: ids.map((c) => c.id) });
+    return {
+      items,
+      total: r.total,
+      pagina,
+      tamanoPagina,
+      resumen: {
+        facturado: Number(r.facturado),
+        pendiente: Number(r.pendiente),
+        facturasMes: r.facturasMes,
+        notasMes: r.notasMes,
+      },
+    };
   }
 
   async obtener(auth: CurrentAuth, id: string) {
@@ -321,12 +406,21 @@ export class ComprobantesService {
    * emisor×receptor y se congela acá: si el cliente después cambia de
    * condición fiscal, este comprobante no cambia.
    */
-  async crear(auth: CurrentAuth, payload: CrearComprobanteDto) {
+  async crear(
+    auth: CurrentAuth,
+    payload: CrearComprobanteDto,
+    loteItemId?: string,
+    loteLeaseToken?: string,
+  ) {
+    if (loteItemId && !loteLeaseToken)
+      throw new ConflictException(
+        'El lote no tiene un turno de ejecución válido.',
+      );
     if (
-      !auth.permisos?.has(
-        payload.tipo === 'nota_credito'
-          ? 'administracion.anular'
-          : 'administracion.gestionar',
+      !puedeOperarComprobante(
+        auth,
+        payload.tipo,
+        Boolean(payload.ordenId || payload.ordenes?.length),
       )
     )
       throw new ForbiddenException(
@@ -489,7 +583,7 @@ export class ComprobantesService {
         ['fiscal_argentina'],
         ['fiscal_argentina'],
       );
-      return tx.comprobante.create({
+      const creado = await tx.comprobante.create({
         data: {
           tenantId: auth.tenantId,
           tipo: payload.tipo,
@@ -548,6 +642,27 @@ export class ComprobantesService {
           },
         },
       });
+      if (loteItemId) {
+        // La factura y su vínculo durable se confirman juntos. Dos workers no
+        // pueden crear facturas diferentes para el mismo item al recuperar un lease.
+        const vinculado = await tx.facturacionLoteItem.updateMany({
+          where: {
+            id: loteItemId,
+            tenantId: auth.tenantId,
+            comprobanteId: null,
+            lote: {
+              leaseToken: loteLeaseToken,
+              leaseHasta: { gt: new Date() },
+            },
+          },
+          data: { comprobanteId: creado.id, estado: 'emitiendo' },
+        });
+        if (vinculado.count !== 1)
+          throw new ConflictException(
+            'El item ya tiene un comprobante asociado o cambió su turno de ejecución.',
+          );
+      }
+      return creado;
     });
     return this.toResponse(comprobante);
   }
@@ -559,6 +674,26 @@ export class ComprobantesService {
       await this.publicar(auth.tenantId, id);
     }
     return this.obtener(auth, id);
+  }
+
+  async publicarParaLote(tenantId: string, id: string) {
+    // A diferencia del best-effort de emisión individual, el lote conserva
+    // el resultado de cada etapa y vuelve a intentar sólo lo que no confirmó.
+    if (await this.capacidades.puedeOperar(tenantId, 'documentos_pdf'))
+      await this.materializarPdf(tenantId, id);
+    const existente = await this.prisma.enlacePublico.findUnique({
+      where: {
+        tipo_entidadId: { tipo: TipoEnlacePublico.FACTURA, entidadId: id },
+      },
+    });
+    if (!existente)
+      await this.enlaces.emitir(this.prisma, {
+        tenantId,
+        tipo: TipoEnlacePublico.FACTURA,
+        entidadId: id,
+        token: generarTokenPublico(),
+      });
+    return this.avisos.avisarParaLote(id);
   }
 
   async consultarEmision(auth: CurrentAuth, id: string) {
@@ -588,7 +723,7 @@ export class ComprobantesService {
       });
     } catch (error) {
       this.logger.warn(
-        `No pude emitir el link público del comprobante ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        `No pude emitir el link público del comprobante ${id}: ${textoErrorLog(error)}`,
       );
       // Sin link no hay nada que mandar: el aviso no sale y no tiene sentido
       // intentarlo.
@@ -703,6 +838,8 @@ export class ComprobantesService {
     auth: CurrentAuth,
     ordenId: string,
     payload: FacturarOrdenDto,
+    loteItemId?: string,
+    loteLeaseToken?: string,
   ) {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
@@ -714,6 +851,7 @@ export class ComprobantesService {
         total: true,
         facturadoTotal: true,
         descuentoTotal: true,
+        cargosDirectosJson: true,
         tratamientoFiscal: true,
         items: {
           where: { parentItemId: null },
@@ -724,6 +862,7 @@ export class ComprobantesService {
             subtotal: true,
             total: true,
             descuentoMonto: true,
+            cotizacionItem: { select: { impuestosSnapshotJson: true } },
           },
         },
       },
@@ -781,30 +920,30 @@ export class ComprobantesService {
     const puntoVentaId =
       payload.puntoVentaId ?? (await this.puntoVentaDefault(auth));
     const letra = await this.letraParaCliente(auth, orden.clienteId);
-    // F5 descuentos: una orden CON descuento que se factura completa y de una
-    // sola vez sale DETALLADA — un renglón por producto con precio de lista +
-    // bonificación (decisión 2026-08-08, ver descuentos-diseno.md §10). Los
-    // montos parciales siguen como renglón único: no mapean a items y el
-    // descuento ya viaja embebido en el monto.
-    const items = this.itemsFacturaOrden(
+    const items = renglonesFacturaOrden(
       orden,
       letra,
       monto,
-      saldo,
+      payload.detalle ?? 'items',
       payload.concepto?.trim() || `Trabajos de impresión — ${orden.numero}`,
     );
     // El vínculo lleva el total RECALCULADO de los renglones (en A el redondeo
     // del neto puede correr un centavo) para que el reparto cierre exacto.
     const total = calcularTotales(letra, items).total;
 
-    const borrador = await this.crear(auth, {
-      tipo: 'factura',
-      puntoVentaId,
-      clienteId: orden.clienteId ?? undefined,
-      ordenes: [{ ordenId: orden.id, monto: total }],
-      items,
-      condicionVenta: 'contado',
-    } as CrearComprobanteDto);
+    const borrador = await this.crear(
+      auth,
+      {
+        tipo: 'factura',
+        puntoVentaId,
+        clienteId: orden.clienteId ?? undefined,
+        ordenes: [{ ordenId: orden.id, monto: total }],
+        items,
+        condicionVenta: 'contado',
+      } as CrearComprobanteDto,
+      loteItemId,
+      loteLeaseToken,
+    );
     if (payload.emitir === false) return borrador;
     return this.emitir(auth, borrador.id);
   }
@@ -926,7 +1065,12 @@ export class ComprobantesService {
    * reportadas, las demás salen). 'agrupada' arma UNA factura con un
    * renglón por orden — mismo cliente obligatorio.
    */
-  async facturarLote(auth: CurrentAuth, payload: FacturarLoteDto) {
+  async facturarLote(
+    auth: CurrentAuth,
+    payload: FacturarLoteDto,
+    loteItemId?: string,
+    loteLeaseToken?: string,
+  ) {
     const ordenes = await this.prisma.ordenTrabajo.findMany({
       where: { id: { in: payload.ordenIds }, tenantId: auth.tenantId },
       select: {
@@ -937,6 +1081,14 @@ export class ComprobantesService {
         total: true,
         facturadoTotal: true,
         tratamientoFiscal: true,
+        cargosDirectosJson: true,
+        items: {
+          where: { parentItemId: null },
+          orderBy: { ordenIndice: 'asc' },
+          include: {
+            cotizacionItem: { select: { impuestosSnapshotJson: true } },
+          },
+        },
       },
     });
     const porId = new Map(ordenes.map((o) => [o.id, o]));
@@ -956,6 +1108,11 @@ export class ComprobantesService {
           .join(', ')}): no se pueden facturar.`,
       );
     }
+
+    if (ordenes.some((o) => ['borrador', 'cancelada'].includes(o.estado)))
+      throw new BadRequestException(
+        'El lote contiene órdenes en borrador o canceladas.',
+      );
 
     if (payload.modo === 'agrupada') {
       const clientes = new Set(ordenes.map((o) => o.clienteId ?? 'CF'));
@@ -978,28 +1135,43 @@ export class ComprobantesService {
             `La orden ${orden.numero} ya está facturada por completo.`,
           );
         }
-        const item = this.renglonPorMonto(
+        const renglones = renglonesFacturaOrden(
+          orden,
           letra,
           saldo,
+          payload.detalle ?? 'orden',
           `Trabajos de impresión — ${orden.numero}`,
+          true,
         );
-        items.push(item);
+        items.push(...renglones);
         vinculos.push({
           ordenId: orden.id,
-          monto: calcularTotales(letra, [item]).total,
+          monto: calcularTotales(letra, renglones).total,
         });
       }
+      conciliarRenglones(
+        letra,
+        items,
+        vinculos.reduce((s, v) => s + v.monto, 0),
+      );
       const puntoVentaId =
         payload.puntoVentaId ?? (await this.puntoVentaDefault(auth));
-      const borrador = await this.crear(auth, {
-        tipo: 'factura',
-        puntoVentaId,
-        clienteId: clienteId ?? undefined,
-        ordenes: vinculos,
-        items,
-        condicionVenta: 'contado',
-      } as CrearComprobanteDto);
-      const emitido = await this.emitir(auth, borrador.id);
+      const borrador = await this.crear(
+        auth,
+        {
+          tipo: 'factura',
+          puntoVentaId,
+          clienteId: clienteId ?? undefined,
+          ordenes: vinculos,
+          items,
+          condicionVenta: 'contado',
+        } as CrearComprobanteDto,
+        loteItemId,
+        loteLeaseToken,
+      );
+      const emitido = loteItemId
+        ? borrador
+        : await this.emitir(auth, borrador.id);
       return {
         modo: 'agrupada' as const,
         resultados: payload.ordenIds.map((ordenId) => ({
@@ -1029,6 +1201,7 @@ export class ComprobantesService {
       try {
         const comprobante = await this.facturarOrden(auth, ordenId, {
           puntoVentaId: payload.puntoVentaId,
+          detalle: payload.detalle ?? 'items',
         });
         resultados.push({
           ordenId,
@@ -1092,48 +1265,6 @@ export class ComprobantesService {
       precioUnitarioSinIva: letra === 'A' ? redondear2(monto / 1.21) : monto,
       alicuotaIva: 21,
     };
-  }
-
-  /**
-   * Renglones de la factura de una orden (F5 descuentos): detallados con
-   * bonificación cuando `renglonesDetalladosOrden` lo permite; si no, el
-   * renglón único por monto de siempre.
-   */
-  private itemsFacturaOrden(
-    orden: {
-      facturadoTotal: Prisma.Decimal | number;
-      descuentoTotal: Prisma.Decimal | number | null;
-      items: Array<{
-        parentItemId?: string | null;
-        nombre: string;
-        cantidad: Prisma.Decimal | number;
-        subtotal: Prisma.Decimal | number;
-        total: Prisma.Decimal | number;
-        descuentoMonto: Prisma.Decimal | number | null;
-      }>;
-    },
-    letra: LetraProvider,
-    monto: number,
-    saldo: number,
-    concepto: string,
-  ): ItemPersistido[] {
-    const detallados = renglonesDetalladosOrden({
-      letra,
-      monto,
-      saldo,
-      facturadoTotal: Number(orden.facturadoTotal),
-      descuentoTotal: Number(orden.descuentoTotal ?? 0),
-      items: orden.items
-        .filter((item) => item.parentItemId == null)
-        .map((item) => ({
-          nombre: item.nombre,
-          cantidad: Number(item.cantidad),
-          subtotal: Number(item.subtotal),
-          total: Number(item.total),
-          descuentoMonto: Number(item.descuentoMonto ?? 0),
-        })),
-    });
-    return detallados ?? [this.renglonPorMonto(letra, monto, concepto)];
   }
 
   private async puntoVentaDefault(auth: CurrentAuth): Promise<string> {
@@ -1207,16 +1338,14 @@ export class ComprobantesService {
         // El precio de entrada depende de la letra: neto en A, final en
         // B/C/E. Comparte la preparación de la facturación desde la orden.
         const letra = await this.letraParaCliente(auth, clienteId);
-        items = itemsOrdenConDescuento(
-          letra,
-          orden.items.map((it) => ({
-            nombre: it.nombre,
-            cantidad: Number(it.cantidad),
-            subtotal: Number(it.subtotal),
-            total: Number(it.total),
-            descuentoMonto: Number(it.descuentoMonto ?? 0),
-          })),
+        const saldo = redondear2(
+          Number(orden.total ?? 0) - Number(orden.facturadoTotal),
         );
+        if (saldo <= 0.01)
+          throw new BadRequestException(
+            'La orden ya está facturada por completo.',
+          );
+        items = renglonesFacturaOrden(orden, letra, saldo, 'items');
       }
     }
 
@@ -1271,7 +1400,15 @@ export class ComprobantesService {
   private async validarOrdenFacturable(auth: CurrentAuth, ordenId: string) {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
-      include: { items: { where: { parentItemId: null } } },
+      include: {
+        items: {
+          where: { parentItemId: null },
+          orderBy: { ordenIndice: 'asc' },
+          include: {
+            cotizacionItem: { select: { impuestosSnapshotJson: true } },
+          },
+        },
+      },
     });
     if (!orden) throw new BadRequestException('La orden no existe.');
     if (orden.estado === 'borrador') {

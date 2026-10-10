@@ -30,6 +30,11 @@ const db = new PrismaService();
 afterAll(() => db.$disconnect());
 type Contexto = Parameters<Parameters<typeof conPlanesAsignados>[1]>[0];
 const base = '/reportes/panel/';
+const permisosReportes = [
+  'reportes.resumen.ver', 'reportes.comercial.ver', 'reportes.embudo.ver',
+  'reportes.finanzas.ver', 'reportes.produccion.ver', 'reportes.producto.ver',
+  'reportes.clientes.ver', 'reportes.equipo.ver', 'reportes.salud_eta.ver',
+];
 const rango = { desde: '2026-08-01', hasta: '2026-08-31' };
 const rutas = [
   ['resumen', 'reportes_resumen'],
@@ -63,6 +68,10 @@ async function preparar(c: Contexto) {
     data: { nombre: 'Reportes QA', slug: `reportes-plan-${randomUUID()}` },
   });
   const tenantId = tenant.id;
+  // La lectura de cuentas verifica la membresía vigente en esta empresa.
+  await c.db.membership.create({
+    data: { tenantId, userId: c.auth.userId, rol: 'OPERADOR' },
+  });
   const plan = await c.db.plan.create({
     data: {
       codigo: randomUUID(),
@@ -137,10 +146,9 @@ async function preparar(c: Contexto) {
   const completa: CurrentAuth = {
     ...c.auth,
     tenantId,
-    role: 'OPERARIO',
+    role: 'OPERADOR',
     permisos: new Set([
-      'reportes.ver',
-      'reportes.ver_resumen',
+      ...permisosReportes,
       'finanzas.ver_margenes',
       'registros.ver_comisiones',
     ]),
@@ -319,13 +327,14 @@ it.each([
   },
 );
 
-it('un permiso especial no evita el permiso de entrada a Reportes, y viceversa', async () => {
+it('el permiso financiero requiere también la vista; una vista comercial no concede Resumen ni Finanzas', async () => {
   await conPlanesAsignados(db, (c) =>
     escenario(c, async (f) => {
       const calculo = jest.spyOn(f.rentabilidad, 'bloque');
       for (const permisos of [
         [],
-        ['reportes.ver_resumen', 'finanzas.ver_margenes'],
+        ['finanzas.ver_margenes'],
+        ['reportes.finanzas.ver'],
       ]) {
         f.setAuth({ ...f.completa, permisos: new Set(permisos) });
         for (const [ruta] of rutas) await f.get(ruta).expect(403);
@@ -335,7 +344,7 @@ it('un permiso especial no evita el permiso de entrada a Reportes, y viceversa',
           .expect(403);
       }
       expect(calculo).not.toHaveBeenCalled();
-      f.setAuth({ ...f.completa, permisos: new Set(['reportes.ver']) });
+      f.setAuth({ ...f.completa, permisos: new Set(['reportes.comercial.ver']) });
       await f.get('resumen').expect(403);
       await f.get('finanzas').expect(403);
       await f.http
@@ -357,9 +366,9 @@ it('el usuario sin márgenes recibe ventas, sin costos ni rentabilidad oculta en
         porCategoria: { ventas: number; margen: number; costo: number }[];
       };
       expect(productoCompleto.porCategoria).toMatchObject([
-        { ventas: 100, margen: 100, costo: 0 },
+        { ventas: 100, ventasConIva: 121, margen: 100, costo: 0 },
       ]);
-      f.setAuth({ ...f.completa, permisos: new Set(['reportes.ver']) });
+      f.setAuth({ ...f.completa, permisos: new Set(permisosReportes) });
       const sinAcceso = (await f.get('alertas')).body as Alertas;
       expect(sinAcceso.activas.map((a) => a.id)).not.toContain(
         'punto-equilibrio',
@@ -369,6 +378,7 @@ it('el usuario sin márgenes recibe ventas, sin costos ni rentabilidad oculta en
         unknown
       >;
       expect(JSON.stringify(comercial)).toContain('Cliente QA');
+      expect(comercial.kpis).toMatchObject({ ventas: 100, ventasConIva: 121 });
       expect(JSON.stringify(comercial)).not.toMatch(
         /"(?:costo|margen|margenPct|contribucion)":/,
       );
@@ -384,7 +394,7 @@ it('el usuario sin márgenes recibe ventas, sin costos ni rentabilidad oculta en
       // El resumen concede explícitamente la visión integral del negocio.
       f.setAuth({
         ...f.completa,
-        permisos: new Set(['reportes.ver', 'reportes.ver_resumen']),
+        permisos: new Set(['reportes.ver', 'reportes.resumen.ver']),
       });
       const resumen = (await f.get('resumen')).body as {
         rentabilidad: { margenBruto: number };
@@ -407,6 +417,58 @@ it('rechaza empresa inyectada por query y no mezcla datos entre empresas', async
       expect(JSON.stringify(otro)).not.toContain('Trabajo QA');
     }),
   );
+});
+
+it('los doce reportes excluyen la actividad de otra empresa con el mismo plan', async () => {
+  await conPlanesAsignados(db, async (c) => {
+    const propia = await preparar(c);
+    let ajena: Awaited<ReturnType<typeof preparar>> | undefined;
+    try {
+      ajena = await preparar(c);
+      const marca = `AJENO-${randomUUID()}`;
+      await c.db.cliente.updateMany({
+        where: { tenantId: ajena.tenantId },
+        data: { nombre: marca },
+      });
+      await c.db.ordenTrabajoItem.updateMany({
+        where: { tenantId: ajena.tenantId },
+        data: {
+          nombre: marca,
+          categoriaComercial: marca,
+          subtotal: 1000000,
+          total: 1210000,
+        },
+      });
+      await c.db.ordenTrabajo.updateMany({
+        where: { tenantId: ajena.tenantId },
+        data: { subtotal: 1000000, total: 1210000 },
+      });
+      await c.db.gastoFijoEstructura.updateMany({
+        where: { tenantId: ajena.tenantId },
+        data: { nombre: marca, valor: 700000, importeMensual: 700000 },
+      });
+      for (const [ruta] of rutas) {
+        const response = await propia.get(ruta).expect(200);
+        expect(JSON.stringify(response.body)).not.toContain(marca);
+        expect(JSON.stringify(response.body)).not.toContain(ajena.tenantId);
+        if (ruta === 'resumen') {
+          expect(response.body as unknown).toMatchObject({
+            rentabilidad: { ventas: 100, costosFijos: 5000 },
+            topClientes: [{ nombre: 'Cliente QA' }],
+          });
+        }
+      }
+      // Control positivo: los marcadores sí están presentes en su propio informe.
+      const informeAjeno = await ajena.get('resumen').expect(200);
+      expect(JSON.stringify(informeAjeno.body)).toContain(marca);
+      expect(informeAjeno.body as unknown).toMatchObject({
+        rentabilidad: { ventas: 1000000, costosFijos: 700000 },
+      });
+    } finally {
+      await ajena?.app.close();
+      await propia.app.close();
+    }
+  });
 });
 
 it('la retirada se aplica a la siguiente lectura; las cuentas vencidas conservan consulta y no editan umbrales', async () => {

@@ -7,6 +7,7 @@ import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppThrottlerGuard } from './common/app-throttler.guard';
+import { LimitesCompartidosService } from './common/limites-compartidos.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
@@ -37,7 +38,11 @@ import { ProductosServiciosModule } from './productos-servicios/productos-servic
 import { MotorUniversalModule } from './motor-universal/motor.module';
 import { McpModule } from './mcp/mcp.module';
 import { WebhooksWhatsappModule } from './webhooks-whatsapp/webhooks-whatsapp.module';
-import { rutaLog } from './common/ruta-log';
+import {
+  solicitudParaLog,
+  respuestaParaLog,
+  errorParaLog,
+} from './common/log-seguro';
 import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
 import { PresupuestosModule } from './presupuestos/presupuestos.module';
 import { CuponesModule } from './cupones/cupones.module';
@@ -77,10 +82,9 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
     LoggerModule.forRoot({
       pinoHttp: {
         serializers: {
-          req: (req: Record<string, unknown>) => ({
-            ...req,
-            url: rutaLog(typeof req.url === 'string' ? req.url : ''),
-          }),
+          req: solicitudParaLog,
+          res: respuestaParaLog,
+          err: errorParaLog,
         },
         level:
           process.env.LOG_LEVEL ??
@@ -96,6 +100,13 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
         redact: [
           'req.headers.authorization',
           'req.body.codigo',
+          'req.body.token',
+          'req.body.password',
+          'req.body.certificado',
+          'req.body.clavePrivada',
+          'req.body.actual',
+          'req.body.nueva',
+          'res.headers["x-grafoprint-sesion-renovada"]',
           'req.body.estadoSecreto',
           'req.headers.cookie',
           'req.headers["x-hub-signature-256"]',
@@ -107,21 +118,13 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
           'res.headers["set-cookie"]',
         ],
         genReqId: (req, res) => {
-          const existing = req.headers['x-request-id'];
-          const id =
-            (Array.isArray(existing) ? existing[0] : existing) ?? randomUUID();
+          const id = randomUUID();
           res.setHeader('x-request-id', id);
           return id;
         },
       },
     }),
-    ThrottlerModule.forRoot([
-      {
-        name: 'default',
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    ThrottlerModule.forRootAsync({ useClass: LimitesCompartidosService }),
     PrismaModule,
     ImpresionModule,
     EventosSistemaModule,
@@ -186,7 +189,7 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
       useClass: MargenesInterceptor,
     },
     {
-      // Tracker por credencial MCP (una cubeta por token) o IP (default).
+      // Límite por IP antes de confiar en cualquier credencial.
       provide: APP_GUARD,
       useClass: AppThrottlerGuard,
     },

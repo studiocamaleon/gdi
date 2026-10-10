@@ -1,3 +1,4 @@
+import { idsClientesPorNombre } from '../clientes/busqueda-clientes';
 import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
@@ -60,6 +61,7 @@ const CAMPANA_INCLUDE = {
     orderBy: [{ orden: 'asc' as const }, { createdAt: 'asc' as const }],
   },
   cotizaciones: {
+    where: { versionVigente: true, estado: { not: 'descartado' } },
     select: {
       id: true,
       numero: true,
@@ -145,7 +147,7 @@ export class CampanasService {
               { codigo: { contains: texto, mode: 'insensitive' } },
               { nombre: { contains: texto, mode: 'insensitive' } },
               { tipo: { contains: texto, mode: 'insensitive' } },
-              { cliente: { nombre: { contains: texto, mode: 'insensitive' } } },
+              { clienteId: { in: await idsClientesPorNombre(this.prisma, auth.tenantId, texto) } },
             ],
           }
         : {}),
@@ -162,7 +164,7 @@ export class CampanasService {
             cliente: { select: { id: true, nombre: true } },
             responsable: { select: { id: true, nombreCompleto: true } },
             _count: {
-              select: { cotizaciones: true, ordenes: true, hitos: true },
+              select: { cotizaciones: { where: { versionVigente: true, estado: { not: 'descartado' } } }, ordenes: true, hitos: true },
             },
             hitos: { select: { estado: true, fechaObjetivo: true } },
             ordenes: {

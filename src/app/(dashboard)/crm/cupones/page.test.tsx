@@ -9,7 +9,7 @@ vi.mock("@/components/design-system/appearance", () => ({ DesignSystemProvider: 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.usuario.mockResolvedValue({ currentUser: { tenantActual: {
-    rol: "administrador", permisos: ["crm.ver", "comercial.aprobar_descuento"],
+    rol: "administrador", permisos: ["crm.cupones.ver", "comercial.aprobar_descuento"],
   } } });
   mocks.listar.mockResolvedValue({ items: [{ codigo: "HISTORICO" }] });
 });
@@ -27,7 +27,7 @@ it("permite gestionar al supervisor autorizado cuando el plan incluye Cupones", 
 });
 it.each([
   { rol: "operador", permisos: ["comercial.aprobar_descuento"] },
-  { rol: "administrador", permisos: ["crm.ver"] },
+  { rol: "administrador", permisos: ["crm.cupones.ver"] },
   { rol: "administrador", permisos: ["comercial.aprobar_descuento"], suscripcion: { soloLectura: true } },
 ])("mantiene lectura sin ofrecer acciones cuando faltan permisos o la cuenta es de consulta: %j", async tenantActual => {
   mocks.capacidad.mockResolvedValue(true);

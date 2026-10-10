@@ -124,6 +124,14 @@ egress, así que el ahorro de banda del proxy es cero.
 **Consecuencias a asumir:**
 
 - Hay que configurar **CORS en el bucket R2** (`PUT` desde el origen del front).
+- Las subidas simples firman `If-None-Match: *`: el primer PUT crea el objeto
+  y un segundo PUT al mismo enlace devuelve 412. La condición forma parte de
+  la firma y CORS debe permitir `If-None-Match`. Así los bytes que se validan
+  y contabilizan al confirmar no pueden sustituirse con una firma aún vigente.
+  El multipart de R2 queda cerrado por su `uploadId`; el driver local publica
+  el archivo completo de manera atómica y tampoco permite reemplazarlo.
+  Si una subida ya llegó pero se perdió su respuesta, se puede reintentar la
+  confirmación; para sustituir contenido hay que iniciar otro archivo.
 - El objeto puede existir en el bucket sin fila confirmada (el usuario cierra la
   pestaña a mitad de subida). Mitigación: la fila nace en `pendiente` **antes**
   de firmar; un barrido diario borra `pendiente` con más de 24 h (objeto +
@@ -279,7 +287,7 @@ R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET=grafo-archivos
 R2_ENDPOINT=https://<account>.r2.cloudflarestorage.com
-ARCHIVOS_MAX_BYTES=104857600      # 100 MB
+ARCHIVOS_MAX_BYTES=524288000      # 500 MB
 ```
 
 Dependencias: `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`. R2 es
@@ -574,3 +582,9 @@ La comprobación previa sin reserva queda reemplazada por una reserva transaccio
 `POST /archivos/:id/cancelar-subida` libera sólo reservas incompletas; nunca borra un archivo confirmado. `PURGANDO` bloquea restauraciones/confirmaciones durante la limpieza. Las claves canceladas se conservan 24 horas para limpiar transferencias tardías y un fallo de storage conserva el rastro para el siguiente barrido.
 
 Reglas, compatibilidad y pruebas: [Cupo de almacenamiento](planes-evaluador-desacople-2026-09-21.md#cupo-de-almacenamiento--21092026).
+
+## Límite general de carga — 09/10/2026
+
+La interfaz acepta hasta **500 MB por archivo** (524.288.000 bytes), inclusive. El máximo predeterminado de la API y su configuración de ejemplo coinciden; al iniciar y confirmar se conserva la comprobación del tamaño. Revisar `ARCHIVOS_MAX_BYTES` si un entorno tiene un valor explícito, porque prevalece sobre el predeterminado.
+
+Los archivos mayores de 64 MB siguen viajando directamente al almacenamiento en partes de 8 MB, con hasta tres partes simultáneas. No se amplía el body de Next ni se envían 500 MB a la API en un único pedido. La cuota de almacenamiento de la empresa, los límites propios de WhatsApp y los límites de procesamiento de PDF siguen siendo independientes del máximo de carga.

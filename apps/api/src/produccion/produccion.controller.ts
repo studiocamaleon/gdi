@@ -15,20 +15,22 @@ import { ProduccionService } from './produccion.service';
 import { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 import { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 
-@Permiso('produccion.ver')
+@Permiso("produccion.estaciones.ver")
 @Controller('produccion')
 export class ProduccionController {
   constructor(private readonly service: ProduccionService) {}
 
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'produccion.planificacion.ver')
   @Get('estaciones')
   findEstaciones(@CurrentSession() auth: CurrentAuth) {
     return this.service.findEstaciones(auth.tenantId);
   }
 
   /** Referencias operativas del editor, sin exigir Registros ni Costos. */
-  @Permiso('produccion.configurar')
+  @Permiso("produccion.configurar")
+  @RequiereVista("produccion.estaciones.ver")
   @Get('estaciones-recursos')
   recursosEstaciones(@CurrentSession() auth: CurrentAuth) {
     return this.service.recursosEstaciones(auth.tenantId);
@@ -44,6 +46,7 @@ export class ProduccionController {
    * Mediana histórica de duración real por familia (fallback de la cola en
    * horas del tablero). Ver docs/capacidad-estaciones-diseno.md D6.
    */
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'produccion.planificacion.ver')
   @Get('duraciones-familias')
   findDuracionesFamilias(@CurrentSession() auth: CurrentAuth) {
     return this.service.findDuracionesFamilias(auth.tenantId);
@@ -53,6 +56,7 @@ export class ProduccionController {
    * Estructura del bastidor de un ítem (cartelería), para el visor 3D del tab
    * de Producción. Sale del snapshot del ítem: es lo cotizado, con overrides.
    */
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'comercial.ordenes.ver')
   @Get('estructura-bastidor/:itemId')
   estructuraBastidor(
     @CurrentSession() auth: CurrentAuth,
@@ -63,12 +67,14 @@ export class ProduccionController {
 
   // ── Configuración de producción (margen de la ETA sugerida) ───────────
 
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'produccion.planificacion.ver')
   @Get('configuracion')
   getConfiguracion(@CurrentSession() auth: CurrentAuth) {
     return this.service.getConfiguracion(auth.tenantId);
   }
 
-  @Permiso('produccion.configurar')
+  @Permiso("produccion.configurar")
+  @RequiereVista("produccion.estaciones.ver")
   @Put('configuracion')
   actualizarConfiguracion(
     @CurrentSession() auth: CurrentAuth,
@@ -79,12 +85,14 @@ export class ProduccionController {
 
   // ── Días no laborables (feriados y cierres del taller) ────────────────
 
+  @Permiso('produccion.estaciones.ver', 'produccion.tablero.ver', 'produccion.planificacion.ver')
   @Get('dias-no-laborables')
   findDiasNoLaborables(@CurrentSession() auth: CurrentAuth) {
     return this.service.findDiasNoLaborables(auth.tenantId);
   }
 
-  @Permiso('produccion.configurar')
+  @Permiso("produccion.configurar")
+  @RequiereVista("produccion.estaciones.ver")
   @Post('dias-no-laborables')
   crearDiaNoLaborable(
     @CurrentSession() auth: CurrentAuth,
@@ -93,7 +101,8 @@ export class ProduccionController {
     return this.service.crearDiaNoLaborable(auth, payload);
   }
 
-  @Permiso('produccion.configurar')
+  @Permiso("produccion.configurar")
+  @RequiereVista("produccion.estaciones.ver")
   @Delete('dias-no-laborables/:id')
   eliminarDiaNoLaborable(
     @CurrentSession() auth: CurrentAuth,
@@ -102,7 +111,8 @@ export class ProduccionController {
     return this.service.eliminarDiaNoLaborable(auth, id);
   }
 
-  @Permiso('produccion.configurar')
+  @Permiso("produccion.configurar")
+  @RequiereVista("produccion.estaciones.ver")
   @Post('estaciones')
   createEstacion(
     @CurrentSession() auth: CurrentAuth,
@@ -111,7 +121,8 @@ export class ProduccionController {
     return this.service.createEstacion(auth, payload);
   }
 
-  @Permiso('produccion.configurar')
+  @Permiso("produccion.configurar")
+  @RequiereVista("produccion.estaciones.ver")
   @Put('estaciones/:id')
   updateEstacion(
     @CurrentSession() auth: CurrentAuth,
@@ -121,13 +132,15 @@ export class ProduccionController {
     return this.service.updateEstacion(auth, id, payload);
   }
 
-  @Permiso('produccion.configurar')
+  @Permiso("produccion.configurar")
+  @RequiereVista("produccion.estaciones.ver")
   @Patch('estaciones/:id/toggle')
   toggleEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.toggleEstacion(auth, id);
   }
 
-  @Permiso('produccion.configurar')
+  @Permiso("produccion.configurar")
+  @RequiereVista("produccion.estaciones.ver")
   @Delete('estaciones/:id')
   deleteEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.deleteEstacion(auth, id);

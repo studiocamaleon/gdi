@@ -207,3 +207,17 @@ describe("ETA del producto compuesto completo", () => {
     expect(r.pasos.at(-1)?.predecesoras).toEqual([r.pasos[1].clave]);
   });
 });
+
+it("la fecha del cotizador respeta el operador elegido y no aplica esa elección a componentes", () => {
+  const c = compuesto();
+  const r = itemHipoteticoDesdeCotizacion("item", c, [{ nodoClave: "ruta:pre", empleadoIds: ["apoyo"] }]);
+  expect(r.pasos[0].personalFijo).toEqual({ empleadoIds: ["apoyo"] });
+  expect(r.pasos[1].personalFijo).toBeUndefined();
+  const est = estacion("pre");
+  est.planificacionPorEmpleados = true;
+  est.tiempoPreparacionMin = 0;
+  est.empleados = [{ id: "apoyo", nombreCompleto: "Apoyo", sector: "Taller", activo: true, asignacionAutomatica: false, calendario: { dias: { ...est.calendario!.dias, lun: [{ desde: "12:00", hasta: "17:00" }] } } }];
+  const eta = estimarDemoraNuevos({ nuevos: [itemHipoteticoDesdeCotizacion("simple", { pasos: [p("pre", 15)] }, [{ nodoClave: "ruta:pre", empleadoIds: ["apoyo"] }])], enCola: [], estaciones: [est], medianas: new Map(), ahora: new Date("2026-10-05T09:00:00-03:00"), zona: "America/Argentina/Rio_Gallegos" });
+  expect(eta.get("simple")?.finEstimado?.toISOString()).toBe("2026-10-05T15:15:00.000Z");
+  expect(itemHipoteticoDesdeCotizacion("item", c, [{ nodoClave: "ruta:otro", empleadoIds: ["apoyo"] }]).motivoSinEstimar).toContain("Cambió un paso");
+});

@@ -16,13 +16,15 @@
     "marketing:dev": "npm --prefix apps/marketing run dev",
     "marketing:build": "npm --prefix apps/marketing run build",
     "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "test:dependencias": "node --test scripts/dependencias-runtime.test.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
     "@heroui/react": "3.2.5",
     "@heroui/styles": "3.2.5",
     "@paddle/paddle-js": "^1.6.4",
+    "@sentry/nextjs": "11.4.0",
     "@tanstack/react-table": "8.21.3",
     "@types/qrcode": "^1.5.6",
     "class-variance-authority": "^0.7.1",
@@ -30,9 +32,10 @@
     "dxf-writer": "1.18.4",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
+    "libphonenumber-js": "1.13.9",
     "lucide-react": "^0.577.0",
     "maxrects-packer": "^2.7.3",
-    "next": "16.1.6",
+    "next": "16.3.8",
     "opentype.js": "^2.0.0",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
@@ -41,7 +44,6 @@
     "react-aria-components": "1.21.1",
     "react-dom": "19.2.3",
     "recharts": "^2.15.4",
-    "shadcn": "^4.0.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "three": "^0.149.0",
@@ -54,11 +56,14 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.149.0",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "16.3.8",
     "jsdom": "26.1.0",
-    "postcss": "8.5.8",
+    "postcss": "8.5.28",
+    "postcss-selector-parser": "7.1.6",
+    "shadcn": "^4.21.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^3.2.7"
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11"
   }
 }

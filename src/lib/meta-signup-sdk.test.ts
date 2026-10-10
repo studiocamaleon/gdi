@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { iniciarAltaMeta, type MetaSdk } from "./meta-signup-sdk";
+import {
+  iniciarAltaMeta,
+  type MetaSdk,
+  type PasoAltaMeta,
+} from "./meta-signup-sdk";
 import type {
   MetaConexionApi,
   PreparacionMeta,
@@ -18,7 +22,7 @@ const preparacion: PreparacionMeta = {
 let api: MetaConexionApi,
   sdk: MetaSdk,
   callback: (r: unknown) => void,
-  cambiar: ReturnType<typeof vi.fn>,
+  cambiar: ReturnType<typeof vi.fn<(paso: PasoAltaMeta) => void>>,
   cancelar: (() => void) | undefined;
 const respuesta = (estado: RespuestaIntentoMeta["estado"]) => ({
   id: "intento",
@@ -43,7 +47,7 @@ beforeEach(() => {
       callback = cb;
     }),
   };
-  cambiar = vi.fn();
+  cambiar = vi.fn<(paso: PasoAltaMeta) => void>();
 });
 afterEach(() => {
   cancelar?.();

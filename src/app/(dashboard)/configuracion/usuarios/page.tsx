@@ -24,7 +24,7 @@ const VACIO: ListadoUsuarios = { usuarios: [], limite: null, enUso: 0 };
  * de la pantalla funciona igual: vincular es opcional.
  */
 export default async function UsuariosPage() {
-  if (!(await tienePermiso("configuracion.ver"))) {
+  if (!(await tienePermiso("configuracion.usuarios.ver"))) {
     return <SinPermiso modulo="Usuarios" />;
   }
 

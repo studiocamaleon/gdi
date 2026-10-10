@@ -1,8 +1,16 @@
 import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 import {
   AjustarPuntosDto,
   ActualizarFidelizacionDto,
@@ -10,7 +18,7 @@ import {
 } from './dto/fidelizacion.dto';
 import { FidelizacionService } from './fidelizacion.service';
 
-@Permiso('crm.ver')
+@Permiso('crm.fidelizacion.ver')
 @Controller('fidelizacion')
 export class FidelizacionController {
   constructor(private readonly service: FidelizacionService) {}
@@ -18,7 +26,8 @@ export class FidelizacionController {
     return this.service.configuracion(auth.tenantId);
   }
   @RequiereCapacidad('fidelizacion')
-  @Permiso('crm.configurar_fidelizacion')
+  @Permiso('crm.fidelizacion.gestionar')
+  @RequiereVista('crm.fidelizacion.ver')
   @Patch('configuracion')
   actualizar(
     @CurrentSession() auth: CurrentAuth,
@@ -35,7 +44,8 @@ export class FidelizacionController {
   ) {
     return this.service.cuenta(auth, clienteId);
   }
-  @Permiso('crm.configurar_fidelizacion')
+  @Permiso('crm.fidelizacion.gestionar')
+  @RequiereVista('crm.fidelizacion.ver')
   @RequiereCapacidad('fidelizacion')
   @Post('clientes/:clienteId/ajustes')
   ajustar(
@@ -46,19 +56,46 @@ export class FidelizacionController {
     return this.service.ajustar(auth, clienteId, dto);
   }
   @RequiereCapacidad('fidelizacion')
-  @Permiso('comercial.gestionar')
+  @Permiso('comercial.ordenes.gestionar', 'comercial.presupuestos.gestionar')
   @Post('clientes/:clienteId/simular')
-  simular(
+  async simular(
     @CurrentSession() auth: CurrentAuth,
     @Param('clienteId') clienteId: string,
     @Body() dto: SimularFidelizacionDto,
   ) {
-    return this.service.simular(
-      auth.tenantId,
-      clienteId,
-      dto.margen,
-      dto.total,
-      dto.canjePuntos,
-    );
+    if (
+      dto.presupuestoBaseId &&
+      !auth.permisos?.has('comercial.presupuestos.gestionar')
+    )
+      throw new ForbiddenException(
+        'No tenés permiso para editar presupuestos.',
+      );
+    const reservados = dto.presupuestoBaseId
+      ? await this.service.puntosReservaPresupuesto(
+          auth.tenantId,
+          clienteId,
+          dto.presupuestoBaseId,
+        )
+      : 0;
+    const conoceMargen =
+      auth.permisos?.has('finanzas.ver_margenes') && dto.margen != null;
+    const { snapshot: _configuracionPrivada, ...resultado } =
+      await this.service.simular(
+        auth.tenantId,
+        clienteId,
+        conoceMargen ? dto.margen! : 0,
+        dto.total,
+        dto.canjePuntos,
+        reservados,
+      );
+    // El canje depende del saldo y la venta. No necesita exponer ni inventar
+    // costos: la acumulación definitiva se calcula en el servidor al emitir.
+    return conoceMargen
+      ? resultado
+      : {
+          ...resultado,
+          puntosEstimados: null,
+          puntosEstimadosMonto: null,
+        };
   }
 }

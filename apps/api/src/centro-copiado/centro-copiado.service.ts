@@ -38,6 +38,7 @@ import { dataCotizacionItemTomo } from './persistencia-tomo';
 import {
   calcularHojas,
   construirSegmento,
+  preparacionesPorDocumento,
   resolverVariantePapel,
   variantesCubre,
   pliegoDeDoc,
@@ -491,7 +492,7 @@ export class CentroCopiadoService {
    */
   async reparar(tenantId: string, actorUserId?: string) {
     await this.capacidades.exigir(tenantId, 'centro_copiado');
-    await provisionarPlantillaCentroCopiado(this.prisma, tenantId);
+    await this.asegurarPlantilla(tenantId);
     const config = await this.configDe(tenantId);
     await this.prisma.$transaction(async (tx) => {
       await this.regenerarCandidatas(tx, tenantId, config);
@@ -503,6 +504,28 @@ export class CentroCopiadoService {
       });
     });
     return this.getConfig(tenantId);
+  }
+
+  private async asegurarPlantilla(tenantId: string) {
+    const resultado = await provisionarPlantillaCentroCopiado(
+      this.prisma,
+      tenantId,
+    );
+    if (resultado.estado !== 'omitido') return;
+
+    const requisitos: Record<string, string> = {
+      'sin IMPRESORA_LASER':
+        'Agregá una impresora láser en Maquinaria y completá su configuración hasta que esté lista y activa.',
+      'sin papeles SUSTRATO_HOJA':
+        'Agregá un papel en hojas en Materiales, con al menos una variante activa.',
+      "sin subcategoría 'papeleria_comercial'":
+        'Falta la categoría comercial Papelería comercial. Pedí a soporte que revise el catálogo del sistema.',
+    };
+    // No guardar una configuración que parece activada cuando todavía no
+    // existe el producto ni la ruta que necesita el módulo.
+    throw new ConflictException(
+      `No se pudo inicializar el Centro de Copiado. ${requisitos[resultado.motivo] ?? 'Revisá las máquinas y los papeles disponibles antes de volver a intentar.'}`,
+    );
   }
 
   /**
@@ -828,7 +851,7 @@ export class CentroCopiadoService {
     // El producto y su ruta son infraestructura del módulo. Se provisionan
     // antes del commit de configuración; desde este punto, config + margen +
     // tiempos + candidatas se escriben como una sola unidad.
-    await provisionarPlantillaCentroCopiado(this.prisma, tenantId);
+    await this.asegurarPlantilla(tenantId);
     const jsonOrNull = (v: unknown) =>
       v == null ? Prisma.DbNull : (v as never);
     await this.prisma.$transaction(async (tx) => {
@@ -1951,6 +1974,11 @@ export class CentroCopiadoService {
     await this.validarOperacion(tenantId, dto, ctx);
     const gruposById = new Map((dto.grupos ?? []).map((g) => [g.id, g]));
 
+    const preparaciones = preparacionesPorDocumento(
+      dto.documentos as DocumentoInput[],
+      ctx,
+    );
+
     // Un documento agrupado usa los `juegos` del tomo como copias efectivas.
     const documentos = await Promise.all(
       dto.documentos.map((doc) => {
@@ -1961,7 +1989,7 @@ export class CentroCopiadoService {
         return this.cotizarDocumento(
           tenantId,
           doc as DocumentoInput,
-          ctx,
+          { ...ctx, cobraSetup: preparaciones.get(doc.id) ?? ctx.cobraSetup },
           copias,
           periodo,
           dto.clienteId,
@@ -2193,7 +2221,7 @@ export class CentroCopiadoService {
       if (!c) throw new NotFoundException('No se encontró la cotización.');
       if (c.estado !== 'borrador') {
         throw new BadRequestException(
-          'Solo se pueden agregar items a una cotización en borrador.',
+          'Sólo se pueden agregar items a una cotización sin formalizar. Creá una nueva versión del presupuesto.',
         );
       }
       return c.id;
@@ -2647,9 +2675,15 @@ export class CentroCopiadoService {
       ? terminaciones.join(', ')
       : 'Ninguna';
 
+    const preparaciones = preparacionesPorDocumento(docs, ctx);
     const segs = await Promise.all(
       docs.map(async (doc) => {
-        const prep = this.prepararDoc(doc, ctx, grupo, grupoCargaId);
+        const prep = this.prepararDoc(
+          doc,
+          { ...ctx, cobraSetup: preparaciones.get(doc.id) ?? ctx.cobraSetup },
+          grupo,
+          grupoCargaId,
+        );
         if (!prep.jobContext)
           return { doc, prep, cot: null, error: prep.error };
         const r = await this.motor.cotizar({
@@ -3091,19 +3125,20 @@ export class CentroCopiadoService {
       if (cotizacionId) {
         const existente = await tx.cotizacion.findFirst({
           where: { id: cotizacionId, tenantId },
-          select: { id: true, estado: true, tipoCambioId: true },
+          select: { id: true, estado: true, numero: true, tipoCambioId: true },
         });
         if (!existente) {
           throw new NotFoundException('No se encontró la cotización.');
         }
-        if (existente.estado !== 'borrador') {
+        if (existente.estado !== 'borrador' || existente.numero) {
           throw new BadRequestException(
-            'Solo se pueden agregar items a una cotización en borrador.',
+            'Sólo se pueden agregar items a una cotización sin formalizar. Creá una nueva versión del presupuesto.',
           );
         }
         const cambioId = monedaCotizacionContext.getStore()?.cambio.id;
-        if (cambioId) {
-          if (existente.tipoCambioId && existente.tipoCambioId !== cambioId)
+        {
+          // Bloquear incluso sin tipo de cambio: una emisión concurrente congela los items.
+          if (cambioId && existente.tipoCambioId && existente.tipoCambioId !== cambioId)
             throw new BadRequestException(
               'El tipo de cambio del tomo no coincide con la cotización.',
             );
@@ -3112,9 +3147,10 @@ export class CentroCopiadoService {
               id: cotizacionId,
               tenantId,
               estado: 'borrador',
+              numero: null,
               tipoCambioId: existente.tipoCambioId,
             },
-            data: { tipoCambioId: cambioId, updatedAt: new Date() },
+            data: { ...(cambioId ? { tipoCambioId: cambioId } : {}), updatedAt: new Date() },
           });
           if (lock.count !== 1)
             throw new BadRequestException(

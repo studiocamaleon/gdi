@@ -1,3 +1,6 @@
+import './instrument';
+import { reportarFallo, cerrarMonitoreo } from '../common/observabilidad';
+import { textoErrorLog } from '../common/log-seguro';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentosWorkerModule } from './documentos-worker.module';
@@ -22,10 +25,9 @@ async function bootstrap() {
     'PdfBootstrap',
   );
 }
-void bootstrap().catch((error: unknown) => {
-  Logger.error(
-    error instanceof Error ? error.stack : String(error),
-    'PdfBootstrap',
-  );
+void bootstrap().catch(async (error: unknown) => {
+  reportarFallo(error, { operacion: 'inicio' });
+  await cerrarMonitoreo();
+  Logger.error(textoErrorLog(error), 'PdfBootstrap');
   process.exitCode = 1;
 });

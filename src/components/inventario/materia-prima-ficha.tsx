@@ -1,4 +1,5 @@
 "use client";
+import { normalizarPerfilEstructural, seccionPerfil } from "../../../apps/api/src/inventario/perfil-estructural";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 
@@ -130,7 +131,7 @@ type FormState = {
 type MateriaPrimaFichaProps = {
   materiaPrima: MateriaPrima;
   proveedores: ProveedorOpcion[];
-  maquinas: MaquinaResumen[];
+  maquinas: Pick<MaquinaResumen, "id" | "nombre">[];
 };
 
 /**
@@ -223,7 +224,7 @@ function normalizeVarianteAtributos(
   attrs: Record<string, unknown>,
   templateId?: string,
 ): Record<string, unknown> {
-  const normalized = { ...attrs };
+  const normalized = templateId === "perfil_estructural_v1" ? normalizarPerfilEstructural(attrs) : { ...attrs };
   const normalizedTemplateId = getMateriaPrimaTemplate(templateId ?? "")?.id;
 
   if (SHEET_LIKE_TEMPLATE_IDS.has(normalizedTemplateId ?? "")) {
@@ -616,7 +617,7 @@ export function MateriaPrimaFicha({
   maquinas,
 }: MateriaPrimaFichaProps) {
   const conMateriales = useCapacidad("materiales");
-  const permisoGestionar = usePuede("inventario.gestionar");
+  const permisoGestionar = usePuede("inventario.materiales.gestionar");
   const puedeGestionar = conMateriales && permisoGestionar;
   const { moneda } = useConfigRegional();
   const themeClass = useDesignTheme();
@@ -841,7 +842,7 @@ export function MateriaPrimaFicha({
       attrs[key] = value;
     }
     setVariante(varianteId, {
-      atributosVarianteTexto: JSON.stringify(attrs),
+      atributosVarianteTexto: JSON.stringify(form.templateId === "perfil_estructural_v1" && key !== "seccion" ? { ...normalizarPerfilEstructural(attrs), [key]: value } : attrs),
     });
   };
 
@@ -1609,10 +1610,7 @@ export function MateriaPrimaFicha({
                                       : undefined
                                   }
                                   value={shown}
-                                  disabled={isSustratoHojaDimensionLocked(
-                                    variante,
-                                    key,
-                                  )}
+                                  disabled={(template?.id === "perfil_estructural_v1" && key === "seccion" && "seccionAnchoMm" in getVarianteAtributos(variante) && Boolean(seccionPerfil(getVarianteAtributos(variante)))) || isSustratoHojaDimensionLocked(variante, key)}
                                   onChange={(event) => {
                                     const texto = event.target.value;
                                     const numero = Number(

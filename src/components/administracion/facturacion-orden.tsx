@@ -1,4 +1,9 @@
 "use client";
+import {
+  FacturaDetalleSelector,
+  type DetalleFactura,
+} from "./factura-detalle-selector";
+import { ActionButton } from "@/components/design-system/action-button";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { montoCobroEnOrden } from "@/lib/cobro-aplicado";
@@ -32,9 +37,140 @@ import {
   reciboPdfUrl,
 } from "@/lib/administracion-api";
 import { formatFechaOrden, formatMonedaOrden } from "@/lib/ordenes-trabajo";
+import { formatearMoneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+
+/** Facturar es una acción fiscal independiente de editar los datos de la OT. */
+export function FacturarOrdenAccion({
+  ordenId,
+  numero,
+  total,
+  facturado,
+  descuentoTotal = 0,
+  habilitada = true,
+  bloqueada = false,
+  onFacturada,
+}: {
+  ordenId: string;
+  numero: string;
+  total: number;
+  facturado: number;
+  descuentoTotal?: number;
+  habilitada?: boolean;
+  bloqueada?: boolean;
+  onFacturada: () => void;
+}) {
+  const motivoId = React.useId();
+  const permiso = usePuede("administracion.facturacion.gestionar");
+  const capacidad = useCapacidad("fiscal_argentina");
+  const autorizada = permiso && capacidad && habilitada;
+  const [estado, setEstado] = React.useState<
+    "cargando" | "activa" | "inactiva" | "error"
+  >("cargando");
+  const [consultando, setConsultando] = React.useState(false);
+  const [saldoModal, setSaldoModal] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (!autorizada) return;
+    let vigente = true;
+    setEstado("cargando");
+    getFacturacionHabilitada()
+      .then((activa) => {
+        if (vigente) setEstado(activa ? "activa" : "inactiva");
+      })
+      .catch(() => {
+        if (vigente) setEstado("error");
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [autorizada, ordenId]);
+  React.useEffect(() => {
+    setSaldoModal(null);
+  }, [ordenId, bloqueada, autorizada]);
+  async function abrir() {
+    if (!autorizada || bloqueada || consultando || estado !== "activa") return;
+    setConsultando(true);
+    try {
+      // No usar como saldo definitivo la copia que llegó al abrir la ficha.
+      const actuales = await getComprobantes({ ordenId });
+      if (
+        actuales.some((c) => ["en_proceso", "por_verificar"].includes(c.estado))
+      ) {
+        toast.error(
+          "Hay un comprobante en proceso o por verificar. Revisalo antes de volver a facturar.",
+        );
+        return;
+      }
+      const neto = actuales.reduce((acum, c) => {
+        if (c.estado !== "emitido") return acum;
+        const monto =
+          c.ordenes.find((o) => o.ordenId === ordenId)?.monto ?? c.total;
+        return (
+          acum +
+          (c.tipo === "nota_credito"
+            ? -monto
+            : c.tipo === "factura"
+              ? monto
+              : 0)
+        );
+      }, 0);
+      const saldo = Math.max(0, total - Math.max(0, neto));
+      if (saldo <= 0.01) {
+        toast.info("La orden ya está facturada por completo.");
+        onFacturada();
+        return;
+      }
+      setSaldoModal(saldo);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo comprobar el saldo a facturar.",
+      );
+    } finally {
+      setConsultando(false);
+    }
+  }
+  if (!autorizada || total - facturado <= 0.01) return null;
+  const motivo = bloqueada
+    ? "Guardá o descartá los cambios de la orden antes de facturar."
+    : estado === "inactiva"
+      ? "Activá la facturación electrónica en Configuración → Integraciones."
+      : estado === "error"
+        ? "No se pudo consultar la facturación. Volvé a abrir la orden para reintentar."
+        : estado === "cargando"
+          ? "Comprobando facturación…"
+          : "Facturar esta orden";
+  return (
+    <>
+      <ActionButton
+        variant="outline"
+        isDisabled={bloqueada || consultando || estado !== "activa"}
+        aria-describedby={motivoId}
+        title={motivo}
+        onPress={() => void abrir()}
+      >
+        <ReceiptTextIcon />
+        {consultando ? "Consultando…" : "Facturar"}
+      </ActionButton>
+      <span id={motivoId} className="sr-only">
+        {motivo}
+      </span>
+      {saldoModal !== null && !bloqueada && (
+        <FacturarOrdenModal
+          ordenId={ordenId}
+          numero={numero}
+          saldoSinFacturar={saldoModal}
+          descuentoTotal={descuentoTotal}
+          onClose={() => setSaldoModal(null)}
+          onFacturada={onFacturada}
+        />
+      )}
+    </>
+  );
+}
 
 /** Fecha · método · recibo · acreditación · monto · acción. */
 const COLS_COBRO = "84px 1fr 118px 96px 108px 40px";
@@ -72,7 +208,6 @@ export function FacturarOrdenModal({
   ordenId,
   numero,
   saldoSinFacturar,
-  descuentoTotal = 0,
   onClose,
   onFacturada,
 }: {
@@ -80,29 +215,27 @@ export function FacturarOrdenModal({
   numero: string;
   saldoSinFacturar: number;
   /**
-   * Descuento comercial de la orden. Con descuento y facturación del 100%,
-   * el backend emite la factura DETALLADA (un renglón por producto con su
-   * bonificación) y el concepto no se usa — este prop sólo avisa eso.
+   * Conservado por compatibilidad con las fichas. El detalle ahora incluye
+   * productos y cargos aunque no haya descuentos.
    */
   descuentoTotal?: number;
   onClose: () => void;
   onFacturada: (comprobante: Comprobante) => void;
 }) {
   const { moneda } = useConfigRegional();
-  const [monto, setMonto] = React.useState(
-    String(Math.round(saldoSinFacturar)),
-  );
+  const saldoCentavos = Math.round(saldoSinFacturar * 100);
+  const [monto, setMonto] = React.useState(String(saldoCentavos / 100));
   const [concepto, setConcepto] = React.useState(
     `Trabajos de impresión — ${numero}`,
   );
+  const [detalle, setDetalle] = React.useState<DetalleFactura>("items");
   const [enviando, setEnviando] = React.useState(false);
 
   const montoNum = Number(monto);
   const valido =
     Number.isFinite(montoNum) &&
     montoNum > 0 &&
-    montoNum <= saldoSinFacturar + 0.01 &&
-    concepto.trim().length > 0;
+    montoNum <= saldoSinFacturar + 0.01;
 
   const emitir = async () => {
     if (!valido || enviando) return;
@@ -111,6 +244,7 @@ export function FacturarOrdenModal({
       const comprobante = await facturarOrden(ordenId, {
         monto: montoNum,
         concepto: concepto.trim(),
+        detalle,
       });
       if (comprobante.estado === "emitido") {
         toast.success(`Factura ${comprobante.numeroCompleto} emitida.`);
@@ -143,8 +277,9 @@ export function FacturarOrdenModal({
           </button>
           <h2>Facturar {numero}</h2>
           <div className="s">
-            Saldo sin facturar: {formatMonedaOrden(saldoSinFacturar, moneda)} ·
-            la factura queda vinculada a la orden
+            Saldo sin facturar:{" "}
+            {formatearMoneda(saldoSinFacturar, moneda, { decimales: 2 })} · la
+            factura queda vinculada a la orden
           </div>
         </div>
         <div className="acc-modal-body">
@@ -156,6 +291,8 @@ export function FacturarOrdenModal({
                   <span className="cf-cur">{moneda.simbolo}</span>
                   <input
                     type="number"
+                    step="0.01"
+                    min="0.01"
                     value={monto}
                     onChange={(e) => setMonto(e.target.value)}
                     placeholder="0"
@@ -166,9 +303,7 @@ export function FacturarOrdenModal({
                   <button
                     className="cf-max"
                     type="button"
-                    onClick={() =>
-                      setMonto(String(Math.round(saldoSinFacturar)))
-                    }
+                    onClick={() => setMonto(String(saldoCentavos / 100))}
                   >
                     100% del saldo
                   </button>
@@ -176,7 +311,7 @@ export function FacturarOrdenModal({
                     className="cf-max"
                     type="button"
                     onClick={() =>
-                      setMonto(String(Math.round(saldoSinFacturar / 2)))
+                      setMonto(String(Math.round(saldoCentavos / 2) / 100))
                     }
                   >
                     50%
@@ -194,27 +329,19 @@ export function FacturarOrdenModal({
                   </span>
                 ) : null}
               </label>
+              <FacturaDetalleSelector
+                value={detalle}
+                onChange={setDetalle}
+                disabled={enviando}
+              />
               <label className="cf-field">
-                <span className="cf-lbl">Concepto del renglón</span>
+                <span className="cf-lbl">Concepto del resumen (opcional)</span>
                 <input
                   type="text"
                   value={concepto}
                   onChange={(e) => setConcepto(e.target.value)}
                   placeholder="Trabajos de impresión…"
                 />
-                {descuentoTotal > 0 &&
-                Math.abs(montoNum - saldoSinFacturar) <= 0.5 ? (
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "var(--muted)",
-                      marginTop: 4,
-                    }}
-                  >
-                    La orden tiene descuento: la factura sale detallada por
-                    producto con su bonificación (el concepto no se imprime).
-                  </span>
-                ) : null}
               </label>
             </div>
             <div className="cf-actions">
@@ -300,6 +427,8 @@ export function ComprobantesOrdenTab({
   puedeFacturar,
   recargarToken = 0,
   soloLectura = false,
+  facturacionBloqueada = false,
+  onFacturada,
 }: {
   ordenId: string;
   numero: string;
@@ -314,6 +443,8 @@ export function ComprobantesOrdenTab({
    */
   recargarToken?: number;
   soloLectura?: boolean;
+  facturacionBloqueada?: boolean;
+  onFacturada?: () => void;
 }) {
   const { moneda } = useConfigRegional();
   const [comprobantes, setComprobantes] = React.useState<Comprobante[] | null>(
@@ -321,7 +452,6 @@ export function ComprobantesOrdenTab({
   );
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
   const [errorCobros, setErrorCobros] = React.useState(false);
-  const [facturarOpen, setFacturarOpen] = React.useState(false);
   const [refrescos, setRefrescos] = React.useState(0);
   /** La factura que se está por acreditar, o null. */
   const [ncPara, setNcPara] = React.useState<Comprobante | null>(null);
@@ -330,12 +460,11 @@ export function ComprobantesOrdenTab({
   );
   // Anular es otro permiso que facturar: emitir y deshacer no son lo mismo.
   const fiscalDisponible = useCapacidad("fiscal_argentina");
-  const puedeAnular = usePuede("administracion.anular");
-  // El botón Facturar sólo aparece con la integración AFIP activa. null =
-  // todavía no sabemos, así que no se muestra ni el botón ni el aviso.
-  const [facturacionActiva, setFacturacionActiva] = React.useState<
-    boolean | null
-  >(null);
+  const permisoAnular = usePuede("administracion.anular");
+  const permisoVerCobros = usePuede("administracion.cobrar.ver");
+  const puedeAnularCobro = permisoAnular && permisoVerCobros;
+  const permisoVerFacturacion = usePuede("administracion.facturacion.ver");
+  const puedeAnular = permisoAnular && permisoVerFacturacion;
 
   React.useEffect(() => {
     let activo = true;
@@ -347,9 +476,6 @@ export function ComprobantesOrdenTab({
     getCobros({ ordenId })
       .then((data) => activo && setCobros(data))
       .catch(() => activo && setErrorCobros(true));
-    getFacturacionHabilitada()
-      .then((h: boolean) => activo && setFacturacionActiva(h))
-      .catch(() => activo && setFacturacionActiva(false));
     return () => {
       activo = false;
     };
@@ -372,11 +498,9 @@ export function ComprobantesOrdenTab({
     cobros === null
       ? cobradoInicial
       : cobros.reduce((s, c) => s + montoCobroEnOrden(c), 0);
-  const saldoSinFacturar = Math.max(0, total - Math.max(0, facturado));
 
   React.useEffect(() => {
     if (!soloLectura) return;
-    setFacturarOpen(false);
     setNcPara(null);
     setCobroParaAnular(null);
   }, [soloLectura]);
@@ -397,38 +521,27 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Comprobantes fiscales <span className="ct">{listaComp.length}</span>
           </span>
-          {!soloLectura &&
-          puedeFacturar &&
-          facturacionActiva &&
-          saldoSinFacturar > 0.01 ? (
-            <button
-              type="button"
-              className="btn btn-primary sm"
-              onClick={() => setFacturarOpen(true)}
-            >
-              <ReceiptTextIcon />
-              Facturar
-            </button>
-          ) : !soloLectura &&
-            puedeFacturar &&
-            facturacionActiva === false &&
-            saldoSinFacturar > 0.01 ? (
-            // No se esconde sin explicar: se dice por qué y adónde ir.
-            <a className="otd-fact-off" href="/configuracion/integraciones">
-              Activá la facturación electrónica →
-            </a>
-          ) : null}
+          <FacturarOrdenAccion
+            ordenId={ordenId}
+            numero={numero}
+            total={total}
+            facturado={facturado}
+            habilitada={puedeFacturar}
+            bloqueada={facturacionBloqueada}
+            onFacturada={() => {
+              setRefrescos((n) => n + 1);
+              onFacturada?.();
+            }}
+          />
         </div>
         {comprobantes === null ? (
           <div className="mov-empty">Cargando comprobantes…</div>
         ) : listaComp.length === 0 ? (
           <div className="mov-empty">
             Esta orden no tiene comprobantes fiscales.
-            {soloLectura
-              ? " Activá Editar orden para gestionar comprobantes."
-              : puedeFacturar
-                ? " Facturala entera o parcial cuando lo necesites — la deuda del cliente corre igual, esté facturada o no."
-                : " Emití la orden para poder facturarla."}
+            {puedeFacturar
+              ? " Podés facturarla entera o parcialmente con permiso de facturación, sin editar la orden."
+              : " La facturación no está disponible para el estado o tratamiento fiscal de esta orden."}
           </div>
         ) : (
           <div className="mov-table fo-comps">
@@ -564,7 +677,7 @@ export function ComprobantesOrdenTab({
                   ) : null}
                 </span>
                 <span className="mov-comp">
-                  {c.numeroRecibo ? (
+                  {c.numeroRecibo && c.puedeAbrirRecibo !== false ? (
                     <a
                       className="mov-recibo"
                       href={reciboPdfUrl(c.id)}
@@ -575,7 +688,7 @@ export function ComprobantesOrdenTab({
                       {c.numeroRecibo}
                     </a>
                   ) : (
-                    "—"
+                    (c.numeroRecibo ?? "—")
                   )}
                 </span>
                 <span className="mov-comp">
@@ -587,7 +700,9 @@ export function ComprobantesOrdenTab({
                   {formatMonedaOrden(montoCobroEnOrden(c), moneda)}
                 </span>
                 <span className="fo-comp-acc">
-                  {!soloLectura && puedeAnular ? (
+                  {!soloLectura &&
+                  puedeAnularCobro &&
+                  c.puedeAbrirRecibo !== false ? (
                     <button
                       type="button"
                       className="fo-nc-btn"
@@ -622,18 +737,8 @@ export function ComprobantesOrdenTab({
         </Link>
       </div>
 
-      {!soloLectura && facturarOpen ? (
-        <FacturarOrdenModal
-          ordenId={ordenId}
-          numero={numero}
-          saldoSinFacturar={saldoSinFacturar}
-          onClose={() => setFacturarOpen(false)}
-          onFacturada={() => setRefrescos((n) => n + 1)}
-        />
-      ) : null}
-
       <ConfirmacionDestructiva
-        open={!soloLectura && cobroParaAnular !== null}
+        open={!soloLectura && puedeAnularCobro && cobroParaAnular !== null}
         onOpenChange={(open) => {
           if (!open) setCobroParaAnular(null);
         }}
@@ -652,7 +757,7 @@ export function ComprobantesOrdenTab({
         }}
         accionLabel="Anular cobro"
         onConfirmar={async (motivo) => {
-          if (soloLectura || !cobroParaAnular) return;
+          if (soloLectura || !puedeAnularCobro || !cobroParaAnular) return;
           try {
             await anularCobro(cobroParaAnular.id, {
               motivo,
@@ -672,7 +777,7 @@ export function ComprobantesOrdenTab({
       />
 
       <ConfirmacionDestructiva
-        open={!soloLectura && ncPara !== null}
+        open={!soloLectura && puedeAnular && ncPara !== null}
         onOpenChange={(open) => {
           if (!open) setNcPara(null);
         }}
@@ -691,7 +796,7 @@ export function ComprobantesOrdenTab({
         }}
         accionLabel="Emitir nota de crédito"
         onConfirmar={async (motivo) => {
-          if (soloLectura || !ncPara) return;
+          if (soloLectura || !puedeAnular || !ncPara) return;
           try {
             const nc = await notaCreditoOrden(ordenId, {
               comprobanteOrigenId: ncPara.id,

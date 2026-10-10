@@ -257,6 +257,15 @@ const analizar = (componentes: ComponenteFabricadoCosteado[]) =>
   });
 
 describe('F4 consolidación ejecutable', () => {
+  it('no reacomoda una impresión condicionada por la zona útil del corte posterior', async () => {
+    const n = nestingBase();
+    n.visualConfig!.restriccionCortePosterior = { pasos: ['laser'] };
+    const resultado = (await analizar([componente('A', n), componente('B', n)]))!;
+    expect(resultado.grupos).toHaveLength(0);
+    expect(resultado.exclusiones).toEqual(expect.arrayContaining([
+      expect.objectContaining({ motivo: expect.stringContaining('acomodo común de impresión y corte') }),
+    ]));
+  });
   it.each([false, true])('conserva costos independientes ante precedencia entre componentes (transitiva: %s)', async (transitiva) => {
     const componentes = [
       componente('A', nestingBase(), { nodoIncorporacionClave: 'ruta:control' }),

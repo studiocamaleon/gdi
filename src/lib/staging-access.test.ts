@@ -68,3 +68,10 @@ it("conserva la IP de Fly y reemplaza las cabeceras internas falsificadas", () =
 it.each(["", "1.2.3.4, 5.6.7.8", "10.0.0.1:123", "desconocida"])("no inventa una IP si Fly entrega %s", (ip) => {
   expect(() => cabecerasBackendStaging(new Headers({authorization,"fly-client-ip":ip}),new Headers())).toThrow();
 });
+
+it("rechaza credenciales alteradas de igual o diferente longitud", () => {
+  for (const supplied of [authorization.slice(0, -1), authorization + "x", authorization.replace("Basic", "basic"), `Basic ${Buffer.from(`ensayo:${password}x`).toString("base64")}`]) {
+    expect(controlAccesoStaging(new Headers({ authorization: supplied }))?.status).toBe(401);
+  }
+  expect(controlAccesoStaging(new Headers({ authorization }))).toBeNull();
+});

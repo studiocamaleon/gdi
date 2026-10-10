@@ -3,20 +3,26 @@ import { Controller, Get, Post, Query } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { EtaService } from './eta.service';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 
-@Permiso('produccion.ver')
+@Permiso("produccion.planificacion.ver")
 @RequiereCapacidad('eta_capacidad')
 @Controller('eta')
 export class EtaController {
   constructor(private readonly eta: EtaService) {}
 
   /** Contexto y reloj del servidor para la previsión comercial. No reserva capacidad. */
+  @Permiso('produccion.planificacion.ver', 'comercial.ordenes.ver', 'comercial.presupuestos.ver')
   @Get('contexto-prevision')
   async contextoPrevision(@CurrentSession() auth: CurrentAuth) {
     const contexto = await this.eta.contextoSimulacion(auth.tenantId);
     return {
       ...contexto,
+      // La previsión necesita ocupación y dependencias, no la identidad comercial
+      // de los trabajos que ya están en el taller.
+      items: auth.permisos?.has('produccion.planificacion.ver')
+        ? contexto.items
+        : contexto.items.map((item) => ({ ...item, nombre: 'Trabajo programado', ordenNumero: '' })),
       ahora: contexto.ahora.toISOString(),
       medianas: [...contexto.medianas],
       noLaborables: [...contexto.noLaborables],
@@ -52,7 +58,8 @@ export class EtaController {
 
   /** Dispara la foto del día para este tenant (backfill / "actualizar ahora"). */
   @Post('snapshot')
-  @Permiso('produccion.supervisar')
+  @Permiso("produccion.supervisar")
+  @RequiereVista("produccion.planificacion.ver")
   async snapshot(@CurrentSession() auth: CurrentAuth) {
     const ok = await this.eta.snapshotDiario(auth.tenantId);
     return { ok };

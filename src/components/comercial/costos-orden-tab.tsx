@@ -21,6 +21,7 @@ import * as React from "react";
 import styles from "./costos-orden-tab.module.css";
 
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import {
   consolidarCostosOrden,
   cruzarRealVsCotizado,
@@ -58,20 +59,42 @@ function tonoDesvio(valor: number, umbral = 0.5) {
   return "";
 }
 
-export function CostosOrdenTab({
-  items,
-  cargosOrden,
-  ordenId,
-  sinComprobante = false,
-}: {
+type CostosOrdenProps = {
   items: PropuestaItem[];
   cargosOrden: PropuestaCargoDirecto[];
   /** Ausente mientras la propuesta no se emitió: no hay pasos reales todavía. */
   ordenId?: string;
   /** Orden sin comprobante: el consolidado oculta el IVA y cierra en el neto. */
   sinComprobante?: boolean;
-}) {
+};
+
+export function CostosOrdenTab(props: CostosOrdenProps) {
+  const puedeVer = usePuede("finanzas.ver_margenes");
+  if (!puedeVer || props.items.some((item) => !item.cotizacion.costos)) {
+    return (
+      <div className="orden-tab-empty">
+        <div className="ttl">Costos no disponibles</div>
+        <div className="sub">
+          {!puedeVer
+            ? "Tu acceso no incluye costos ni márgenes."
+            : "Falta el detalle de costos de una cotización. El precio de venta se conserva."}
+        </div>
+      </div>
+    );
+  }
+  return <CostosOrdenContenido {...props} />;
+}
+
+function CostosOrdenContenido({
+  items,
+  cargosOrden,
+  ordenId,
+  sinComprobante = false,
+}: CostosOrdenProps) {
   const { moneda } = useConfigRegional();
+  const puedeVerOrdenes = usePuede("comercial.ordenes.ver");
+  const puedeVerCobros = usePuede("administracion.cobrar.ver");
+  const consultarCobros = puedeVerOrdenes || puedeVerCobros;
   const fmt = (v: number) => formatCurrency(v, moneda);
   const consolidado = React.useMemo(
     () => consolidarCostosOrden(items, cargosOrden),
@@ -111,7 +134,7 @@ export function CostosOrdenTab({
   // la REAL de cada forma de pago (efectivo = 0). Sólo si hay pasarela cotizada.
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
   React.useEffect(() => {
-    if (!ordenId || consolidado.comisionesPasarelaTotal <= 0) return;
+    if (!ordenId || !consultarCobros || consolidado.comisionesPasarelaTotal <= 0) return;
     let vigente = true;
     setCobros(null);
     getCobros({ ordenId })
@@ -120,7 +143,7 @@ export function CostosOrdenTab({
     return () => {
       vigente = false;
     };
-  }, [ordenId, consolidado.comisionesPasarelaTotal]);
+  }, [ordenId, consultarCobros, consolidado.comisionesPasarelaTotal]);
 
   const reconPasarela = React.useMemo<ComisionPasarelaReconciliacion | null>(
     () =>
@@ -190,7 +213,7 @@ export function CostosOrdenTab({
         </section>
       )}
 
-      {ordenId && consolidado.comisionesPasarelaTotal > 0 ? (
+      {ordenId && consultarCobros && consolidado.comisionesPasarelaTotal > 0 ? (
         <ComisionPasarelaSeccion recon={reconPasarela} fmt={fmt} />
       ) : null}
     </div>

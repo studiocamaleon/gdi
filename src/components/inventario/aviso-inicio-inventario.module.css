@@ -1,0 +1,71 @@
+.aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.icono {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+.icono svg {
+  width: 22px;
+  height: 22px;
+}
+.etiqueta {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted-text);
+}
+.aviso h3 {
+  margin: 5px 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.aviso p {
+  max-width: 670px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.aviso small {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-text);
+}
+.estado {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  background: var(--surface-secondary);
+}
+@media (max-width: 850px) {
+  .aviso {
+    flex-wrap: wrap;
+    padding: 18px;
+  }
+  .aviso > div {
+    flex: 1;
+    min-width: 180px;
+  }
+  .estado {
+    margin-left: 58px;
+  }
+}

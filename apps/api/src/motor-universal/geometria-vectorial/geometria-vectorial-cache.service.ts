@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import Redis from 'ioredis';
@@ -21,9 +22,15 @@ import {
   type SolucionNesting,
 } from './contrato-nesting';
 
+import {
+  CLAVES_CACHE_VECTORIAL,
+  OPERAR_CACHE_VECTORIAL,
+  PRESUPUESTO_CACHE_VECTORIAL as CUPO,
+  serializarEntradaCache,
+} from './cache-vectorial-presupuesto';
+
 const CACHE_TTL_DEFAULT_MS = 7 * 24 * 60 * 60 * 1000;
-const CACHE_MAX_ENTRIES = 100;
-const CACHE_REDIS_PREFIX = 'grafo:geometry:analysis:v3';
+
 const CACHE_INTERNO = Symbol('geometria-vectorial-cache');
 type AnalisisSvgResultado = ReturnType<typeof analizarSvgFabricacion>;
 
@@ -66,7 +73,10 @@ type JobContextConCache = JobContext & {
 export class GeometriaVectorialCacheService implements OnApplicationShutdown {
   private readonly logger = new Logger(GeometriaVectorialCacheService.name);
   private readonly cacheTtlMs = cacheTtlMs();
-  private readonly entries = new Map<string, EntradaGeometriaVectorialCache>();
+  private readonly entries = new Map<
+    string,
+    { raw: string; bytes: number; tenantId: string; expiresAt: number }
+  >();
   private redis?: Redis;
 
   analizar(input: {
@@ -135,8 +145,7 @@ export class GeometriaVectorialCacheService implements OnApplicationShutdown {
       parametros: input.parametros,
       expiresAt: Date.now() + this.cacheTtlMs,
     };
-    this.entries.set(this.scopedKey(input.tenantId, cacheKey), entry);
-    this.prune();
+    this.guardarLocal(entry);
     return { entry, cacheHit: false };
   }
 
@@ -172,13 +181,24 @@ export class GeometriaVectorialCacheService implements OnApplicationShutdown {
   async guardarCompartido(
     entry: EntradaGeometriaVectorialCache,
   ): Promise<void> {
-    this.guardarLocal(entry);
-    await this.client().set(
-      claveRedis(entry.tenantId, entry.cacheKey),
-      JSON.stringify(entry),
-      'EX',
-      Math.ceil(this.cacheTtlMs / 1_000),
-    );
+    const raw = serializarEntradaCache(entry);
+    if (!raw || entry.expiresAt <= Date.now()) return;
+    this.guardarLocal(entry, raw);
+    try {
+      await this.client().eval(
+        OPERAR_CACHE_VECTORIAL,
+        CLAVES_CACHE_VECTORIAL.length,
+        ...CLAVES_CACHE_VECTORIAL,
+        'set',
+        claveRedis(entry.tenantId, entry.cacheKey),
+        raw,
+        entry.expiresAt,
+        this.cacheTtlMs,
+      );
+    } catch {
+      // Una caché prescindible no debe convertir un cálculo terminado en error.
+      this.avisarFalloCache();
+    }
   }
 
   async obtenerCompartido(
@@ -187,24 +207,40 @@ export class GeometriaVectorialCacheService implements OnApplicationShutdown {
   ): Promise<EntradaGeometriaVectorialCache | null> {
     const local = this.get(tenantId, cacheKey);
     if (local) return local;
-    const raw = await this.client().get(claveRedis(tenantId, cacheKey));
-    if (!raw) return null;
     try {
+      const raw = await this.client().eval(
+        OPERAR_CACHE_VECTORIAL,
+        CLAVES_CACHE_VECTORIAL.length,
+        ...CLAVES_CACHE_VECTORIAL,
+        'get',
+        claveRedis(tenantId, cacheKey),
+      );
+      if (typeof raw !== 'string' || Buffer.byteLength(raw) > CUPO.entradaBytes)
+        return null;
       const entry = JSON.parse(raw) as EntradaGeometriaVectorialCache;
       if (
+        !entry ||
         entry.tenantId !== tenantId ||
         entry.cacheKey !== cacheKey ||
+        !Number.isFinite(entry.expiresAt) ||
         entry.expiresAt <= Date.now()
       )
         return null;
-      this.guardarLocal(entry);
+      this.guardarLocal(entry, raw);
       return entry;
     } catch {
-      this.logger.warn(
-        `Entrada vectorial inválida en Redis para cache=${cacheKey}.`,
-      );
+      this.avisarFalloCache();
       return null;
     }
+  }
+
+  private ultimoAvisoCache = 0;
+  private avisarFalloCache(): void {
+    if (Date.now() - this.ultimoAvisoCache < 60_000) return;
+    this.ultimoAvisoCache = Date.now();
+    this.logger.warn(
+      'Caché vectorial compartida no disponible; se recalculará cuando sea necesario.',
+    );
   }
 
   async obtenerParaCotizacionCompartido(input: {
@@ -266,7 +302,7 @@ export class GeometriaVectorialCacheService implements OnApplicationShutdown {
     }
     this.entries.delete(scopedKey);
     this.entries.set(scopedKey, entry);
-    return entry;
+    return JSON.parse(entry.raw) as EntradaGeometriaVectorialCache;
   }
 
   private prune(): void {
@@ -274,23 +310,62 @@ export class GeometriaVectorialCacheService implements OnApplicationShutdown {
     for (const [key, entry] of this.entries) {
       if (entry.expiresAt <= now) this.entries.delete(key);
     }
-    while (this.entries.size > CACHE_MAX_ENTRIES) {
-      const oldestKey = this.entries.keys().next().value as string | undefined;
-      if (!oldestKey) break;
-      this.entries.delete(oldestKey);
-    }
   }
 
   onApplicationShutdown(): void {
     this.redis?.disconnect(false);
     this.redis = undefined;
+    this.entries.clear();
   }
 
-  private guardarLocal(entry: EntradaGeometriaVectorialCache): void {
+  private guardarLocal(
+    entry: EntradaGeometriaVectorialCache,
+    serializado?: string,
+  ): void {
+    const raw = serializado ?? serializarEntradaCache(entry);
+    if (!raw || entry.expiresAt <= Date.now()) return;
     const key = this.scopedKey(entry.tenantId, entry.cacheKey);
     this.entries.delete(key);
-    this.entries.set(key, entry);
     this.prune();
+    const bytes = Buffer.byteLength(raw);
+    let total = 0,
+      empresa = 0,
+      cantidad = 0;
+    for (const item of this.entries.values()) {
+      total += item.bytes;
+      if (item.tenantId === entry.tenantId) {
+        empresa += item.bytes;
+        cantidad++;
+      }
+    }
+    for (const [k, item] of this.entries) {
+      if (
+        cantidad < CUPO.empresaEntradas &&
+        empresa + bytes <= CUPO.localEmpresaBytes
+      )
+        break;
+      if (item.tenantId === entry.tenantId) {
+        this.entries.delete(k);
+        cantidad--;
+        empresa -= item.bytes;
+        total -= item.bytes;
+      }
+    }
+    for (const [k, item] of this.entries) {
+      if (
+        this.entries.size < CUPO.localEntradas &&
+        total + bytes <= CUPO.localBytes
+      )
+        break;
+      this.entries.delete(k);
+      total -= item.bytes;
+    }
+    this.entries.set(key, {
+      raw,
+      bytes,
+      tenantId: entry.tenantId,
+      expiresAt: entry.expiresAt,
+    });
   }
 
   private client(): Redis {
@@ -298,12 +373,13 @@ export class GeometriaVectorialCacheService implements OnApplicationShutdown {
     this.redis = new Redis(urlRedisWorkers(), {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
+      commandTimeout: 5_000,
       connectTimeout: Number(
         process.env.WORKER_REDIS_CONNECT_TIMEOUT_MS ?? 5_000,
       ),
     });
     this.redis.on('error', (error) =>
-      this.logger.warn(`Redis del cache vectorial: ${error.message}`),
+      this.logger.warn(`Redis del cache vectorial: ${textoErrorLog(error)}`),
     );
     return this.redis;
   }
@@ -362,5 +438,5 @@ function hash(value: string): string {
 }
 
 function claveRedis(tenantId: string, cacheKey: string): string {
-  return `${CACHE_REDIS_PREFIX}:${hash(tenantId)}:${cacheKey}`;
+  return `${hash(tenantId)}:${hash(cacheKey)}`;
 }

@@ -17,7 +17,7 @@ import { ConsultaColaDto } from './consulta-cola.dto';
 import { SimulacionNestingColaService } from './simulacion-nesting.service';
 import { SimularNestingColaDto } from './simular-nesting.dto';
 
-@Permiso('produccion.ver')
+@Permiso("produccion.colas.ver")
 @RequiereCapacidad('colas_produccion')
 @Controller('produccion/colas')
 export class ColasProduccionController {

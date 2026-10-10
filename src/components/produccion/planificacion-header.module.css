@@ -17,8 +17,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   flex: none;
 }
 .periodControls,
@@ -31,7 +30,7 @@
   gap: 8px;
 }
 .periodControls {
-  flex-wrap: wrap;
+  margin-left: auto;
 }
 .periodNavigation {
   gap: 4px;
@@ -46,28 +45,28 @@
   white-space: nowrap;
 }
 .periodControls .periodSelect {
-  width: 132px;
+  width: 116px;
 }
 .toolbar {
   --accent-foreground: var(--action-primary-foreground);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: 8px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   flex: none;
   background: var(--surface);
 }
 .search {
+  flex: 1;
   width: 320px;
   max-width: 100%;
   min-width: 0;
 }
 .toolbarActions {
-  flex-wrap: wrap;
-  gap: 8px 12px;
+  flex: none;
+  gap: 8px;
   min-width: 0;
 }
 .switchLabel {
@@ -97,18 +96,37 @@
   font: 11px / 1.5 var(--brand-mono);
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 720px) {
-  .stats { gap: 8px; }
-  .toolbar { padding: 12px; }
-  .toolbarActions { width: 100%; justify-content: space-between; }
-  .zoomControls { margin-left: auto; }
-  .zoomControls .zoomSlider { width: 80px; }
-  .search { width: 100%; }
+
+.expandButton { order: 3; }
+.compactSummary { display: none; flex: none; }
+.summaryButton { height: 30px; padding: 0; gap: 14px; font-size: 11px; color: var(--muted-text); }
+.summaryButton > span { display: inline-flex; align-items: center; gap: 4px; }
+.summaryButton strong { color: var(--foreground); font-weight: 600; }
+.summaryButton [data-warning="true"], .summaryButton [data-warning="true"] strong { color: var(--danger); }
+.summaryPopover dl { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-block: 8px; font-size: 12px; }
+.summaryPopover dd { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.optionsPopover { width: 340px; max-width: calc(100vw - 24px); max-height: var(--available-height); overflow-y: auto; gap: 18px; padding: 16px; }
+.optionsPopover .zoomControls { justify-content: space-between; }
+.optionsPopover .zoomSlider { width: auto; flex: 1; min-width: 50px; }
+.optionsPopover .rowActions { flex-wrap: wrap; }
+:global([data-expanded="true"]) .stats { display: none; }
+:global([data-expanded="true"]) .compactSummary { display: flex; }
+@media (max-width: 1280px), (max-height: 800px) {
+  .stats { display: none; }
+  .compactSummary { display: flex; }
+  .viewControls { flex-wrap: wrap; }
+  .toolbar { padding: 8px 12px; }
 }
-@media (max-width: 480px) {
-  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stats > :last-child { grid-column: 1 / -1; }
-  .periodControls { gap: 8px; width: 100%; }
-  .periodNavigation { flex: 1; justify-content: space-between; }
-  .periodControls .periodSelect { width: 100%; }
+@media (max-width: 720px) {
+  .viewControls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .expandButton { order: 0; }
+  .expandButton > span, .optionsLabel { display: none; }
+  .periodControls { grid-column: 1 / -1; width: 100%; gap: 6px; }
+  .periodNavigation { flex: 1; justify-content: space-between; min-width: 0; padding: 0; gap: 0; }
+  .periodYear { display: none; }
+  .periodControls .periodSelect { width: 96px; }
+  .toolbar { padding: 8px; }
+  .toolbarActions { gap: 4px; }
+  .summaryButton { gap: 10px; font-size: 10px; }
+  .summaryReview { display: none; }
 }

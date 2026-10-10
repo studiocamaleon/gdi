@@ -5,8 +5,11 @@ import { useDesignScope, useDesignTheme } from "@/components/design-system/appea
 import brandStyles from "./orden-configurador.module.css";
 import catalogStyles from "./producto-catalogo.module.css";
 import { ProductoCatalogoGlyph } from "./producto-catalogo-glyph";
+import { compararProductosPorUso } from "@/lib/productos-por-uso";
+import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import { ActionButton } from "@/components/design-system/action-button";
 import { MaterialAutomaticoStock } from "./material-automatico-stock";
+import { CantidadProductoInput } from "./cantidad-producto-input";
 import { MaterialSelectorRollo } from "./material-selector-rollo";
 import { crearGruposRollos } from "@/lib/selector-rollos";
 import { decisionesMaterialStock, hayDecisionMaterialStockPendiente } from "@/lib/seleccion-material-stock";
@@ -1466,6 +1469,7 @@ function mapSlotMaterial(
                 sku: v.sku,
                 nombreVariante: v.nombreVariante,
                 precioReferencia: v.precioReferencia,
+                precioCargado: v.precioCargado,
                 atributosVarianteJson: (v.atributosVarianteJson ??
                   null) as Record<string, unknown> | null,
               },
@@ -1502,7 +1506,7 @@ function mapSlotMaterial(
             colorLabel: getVariantColorLabel(
               item.variante.atributosVarianteJson,
             ),
-            missingPrice: Number(item.variante.precioReferencia ?? 0) <= 0,
+            missingPrice: item.variante.precioCargado === undefined ? Number(item.variante.precioReferencia ?? 0) <= 0 : !item.variante.precioCargado,
             sello: getSelloModelDeVariante(
               item.variante.atributosVarianteJson,
               display.label,
@@ -1716,6 +1720,7 @@ function getPreferredCandidate(candidates: MaquinaCandidataComercial[]) {
  *  según el trabajo y eso viaja como override de perfil
  *  (`perfilSeleccionado_<configPasoId>`, que el motor ya valida). */
 type ComplejidadCorteComercial = {
+  base: BaseDelPaso;
   configPasoId: string;
   nombreVisible: string | null;
   familiaCodigo: string;
@@ -1725,34 +1730,6 @@ type ComplejidadCorteComercial = {
   /** Ordenadas de más rápida a más lenta (fácil → complejo). */
   opciones: Array<{ perfilId: string; nombre: string }>;
 };
-
-/** Letra grande = corte fácil (formas grandes), letra chica = corte complejo
- *  (detalle intrincado). Mismo rol visual que los cuadraditos del modo de
- *  color: se entiende sin leer. */
-function complejidadCorteGlyph(rank: number, total: number) {
-  const sizes = total <= 2 ? [20, 11] : [20, 15, 10];
-  const size = sizes[Math.min(rank, sizes.length - 1)] ?? 10;
-  const y = 13 + size * 0.36;
-  return (
-    <svg
-      className="ap-sheet-ico"
-      viewBox="0 0 26 26"
-      fill="none"
-      aria-hidden="true"
-    >
-      <text
-        x="13"
-        y={y}
-        textAnchor="middle"
-        fontSize={size}
-        fontWeight={800}
-        fill="#14141a"
-      >
-        A
-      </text>
-    </svg>
-  );
-}
 
 function getComplejidadCorte(
   ruta: RutaAlternativaDetalle | null,
@@ -1764,10 +1741,11 @@ function getComplejidadCorte(
       .filter(isExecutableConfigPaso)
       .filter(includeConfig)
       .map((config): ComplejidadCorteComercial | null => {
-        if (config.rutaPaso.familiaCodigo !== "plotter_corte") return null;
         const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+        if (leerNivelesPaso(params) || params.nivelesUnificados === true) return null;
         const candidata = getActiveCandidateForConfig(config, motorConfig);
         const maquina = candidata?.maquina ?? config.maquinaM1;
+        if (config.rutaPaso.familiaCodigo !== "plotter_corte" && maquina?.plantilla?.toUpperCase() !== "PLOTTER_DE_CORTE") return null;
         const perfiles = (maquina?.perfilesOperativos ?? []).filter(
           (perfil) =>
             perfil.activo !== false &&
@@ -1817,6 +1795,13 @@ function getComplejidadCorte(
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion ?? "OBLIGATORIO",
           defaultId,
+          base: {
+            usaTiempoDeMaquina: true,
+            maquina: {
+              ...getMaquinaParaNivel(config, motorConfig)!,
+              perfilDefaultId: defaultId,
+            },
+          },
           opciones: opciones.map((perfil) => ({
             perfilId: perfil.id,
             nombre: perfil.nombre ?? "Perfil",
@@ -1837,6 +1822,23 @@ function getActiveCandidateForConfig(
     ? candidates.find((candidate) => candidate.maquinaId === selectedId)
     : null;
   return selected ?? getPreferredCandidate(candidates);
+}
+
+function getMaquinaParaNivel(
+  config: ConfigPasoDetalle,
+  motorConfig: Pick<MotorConfigState, "seleccionMaquina">,
+): BaseDelPaso["maquina"] {
+  const candidata = getActiveCandidateForConfig(config, motorConfig);
+  const maquina = candidata?.maquina ?? config.maquinaM1;
+  if (!maquina) return null;
+  return {
+    id: maquina.id,
+    nombre: maquina.nombre,
+    perfilDefaultId: candidata ? candidata.perfilDefaultId : config.perfilM1?.id,
+    perfiles: (maquina.perfilesOperativos ?? [])
+      .filter((perfil) => perfil.activo !== false)
+      .map((perfil) => ({ ...perfil, nombre: perfil.nombre ?? "Perfil" })),
+  };
 }
 
 // Los modos se listan de menos a más tinta: sin impresión → 1 tinta → CMYK →
@@ -2055,6 +2057,8 @@ function getModosColorComercial(
  * excluyente, como el modo de color. Ver docs/cargos-por-paso-analisis-y-plan.md §8.
  */
 type NivelComercial = {
+  /** Compatibilidad con cotizaciones anteriores a niveles unificados. */
+  perfilAnterior?: boolean;
   configPasoId: string;
   nombreVisible: string | null;
   familiaCodigo: string;
@@ -2074,6 +2078,9 @@ function tienePasoTiempoManual(config: ConfigPasoDetalle): boolean {
 function getNivelesComercial(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+  motorConfig: Pick<MotorConfigState, "seleccionMaquina"> = {
+    seleccionMaquina: {},
+  },
 ): NivelComercial[] {
   return (
     ruta?.configPasos
@@ -2107,6 +2114,16 @@ function getNivelesComercial(
           modoActivacion: config.modoActivacion,
           config: { ...niveles, opciones },
           base: {
+            usaTiempoDeMaquina:
+              config.modoTiempo === "T-3" ||
+              config.rutaPaso.familiaCodigo === "corte_laser",
+            maquina: getMaquinaParaNivel(config, motorConfig),
+            perfilesPorOperacion: params.cotizarOperacionesVectoriales === true,
+            productividadHora: Number(params.productivityValue) || null,
+            unidadProductividad:
+              config.modoTiempo !== "T-2" ? null : typeof params.productivityUnit === "string"
+                ? params.productivityUnit
+                : "unidades_h",
             // Sin nivel aplicado: es el punto de partida contra el que cada
             // nivel se compara.
             tiempoFijoMin: getTiempoFijoDeclaradoMin(config, {}),
@@ -2414,12 +2431,6 @@ function formatMedidasCm(
   return profundidadMm && profundidadMm > 0
     ? `${formatCmFromMm(anchoMm)} x ${formatCmFromMm(altoMm)} x ${formatCmFromMm(profundidadMm)} cm`
     : `${formatCmFromMm(anchoMm)} x ${formatCmFromMm(altoMm)} cm`;
-}
-
-function parseDecimalInput(value: string) {
-  const normalized = value.trim().replace(",", ".");
-  const parsed = Number.parseFloat(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function getTextAttr(
@@ -3212,7 +3223,7 @@ function getCotizacionNeto(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioNetoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -3220,7 +3231,7 @@ function getCotizacionTotal(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioBrutoTotal ??
     cotizacion.precio?.precioTotal ??
-    cotizacion.costos.total
+    (cotizacion.costos?.total ?? 0)
   );
 }
 
@@ -3228,7 +3239,7 @@ function getCotizacionUnitario(cotizacion: CotizacionExitosa) {
   return (
     cotizacion.desglosePrecio?.precioBrutoUnitario ??
     cotizacion.precio?.precioUnitario ??
-    cotizacion.costos.unitario
+    (cotizacion.costos?.unitario ?? 0)
   );
 }
 
@@ -3255,10 +3266,11 @@ function getCotizacionImpuestos(cotizacion: CotizacionExitosa) {
 }
 
 function getCotizacionMargen(cotizacion: CotizacionExitosa) {
+  if (!cotizacion.costos) return null;
   if (cotizacion.desglosePrecio)
     return cotizacion.desglosePrecio.margenEfectivoPct;
   const neto = getCotizacionNeto(cotizacion);
-  return neto > 0 ? ((neto - cotizacion.costos.total) / neto) * 100 : 0;
+  return neto > 0 ? ((neto - (cotizacion.costos?.total ?? 0)) / neto) * 100 : 0;
 }
 
 function labelPrecioUnitario(unidad: string) {
@@ -3904,6 +3916,7 @@ export function buildJobContext(
     const elegido = nivelEfectivo(
       item.config,
       config.seleccionNivel[item.configPasoId],
+      config.seleccionPerfil[item.configPasoId],
     );
     ctx[nivelPasoKey(item.configPasoId)] = elegido.codigo;
   }
@@ -5023,6 +5036,21 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
 }
 
 function getQtyFromItem(item: PropuestaItem) {
+  // En venta lineal directa, cantidad=1 es la pieza técnica (una franja del
+  // rollo), no los metros vendidos. Recuperar primero la medida comercial.
+  if (
+    item.unidadMedida === "metro_lineal" &&
+    item.jobContext?.modoCotizacionLineal === "directo"
+  ) {
+    for (const valor of [
+      item.jobContext.metrosLineales,
+      item.jobContext.cantidadComercial,
+      item.cantidad,
+    ]) {
+      const metros = Number(valor);
+      if (Number.isFinite(metros) && metros > 0) return metros;
+    }
+  }
   const ctxCantidad = Number(item.jobContext?.cantidad);
   if (Number.isFinite(ctxCantidad) && ctxCantidad > 0) return ctxCantidad;
   if (item.cotizacion.cantidadPedida && item.cotizacion.cantidadPedida > 0) {
@@ -5074,11 +5102,11 @@ function ApSelectStep({
 
   // Busca por título (y código), no por el texto descriptivo. Cada palabra de
   // la consulta debe estar presente (AND).
-  const queryTokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const queryTokens = normalizarBusqueda(query).split(/\s+/).filter(Boolean);
   const filtered = products.filter((product) => {
     if (family !== "Todos" && product.family !== family) return false;
     if (queryTokens.length === 0) return true;
-    const haystack = `${product.code} ${product.name}`.toLowerCase();
+    const haystack = normalizarBusqueda(`${product.code} ${product.name}`);
     return queryTokens.every((token) => haystack.includes(token));
   });
   const activeProduct =
@@ -5191,7 +5219,7 @@ function ApSelectStep({
 
       <div className={catalogStyles.results}>
         <div className={catalogStyles.resultHeading}>
-          <span>{query || family !== "Todos" ? "Resultados" : "Explorá el catálogo"}</span>
+          <span>{query || family !== "Todos" ? "Resultados · más usados primero" : "Más usados en tus órdenes"}</span>
           <span className={catalogStyles.resultCount} role="status" aria-live="polite">
             {filtered.length} producto{filtered.length === 1 ? "" : "s"}
           </span>
@@ -5589,8 +5617,10 @@ function ApConfigStep({
   // corren siempre van con los datos del producto; los de pasos opcionales,
   // dentro de la card del opcional activado.
   const nivelesComercialRuta = React.useMemo(
-    () => getNivelesComercial(rutaSel, includeVisibleConfig),
-    [rutaSel, includeVisibleConfig],
+    () => getNivelesComercial(rutaSel, includeVisibleConfig, {
+      seleccionMaquina: motorConfig.seleccionMaquina,
+    }),
+    [rutaSel, includeVisibleConfig, motorConfig.seleccionMaquina],
   );
   const nivelesPorConfigPaso = React.useMemo(
     () =>
@@ -6830,6 +6860,21 @@ function ApConfigStep({
       ? campo.etiqueta
       : `${paso.nombre} · ${campo.etiqueta}`;
 
+    if (campo.tipo === "enum") {
+      return (
+        <div className="ap-spec ap-spec-wide" key={key}>
+          <label>{label}</label>
+          {renderSegmentedControl(
+            label,
+            typeof valor === "string" ? valor : "",
+            campo.valoresPermitidos.map((value) => ({ value, label: etiquetaValorParam(value) })),
+            (value) => setParamComercial(paso.configPasoId, campo.campo, value),
+            true,
+          )}
+        </div>
+      );
+    }
+
     if (campo.tipo === "multi-enum") {
       const seleccion = Array.isArray(valor) ? valor.map(String) : [];
       return (
@@ -6928,6 +6973,21 @@ function ApConfigStep({
             const elegido = motorConfig.paramsComercial?.[paso.configPasoId];
             const valor = valorEfectivoCampo(campo, elegido);
             const rowKey = `plan-${paso.configPasoId}-${campo.campo}`;
+
+            if (campo.tipo === "enum") {
+              return (
+                <div className={`${plS.prow} ${plS.choiceRow}`} key={rowKey}>
+                  <span className={plS.plabel}>{campo.etiqueta}</span>
+                  {renderSegmentedControl(
+                    campo.etiqueta,
+                    typeof valor === "string" ? valor : "",
+                    campo.valoresPermitidos.map((value) => ({ value, label: etiquetaValorParam(value) })),
+                    (value) => setParamComercial(paso.configPasoId, campo.campo, value),
+                    true,
+                  )}
+                </div>
+              );
+            }
 
             if (campo.tipo === "number") {
               return (
@@ -7120,7 +7180,10 @@ function ApConfigStep({
       item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
     const elegido = nivelEfectivo(
       item.config,
-      motorConfig.seleccionNivel[item.configPasoId],
+      item.perfilAnterior
+        ? `perfil_${motorConfig.seleccionPerfil[item.configPasoId] || item.config.opciones.find((o) => o.esDefault)?.codigo.replace("perfil_", "") || ""}`
+        : motorConfig.seleccionNivel[item.configPasoId],
+      motorConfig.seleccionPerfil[item.configPasoId],
     );
     // El fallback vive acá y no en el lector: si el lector normalizara, el
     // editor no dejaría escribir un espacio (ver src/lib/niveles-paso.ts).
@@ -7137,13 +7200,20 @@ function ApConfigStep({
             : (describirNivel(opcion, item.base) ?? undefined),
       })),
       (codigo) =>
-        setMotorConfig((current) => ({
-          ...current,
-          seleccionNivel: {
-            ...current.seleccionNivel,
-            [item.configPasoId]: codigo,
-          },
-        })),
+        item.perfilAnterior
+          ? setPerfil(item.configPasoId, codigo.replace("perfil_", ""))
+          : setMotorConfig((current) => ({
+              ...current,
+              seleccionNivel: {
+                ...current.seleccionNivel,
+                [item.configPasoId]: codigo,
+              },
+              // El nivel unificado reemplaza la elección anterior de complejidad.
+              seleccionPerfil: {
+                ...current.seleccionPerfil,
+                [item.configPasoId]: "",
+              },
+            })),
     );
     if (opts?.sinTarjeta) {
       return (
@@ -7164,50 +7234,31 @@ function ApConfigStep({
       </div>
     );
   };
+  // Las configuraciones antiguas usan el mismo control, conservando su payload.
   const renderComplejidadField = (
     item: ComplejidadCorteComercial,
     opts?: { sinTarjeta?: boolean },
-  ) => {
-    const nombrePaso =
-      item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
-    const value =
-      motorConfig.seleccionPerfil[item.configPasoId] || item.defaultId || "";
-    const control = renderChoiceCards(
-      "Complejidad del corte",
-      value,
-      item.opciones.map((opcion, indice) => ({
-        value: opcion.perfilId,
-        label: opcion.nombre,
-        desc: opcion.perfilId === item.defaultId ? "por defecto" : undefined,
-        glyph: complejidadCorteGlyph(indice, item.opciones.length),
-      })),
-      // Elegir el default = sin override (el motor resuelve solo); cualquier
-      // otro nivel viaja como perfilSeleccionado_<paso>.
-      (next) =>
-        setPerfil(item.configPasoId, next === item.defaultId ? "" : next),
-      { columns: item.opciones.length <= 2 ? 2 : 3, layout: "row" },
+  ) =>
+    renderNivelField(
+      {
+        ...item,
+        perfilAnterior: true,
+        config: {
+          etiqueta: "¿Qué nivel de corte?",
+          opciones: item.opciones.map((opcion) => ({
+            codigo: `perfil_${opcion.perfilId}`,
+            nombre: opcion.nombre,
+            esDefault: opcion.perfilId === item.defaultId,
+            overrides: {
+              perfilesPorMaquina: item.base.maquina
+                ? { [item.base.maquina.id]: opcion.perfilId }
+                : undefined,
+            },
+          })),
+        },
+      },
+      opts,
     );
-    if (opts?.sinTarjeta) {
-      return (
-        <div key={`complejidad-${item.configPasoId}`}>
-          <span className={seC.sub} title={nombrePaso}>
-            Complejidad del corte
-          </span>
-          {control}
-        </div>
-      );
-    }
-    return (
-      <div className={seC.card} key={`complejidad-${item.configPasoId}`}>
-        <div className={seC.gh} title={nombrePaso}>
-          {complejidadesPrincipales.length === 1
-            ? "Complejidad del corte"
-            : `${nombrePaso} · complejidad`}
-        </div>
-        <div className={seC.body}>{control}</div>
-      </div>
-    );
-  };
   // El bloque de copias (tipo de copia + hojas por talonario) se muestra si el
   // producto es de subcategoría "talonarios" O si su ruta realmente usa
   // `tipoCopia` (algún talonario está en otra subcategoría, ej. papelería).
@@ -7480,6 +7531,17 @@ function ApConfigStep({
   const unidadCantidadVisible = cuentaProductosVectoriales
     ? "u."
     : product.unidad;
+  const permiteCantidadDecimal =
+    !cuentaProductosVectoriales &&
+    ["ml", "m²", "m2"].includes(product.unidad.toLowerCase());
+  const pasoCantidad = permiteCantidadDecimal ? 0.1 : 1;
+  const ajustarCantidad = (direccion: number) =>
+    setCantidad(
+      Math.max(
+        cuentaProductosVectoriales ? 1 : 0,
+        Number((qty + direccion * pasoCantidad).toFixed(6)),
+      ),
+    );
   const renderCantidadCard = () => (
     <div className={seC.card}>
       <div className={seC.gh}>
@@ -7525,36 +7587,24 @@ function ApConfigStep({
             type="button"
             className="ap-qty-btn"
             aria-label="Disminuir cantidad"
-            onClick={() =>
-              setCantidad(Math.max(cuentaProductosVectoriales ? 1 : 0, qty - 1))
-            }
+            onClick={() => ajustarCantidad(-1)}
           >
             <MinusIcon />
           </button>
-          <input
-            type="number"
-            aria-label={
+          <CantidadProductoInput
+            ariaLabel={
               cuentaProductosVectoriales ? "Cantidad de productos" : "Cantidad"
             }
             value={qty}
-            step={
-              cuentaProductosVectoriales
-                ? 1
-                : product.unidad === "m²" || product.unidad === "ml"
-                  ? 0.1
-                  : 1
-            }
-            min={cuentaProductosVectoriales ? 1 : 0}
-            onChange={(event) =>
-              setCantidad(parseDecimalInput(event.target.value))
-            }
+            permiteDecimales={permiteCantidadDecimal}
+            onValueChange={setCantidad}
           />
           <span className="ap-qty-unit">{unidadCantidadVisible}</span>
           <button
             type="button"
             className="ap-qty-btn"
             aria-label="Aumentar cantidad"
-            onClick={() => setCantidad(qty + 1)}
+            onClick={() => ajustarCantidad(1)}
           >
             <PlusIcon />
           </button>
@@ -8183,6 +8233,12 @@ function ApConfigStep({
                       <label>Largo a cotizar</label>
                       {renderQuantityControl()}
                     </div>
+                    {minimoComercialStatus ? (
+                      <div className={`ap-minimum-alert ${minimoComercialStatus.kind === "blocked" ? "is-blocked" : "is-warning"}`}>
+                        <CircleAlertIcon />
+                        <span>{minimoComercialStatus.message}</span>
+                      </div>
+                    ) : null}
                     {infoRolloLineal?.anchoUtilCm ? (
                       <div className="ap-minimum-alert">
                         <Grid2X2Icon />
@@ -9470,15 +9526,15 @@ function ApConfigStep({
                   <div className="m-head">
                     <span>Margen bruto</span>
                     <span
-                      className={`m-val ${getCotizacionMargen(cotizacionExitosa) < 25 ? "warn" : ""}`}
+                      className={`m-val ${(getCotizacionMargen(cotizacionExitosa) ?? 100) < 25 ? "warn" : ""}`}
                     >
-                      {getCotizacionMargen(cotizacionExitosa).toFixed(1)}%
+                      {getCotizacionMargen(cotizacionExitosa)?.toFixed(1) ?? "—"}%
                     </span>
                   </div>
                   <div className="m-track">
                     <span
                       style={{
-                        width: `${Math.min(100, Math.max(0, getCotizacionMargen(cotizacionExitosa)))}%`,
+                        width: `${Math.min(100, Math.max(0, getCotizacionMargen(cotizacionExitosa) ?? 0))}%`,
                       }}
                     />
                   </div>
@@ -9661,7 +9717,7 @@ export function AgregarProductoSheet({
   const cotizacionAbortRef = React.useRef<AbortController | null>(null);
   const cotizacionScopeRef = React.useRef(crypto.randomUUID());
   const catalogProducts = React.useMemo(
-    () => productos.map(mapProductoReal),
+    () => [...productos].sort(compararProductosPorUso).map(mapProductoReal),
     [productos],
   );
   const geometriasComerciales = React.useMemo(
@@ -9758,7 +9814,7 @@ export function AgregarProductoSheet({
         setLoadingProductId(baseProduct.id);
         try {
           detalle = augmentDetalleConPasosExtras(
-            await getProductoById(baseProduct.id),
+            await getProductoById(baseProduct.id, true),
           );
           nextProduct = mapProductoReal(detalle);
         } catch {
@@ -9844,7 +9900,7 @@ export function AgregarProductoSheet({
       setLoadingProductId(picked.id);
       try {
         detalle = augmentDetalleConPasosExtras(
-          await getProductoById(picked.id),
+          await getProductoById(picked.id, true),
         );
         next = mapProductoReal(detalle);
       } catch {
@@ -9905,6 +9961,13 @@ export function AgregarProductoSheet({
 
   const cotizarActual = React.useCallback(async () => {
     if (!product?.real || !product.id || !productoDetalle) return;
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setCotizacion(null);
+      setCotizacionError(null);
+      setCotizacionTrabajo(null);
+      setCotizando(false);
+      return;
+    }
     if (isBlockedByMaterialVisual) return;
     if (motorConfig.importandoPiezasVectoriales) return;
     const configParaCotizar = completarNombresPiezas(motorConfig);
@@ -10275,6 +10338,10 @@ export function AgregarProductoSheet({
   const addCurrent = React.useCallback(
     (keepOpen: boolean) => {
       if (!product) return;
+      if (!Number.isFinite(qty) || qty <= 0) {
+        toast.error("Ingresá una cantidad mayor a cero antes de guardar.");
+        return;
+      }
       if (isBlockedByMaterialVisual) {
         toast.error("Completá la selección del material y su variante antes de guardar.");
         return;
@@ -10641,6 +10708,7 @@ export function AgregarProductoSheet({
                   onPress={() => addCurrent(true)}
                   isDisabled={
                     briefEditorOpen ||
+                    qty <= 0 ||
                     nombresPiezasIncompletos ||
                     (product.real &&
                       (!cotizacionExitosa ||
@@ -10661,6 +10729,7 @@ export function AgregarProductoSheet({
                 onPress={() => addCurrent(false)}
                 isDisabled={
                   briefEditorOpen ||
+                  qty <= 0 ||
                   nombresPiezasIncompletos ||
                   (product.real &&
                     (!cotizacionExitosa ||

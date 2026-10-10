@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { contratoSuscripcion } from '../suscripciones/contrato-suscripcion';
 import {
   bloquearCupoUsuarios,
@@ -5,6 +6,7 @@ import {
 } from '../suscripciones/cupos-usuarios';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -31,6 +33,8 @@ import { ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 import { bloquearIdentidad, MfaService } from './mfa.service';
+import { revocarAccesoEmpresa } from './revocar-acceso-empresa';
+import { mfaPlataformaCompleta } from './enrolamiento-plataforma';
 import type { AlcanceMfa } from './mfa-dispositivo-cookie';
 import { VerificarMfaDto } from './dto/perfil.dto';
 import {
@@ -119,7 +123,7 @@ export class AuthService {
         // "credenciales inválidas" mandaría a la persona a probar diez veces
         // la clave correcta.
         this.logger.warn(
-          `Login bloqueado por IP: ${user.email} desde ${ip || 'origen desconocido'}.`,
+          `Login bloqueado por restricción de IP para el usuario ${user.id}.`,
         );
         await this.registrarBloqueoPorIp(user.memberships[0], user.id, ip);
         throw new UnauthorizedException(
@@ -223,7 +227,7 @@ export class AuthService {
     } catch (error) {
       this.logger.error(
         'No pude registrar el bloqueo por IP.',
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -524,25 +528,83 @@ export class AuthService {
       throw new BadRequestException('La clave nueva tiene que ser distinta.');
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash: await bcrypt.hash(dto.nueva, 10),
-        debeCambiarPassword: false,
-      },
+    // El hash costoso se prepara antes del lock. Dentro se vuelve a comprobar
+    // la identidad: otro cambio/restablecimiento no puede usar la misma clave
+    // antigua ni dejar una contraseña nueva con sesiones anteriores vivas.
+    const passwordHash = await bcrypt.hash(dto.nueva, 10);
+    const accessToken = await this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, user.id);
+      const vigente = await tx.user.findUnique({ where: { id: user.id } });
+      const sesion = await tx.authSession.findFirst({
+        where: {
+          id: auth.sessionId,
+          userId: user.id,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+          impersonacionId: null,
+        },
+        include: { currentMembership: true },
+      });
+      if (!vigente?.activo || !sesion)
+        throw new UnauthorizedException('Volvé a iniciar sesión.');
+      const plataforma = auth.esPlataforma === true;
+      if (
+        (plataforma &&
+          (!vigente.rolPlataforma ||
+            sesion.currentTenantId ||
+            sesion.currentMembershipId)) ||
+        (!plataforma &&
+          (sesion.currentTenantId !== auth.tenantId ||
+            sesion.currentMembershipId !== auth.membershipId ||
+            !sesion.currentMembership?.activa))
+      )
+        throw new UnauthorizedException('Volvé a iniciar sesión.');
+      if (vigente.passwordHash !== user.passwordHash)
+        throw new BadRequestException(
+          'La contraseña cambió. Volvé a iniciar sesión.',
+        );
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash, debeCambiarPassword: false },
+      });
+      // Cambiar también el identificador corta una copia del token del mismo
+      // navegador. Conservar la edad/plazo evita extender su vida máxima.
+      const nuevaSesion = await tx.authSession.create({
+        data: {
+          userId: user.id,
+          currentTenantId: sesion.currentTenantId,
+          currentMembershipId: sesion.currentMembershipId,
+          mfaVerificadoEl: sesion.mfaVerificadoEl,
+          createdAt: sesion.createdAt,
+          expiresAt: sesion.expiresAt,
+        },
+      });
+      await tx.authSession.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+          id: { not: nuevaSesion.id },
+        },
+        data: { revokedAt: new Date() },
+      });
+      await tx.mfaChallenge.deleteMany({ where: { userId: user.id } });
+      await tx.mfaDispositivo.updateMany({
+        where: { userId: user.id, revocadoEl: null },
+        data: { revocadoEl: new Date() },
+      });
+      return this.issueToken({
+        sub: user.id,
+        sessionId: nuevaSesion.id,
+        tenantId: sesion.currentTenantId ?? '',
+        membershipId: sesion.currentMembershipId ?? '',
+        role: sesion.currentMembership?.rol ?? RolSistema.ADMINISTRADOR,
+        email: vigente.email,
+        ...(plataforma ? { plat: true } : {}),
+      });
     });
+    this.sessionCache.invalidarUsuario(user.id);
 
-    // Las demás sesiones se caen: cambiar la clave es lo que hace alguien que
-    // sospecha que se la sabe otro, y dejar vivas las sesiones abiertas lo
-    // dejaría igual que antes. La actual sigue, para no echarlo de la pantalla
-    // en la que está.
-    await this.prisma.authSession.updateMany({
-      where: { userId: user.id, revokedAt: null, id: { not: auth.sessionId } },
-      data: { revokedAt: new Date() },
-    });
-    this.sessionCache.invalidate(auth.sessionId);
-
-    return { ok: true as const };
+    return { ok: true as const, accessToken };
   }
 
   async logout(auth: CurrentAuth) {
@@ -561,23 +623,31 @@ export class AuthService {
    * La AuthSession lleva `impersonacionId` (sin membership) y expira JUNTO con
    * la impersonación, no a los 7 días: el token no puede sobrevivir a la
    * sesión que lo justifica. El staff opera con rol ADMINISTRADOR del tenant.
+   * El caller conserva bloqueado el origen validado, aporta su factor real
+   * y confirma la sesión de soporte/auditoría en esta misma transacción.
    * Ver docs/control-plane-diseno.md
    */
-  async emitirTokenImpersonacion(params: {
-    tenantId: string;
-    sesionImpersonacionId: string;
-    expiraEl: Date;
-    actorUserId: string;
-    actorNombre: string;
-  }): Promise<string> {
-    const session = await this.prisma.authSession.create({
+  async emitirTokenImpersonacion(
+    params: {
+      tenantId: string;
+      sesionImpersonacionId: string;
+      expiraEl: Date;
+      actorUserId: string;
+      actorNombre: string;
+      mfaVerificadoEl: Date;
+      mfaDispositivoId: string | null;
+    },
+    db: Prisma.TransactionClient,
+  ): Promise<string> {
+    const session = await db.authSession.create({
       data: {
         userId: params.actorUserId,
         currentTenantId: params.tenantId,
         currentMembershipId: null,
         impersonacionId: params.sesionImpersonacionId,
         expiresAt: params.expiraEl,
-        mfaVerificadoEl: new Date(),
+        mfaVerificadoEl: params.mfaVerificadoEl,
+        mfaDispositivoId: params.mfaDispositivoId,
       },
     });
     return this.issueToken({
@@ -607,34 +677,81 @@ export class AuthService {
     if (!auth.impersonacion) {
       throw new BadRequestException('No hay una impersonación en curso.');
     }
-    // Revoca la sesión de impersonación actual (defensa; el control plane ya
-    // la cerró al pedir salir, pero el token podría reusarse).
-    await this.prisma.authSession.update({
-      where: { id: auth.sessionId },
-      data: { revokedAt: new Date() },
+    const resultado = await this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, auth.userId);
+      const origen = await tx.authSession.findUnique({
+        where: { id: auth.sessionId },
+        include: { user: { include: { mfa: true } }, impersonacion: true },
+      });
+      const imp = origen?.impersonacion;
+      if (
+        !origen ||
+        origen.userId !== auth.userId ||
+        origen.revokedAt ||
+        origen.expiresAt <= new Date() ||
+        !origen.user.activo ||
+        origen.user.rolPlataforma !== 'ADMIN' ||
+        !mfaPlataformaCompleta(origen.user.mfa, origen.mfaVerificadoEl) ||
+        !imp ||
+        imp.id !== auth.impersonacion!.sesionId ||
+        imp.staffUserId !== auth.userId ||
+        imp.tenantId !== auth.tenantId ||
+        imp.cerradaEl ||
+        imp.expiraEl <= new Date()
+      ) {
+        throw new UnauthorizedException(
+          'La sesión de soporte ya no está disponible.',
+        );
+      }
+      // Consumir también el registro de soporte: dos salidas o un cierre
+      // desde otra réplica no pueden emitir dos sesiones personales.
+      const cierre = await tx.sesionImpersonacion.updateMany({
+        where: { id: imp.id, cerradaEl: null, expiraEl: { gt: new Date() } },
+        data: { cerradaEl: new Date(), motivoCierre: 'salida' },
+      });
+      if (cierre.count !== 1) {
+        throw new UnauthorizedException('La sesión de soporte ya terminó.');
+      }
+      const revocada = await tx.authSession.updateMany({
+        where: {
+          id: origen.id,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { revokedAt: new Date() },
+      });
+      if (revocada.count !== 1) {
+        throw new UnauthorizedException('La sesión de soporte fue revocada.');
+      }
+      await tx.plataformaEvento.create({
+        data: {
+          staffUserId: auth.userId,
+          tipo: 'impersonacion_cerrada',
+          tenantAfectadoId: imp.tenantId,
+          descripcion: 'Salió del tenant.',
+          datosJson: { sesionId: imp.id },
+        },
+      });
+      const membership = await tx.membership.findFirst({
+        where: { userId: auth.userId, activa: true, tenant: { activo: true } },
+        include: { tenant: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (!membership) return { accessToken: null };
+      const resp = await this.createSessionResponse(
+        origen.userId,
+        origen.user.email,
+        membership,
+        tx,
+        origen.user.nombreCompleto,
+        origen.user.rolPlataforma,
+        origen.mfaVerificadoEl!,
+        origen.mfaDispositivoId ?? undefined,
+      );
+      return { accessToken: resp.accessToken };
     });
-
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        userId: auth.impersonacion.actorUserId,
-        activa: true,
-        tenant: { activo: true },
-      },
-      include: { tenant: true },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (!membership) return { accessToken: null };
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: auth.impersonacion.actorUserId },
-      select: { email: true },
-    });
-    const resp = await this.createSessionResponse(
-      membership.userId,
-      user!.email,
-      membership,
-    );
-    return { accessToken: resp.accessToken };
+    this.sessionCache.invalidate(auth.sessionId);
+    return resultado;
   }
 
   async getInvitation(token: string) {
@@ -680,11 +797,16 @@ export class AuthService {
         throw new BadRequestException('La invitacion ya fue utilizada.');
       }
 
-      let user =
-        invitation.user ??
-        (await tx.user.findUnique({
-          where: { email: normalizedEmail },
-        }));
+      let user = await tx.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+      if (user) {
+        await bloquearIdentidad(tx, user.id);
+        // No reutilizar la foto de la invitación: la identidad pudo activar
+        // su contraseña/MFA mientras se aceptaba otra invitación.
+        user = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      }
+      const requiereLogin = Boolean(user?.passwordHash || user?.rolPlataforma);
 
       if (!user) {
         if (!payload.password) {
@@ -701,18 +823,11 @@ export class AuthService {
           },
         });
       } else if (!user.passwordHash) {
-        if (!payload.password) {
-          throw new BadRequestException(
-            'Debes definir una clave para activar el acceso.',
-          );
-        }
-
-        user = await tx.user.update({
-          where: { id: user.id },
-          data: {
-            passwordHash: await bcrypt.hash(payload.password, 10),
-          },
-        });
+        // Un administrador de otra empresa puede generar este enlace. No
+        // puede apropiarse de una identidad pendiente eligiéndole la clave.
+        throw new BadRequestException(
+          'Esta identidad tiene una activación pendiente. Su titular debe completar el acceso original.',
+        );
       }
 
       const membership = await tx.membership.upsert({
@@ -758,7 +873,7 @@ export class AuthService {
         where: { userId: user.id },
         select: { activatedAt: true },
       });
-      if (mfa?.activatedAt)
+      if (requiereLogin || mfa?.activatedAt || !user.activo)
         return { requiereLogin: true as const, accessToken: null };
 
       return this.createSessionResponse(
@@ -867,6 +982,11 @@ export class AuthService {
   }
 
   async switchTenant(auth: CurrentAuth, tenantId: string) {
+    if (auth.mcp || auth.impersonacion || auth.esPlataforma) {
+      throw new ForbiddenException(
+        'Esta acción requiere tu sesión personal de empresa.',
+      );
+    }
     const membership = await this.prisma.membership.findUnique({
       where: {
         userId_tenantId: {
@@ -883,13 +1003,29 @@ export class AuthService {
       throw new NotFoundException('No tienes acceso a esa empresa.');
     }
 
-    await this.prisma.authSession.update({
-      where: { id: auth.sessionId },
+    const cambio = await this.prisma.authSession.updateMany({
+      where: {
+        id: auth.sessionId,
+        userId: auth.userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+        currentTenantId: auth.tenantId,
+        currentMembershipId: auth.membershipId,
+        impersonacionId: null,
+        user: { activo: true },
+        currentTenant: { activo: true },
+        currentMembership: { activa: true },
+      },
       data: {
         currentTenantId: membership.tenantId,
         currentMembershipId: membership.id,
       },
     });
+    if (cambio.count !== 1) {
+      throw new UnauthorizedException(
+        'La sesión cambió, venció o fue revocada.',
+      );
+    }
     // El token nuevo reusa el sessionId con otro tenant/membership: invalidar
     // el cache para que la próxima request revalide contra la DB.
     this.sessionCache.invalidate(auth.sessionId);
@@ -1036,10 +1172,8 @@ export class AuthService {
     const invitationUrl = `${process.env.FRONTEND_URL?.split(',')[0]?.trim() ?? 'http://localhost:3000'}/aceptar-invitacion?token=${rawToken}`;
 
     // No logueamos la URL/token en claro (cualquiera con acceso a logs podría
-    // aceptar la invitación). Solo id + email; el enlace se entrega por retorno.
-    this.logger.log(
-      `Invitacion creada para ${normalizedEmail} (${invitation.id})`,
-    );
+    // aceptar la invitación). Sólo id; el enlace se entrega por retorno.
+    this.logger.log(`Invitación creada (${invitation.id}).`);
 
     return {
       invitationState: existingUser?.passwordHash
@@ -1082,11 +1216,13 @@ export class AuthService {
     empleadoId: string,
     userId: string,
   ) {
+    await bloquearIdentidad(tx, userId);
     await bloquearCupoUsuarios(tx, tenantId);
     await tx.membership.updateMany({
       where: { userId, tenantId },
       data: { activa: false },
     });
+    await revocarAccesoEmpresa(tx, tenantId, userId);
     await tx.empleado.update({
       where: { id: empleadoId },
       data: { userId: null },
@@ -1211,7 +1347,9 @@ export class AuthService {
     return {
       planNombre: contratoSuscripcion(suscripcion).nombre,
       capacidades: {
-        impresionDirecta: suscripcion.estado === 'activa' && contratoSuscripcion(suscripcion).funciones.impresion_directa === true,
+        impresionDirecta:
+          suscripcion.estado === 'activa' &&
+          contratoSuscripcion(suscripcion).funciones.impresion_directa === true,
       },
       estado: suscripcion.estado,
       estadoProveedor: suscripcion.estadoProveedor,

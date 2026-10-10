@@ -448,6 +448,15 @@ export class ProduccionService {
     ];
     const reglas: Array<{ tipo: 'paso'; valor: string }> = [];
     const empleadoIds = [...new Set(payload.empleadoIds ?? [])];
+    // Un cliente anterior que omite el campo conserva la modalidad existente.
+    const apoyosPrevios = payload.empleadoApoyoIds === undefined && exceptoEstacionId
+      ? await this.prisma.estacionEmpleado.findMany({
+          where: { tenantId: auth.tenantId, estacionId: exceptoEstacionId, asignacionAutomatica: false },
+          select: { empleadoId: true },
+        }) : [];
+    const empleadoApoyoIds = [...new Set(payload.empleadoApoyoIds ?? apoyosPrevios.map(p => p.empleadoId).filter(id => empleadoIds.includes(id)))];
+    if (empleadoApoyoIds.some(id => !empleadoIds.includes(id)))
+      throw new BadRequestException('El personal de apoyo debe estar habilitado en la estación.');
     const maquinaIds = [...new Set(payload.maquinaIds ?? [])];
     // Siempre verificar pertenencia de los UUID, aunque el registro en memoria
     // conozca pasos de otras empresas.
@@ -560,7 +569,7 @@ export class ProduccionService {
           'Completá el horario de cada empleado asignado.',
         );
     }
-    return { familias, empleadoIds, maquinaIds, reglas, horarios };
+    return { familias, empleadoIds, empleadoApoyoIds, maquinaIds, reglas, horarios };
   }
 
   /**
@@ -575,6 +584,7 @@ export class ProduccionService {
     listas: {
       familias: string[];
       empleadoIds: string[];
+      empleadoApoyoIds: string[];
       maquinaIds: string[];
       reglas: Array<{ tipo: string; valor: string }>;
       horarios: Array<{ empleadoId: string; calendario: CalendarioEstacion }>;
@@ -612,6 +622,7 @@ export class ProduccionService {
           tenantId: auth.tenantId,
           estacionId,
           empleadoId,
+          asignacionAutomatica: !listas.empleadoApoyoIds.includes(empleadoId),
         })),
       });
     }
@@ -682,6 +693,7 @@ export class ProduccionService {
       payload.equipoProduccionId ||
       payload.planificacionPorEmpleados ||
       payload.empleadoIds?.length ||
+      payload.empleadoApoyoIds?.length ||
       payload.horariosEmpleados?.length
     )
       await this.capacidades.exigir(auth.tenantId, 'equipos_produccion');
@@ -739,7 +751,7 @@ export class ProduccionService {
     ) {
       const miembros = await this.prisma.estacionEmpleado.findMany({
         where: { estacionId: id, tenantId: auth.tenantId },
-        select: { empleadoId: true },
+        select: { empleadoId: true, asignacionAutomatica: true },
       });
       const cambiaMiembros =
         payload.empleadoIds !== undefined &&
@@ -747,6 +759,9 @@ export class ProduccionService {
           JSON.stringify(miembros.map((m) => m.empleadoId).sort());
       if (
         cambiaMiembros ||
+        (payload.empleadoApoyoIds !== undefined &&
+          JSON.stringify([...new Set(payload.empleadoApoyoIds)].sort()) !==
+          JSON.stringify(miembros.filter(m => !m.asignacionAutomatica).map(m => m.empleadoId).sort())) ||
         payload.horariosEmpleados?.length ||
         (payload.equipoProduccionId !== undefined &&
           payload.equipoProduccionId !== existing.equipoProduccionId) ||
@@ -895,6 +910,7 @@ export class ProduccionService {
         .map((r) => ({ tipo: r.tipo, valor: r.valor })),
       empleados: item.empleados.map((fila) => ({
         id: fila.empleado.id,
+        asignacionAutomatica: fila.asignacionAutomatica,
         nombreCompleto: fila.empleado.nombreCompleto,
         sector: fila.empleado.sector,
         activo: fila.empleado.activo,

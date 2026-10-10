@@ -5,8 +5,8 @@ import { resumenOperacionPlan } from "@/lib/planificacion-geometria";
 import { leerModoOperacionMaquina } from "@/lib/demanda-humana";
 
 import Link from "next/link";
-import { useId, useMemo, useRef, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Clock3, Factory, Info, Layers3, ListTree, RefreshCw, TriangleAlert, X, ZoomIn, ZoomOut } from "lucide-react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, Factory, Info, Layers3, ListTree, Maximize2, Minimize2, RefreshCw, SlidersHorizontal, TriangleAlert, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Label, SearchField, Slider, Switch } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { SegmentedControl } from "@/components/design-system/choice-controls";
@@ -18,20 +18,24 @@ import focus from "@/components/design-system/field-focus.module.css";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { construirEje } from "@/lib/eje-laboral";
 import { claveFechaEnZona, instanteDe, sumarDiasAClave } from "@/lib/zona";
 import { abrirGruposRecorridoPlan, dependenciasPlan, entregaFinal, estadoEntregaPlan, etaConjuntoPlan, filtrarGruposPlan, filtrarRecorridoPlan, gruposPorOrdenes, gruposPorRecursos, hitosEntregasPlan, periodoCalendarioPlan, plazoEntregaPlan, rangoRecorridoPlan, type GrupoPlan, type OperacionPlan } from "@/lib/planificacion-vista";
 import { fechaHoraEta } from "@/lib/eta-fechas";
 import { etiquetaCalendario } from "@/lib/estaciones";
-import { duracionPlan, fechaPlan, grupoAbierto, PlanificacionGantt } from "./planificacion-gantt";
+import { duracionPlan, fechaPlan, grupoAbierto, PlanificacionGantt, type PosicionCalendarioPlan } from "./planificacion-gantt";
 import { type DatosPlanificacion, usePlanificacion } from "./use-planificacion";
 import styles from "./planificacion-view.module.css";
 import header from "./planificacion-header.module.css";
 
+import { ReprogramacionSheet } from "./reprogramacion-sheet";
+
 const NIVELES_ZOOM = [25, 50, 75, 100, 150, 200, 300, 400];
 
-export function PlanificacionView(inicial: DatosPlanificacion) {
+export function PlanificacionView(inicial: DatosPlanificacion & { puedeReprogramar?: boolean; puedeCambiarEntrega?: boolean }) {
   const scope = useDesignScope();
   const designTheme = useDesignTheme();
   const { className: legacyTheme, ...legacyScope } = useLegacyDesignScope();
@@ -45,10 +49,16 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
   const [volverAlInicio, setVolverAlInicio] = useState(0);
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
   const [seleccionId, setSeleccionId] = useState<string | null>(null);
+  const [edicionFecha, setEdicionFecha] = useState<"produccion" | "entrega" | null>(null);
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [verPendientes, setVerPendientes] = useState(false);
   const [mostrarDependencias, setMostrarDependencias] = useState(true);
   const [focoRecorrido, setFocoRecorrido] = useState(false);
+  const [ampliada, setAmpliada] = useState(false);
+  const ampliarRef = useRef<HTMLButtonElement>(null);
+  const posicionCalendario = useRef<PosicionCalendarioPlan | null>(null);
+  const leerPosicion = useCallback(() => posicionCalendario.current, []);
+  const guardarPosicion = useCallback((posicion: PosicionCalendarioPlan) => { posicionCalendario.current = posicion; }, []);
   const tituloDetalle = useRef<HTMLHeadingElement>(null);
   const tituloEstado = useRef<HTMLHeadingElement>(null);
   const seleccion = operaciones.find((op) => op.id === seleccionId) ?? null;
@@ -139,95 +149,7 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
     {error && <ActionButton variant="outline" onPress={() => void actualizar()}>Volver a intentar</ActionButton>}
   </section>;
 
-  return <section {...scope} data-visual="brand" className={`${legacyTheme ?? designTheme} ${layout.page} ${styles.page}`} aria-label="Planificación de producción" aria-busy={calculando}>
-    <h1 className="sr-only">Planificación de producción</h1>
-
-    {error && <Alert variant="destructive"><TriangleAlert /><AlertTitle>No se pudo completar la consulta</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-    {calculando && <Badge variant="secondary"><GdiSpinner />Actualizando fechas</Badge>}
-    {(datos.initialPartialWarning || datos.initialMeta.alcance !== "completo") && <Alert><Info /><AlertDescription>{datos.initialPartialWarning ?? "Tu acceso muestra sólo parte del taller. Esta proyección puede omitir carga de otros trabajos y no confirma la capacidad total."}</AlertDescription></Alert>}
-
-    {/* La identidad visual se comparte con el calendario; su geometría y cálculos se conservan. */}
-    <div {...scope} className={`${designTheme} ${header.stats}`}>
-      <ListMetric label="Órdenes en producción" value={numeroOrdenes} hint="Órdenes de trabajo" icon={ListTree} />
-      <ListMetric label="Operaciones con fecha" value={programadas} hint={`De ${operaciones.length} operaciones`} icon={CalendarDays} />
-      <ListMetric label="Entregas para revisar" value={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo} hint={`${ordenesVencidas} vencidas · ${ordenesEnRiesgo} en riesgo · ${ordenesPorRevisar} por confirmar`} icon={TriangleAlert} tone={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo ? "danger" : "neutral"} />
-    </div>
-
-    <div className={styles.workbench}>
-    <div {...scope} className={`${designTheme} ${header.viewControls}`}>
-      <SegmentedControl tone="graphite" aria-label="Agrupar planificación" value={modo} options={[
-        { value: "recursos", label: "Por recursos", icon: <Factory size={15} aria-hidden /> },
-        { value: "ordenes", label: "Por órdenes", icon: <ListTree size={15} aria-hidden /> },
-      ]} onChange={(valor) => { setModo(valor as "recursos" | "ordenes"); if (valor === "ordenes" && seleccionId) setAbiertos((actual) => ({ ...actual, ...abrirGruposRecorridoPlan(ordenes, relacionadas) })); }} />
-      <div className={header.periodControls}>
-        <div className={header.periodNavigation} role="group" aria-label="Navegar por el calendario">
-          <ActionButton isIconOnly variant="ghost" aria-label="Período anterior" isDisabled={desde <= hoy} onPress={() => cambiarPeriodo(sumarDiasAClave(desde, -Number(periodo)))}><ChevronLeft size={16} /></ActionButton>
-          <span className={header.periodLabel}>{fechaPlan(eje.dias[0]?.fecha ?? desde).slice(0, 5)} — {fechaPlan(hasta)}</span>
-          <ActionButton isIconOnly variant="ghost" aria-label="Período siguiente" onPress={() => cambiarPeriodo(sumarDiasAClave(desde, Number(periodo)))}><ChevronRight size={16} /></ActionButton>
-        </div>
-        <ActionButton variant="outline" onPress={() => { cambiarPeriodo(hoy); void actualizar(); }}>Ahora</ActionButton>
-        <SelectField className={header.periodSelect} aria-label="Período del calendario" options={[{ value: "7", label: "Semana" }, { value: "14", label: "2 semanas" }, { value: "recorrido", label: "Recorrido", disabled: !rangoRecorrido }]} value={recorridoVisible ? "recorrido" : periodo} onChange={(valor) => { if (valor === "recorrido") verRecorrido(); else if (valor) { setFocoRecorrido(false); setPeriodo(valor); } }} />
-      </div>
-    </div>
-
-    <div key={modo} className={styles.ganttCard} role="region" aria-label={`Calendario por ${modo === "recursos" ? "recursos" : "órdenes"}`}>
-      <div {...scope} className={`${designTheme} ${header.toolbar}`}>
-        <SearchField className={header.search} value={consulta} onChange={(valor) => { setFocoRecorrido(false); setConsulta(valor); }} aria-label="Buscar en planificación">
-          <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
-            <SearchField.SearchIcon />
-            <SearchField.Input placeholder="Buscar OT, cliente, lote o tarea…" />
-          </SearchField.Group>
-        </SearchField>
-        <div className={header.toolbarActions}>
-          <Switch size="sm" isSelected={mostrarDependencias} onChange={setMostrarDependencias}>
-            <Switch.Content className={header.switchLabel}>
-              <Switch.Control><Switch.Thumb /></Switch.Control>
-              <Label>Dependencias</Label>
-            </Switch.Content>
-          </Switch>
-          <div className={header.zoomControls} role="group" aria-label="Zoom horizontal" onKeyDownCapture={(event) => {
-            if (!(event.target instanceof HTMLInputElement) || (event.key !== "PageUp" && event.key !== "PageDown")) return;
-            event.preventDefault();
-            event.stopPropagation();
-            const salto = event.key === "PageUp" ? 25 : -25;
-            setZoom(actual => Math.min(400, Math.max(25, actual + salto)));
-          }}>
-            <span id={zoomLabelId}>Zoom<span className="sr-only"> horizontal, porcentaje</span></span>
-            <ActionButton variant="ghost" isIconOnly aria-label="Reducir zoom horizontal" title="Reducir zoom horizontal" isDisabled={zoom <= 25} onPress={() => setZoom(NIVELES_ZOOM.filter(nivel => nivel < zoom).at(-1) ?? 25)}><ZoomOut size={16} /></ActionButton>
-            <Slider className={header.zoomSlider} aria-labelledby={zoomLabelId} minValue={25} maxValue={400} step={5} value={zoom} onChange={valor => setZoom(typeof valor === "number" ? valor : valor[0] ?? 100)}>
-              <Slider.Track>
-                <Slider.Fill />
-                <Slider.Thumb aria-label="Zoom horizontal, porcentaje" />
-              </Slider.Track>
-            </Slider>
-            <ActionButton variant="ghost" isIconOnly aria-label="Aumentar zoom horizontal" title="Aumentar zoom horizontal" isDisabled={zoom >= 400} onPress={() => setZoom(NIVELES_ZOOM.find(nivel => nivel > zoom) ?? 400)}><ZoomIn size={16} /></ActionButton>
-            <output className={header.zoomValue} aria-label="Zoom actual">{zoom}%</output>
-          </div>
-          <div className={header.rowActions} role="group" aria-label="Desplegar o plegar filas">
-            <ActionButton variant="outline" onPress={() => expandir(true)}>Desplegar filas</ActionButton>
-            <ActionButton variant="outline" onPress={() => expandir(false)}>Plegar filas</ActionButton>
-          </div>
-          {seleccionId && <ActionButton variant="ghost" isIconOnly onPress={() => { setSeleccionId(null); setPanelAbierto(false); setFocoRecorrido(false); }} aria-label="Limpiar selección"><X size={16} /></ActionButton>}
-          <ActionButton variant="outline" isIconOnly onPress={() => void actualizar()} isDisabled={actualizando} aria-label="Actualizar planificación" title={actualizando ? "Actualizando planificación" : "Actualizar planificación"}>{actualizando ? <GdiSpinner /> : <RefreshCw size={16} />}</ActionButton>
-        </div>
-      </div>
-      <PlanificacionGantt grupos={grupos} entregas={entregas} modo={modo} eje={eje} desde={desde} hasta={hasta} zona={zona} ahora={ahora} zoom={zoom} volverAlInicio={volverAlInicio} abiertos={abiertos} alternar={alternar} seleccionId={seleccionId} relacionadas={relacionadas} mostrarDependencias={mostrarDependencias} seleccionar={seleccionarEnGantt} riesgo={riesgo} />
-      <div className={styles.legend}>
-        <div><span><i className={styles.legendOperator} />Operario</span><span><i className={styles.legendMachine} />Operación autónoma</span><span><i className={styles.legendWait} />Espera / fuera de horario</span><span><i className={styles.legendSelected} />Selección</span><span><i className={styles.legendRelated} />Relacionada</span><span><i className={styles.legendPartial} />Orientativa</span><span><i className={styles.legendDiamond} />Entrega</span></div>
-        {seleccion ? <div className={styles.selectionActions}>
-          <span className={styles.selectionText} title={`${seleccion.item.ordenNumero} · ${seleccion.item.loteEntrega?.nombre ?? seleccion.productoNombre} · ${seleccion.paso.nombre}`}>{seleccion.item.ordenNumero}{seleccion.item.loteEntrega ? ` · ${seleccion.item.loteEntrega.nombre}` : ""} · {seleccion.paso.nombre}</span>
-          <ActionButton variant="ghost" size="sm" onPress={verRecorrido} isDisabled={!rangoRecorrido}>Ver recorrido</ActionButton>
-          <ActionButton variant="outline" size="sm" onPress={() => setPanelAbierto(true)}>Ver detalle</ActionButton>
-        </div> : <span>{consulta ? `${visibles.size} de ${operaciones.length} operaciones` : `${operaciones.length} operaciones`} · Seleccioná una tarea para ver sus dependencias</span>}
-      </div>
-    </div>
-    </div>
-
-    <footer className={styles.footer}>
-      <div className={styles.footerNotes}><span>Calendario laboral · {zona.replaceAll("_", " ")} · Desplazá horizontalmente para recorrer los días</span><span>Consulta: {fechaHora(ahora)} · Indicadores sobre todas las órdenes accesibles.</span></div>
-      <ActionButton variant={pendientes.length || sinRuta.length ? "outline" : "ghost"} size="sm" onPress={() => setVerPendientes(true)}><Info size={16} aria-hidden />{pendientes.length + sinRuta.length ? `${pendientes.length + sinRuta.length} sin planificación completa` : "Estado de la planificación"}</ActionButton>
-    </footer>
-
+  const paneles = <>
     <Sheet open={panelAbierto && !!seleccion} onOpenChange={setPanelAbierto}>
       <SheetContent {...scope} {...legacyScope} className={`${legacyTheme ?? designTheme} ${styles.detailPanel}`} overlayClassName={`${designTheme} ${styles.detailOverlay}`} initialFocus={tituloDetalle}>
         {seleccion && <>
@@ -253,6 +175,9 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
               <dt>Fin previsto de la OT</dt><dd>{fechaHora(etaOrden.finEstimado)}</dd>
               <dt>Entrega final comprometida</dt><dd className={plazoOrden.vencida || plazoOrden.fueraDeFecha ? styles.fechaFueraDePlazo : undefined}>{fechaPlan(entregaOrden)}</dd>
             </dl>
+              {(inicial.puedeReprogramar || inicial.puedeCambiarEntrega) && <div className={styles.selectionActions}>
+                <ActionButton variant="outline" size="sm" onPress={() => { setPanelAbierto(false); setEdicionFecha(inicial.puedeCambiarEntrega ? "entrega" : "produccion"); }}><CalendarDays size={16} aria-hidden />Reprogramar</ActionButton>
+              </div>}
               {plazoSeleccion.vencida ? <Alert variant="destructive"><TriangleAlert /><AlertTitle>La fecha de entrega ya venció</AlertTitle><AlertDescription>El compromiso guardado es el {fechaPlan(entregaSeleccion)} y todavía hay producción pendiente.{etaSeleccion.finEstimado && ` Con la planificación actual, el fin productivo se estima para ${fechaHora(etaSeleccion.finEstimado)}.`}</AlertDescription></Alert> : plazoSeleccion.fueraDeFecha ? <Alert variant="destructive"><TriangleAlert /><AlertTitle>La producción proyectada supera la entrega</AlertTitle><AlertDescription>El compromiso es el {fechaPlan(entregaSeleccion)}; el fin productivo se estima para {fechaHora(etaSeleccion.finEstimado)}.</AlertDescription></Alert> : entregaSeleccion && estadoSeleccion === "prevista" ? <p className={styles.note}>La producción proyectada termina dentro de la fecha comprometida.</p> : !entregaSeleccion ? <p className={styles.note}>Este producto todavía no tiene una fecha de entrega comprometida.</p> : null}
               {(plazoOrden.vencida && !plazoSeleccion.vencida || plazoOrden.fueraDeFecha && !plazoSeleccion.fueraDeFecha) && <Alert variant="destructive"><TriangleAlert /><AlertTitle>Revisá también la entrega final de la OT</AlertTitle><AlertDescription>La OT tiene una entrega comprometida para el {fechaPlan(entregaOrden)} y su fin productivo se estima para {fechaHora(etaOrden.finEstimado)}.</AlertDescription></Alert>}
               {estadoSeleccion === "revision" && <Alert><Info /><AlertTitle>Proyección orientativa</AlertTitle><AlertDescription>{motivosRevisionSeleccion.length ? motivosRevisionSeleccion.join(" ") : "Faltan datos o hay dependencias sin confirmar."} Esta estimación puede cambiar al completar esos datos.</AlertDescription></Alert>}
@@ -283,6 +208,11 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
       </SheetContent>
     </Sheet>
 
+    {edicionFecha && seleccion && <ReprogramacionSheet key={`${seleccion.id}-${edicionFecha}`} pasoId={seleccion.id} paso={seleccion.paso.nombre}
+      trabajo={`${seleccion.item.ordenNumero} · ${seleccion.item.loteEntrega?.nombre ?? seleccion.productoNombre}`} zona={zona} inicio={seleccion.agenda?.inicio ?? null}
+      entrega={entregaSeleccion} tipo={edicionFecha} puedeReprogramar={!!inicial.puedeReprogramar} puedeCambiarEntrega={!!inicial.puedeCambiarEntrega} onClose={() => { setEdicionFecha(null); setPanelAbierto(true); }}
+      onSaved={() => { setEdicionFecha(null); setPanelAbierto(true); void actualizar(); }} />}
+
     <Sheet open={verPendientes} onOpenChange={setVerPendientes}><SheetContent {...scope} {...legacyScope} className={`${legacyTheme ?? designTheme} ${styles.detailPanel}`} overlayClassName={`${designTheme} ${styles.detailOverlay}`} initialFocus={tituloEstado}>
       <SheetHeader className={styles.detailHeader}><SheetTitle ref={tituloEstado} tabIndex={-1}>Estado de la planificación</SheetTitle><SheetDescription>Datos pendientes de las órdenes accesibles. Cambiar la vista o los filtros no los elimina del cálculo.</SheetDescription></SheetHeader>
       <div className={styles.detailBody}>
@@ -291,5 +221,138 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
         {sinRuta.map((item) => <div className={styles.pendingItem} key={item.id}><Badge variant="outline">{item.ordenNumero}</Badge><strong>{item.nombre}</strong><p>Este ítem no tiene una ruta productiva en el tablero.</p></div>)}
       </div>
     </SheetContent></Sheet>
+  </>;
+
+  const contenido = <section {...scope} data-visual="brand" data-expanded={ampliada || undefined} className={`${legacyTheme ?? designTheme} ${layout.page} ${styles.page}`} aria-label="Planificación de producción" aria-busy={calculando}>
+
+
+    {error && <Alert variant="destructive"><TriangleAlert /><AlertTitle>No se pudo completar la consulta</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+    {calculando && <Badge variant="secondary"><GdiSpinner />Actualizando fechas</Badge>}
+    {(datos.initialPartialWarning || datos.initialMeta.alcance !== "completo") && <Alert><Info /><AlertDescription>{datos.initialPartialWarning ?? "Tu acceso muestra sólo parte del taller. Esta proyección puede omitir carga de otros trabajos y no confirma la capacidad total."}</AlertDescription></Alert>}
+
+    <div className={header.compactSummary}>
+      <Popover>
+        <PopoverTrigger render={<Button variant="ghost" className={header.summaryButton} />} aria-label="Ver resumen de la planificación">
+          <span><strong>{numeroOrdenes}</strong> órdenes</span><span><strong>{operaciones.length}</strong> operaciones</span>
+          <span title="Entregas para revisar" data-warning={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo > 0}><TriangleAlert size={13} aria-hidden /><strong>{ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo}</strong><span>entregas<span className={header.summaryReview}> para revisar</span></span></span><ChevronDown size={14} aria-hidden />
+        </PopoverTrigger>
+        <PopoverContent align="start" className={header.summaryPopover}>
+          <PopoverTitle>Resumen de la planificación</PopoverTitle>
+          <dl><dt>Órdenes en producción</dt><dd>{numeroOrdenes}</dd><dt>Operaciones con fecha</dt><dd>{programadas} de {operaciones.length}</dd><dt>Entregas vencidas</dt><dd>{ordenesVencidas}</dd><dt>Entregas en riesgo</dt><dd>{ordenesEnRiesgo}</dd><dt>Entregas por confirmar</dt><dd>{ordenesPorRevisar}</dd></dl>
+          <p className={styles.note}>Indicadores sobre todas las órdenes accesibles.</p>
+        </PopoverContent>
+      </Popover>
+    </div>
+    <div {...scope} className={`${designTheme} ${header.stats}`}>
+      <ListMetric label="Órdenes en producción" value={numeroOrdenes} hint="Órdenes de trabajo" icon={ListTree} />
+      <ListMetric label="Operaciones con fecha" value={programadas} hint={`De ${operaciones.length} operaciones`} icon={CalendarDays} />
+      <ListMetric label="Entregas para revisar" value={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo} hint={`${ordenesVencidas} vencidas · ${ordenesEnRiesgo} en riesgo · ${ordenesPorRevisar} por confirmar`} icon={TriangleAlert} tone={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo ? "danger" : "neutral"} />
+    </div>
+
+    <div className={styles.workbench}>
+    <div {...scope} className={`${designTheme} ${header.viewControls}`}>
+      <SegmentedControl tone="graphite" aria-label="Agrupar planificación" value={modo} options={[
+        { value: "recursos", label: "Por recursos", icon: <Factory size={15} aria-hidden /> },
+        { value: "ordenes", label: "Por órdenes", icon: <ListTree size={15} aria-hidden /> },
+      ]} onChange={(valor) => { setModo(valor as "recursos" | "ordenes"); if (valor === "ordenes" && seleccionId) setAbiertos((actual) => ({ ...actual, ...abrirGruposRecorridoPlan(ordenes, relacionadas) })); }} />
+      <ActionButton ref={ampliarRef} className={header.expandButton} variant="outline" aria-label={ampliada ? "Cerrar planificación ampliada" : "Ampliar planificación"} aria-haspopup={ampliada ? undefined : "dialog"} onPress={() => setAmpliada(!ampliada)}>
+        {ampliada ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}<span>{ampliada ? "Cerrar ampliación" : "Ampliar"}</span>
+      </ActionButton>
+      <div className={header.periodControls}>
+        <div className={header.periodNavigation} role="group" aria-label="Navegar por el calendario">
+          <ActionButton isIconOnly variant="ghost" aria-label="Período anterior" isDisabled={desde <= hoy} onPress={() => cambiarPeriodo(sumarDiasAClave(desde, -Number(periodo)))}><ChevronLeft size={16} /></ActionButton>
+          <span className={header.periodLabel} title={`${fechaPlan(eje.dias[0]?.fecha ?? desde)} — ${fechaPlan(hasta)}`}>{fechaPlan(eje.dias[0]?.fecha ?? desde).slice(0, 5)} — {fechaPlan(hasta).slice(0, 5)}<span className={header.periodYear}>{fechaPlan(hasta).slice(5)}</span></span>
+          <ActionButton isIconOnly variant="ghost" aria-label="Período siguiente" onPress={() => cambiarPeriodo(sumarDiasAClave(desde, Number(periodo)))}><ChevronRight size={16} /></ActionButton>
+        </div>
+        <ActionButton variant="outline" onPress={() => { cambiarPeriodo(hoy); void actualizar(); }}>Ahora</ActionButton>
+        <SelectField className={header.periodSelect} aria-label="Período del calendario" options={[{ value: "7", label: "Semana" }, { value: "14", label: "2 semanas" }, { value: "recorrido", label: "Recorrido", disabled: !rangoRecorrido }]} value={recorridoVisible ? "recorrido" : periodo} onChange={(valor) => { if (valor === "recorrido") verRecorrido(); else if (valor) { setFocoRecorrido(false); setPeriodo(valor); } }} />
+      </div>
+    </div>
+
+    <div key={modo} className={styles.ganttCard} role="region" aria-label={`Calendario por ${modo === "recursos" ? "recursos" : "órdenes"}`}>
+      <div {...scope} className={`${designTheme} ${header.toolbar}`}>
+        <SearchField className={header.search} value={consulta} onChange={(valor) => { setFocoRecorrido(false); setConsulta(valor); }} aria-label="Buscar en planificación">
+          <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
+            <SearchField.SearchIcon />
+            <SearchField.Input placeholder="Buscar OT, cliente, lote o tarea…" />
+          </SearchField.Group>
+        </SearchField>
+        <div className={header.toolbarActions}>
+          <Popover>
+            <PopoverTrigger render={<Button variant="outline" />} aria-label="Opciones de vista"><SlidersHorizontal size={15} aria-hidden /><span className={header.optionsLabel}>Opciones de vista</span></PopoverTrigger>
+            <PopoverContent align="end" className={`${designTheme} ${header.optionsPopover}`}>
+              <PopoverTitle>Opciones de vista</PopoverTitle>
+              <Switch size="sm" isSelected={mostrarDependencias} onChange={setMostrarDependencias}>
+                <Switch.Content className={header.switchLabel}>
+                  <Switch.Control><Switch.Thumb /></Switch.Control>
+                  <Label>Dependencias</Label>
+                </Switch.Content>
+              </Switch>
+              <div className={header.zoomControls} role="group" aria-label="Zoom horizontal" onKeyDownCapture={(event) => {
+                if (!(event.target instanceof HTMLInputElement) || (event.key !== "PageUp" && event.key !== "PageDown")) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const salto = event.key === "PageUp" ? 25 : -25;
+                setZoom(actual => Math.min(400, Math.max(25, actual + salto)));
+              }}>
+                <span id={zoomLabelId}>Zoom<span className="sr-only"> horizontal, porcentaje</span></span>
+                <ActionButton variant="ghost" isIconOnly aria-label="Reducir zoom horizontal" title="Reducir zoom horizontal" isDisabled={zoom <= 25} onPress={() => setZoom(NIVELES_ZOOM.filter(nivel => nivel < zoom).at(-1) ?? 25)}><ZoomOut size={16} /></ActionButton>
+                <Slider className={header.zoomSlider} aria-labelledby={zoomLabelId} minValue={25} maxValue={400} step={5} value={zoom} onChange={valor => setZoom(typeof valor === "number" ? valor : valor[0] ?? 100)}>
+                  <Slider.Track>
+                    <Slider.Fill />
+                    <Slider.Thumb aria-label="Zoom horizontal, porcentaje" />
+                  </Slider.Track>
+                </Slider>
+                <ActionButton variant="ghost" isIconOnly aria-label="Aumentar zoom horizontal" title="Aumentar zoom horizontal" isDisabled={zoom >= 400} onPress={() => setZoom(NIVELES_ZOOM.find(nivel => nivel > zoom) ?? 400)}><ZoomIn size={16} /></ActionButton>
+                <output className={header.zoomValue} aria-label="Zoom actual">{zoom}%</output>
+              </div>
+              <div className={header.rowActions} role="group" aria-label="Desplegar o plegar filas">
+                <ActionButton variant="outline" onPress={() => expandir(true)}>Desplegar filas</ActionButton>
+                <ActionButton variant="outline" onPress={() => expandir(false)}>Plegar filas</ActionButton>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {seleccionId && <ActionButton variant="ghost" isIconOnly onPress={() => { setSeleccionId(null); setPanelAbierto(false); setFocoRecorrido(false); }} aria-label="Limpiar selección"><X size={16} /></ActionButton>}
+          <ActionButton variant="outline" isIconOnly onPress={() => void actualizar()} isDisabled={actualizando} aria-label="Actualizar planificación" title={actualizando ? "Actualizando planificación" : "Actualizar planificación"}>{actualizando ? <GdiSpinner /> : <RefreshCw size={16} />}</ActionButton>
+        </div>
+      </div>
+      <PlanificacionGantt leerPosicion={leerPosicion} guardarPosicion={guardarPosicion} grupos={grupos} entregas={entregas} modo={modo} eje={eje} desde={desde} hasta={hasta} zona={zona} ahora={ahora} zoom={zoom} volverAlInicio={volverAlInicio} abiertos={abiertos} alternar={alternar} seleccionId={seleccionId} relacionadas={relacionadas} mostrarDependencias={mostrarDependencias} seleccionar={seleccionarEnGantt} riesgo={riesgo} />
+      <div className={styles.legend}>
+        <div className={styles.calendarHelp}>
+          <Popover>
+            <PopoverTrigger render={<Button variant="ghost" size="sm" />}><Info size={14} aria-hidden />Referencias</PopoverTrigger>
+            <PopoverContent align="start" side="top" className={styles.referencesPopover}>
+              <PopoverTitle>Cómo leer la planificación</PopoverTitle>
+              <div className={styles.legendItems}><span><i className={styles.legendOperator} />Operario</span><span><i className={styles.legendMachine} />Operación autónoma</span><span><i className={styles.legendWait} />Espera / fuera de horario</span><span><i className={styles.legendSelected} />Selección</span><span><i className={styles.legendRelated} />Relacionada</span><span><i className={styles.legendPartial} />Orientativa</span><span><i className={styles.legendDiamond} />Entrega</span></div>
+              <p className={styles.note}>Calendario laboral · {zona.replaceAll("_", " ")}. Desplazá horizontalmente para recorrer los días.</p>
+              <p className={styles.note}>Consulta: {fechaHora(ahora)}. Seleccioná una tarea para ver sus dependencias y reprogramarla.</p>
+            </PopoverContent>
+          </Popover>
+          <ActionButton variant={pendientes.length || sinRuta.length ? "outline" : "ghost"} size="sm" onPress={() => setVerPendientes(true)} aria-label="Estado de la planificación"><Info size={14} aria-hidden />{pendientes.length + sinRuta.length ? `${pendientes.length + sinRuta.length} sin planificar` : "Estado"}</ActionButton>
+        </div>
+        {seleccion ? <div className={styles.selectionActions}>
+          <span className={styles.selectionText} title={`${seleccion.item.ordenNumero} · ${seleccion.item.loteEntrega?.nombre ?? seleccion.productoNombre} · ${seleccion.paso.nombre}`}>{seleccion.item.ordenNumero}{seleccion.item.loteEntrega ? ` · ${seleccion.item.loteEntrega.nombre}` : ""} · {seleccion.paso.nombre}</span>
+          <ActionButton variant="ghost" size="sm" onPress={verRecorrido} isDisabled={!rangoRecorrido}>Ver recorrido</ActionButton>
+          <ActionButton variant="outline" size="sm" onPress={() => setPanelAbierto(true)}>Ver detalle</ActionButton>
+        </div> : <span className={styles.operationCount}>{consulta ? `${visibles.size} de ${operaciones.length} operaciones` : `${operaciones.length} operaciones`}</span>}
+      </div>
+    </div>
+    </div>
+
+    {paneles}
   </section>;
+
+  return <>
+    {!ampliada && <><h1 className="sr-only">Planificación de producción</h1>{contenido}</>}
+    <Dialog open={ampliada} onOpenChange={(abierta, evento) => {
+      if (!abierta && (panelAbierto || edicionFecha || verPendientes)) { evento.cancel(); return; }
+      setAmpliada(abierta);
+    }}>
+      <DialogContent {...scope} {...legacyScope} className={`${legacyTheme ?? designTheme} ${styles.expandedDialog}`} showCloseButton={false} finalFocus={ampliarRef}>
+        <DialogTitle className="sr-only">Planificación ampliada</DialogTitle>
+        <DialogDescription className="sr-only">Calendario de producción a pantalla completa. Conserva los filtros, la selección y las fechas. Cerrá la ampliación para volver a la vista anterior.</DialogDescription>
+        {ampliada && contenido}
+      </DialogContent>
+    </Dialog>
+  </>;
 }

@@ -9,6 +9,10 @@ import {
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
 import { rutaLog } from '../ruta-log';
+import { errorParaLog } from '../log-seguro';
+import { reportarFallo } from '../observabilidad';
+import type { CurrentAuth } from '../../auth/auth.types';
+import { areaMonitoreo } from '../observabilidad-segura';
 
 /**
  * Filtro global de excepciones. Mapea errores conocidos de Prisma a códigos
@@ -22,7 +26,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
-    const req = ctx.getRequest<Request>();
+    const req = ctx.getRequest<
+      Request & { id?: unknown; auth?: CurrentAuth }
+    >();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Error interno del servidor.';
@@ -43,19 +49,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const where = `${req.method} ${rutaLog(req.url)}`;
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
-      // 5xx: error real, logueamos con stack para diagnóstico.
+      reportarFallo(exception, {
+        operacion: 'http',
+        status: String(status),
+        area: areaMonitoreo(req.path ?? req.url),
+        tenant_id: req.auth?.tenantId,
+        request_id: typeof req.id === 'string' ? req.id : undefined,
+      });
+      // 5xx: conservar categoría y ubicaciones, nunca datos de SQL/proveedores.
       this.logger.error(
         `${where} → ${status}`,
-        req.path === '/api/webhooks/whatsapp'
-          ? 'Falló el receptor de Meta; el proveedor puede reintentar.'
-          : exception instanceof Error
-            ? exception.stack
-            : String(exception),
+        JSON.stringify(errorParaLog(exception)),
       );
     } else {
       // 4xx: esperado (validación/negocio), log liviano.
-      const text = Array.isArray(message) ? message.join(', ') : message;
-      this.logger.warn(`${where} → ${status}: ${text}`);
+      this.logger.warn(`${where} → ${status}`);
     }
 
     res.status(status).json({

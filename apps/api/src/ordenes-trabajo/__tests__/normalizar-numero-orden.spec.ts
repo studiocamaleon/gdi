@@ -34,3 +34,11 @@ describe('normalizarNumeroOrden', () => {
     expect(normalizarNumeroOrden('---')).toBe('');
   });
 });
+
+
+it('colapsa entradas extensas sin dejar grupos para el recorte final', () => {
+  const separadores = '-'.repeat(100_000);
+  expect(normalizarNumeroOrden(`${separadores}ot${separadores}2026${separadores}0009${separadores}`))
+    .toBe('OT-2026-0009');
+  expect(normalizarNumeroOrden(separadores)).toBe('');
+});

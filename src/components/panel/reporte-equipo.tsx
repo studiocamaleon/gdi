@@ -19,7 +19,7 @@ import type { EquipoPanel, TabPanel } from "@/lib/panel-api";
 import { fechaDelReporte } from "@/lib/reporte-resumen";
 import { cn } from "@/lib/utils";
 import { TremorSparkAreaChart } from "./charts/tremor-charts";
-import { Metric, NoData, ReportCard, ReportSource } from "./reportes-ui";
+import { Metric, NoData, ReportCard, ReportSource, IvaReference, SalesScopeNote } from "./reportes-ui";
 import shared from "./reportes.module.css";
 import styles from "./reporte-equipo.module.css";
 
@@ -643,6 +643,7 @@ export function ReporteEquipo({ d }: { d: TabPanel<EquipoPanel> }) {
           <ArrowUpRightIcon className={shared.headerIcon} aria-hidden="true" />
         }
       >
+        <SalesScopeNote />
         {d.vendedores.length ? (
           <TableScroll label="Ventas por vendedor">
             <table
@@ -678,8 +679,8 @@ export function ReporteEquipo({ d }: { d: TabPanel<EquipoPanel> }) {
                       />
                     </th>
                     <td>{numero(v.ordenes)}</td>
-                    <td>{dinero(v.ticketPromedio)}</td>
-                    <td className={styles.emphasis}>{dinero(v.facturado)}</td>
+                    <td>{dinero(v.ticketPromedio)}<IvaReference value={v.ticketPromedioConIva} /></td>
+                    <td className={styles.emphasis}>{dinero(v.facturado)}<IvaReference value={v.facturadoConIva} /></td>
                     {d.margenesVisibles ? (
                       <td
                         data-negative={v.margenPct != null && v.margenPct < 0}

@@ -18,6 +18,7 @@ export const PREFIJO_ENLACE = {
   cobro: "c",
   encuesta: "e",
   aprobacion_documental: "a",
+  alta_cliente: "alta-cliente",
 } as const;
 
 export type TipoEnlacePublico = keyof typeof PREFIJO_ENLACE;

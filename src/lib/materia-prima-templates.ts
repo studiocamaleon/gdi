@@ -32,6 +32,7 @@ export type MateriaPrimaTemplateDef = {
   subfamilia: SubfamiliaMateriaPrima;
   tipoTecnico: string;
   unidadStock: UnidadMateriaPrima;
+  unidadUso?: UnidadMateriaPrima;
   unidadCompra: UnidadMateriaPrima;
   camposTecnicos: CampoTecnicoTemplate[];
   dimensionesVariante: string[];
@@ -2556,10 +2557,14 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     familia: "metal_estructura",
     subfamilia: "perfil_estructural",
     tipoTecnico: "perfil_estructural",
-    unidadStock: "metro_lineal",
-    unidadCompra: "unidad",
+    unidadStock: "barra",
+    unidadUso: "metro_lineal",
+    allowUnitSuffixKeys: ["seccionAnchoMm", "seccionAltoMm"],
+    unidadCompra: "barra",
     camposTecnicos: [
-      { key: "seccion", label: "Sección", type: "text", required: true },
+      { key: "seccion", label: "Sección / descripción", type: "text", required: true },
+      { key: "seccionAnchoMm", label: "Ancho exterior", type: "number", unit: "mm", required: false },
+      { key: "seccionAltoMm", label: "Alto exterior", type: "number", unit: "mm", required: false },
       {
         key: "espesor",
         label: "Espesor de pared",
@@ -2583,16 +2588,19 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       },
       {
         key: "largoBarra",
-        label: "Largo de la barra comercial (se cobran barras enteras)",
+        label: "Largo de barra",
+        descripcion: "Longitud de cada barra comercial. El despiece calcula las barras enteras necesarias, incluidos los cortes.",
         type: "number",
         unit: "m",
         required: false,
       },
     ],
-    dimensionesVariante: ["seccion", "material", "espesor"],
+    dimensionesVariante: ["seccion", "seccionAnchoMm", "seccionAltoMm", "espesor", "largoBarra", "material"],
     requiredAtributos: ["seccion", "material"],
     atributosIniciales: {
       seccion: "40×40 mm",
+      seccionAnchoMm: 40,
+      seccionAltoMm: 40,
       espesor: 1.6,
       material: "Acero",
       desarrolloSeccion: 0.16,

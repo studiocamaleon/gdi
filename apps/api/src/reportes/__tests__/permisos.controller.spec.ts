@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method -- Se inspeccionan metadatos; no se invocan los métodos. */
 import { OCULTA_MARGENES_KEY } from '../../auth/margenes.decorator';
 import { PERMISO_KEY } from '../../auth/permiso.decorator';
 import { ReportesController } from '../reportes.controller';
@@ -12,7 +13,7 @@ describe('permisos sensibles de ReportesController', () => {
     ).toBe(false);
     expect(
       Reflect.getMetadata(PERMISO_KEY, ReportesController.prototype.resumen),
-    ).toEqual(['reportes.ver_resumen']);
+    ).toEqual(['reportes.resumen.ver']);
   });
 
   it('editar umbrales no queda habilitado con el permiso general de lectura', () => {
@@ -21,6 +22,6 @@ describe('permisos sensibles de ReportesController', () => {
         PERMISO_KEY,
         ReportesController.prototype.actualizarUmbrales,
       ),
-    ).toEqual(['reportes.ver_resumen']);
+    ).toEqual(['reportes.resumen.ver']);
   });
 });

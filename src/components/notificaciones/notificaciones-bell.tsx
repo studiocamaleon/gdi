@@ -3,20 +3,19 @@
 import * as React from "react";
 import { Bell, CheckCheck, Wifi, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useNotificaciones } from "./notificaciones-provider";
+import { NotificacionItem } from "./notificacion-item";
 import { cn } from "@/lib/utils";
 import styles from "./notificaciones.module.css";
 
-const fecha = new Intl.DateTimeFormat("es-AR", {
-  day: "2-digit",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-export function NotificacionesBell({ triggerClassName }: { triggerClassName?: string } = {}) {
+export function NotificacionesBell({
+  triggerClassName,
+}: { triggerClassName?: string } = {}) {
   const router = useRouter();
   const [abierto, setAbierto] = React.useState(false);
+  const [pendiente, setPendiente] = React.useState<string | null>(null);
+  const guardando = React.useRef(false);
   const ref = React.useRef<HTMLDivElement>(null);
   const { notificaciones, noLeidas, estado, cargando, leer, leerTodas } =
     useNotificaciones();
@@ -37,11 +36,22 @@ export function NotificacionesBell({ triggerClassName }: { triggerClassName?: st
     };
   }, [abierto]);
 
-  const abrir = async (id: string, href: string | null) => {
-    await leer(id);
-    if (href) {
-      setAbierto(false);
-      router.push(href);
+  const marcar = async (id: string, href?: string | null) => {
+    if (guardando.current) return;
+    guardando.current = true;
+    setPendiente(id);
+    try {
+      if (id === "todas") await leerTodas();
+      else await leer(id);
+      if (href) {
+        setAbierto(false);
+        router.push(href);
+      }
+    } catch {
+      toast.error("No se pudo confirmar la lectura. Intentá nuevamente.");
+    } finally {
+      guardando.current = false;
+      setPendiente(null);
     }
   };
 
@@ -73,7 +83,8 @@ export function NotificacionesBell({ triggerClassName }: { triggerClassName?: st
               <button
                 type="button"
                 className={styles.readAll}
-                onClick={() => void leerTodas()}
+                disabled={pendiente !== null}
+                onClick={() => void marcar("todas")}
               >
                 <CheckCheck size={15} /> Marcar todas
               </button>
@@ -98,24 +109,14 @@ export function NotificacionesBell({ triggerClassName }: { triggerClassName?: st
               </div>
             ) : (
               notificaciones.map((item) => (
-                <button
-                  type="button"
+                <NotificacionItem
                   key={item.id}
-                  className={styles.item}
-                  data-unread={!item.leidaEl}
-                  data-severity={item.evento.severidad}
-                  onClick={() => void abrir(item.id, item.evento.href)}
-                >
-                  <span className={styles.dot} />
-                  <span className={styles.content}>
-                    <strong>{item.evento.titulo}</strong>
-                    <span>{item.evento.mensaje}</span>
-                    <small>
-                      {item.evento.actorNombre} ·{" "}
-                      {fecha.format(new Date(item.createdAt))}
-                    </small>
-                  </span>
-                </button>
+                  item={item}
+                  pendiente={pendiente === item.id || pendiente === "todas"}
+                  deshabilitado={pendiente !== null}
+                  onLeer={() => void marcar(item.id)}
+                  onAbrir={() => void marcar(item.id, item.evento.href)}
+                />
               ))
             )}
           </div>

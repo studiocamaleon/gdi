@@ -1,0 +1,10 @@
+*
+!package.json
+!package-lock.json
+!Dockerfile
+!lib/
+!lib/**
+!ejecutar.mjs
+!servicio.mjs
+!validar-destino.mjs
+!entrypoint.sh

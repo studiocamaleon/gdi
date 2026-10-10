@@ -8,7 +8,7 @@ export type ContextoAsignacionPersonal = {
   zona: string;
   personasNecesarias: number;
   seleccionActual: string[];
-  candidatos: Array<{ id: string; nombre: string; tieneHorario: boolean }>;
+  candidatos: Array<{ id: string; nombre: string; tieneHorario: boolean; asignacionAutomatica?: boolean }>;
 };
 
 export type ImpactoPasoAsignacion = {

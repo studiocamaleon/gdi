@@ -936,3 +936,27 @@
     padding: 16px;
   }
 }
+
+.versiones {
+  display: grid;
+  gap: 12px;
+}
+.versionFila {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 2fr);
+  gap: 8px 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+.versionFila:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .versionFila {
+    grid-template-columns: 1fr;
+  }
+}

@@ -16,7 +16,7 @@ export class PruebaMetaDto {
 
 @Controller('integraciones/meta/piloto')
 @Roles(RolSistema.ADMINISTRADOR)
-@Permiso('configuracion.gestionar')
+@Permiso("configuracion.integraciones.gestionar")
 @ProhibidoImpersonando()
 export class MetaPilotoController {
   constructor(private readonly service: MetaPilotoService) {}

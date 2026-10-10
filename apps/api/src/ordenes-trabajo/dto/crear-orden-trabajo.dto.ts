@@ -2,6 +2,7 @@ import { VincularPlanEntregaDto } from '../../planificacion-entregas/planificaci
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayUnique,
   ArrayMinSize,
   IsArray,
   IsBoolean,
@@ -37,7 +38,53 @@ export class OrdenTrabajoItemSpecDto {
   valor: string;
 }
 
+export class EleccionPersonalDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  nodoClave!: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(99)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  empleadoIds!: string[];
+}
+
+export class RevisarPersonalItemDto {
+  @IsUUID()
+  cotizacionItemId!: string;
+
+  @IsOptional()
+  @IsUUID()
+  ordenItemId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => EleccionPersonalDto)
+  asignacionesPersonal?: EleccionPersonalDto[];
+}
+
+export class RevisarPersonalOrdenDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => RevisarPersonalItemDto)
+  items!: RevisarPersonalItemDto[];
+}
+
 export class CrearOrdenTrabajoItemDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => EleccionPersonalDto)
+  asignacionesPersonal?: EleccionPersonalDto[];
+
   @IsOptional()
   @IsISO8601({ strict: true })
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
@@ -286,7 +333,21 @@ export class EditarOrdenTrabajoItemLoteDto extends CrearOrdenTrabajoItemDto {
  * que cambió desde que el usuario abrió la ficha y `items` representa el
  * conjunto final completo (altas, cambios, bajas y orden incluidos).
  */
+export class EditarOrdenTrabajoCargoDto extends CrearOrdenTrabajoCargoDto {
+  /** Con ID conserva el snapshot histórico; sin ID calcula un cargo nuevo. */
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+}
+
 export class EditarOrdenTrabajoLoteDto extends EditarOrdenTrabajoDto {
+  @ValidateIf((_, valor) => valor !== undefined)
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EditarOrdenTrabajoCargoDto)
+  @ArrayMaxSize(30)
+  cargos?: EditarOrdenTrabajoCargoDto[];
+
   @IsOptional()
   @IsUUID()
   tipoCambioId?: string;

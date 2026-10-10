@@ -53,20 +53,20 @@
 }
 .table {
   width: 100%;
-  min-width: 1260px;
+  min-width: 1380px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 11px;
   text-align: left;
 }
 .colJob {
-  width: 20%;
+  width: 18%;
 }
 .colQuantity {
   width: 5%;
 }
 .colStep {
-  width: 17%;
+  width: 16%;
 }
 .colOperator {
   width: 12%;
@@ -75,13 +75,16 @@
   width: 8%;
 }
 .colDate {
-  width: 9%;
+  width: 8%;
+}
+.colDelivery {
+  width: 8%;
 }
 .colCompliance {
   width: 10%;
 }
 .colProgress {
-  width: 10%;
+  width: 7%;
 }
 .table thead {
   color: var(--muted-text);

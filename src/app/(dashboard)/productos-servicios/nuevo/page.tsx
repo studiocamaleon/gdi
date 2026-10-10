@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NuevoProductoPage() {
   if (!(await tieneCapacidad("productos"))) return <FuncionNoIncluida />;
-  if (!(await puedeConfigurar("productos", "costos.gestionar"))) {
+  if (!(await puedeConfigurar("productos", "costos.catalogo.gestionar"))) {
     return <SinPermiso modulo="Catálogo de productos" />;
   }
   return (

@@ -100,7 +100,7 @@ export function PresupuestoCorreoDialog({
   onCerrar: () => void;
   onEnviado: () => void;
 }) {
-  const puedeEnviar = usePuede("comercial.gestionar");
+  const puedeEnviar = usePuede("comercial.presupuestos.gestionar");
   const conPresupuestos = useCapacidad("presupuestos");
   const conPdf = useCapacidad("documentos_pdf");
   const conEnlace = useCapacidad("aprobacion_presupuestos");
@@ -402,7 +402,7 @@ export function HistorialCorreosPresupuesto({
   id: string;
   revision: number;
 }) {
-  const puedeGestionar = usePuede("comercial.gestionar");
+  const puedeGestionar = usePuede("comercial.presupuestos.gestionar");
   const conPresupuestos = useCapacidad("presupuestos");
   const conPdf = useCapacidad("documentos_pdf");
   const conEnlace = useCapacidad("aprobacion_presupuestos");

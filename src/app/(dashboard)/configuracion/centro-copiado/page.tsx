@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function CentroCopiadoConfigPage() {
   if (!(await tieneCapacidad("centro_copiado"))) return <FuncionNoIncluida />;
-  if (!(await tienePermiso("costos.gestionar"))) {
+  if (!(await tienePermiso("configuracion.copiado.ver"))) {
     return <SinPermiso modulo="Centro de copiado" />;
   }
   return <CentroCopiadoConfigView />;

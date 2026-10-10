@@ -98,9 +98,10 @@ export function BackofficeLogin() {
         <section className={s.access} aria-label="Acceso del equipo">
           <header className={s.topbar}>
             <span>PLATAFORMA</span>
-            <Link href="/login">
+            {/* Navegación completa, sin prefetch: salir sólo al elegir otro acceso. */}
+            <a href="/salir">
               Acceso de empresa <ArrowUpRight />
-            </Link>
+            </a>
           </header>
           <div className={s.formWrap}>
             {challenge ? (
@@ -177,6 +178,7 @@ export function BackofficeLogin() {
                     </div>
                   </Field>
                 </FieldGroup>
+                <Link href="/recuperar-acceso">¿Olvidaste tu contraseña?</Link>
                 {error && (
                   <p className={s.error} role="alert">
                     {error}

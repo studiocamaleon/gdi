@@ -115,6 +115,32 @@ it("retirar ARCA conserva consultar resultado sin ofrecer volver a emitir", asyn
   await act(async () => boton("Consultar resultado")!.click());
   expect(consultarEmisionComprobante).toHaveBeenCalledWith(c.id);
   expect(emitirComprobante).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("Recuperado");
+  expect(container.textContent).not.toContain("Resultado por verificar");
+  expect(boton("Consultar resultado")).toBeUndefined();
+});
+it("mantiene visible el resultado sin confirmar y permite consultar nuevamente", async () => {
+  await mostrar();
+  vi.mocked(consultarEmisionComprobante).mockResolvedValue({
+    aplicada: false,
+    detalle:
+      "Todavía no hay un resultado confirmado. No se reenvió la solicitud.",
+    comprobante: c,
+  });
+  await act(async () => boton("Consultar resultado")!.click());
+  expect(container.textContent).toContain("No se reenvió la solicitud.");
+  expect(boton("Consultar resultado")?.disabled).toBe(false);
+  expect(emitirComprobante).not.toHaveBeenCalled();
+});
+it("muestra un error persistente y libera el botón cuando falla la consulta", async () => {
+  await mostrar();
+  vi.mocked(consultarEmisionComprobante).mockRejectedValue(
+    new Error("No se pudo conectar con ARCA."),
+  );
+  await act(async () => boton("Consultar resultado")!.click());
+  expect(container.textContent).toContain("No se pudo conectar con ARCA.");
+  expect(boton("Consultar resultado")?.disabled).toBe(false);
+  expect(emitirComprobante).not.toHaveBeenCalled();
 });
 it("un borrador no muestra emitir sin la función, aunque el usuario gestione administración", async () => {
   await mostrar({ ...c, estado: "borrador", numero: null });

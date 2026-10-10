@@ -140,7 +140,11 @@ export function armarJobContext(
     );
   } else if (medida) {
     jobContext.piezas = [
-      { cantidad: cantidadTrabajo, anchoMm: medida.anchoMm, altoMm: medida.altoMm },
+      {
+        cantidad: cantidadTrabajo,
+        anchoMm: medida.anchoMm,
+        altoMm: medida.altoMm,
+      },
     ];
     jobContext.medidaCustomMm = {
       anchoMm: medida.anchoMm,
@@ -224,7 +228,9 @@ export function armarJobContext(
         .map((a) => [String(a.id), a]),
     );
     const opcionales: Record<string, boolean> = {
-      ...(jobContext.opcionalesActivados as Record<string, boolean> | undefined),
+      ...(jobContext.opcionalesActivados as
+        | Record<string, boolean>
+        | undefined),
     };
     for (const id of input.adicionales) {
       if (!activables.has(id)) {
@@ -313,7 +319,9 @@ function resolverMedida(
   }
 
   if (input.medidaPredefinidaId) {
-    const elegida = predefinidas.find((m) => m.id === input.medidaPredefinidaId);
+    const elegida = predefinidas.find(
+      (m) => m.id === input.medidaPredefinidaId,
+    );
     if (!elegida) {
       fail(
         `La medida "${input.medidaPredefinidaId}" no existe. Opciones: ` +
@@ -331,8 +339,7 @@ function resolverMedida(
   }
 
   // elegir_predefinida / predefinida_o_custom sin elección → default.
-  const def =
-    predefinidas.find((m) => m.esDefault) ?? predefinidas[0] ?? null;
+  const def = predefinidas.find((m) => m.esDefault) ?? predefinidas[0] ?? null;
   return def ? { anchoMm: def.anchoMm, altoMm: def.altoMm } : null;
 }
 
@@ -371,7 +378,8 @@ function aplicarPersonalizaciones(
     const obligatoria = p.obligatoria === true;
     const respuesta = respuestas[key];
 
-    const activa = obligatoria || (respuesta !== undefined && respuesta !== false);
+    const activa =
+      obligatoria || (respuesta !== undefined && respuesta !== false);
     if (!activa) continue;
 
     let anchoMm = asNumber(p.anchoMm);
@@ -433,16 +441,22 @@ function setAnidado(
   valor: unknown,
 ): void {
   const partes = key.split('.');
+  const ultima = partes.pop()!;
+  // Comprobar cada segmento junto a su acceso, incluido el último. Los
+  // nombres de campos del tenant no autorizan recorrer prototipos compartidos.
+  if (ultima === '__proto__' || ultima === 'constructor' || ultima === 'prototype')
+    fail('El campo de respuesta contiene una clave reservada.');
   let nodo = jobContext;
-  for (let i = 0; i < partes.length - 1; i++) {
-    const parte = partes[i];
-    const actual = nodo[parte];
+  for (const parte of partes) {
+    if (parte === '__proto__' || parte === 'constructor' || parte === 'prototype')
+      fail('El campo de respuesta contiene una clave reservada.');
+    const actual = Object.hasOwn(nodo, parte) ? nodo[parte] : undefined;
     if (typeof actual !== 'object' || actual === null) {
-      nodo[parte] = {};
+      nodo[parte] = Object.create(null) as Record<string, unknown>;
     }
     nodo = nodo[parte] as Record<string, unknown>;
   }
-  nodo[partes[partes.length - 1]] = valor;
+  nodo[ultima] = valor;
 }
 
 function aplicarPregunta(
@@ -607,7 +621,8 @@ function aplicarPregunta(
           setAnidado(jobContext, key, pregunta.default);
         } else if (pregunta.obligatorio === true) {
           faltantes.push(
-            `${key}` + (permitidos.length ? ` (${permitidos.join(' o ')})` : ''),
+            `${key}` +
+              (permitidos.length ? ` (${permitidos.join(' o ')})` : ''),
           );
         }
         return;

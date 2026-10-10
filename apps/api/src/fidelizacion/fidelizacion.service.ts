@@ -300,6 +300,20 @@ export class FidelizacionService {
     };
   }
 
+  /** Sólo se recupera el saldo reservado por la misma propuesta editable. */
+  async puntosReservaPresupuesto(tenantId: string, clienteId: string, presupuestoId: string) {
+    const presupuesto = await this.prisma.cotizacion.findFirst({ where: {
+      id: presupuestoId, tenantId, clienteId, numero: { not: null }, versionVigente: true,
+      estado: { in: ['borrador', 'enviado', 'rechazado', 'vencido', 'descartado'] },
+    }, select: { id: true } });
+    if (!presupuesto) throw new BadRequestException('El presupuesto de origen ya no admite una nueva versión.');
+    const reservas = await this.prisma.fidelizacionReserva.aggregate({
+      where: { tenantId, clienteId, cotizacionId: presupuestoId, ordenId: null, estado: 'RESERVADA' },
+      _sum: { puntos: true },
+    });
+    return reservas._sum.puntos ?? 0;
+  }
+
   async simularCotizacion(
     tenantId: string,
     clienteId: string,
@@ -307,6 +321,7 @@ export class FidelizacionService {
     total: number,
     cargosNeto: number,
     canjePuntos = 0,
+    presupuestoBaseId?: string,
   ) {
     const items = await this.prisma.cotizacionItem.findMany({
       where: { tenantId, cotizacionId },
@@ -359,7 +374,7 @@ export class FidelizacionService {
       }, 0) - cargosNeto;
     return {
       margen,
-      ...(await this.simular(tenantId, clienteId, margen, total, canjePuntos)),
+      ...(await this.simular(tenantId, clienteId, margen, total, canjePuntos, presupuestoBaseId ? await this.puntosReservaPresupuesto(tenantId, clienteId, presupuestoBaseId) : 0)),
     };
   }
 

@@ -100,6 +100,12 @@ function estacion(overrides: Partial<Estacion> = {}): Estacion {
 }
 
 describe("lista operativa compartida con Kanban", () => {
+  it("encuentra clientes sin tildes en operación diaria", () => {
+    const items = [trabajo({ clienteNombre: "María Núñez" })];
+    const filtros: FiltrosTrabajo = { query: "maria nunez", estacionId: "", empleadoId: "", asignadasAMi: false };
+    expect(filtrarTrabajos(items, [], filtros, zona, ahora)).toHaveLength(1);
+    expect(filtrarTrabajos(items, [], { ...filtros, query: "otra" }, zona, ahora)).toHaveLength(0);
+  });
   it("cada trabajo aparece una vez, prioriza bloqueos y ordena por fin previsto del paso", () => {
     const grupos = agruparTrabajos([
       trabajo({ id: "tardio" }, [
@@ -854,6 +860,12 @@ describe("actualizaciones visibles de la Lista", () => {
     expect(campos(version(actual), version(trabajo({}, [paso({ mesaEsMia: true, mesaUsuarioNombre: "Ana" })])))).toEqual(["personal"]);
     expect(campos(version(actual), version({ ...actual, qtyLabel: "2 unidades" }))).toEqual(["cantidad"]);
     expect(campos(version(actual), version({ ...actual, progressPct: 25 }))).toEqual(["avance"]);
+  });
+  it("actualiza la entrega y la condición compartida sólo en sus propias celdas", () => {
+    const antes = trabajo({ fechaEntrega: "2026-10-10" });
+    const despues = trabajo({ fechaEntrega: "2026-10-12" });
+    expect(campos(version(antes), version(despues))).toEqual(["entrega"]);
+    expect(campos(version(), version(trabajo({}, [paso({ ejecucionPorEquipo: true })])))).toEqual(["personal"]);
   });
   it("un cambio del responsable de una dependencia sólo anima la celda En espera", () => {
     const item = trabajo();

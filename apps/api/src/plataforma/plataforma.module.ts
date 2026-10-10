@@ -1,3 +1,5 @@
+import { FiscalPlataformaController } from './fiscal.controller';
+import { FiscalPlataformaModule } from '../fiscal-plataforma/fiscal-plataforma.module';
 import { PlanesPaddleService } from './planes/planes-paddle.service';
 import { PlanesOfertasController } from './planes/planes-ofertas.controller';
 import { PlanesOfertasService } from './planes/planes-ofertas.service';
@@ -30,6 +32,8 @@ import { PlanesAsignacionController } from './planes/planes-asignacion.controlle
 import { PlanesVersionesController } from './planes/planes-versiones.controller';
 import { PlanesComparacionService } from './planes/planes-comparacion.service';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
+import { IncidentesController } from './incidentes.controller';
+import { IncidentesService } from './incidentes.service';
 
 /**
  * Control plane (etapa A): la consola de la Plataforma, sólo lectura.
@@ -37,6 +41,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
  */
 @Module({
   imports: [
+    FiscalPlataformaModule,
     PrismaModule,
     CorreoTransaccionalModule,
     AuthModule,
@@ -45,6 +50,8 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
     CapacidadesEmpresaModule,
   ],
   controllers: [
+    IncidentesController,
+    FiscalPlataformaController,
     ContratacionesPlataformaController,
     PlanesOfertasController,
     PlanesAsignacionController,
@@ -55,6 +62,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
     SuscripcionesPlataformaController,
   ],
   providers: [
+    IncidentesService,
     InvitacionesEmpresaService,
     ContratacionesPlataformaService,
     ConsultaContratacionService,

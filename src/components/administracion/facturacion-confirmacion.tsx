@@ -15,6 +15,7 @@ export type LotePorConfirmar = {
     "ordenId" | "numero" | "clienteNombre" | "saldoSinFacturar"
   >[];
   modo: "por_orden" | "agrupada";
+  detalle?: "items" | "orden";
 };
 
 export function FacturacionConfirmacion({
@@ -64,6 +65,15 @@ export function FacturacionConfirmacion({
             </dd>
           </div>
           <div>
+            <dt>Detalle</dt>
+            <dd>
+              {(lote.detalle ??
+                (lote.modo === "agrupada" ? "orden" : "items")) === "items"
+                ? "Productos y cargos"
+                : "Resumen por OT"}
+            </dd>
+          </div>
+          <div>
             <dt>Facturas a emitir</dt>
             <dd>{cantidadFacturas}</dd>
           </div>
@@ -74,10 +84,10 @@ export function FacturacionConfirmacion({
         </dl>
         <p className={s.confirmationHint} aria-live="polite">
           {enviando
-            ? "Emitiendo. El resultado se mostrará al terminar."
+            ? "Registrando el lote. Enseguida podrás seguir trabajando."
             : cantidadFacturas === 1
-              ? "Al confirmar se emitirá la factura y quedará vinculada a las órdenes indicadas."
-              : "Al confirmar se emitirán las facturas y quedarán vinculadas a las órdenes indicadas."}
+              ? "Al confirmar, el sistema procesará la factura en segundo plano y te notificará al terminar la emisión y los envíos."
+              : "Al confirmar, el sistema procesará las facturas en segundo plano y te notificará al terminar la emisión y los envíos."}
         </p>
       </Modal.Body>
       <Modal.Footer className={s.confirmationFooter}>
@@ -95,7 +105,7 @@ export function FacturacionConfirmacion({
           isDisabled={enviando}
         >
           <ReceiptTextIcon aria-hidden />
-          {enviando ? "Emitiendo…" : "Confirmar y emitir"}
+          {enviando ? "Registrando…" : "Confirmar y emitir"}
         </ActionButton>
       </Modal.Footer>
     </FormDialog>

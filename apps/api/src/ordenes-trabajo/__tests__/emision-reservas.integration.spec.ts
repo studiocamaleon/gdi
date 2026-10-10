@@ -1,4 +1,6 @@
+import { PresupuestosService } from '../../presupuestos/presupuestos.service';
 import { DisponibilidadCotizacion } from '../../motor-universal/disponibilidad-materiales';
+import { inicioSinStock } from '../../inventario/inicio-sin-stock';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { contratoPropuesto } from '../../suscripciones/evaluador-capacidades';
 import {
@@ -278,6 +280,200 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     await db.productoCategoriaComercial.delete({ where: { id: categoriaId } });
   });
   afterAll(() => db.$disconnect());
+
+  it.each(['directa', 'borrador'])(
+    'modo de inicio emite por vía %s sin stock ficticio ni demanda de compra',
+    async (via) => {
+      const activado = await reservas.guardarInicio(auth, {
+        activo: true,
+        version: 1,
+      });
+      const item = await db.cotizacionItem.findUniqueOrThrow({
+        where: { id: payload.items[0].cotizacionItemId },
+      });
+      const traza = item.trazabilidadJson as any;
+      traza.pasos[0].materiales[0].seleccionStock = {
+        politica: 'SOLO_DISPONIBLES',
+        estado: 'sin_verificar_inicio',
+        alternativas: [],
+      };
+      await db.cotizacionItem.update({
+        where: { id: item.id },
+        data: { trazabilidadJson: traza },
+      });
+      const stockAntes = await db.stockMateriaPrimaVariante.findMany({
+        where: { tenantId: auth.tenantId },
+      });
+      const movimientosAntes = await db.movimientoStockMateriaPrima.count({
+        where: { tenantId: auth.tenantId },
+      });
+      const orden = await ordenes.create(auth, {
+        ...payload,
+        estado: via === 'directa' ? 'pendiente' : 'borrador',
+      });
+      if (via === 'borrador') {
+        expect(orden.materialesInicioSinStock).toBe(false);
+        await ordenes.cambiarEstado(auth, orden.id, { estado: 'pendiente' });
+      }
+      expect(
+        await db.ordenTrabajo.findUnique({ where: { id: orden.id } }),
+      ).toMatchObject({
+        materialesInicioSinStock: true,
+        materialesControlados: false,
+        total: orden.total,
+      });
+      expect(
+        (await reservas.consultar(auth.tenantId, orden.id)).control
+          .inicioSinStock,
+      ).toBe(true);
+      expect((await compras.necesidades(auth)).total).toBe(0);
+      expect(
+        await db.necesidadMaterialOt.count({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toBe(0);
+      expect(
+        await db.reservaMaterialOt.count({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toBe(0);
+      expect(
+        await db.stockMateriaPrimaVariante.findMany({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toEqual(stockAntes);
+      expect(
+        await db.movimientoStockMateriaPrima.count({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toBe(movimientosAntes);
+      await reservas.guardarInicio(auth, {
+        activo: false,
+        version: activado.version,
+      });
+      expect(await inicioSinStock(db, auth.tenantId, orden.id)).toBe(true);
+      expect(await inicioSinStock(db, auth.tenantId)).toBe(false);
+      await db.$transaction((tx) =>
+        reservas.sincronizarOrdenTx(tx, auth.tenantId, orden.id),
+      );
+      const lectura = await reservas.consultar(auth.tenantId, orden.id);
+      await expect(
+        reservas.ejecutar(auth, orden.id, {
+          clave: randomUUID(),
+          revision: lectura.revision,
+          accion: 'reservar',
+        }),
+      ).rejects.toThrow('modo de inicio');
+      await expect(
+        ordenes.create(auth, { ...payload, idempotencyKey: randomUUID() }),
+      ).rejects.toThrow('Sólo stock disponible');
+      expect(
+        await db.eventoSistema.count({
+          where: { tenantId: auth.tenantId, tipo: 'inventario.modo_inicio' },
+        }),
+      ).toBe(2);
+    },
+  );
+
+  it('omite únicamente los gates materiales al emitir un borrador', async () => {
+    await reservas.guardarInicio(auth, { activo: true, version: 1 });
+    const orden = await ordenes.create(auth, {
+      ...payload,
+      estado: 'borrador',
+    });
+    const item = await db.ordenTrabajoItem.findFirstOrThrow({
+      where: { tenantId: auth.tenantId, ordenId: orden.id },
+    });
+    const paso = await db.ordenTrabajoItemPaso.create({
+      data: {
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        itemId: item.id,
+        indice: 0,
+        nombre: 'Control',
+        familiaCodigo: 'trabajo_manual',
+        categoriaFamilia: 'produccion',
+      },
+    });
+    await db.ordenTrabajoPasoGate.createMany({
+      data: ['MATERIAL', 'CALIDAD'].map((tipo) => ({
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        pasoId: paso.id,
+        tipo,
+      })),
+    });
+    await ordenes.cambiarEstado(auth, orden.id, { estado: 'pendiente' });
+    const gates = await db.ordenTrabajoPasoGate.findMany({
+      where: { pasoId: paso.id },
+    });
+    expect(gates.find((g) => g.tipo === 'MATERIAL')).toMatchObject({
+      estado: 'OMITIDO_INICIO',
+      resueltoEl: null,
+      resueltoPorId: null,
+    });
+    expect(gates.find((g) => g.tipo === 'CALIDAD')).toMatchObject({
+      estado: 'PENDIENTE',
+    });
+    await expect(
+      ordenes.resolverGatePaso(auth, paso.id, {
+        tipo: 'MATERIAL',
+        estado: 'CUMPLIDO',
+      }),
+    ).rejects.toThrow('modo de inicio');
+  });
+
+  it('el modo de inicio no libera reservas de OTs anteriores y controla versiones', async () => {
+    const anterior = await ordenes.create(auth, payload);
+    await reservas.guardarInicio(auth, { activo: true, version: 1 });
+    await expect(
+      reservas.guardarInicio(auth, { activo: false, version: 1 }),
+    ).rejects.toThrow('configuración cambió');
+    expect(await inicioSinStock(db, auth.tenantId, anterior.id)).toBe(false);
+    await db.$transaction((tx) =>
+      reservas.sincronizarOrdenTx(tx, auth.tenantId, anterior.id),
+    );
+    expect(
+      (await reservas.consultar(auth.tenantId, anterior.id)).control
+        .materiales[0].reservada,
+    ).toBe(10);
+    expect(
+      await db.ordenTrabajo.findUnique({ where: { id: anterior.id } }),
+    ).toMatchObject({ materialesInicioSinStock: false });
+  });
+
+  it('previsión en modo de inicio no inventa disponibilidad ni espera proveedores', async () => {
+    const consulta = {
+      materiales: [
+        { varianteId, cantidad: 15, unidad: 'hoja', consumible: false },
+      ],
+      pendientes: 0,
+    };
+    const antes = await prevision.consultar(auth.tenantId, consulta);
+    expect(antes.estado).toBe('por_confirmar');
+    const modo = await reservas.guardarInicio(auth, {
+      activo: true,
+      version: 1,
+    });
+    const durante = await prevision.consultar(auth.tenantId, consulta);
+    expect(durante).toMatchObject({
+      estado: 'inicio_sin_stock',
+      materiales: [],
+      modoReserva: null,
+    });
+    expect(durante.disponibleDesde).toBeTruthy();
+    await reservas.guardarInicio(auth, {
+      activo: false,
+      version: modo.version,
+    });
+    expect((await prevision.consultar(auth.tenantId, consulta)).estado).toBe(
+      'por_confirmar',
+    );
+    const ajena = randomUUID();
+    await expect(
+      inicioSinStock(db, ajena, (await ordenes.create(auth, payload)).id),
+    ).rejects.toThrow('no encontrada');
+  });
 
   const prepararConversion = async (cantidad = 2) => {
     simularPlan(2);
@@ -562,6 +758,121 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     expect(await nueva.evaluarCantidad(varianteId, 10, 'hoja')).toMatchObject({ libre: 0, alcanza: false });
     expect(await misma.evaluarCantidad(varianteId, 10, 'hoja')).toMatchObject({ libre: 10, alcanza: true });
     expect((await reservas.consultar(auth.tenantId, orden.id)).control.materiales[0].reservada).toBe(10);
+  });
+
+  it('guardar y editar cargos en borrador no numera; emitir asigna la primera OT y conserva los cargos', async () => {
+    const o = await ordenes.create(auth, { ...payload, estado: 'borrador' });
+    expect(o.numero).toMatch(/^BORRADOR-/);
+    expect(await db.ordenTrabajoContador.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+    expect(await db.ordenTrabajoEvento.count({ where: { ordenId: o.id, tipo: 'numero_asignado' } })).toBe(0);
+    const cargo = await db.cargoDirectoCatalogo.create({ data: {
+      tenantId: auth.tenantId, codigo: 'viatico', nombre: 'Viático de prueba', modoCalculo: 'MONTO_FIJO_PLANO',
+      configJson: { zonas: [{ codigo: 'centro', nombre: 'Centro', monto: 500 }], impuestoPorcentaje: 21 },
+    } });
+    const editada = await ordenes.editarLote(auth, o.id, {
+      expectedVersion: o.updatedAt.toISOString(),
+      cargos: [{ cargoDirectoCatalogoId: cargo.id, configInput: { zonaAplicada: { codigo: 'centro' } }, montoNeto: 1 }],
+    });
+    expect(Number(editada.cargosDirectos)).toBe(605);
+    expect(Number(editada.total)).toBe(705);
+    expect(await db.ordenTrabajoContador.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+    await ordenes.cambiarEstado(auth, o.id, { estado: 'pendiente' });
+    const emitida = await db.ordenTrabajo.findUniqueOrThrow({ where: { id: o.id } });
+    expect(emitida.numero).toMatch(/^OT-\d{4}-0001$/);
+    expect(Number(emitida.total)).toBe(705);
+    expect(await db.ordenTrabajoEvento.count({ where: { ordenId: o.id, tipo: 'numero_asignado' } })).toBe(1);
+    await expect(ordenes.cambiarEstado(auth, o.id, { estado: 'pendiente' })).rejects.toThrow();
+    expect((await db.ordenTrabajoContador.findFirstOrThrow({ where: { tenantId: auth.tenantId } })).ultimo).toBe(1);
+  });
+
+  it('emisiones concurrentes de un borrador consumen un único número', async () => {
+    const o = await ordenes.create(auth, { ...payload, estado: 'borrador' });
+    const resultados = await Promise.allSettled([
+      ordenes.cambiarEstado(auth, o.id, { estado: 'pendiente' }),
+      ordenes.cambiarEstado(auth, o.id, { estado: 'pendiente' }),
+    ]);
+    expect(resultados.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    expect((await db.ordenTrabajoContador.findFirstOrThrow({ where: { tenantId: auth.tenantId } })).ultimo).toBe(1);
+  });
+
+  it('un fallo de emisión revierte el número y permite reintentar sin saltos', async () => {
+    const o = await ordenes.create(auth, { ...payload, estado: 'borrador' });
+    const fallo = jest.spyOn(ordenes as any, 'materializarPasosItems').mockRejectedValueOnce(new Error('Fallo simulado'));
+    await expect(ordenes.cambiarEstado(auth, o.id, { estado: 'pendiente' })).rejects.toThrow('Fallo simulado');
+    expect(await db.ordenTrabajoContador.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+    expect((await db.ordenTrabajo.findUniqueOrThrow({ where: { id: o.id } })).numero).toMatch(/^BORRADOR-/);
+    fallo.mockRestore();
+    await ordenes.cambiarEstado(auth, o.id, { estado: 'pendiente' });
+    expect((await db.ordenTrabajo.findUniqueOrThrow({ where: { id: o.id } })).numero).toMatch(/-0001$/);
+  });
+
+  it('conserva los números asignados a borradores históricos', async () => {
+    const o = await ordenes.create(auth, { ...payload, estado: 'borrador' });
+    await db.ordenTrabajo.update({ where: { id: o.id }, data: { numero: 'OT-2020-0040' } });
+    await ordenes.cambiarEstado(auth, o.id, { estado: 'pendiente' });
+    expect((await db.ordenTrabajo.findUniqueOrThrow({ where: { id: o.id } })).numero).toBe('OT-2020-0040');
+    expect(await db.ordenTrabajoContador.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+  });
+
+  it.each(['borrador', 'pendiente', 'produccion', 'finalizada', 'entregada'])('permite agregar y quitar cargos en %s con historial y sin alterar productos', async estado => {
+    const o = await ordenes.create(auth, { ...payload, estado: 'borrador' });
+    const actual = await db.ordenTrabajo.update({ where: { id: o.id }, data: { estado } });
+    const cargo = await db.cargoDirectoCatalogo.create({ data: {
+      tenantId: auth.tenantId, codigo: 'entrega', nombre: 'Entrega', modoCalculo: 'MONTO_FIJO_PLANO', configJson: {},
+    } });
+    const entrada = { cargoDirectoCatalogoId: cargo.id, configInput: {}, montoNeto: 100 };
+    const editada = await ordenes.editarLote(auth, o.id, { expectedVersion: actual.updatedAt.toISOString(), cargos: [entrada] });
+    expect(Number(editada.total)).toBe(221);
+    const conservado = (editada.cargosDirectosJson as any[])[0];
+    // El catálogo puede cambiar; un cargo conservado no se revaloriza ni acepta importes adulterados.
+    await db.cargoDirectoCatalogo.update({ where: { id: cargo.id }, data: { activo: false } });
+    const intacta = await ordenes.editarLote(auth, o.id, { expectedVersion: editada.updatedAt.toISOString(), cargos: [{ ...entrada, id: conservado.id, montoNeto: 1 }] });
+    expect(Number(intacta.total)).toBe(221);
+    const quitada = await ordenes.editarLote(auth, o.id, { expectedVersion: intacta.updatedAt.toISOString(), cargos: [] });
+    expect(Number(quitada.total)).toBe(100);
+    expect(Number(quitada.cargosDirectos)).toBe(0);
+    expect(quitada.cargosDirectosJson).toEqual([]);
+    expect(await db.ordenTrabajoItem.count({ where: { ordenId: o.id } })).toBe(1);
+    expect(await db.ordenTrabajoEvento.count({ where: { ordenId: o.id, tipo: 'modificacion' } })).toBe(3);
+  });
+
+  it('rechaza cambios de cargos con factura, versión vieja, ID ajeno, duplicados o total inferior a cobros', async () => {
+    const o = await ordenes.create(auth, { ...payload, estado: 'borrador' });
+    const cargo = await db.cargoDirectoCatalogo.create({ data: {
+      tenantId: auth.tenantId, codigo: 'entrega', nombre: 'Entrega', modoCalculo: 'MONTO_FIJO_PLANO', configJson: {},
+    } });
+    const entrada = { cargoDirectoCatalogoId: cargo.id, configInput: {}, montoNeto: 100 };
+    await expect(ordenes.editarLote(auth, o.id, { expectedVersion: '2000-01-01T00:00:00Z', cargos: [entrada] })).rejects.toThrow('cambió');
+    await expect(ordenes.editarLote(auth, o.id, { expectedVersion: o.updatedAt.toISOString(), cargos: [{ ...entrada, id: randomUUID() }] })).rejects.toThrow('no pertenece');
+    await expect(ordenes.editarLote(auth, o.id, { expectedVersion: o.updatedAt.toISOString(), cargos: [entrada, entrada] })).rejects.toThrow('dos veces');
+    await expect(ordenes.editarLote(auth, o.id, { expectedVersion: o.updatedAt.toISOString(), cargos: [{ ...entrada, cargoDirectoCatalogoId: randomUUID() }] })).rejects.toThrow('no existe');
+    const facturada = await db.ordenTrabajo.update({ where: { id: o.id }, data: { facturadoTotal: 10 } });
+    await expect(ordenes.editarLote(auth, o.id, { expectedVersion: facturada.updatedAt.toISOString(), cargos: [entrada] })).rejects.toThrow('facturación');
+    const cobrada = await db.ordenTrabajo.update({ where: { id: o.id }, data: { facturadoTotal: 0, cobradoTotal: 300 } });
+    await expect(ordenes.editarLote(auth, o.id, { expectedVersion: cobrada.updatedAt.toISOString(), cargos: [entrada] })).rejects.toThrow('debajo de lo cobrado');
+    const intacta = await db.ordenTrabajo.findUniqueOrThrow({ where: { id: o.id } });
+    expect(Number(intacta.total)).toBe(100);
+    expect(intacta.cargosDirectosJson).toEqual([]);
+  });
+
+  it('guarda el presupuesto con productos y cargos sin crear OT, enlaces ni envíos', async () => {
+    const snapshot = await db.cotizacionItem.findUniqueOrThrow({ where: { id: payload.items[0].cotizacionItemId } });
+    const enviar = jest.fn();
+    const servicio = Object.assign(Object.create(PresupuestosService.prototype), {
+      prisma: db, ordenes, capacidades, fidelizacion: new FidelizacionService(db, capacidades), enviar, nombreCache: new Map(),
+      detalle: (_auth: CurrentAuth, id: string) => db.cotizacion.findUniqueOrThrow({ where: { id } }),
+    }) as PresupuestosService;
+    const resultado = await servicio.guardarBorrador(auth, {
+      cotizacionId: snapshot.cotizacionId, clienteId: payload.clienteId!, canalVenta: 'mostrador', items: payload.items,
+    });
+    expect(resultado).toMatchObject({ estado: 'borrador', fechaEmision: null, fechaEnvio: null, fechaValidez: null, publicToken: null });
+    expect(resultado.numero).toMatch(/^PRES-/);
+    expect(Number(resultado.total)).toBe(100);
+    expect(enviar).not.toHaveBeenCalled();
+    expect(await db.ordenTrabajo.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+    expect(await db.ordenTrabajoContador.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+    await expect(servicio.guardarBorrador(auth, { cotizacionId: snapshot.cotizacionId, clienteId: payload.clienteId!, canalVenta: 'mostrador', items: payload.items })).rejects.toThrow('ya es el presupuesto');
+    expect((await db.cotizacionContador.findFirstOrThrow({ where: { tenantId: auth.tenantId } })).ultimo).toBe(1);
   });
 
   it('guardar borrador no compromete; emitirlo luego hace la misma reserva automática', async () => {

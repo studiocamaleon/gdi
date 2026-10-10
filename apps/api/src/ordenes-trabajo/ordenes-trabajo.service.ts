@@ -1,3 +1,33 @@
+import { idsClientesPorNombre } from '../clientes/busqueda-clientes';
+import { asignarNumeroOrden, esReferenciaBorrador, numeroOrdenVisible, referenciaBorrador } from './numero-orden';
+import {
+  materialesYNotaOperativos,
+  type DetalleOperativoItem,
+} from './detalle-operativo';
+import { DescuentoOrdenDto } from './dto/descuento-orden.dto';
+import {
+  netoListaPersistido,
+  descontarLineaPersistida,
+  validarAjustePosterior,
+  validarTotalCobrado,
+} from './descuento-posterior';
+import { textoErrorLog } from '../common/log-seguro';
+import {
+  contextoPersonalDePasos,
+  eleccionesDePersonal,
+  eleccionesCanonicas,
+  leerPersonalPrevisto,
+  validarEleccionesPersonal,
+  type PersonalPrevisto,
+} from './personal-previsto';
+import { leerAsignacionManual } from '../produccion/asignacion-manual';
+import type { RevisarPersonalItemDto } from './dto/crear-orden-trabajo.dto';
+import { simularFlujo as simularPersonal } from '../eta/motor/flujo-produccion';
+import type {
+  TableroItemData as ItemPersonal,
+  TableroPasoData as PasoPersonal,
+} from '../eta/motor/tablero-tipos';
+import { ordenarPasosProduccion } from './orden-pasos-produccion';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { ReservasMaterialService } from '../inventario/reservas-material.service';
 import {
@@ -8,11 +38,13 @@ import { proyectarPlanReferencia } from '../produccion/plan-referencia-paso';
 import {
   leerAsignacionPersonal,
   proyectarAsignacionPersonal,
+  ejecucionCompartidaPorEquipo,
   personalFijoDelPaso,
 } from '../produccion/asignacion-personal';
 import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
 import {
   itemTableroInclude,
+  archivosGeneralesTableroCount,
   itemActivoTablero,
   itemTerminadoTablero,
 } from './tablero-consultas';
@@ -27,6 +59,8 @@ import {
 } from './ejecucion-pasos-atomica';
 import { nombreLoteProduccion } from '../planificacion-entregas/materializar-lotes-entrega';
 import { PrevisionMaterialesService } from '../inventario/prevision-materiales.service';
+import { DETALLE_INICIO_SIN_STOCK } from '../inventario/inicio-sin-stock';
+import { gateOperativoCumplido } from './gate-operativo-cumplido';
 import { recalcularFechasConversion } from './fechas-entrega-conversion';
 import {
   calcularProgreso,
@@ -165,6 +199,8 @@ const ARCHIVO_PUBLICO = {
 } as const;
 
 type CargoOrdenSnapshot = {
+  id?: string;
+  cargoDirectoCatalogoId?: string;
   montoNeto?: unknown;
   impuestoMonto?: unknown;
   total?: unknown;
@@ -713,7 +749,7 @@ export function progresoPonderadoPasos(
 export function gatesOperativosPendientes(
   gates: Array<{ tipo: string; estado: string }>,
 ) {
-  return gates.filter((gate) => gate.estado !== 'CUMPLIDO');
+  return gates.filter((gate) => !gateOperativoCumplido(gate));
 }
 
 /**
@@ -830,6 +866,275 @@ export class OrdenesTrabajoService {
     await this.reservasMaterial?.sincronizarOrdenTx(tx, tenantId, raiz.ordenId);
   }
 
+  /** Proyección operativa de la cotización; nunca devuelve costos ni legajos. */
+  private async fotoPersonalCotizado(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    cotizacionItemId: string,
+  ) {
+    const snapshot = await tx.cotizacionItem.findFirst({
+      where: { id: cotizacionItemId, tenantId },
+      select: { trazabilidadJson: true, snapshotJson: true },
+    });
+    if (!snapshot)
+      throw new NotFoundException('No se encontró la cotización del producto.');
+    const raiz = snapshot.snapshotJson as {
+      receta?: { bom?: Prisma.JsonValue };
+    } | null;
+    const grafo = grafoDesdeSnapshotReceta(raiz?.receta?.bom);
+    const filas = this.pasosDesdeTrazabilidad(
+      tenantId,
+      '@previa',
+      cotizacionItemId,
+      snapshot.trazabilidadJson,
+      new Map(),
+      grafo,
+    );
+    const efectivo = grafo
+      ? reducirGrafoAClaves(grafo, new Set(filas.map((f) => f.nodoClave)))
+      : null;
+    const pasos: PasoPersonal[] = filas.map((fila, index) => ({
+      ...fila,
+      id: `${cotizacionItemId}/${fila.nodoClave}`,
+      estado: 'pendiente',
+      iniciadoEl: null,
+      demandaHumana: fila.demandaHumanaJson,
+      requiereMaquina: !admitePasoSinMaquina(fila.familiaCodigo),
+      predecesorPasoIds: efectivo
+        ? efectivo.aristas
+            .filter((a) => a.haciaClave === fila.nodoClave)
+            .map((a) => `${cotizacionItemId}/${a.desdeClave}`)
+        : index
+          ? [`${cotizacionItemId}/${filas[index - 1].nodoClave}`]
+          : [],
+    }));
+    const traza = snapshot.trazabilidadJson as {
+      componentesFabricados?: unknown[];
+      lotesNestingCompuesto?: unknown[];
+    } | null;
+    return {
+      pasos,
+      compuesta:
+        !!traza?.componentesFabricados?.length ||
+        !!traza?.lotesNestingCompuesto?.length,
+    };
+  }
+
+  async revisarPersonalPrevisto(
+    auth: CurrentAuth,
+    items: RevisarPersonalItemDto[],
+  ) {
+    if (!auth.permisos?.has('produccion.supervisar'))
+      throw new ForbiddenException(
+        'Necesitás permiso de supervisión para asignar operadores.',
+      );
+    await this.capacidades.exigir(auth.tenantId, 'asignacion_automatica');
+    if (new Set(items.map((i) => i.cotizacionItemId)).size !== items.length)
+      throw new BadRequestException('Hay cotizaciones repetidas.');
+    return this.prisma.$transaction(
+      async (tx) => {
+        const entrada = await this.eta.contextoSimulacion(
+          auth.tenantId,
+          tx,
+          false,
+          'asignacion_automatica',
+        );
+        const [personal, maquinas] = await Promise.all([
+          tx.empleado.findMany({
+            where: { tenantId: auth.tenantId, activo: true },
+            select: { id: true, nombreCompleto: true },
+          }),
+          tx.maquina.findMany({
+            where: { tenantId: auth.tenantId },
+            select: { id: true, nombre: true },
+          }),
+        ]);
+        const nombres = new Map(personal.map((e) => [e.id, e.nombreCompleto]));
+        const nombresMaquinas = new Map(maquinas.map((e) => [e.id, e.nombre]));
+        const fotos = [];
+        for (const item of items) {
+          if (
+            item.ordenItemId &&
+            !(await tx.ordenTrabajoItem.findFirst({
+              where: {
+                id: item.ordenItemId,
+                tenantId: auth.tenantId,
+                parentItemId: null,
+                orden: { estado: 'borrador' },
+              },
+              select: { id: true },
+            }))
+          )
+            throw new BadRequestException(
+              'Sólo se puede preparar el personal de un borrador propio.',
+            );
+          const foto = await this.fotoPersonalCotizado(
+            tx,
+            auth.tenantId,
+            item.cotizacionItemId,
+          );
+          const contexto = contextoPersonalDePasos(
+            foto.pasos,
+            entrada.estaciones,
+            entrada.tiempoEntrePasosMin,
+            nombres,
+            nombresMaquinas,
+          );
+          validarEleccionesPersonal(contexto, item.asignacionesPersonal ?? []);
+          fotos.push({ item, ...foto, contexto });
+        }
+        const escenarios: ItemPersonal[] = fotos.map((f) => ({
+          id: f.item.cotizacionItemId,
+          ordenId: '@previa',
+          ordenNumero: 'PREVIA',
+          ordenEstado: 'pendiente',
+          fechaEntrega: null,
+          sinRuta: false,
+          pasos: f.pasos.map((p) => {
+            const eleccion = f.item.asignacionesPersonal?.find(
+              (e) => e.nodoClave === p.nodoClave,
+            );
+            return {
+              ...p,
+              personalFijo: eleccion
+                ? { empleadoIds: eleccion.empleadoIds }
+                : undefined,
+            };
+          }),
+        }));
+        const antes = simularPersonal({
+          ...entrada,
+          items: [
+            ...entrada.items,
+            ...escenarios.map((i) => ({
+              ...i,
+              pasos: i.pasos.map((p) => ({ ...p, personalFijo: undefined })),
+            })),
+          ],
+        });
+        const despues = simularPersonal({
+          ...entrada,
+          items: [...entrada.items, ...escenarios],
+        });
+        return {
+          zona: entrada.zona,
+          items: fotos.map((f) => ({
+            cotizacionItemId: f.item.cotizacionItemId,
+            pasos: f.contexto.map((p) => {
+              const id = `${f.item.cotizacionItemId}/${p.nodoClave}`;
+              return {
+                ...p,
+                finAutomatico: f.compuesta
+                  ? null
+                  : (antes.traza
+                      .find((t) => t.pasoId === id)
+                      ?.fin.toISOString() ?? null),
+                finElegido: f.compuesta
+                  ? null
+                  : (despues.traza
+                      .find((t) => t.pasoId === id)
+                      ?.fin.toISOString() ?? null),
+              };
+            }),
+            aviso: f.compuesta
+              ? 'La fecha completa depende también de los componentes fabricados; se comprobará al emitir.'
+              : null,
+          })),
+        };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        timeout: 30_000,
+      },
+    );
+  }
+
+  /** Omisión conserva la decisión; cambiarla exige supervisión, incluso al guardar por API. */
+  private async prepararPersonalPrevisto(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    item: CrearOrdenTrabajoItemDto,
+    previo?: { personalPrevistoJson: unknown; cotizacionItemId: string | null },
+    permiteCambiar = true,
+  ): Promise<Prisma.InputJsonValue | undefined> {
+    const anterior = leerPersonalPrevisto(previo?.personalPrevistoJson);
+    const elecciones =
+      item.asignacionesPersonal ?? eleccionesDePersonal(anterior);
+    const cambia =
+      eleccionesCanonicas(elecciones) !==
+      eleccionesCanonicas(eleccionesDePersonal(anterior));
+    if (cambia && !auth.permisos?.has('produccion.supervisar'))
+      throw new ForbiddenException(
+        'Necesitás permiso de supervisión para cambiar los operadores.',
+      );
+    if (cambia && !permiteCambiar)
+      throw new ConflictException(
+        'La orden ya está emitida. Cambiá los operadores desde la asignación del paso en Producción.',
+      );
+    // Una OT emitida se valida con la decisión vigente de cada paso, que puede
+    // haber sido reasignada después de la elección original del borrador.
+    if (!permiteCambiar && anterior)
+      return {
+        ...anterior,
+        cotizacionItemId: item.cotizacionItemId,
+      } as unknown as Prisma.InputJsonValue;
+    if (!elecciones.length)
+      return item.asignacionesPersonal !== undefined
+        ? { version: 1, cotizacionItemId: item.cotizacionItemId, pasos: [] }
+        : undefined;
+    if (item.planEntrega)
+      throw new BadRequestException(
+        'Asigná el personal de los lotes desde Producción, después de emitir.',
+      );
+    await this.capacidades.exigir(auth.tenantId, 'asignacion_automatica', tx);
+    const entrada = await this.eta.contextoSimulacion(
+      auth.tenantId,
+      tx,
+      false,
+      'asignacion_automatica',
+    );
+    const foto = await this.fotoPersonalCotizado(
+      tx,
+      auth.tenantId,
+      item.cotizacionItemId,
+    );
+    validarEleccionesPersonal(
+      contextoPersonalDePasos(
+        foto.pasos,
+        entrada.estaciones,
+        entrada.tiempoEntrePasosMin,
+        new Map(),
+        new Map(),
+      ),
+      elecciones,
+    );
+    const resultado: PersonalPrevisto = {
+      version: 1,
+      cotizacionItemId: item.cotizacionItemId,
+      pasos: elecciones.map((e) => {
+        const conservada = anterior?.pasos.find(
+          (p) =>
+            p.nodoClave === e.nodoClave &&
+            eleccionesCanonicas([
+              { nodoClave: p.nodoClave, empleadoIds: p.asignacion.empleadoIds },
+            ]) === eleccionesCanonicas([e]),
+        );
+        return {
+          nodoClave: e.nodoClave,
+          asignacion: conservada?.asignacion ?? {
+            version: 1,
+            revision: randomUUID(),
+            empleadoIds: [...e.empleadoIds].sort(),
+            asignadoEl: new Date().toISOString(),
+            usuarioId: auth.impersonacion?.actorUserId ?? auth.userId,
+            usuarioNombre: auth.impersonacion?.actorNombre ?? auth.email,
+          },
+        };
+      }),
+    };
+    return resultado as unknown as Prisma.InputJsonValue;
+  }
+
   async prepararRecorridosDeItems(
     auth: CurrentAuth,
     itemIds: string[],
@@ -859,7 +1164,7 @@ export class OrdenesTrabajoService {
           event: 'preparacion_recorrido_corte_fallida',
           tenantId: auth.tenantId,
           itemId,
-          message: error instanceof Error ? error.message : 'Error desconocido',
+          message: textoErrorLog(error),
         });
       }
       const hijos = await this.prisma.ordenTrabajoItem.findMany({
@@ -992,7 +1297,7 @@ export class OrdenesTrabajoService {
     } catch (error) {
       this.logger.error(
         'No se pudo actualizar el reparto de producción; se reintentará automáticamente.',
-        error,
+        textoErrorLog(error),
       );
     }
   }
@@ -1004,7 +1309,7 @@ export class OrdenesTrabajoService {
     } catch (error) {
       this.logger.error(
         `Falló la captura de promesa de ETA (orden ${ordenId}).`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -1015,7 +1320,7 @@ export class OrdenesTrabajoService {
     } catch (error) {
       this.logger.error(
         `Falló la captura de cierre de ETA (orden ${ordenId}).`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -1023,6 +1328,14 @@ export class OrdenesTrabajoService {
   // ── Listado ──────────────────────────────────────────────────────────
 
   async findAll(auth: CurrentAuth, query: OrdenesTrabajoQueryDto) {
+    // Un borrador descartado conserva la auditoría, fuera del listado habitual.
+    const sinDescartados: Prisma.OrdenTrabajoWhereInput = {
+      OR: [
+        { estado: { not: ESTADO_CANCELADA } },
+        { estadoAlCancelar: null },
+        { estadoAlCancelar: { not: 'borrador' } },
+      ],
+    };
     const q = query.q?.trim();
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const hoyClave = claveFechaEnZona(new Date(), regional.zonaHoraria);
@@ -1040,7 +1353,12 @@ export class OrdenesTrabajoService {
       ...(query.proyectoCampanaId
         ? { proyectoCampanaId: query.proyectoCampanaId }
         : {}),
-      ...(query.estado ? { estado: query.estado } : {}),
+      ...(query.estado === 'descartada'
+        ? { estado: ESTADO_CANCELADA, estadoAlCancelar: 'borrador' }
+        : {
+            AND: [sinDescartados],
+            ...(query.estado ? { estado: query.estado } : {}),
+          }),
       ...(query.urgencia === 'atrasadas'
         ? {
             estado: { in: ['pendiente', 'produccion'] },
@@ -1051,7 +1369,7 @@ export class OrdenesTrabajoService {
         ? {
             OR: [
               { numero: { contains: q, mode: 'insensitive' } },
-              { cliente: { nombre: { contains: q, mode: 'insensitive' } } },
+              { clienteId: { in: await idsClientesPorNombre(this.prisma, auth.tenantId, q) } },
               {
                 vendedor: {
                   nombreCompleto: { contains: q, mode: 'insensitive' },
@@ -1078,6 +1396,7 @@ export class OrdenesTrabajoService {
       proximasEntregar,
       atrasadas,
       emitidasHoy,
+      descartados,
     ] = await this.prisma.$transaction([
       this.prisma.ordenTrabajo.findMany({
         where,
@@ -1092,7 +1411,7 @@ export class OrdenesTrabajoService {
       this.prisma.ordenTrabajo.count({ where }),
       this.prisma.ordenTrabajo.groupBy({
         by: ['estado'],
-        where: { tenantId: auth.tenantId },
+        where: { tenantId: auth.tenantId, AND: [sinDescartados] },
         orderBy: { estado: 'asc' },
         _count: { _all: true },
         _sum: { total: true },
@@ -1119,6 +1438,13 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           estado: { notIn: ['borrador', ESTADO_CANCELADA] },
           fechaEmision: { gte: hoy0, lt: manana0 },
+        },
+      }),
+      this.prisma.ordenTrabajo.count({
+        where: {
+          tenantId: auth.tenantId,
+          estado: ESTADO_CANCELADA,
+          estadoAlCancelar: 'borrador',
         },
       }),
     ]);
@@ -1157,6 +1483,7 @@ export class OrdenesTrabajoService {
         query,
       ),
       stats: {
+        descartados,
         porEstado: counts,
         totalOrdenes: Object.values(counts).reduce((a, b) => a + b, 0),
         activas: counts.pendiente + counts.produccion,
@@ -1175,6 +1502,7 @@ export class OrdenesTrabajoService {
       where: { id, tenantId: auth.tenantId },
       include: {
         ...LIST_INCLUDE,
+        cliente: { select: { nombre: true, telefonoCodigo: true, telefonoNumero: true } },
         _count: {
           select: {
             items: { where: { parentItemId: null } },
@@ -1283,7 +1611,12 @@ export class OrdenesTrabajoService {
       auth.tenantId,
       orden.items.map((i) => i.id),
     );
-    const detalle = this.toDetalle({ ...orden, publicToken });
+    const detalle = {
+      ...this.toDetalle({ ...orden, publicToken }),
+      clienteTelefono: orden.cliente?.telefonoNumero?.trim()
+        ? [orden.cliente.telefonoCodigo, orden.cliente.telefonoNumero].filter(Boolean).join(' ').trim()
+        : null,
+    };
     // Independiente de la capacidad actual y del límite de 200 eventos del
     // timeline: el acceso a impresiones anteriores sobrevive a un cambio de plan.
     const impresionRegistrada = await this.prisma.ordenTrabajoEvento.findFirst({
@@ -1721,6 +2054,8 @@ export class OrdenesTrabajoService {
           'cotizacion',
         ]);
         await this.exigirCuponesEnEscritura(tx, auth, items);
+        const personalPorCotizacion = new Map<string, Prisma.InputJsonValue | undefined>();
+        for (const item of items) personalPorCotizacion.set(item.cotizacionItemId, await this.prepararPersonalPrevisto(tx, auth, item));
         await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, fidelizacion);
         if (tienePlanEntrega)
           await this.capacidades.exigirOperacionTx(
@@ -1738,14 +2073,14 @@ export class OrdenesTrabajoService {
           );
         if (tienePlanEntrega || conversion) await bloquearColaEntrega(tx, auth.tenantId);
         if (conversion) {
-          const presupuesto = await tx.cotizacion.findFirst({
-            where: { tenantId: auth.tenantId, id: payload.cotizacionId, estado: 'aprobado' },
-            select: { id: true },
+          const presupuesto = await tx.cotizacion.updateMany({
+            where: { tenantId: auth.tenantId, id: payload.cotizacionId, estado: 'aprobado', versionVigente: true },
+            data: { updatedAt: new Date() },
           });
           const convertidos = await tx.ordenTrabajoItem.count({
             where: { tenantId: auth.tenantId, cotizacionItemId: { in: idsSnapshot }, orden: { cotizacionId: payload.cotizacionId } },
           });
-          if (!presupuesto || convertidos)
+          if (presupuesto.count !== 1 || convertidos)
             throw new ConflictException('El presupuesto cambió o alguno de sus productos ya fue convertido. Actualizá la ficha.');
         }
         const contextoEntrega = tienePlanEntrega
@@ -1770,9 +2105,8 @@ export class OrdenesTrabajoService {
           data: {
             tenantId: auth.tenantId,
             idempotencyKey: payload.idempotencyKey ?? null,
-            // Identidad provisional sólo dentro de esta transacción. Nunca
-            // se publica ni consume un número si la materialización falla.
-            numero: `pendiente-${randomUUID()}`,
+            // El borrador tiene una referencia interna; se numera al emitir.
+            numero: referenciaBorrador(),
             clienteId: payload.clienteId ?? null,
             vendedorEmpleadoId,
             cotizacionId: payload.cotizacionId ?? null,
@@ -1808,6 +2142,7 @@ export class OrdenesTrabajoService {
                 recetaHuella: (item as ItemAutorizado).recetaHuella ?? null,
                 recetaSnapshotJson:
                   (item as ItemAutorizado).recetaSnapshotJson ?? undefined,
+                personalPrevistoJson: personalPorCotizacion.get(item.cotizacionItemId),
                 codigo: item.codigo,
                 nombre: item.nombre,
                 familia: item.familia,
@@ -1868,21 +2203,10 @@ export class OrdenesTrabajoService {
           await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
         }
 
-        // Numerar después del trabajo geométrico: el lock por empresa sólo
-        // dura las escrituras finales y mantiene secuencia + rollback.
-        const anio = ahora.getFullYear();
-        const contador = await tx.ordenTrabajoContador.upsert({
-          where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
-          create: { tenantId: auth.tenantId, anio, ultimo: 1 },
-          update: { ultimo: { increment: 1 } },
-        });
-        const numero = `OT-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
-
-        await tx.ordenTrabajo.update({
-          where: { id: orden.id },
-          data: { numero },
-          select: { id: true },
-        });
+        // La secuencia comercial se consume únicamente al emitir.
+        const numero = emitida
+          ? await asignarNumeroOrden(tx, auth.tenantId, orden.id, ahora)
+          : orden.numero;
         orden.numero = numero;
 
         if (tokenSeguimiento) {
@@ -1940,9 +2264,11 @@ export class OrdenesTrabajoService {
             } agregado${payload.items.length === 1 ? '' : 's'} a la orden`,
           },
           { tipo: 'borrador', descripcion: 'Borrador guardado' },
-          { tipo: 'numero_asignado', descripcion: `Nº asignado ${numero}` },
           ...(emitida
-            ? [{ tipo: 'emision', descripcion: 'OT emitida al taller' }]
+            ? [
+                { tipo: 'numero_asignado', descripcion: `Nº asignado ${numero}` },
+                { tipo: 'emision', descripcion: 'OT emitida al taller' },
+              ]
             : []),
         ];
         await tx.ordenTrabajoEvento.createMany({
@@ -1968,7 +2294,7 @@ export class OrdenesTrabajoService {
               tenantId: auth.tenantId,
               proyectoCampanaId,
               tipo: 'vinculo',
-              descripcion: `Se vinculó la orden ${numero}.`,
+              descripcion: `Se vinculó ${emitida ? `la orden ${numero}` : 'un borrador de orden'}.`,
               actorUserId: auth.impersonacion?.actorUserId ?? auth.userId,
               actorNombre: usuarioNombre,
               datosJson: { tipo: 'orden', documentoId: orden.id },
@@ -2078,6 +2404,7 @@ export class OrdenesTrabajoService {
     cotizacionId: string,
     payload: CrearOrdenTrabajoItemDto[],
     clienteId: string | null = null,
+    cuponesYaReservados: ReadonlySet<string> = new Set(),
   ): Promise<CrearOrdenTrabajoItemDto[]> {
     const ids = payload.map((item) => item.cotizacionItemId);
     if (new Set(ids).size !== ids.length) {
@@ -2124,7 +2451,7 @@ export class OrdenesTrabajoService {
       this.itemAutorizado(item, porId.get(item.cotizacionItemId)!, decimales),
     );
     this.validarMontosItems(autorizados);
-    return this.validarCupones(auth, clienteId, autorizados);
+    return this.validarCupones(auth, clienteId, autorizados, cuponesYaReservados);
   }
 
   /** Calcula y congela cargos desde el catálogo vigente del tenant. */
@@ -2166,7 +2493,7 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró la orden de trabajo.');
     }
 
-    if (orden.estado === 'borrador' || payload.items !== undefined)
+    if (orden.estado === 'borrador' || payload.items !== undefined || payload.cargos !== undefined)
       await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const versionEsperada = new Date(payload.expectedVersion);
     if (
@@ -2190,6 +2517,9 @@ export class OrdenesTrabajoService {
     }
 
     const estado = orden.estado as OrdenTrabajoEstado;
+    if (payload.cargos !== undefined && estado === 'cancelada')
+      throw new ConflictException('No se pueden modificar cargos de una orden cancelada.');
+
     const campos = (
       [
         'clienteId',
@@ -2357,7 +2687,9 @@ export class OrdenesTrabajoService {
       if (
         orden.cotizacionId &&
         snapshots.some(
-          (snapshot) => snapshot.cotizacionId !== orden.cotizacionId,
+          (snapshot) =>
+            snapshot.cotizacionId !== orden.cotizacionId &&
+            !historicosSinCambio.has(snapshot.id),
         )
       ) {
         if (!payload.tipoCambioId)
@@ -2422,6 +2754,7 @@ export class OrdenesTrabajoService {
     await this.prisma.$transaction(async (tx) => {
       await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
         'identidad',
+        ...(payload.cargos !== undefined ? ['ordenes', 'cotizacion'] as const : []),
       ]);
       await this.exigirCuponesEnEscritura(tx, auth, itemsAutorizados ?? []);
       const reclamo = await tx.ordenTrabajo.updateMany({
@@ -2460,6 +2793,73 @@ export class OrdenesTrabajoService {
         );
       }
 
+      // updateMany ya bloqueó la orden y comprobó la versión. Consultar aquí
+      // la facturación impide cambiar importes mientras se emite un comprobante.
+      let cargosActualizados: CargoOrdenSnapshot[] | undefined;
+      if (payload.cargos !== undefined) {
+        const actual = await tx.ordenTrabajo.findUniqueOrThrow({
+          where: { id: orden.id },
+        });
+        const comprobante = await tx.comprobante.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            tipo: 'factura',
+            estado: { notIn: ['rechazado', 'anulado'] },
+            OR: [{ ordenId: orden.id }, { ordenes: { some: { ordenId: orden.id } } }],
+          },
+          select: { id: true },
+        });
+        if (Number(actual.facturadoTotal) > 0 || comprobante)
+          throw new ConflictException(
+            'La orden tiene facturación emitida, preparada o en proceso. Revisá los comprobantes antes de modificar sus cargos.',
+          );
+        const anteriores = (Array.isArray(actual.cargosDirectosJson)
+          ? actual.cargosDirectosJson
+          : []) as unknown as CargoOrdenSnapshot[];
+        if (!anteriores.length && Number(actual.cargosDirectos) > 0)
+          throw new ConflictException(
+            'Esta orden tiene cargos históricos sin detalle. Revisalos antes de reemplazarlos.',
+          );
+        const conservados = payload.cargos
+          .filter((cargo) => cargo.id)
+          .map((cargo) => {
+            const anterior = anteriores.find((a) => a.id === cargo.id);
+            if (
+              !anterior ||
+              anterior.cargoDirectoCatalogoId !== cargo.cargoDirectoCatalogoId
+            )
+              throw new BadRequestException(
+                'Un cargo no pertenece a esta orden. Recargá antes de guardar.',
+              );
+            return anterior;
+          });
+        const catalogos = payload.cargos.map((cargo) => cargo.cargoDirectoCatalogoId);
+        if (new Set(catalogos).size !== catalogos.length)
+          throw new BadRequestException(
+            'No se puede agregar dos veces el mismo cargo a una orden.',
+          );
+        const nuevos = await this.cargosAutorizados(
+          auth.tenantId,
+          payload.cargos.filter((cargo) => !cargo.id),
+          itemsAutorizados
+            ? itemsAutorizados.reduce((s, i) => s + Number(i.subtotal), 0)
+            : Number(actual.subtotal),
+          regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales,
+        );
+        cargosActualizados = [...conservados, ...nuevos];
+        await tx.ordenTrabajo.update({
+          where: { id: orden.id },
+          data: {
+            cargosDirectosJson: cargosActualizados as never,
+            cargosDirectos: montoCargosPorTratamiento(
+              cargosActualizados,
+              actual.tratamientoFiscal as 'FISCAL' | 'SIN_COMPROBANTE',
+              0,
+            ),
+          },
+        });
+      }
+
       if (itemsAutorizados) {
         const conservados = new Set(
           itemsAutorizados
@@ -2488,6 +2888,7 @@ export class OrdenesTrabajoService {
                 parentItemId: true,
                 cotizacionItemId: true,
                 cantidad: true,
+                personalPrevistoJson: true,
               },
             });
             if (previo.parentItemId)
@@ -2504,7 +2905,7 @@ export class OrdenesTrabajoService {
               );
             const actualizado = await tx.ordenTrabajoItem.update({
               where: { id: item.id },
-              data: { ...this.buildItemData(item), ordenIndice },
+              data: { ...this.buildItemData(item), personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item, previo, estado === 'borrador'), ordenIndice },
             });
             materializables.push({
               id: actualizado.id,
@@ -2518,6 +2919,7 @@ export class OrdenesTrabajoService {
                 tenantId: auth.tenantId,
                 ordenId: orden.id,
                 ...this.buildItemData(item),
+                personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item),
                 ordenIndice,
               },
             });
@@ -2554,11 +2956,15 @@ export class OrdenesTrabajoService {
         if (estado === 'pendiente') {
           await this.reconciliarCupones(tx, auth, orden.id, itemsAutorizados);
         }
-        await this.recalcularTotales(
-          tx,
-          orden.id,
-          Number(orden.cargosDirectos ?? 0),
-        );
+      }
+      if (itemsAutorizados || cargosActualizados !== undefined) {
+        await this.recalcularTotales(tx, orden.id,
+          cargosActualizados !== undefined ? 0 : Number(orden.cargosDirectos ?? 0));
+        if (cargosActualizados !== undefined) {
+          const actualizada = await tx.ordenTrabajo.findUniqueOrThrow({ where: { id: orden.id } });
+          if (Number(actualizada.total) + 0.005 < Number(actualizada.cobradoTotal))
+            throw new ConflictException('El cambio de cargos dejaría el total por debajo de lo cobrado. Resolvé primero la diferencia en los cobros.');
+        }
       }
 
       if (
@@ -2588,12 +2994,13 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           tipo: 'modificacion',
-          descripcion: `Edición guardada: ${campos.length} campo(s) y ${itemsAutorizados ? `${itemsAutorizados.length} producto(s)` : 'sin cambios de productos'}`,
+          descripcion: `Edición guardada: ${campos.length} campo(s) y ${itemsAutorizados ? `${itemsAutorizados.length} producto(s)` : 'sin cambios de productos'}${cargosActualizados !== undefined ? ` y ${cargosActualizados.length} cargo(s)` : ''}`,
           usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
           usuarioId: auth.userId,
           origen: 'usuario',
           datosJson: {
             campos,
+            ...(cargosActualizados !== undefined ? { cargosAntes: orden.cargosDirectosJson, cargosDespues: cargosActualizados as unknown as Prisma.InputJsonValue } : {}),
             itemsAntes: orden.items.length,
             itemsDespues: itemsAutorizados?.length ?? orden.items.length,
           },
@@ -3045,6 +3452,321 @@ export class OrdenesTrabajoService {
     return this.findOne(auth, id);
   }
 
+  /** Cambia únicamente el precio acordado. Conserva materiales, archivos, pasos y tiempos. */
+  async aplicarDescuentoOrden(
+    auth: CurrentAuth,
+    id: string,
+    dto: DescuentoOrdenDto,
+  ) {
+    if (dto.modo === 'manual' && (!dto.tipo || dto.valor == null))
+      throw new BadRequestException('Indicá el tipo y el valor del descuento.');
+    if (dto.modo === 'cupon' && !dto.codigo?.trim())
+      throw new BadRequestException('Ingresá el código del cupón.');
+    await this.prisma.$transaction(
+      async (tx) => {
+        await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+          'ordenes',
+        ]);
+        const bloqueadas = await tx.$queryRaw<
+          Array<{ id: string }>
+        >`SELECT "id" FROM "OrdenTrabajo" WHERE "id" = ${id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+        if (!bloqueadas.length)
+          throw new NotFoundException('No se encontró la orden de trabajo.');
+        const orden = await tx.ordenTrabajo.findFirstOrThrow({
+          where: { id, tenantId: auth.tenantId },
+          include: {
+            items: {
+              where: { parentItemId: null },
+              include: {
+                cotizacionItem: {
+                  include: {
+                    producto: {
+                      include: {
+                        subcategoriaComercial: { include: { categoria: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+        const comprobante = await tx.comprobante.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            tipo: 'factura',
+            estado: { notIn: ['rechazado', 'anulado'] },
+            OR: [{ ordenId: id }, { ordenes: { some: { ordenId: id } } }],
+          },
+          select: { id: true },
+        });
+        validarAjustePosterior(
+          orden,
+          dto.expectedVersion,
+          Boolean(comprobante),
+        );
+        if (!orden.items.length)
+          throw new BadRequestException('La orden no tiene productos.');
+        if (orden.items.some((i) => !i.cotizacionItem))
+          throw new BadRequestException(
+            'Algún producto no tiene su cotización histórica. Revisalo antes de cambiar el precio.',
+          );
+        const regional = await regionalDelTenant(tx, auth.tenantId);
+        const dec =
+          regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+        const contexto = {
+          ahora: new Date(),
+          zonaHoraria: regional.zonaHoraria,
+          clienteId: orden.clienteId,
+          items: orden.items.map((i) => ({
+            key: i.id,
+            neto: netoListaPersistido(i),
+            productoId: i.cotizacionItem!.productoId,
+            productoCodigo: i.codigo,
+            categoriaCodigo:
+              i.cotizacionItem!.producto.subcategoriaComercial.categoria.codigo,
+            subcategoriaCodigo:
+              i.cotizacionItem!.producto.subcategoriaComercial.codigo,
+          })),
+        };
+        let cupon: Awaited<ReturnType<typeof tx.cupon.findFirst>> = null;
+        let plan: Array<{
+          key: string;
+          tipo: 'PORCENTAJE' | 'MONTO';
+          valor: number;
+        }> = [];
+        if (dto.modo === 'cupon') {
+          await this.capacidades.exigirOperacionTx(
+            tx,
+            auth.tenantId,
+            ['cupones'],
+            ['cupones'],
+          );
+          cupon = await tx.cupon.findFirst({
+            where: {
+              tenantId: auth.tenantId,
+              codigo: { equals: dto.codigo!.trim(), mode: 'insensitive' },
+            },
+          });
+          if (!cupon) throw new BadRequestException('El cupón no existe.');
+          await tx.$queryRaw`SELECT "id" FROM "Cupon" WHERE "id"=${cupon.id}::uuid AND "tenantId"=${auth.tenantId}::uuid FOR UPDATE`;
+          cupon = await tx.cupon.findUniqueOrThrow({ where: { id: cupon.id } });
+          const uso = await tx.cuponRedencion.findFirst({
+            where: {
+              tenantId: auth.tenantId,
+              ordenId: id,
+              cuponId: cupon.id,
+              estado: { not: 'LIBERADA' },
+            },
+          });
+          const evaluacion = evaluarCupon(
+            {
+              ...cupon,
+              valor: Number(cupon.valor),
+              montoMinimo:
+                cupon.montoMinimo == null ? null : Number(cupon.montoMinimo),
+              vigenciaDesde:
+                cupon.vigenciaDesde?.toISOString().slice(0, 10) ?? null,
+              vigenciaHasta:
+                cupon.vigenciaHasta?.toISOString().slice(0, 10) ?? null,
+              usoCount: Math.max(0, cupon.usoCount - (uso ? 1 : 0)),
+            },
+            contexto,
+          );
+          if (!evaluacion.ok) throw new BadRequestException(evaluacion.motivo);
+          plan = planDescuentoCupon(
+            { tipo: cupon.tipo, valor: Number(cupon.valor) },
+            contexto.items,
+            evaluacion.alcanzadas,
+            dec,
+          );
+          if (!plan.length)
+            throw new BadRequestException(
+              'El cupón no alcanza productos con importe.',
+            );
+        } else if (dto.modo === 'manual') {
+          plan = planDescuentoCupon(
+            { tipo: dto.tipo!, valor: dto.valor! },
+            contexto.items,
+            contexto.items.map((i) => i.key),
+            dec,
+          );
+          if (dto.tipo === 'PORCENTAJE' && dto.valor! > 100)
+            throw new BadRequestException(
+              'El porcentaje no puede superar 100.',
+            );
+        }
+        const porId = new Map(plan.map((p) => [p.key, p]));
+        const proyeccion = orden.items.map((item) => {
+          const seleccion = porId.get(item.id);
+          // Cupón reemplaza solamente las líneas alcanzadas; quitar/manual, toda la OT.
+          if (dto.modo === 'cupon' && !seleccion)
+            return { ...item, cambio: false };
+          return {
+            ...item,
+            ...descontarLineaPersistida(
+              {
+                ...item,
+                impuestosSnapshotJson:
+                  item.cotizacionItem!.impuestosSnapshotJson,
+              },
+              seleccion ?? null,
+              dec,
+            ),
+            descuentoCuponId: cupon?.id ?? null,
+            cambio: true,
+          };
+        });
+        if (orden.estado !== 'borrador')
+          await this.exigirDescuentoEmitible(
+            auth,
+            proyeccion.filter((i) => !i.descuentoCuponId),
+          );
+        const subtotal = proyeccion.reduce((s, i) => s + Number(i.subtotal), 0);
+        const impuestos =
+          orden.tratamientoFiscal === 'SIN_COMPROBANTE'
+            ? 0
+            : proyeccion.reduce((s, i) => s + Number(i.impuestos), 0);
+        const cargos = recalcularCargosPorSubtotal(
+          orden.cargosDirectosJson,
+          subtotal,
+          dec,
+        );
+        const cargosDirectos = montoCargosPorTratamiento(
+          cargos,
+          orden.tratamientoFiscal === 'SIN_COMPROBANTE'
+            ? 'SIN_COMPROBANTE'
+            : 'FISCAL',
+          Number(orden.cargosDirectos),
+        );
+        const total = new Prisma.Decimal(
+          subtotal +
+            impuestos +
+            cargosDirectos -
+            Number(orden.fidelizacionCanjeMonto),
+        )
+          .toDecimalPlaces(dec)
+          .toNumber();
+        if (total < 0)
+          throw new ConflictException(
+            'El descuento supera el importe disponible después del canje de puntos.',
+          );
+        validarTotalCobrado(total, orden.cobradoTotal);
+        const revision = await tx.cotizacion.create({
+          data: {
+            tenantId: auth.tenantId,
+            clienteId: orden.clienteId,
+            notificarWhatsapp: false,
+          },
+        });
+        for (const item of proyeccion.filter((i) => i.cambio)) {
+          const {
+            id: origenId,
+            createdAt,
+            updatedAt,
+            producto,
+            ...origen
+          } = item.cotizacionItem!;
+          const resumen = origen.snapshotJson as Record<string, unknown>;
+          const cantidad =
+            Number(
+              (resumen?.ejecucion as { cantidadComercialPricing?: number })
+                ?.cantidadComercialPricing ?? origen.cantidad,
+            ) || 1;
+          // Revisión nueva: el presupuesto/snapshot original nunca se modifica.
+          const nuevo = await tx.cotizacionItem.create({
+            data: {
+              ...origen,
+              cotizacionId: revision.id,
+              trazabilidadJson: origen.trazabilidadJson ?? Prisma.DbNull,
+              precioConfigSnapshotJson:
+                origen.precioConfigSnapshotJson ?? Prisma.DbNull,
+              impuestosSnapshotJson:
+                origen.impuestosSnapshotJson ?? Prisma.DbNull,
+              comisionesSnapshotJson:
+                origen.comisionesSnapshotJson ?? Prisma.DbNull,
+              precioEspecialClienteSnapshotJson:
+                origen.precioEspecialClienteSnapshotJson ?? Prisma.DbNull,
+              snapshotJson: {
+                ...resumen,
+                ajusteComercial: {
+                  origenId,
+                  ordenId: id,
+                  fecha: new Date().toISOString(),
+                  actorId: auth.userId,
+                },
+              },
+              precioNetoUnitario: Number(item.subtotal) / cantidad,
+              precioNetoTotal: item.subtotal,
+              impuestosPorFueraTotal: item.impuestos,
+              precioUnitario: Number(item.total) / cantidad,
+              precioTotal: item.total,
+              descuentoTipo: item.descuentoTipo,
+              descuentoValor: item.descuentoValor,
+              descuentoMonto: item.descuentoMonto,
+            } as Prisma.CotizacionItemUncheckedCreateInput,
+          });
+          await tx.ordenTrabajoItem.update({
+            where: { id: item.id },
+            data: {
+              cotizacionItemId: nuevo.id,
+              subtotal: item.subtotal,
+              impuestos: item.impuestos,
+              total: item.total,
+              descuentoTipo: item.descuentoTipo,
+              descuentoValor: item.descuentoValor,
+              descuentoMonto: item.descuentoMonto,
+              descuentoCuponId: item.descuentoCuponId,
+            },
+          });
+        }
+        if (orden.estado !== 'borrador')
+          await this.reconciliarCupones(tx, auth, id, proyeccion);
+        await tx.ordenTrabajo.update({
+          where: { id },
+          data: {
+            subtotal,
+            impuestos,
+            cargosDirectos,
+            cargosDirectosJson: cargos as never,
+            total,
+            descuentoTotal: proyeccion.reduce(
+              (s, i) => s + Number(i.descuentoMonto ?? 0),
+              0,
+            ),
+            updatedAt: new Date(),
+          },
+        });
+        await tx.ordenTrabajoEvento.create({
+          data: {
+            tenantId: auth.tenantId,
+            ordenId: id,
+            tipo: 'descuento',
+            descripcion:
+              dto.modo === 'cupon'
+                ? `Cupón ${cupon!.codigo} aplicado`
+                : dto.modo === 'quitar'
+                  ? 'Descuento quitado'
+                  : 'Descuento comercial aplicado',
+            usuarioId: auth.userId,
+            usuarioNombre: firmaActor(auth, auth.email ?? 'Usuario'),
+            origen: 'usuario',
+            datosJson: {
+              modo: dto.modo,
+              totalAnterior: Number(orden.total),
+              totalNuevo: total,
+              tipo: dto.tipo ?? null,
+              valor: dto.valor ?? null,
+              cuponId: cupon?.id ?? null,
+            },
+          },
+        });
+      },
+      { timeout: 30000 },
+    );
+    return this.findOne(auth, id);
+  }
+
   /** Recalcula los denormalizados de la orden a partir de sus items. */
   private async recalcularTotales(
     tx: Prisma.TransactionClient,
@@ -3389,7 +4111,7 @@ export class OrdenesTrabajoService {
             | undefined;
           if (!zona)
             throw new BadRequestException(
-              `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
+              `Elegí una zona válida para el cargo "${catalogo.nombre}". Si lo agregaste antes de actualizar sus tarifas, quitá el cargo y volvé a agregarlo.`,
             );
           montoNeto = Number(zona.monto ?? 0);
           configSnapshot.zonaAplicada = {
@@ -3638,6 +4360,7 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           ...this.buildItemData(item),
+          personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item),
           ordenIndice: (ultimo._max.ordenIndice ?? -1) + 1,
         },
       });
@@ -3819,7 +4542,7 @@ export class OrdenesTrabajoService {
         );
       await tx.ordenTrabajoItem.update({
         where: { id: existente.id },
-        data: this.buildItemData(item),
+        data: { ...this.buildItemData(item), personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item, existente, orden.estado === 'borrador') },
       });
       // Emitida: el item pudo cambiar de snapshot/ruta → pasos de nuevo.
       // No hay ejecución que pisar: ejecutar promueve a `produccion`, y ahí
@@ -4074,6 +4797,13 @@ export class OrdenesTrabajoService {
           'La orden cambió de estado mientras la estabas actualizando. Recargala e intentá nuevamente.',
         );
       }
+      if (desde === 'borrador' && hacia !== 'cancelada' && esReferenciaBorrador(orden.numero)) {
+        const numero = await asignarNumeroOrden(tx, auth.tenantId, orden.id, new Date());
+        await tx.ordenTrabajoEvento.create({
+          data: { tenantId: auth.tenantId, ordenId: orden.id, tipo: 'numero_asignado',
+            descripcion: `Nº asignado ${numero}`, usuarioNombre: 'Sistema', origen: 'sistema' },
+        });
+      }
       if (tokenSeguimiento) {
         await this.enlaces.emitir(tx, {
           tenantId: auth.tenantId,
@@ -4216,6 +4946,7 @@ export class OrdenesTrabajoService {
     auth: CurrentAuth,
     id: string,
     payload: CancelarOrdenTrabajoDto,
+    soloBorrador = false,
   ) {
     const [orden, actor] = await Promise.all([
       this.prisma.ordenTrabajo.findFirst({
@@ -4230,6 +4961,7 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró la orden de trabajo.');
     }
 
+    if (soloBorrador && orden.estado !== 'borrador') throw new ConflictException('El borrador ya fue emitido. Recargá la orden antes de actuar.');
     const desde = orden.estado as OrdenTrabajoEstado;
     const motivo = payload.motivo.trim();
 
@@ -4393,8 +5125,10 @@ export class OrdenesTrabajoService {
         data: {
           tenantId: auth.tenantId,
           ordenId: orden.id,
-          tipo: 'cancelacion',
-          descripcion: `Orden cancelada (estaba ${ORDEN_TRABAJO_ESTADO_LABELS[desde].toLowerCase()}): ${motivo}`,
+          tipo: soloBorrador ? 'borrador_descartado' : 'cancelacion',
+          descripcion: soloBorrador
+            ? 'Borrador descartado y archivado. Se conserva el historial.'
+            : `Orden cancelada (estaba ${ORDEN_TRABAJO_ESTADO_LABELS[desde].toLowerCase()}): ${motivo}`,
           usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
           usuarioId: auth.userId,
           origen: 'usuario',
@@ -4503,7 +5237,7 @@ export class OrdenesTrabajoService {
     } catch (error) {
       this.logger.error(
         `Falló el descarte de promesas de ETA (orden ${ordenId}).`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
     }
   }
@@ -4835,7 +5569,9 @@ export class OrdenesTrabajoService {
 
     const nuevas = items.filter(
       (item) =>
-        item.descuentoCuponId && !actualesPorCupon.has(item.descuentoCuponId),
+        item.descuentoCuponId &&
+        (!actualesPorCupon.has(item.descuentoCuponId) ||
+          actualesPorCupon.get(item.descuentoCuponId)?.estado === 'LIBERADA'),
     );
     if (nuevas.length > 0) {
       await this.redimirCupones(tx, auth, ordenId, nuevas);
@@ -5033,12 +5769,15 @@ export class OrdenesTrabajoService {
         loteEntregaId: true,
         recetaSnapshotJson: true,
         trazabilidadSnapshotJson: true,
+        personalPrevistoJson: true,
         planEntrega: { select: { alternativaElegidaId: true } },
       },
     });
     for (const i of actuales.filter(
       (i) => i.contieneLotesEntrega || i.planEntrega?.alternativaElegidaId,
     )) {
+      if (leerPersonalPrevisto(i.personalPrevistoJson)?.pasos.length)
+        throw new ConflictException('Quitá la asignación previa del producto antes de distribuirlo en lotes; luego asigná sus operadores desde Producción.');
       await validarReprogramacionAlEmitir(tx, this.eta, tenantId, i.id);
       // Una revisión en preparación no reemplaza los lotes ya adoptados.
       // Sólo sincronizarLotesEntrega aplica explícitamente una nueva elección.
@@ -5061,6 +5800,8 @@ export class OrdenesTrabajoService {
         !i.planEntrega?.alternativaElegidaId &&
         (i.cotizacionItemId || i.loteEntregaId),
     );
+    const personalAnterior = conSnapshot.length
+      ? await tx.ordenTrabajoItemPaso.findMany({ where: { tenantId, itemId: { in: conSnapshot.map(i => i.id) } }, select: { itemId: true, nodoClave: true, asignacionManualJson: true } }) : [];
     if (opts?.reemplazar && conSnapshot.length > 0) {
       await tx.ordenTrabajoItemPaso.deleteMany({
         where: { tenantId, itemId: { in: conSnapshot.map((item) => item.id) } },
@@ -5136,7 +5877,38 @@ export class OrdenesTrabajoService {
         return [item.id, filas] as const;
       }),
     );
-    const data = [...dataPorItem.values()].flat();
+    const data = [...dataPorItem.values()].flat().map(fila => ({ ...fila, asignacionManualJson: undefined as Prisma.InputJsonValue | undefined }));
+    const requierePersonal = conSnapshot.some(item =>
+      (opts?.reemplazar || !personalAnterior.some(p => p.itemId === item.id)) &&
+      (leerPersonalPrevisto(item.personalPrevistoJson)?.pasos.length || personalAnterior.some(p => p.itemId === item.id && p.asignacionManualJson)));
+    const entradaPersonal = requierePersonal
+      ? await this.eta.contextoSimulacion(tenantId, tx, false, 'asignacion_automatica') : null;
+    if (entradaPersonal) {
+      for (const item of conSnapshot) {
+        // Una lectura del tablero no debe revalidar ni reescribir decisiones ya materializadas.
+        if (!opts?.reemplazar && personalAnterior.some(p => p.itemId === item.id)) continue;
+        const prevista = leerPersonalPrevisto(item.personalPrevistoJson);
+        if (prevista?.pasos.length && prevista.cotizacionItemId !== item.cotizacionItemId)
+          throw new ConflictException('La cotización cambió. Revisá los operadores antes de emitir.');
+        const filas = data.filter(f => f.itemId === item.id);
+        const selecciones = filas.flatMap(fila => {
+          const anterior = personalAnterior.find(p => p.itemId === item.id && p.nodoClave === fila.nodoClave);
+          const guardada = anterior ? anterior.asignacionManualJson : prevista?.pasos.find(p => p.nodoClave === fila.nodoClave)?.asignacion;
+          if (!guardada) return [];
+          const manual = leerAsignacionManual(guardada);
+          if (!manual) throw new ConflictException('La asignación de personal guardada no es válida.');
+          fila.asignacionManualJson = manual as unknown as Prisma.InputJsonValue;
+          return [{ nodoClave: fila.nodoClave, empleadoIds: manual.empleadoIds }];
+        });
+        const decisionesVigentes = personalAnterior.some(p => p.itemId === item.id)
+          ? personalAnterior.filter(p => p.itemId === item.id && p.asignacionManualJson)
+          : prevista?.pasos ?? [];
+        if (decisionesVigentes.some(p => !filas.some(f => f.nodoClave === p.nodoClave)))
+          throw new ConflictException('Cambió un paso con operador elegido. Revisá la asignación.');
+        const pasos = filas.map(f => ({ ...f, id: f.nodoClave, estado: 'pendiente' as const, iniciadoEl: null, demandaHumana: f.demandaHumanaJson }));
+        validarEleccionesPersonal(contextoPersonalDePasos(pasos, entradaPersonal.estaciones, entradaPersonal.tiempoEntrePasosMin, new Map(), new Map()), selecciones);
+      }
+    }
     if (data.length > 0) {
       // skipDuplicates = ON CONFLICT DO NOTHING contra el único
       // (itemId, indice): si dos materializaciones corren a la vez, el
@@ -5213,8 +5985,22 @@ export class OrdenesTrabajoService {
         );
       });
       if (gatesOperativos.length > 0) {
+        const sinStock = new Set(
+          (await tx.ordenTrabajo.findMany({
+            where: {
+              tenantId,
+              id: { in: [...new Set(gatesOperativos.map((g) => g.ordenId))] },
+              materialesInicioSinStock: true,
+            },
+            select: { id: true },
+          })).map((o) => o.id),
+        );
         await tx.ordenTrabajoPasoGate.createMany({
-          data: gatesOperativos,
+          data: gatesOperativos.map((g) =>
+            g.tipo === 'MATERIAL' && sinStock.has(g.ordenId)
+              ? { ...g, estado: 'OMITIDO_INICIO', detalle: DETALLE_INICIO_SIN_STOCK }
+              : g,
+          ),
           skipDuplicates: true,
         });
       }
@@ -5248,6 +6034,16 @@ export class OrdenesTrabajoService {
           conSnapshot.map((item) => [item.id, trazabilidadPorId.get(item.id)]),
         ),
       );
+      if (data.some(f => f.asignacionManualJson)) {
+        const entrada = await this.eta.contextoSimulacion(tenantId, tx, false, 'asignacion_automatica');
+        const plan = simularPersonal(entrada);
+        for (const fila of data.filter(f => f.asignacionManualJson)) {
+          const paso = pasosPersistidos.find(p => p.itemId === fila.itemId && p.nodoClave === fila.nodoClave);
+          const trazado = plan.traza.find(p => p.pasoId === paso?.id);
+          if (!trazado || trazado.parcial)
+            throw new ConflictException('No hay una fecha realizable para el personal elegido. Revisá operadores, horarios y dependencias antes de emitir.');
+        }
+      }
     }
   }
 
@@ -6178,6 +6974,7 @@ export class OrdenesTrabajoService {
         ...(soloPendientes ? { items: { some: itemActivoTablero } } : {}),
       },
       include: {
+        _count: archivosGeneralesTableroCount,
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
         items: {
@@ -6277,7 +7074,7 @@ export class OrdenesTrabajoService {
           { orden: { numero: { contains: q, mode: 'insensitive' } } },
           {
             orden: {
-              cliente: { nombre: { contains: q, mode: 'insensitive' } },
+              clienteId: { in: await idsClientesPorNombre(this.prisma, auth.tenantId, q) },
             },
           },
           {
@@ -6327,6 +7124,7 @@ export class OrdenesTrabajoService {
         ...itemTableroInclude,
         orden: {
           include: {
+            _count: archivosGeneralesTableroCount,
             cliente: { select: { nombre: true } },
             vendedor: { select: { nombreCompleto: true } },
           },
@@ -6368,6 +7166,55 @@ export class OrdenesTrabajoService {
     return this.tableroItemActualizado(auth, itemId);
   }
 
+  /** Proyección independiente de findOne: ni importes, ni snapshots, ni tokens. */
+  async detalleItemTablero(
+    auth: CurrentAuth,
+    itemId: string,
+  ): Promise<DetalleOperativoItem> {
+    const item = await this.prisma.ordenTrabajoItem.findFirst({
+      where: {
+        id: itemId,
+        tenantId: auth.tenantId,
+        contieneLotesEntrega: false,
+        orden: {
+          produccionControlada: true,
+          estado: { in: ['pendiente', 'produccion', 'finalizada', 'entregada'] },
+        },
+      },
+      select: {
+        jobContextSnapshotJson: true,
+        trazabilidadSnapshotJson: true,
+        cotizacionItem: { select: { jobContextJson: true, trazabilidadJson: true } },
+        orden: {
+          select: {
+            eventos: {
+              where: {
+                tenantId: auth.tenantId,
+                tipo: { in: ['paso', 'estado', 'emision'] },
+              },
+              select: { fecha: true, tipo: true, descripcion: true, usuarioNombre: true },
+              orderBy: { fecha: 'desc' },
+              take: 200,
+            },
+          },
+        },
+      },
+    });
+    if (!item) throw new NotFoundException('No se encontró el trabajo.');
+    return {
+      ...materialesYNotaOperativos(
+        item.jobContextSnapshotJson ?? item.cotizacionItem?.jobContextJson,
+        item.trazabilidadSnapshotJson ?? item.cotizacionItem?.trazabilidadJson,
+      ),
+      eventos: item.orden.eventos.map((evento) => ({
+        fecha: evento.fecha.toISOString(),
+        tipo: evento.tipo,
+        descripcion: evento.descripcion,
+        usuarioNombre: evento.usuarioNombre,
+      })),
+    };
+  }
+
   /**
    * Pasos materializados de UNA orden — alimenta el tab "Producción" del
    * detalle de OT (ver el estado sin ir al Tablero). Reusa la misma
@@ -6397,6 +7244,7 @@ export class OrdenesTrabajoService {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
       include: {
+        _count: archivosGeneralesTableroCount,
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
         items: {
@@ -6417,7 +7265,7 @@ export class OrdenesTrabajoService {
             // con el número, no la lista. Traer las filas para contarlas
             // sería N+1 disfrazado.
             _count: {
-              select: { archivos: { where: { estado: ArchivoEstado.LISTO } } },
+              select: { archivos: { where: { estado: ArchivoEstado.LISTO, generado: false } } },
             },
             pasos: {
               orderBy: { indice: 'asc' as const },
@@ -6880,6 +7728,7 @@ export class OrdenesTrabajoService {
           modoRegistro: true,
           mesaUsuarioId: true,
           asignacionPersonalJson: true,
+          asignacionManualJson: true,
           iniciadoEl: true,
           iniciadoPorId: true,
           duracionEstimadaMin: true,
@@ -6937,10 +7786,13 @@ export class OrdenesTrabajoService {
     }
     const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
     const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
+    const manual = leerAsignacionManual(paso.asignacionManualJson);
     const asignado =
       !!actor &&
-      !asignacion?.conflicto &&
-      asignacion?.personas.some((p) => p.empleadoId === actor.id);
+      (paso.asignacionManualJson
+        ? !!manual?.empleadoIds.includes(actor.id)
+        : !asignacion?.conflicto &&
+          asignacion?.personas.some((p) => p.empleadoId === actor.id));
     if (
       (payload.accion === 'desbloquear' || payload.accion === 'reabrir') &&
       !supervisa
@@ -6951,9 +7803,15 @@ export class OrdenesTrabajoService {
     }
     if (!supervisa) {
       await this.validarEjecucionEnEstacion(auth, paso, tx);
+      if (paso.asignacionManualJson && !asignado) {
+        throw new ForbiddenException(
+          'Este paso tiene una asignación manual a otra persona. Consultá al supervisor.',
+        );
+      }
       if (
         paso.mesaUsuarioId !== auth.userId &&
         !asignado &&
+        !ejecucionCompartidaPorEquipo(paso) &&
         !paso.tramos.some(
           (tramo) => tramo.usuarioId === auth.userId && !tramo.finEl,
         )
@@ -7513,6 +8371,7 @@ export class OrdenesTrabajoService {
     const item = await this.prisma.ordenTrabajoItem.findFirst({
       where: { id: itemId, tenantId: auth.tenantId },
       include: {
+        _count: itemTableroInclude._count,
         parentItem: { select: { id: true, nombre: true } },
         loteEntrega: { select: loteTableroSelect },
         cotizacionItem: {
@@ -7561,6 +8420,7 @@ export class OrdenesTrabajoService {
         },
         orden: {
           include: {
+            _count: archivosGeneralesTableroCount,
             cliente: { select: { nombre: true } },
             vendedor: { select: { nombreCompleto: true } },
           },
@@ -7807,6 +8667,10 @@ export class OrdenesTrabajoService {
           'Ese paso no exige la condición operativa indicada.',
         );
       }
+      if (gate.estado === 'OMITIDO_INICIO')
+        throw new ConflictException(
+          'Esta OT se emitió en modo de inicio sin stock. El requisito de material queda identificado como omitido.',
+        );
       const cumplido = payload.estado === 'CUMPLIDO';
       const actualizado = await tx.ordenTrabajoPasoGate.update({
         where: { id: gate.id },
@@ -7926,6 +8790,7 @@ export class OrdenesTrabajoService {
   private toTableroItem(
     orden: {
       id: string;
+      _count?: { archivos: number };
       numero: string;
       estado: string;
       fechaEntrega: Date | null;
@@ -8042,9 +8907,10 @@ export class OrdenesTrabajoService {
       contexto && typeof contexto === 'object' && !Array.isArray(contexto)
         ? (contexto as Record<string, unknown>)
         : null;
-    const pasosVisibles = item.pasos.filter(
-      (paso) => paso.nestingLoteRol !== 'PARTICIPANTE',
-    );
+    const pasosVisibles = ordenarPasosProduccion(
+      item.pasos,
+      (paso) => (paso.dependenciasEntrantes ?? []).map((d) => d.predecesorPasoId),
+    ).filter((paso) => paso.nestingLoteRol !== 'PARTICIPANTE');
     return {
       id: item.id,
       parentItemId: item.parentItemId,
@@ -8074,7 +8940,7 @@ export class OrdenesTrabajoService {
       fechaEntrega:
         (item.fechaEntrega ?? orden.fechaEntrega)?.toISOString().slice(0, 10) ??
         null,
-      archivosCount: item._count?.archivos ?? 0,
+      archivosCount: (item._count?.archivos ?? 0) + (orden._count?.archivos ?? 0),
       // El operario necesita estas instrucciones antes de iniciar Diseño
       // gráfico. Se proyecta sólo el brief, no todo el jobContext comercial.
       briefDiseno: jobContext?.briefDiseno ?? null,
@@ -8213,6 +9079,7 @@ export class OrdenesTrabajoService {
           paso.asignacionPersonalJson,
           viewerUserId,
         ),
+        ejecucionPorEquipo: ejecucionCompartidaPorEquipo(paso),
         mesaEsMia: paso.mesaUsuarioId === viewerUserId,
         mesaUsuarioNombre: paso.mesaUsuario
           ? paso.mesaUsuario.nombreCompleto || paso.mesaUsuario.email
@@ -8235,13 +9102,15 @@ export class OrdenesTrabajoService {
     );
     return {
       id: orden.id,
-      numero: orden.numero,
+      numero: numeroOrdenVisible(orden.numero),
       clienteId: orden.clienteId,
       clienteNombre: orden.cliente?.nombre ?? 'Sin cliente',
       vendedorEmpleadoId: orden.vendedorEmpleadoId,
       vendedorNombre: orden.vendedor?.nombreCompleto ?? '—',
       estado,
       creadaEl: orden.createdAt.toISOString(),
+      borradorDescartado:
+        estado === ESTADO_CANCELADA && orden.estadoAlCancelar === 'borrador',
       fechaEmision: orden.fechaEmision?.toISOString() ?? null,
       version: orden.updatedAt.toISOString(),
       fechaEntrega: orden.fechaEntrega
@@ -8370,6 +9239,7 @@ export class OrdenesTrabajoService {
           return {
             id: item.id,
             cotizacionItemId: item.cotizacionItemId,
+            asignacionesPersonal: eleccionesDePersonal(item.personalPrevistoJson),
             // Descuento comercial persistido (F1): para rehidratar la ficha con el
             // mismo descuento que aplicó el vendedor. Ver descuentos-diseno.md §10.
             descuentoTipo: itemDescuento.descuentoTipo ?? null,

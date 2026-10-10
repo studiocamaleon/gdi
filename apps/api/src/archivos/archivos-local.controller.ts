@@ -21,11 +21,11 @@ import { STORAGE_DRIVER, type StorageDriver } from './storage/storage.driver';
 
 /**
  * Tope por REQUEST, no por archivo: o un archivo entero que no llegó al umbral
- * de multipart, o una parte del más grande que aceptamos. Un archivo de 2 GB
- * entra igual — en 250 pedidos.
+ * de multipart, o una parte del más grande que aceptamos. Un archivo de
+ * 500 MB entra en partes sin ampliar el cuerpo de cada request.
  */
 const MAX_ARCHIVO = Number(
-  process.env.ARCHIVOS_MAX_BYTES ?? 2 * 1024 * 1024 * 1024,
+  process.env.ARCHIVOS_MAX_BYTES ?? 500 * 1024 * 1024,
 );
 const MAX_BYTES_REQUEST = topeDeRequest(MAX_ARCHIVO);
 
@@ -59,7 +59,7 @@ export class ArchivosLocalController {
   ): Promise<void> {
     const clave = this.claveDe(key, query);
     const cuerpo = await this.leerCuerpo(req);
-    await this.local.escribir(clave, cuerpo);
+    await this.local.escribir(clave, cuerpo, { soloCrear: query.sc === '1' });
     // ETag como lo devuelve S3/R2 (md5 entre comillas). La subida en partes
     // lo necesita para cerrar el multipart, así que el front usa el mismo
     // código en dev que en producción.

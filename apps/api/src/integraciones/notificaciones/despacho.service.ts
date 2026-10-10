@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -38,7 +39,7 @@ export const MAX_INTENTOS = 4;
 // multi-moneda-zona-horaria (D11), sí la modelamos.
 
 export type ResultadoDespacho =
-  | { estado: 'enviada' }
+  | { estado: 'aceptada' }
   | { estado: 'reprogramada'; para: Date }
   | { estado: 'pendiente'; motivo: string }
   | { estado: 'fallida'; motivo: string }
@@ -72,7 +73,7 @@ export class DespachoService {
     } catch (error) {
       this.logger.error(
         `Falló el despacho de la notificación ${id}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
       // Antes del POST se puede recuperar. Después de autorizarlo no sabemos
       // si Wati lo recibió: conservar la incertidumbre evita duplicar el aviso.
@@ -118,6 +119,16 @@ export class DespachoService {
       where: { id, canal: 'WATI' },
     });
     if (!n) return { estado: 'nada' };
+    if (n.cotizacionId && !(await this.prisma.cotizacion.findFirst({
+      where: { id: n.cotizacionId, tenantId: n.tenantId, versionVigente: true, estado: { not: 'descartado' } },
+      select: { id: true },
+    }))) {
+      await this.prisma.notificacionWhatsapp.updateMany({
+        where: { id, tenantId: n.tenantId, estado: ESTADOS.pendiente },
+        data: { estado: ESTADOS.descartada, motivo: 'El presupuesto fue reemplazado o descartado.' },
+      });
+      return { estado: 'descartada', motivo: 'Presupuesto no vigente.' };
+    }
     const reserva = await this.prisma.$transaction(async (tx) => {
       await bloquearCupoUsuarios(tx, n.tenantId);
       if (
@@ -197,13 +208,13 @@ export class DespachoService {
     // que nadie avise. Verificarlo acá da un motivo legible en vez de un
     // rechazo críptico de Wati.
     const remota = (await this.wati.listarPlantillas(cred)).find(
-      (p) => p.nombre === n.plantilla,
+      (p) => p.nombre === plantilla.codigo,
     );
     if (remota?.estado !== 'APPROVED') {
       const intentos = n.intentos + 1;
       await this.marcar(id, token, ESTADOS.pendiente, {
         intentos,
-        motivo: `La plantilla ${n.plantilla} está ${remota?.estado ?? 'sin crear'}.`,
+        motivo: `La plantilla ${plantilla.codigo} está ${remota?.estado ?? 'sin crear'}.`,
         // Una plantilla en revisión se aprueba sola en horas.
         programadaPara: new Date(ahora.getTime() + 60 * 60 * 1000),
       });
@@ -232,7 +243,7 @@ export class DespachoService {
     // orden acá, con firma fresca por envío. Para las de texto puro es
     // `undefined` y el envío va igual que siempre.
     const mediaHeaderUrl = await this.integraciones.mediaHeaderDe(
-      n.plantilla,
+      plantilla.codigo,
       parametros,
     );
 
@@ -260,7 +271,7 @@ export class DespachoService {
           estado: ESTADOS.reservada,
           reservaToken: token,
         },
-        data: { estado: ESTADOS.enviando, reservadaEl: new Date() },
+        data: { estado: ESTADOS.enviando, reservadaEl: new Date(), plantilla: plantilla.codigo },
       });
     });
     if (!autorizada.count) {
@@ -273,20 +284,23 @@ export class DespachoService {
 
     const res = await this.wati.enviarPlantilla(cred, {
       telefono: n.telefono,
-      plantilla: n.plantilla,
+      plantilla: plantilla.codigo,
       parametros,
-      broadcastName: `grafo_${n.evento}`,
+      broadcastName: `grafo_${token}`,
+      mediaHeaderParam: remota.parametroImagen,
       mediaHeaderUrl,
     });
 
     if (res.ok) {
-      await this.marcar(id, token, ESTADOS.enviada, {
+      await this.marcar(id, token, ESTADOS.aceptada, {
         intentos: n.intentos + 1,
         motivo: null,
-        enviadaEl: new Date(),
+        watiMensajeId: res.id,
+        estadoEntrega: "aceptado",
+        estadoEntregaEl: new Date(),
         programadaPara: null,
       });
-      return { estado: 'enviada' };
+      return { estado: 'aceptada' };
     }
 
     if (res.incierto) {
@@ -345,6 +359,9 @@ export class DespachoService {
       intentos: number;
       motivo?: string | null;
       enviadaEl?: Date;
+      watiMensajeId?: string | null;
+      estadoEntrega?: string;
+      estadoEntregaEl?: Date;
       programadaPara?: Date | null;
     },
   ): Promise<void> {

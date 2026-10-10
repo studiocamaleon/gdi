@@ -1,4 +1,5 @@
 import { validarSeleccionStockAlEmitir } from './seleccion-stock-emision';
+import { DETALLE_INICIO_SIN_STOCK } from './inicio-sin-stock';
 import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { comprasPorNecesidad } from '../compras/cobertura-compra';
 import {
@@ -20,6 +21,7 @@ import { bloquearVariantesStock, reservasPorSaldo } from './stock-reservas';
 import {
   ComandoReservasDto,
   PoliticaReservasDto,
+  InicioInventarioDto,
 } from './dto/comando-reservas.dto';
 import {
   OrigenMovimientoStockMateriaPrimaDto as Origen,
@@ -33,6 +35,7 @@ const equivalente = (a: string, b: string) =>
 const esUuid = (value: string) =>
   /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
 const ceroPolitica = {
+  inicioSinStock: false,
   modo: 'AL_EMITIR',
   habilitada: false,
   incluirConsumibles: false,
@@ -46,6 +49,49 @@ export class ReservasMaterialService {
     private readonly inventario: InventarioService,
     private readonly capacidades: CapacidadesEmpresaService,
   ) {}
+
+  async consultarInicio(tenantId: string) {
+    const politica = await this.politica(tenantId);
+    return { activo: politica.inicioSinStock, version: politica.version };
+  }
+
+  async guardarInicio(auth: CurrentAuth, data: InicioInventarioDto) {
+    const tenantId = auth.tenantId;
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`politica-reservas:${tenantId}`}, 0))::text`;
+      const politica = await this.politicaTx(tx, tenantId);
+      if (politica.version !== data.version)
+        throw new ConflictException(
+          'La configuración cambió. Actualizá antes de guardar.',
+        );
+      if (politica.inicioSinStock === data.activo)
+        return { activo: data.activo, version: politica.version };
+      const guardada = await tx.politicaReservasMaterial.upsert({
+        where: { tenantId },
+        create: { tenantId, inicioSinStock: data.activo },
+        update: { inicioSinStock: data.activo, version: { increment: 1 } },
+      });
+      await tx.eventoSistema.create({
+        data: {
+          tenantId,
+          tipo: 'inventario.modo_inicio',
+          entidadTipo: 'inventario',
+          actorUserId: auth.impersonacion?.actorUserId ?? auth.userId,
+          actorNombre: auth.impersonacion?.actorNombre ?? auth.email,
+          titulo: data.activo
+            ? 'Modo de inicio sin stock activado'
+            : 'Control normal de stock restablecido',
+          mensaje: data.activo
+            ? 'Las nuevas OTs se emitirán sin verificar stock ni crear reservas o consumos. Las órdenes anteriores conservan su control.'
+            : 'Las nuevas OTs usan el control habitual. Las emitidas en modo de inicio conservan su identificación y no descuentan stock retroactivamente.',
+          topicos: ['inventario'],
+          href: '/inventario/centro-stock',
+        },
+      });
+      return { activo: guardada.inicioSinStock, version: guardada.version };
+    });
+  }
 
   async politica(tenantId: string) {
     return (
@@ -378,12 +424,37 @@ export class ReservasMaterialService {
     await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
     if (opciones.alEmitir) {
       await this.bloquearOrden(tx, tenantId, ordenId);
-      await validarSeleccionStockAlEmitir(tx, tenantId, ordenId);
     }
     const control = await tx.ordenTrabajo.findFirst({
       where: { tenantId, id: ordenId },
-      select: { materialesControlados: true },
+      select: { materialesControlados: true, materialesInicioSinStock: true },
     });
+    if (!control)
+      throw new NotFoundException('Orden de trabajo no encontrada.');
+    if (control.materialesInicioSinStock) return;
+    if (opciones.alEmitir) {
+      const politica = await this.politicaTx(tx, tenantId);
+      if (politica.inicioSinStock && !control.materialesControlados) {
+        await tx.ordenTrabajo.update({
+          where: { id: ordenId },
+          data: { materialesInicioSinStock: true },
+        });
+        await tx.ordenTrabajoPasoGate.updateMany({
+          where: { tenantId, ordenId, tipo: 'MATERIAL', estado: 'PENDIENTE' },
+          data: { estado: 'OMITIDO_INICIO', detalle: DETALLE_INICIO_SIN_STOCK },
+        });
+        await this.auditar(
+          tx,
+          tenantId,
+          ordenId,
+          'inicio_sin_stock',
+          { motivo: DETALLE_INICIO_SIN_STOCK },
+          opciones.auth,
+        );
+        return;
+      }
+      await validarSeleccionStockAlEmitir(tx, tenantId, ordenId);
+    }
     if (
       !(await this.capacidades.incluida(tenantId, 'reservas', tx)) ||
       !(await this.capacidades.incluida(tenantId, 'existencias', tx))
@@ -570,6 +641,10 @@ export class ReservasMaterialService {
           tenantId,
           ordenId,
         );
+        if (orden.materialesInicioSinStock)
+          throw new ConflictException(
+            'Esta OT se emitió en modo de inicio sin stock. No admite reservas ni consumos de inventario.',
+          );
         // Consumir/liberar cierra necesidades existentes; no descubre ni reserva
         // materiales nuevos como efecto secundario, incluso si el plan los incluye.
         const soloContinuidad = cierre;
@@ -838,6 +913,7 @@ export class ReservasMaterialService {
         return {
           ...materiales,
           control: {
+            inicioSinStock: orden.materialesInicioSinStock,
             habilitado: politica.habilitada,
             modoReserva: politica.modo,
             iniciado: orden.materialesControlados,

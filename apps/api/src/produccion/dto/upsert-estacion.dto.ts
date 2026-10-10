@@ -130,6 +130,13 @@ export class UpsertEstacionDto {
   @IsUUID(undefined, { each: true })
   empleadoIds?: string[];
 
+  /** Subconjunto del personal habilitado, sólo asignable manualmente. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID(undefined, { each: true })
+  empleadoApoyoIds?: string[];
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(100)

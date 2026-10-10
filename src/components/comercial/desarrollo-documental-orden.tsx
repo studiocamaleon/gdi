@@ -12,7 +12,7 @@ export function DesarrolloDocumentalOrden({ ordenId, archivos, soloLectura, onCa
   onCambioDocumental: (next: EstadoDocumentalOrden) => void;
 }) {
   const conArte = useCapacidad("aprobacion_arte");
-  const puedeGestionar = usePuede("comercial.gestionar");
+  const puedeGestionar = usePuede("comercial.ordenes.gestionar");
   const [data, setData] = React.useState<DesarrolloDocumental | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [intento, setIntento] = React.useState(0);

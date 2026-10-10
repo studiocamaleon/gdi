@@ -319,3 +319,57 @@ it('conserva propuestas históricas sin fin sin inventar una referencia ni imped
     ),
   ).rejects.toBe(rollback);
 });
+
+it('permite retirar lotes pendientes con material omitido y conserva el modo en los pasos nuevos', async () => {
+  await expect(
+    db.$transaction(
+      async (tx) => {
+        const f = await fixture(tx);
+        await tx.ordenTrabajo.update({
+          where: { id: f.orden.id },
+          data: { materialesInicioSinStock: true },
+        });
+        const snapshot = f.raiz.recetaSnapshotJson as {
+          grafoProduccion: { nodos: Array<{ gates?: string[] }> };
+        };
+        for (const nodo of snapshot.grafoProduccion.nodos)
+          nodo.gates = ['MATERIAL', 'CALIDAD'];
+        await tx.ordenTrabajoItem.update({
+          where: { id: f.raiz.id },
+          data: { recetaSnapshotJson: snapshot },
+        });
+        await service.sincronizarLotesEntrega(tx, f.tenantId, f.raiz.id);
+        const paso = await tx.ordenTrabajoItemPaso.findFirstOrThrow({
+          where: { ordenId: f.orden.id },
+        });
+        await tx.ordenTrabajoPasoGate.upsert({
+          where: { pasoId_tipo: { pasoId: paso.id, tipo: 'MATERIAL' } },
+          create: {
+            tenantId: f.tenantId,
+            ordenId: f.orden.id,
+            pasoId: paso.id,
+            tipo: 'MATERIAL',
+            estado: 'OMITIDO_INICIO',
+          },
+          update: { estado: 'OMITIDO_INICIO' },
+        });
+        await tx.planEntregaItem.update({
+          where: { id: f.plan.id },
+          data: { alternativaElegidaId: null },
+        });
+        await service.sincronizarLotesEntrega(tx, f.tenantId, f.raiz.id, true);
+        const gates = await tx.ordenTrabajoPasoGate.findMany({
+          where: { ordenId: f.orden.id },
+        });
+        expect(gates.map((g) => ({ tipo: g.tipo, estado: g.estado }))).toEqual(
+          expect.arrayContaining([
+            { tipo: 'MATERIAL', estado: 'OMITIDO_INICIO' },
+            { tipo: 'CALIDAD', estado: 'PENDIENTE' },
+          ]),
+        );
+        throw rollback;
+      },
+      { timeout: 60_000 },
+    ),
+  ).rejects.toBe(rollback);
+});

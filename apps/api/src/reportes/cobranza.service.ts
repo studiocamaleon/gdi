@@ -1,3 +1,5 @@
+import { alcanceCuentas, filtroCuentas } from '../administracion/acceso-cuentas';
+import type { CurrentAuth } from '../auth/auth.types';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { diasDelRango, finExclusivo, type Rango } from './periodo';
@@ -45,7 +47,9 @@ export type CostoCobrarMetodo = {
 export class CobranzaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async finanzas(tenantId: string, rango: Rango, hoy: Date = new Date()) {
+  async finanzas(auth: CurrentAuth, rango: Rango, hoy: Date = new Date()) {
+    const tenantId = auth.tenantId;
+    const alcance = await alcanceCuentas(this.prisma, auth);
     const desde = rango.desde;
     const hastaExcl = finExclusivo(rango);
 
@@ -114,7 +118,7 @@ export class CobranzaService {
           select: { estado: true, importe: true, fechaPago: true },
         }),
         this.prisma.cuentaFondos.findMany({
-          where: { tenantId },
+          where: { tenantId, ...filtroCuentas(alcance) },
           select: { nombre: true, saldo: true },
           orderBy: { nombre: 'asc' },
         }),

@@ -321,6 +321,7 @@ export function AsignacionPersonalSheet({
                         <UserRound size={16} />
                         <Label>
                           {c.nombre}
+                          <small>{c.asignacionAutomatica === false ? "Apoyo · elección manual" : "Habitual"}</small>
                           {!c.tieneHorario && (
                             <small>Sin horario configurado</small>
                           )}

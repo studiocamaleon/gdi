@@ -1,3 +1,5 @@
+import { reportarFallo } from '../../common/observabilidad';
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   Injectable,
@@ -54,13 +56,23 @@ export class CotizacionWorker
       removeOnComplete: { age: 24 * 60 * 60, count: 2_000 },
       removeOnFail: { age: 7 * 24 * 60 * 60, count: 5_000 },
     });
+    this.worker.on('failed', (job, error) =>
+      reportarFallo(error, {
+        operacion: 'cola',
+        cola: 'cotizacion',
+        tenant_id: job?.data.input.tenantId,
+      }),
+    );
+    this.worker.on('error', (error) =>
+      reportarFallo(error, { operacion: 'cola', cola: 'cotizacion' }),
+    );
     await this.worker.waitUntilReady();
     this.worker.on('failed', (job, error) =>
       this.logger.error({
         event: 'quote_job_failed',
         jobId: job?.id,
         tenantId: job?.data.input.tenantId,
-        message: error.message,
+        message: textoErrorLog(error),
       }),
     );
     this.worker.on('completed', (job) =>
@@ -137,7 +149,7 @@ export class CotizacionWorker
         await this.capacidadesPlan.exigirTodas(job.data.input.tenantId, [
           'analisis_vectorial',
           'aprovechamiento_cotizacion',
-      'nesting_irregular',
+          'nesting_irregular',
         ]);
       await actualizarPreparacion('PROCESANDO');
       await job.updateProgress({ porcentaje: 10, etapa: 'cotizando' });
@@ -169,7 +181,7 @@ export class CotizacionWorker
         .liberar(lease)
         .catch((error: unknown) =>
           this.logger.warn(
-            `No se pudo liberar concurrencia de cotización job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+            `No se pudo liberar concurrencia de cotización job=${jobId}: ${textoErrorLog(error)}`,
           ),
         );
     }

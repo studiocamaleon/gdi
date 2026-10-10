@@ -1,3 +1,4 @@
+import { PRODUCTO_CON_IVA_SQL } from './importes-referencia-sql';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PASOS_ECONOMICOS_SQL, COSTO_VARIABLE_PASO_SQL } from './costos-snapshot-sql';
@@ -17,6 +18,7 @@ export type CategoriaGasto = { categoria: string; monto: number; pct: number };
 
 export type RentabilidadPeriodo = {
   ventas: number;
+  ventasConIva: number;
   costoTotal: number;
   margenBruto: number;
   margenBrutoPct: number;
@@ -42,9 +44,10 @@ export class RentabilidadService {
     const [ventasCosto, variables, gastosFijos] = await Promise.all([
       // Ventas (neto del OT item) + costo (snapshot de cotización).
       this.prisma.$queryRaw<
-        Array<{ ventas: number; costo: number; items_sin_costo: number }>
+        Array<{ ventas: number; ventasConIva: number; costo: number; items_sin_costo: number }>
       >`
         SELECT COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
+               COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "ventasConIva",
                COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo,
                COUNT(*) FILTER (WHERE ci.id IS NULL)::int AS items_sin_costo
         FROM "OrdenTrabajoItem" oti
@@ -125,6 +128,7 @@ export class RentabilidadService {
 
     return {
       ventas: r2(ventas),
+      ventasConIva: r2(ventasCosto[0]?.ventasConIva ?? 0),
       costoTotal: r2(costoTotal),
       margenBruto: r2(margenBruto),
       margenBrutoPct: ventas > 0 ? r2((margenBruto / ventas) * 100) : 0,

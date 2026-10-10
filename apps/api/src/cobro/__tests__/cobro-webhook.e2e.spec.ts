@@ -6,6 +6,7 @@ import { json } from 'express';
 import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomUUID } from 'node:crypto';
+import type { Server } from 'node:http';
 import { CobroWebhookController } from '../cobro-webhook.controller';
 import { PaddleService } from '../paddle.service';
 import { SuscripcionSyncService } from '../suscripcion-sync.service';
@@ -32,7 +33,7 @@ function firmar(body: string, ts = Math.floor(Date.now() / 1000)): string {
 }
 
 describe('POST /webhooks/paddle (HTTP real)', () => {
-  let app: INestApplication;
+  let app: INestApplication<Server>;
   let tenantId: string;
   let planId: string;
   const priceId = `pri_${randomUUID().slice(0, 10)}`;
@@ -84,6 +85,9 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
       select: { id: true },
     });
     planId = p.id;
+    await prisma.suscripcion.create({
+      data: { tenantId, planId, proveedor: 'paddle', referenciaExterna: subId },
+    });
   });
 
   afterAll(async () => {
@@ -129,6 +133,47 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
       .set('paddle-signature', firmar('{"otra":"cosa"}'))
       .send(body)
       .expect(401);
+  });
+
+  it('una firma válida no autoriza un alta histórica por custom_data', async () => {
+    const evento = JSON.parse(
+      cuerpo('active', `evt_ajeno_${randomUUID()}`),
+    ) as {
+      data: { id: string };
+    };
+    evento.data.id = `sub_${randomUUID().replaceAll('-', '').slice(0, 26)}`;
+    const body = JSON.stringify(evento);
+    const antes = await prisma.suscripcion.findUniqueOrThrow({
+      where: { tenantId },
+    });
+    // También se comprueba el caso sin vínculo previo en la suite de aislamiento.
+    await prisma.suscripcion.update({
+      where: { tenantId },
+      data: { estado: 'baja' },
+    });
+    try {
+      const respuesta = await request(app.getHttpServer())
+        .post('/webhooks/paddle')
+        .set('content-type', 'application/json')
+        .set('paddle-signature', firmar(body))
+        .send(body)
+        .expect(200);
+      expect((respuesta.body as { sinAplicar?: string }).sinAplicar).toMatch(
+        /precios históricos/i,
+      );
+      expect(
+        await prisma.suscripcion.findUniqueOrThrow({ where: { tenantId } }),
+      ).toMatchObject({
+        referenciaExterna: subId,
+        estado: 'baja',
+        planId,
+      });
+    } finally {
+      await prisma.suscripcion.update({
+        where: { tenantId },
+        data: { estado: antes.estado },
+      });
+    }
   });
 
   it('acepta el evento firmado y sincroniza la suscripción', async () => {

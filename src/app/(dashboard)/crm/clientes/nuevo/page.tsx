@@ -12,7 +12,7 @@ const ClienteFicha = dynamicImport(
 );
 export default async function Page() {
   if (!(await tieneCapacidad("clientes"))) return <FuncionNoIncluida />;
-  if (!(await puedeConfigurar("clientes", "crm.gestionar")))
+  if (!(await puedeConfigurar("clientes", "crm.clientes.gestionar")))
     return <SinPermiso modulo="Gestionar clientes" />;
   return (
     <DesignSystemProvider theme="brand" appearance="light">

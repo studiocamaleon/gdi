@@ -23,7 +23,7 @@ import type {
   TabPanel,
 } from "@/lib/panel-api";
 import { cn } from "@/lib/utils";
-import { Metric, NoData, ReportCard, ReportSource } from "./reportes-ui";
+import { Metric, NoData, ReportCard, ReportSource, IvaReference, SalesScopeNote, sumarReferencias } from "./reportes-ui";
 import { ProductoMix, VentasProductoTabla } from "./reporte-producto-mix";
 import shared from "./reportes.module.css";
 import styles from "./reporte-producto.module.css";
@@ -135,6 +135,7 @@ export function ReporteProducto({
         <span>Lectura del catálogo</span>
         <span>Órdenes emitidas · ventas sin IVA</span>
       </div>
+      <SalesScopeNote />
       <div className={shared.metrics}>
         <Metric
           featured
@@ -142,7 +143,9 @@ export function ReporteProducto({
           value={abreviarMoneda(ventas, moneda)}
           detail={`${money(ventas)} · sin IVA`}
           icon={<WalletIcon />}
-        />
+        >
+          <IvaReference value={sumarReferencias(d.porCategoria.map((p) => p.ventasConIva))} />
+        </Metric>
         <Metric
           label="Ítems vendidos"
           value={numero(ad.itemsTotales)}
@@ -241,7 +244,7 @@ export function ReporteProducto({
                       </th>
                       <td>{numero(a.items)}</td>
                       <td>{pct(a.pctItems)}</td>
-                      <td>{money(a.ventas)}</td>
+                      <td>{money(a.ventas)}<IvaReference value={a.ventasConIva} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -275,12 +278,12 @@ export function ReporteProducto({
               <div className={styles.ticketSummary}>
                 <div>
                   <span>Con adicionales</span>
-                  <strong>{ticketCon ? money(ad.ticketItemCon) : "—"}</strong>
+                  <strong>{ticketCon ? money(ad.ticketItemCon) : "—"}<IvaReference value={ticketCon ? ad.ticketItemConConIva : undefined} /></strong>
                   <small>{numero(ad.itemsCon)} ítems</small>
                 </div>
                 <div>
                   <span>Sin adicionales</span>
-                  <strong>{ticketSin ? money(ad.ticketItemSin) : "—"}</strong>
+                  <strong>{ticketSin ? money(ad.ticketItemSin) : "—"}<IvaReference value={ticketSin ? ad.ticketItemSinConIva : undefined} /></strong>
                   <small>{numero(ad.itemsTotales - ad.itemsCon)} ítems</small>
                 </div>
               </div>
@@ -315,12 +318,12 @@ export function ReporteProducto({
                       <tr>
                         <th scope="row">Con adicionales</th>
                         <td>{numero(ad.itemsCon)}</td>
-                        <td>{ticketCon ? money(ad.ticketItemCon) : "—"}</td>
+                        <td>{ticketCon ? money(ad.ticketItemCon) : "—"}<IvaReference value={ticketCon ? ad.ticketItemConConIva : undefined} /></td>
                       </tr>
                       <tr>
                         <th scope="row">Sin adicionales</th>
                         <td>{numero(ad.itemsTotales - ad.itemsCon)}</td>
-                        <td>{ticketSin ? money(ad.ticketItemSin) : "—"}</td>
+                        <td>{ticketSin ? money(ad.ticketItemSin) : "—"}<IvaReference value={ticketSin ? ad.ticketItemSinConIva : undefined} /></td>
                       </tr>
                     </tbody>
                   </table>
@@ -579,7 +582,7 @@ export function ReporteProducto({
                       <Track value={m.pct} />
                     </th>
                     <td>{pct(m.pct)}</td>
-                    <td>{money(m.monto)}</td>
+                    <td>{money(m.monto)}<IvaReference value={m.montoConIva} /></td>
                   </tr>
                 ))}
               </tbody>

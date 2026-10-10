@@ -23,6 +23,7 @@ import focus from "@/components/design-system/field-focus.module.css";
 import s from "./presupuesto-detalle-view.module.css";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   ArrowLeftIcon,
   ArrowUpRight,
@@ -48,6 +49,7 @@ import {
 import {
   convertirPresupuesto,
   getPresupuesto,
+  descartarPresupuesto,
   presupuestoPdfUrl,
   presupuestoPublicPath,
   presupuestoPublicUrl,
@@ -61,7 +63,6 @@ import {
   useConfigRegional,
   useFecha,
 } from "@/components/navigation/config-regional-provider";
-import type { MembershipRole } from "@/lib/auth";
 import { nombreCanalVenta } from "@/lib/canales-venta";
 import { fechaConDia } from "@/lib/fecha";
 import { claveFechaEnZona } from "@/lib/zona";
@@ -75,6 +76,8 @@ const ESTADO_META: Record<PresupuestoEstado, { label: string }> = {
   rechazado: { label: "Rechazado" },
   vencido: { label: "Vencido" },
   convertido: { label: "Convertido en OT" },
+  descartado: { label: "Descartado" },
+  reemplazado: { label: "Versión anterior" },
 };
 
 /** Camino feliz del presupuesto. Rechazado/vencido se muestran aparte. */
@@ -99,11 +102,10 @@ const canalLabel = (v: string | null) => nombreCanalVenta(v);
 const fmtMoneda = (n: number, moneda: Moneda) =>
   formatearMoneda(n, moneda, { decimales: 0 });
 
-type Tab = "productos" | "conversion" | "historial";
+type Tab = "productos" | "conversion" | "historial" | "versiones";
 
 type PresupuestoDetalleViewProps = {
   inicial: PresupuestoDetalle;
-  rol: MembershipRole;
 };
 export function PresupuestoDetalleView(props: PresupuestoDetalleViewProps) {
   return (
@@ -115,13 +117,12 @@ export function PresupuestoDetalleView(props: PresupuestoDetalleViewProps) {
 
 function PresupuestoDetalleContent({
   inicial,
-  rol,
 }: PresupuestoDetalleViewProps) {
-  const puedeEnviar = usePuede("comercial.gestionar");
+  const permisoGestionar = usePuede("comercial.presupuestos.gestionar");
   const conPresupuestos = useCapacidad("presupuestos");
   const conPdf = useCapacidad("documentos_pdf");
   const conEta = useCapacidad("eta_capacidad");
-  const { zonaHoraria } = useConfigRegional();
+  const { zonaHoraria, moneda } = useConfigRegional();
   const [fechaConversionAbierta, setFechaConversionAbierta] = React.useState(false);
   const [fechaConversion, setFechaConversion] = React.useState("");
   const scope = useDesignScope();
@@ -136,6 +137,10 @@ function PresupuestoDetalleContent({
       : "—";
   const fmtMomento = fechaHora;
   const [d, setD] = React.useState<PresupuestoDetalle>(inicial);
+  const puedeEnviar = permisoGestionar && d.versionVigente !== false && d.estado !== "descartado";
+  const [descartarAbierto, setDescartarAbierto] = React.useState(false);
+  const puedeVersionar = permisoGestionar && conPresupuestos && d.versionVigente !== false &&
+    ["borrador", "enviado", "rechazado", "vencido", "descartado"].includes(d.estado) && d.ordenesConvertidas.length === 0;
   const [tab, setTab] = React.useState<Tab>("productos");
   const [trabajando, setTrabajando] = React.useState(false);
   const [correoAbierto, setCorreoAbierto] = React.useState(false);
@@ -144,12 +149,12 @@ function PresupuestoDetalleContent({
   React.useEffect(() => {
     const url = new URL(window.location.href);
     const canal = url.searchParams.get("correo");
-    if ((d.estado === "enviado" || d.estado === "borrador") && (canal === "correo" || canal === "ambos")) {
+    if (d.versionVigente !== false && (d.estado === "enviado" || d.estado === "borrador") && (canal === "correo" || canal === "ambos")) {
       setCanalCorreo(canal); setCorreoAbierto(true);
       url.searchParams.delete("correo");
       window.history.replaceState(window.history.state, "", url);
     }
-  }, [d.estado]);
+  }, [d.estado, d.versionVigente]);
   const accionEnCurso = React.useRef(false);
   const [aprobacionAbierta, setAprobacionAbierta] = React.useState(false);
   const [rechazoAbierto, setRechazoAbierto] = React.useState(false);
@@ -168,7 +173,9 @@ function PresupuestoDetalleContent({
       ),
   );
 
-  const puedeAprobar = rol === "administrador" || rol === "supervisor";
+  const permisoAprobar = usePuede("comercial.aprobar_descuento");
+  const permisoVerPresupuesto = usePuede("comercial.presupuestos.ver");
+  const puedeAprobar = permisoAprobar && permisoVerPresupuesto;
   const id = d.id;
 
   const cargar = React.useCallback(async () => {
@@ -310,6 +317,8 @@ function PresupuestoDetalleContent({
           )}
         </div>
         <div className={s.headerActions}>
+          {puedeVersionar && <ActionLink variant="outline" href={`/comercial/presupuestos/${id}/editar`}>Editar · nueva versión</ActionLink>}
+          {puedeEnviar && d.estado === "borrador" && <ActionButton variant="outline" isDisabled={trabajando} onPress={() => setDescartarAbierto(true)}>Descartar borrador</ActionButton>}
           {d.estado === "enviado" && <ActionButton variant="outline" isDisabled={trabajando || !puedeEnviar || !conPresupuestos} onPress={() => setCorreoAbierto(true)}><SendIcon aria-hidden /> Enviar al cliente</ActionButton>}
           {(d.pdfDisponible ?? conPdf) && <ActionLink
             variant="outline"
@@ -341,6 +350,11 @@ function PresupuestoDetalleContent({
           )}
         </div>
       </header>
+      <p className={s.subtitle}>Versión {d.versionPresupuesto ?? 1}{d.versionVigente === false ? " · Histórica, no admite aprobación ni conversión" : " · Vigente"}</p>
+      <ConfirmacionDestructiva apariencia="heroui" open={descartarAbierto} onOpenChange={setDescartarAbierto}
+        titulo="Descartar borrador de presupuesto" requiereTipear={false}
+        descripcion="Se retira de los presupuestos activos y conserva su contenido y el autor del descarte en el historial."
+        accionLabel="Descartar borrador" onConfirmar={() => accion(async () => { await descartarPresupuesto(id); setDescartarAbierto(false); }, "Borrador descartado.")} />
 
       <ol className={s.flow} aria-label="Ciclo del presupuesto">
         {(fueraDelFlujo ? [d.estado] : FLUJO).map((estado, i) => {
@@ -438,6 +452,7 @@ function PresupuestoDetalleContent({
             tone="graphite"
             variant="detailed"
             items={[
+              { id: "versiones", label: "Versiones", description: "Propuestas anteriores", icon: <HistoryIcon aria-hidden />, count: d.versiones?.length ?? 1 },
               {
                 id: "productos",
                 label: "Productos",
@@ -460,6 +475,17 @@ function PresupuestoDetalleContent({
               },
             ]}
           />
+          <Tabs.Panel id="versiones" className={s.tabPanel}>
+            <SectionHeading icon={HistoryIcon} title="Versiones del presupuesto" description="Cada versión conserva sus productos, cantidades, precios, envíos y decisiones." />
+            <div className={s.versiones}>
+              {(d.versiones ?? []).map(v => <Link className={s.versionFila} key={v.id} href={`/comercial/presupuestos/${v.id}`}>
+                <strong>Versión {v.version}{v.vigente ? " · Vigente" : ""}</strong>
+                <span>{ESTADO_META[v.estado]?.label ?? v.estado} · {v.autor ?? "Sin autor registrado"}</span>
+                <span>{fmtMomento(v.creadaEl)} · {fmtMoneda(v.total, moneda)}</span>
+                <span>{v.enviadaEl ? `Enviada ${fmtMomento(v.enviadaEl)}` : "Sin enviar"}</span>
+              </Link>)}
+            </div>
+          </Tabs.Panel>
           <Tabs.Panel id="productos" className={s.tabPanel}>
             <TabProductos d={d} />
           </Tabs.Panel>
@@ -729,11 +755,14 @@ function AccionesEstado({
   seleccionadas: number;
   disponibles: number;
 }) {
-  const puedeEnviar = usePuede("comercial.gestionar");
+  const puedeEnviar = usePuede("comercial.presupuestos.gestionar");
   const conPresupuestos = useCapacidad("presupuestos");
   const conOrdenes = useCapacidad("ordenes");
+  const puedeCrearOrden = usePuede("comercial.ordenes.gestionar");
   const conEta = useCapacidad("eta_capacidad");
   const conEnlace = useCapacidad("aprobacion_presupuestos");
+  if (d.versionVigente === false || d.estado === "descartado") return null;
+  if (!puedeEnviar && !(d.estado === "pendiente_aprobacion" && puedeAprobar)) return null;
   if (d.estado === "convertido") {
     return (
       <div className={s.actionBar} data-tone="success">
@@ -808,7 +837,7 @@ function AccionesEstado({
           </div>
         ) : (
           <span className={s.actionDescription}>
-            Lo tiene que resolver un administrador.
+            Lo tiene que resolver alguien con permiso de aprobación.
           </span>
         )}
       </div>
@@ -863,9 +892,9 @@ function AccionesEstado({
         </div>
         <ActionButton
           type="button"
-          isDisabled={trabajando || seleccionadas === 0 || !conOrdenes}
+          isDisabled={trabajando || seleccionadas === 0 || !conOrdenes || !puedeCrearOrden}
           isPending={trabajando}
-          title={!conOrdenes ? "La creación de órdenes no está incluida en el plan actual." : undefined}
+          title={!conOrdenes ? "La creación de órdenes no está incluida en el plan actual." : !puedeCrearOrden ? "Necesitás permiso para gestionar órdenes." : undefined}
           onPress={onConvertir}
         >
           {trabajando ? "Emitiendo OT…" : "Convertir en orden"}
@@ -969,6 +998,23 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
             <div className={s.productTotal}>
               <span>Total con impuestos</span>
               <strong>{fmtMoneda(item.total, moneda)}</strong>
+            </div>
+          </div>
+        </Card>
+      ))}
+      {d.cargos?.map((cargo, idx) => (
+        <Card key={`cargo-${idx}`} className={s.product}>
+          <div className={s.productHead}>
+            <div className={s.productIdentity}>
+              <span className={s.eyebrow}>Cargo adicional</span>
+              <h3>{cargo.nombre}</h3>
+            </div>
+          </div>
+          {cargo.descripcion && <p>{cargo.descripcion}</p>}
+          <div className={s.productAmounts}>
+            <div className={s.productTotal}>
+              <span>Total con impuestos</span>
+              <strong>{fmtMoneda(cargo.total, moneda)}</strong>
             </div>
           </div>
         </Card>
@@ -1086,7 +1132,7 @@ function TabConversion({
   const { moneda } = useConfigRegional();
   const convertibles = d.items.filter((i) => i.cotizacionItemId != null);
   const pendientes = convertibles.filter((i) => !i.conversion);
-  const disponible = d.estado === "aprobado";
+  const disponible = d.versionVigente !== false && d.estado === "aprobado";
   const toggle = (id: string) => {
     const next = new Set(seleccion);
     if (next.has(id)) next.delete(id);

@@ -1,0 +1,154 @@
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import {
+  RegistrarCobroView,
+  type ClienteCobroContexto,
+  type OrdenContexto,
+} from "@/components/administracion/registrar-cobro-view";
+import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
+import {
+  getCobros,
+  getCuentaCorriente,
+  getCuentasFondos,
+  getMetodosPago,
+} from "@/lib/administracion-api";
+import { getOrdenTrabajo } from "@/lib/ordenes-trabajo-api";
+import { ApiError } from "@/lib/api";
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { getClienteById } from "@/lib/clientes-api";
+
+export const dynamic = "force-dynamic";
+
+export default async function RegistrarCobroPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ordenId?: string; clienteId?: string }>;
+}) {
+  const { ordenId, clienteId } = await searchParams;
+  const [puedeCobrar, puedeGestionar] = await Promise.all([
+    tienePermiso("administracion.cobrar"),
+    tienePermiso("administracion.cobrar.gestionar"),
+  ]);
+  if (!puedeCobrar && !puedeGestionar)
+    return <SinPermiso modulo="registrar cobros" />;
+  // Esta operación tiene una puerta propia: cobrar desde una OT no exige
+  // habilitar Cuentas por cobrar, Tesorería ni la sección Administración.
+  if (ordenId && !(await tienePermiso("comercial.ordenes.ver")))
+    return <SinPermiso modulo="la orden de trabajo" />;
+  if (
+    !ordenId &&
+    clienteId &&
+    !(await tienePermiso("crm.clientes.ver")) &&
+    !(await tienePermiso("administracion.cobrar.ver"))
+  )
+    return <SinPermiso modulo="el cliente" />;
+  const conCobros = await tieneCapacidad("cobros");
+  if (!conCobros && !ordenId) return <FuncionNoIncluida />;
+
+  let cobroNoDisponible = false;
+  let contexto: OrdenContexto | ClienteCobroContexto | null = null;
+  let metodos: MetodoPago[] = [];
+  let cuentas: CuentaFondosResumen[] = [];
+
+  try {
+    [metodos, cuentas] = await Promise.all([
+      getMetodosPago(),
+      getCuentasFondos(),
+    ]);
+    if (ordenId) {
+      const [detalle, cobros] = await Promise.all([
+        getOrdenTrabajo(ordenId),
+        getCobros({ ordenId }),
+      ]);
+      if (
+        !conCobros &&
+        (detalle.cobrosHabilitadosEmision === false ||
+          detalle.total <= (detalle.cobradoTotal ?? 0) ||
+          ["borrador", "cancelada"].includes(detalle.estado))
+      )
+        cobroNoDisponible = true;
+      contexto = {
+        tipo: "orden",
+        id: detalle.id,
+        numero: detalle.numero,
+        clienteId: detalle.clienteId,
+        clienteNombre: detalle.clienteNombre,
+        resumen: detalle.resumen,
+        total: detalle.total,
+        cobradoBruto: cobros.reduce(
+          (s, c) => s + (c.montoAplicadoOrden ?? c.montoBruto),
+          0,
+        ),
+      };
+    } else if (clienteId) {
+      if (
+        (await tieneCapacidad("cuentas_cobrar")) &&
+        (await tienePermiso("administracion.cobrar.ver"))
+      ) {
+        const cc = await getCuentaCorriente(clienteId);
+        contexto = {
+          tipo: "cliente",
+          id: cc.cliente.id,
+          nombre: cc.cliente.nombre,
+          saldo: cc.saldo,
+        };
+      } else {
+        const cliente = await getClienteById(clienteId);
+        if (!cliente) notFound();
+        contexto = {
+          tipo: "cliente",
+          id: cliente.id,
+          nombre: cliente.nombre,
+          saldo: null,
+        };
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
+  }
+
+  if (cobroNoDisponible) return <FuncionNoIncluida />;
+
+  if (contexto) {
+    return (
+      <RegistrarCobroView
+        contexto={contexto}
+        metodos={metodos}
+        cuentas={cuentas}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        padding: "48px 28px",
+      }}
+    >
+      <div style={{ maxWidth: 520, margin: "0 auto", textAlign: "center" }}>
+        <h1 style={{ fontSize: 18, fontWeight: 650, marginBottom: 8 }}>
+          Falta indicar qué cobro querés registrar
+        </h1>
+        <p style={{ color: "var(--muted-text)", fontSize: 13.5 }}>
+          Entrá desde una orden de trabajo o desde la cuenta corriente de un
+          cliente.
+        </p>
+        <Link
+          href="/produccion/ordenes"
+          className="btn btn-primary"
+          style={{ marginTop: 20, display: "inline-flex" }}
+        >
+          Ir a Órdenes de trabajo
+        </Link>
+      </div>
+    </div>
+  );
+}

@@ -153,6 +153,40 @@ describe.each([
       zona: "America/Argentina/Rio_Gallegos",
       noLaborables,
     });
+  it("el apoyo no aumenta la dotación automática, pero puede elegirse manualmente", () => {
+    const est = personal("copiado", [persona("ana"), persona("bruno")]);
+    est.empleados[1].asignacionAutomatica = false;
+    const automatico = correr([manual("a", "copiado"), manual("b", "copiado")], [est]);
+    expect(automatico.traza).toHaveLength(2);
+    expect(automatico.traza.flatMap(p => p.reservasHumanas?.flatMap(r => r.empleadoIds))).toEqual(["ana", "ana"]);
+    expect(automatico.traza[1].inicio.getTime()).toBeGreaterThanOrEqual(automatico.traza[0].fin.getTime());
+    const elegido = manual("c", "copiado");
+    elegido.pasos[0].personalFijo = { empleadoIds: ["bruno"] };
+    expect(correr([elegido], [est]).traza[0].reservasHumanas?.[0].empleadoIds).toEqual(["bruno"]);
+  });
+  it("una estación con sólo apoyo espera una elección explícita", () => {
+    const est = personal("copiado", [persona("bruno")]);
+    est.empleados[0].asignacionAutomatica = false;
+    expect(correr([manual("a", "copiado")], [est]).traza).toHaveLength(0);
+  });
+  it("el apoyo no se asigna simultáneamente en dos estaciones", () => {
+    const otra = personal("armado", [persona("bruno")]);
+    const est = personal("copiado", [persona("bruno")]);
+    est.empleados[0].asignacionAutomatica = false;
+    const a = manual("a", "armado"), b = manual("b", "copiado");
+    b.pasos[0].personalFijo = { empleadoIds: ["bruno"] };
+    const r = correr([a, b], [otra, est]);
+    expect(r.traza).toHaveLength(2);
+    expect(r.traza[1].inicio.getTime()).toBeGreaterThanOrEqual(r.traza[0].fin.getTime());
+  });
+  it("no completa automáticamente una dotación doble con personal de apoyo", () => {
+    const est = personal("copiado", [persona("ana"), persona("bruno")]);
+    est.empleados[1].asignacionAutomatica = false;
+    const trabajo = manual("a", "copiado", 60, 2);
+    expect(correr([trabajo], [est]).traza).toHaveLength(0);
+    trabajo.pasos[0].personalFijo = { empleadoIds: ["ana", "bruno"] };
+    expect(correr([trabajo], [est]).traza[0].reservasHumanas?.[0].empleadoIds?.sort()).toEqual(["ana", "bruno"]);
+  });
   it.each([
     ["lona", [5, 21.98571428571429, 1.014285714285709]],
     ["láser", [15, 16.91933166666667, 0.08066833333332823]],

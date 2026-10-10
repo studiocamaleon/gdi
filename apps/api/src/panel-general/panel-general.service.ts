@@ -52,10 +52,10 @@ type EntregaPanel = {
     progresoPct: number | null;
     progreso?: ReturnType<typeof calcularProgreso>;
   }>;
-  fechaEntrega: string;
+  fechaEntrega: string | null;
   progresoPct: number | null;
   progreso?: ReturnType<typeof calcularProgreso>;
-  riesgo: 'atrasada' | 'hoy' | 'proxima';
+  riesgo: 'atrasada' | 'hoy' | 'proxima' | 'lista';
   pasoActual: string | null;
   estacionActual: string | null;
   href: string;
@@ -129,11 +129,11 @@ export class PanelGeneralService {
       );
     };
     const permisos = auth.permisos ?? new Set<string>();
-    const veComercial = permisos.has('comercial.ver');
-    const gestionaComercial = permisos.has('comercial.gestionar');
-    const veProduccion = permisos.has('produccion.ver');
-    const gestionaProduccion = permisos.has('produccion.gestionar');
-    const gestionaAdministracion = permisos.has('administracion.gestionar');
+    const veComercial = permisos.has('comercial.ordenes.ver');
+    const gestionaComercial = permisos.has('comercial.ordenes.gestionar');
+    const veProduccion = permisos.has('produccion.tablero.ver');
+    const gestionaProduccion = permisos.has('produccion.tablero.gestionar');
+    const gestionaAdministracion = ['administracion.facturacion.gestionar','administracion.cobrar.gestionar','administracion.pagar.gestionar'].every(p => permisos.has(p));
     const aprueba = permisos.has('comercial.aprobar_descuento');
     const perfilSoloProductivo =
       veProduccion &&
@@ -144,7 +144,7 @@ export class PanelGeneralService {
       gestionaComercial &&
       !gestionaAdministracion &&
       !gestionaProduccion &&
-      !permisos.has('reportes.ver_resumen');
+      !permisos.has('reportes.resumen.ver');
 
     const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
     const ahora = new Date();
@@ -187,7 +187,7 @@ export class PanelGeneralService {
       perfilSoloProductivo || (!veProduccion && !veComercial)
         ? Promise.resolve([])
         : this.ordenesProximas(auth.tenantId, hoy, enSiete, filtroVendedor),
-      veComercial && !vendedorSinVinculo
+      veComercial && permisos.has('comercial.presupuestos.ver') && !vendedorSinVinculo
         ? this.resumenComercial(auth.tenantId, hoy, enTres, filtroVendedor)
         : Promise.resolve({ pendientesAprobacion: 0, porVencer: 0 }),
       gestionaAdministracion
@@ -256,6 +256,7 @@ export class PanelGeneralService {
               hoy: grupoEntregas('hoy'),
               atrasada: grupoEntregas('atrasada'),
               proxima: grupoEntregas('proxima'),
+              lista: grupoEntregas('lista'),
             }
           : null,
       generadoEl: ahora.toISOString(),
@@ -324,7 +325,7 @@ export class PanelGeneralService {
           where: {
             tenantId,
             ...filtroVendedor,
-            estado: { in: ['pendiente', 'produccion', 'finalizada'] },
+            estado: { in: ['pendiente', 'produccion'] },
             fechaEntrega: { lt: fechaDb(hoy) },
           },
         }),
@@ -373,8 +374,15 @@ export class PanelGeneralService {
       where: {
         tenantId,
         ...filtroVendedor,
-        estado: { in: ['pendiente', 'produccion', 'finalizada'] },
-        fechaEntrega: { lte: fechaDb(enSiete) },
+        OR: [
+          {
+            estado: { in: ['pendiente', 'produccion'] },
+            fechaEntrega: { lte: fechaDb(enSiete) },
+          },
+          // Una OT terminada espera el retiro, incluso sin fecha o fuera de
+          // la ventana de siete días. Nunca vuelve a atrasarse por no retirarla.
+          { estado: 'finalizada' },
+        ],
       },
       orderBy: [{ fechaEntrega: 'asc' }, { createdAt: 'asc' }],
       include: {
@@ -415,7 +423,7 @@ export class PanelGeneralService {
         pasos.find((p) =>
           ['en_curso', 'pausado', 'bloqueado'].includes(p.estado),
         ) ?? pasos.find((p) => p.estado !== 'hecho');
-      const fecha = orden.fechaEntrega!.toISOString().slice(0, 10);
+      const fecha = orden.fechaEntrega?.toISOString().slice(0, 10) ?? null;
       return {
         id: orden.id,
         numero: orden.numero,
@@ -428,7 +436,14 @@ export class PanelGeneralService {
         fechaEntrega: fecha,
         progresoPct: calcularProgreso(pasos, orden.estado).porcentaje,
         progreso: calcularProgreso(pasos, orden.estado),
-        riesgo: fecha < hoy ? 'atrasada' : fecha === hoy ? 'hoy' : 'proxima',
+        riesgo:
+          orden.estado === 'finalizada'
+            ? 'lista'
+            : fecha! < hoy
+              ? 'atrasada'
+              : fecha === hoy
+                ? 'hoy'
+                : 'proxima',
         pasoActual: actual?.nombre ?? null,
         estacionActual: actual?.centroCostoNombre ?? null,
         href: `/produccion/ordenes/${orden.id}`,
@@ -447,7 +462,7 @@ export class PanelGeneralService {
         where: {
           tenantId,
           ...filtroVendedor,
-          numero: { not: null },
+          numero: { not: null }, versionVigente: true,
           estado: 'pendiente_aprobacion',
         },
       }),
@@ -455,7 +470,7 @@ export class PanelGeneralService {
         where: {
           tenantId,
           ...filtroVendedor,
-          numero: { not: null },
+          numero: { not: null }, versionVigente: true,
           estado: 'enviado',
           fechaValidez: { gte: fechaDb(hoy), lte: fechaDb(enTres) },
         },
@@ -605,7 +620,7 @@ export class PanelGeneralService {
           valor: prod.atrasadas,
           formato: 'cantidad',
           tono: prod.atrasadas ? 'critico' : 'ok',
-          detalle: 'Órdenes activas fuera de fecha',
+          detalle: 'Órdenes sin terminar con fecha vencida',
           href: '/produccion/ordenes?urgencia=atrasadas',
         },
         {
@@ -729,7 +744,8 @@ export class PanelGeneralService {
               dominio: 'produccion',
               severidad: 'critico',
               titulo: 'Órdenes atrasadas',
-              detalle: 'La fecha prometida ya venció y la orden sigue abierta.',
+              detalle:
+                'La fecha prometida ya venció y la producción sigue sin terminar.',
               cantidad: input.prod.atrasadas,
               href: '/produccion/ordenes?urgencia=atrasadas',
             }

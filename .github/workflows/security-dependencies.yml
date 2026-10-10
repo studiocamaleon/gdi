@@ -1,0 +1,41 @@
+name: Revisar dependencias de ejecución
+
+on:
+  pull_request:
+    branches: [main, 'codex/**']
+    paths:
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '.github/workflows/security-dependencies.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-dependencies-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  npm:
+    # Revisar el presupuesto antes de usar ejecutores en un repo privado.
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Comprobar todos los locks sin instalar ni ejecutar paquetes del PR
+        shell: bash
+        run: |
+          failed=0
+          for directory in . apps/api apps/marketing apps/forma-studio apps/whatsapp-extension grafo-hotwire-linker-v1 deploy/recuperacion; do
+            echo "::group::$directory"
+            docker run --rm --read-only --tmpfs /tmp -e npm_config_cache=/tmp/npm-cache \
+              -v "$GITHUB_WORKSPACE:/repo:ro" -w "/repo/$directory" \
+              node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 \
+              npm audit --omit=dev --ignore-scripts --audit-level=high || failed=1
+            echo "::endgroup::"
+          done
+          exit "$failed"

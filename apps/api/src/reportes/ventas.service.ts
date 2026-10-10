@@ -1,3 +1,4 @@
+import { PRODUCTO_CON_IVA_SQL } from './importes-referencia-sql';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,8 +26,8 @@ const DIAS_DORMIDO = 60;
 
 const TRUNC: Record<Granularidad, string> = { dia: 'day', semana: 'week', mes: 'month' };
 
-export type RankingItem = { id: string | null; nombre: string; ordenes: number; facturado: number };
-export type MixItem = { nombre: string; monto: number; pct: number };
+export type RankingItem = { id: string | null; nombre: string; ordenes: number; facturado: number; facturadoConIva: number };
+export type MixItem = { nombre: string; monto: number; montoConIva: number; pct: number };
 export type ClienteDormido = {
   clienteId: string | null;
   cliente: string;
@@ -39,8 +40,10 @@ export type PuntoTicket = {
   ordenes: number;
   ticketPromedio: number;
   ticketMediana: number;
+  ticketPromedioConIva: number;
+  ticketMedianaConIva: number;
 };
-export type CeldaEstacionalidad = { categoria: string; mes: string; monto: number };
+export type CeldaEstacionalidad = { categoria: string; mes: string; monto: number; montoConIva: number };
 
 @Injectable()
 export class VentasService {
@@ -53,14 +56,15 @@ export class VentasService {
   async serie(
     tenantId: string,
     rango: Rango,
-  ): Promise<Array<{ fecha: string; monto: number; costo: number }>> {
+  ): Promise<Array<{ fecha: string; monto: number; montoConIva: number; costo: number }>> {
     const truncUnit = Prisma.raw(`'${TRUNC[granularidad(rango)]}'`);
     // La columna es timestamp SIN zona con UTC adentro: primero se le declara
     // el UTC y recién ahí se lleva al reloj del tenant, para que el bucket
     // "día" sea el día de SU pared.
-    const rows = await this.prisma.$queryRaw<Array<{ fecha: string; monto: number; costo: number }>>`
+    const rows = await this.prisma.$queryRaw<Array<{ fecha: string; monto: number; montoConIva: number; costo: number }>>`
       SELECT to_char(date_trunc(${truncUnit}, (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona}), 'YYYY-MM-DD') AS fecha,
              COALESCE(SUM(oti.subtotal), 0)::float8 AS monto,
+             COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "montoConIva",
              COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
@@ -69,17 +73,18 @@ export class VentasService {
         AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
       GROUP BY 1 ORDER BY 1
     `;
-    return rows.map((s) => ({ fecha: s.fecha, monto: r2(s.monto), costo: r2(s.costo) }));
+    return rows.map((s) => ({ fecha: s.fecha, monto: r2(s.monto), montoConIva: r2(s.montoConIva), costo: r2(s.costo) }));
   }
 
   /** Top clientes del rango por facturación (para Resumen y Comercial). */
   async topClientes(tenantId: string, rango: Rango, limite = 5): Promise<RankingItem[]> {
     const rows = await this.prisma.$queryRaw<
-      Array<{ id: string | null; nombre: string; ordenes: number; facturado: number }>
+      Array<{ id: string | null; nombre: string; ordenes: number; facturado: number; facturadoConIva: number }>
     >`
       SELECT ot."clienteId" AS id, COALESCE(c.nombre, 'Sin cliente') AS nombre,
              COUNT(DISTINCT ot.id)::int AS ordenes,
-             COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado
+             COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado,
+             COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "facturadoConIva"
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "Cliente" c ON c.id = ot."clienteId"
@@ -89,7 +94,7 @@ export class VentasService {
       ORDER BY facturado DESC
       LIMIT ${limite}
     `;
-    return rows.map((r) => ({ ...r, facturado: r2(r.facturado) }));
+    return rows.map((r) => ({ ...r, facturado: r2(r.facturado), facturadoConIva: r2(r.facturadoConIva) }));
   }
 
   /**
@@ -100,11 +105,11 @@ export class VentasService {
   async serieTicket(tenantId: string, rango: Rango): Promise<PuntoTicket[]> {
     const truncUnit = Prisma.raw(`'${TRUNC[granularidad(rango)]}'`);
     const rows = await this.prisma.$queryRaw<
-      Array<{ fecha: string; ordenes: number; promedio: number; mediana: number }>
+      Array<{ fecha: string; ordenes: number; promedio: number; mediana: number; promedioConIva: number; medianaConIva: number }>
     >`
       WITH ordenes AS (
         SELECT ot.id, date_trunc(${truncUnit}, (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona}) AS bucket,
-               SUM(oti.subtotal) AS total
+               SUM(oti.subtotal) AS total, SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}) AS total_con_iva
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
@@ -113,6 +118,8 @@ export class VentasService {
       )
       SELECT to_char(bucket, 'YYYY-MM-DD') AS fecha, COUNT(*)::int AS ordenes,
              COALESCE(AVG(total), 0)::float8 AS promedio,
+             COALESCE(AVG(total_con_iva), 0)::float8 AS "promedioConIva",
+             COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY total_con_iva), 0)::float8 AS "medianaConIva",
              COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY total), 0)::float8 AS mediana
       FROM ordenes GROUP BY bucket ORDER BY bucket
     `;
@@ -121,6 +128,8 @@ export class VentasService {
       ordenes: r.ordenes,
       ticketPromedio: r2(r.promedio),
       ticketMediana: r2(r.mediana),
+      ticketPromedioConIva: r2(r.promedioConIva),
+      ticketMedianaConIva: r2(r.medianaConIva),
     }));
   }
 
@@ -140,14 +149,15 @@ export class VentasService {
     const rows = await this.prisma.$queryRaw<CeldaEstacionalidad[]>`
       SELECT COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') AS categoria,
              to_char(date_trunc('month', (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona}), 'YYYY-MM') AS mes,
-             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
+             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto,
+             COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "montoConIva"
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${desde12} AND ot."fechaEmision" < ${finExclusivo(rango)}
       GROUP BY 1, 2 ORDER BY 2, 1
     `;
-    return rows.map((r) => ({ ...r, monto: r2(r.monto) }));
+    return rows.map((r) => ({ ...r, monto: r2(r.monto), montoConIva: r2(r.montoConIva) }));
   }
 
   async comercial(tenantId: string, rango: Rango, anterior: Rango, hoy: Date = new Date()) {
@@ -164,9 +174,10 @@ export class VentasService {
         this.serieTicket(tenantId, rango),
         this.estacionalidad(tenantId, rango),
         this.topClientes(tenantId, rango, 8),
-        this.prisma.$queryRaw<Array<{ id: string | null; nombre: string; ordenes: number; facturado: number }>>`
+        this.prisma.$queryRaw<Array<{ id: string | null; nombre: string; ordenes: number; facturado: number; facturadoConIva: number }>>`
           SELECT ot."vendedorEmpleadoId" AS id, COALESCE(e."nombreCompleto", 'Sin vendedor') AS nombre,
-                 COUNT(DISTINCT ot.id)::int AS ordenes, COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado
+                 COUNT(DISTINCT ot.id)::int AS ordenes, COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado,
+             COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "facturadoConIva"
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
           LEFT JOIN "Empleado" e ON e.id = ot."vendedorEmpleadoId"
@@ -175,18 +186,20 @@ export class VentasService {
           GROUP BY ot."vendedorEmpleadoId", e."nombreCompleto"
           ORDER BY facturado DESC
         `,
-        this.prisma.$queryRaw<Array<{ nombre: string; monto: number }>>`
+        this.prisma.$queryRaw<Array<{ nombre: string; monto: number; montoConIva: number }>>`
           SELECT COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') AS nombre,
-                 COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
+                 COALESCE(SUM(oti.subtotal), 0)::float8 AS monto,
+             COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "montoConIva"
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
           WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
             AND ot."fechaEmision" >= ${desde} AND ot."fechaEmision" < ${hastaExcl}
           GROUP BY 1 ORDER BY monto DESC
         `,
-        this.prisma.$queryRaw<Array<{ nombre: string; monto: number }>>`
+        this.prisma.$queryRaw<Array<{ nombre: string; monto: number; montoConIva: number }>>`
           SELECT COALESCE(ci."jobContextJson"->>'tecnologia', 'Sin especificar') AS nombre,
-                 COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
+                 COALESCE(SUM(oti.subtotal), 0)::float8 AS monto,
+             COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "montoConIva"
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
           LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
@@ -242,6 +255,8 @@ export class VentasService {
     return {
       kpis: {
         ventas: r2(total.ventas),
+        ventasConIva: r2(total.ventasConIva),
+        ticketPromedioConIva: total.ordenes > 0 ? r2(total.ventasConIva / total.ordenes) : 0,
         ventasDeltaPct: prev.ventas > 0 ? r2(((total.ventas - prev.ventas) / prev.ventas) * 100) : null,
         /** vs. mismo período del año anterior; null hasta que exista esa historia. */
         ventasDeltaAnualPct:
@@ -258,7 +273,7 @@ export class VentasService {
       estacionalidad: estacionalidadRows,
       granularidad: gran,
       rankingClientes: clientes,
-      rankingVendedores: vendedores.map((v) => ({ ...v, facturado: r2(v.facturado) })),
+      rankingVendedores: vendedores.map((v) => ({ ...v, facturado: r2(v.facturado), facturadoConIva: r2(v.facturadoConIva) })),
       mixCategoria,
       mixTecnologia,
       dormidos,
@@ -268,9 +283,10 @@ export class VentasService {
 
   private async totales(tenantId: string, rango: Rango) {
     const rows = await this.prisma.$queryRaw<
-      Array<{ ventas: number; ordenes: number; items: number }>
+      Array<{ ventas: number; ventasConIva: number; ordenes: number; items: number }>
     >`
       SELECT COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
+             COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "ventasConIva",
              COUNT(DISTINCT ot.id)::int AS ordenes,
              COUNT(*)::int AS items
       FROM "OrdenTrabajoItem" oti
@@ -278,14 +294,15 @@ export class VentasService {
       WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
     `;
-    return rows[0] ?? { ventas: 0, ordenes: 0, items: 0 };
+    return rows[0] ?? { ventas: 0, ventasConIva: 0, ordenes: 0, items: 0 };
   }
 
-  private conPct(rows: Array<{ nombre: string; monto: number }>): MixItem[] {
+  private conPct(rows: Array<{ nombre: string; monto: number; montoConIva: number }>): MixItem[] {
     const total = rows.reduce((a, r) => a + r.monto, 0);
     return rows.map((r) => ({
       nombre: r.nombre,
       monto: r2(r.monto),
+      montoConIva: r2(r.montoConIva),
       pct: total > 0 ? r2((r.monto / total) * 100) : 0,
     }));
   }

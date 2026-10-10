@@ -1,3 +1,5 @@
+import { gateOperativoCumplido } from "../../apps/api/src/ordenes-trabajo/gate-operativo-cumplido";
+import { ordenarPasosProduccion } from "../../apps/api/src/ordenes-trabajo/orden-pasos-produccion";
 import {
   codigoVisibleItem,
   nombreTrabajoTablero,
@@ -111,7 +113,7 @@ function motivosEspera(
     );
   }
   for (const gate of paso.gatesOperativos ?? []) {
-    if (gate.estado !== "CUMPLIDO")
+    if (!gateOperativoCumplido(gate))
       motivos.push(
         gate.detalle ||
           (gate.tipo === "MATERIAL"
@@ -152,6 +154,16 @@ export function buildItemView(
   ahora = new Date(),
   incluyePaso?: (paso: TableroPasoData) => boolean,
 ): ItemView {
+  // La API puede haber ordenado también pasos compartidos que ya no se
+  // muestran. En un DAG, conservar ese orden al desempatar ramas visibles.
+  item = {
+    ...item,
+    pasos: ordenarPasosProduccion(
+      item.pasos,
+      (p) => p.predecesorPasoIds ?? [],
+      item.pasos.some((p) => p.nodoClave) ? "entrada" : "indice",
+    ),
+  };
   const activos = pasosActivos(item);
   // El filtro elige qué paso se representa, sin recortar la ruta ni perder
   // dependencias. El detalle y los permisos siguen usando el item completo.

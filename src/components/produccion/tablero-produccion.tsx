@@ -1,5 +1,7 @@
 "use client";
-import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { DescargarArchivosButton } from "@/components/archivos/descargar-archivos-button";
+import { useCapacidad, useImpresionDirecta } from "@/components/navigation/capacidades-provider";
+import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
 import { asignacionPermiteEjecutar } from "@/lib/acciones-produccion";
 import { filtrarTrabajos, metricasTrabajos, opcionesEstacionesTablero, type FiltrosTrabajo } from "@/lib/tablero-lista";
 import { modoTableroEnUrl, urlTableroEstacion } from "@/lib/tablero-navegacion";
@@ -65,13 +67,10 @@ import {
 } from "@/lib/tablero-produccion";
 import { PasoAccionesProduccion } from "./paso-acciones";
 import {
-  getOrdenTrabajo,
+  getDetalleItemTablero,
+  type DetalleOperativoItem,
   getItemTablero,
 } from "@/lib/ordenes-trabajo-api";
-import type {
-  OrdenTrabajoDetalle,
-  OrdenTrabajoEvento,
-} from "@/lib/ordenes-trabajo";
 import {
   type Estacion,
 } from "@/lib/estaciones";
@@ -295,22 +294,23 @@ export function GatesOperativos({
   return (
     <div className="ds-terc">
       {gates.map((gate) => {
-        const cumplido = gate.estado === "CUMPLIDO";
+        const omitido = gate.tipo === "MATERIAL" && gate.estado === "OMITIDO_INICIO";
+        const cumplido = gate.estado === "CUMPLIDO" || omitido;
         const etiqueta = gate.tipo === "MATERIAL" ? "Material" : "Calidad";
         return (
           <React.Fragment key={gate.id}>
             <span
               className={`dst-badge ${cumplido ? "recibido" : "pendiente"}`}
             >
-              {cumplido ? "✓ " : ""}
-              {etiqueta}
+              {omitido ? "" : cumplido ? "✓ " : ""}
+              {omitido ? "Material · modo de inicio" : etiqueta}
             </span>
             <span className="dst-info">
-              {cumplido
+              {omitido ? "Stock sin verificar; no bloquea esta OT" : cumplido
                 ? `Confirmado${gate.resueltoPorNombre ? ` por ${gate.resueltoPorNombre}` : ""}`
                 : "Pendiente: bloquea la ejecución"}
             </span>
-            {canSupervise ? (
+            {canSupervise && !omitido ? (
               <Button
                 type="button"
                 variant="outline"
@@ -472,7 +472,8 @@ function DetailRuta({
               </div>
 
               {paso.asignacionPersonal && <div className={toolbar.assignment}>
-                <span>Personal asignado · {paso.asignacionPersonal.personas.map(p => p.nombre).join(" · ") || "Sin asignar"}</span>
+                <span>{paso.ejecucionPorEquipo ? "Personal previsto" : "Personal asignado"} · {paso.asignacionPersonal.personas.map(p => p.nombre).join(" · ") || "Sin asignar"}</span>
+                {paso.ejecucionPorEquipo && <span>Puede hacerlo el equipo de la estación</span>}
                 {paso.asignacionPersonal.conflicto && <span role="status" className={toolbar.assignmentConflict}>{paso.asignacionPersonal.conflicto}</span>}
               </div>}
 
@@ -565,121 +566,51 @@ function DetailRuta({
 
 type MaterialRow = { nombre: string; cantidad: number; unidad: string };
 
-/** Nota de producción del item (jobContext.notasProduccion del snapshot). */
-function notaProduccionDeDetalle(
-  detalle: OrdenTrabajoDetalle,
-  itemId: string,
-): string | null {
-  const producto = detalle.productos.find((entry) => entry.id === itemId);
-  const jobContext = producto?.snapshot?.jobContext as
-    { notasProduccion?: unknown } | null | undefined;
-  const nota =
-    typeof jobContext?.notasProduccion === "string"
-      ? jobContext.notasProduccion.trim()
-      : "";
-  return nota || null;
-}
-
-/** Materiales estimados del item, desde la trazabilidad del snapshot. */
-function materialesDeDetalle(
-  detalle: OrdenTrabajoDetalle,
-  itemId: string,
-): MaterialRow[] {
-  const producto = detalle.productos.find((entry) => entry.id === itemId);
-  const trazabilidad = producto?.snapshot?.trazabilidad as
-    | {
-        pasos?: Array<{
-          activado?: boolean;
-          materiales?: Array<Record<string, unknown>>;
-        }>;
-      }
-    | null
-    | undefined;
-  if (!trazabilidad?.pasos) return [];
-  const rows: MaterialRow[] = [];
-  for (const paso of trazabilidad.pasos) {
-    if (!paso?.activado || !Array.isArray(paso.materiales)) continue;
-    for (const material of paso.materiales) {
-      rows.push({
-        nombre:
-          (material.materialDisplayName as string) ||
-          (material.materialNombre as string) ||
-          "Material",
-        cantidad: Number(material.cantidad ?? 0),
-        unidad: (material.unidad as string) || "",
-      });
-    }
-  }
-  return rows;
-}
-
-/**
- * El arte del item, al alcance de la mano en la mesa. Se carga recién al
- * abrir el tab: el tablero ya trae bastante payload y el operario abre los
- * archivos de un item por vez, no de los cuarenta.
- *
- * Es de sólo lectura a propósito — desde el tablero se consume el arte, no se
- * administra. Subir y borrar viven en la ficha de la orden.
- */
-function DetailArchivos({ itemId }: { itemId: string }) {
-  const [archivos, setArchivos] = React.useState<Archivo[] | null>(null);
+/** Adjuntos compartidos de la OT y arte exclusivo del trabajo abierto. */
+export function DetailArchivos({ itemId, ordenId }: { itemId: string; ordenId: string }) {
+  const [datos, setDatos] = React.useState<{ itemId: string; ordenId: string; generales: Archivo[]; propios: Archivo[] } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let vivo = true;
-    setArchivos(null);
+    setDatos(null);
     setError(null);
-    listarArchivos("ORDEN_ITEM", itemId)
-      .then((r) => {
-        if (vivo) setArchivos(r);
-      })
-      .catch((e: unknown) => {
-        if (vivo) {
-          setError(e instanceof Error ? e.message : "No se pudieron cargar.");
-        }
-      });
-    return () => {
-      vivo = false;
-    };
-  }, [itemId]);
+    Promise.all([listarArchivos("ORDEN", ordenId), listarArchivos("ORDEN_ITEM", itemId)])
+      .then(([generales, propios]) => { if (vivo) setDatos({ itemId, ordenId, generales, propios }); })
+      .catch((e: unknown) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudieron cargar los archivos."); });
+    return () => { vivo = false; };
+  }, [itemId, ordenId]);
 
-  if (error) return <div className="detail-route-empty">{error}</div>;
-  if (!archivos)
+  if (error) return <div className="detail-route-empty" role="alert">{error}</div>;
+  if (!datos || datos.itemId !== itemId || datos.ordenId !== ordenId)
     return <div className="detail-route-empty">Cargando archivos…</div>;
-  if (archivos.length === 0) {
-    return (
-      <div className="detail-route-empty">
-        Este item no tiene arte cargado. Se sube desde la ficha de la orden.
-      </div>
-    );
-  }
   return (
-    <div className="arch-lista" style={{ marginTop: 0 }}>
-      {archivos.map((a) => (
-        <a
-          key={a.id}
-          className="arch-row"
-          href={urlDeArchivo(a.id)}
-          target="_blank"
-          rel="noreferrer"
-          style={{ textDecoration: "none", color: "inherit" }}
-        >
-          <span className="arch-ico">
-            {a.esImagen ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={urlDeArchivo(a.id)} alt="" />
-            ) : (
-              <FileTextIcon />
-            )}
-          </span>
-          <div className="arch-nom">
-            <b>{a.nombre}</b>
-            <span>
-              {formatBytes(a.bytes)}
-              {a.subidoPor ? ` · ${a.subidoPor}` : ""}
-            </span>
-          </div>
-        </a>
+    <div className="flex flex-col gap-5">
+      <div className="flex justify-end">
+        <DescargarArchivosButton tipo="item" id={itemId} disabled={!datos.generales.length && !datos.propios.length} />
+      </div>
+      {[
+        { titulo: "Archivos generales", archivos: datos.generales, vacio: "La orden no tiene archivos generales." },
+        { titulo: "Archivos del ítem", archivos: datos.propios, vacio: "Este ítem no tiene archivos propios." },
+      ].map(({ titulo, archivos, vacio }) => (
+        <section key={titulo} aria-label={titulo}>
+          <h3 className="mb-2 text-sm font-semibold">{titulo} <span className="text-muted-foreground">({archivos.length})</span></h3>
+          {archivos.length ? (
+            <div className="arch-lista" style={{ marginTop: 0 }}>
+              {archivos.map((a) => (
+                <a key={a.id} className="arch-row" href={urlDeArchivo(a.id)} target="_blank" rel="noreferrer" style={{ textDecoration: "none", color: "inherit" }}>
+                  <span className="arch-ico">
+                    {a.esImagen ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={urlDeArchivo(a.id)} alt="" />
+                    ) : <FileTextIcon />}
+                  </span>
+                  <div className="arch-nom"><b>{a.nombre}</b><span>{formatBytes(a.bytes)}{a.subidoPor ? ` · ${a.subidoPor}` : ""}</span></div>
+                </a>
+              ))}
+            </div>
+          ) : <p className="detail-route-empty">{vacio}</p>}
+        </section>
       ))}
     </div>
   );
@@ -732,7 +663,7 @@ function DetailActividad({
   eventos,
   cargando,
 }: {
-  eventos: OrdenTrabajoEvento[];
+  eventos: DetalleOperativoItem["eventos"];
   cargando: boolean;
 }) {
   if (cargando)
@@ -787,58 +718,68 @@ export function ItemDetailSheet({
   onClose: () => void;
 }) {
   const [tab, setTab] = React.useState("ruta");
-  const [detalle, setDetalle] = React.useState<OrdenTrabajoDetalle | null>(
+  const [detalle, setDetalle] = React.useState<DetalleOperativoItem | null>(
     null,
   );
   const [cargandoDetalle, setCargandoDetalle] = React.useState(false);
-  const ordenId = item?.data.ordenId;
+  const [errorDetalle, setErrorDetalle] = React.useState(false);
+  const itemId = item?.id;
+  const puede = usePuedeFn();
+  const puedeVerOrden = puede("comercial.ordenes.ver");
+  const conDescargaEtiqueta = useCapacidad("etiquetas_pdf");
+  const impresionDirecta = useImpresionDirecta();
+  const [etiquetaItemId, setEtiquetaItemId] = React.useState<string | null>(null);
+  const puedeEtiquetar =
+    (item?.data.ordenEstado === "finalizada" || item?.data.ordenEstado === "entregada") &&
+    (puede("produccion.tablero.ver") || puede("produccion.ejecutar")) &&
+    (conDescargaEtiqueta || impresionDirecta);
+  const etiquetaAbierta = etiquetaItemId === itemId && puedeEtiquetar;
 
-  // Materiales y actividad viven en el detalle de la orden: se trae una vez
-  // al abrir el sheet (y se refresca si cambió la orden seleccionada).
   React.useEffect(() => {
-    if (!ordenId) return;
-    if (alcance === "operario") {
-      setDetalle(null);
-      setCargandoDetalle(false);
-      return;
-    }
+    setEtiquetaItemId(null);
+  }, [itemId]);
+
+  // Sólo la proyección operativa; nunca descargar la ficha comercial al taller.
+  React.useEffect(() => {
     let vigente = true;
-    setCargandoDetalle(true);
-    getOrdenTrabajo(ordenId)
-      .then((data) => {
-        if (vigente) setDetalle(data);
-      })
-      .catch(() => {
-        if (vigente) setDetalle(null);
-      })
-      .finally(() => {
-        if (vigente) setCargandoDetalle(false);
-      });
+    setDetalle(null);
+    setErrorDetalle(false);
+    setCargandoDetalle(Boolean(itemId));
+    if (itemId) {
+      getDetalleItemTablero(itemId)
+        .then((data) => {
+          if (vigente) setDetalle(data);
+        })
+        .catch(() => {
+          if (vigente) setErrorDetalle(true);
+        })
+        .finally(() => {
+          if (vigente) setCargandoDetalle(false);
+        });
+    }
     return () => {
       vigente = false;
     };
-  }, [alcance, ordenId]);
+  }, [itemId]);
 
-  // Esc cierra el sheet (sólo mientras hay un item abierto).
+  // El diálogo de etiqueta administra Escape mientras está abierto.
   const abierto = Boolean(item);
   React.useEffect(() => {
-    if (!abierto) return undefined;
+    if (!abierto || etiquetaAbierta) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [abierto, onClose]);
+  }, [abierto, etiquetaAbierta, onClose]);
 
   if (!item) return null;
 
   const totalSteps = item.steps.length;
   const doneSteps = item.steps.filter((step) => step.status === "done").length;
   const currentStep = item.currentStep;
-  const materiales = detalle ? materialesDeDetalle(detalle, item.id) : [];
-  const notaProduccion = detalle
-    ? notaProduccionDeDetalle(detalle, item.id)
-    : null;
+  const materiales = detalle?.materiales ?? [];
+  const notaProduccion = detalle?.notaProduccion ?? null;
   const eventos = detalle?.eventos ?? [];
   const estimadoTotal = etiquetaDuracion(
     item.data.pasos.reduce(
@@ -1054,14 +995,17 @@ export function ItemDetailSheet({
               onGate={onGate}
             />
           ) : null}
-          {tab === "materiales" ? (
+          {errorDetalle && (tab === "materiales" || tab === "actividad") ? (
+            <p role="alert">No se pudo cargar el detalle del trabajo. Volvé a abrirlo para intentar nuevamente.</p>
+          ) : null}
+          {tab === "materiales" && !errorDetalle ? (
             <DetailMateriales
               materiales={materiales}
               cargando={cargandoDetalle}
             />
           ) : null}
-          {tab === "archivos" ? <DetailArchivos itemId={item.id} /> : null}
-          {tab === "actividad" ? (
+          {tab === "archivos" ? <DetailArchivos key={item.id} itemId={item.id} ordenId={item.data.ordenId} /> : null}
+          {tab === "actividad" && !errorDetalle ? (
             <DetailActividad eventos={eventos} cargando={cargandoDetalle} />
           ) : null}
         </div>
@@ -1079,7 +1023,13 @@ export function ItemDetailSheet({
                 : item.statusLine}
           </div>
           <div className="spacer" />
-          {alcance !== "operario" ? (
+          {puedeEtiquetar ? (
+            <ActionButton variant="outline" onPress={() => setEtiquetaItemId(item.id)}>
+              <PrinterIcon aria-hidden="true" />
+              {impresionDirecta ? "Imprimir etiqueta" : "Descargar etiqueta"}
+            </ActionButton>
+          ) : null}
+          {puedeVerOrden ? (
             <Link
               className="btn"
               href={`/produccion/ordenes/${item.data.ordenId}`}
@@ -1089,6 +1039,12 @@ export function ItemDetailSheet({
           ) : null}
         </div>
       </aside>
+      {etiquetaAbierta ? (
+        <EtiquetaOrdenDialog
+          ordenId={item.data.ordenId}
+          onClose={() => setEtiquetaItemId(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -1293,7 +1249,7 @@ export function TableroProduccion({
   const designScope = useDesignScope();
   const { zonaHoraria } = useConfigRegional();
   const puede = usePuedeFn();
-  const puedeVerOrden = puede("produccion.ver") || puede("comercial.ver") || puede("administracion.ver") || puede("administracion.gestionar");
+  const puedeVerOrden = puede("comercial.ordenes.ver");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [avisoFinalizacion, setAvisoFinalizacion] = React.useState<AvisoFinalizacionOrden | null>(null);
   const avisarFinalizacion = React.useCallback((aviso: AvisoFinalizacionOrden) => {
@@ -1322,7 +1278,9 @@ export function TableroProduccion({
     setErrorConsulta(null);
     getItemTablero(selectedId).then(item => { if (vigente) setItemConsultado(item); })
       .catch(err => { if (vigente) setErrorConsulta(err instanceof Error ? err.message : "No se pudo abrir el trabajo."); });
-    return () => { vigente = false; };
+    return () => {
+      vigente = false;
+    };
   }, [selectedId, items, historicos, itemConsultado]);
   const router = useRouter();
   const searchParams = useSearchParams();

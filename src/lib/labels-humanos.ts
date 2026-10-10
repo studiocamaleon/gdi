@@ -284,15 +284,16 @@ export const metodoPrecioLabels: DiccionarioLabels = {
     ejemplo: "Costo $100 + margen objetivo 50% = precio $200.",
   },
   precio_fijo: {
-    label: "Precio fijo (sin importar costo)",
+    label: "Precio fijo",
     descripcion:
-      "Precio fijo por unidad declarado por el modelador, ignora el costo.",
-    ejemplo: "Tarjeta personal = $50/u siempre, no importa qué papel use.",
+      "Precio por unidad que incluye los pasos obligatorios. Los opcionales seleccionados se suman aparte.",
+    ejemplo:
+      "Base de $50/u; al agregar un opcional, se suma su costo con el margen configurado.",
   },
   precio_fijo_para_margen_minimo: {
     label: "Precio fijo si margen ≥ mínimo",
     descripcion:
-      "Usa precio fijo solo si garantiza el margen mínimo configurado; sino aplica el margen mínimo.",
+      "Ajusta la base si no cubre el margen mínimo de los pasos incluidos. Los opcionales se suman aparte.",
     ejemplo:
       "Precio $50, margen mín 30%; si no alcanza, se recalcula al precio necesario.",
   },
@@ -303,9 +304,10 @@ export const metodoPrecioLabels: DiccionarioLabels = {
     ejemplo: "Hasta 5 m² → 50%, hasta 20 m² → 40%, 20+ m² → 30%.",
   },
   fijado_por_cantidad: {
-    label: "Precio fijo por cantidad (escalonado)",
-    descripcion: "Precio fijo distinto según el rango de cantidad pedida.",
-    ejemplo: "1-50u → $60/u, 51-200u → $50/u, 201+u → $40/u.",
+    label: "Precio fijo por cantidad exacta",
+    descripcion:
+      "Precio base para cada cantidad habilitada, con los pasos obligatorios incluidos y los opcionales aparte.",
+    ejemplo: "50u → $60/u, 100u → $50/u, 200u → $40/u.",
   },
   fijo_con_margen_variable: {
     label: "Cantidades fijas con margen objetivo",
@@ -315,7 +317,7 @@ export const metodoPrecioLabels: DiccionarioLabels = {
   variable_por_cantidad: {
     label: "Variable por cantidad",
     descripcion:
-      "Combinación de descuentos y márgenes variables según rangos de cantidad.",
+      "Precio base según el rango de cantidad, con los pasos obligatorios incluidos y los opcionales aparte.",
   },
 };
 

@@ -73,7 +73,7 @@ describe('MotorUniversalService — mínimos comerciales', () => {
     expect(error?.contexto?.minimoComercialCantidad).toBe(100);
   });
 
-  it('NONE conserva la cantidad comercial real', () => {
+  it.each([0.25, 0.5, 0.75, 1.25])('NONE conserva %s metros como cantidad comercial real', (metros) => {
     const service = createServiceForPrivateMethods();
     const producto = {
       unidadComercial: 'metro_lineal',
@@ -83,10 +83,10 @@ describe('MotorUniversalService — mínimos comerciales', () => {
     };
     const jobContext = {
       cantidad: 1,
-      metrosLineales: 0.75,
+      metrosLineales: metros,
     };
 
-    expect(service.resolverCantidadComercialPricing(producto, jobContext, [])).toBe(0.75);
+    expect(service.resolverCantidadComercialPricing(producto, jobContext, [])).toBe(metros);
   });
 
   it('mínimo por pliegos impresos usa pliegos como cantidad de pricing', () => {

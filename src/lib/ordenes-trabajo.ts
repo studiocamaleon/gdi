@@ -100,6 +100,7 @@ export const ORDEN_TRABAJO_ESTADOS: Record<
  * Fechas: ISO date (`YYYY-MM-DD`) o datetime ISO completo; la vista formatea.
  */
 export type OrdenTrabajoListItem = {
+  borradorDescartado?: boolean;
   id: string;
   /** Número visible, p.ej. "OT-2026-0184". Lo asigna el backend al emitir. */
   numero: string;
@@ -186,6 +187,7 @@ export type OrdenTrabajoItemSnapshot = {
 
 /** Producto (item) de la OT — proyección del snapshot de CotizacionItem. */
 export type OrdenTrabajoProducto = {
+  asignacionesPersonal?: import("../../apps/api/src/ordenes-trabajo/personal-previsto.contrato").EleccionPersonal[];
   fechaEntrega?: string | null;
   distribucionEntregas?: import("./planificacion-entregas").ResumenDistribucion | null;
   /** Id del OrdenTrabajoItem persistido (para editar/quitar). */
@@ -252,6 +254,7 @@ export type OrdenTrabajoPago = {
  * del snapshot de `CotizacionItem` referenciado.
  */
 export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
+  clienteTelefono?: string | null;
   /** Incluye solicitudes aún no enviadas; independiente del plan vigente. */
   tieneHistorialImpresion?: boolean;
   produccionControlada?: boolean;
@@ -315,6 +318,7 @@ export type OrdenTrabajoCancelacion = {
  * había más órdenes que el límite de la página.
  */
 export type OrdenesTrabajoStats = {
+  descartados?: number;
   porEstado: Record<OrdenTrabajoEstado, number>;
   totalOrdenes: number;
   activas: number;

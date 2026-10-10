@@ -8,7 +8,7 @@ import {
   type ConfiguracionComponenteFabricado,
   type PiezaRectangularComponente,
   type FormatoFuenteVectorial,
-  type ProductoRecetaRevision,
+  type RevisionRecetaCotizacion,
 } from "@/lib/productos-servicios-api";
 import {
   unidadVisibleParametro,
@@ -493,7 +493,7 @@ export function ComponentesFabricadosCotizacion({
   values,
   onChange,
 }: {
-  revision?: ProductoRecetaRevision | null;
+  revision?: RevisionRecetaCotizacion | null;
   cantidadProductos?: number;
   values: Record<string, Record<string, unknown>>;
   onChange: (values: Record<string, Record<string, unknown>>) => void;

@@ -48,8 +48,9 @@ describe('Gastos fijos: generación opcional de obligaciones', () => {
       role: RolSistema.ADMINISTRADOR,
       email: 'fijos@test.local',
       permisos: new Set([
-        'administracion.configurar',
-        'administracion.gestionar',
+        'acceso.por_vista',
+        'administracion.gastos.gestionar',
+        'administracion.pagar.gestionar',
       ]),
     } as CurrentAuth;
     const categoria = await prisma.categoriaEgreso.create({
@@ -178,7 +179,7 @@ describe('Gastos fijos: generación opcional de obligaciones', () => {
   it('sin permiso para pagos rechaza el opt-in y revierte el alta entera', async () => {
     const sinGestion = {
       ...auth,
-      permisos: new Set(['administracion.configurar']),
+      permisos: new Set(['acceso.por_vista', 'administracion.gastos.gestionar']),
     };
     await expect(fijos.crear(sinGestion, programado())).rejects.toThrow(
       ForbiddenException,

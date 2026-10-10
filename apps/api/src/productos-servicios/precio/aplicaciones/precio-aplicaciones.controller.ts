@@ -38,7 +38,7 @@ function tenantId(req: RequestWithAuth): string {
  *
  * Idem comisiones.
  */
-@Permiso('costos.ver')
+@Permiso("costos.catalogo.ver")
 @Controller('productos-servicios/productos/:productoId/precio')
 export class PrecioAplicacionesController {
   constructor(private readonly service: PrecioAplicacionesService) {}
@@ -53,7 +53,7 @@ export class PrecioAplicacionesController {
     return this.service.listarImpuestosAplicados(tenantId(req), productoId);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   @Put('impuestos')
   async setImpuestos(
     @Req() req: RequestWithAuth,
@@ -63,7 +63,7 @@ export class PrecioAplicacionesController {
     return this.service.setImpuestos(tenantId(req), productoId, dto);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   @Delete('impuestos/:impuestoCatalogoId')
   @HttpCode(200)
   async quitarImpuesto(
@@ -88,7 +88,7 @@ export class PrecioAplicacionesController {
     return this.service.getCategoriaFiscal(tenantId(req), productoId);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   @Put('categoria-fiscal')
   async setCategoriaFiscal(
     @Req() req: RequestWithAuth,
@@ -108,7 +108,7 @@ export class PrecioAplicacionesController {
     return this.service.listarComisionesAplicadas(tenantId(req), productoId);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   @Put('comisiones')
   async setComisiones(
     @Req() req: RequestWithAuth,
@@ -118,7 +118,7 @@ export class PrecioAplicacionesController {
     return this.service.setComisiones(tenantId(req), productoId, dto);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.catalogo.gestionar")
   @Delete('comisiones/:comisionCatalogoId')
   @HttpCode(200)
   async quitarComision(

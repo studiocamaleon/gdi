@@ -1,3 +1,4 @@
+import { seccionPerfil } from '../inventario/perfil-estructural';
 /**
  * F1 Cartelería — Estructura de bastidor (docs/carteleria-configurador-diseno.md §4.1).
  *
@@ -22,8 +23,8 @@ export const DESPERDICIO_CENEFA = 0.08;
 export const MARGEN_PINTURA = 0.1;
 /**
  * Desarrollo de la sección del perfil (m² de superficie por metro lineal).
- * Un caño de 40×40 pinta 4 × 0,04 = 0,16 m² por metro. Se puede pisar desde
- * el atributo `desarrolloSeccion` de la variante del perfil.
+ * Un caño de 40×40 pinta 4 × 0,04 = 0,16 m² por metro. En perfiles con sección
+ * rectangular se calcula con ambos lados exteriores.
  */
 export const DESARROLLO_PERFIL_M_DEFAULT = 0.16;
 /** Lado del caño cuando la variante no declara `seccion` (40×40 histórico). */
@@ -32,14 +33,16 @@ export const PERFIL_LADO_M_DEFAULT = 0.04;
 export interface PerfilEstructural {
   /** Lado del caño en metros (20×20 → 0,02). */
   ladoM: number;
+  profundidadM?: number;
   /** m² de superficie por metro lineal (para pintura). */
   desarrolloM: number;
 }
 
 /**
  * Lee el perfil desde los atributos de la variante elegida en el slot
- * `perfil_estructural`: `seccion` ("20×20 mm") da el lado del caño y
- * `desarrolloSeccion` la superficie por metro. Sin atributos → default 40×40.
+ * `perfil_estructural`: sus dimensiones exteriores (o el texto antiguo de
+ * `seccion`) determinan la geometría y la superficie por metro. Sin atributos
+ * se conserva el default histórico de 40×40; el derivador valida la variante.
  *
  * El lado importa para el DESPIECE: las barras interiores (parantes,
  * refuerzos, conectores) se cortan descontando el caño contra el que apoyan
@@ -49,23 +52,22 @@ export function parsearPerfilEstructural(
   atributos: Record<string, unknown> | null | undefined,
 ): PerfilEstructural {
   const attrs = (atributos ?? {}) as Record<string, unknown>;
-  const seccion = String(attrs.seccion ?? '');
-  const match = seccion.match(/(\d+(?:[.,]\d+)?)/);
-  const ladoMm = match ? Number(match[1].replace(',', '.')) : NaN;
-  const ladoM =
-    Number.isFinite(ladoMm) && ladoMm > 0 ? ladoMm / 1000 : PERFIL_LADO_M_DEFAULT;
+  const seccion = seccionPerfil(attrs);
+  const ladoM = seccion ? seccion.ancho / 1000 : PERFIL_LADO_M_DEFAULT;
+  const profundidadM = seccion ? seccion.alto / 1000 : ladoM;
   const desarrollo = Number(attrs.desarrolloSeccion);
   return {
     ladoM,
-    // Sin atributo: perímetro de la sección cuadrada (4 lados).
-    desarrolloM:
-      Number.isFinite(desarrollo) && desarrollo > 0 ? desarrollo : ladoM * 4,
+    ...(profundidadM !== ladoM ? { profundidadM } : {}),
+    // La sección rectangular es autoritativa; el texto viejo ya no pierde su segundo lado.
+    desarrolloM: seccion ? 2 * (ladoM + profundidadM) : Number.isFinite(desarrollo) && desarrollo > 0 ? desarrollo : ladoM * 4,
   };
 }
 
 export interface ParamsEstructuraBastidor {
   /** simple = marco plano (frontlight) · doble = cajón (backlight). */
   tipoBastidor: 'simple' | 'doble';
+  orientacionPerfil?: 'ancho_al_frente' | 'alto_al_frente';
   /** Separación máxima entre refuerzos verticales, en cm. 0 = sin refuerzos. */
   sepRefuerzoVcm: number;
   /** Ídem horizontales. */
@@ -104,6 +106,7 @@ export interface ResultadoEstructuraBastidor {
   profundidadM: number;
   /** Lado del caño usado en el despiece (el visor 3D dibuja con este grosor). */
   perfilLadoM: number;
+  perfilProfundidadM: number;
   refuerzosV: number;
   refuerzosH: number;
   mlPerimetro: number;
@@ -168,16 +171,20 @@ export function calcularBarrasNecesarias(
 
   const restos: number[] = [];
   for (const tramo of tramos) {
-    const necesita = tramo + kerfMm;
+    const necesita = tramo + Math.max(0, kerfMm);
     let colocado = false;
     for (let i = 0; i < restos.length; i++) {
-      if (restos[i] >= necesita) {
-        restos[i] -= necesita;
+      if (Math.abs(restos[i] - tramo) < 1e-6 || restos[i] >= necesita) {
+        restos[i] = Math.abs(restos[i] - tramo) < 1e-6 ? 0 : restos[i] - necesita;
         colocado = true;
         break;
       }
     }
-    if (!colocado) restos.push(largoBarraMm - necesita);
+    if (!colocado) {
+      if (Math.abs(largoBarraMm - tramo) < 1e-6) restos.push(0);
+      else if (necesita <= largoBarraMm) restos.push(largoBarraMm - necesita);
+      else return null;
+    }
   }
   const barras = restos.length;
   const sobranteMm = restos.reduce((acc, r) => acc + Math.max(0, r), 0);
@@ -201,6 +208,7 @@ export function parsearParamsEstructuraBastidor(
   };
   return {
     tipoBastidor: tipo === 'simple' ? 'simple' : 'doble',
+    orientacionPerfil: params.orientacionPerfil === 'alto_al_frente' ? 'alto_al_frente' : 'ancho_al_frente',
     montajeLona: montaje === 'contramarco' ? 'contramarco' : 'perimetral',
     demasiaAgarreCm: num(params.demasiaAgarreCm, 10),
     sepRefuerzoVcm: num(params.sepRefuerzoVcm, 100),
@@ -264,10 +272,12 @@ export function calcularEstructuraBastidor(
   // apoya ENTRE dos barras (parantes, refuerzos, conectores) se corta
   // descontando el lado del caño de cada lado. Es como corta la herrería:
   // un marco de 100×80 en caño 20×20 son 2 barras de 100 y 2 de 76.
-  const L = Math.max(0, perfil.ladoM);
+  const girado = params.orientacionPerfil === 'alto_al_frente';
+  const L = Math.max(0, girado ? perfil.profundidadM ?? perfil.ladoM : perfil.ladoM);
+  const P = Math.max(0, girado ? perfil.ladoM : perfil.profundidadM ?? perfil.ladoM);
   const hInterior = Math.max(0, H - 2 * L);
   const wInterior = Math.max(0, W - 2 * L);
-  const dInterior = Math.max(0, D - 2 * L);
+  const dInterior = Math.max(0, D - 2 * P);
 
   // Refuerzos: cuántas barras entran respetando la separación MÁXIMA.
   const refuerzosV =
@@ -358,6 +368,7 @@ export function calcularEstructuraBastidor(
     altoM: H,
     profundidadM: D,
     perfilLadoM: L,
+    perfilProfundidadM: P,
     refuerzosV,
     refuerzosH,
     mlPerimetro,

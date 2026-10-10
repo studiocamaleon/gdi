@@ -32,6 +32,7 @@ export class DisponibilidadCotizacion {
       unidad: string | null;
     }> = [],
     private readonly ordenTrabajoId?: string,
+    readonly inicioSinStock = false,
   ) {}
 
   async saldo(id: string) {
@@ -135,6 +136,7 @@ export class DisponibilidadCotizacion {
 
   /** Verificación del consumo definitivo, después de consolidar todos los componentes. */
   async validar(cotizacion: CotizacionResultado): Promise<ErrorMotor[]> {
+    if (this.inicioSinStock) return [];
     const pasos: PasoEjecutado[] = [];
     type Nodo = {
       pasos?: PasoEjecutado[];

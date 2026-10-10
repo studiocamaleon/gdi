@@ -43,6 +43,7 @@ const data: PanelGeneralData = {
       total: 8,
     },
     proxima: { items: [], total: 0 },
+    lista: { items: [], total: 0 },
   },
   taller: null,
   accionesRapidas: [],

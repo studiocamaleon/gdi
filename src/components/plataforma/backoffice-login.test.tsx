@@ -63,6 +63,14 @@ const challenge = {
   accessToken: null,
 };
 
+it("permite cambiar al acceso de empresa limpiando la sesión anterior", () => {
+  const enlace = Array.from(container.querySelectorAll("a")).find(
+    (a) => a.textContent?.includes("Acceso de empresa"),
+  )!;
+  expect(enlace.getAttribute("href")).toBe("/salir");
+  expect(mocks.session).not.toHaveBeenCalled();
+});
+
 it("guarda la sesión antes de entrar a Plataforma y evita envíos duplicados", async () => {
   let resolve!: (value: { accessToken: string }) => void;
   mocks.login.mockReturnValue(

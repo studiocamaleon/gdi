@@ -2,14 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { CurrentAuth } from './auth.types';
 
 /**
- * Cache in-memory de sesiones validadas para evitar que el AuthGuard consulte
- * la DB (3 joins) en cada request. TTL corto para acotar la ventana en que una
- * sesión revocada/cambiada podría seguir sirviéndose; además se invalida
- * explícitamente en logout y switch-tenant.
- *
- * Nota multi-instancia: es por réplica. Con N réplicas la invalidación es
- * local; la ventana de staleness queda acotada por el TTL. Migrar a Redis
- * cuando haya varias instancias (Fase 3).
+ * Caché heredada: se conserva para las invalidaciones de los servicios y sus
+ * pruebas. AuthGuard NO la consulta ni la llena: autoriza contra la base
+ * compartida en cada request, incluidas las credenciales MCP.
+ * Nunca reutilizar este mapa como fuente de autorización: una invalidación
+ * local no llega a las demás réplicas.
  */
 @Injectable()
 export class SessionCacheService {

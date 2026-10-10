@@ -475,7 +475,7 @@ export function PagosTab({
                   </div>
                 </div>
                 <div className="arc-tc n">
-                  <div className="l">Neto acreditado</div>
+                  <div className="l">Neto antes de retenciones</div>
                   <div className="v">{formatMonedaOrden(netoReal, moneda)}</div>
                   {comisionesReal > 0 ? (
                     <div className="delta">
@@ -487,7 +487,7 @@ export function PagosTab({
                   )}
                 </div>
                 <div className="arc-tc d">
-                  <div className="l">Disponible real</div>
+                  <div className="l">{pendientes > 0 ? "Disponible previsto" : "Disponible confirmado"}</div>
                   <div className="v">
                     {formatMonedaOrden(disponibleTotal, moneda)}
                   </div>
@@ -586,14 +586,14 @@ export function PagosTab({
                     {c.origenAplicacion === "cuenta_corriente" ? <span className="mov-who"> · Cuenta corriente</span> : null}
                   </span>
                   <span className="mov-ref">
-                    {c.numeroRecibo ? (
+                    {c.numeroRecibo && c.puedeAbrirRecibo !== false ? (
                       <a className="mov-recibo" href={reciboPdfUrl(c.id)} target="_blank" rel="noreferrer"
                         title={`Recibo completo: ${formatMonedaOrden(c.montoBruto, moneda)}`}>
                         {c.numeroRecibo}
                       </a>
-                    ) : null}
+                    ) : c.numeroRecibo}
                     {c.numeroRecibo ? " · " : null}
-                    {c.cuentaDestinoNombre ?? "Valor en cartera"}
+                    {c.puedeAbrirRecibo === false ? "Cobro registrado" : c.cuentaDestinoNombre ?? "Valor en cartera"}
                     {c.valor ? (
                       <span className="mov-who">
                         · {c.valor.numero} ({c.valor.estado})
@@ -602,10 +602,12 @@ export function PagosTab({
                   </span>
                   <span className="mov-comp">
                     {c.estadoAcreditacion === "acreditado"
-                      ? "Acreditado"
+                      ? `Acreditado${c.fechaAcreditacionReal ? ` · ${formatFechaOrden(c.fechaAcreditacionReal)}` : ""}`
                       : c.fechaAcreditacionEstimada
                         ? `Pendiente · ${formatFechaOrden(c.fechaAcreditacionEstimada)}`
                         : "Pendiente"}
+                    {c.referenciaAcreditacion ? <span className="mov-who"> · {c.referenciaAcreditacion}</span> : null}
+                    {c.estadoAcreditacion === "acreditado" && c.liquidacionEstimada && Math.abs(c.liquidacionEstimada.disponibleReal - c.disponibleReal) > 0.005 ? <span className="mov-who">Previsto {formatMonedaOrden(c.liquidacionEstimada.disponibleReal, moneda)} · Real {formatMonedaOrden(c.disponibleReal, moneda)}</span> : null}
                   </span>
                   <span className="mov-monto">
                     {formatMonedaOrden(montoCobroEnOrden(c), moneda)}
@@ -904,7 +906,7 @@ export function OrdenTrabajoDetalleView({
             </Link>
             <div className="otd-title-row">
               <h1>{orden.numero}</h1>
-              <EstadoOtBadge estado={orden.estado} />
+              <EstadoOtBadge estado={orden.estado} borradorDescartado={orden.borradorDescartado} />
               {esNueva ? (
                 <span className="otd-new-tag-lg">RECIÉN EMITIDA</span>
               ) : null}

@@ -352,6 +352,65 @@ describe('FacturacionOrdenesService — motor', () => {
   });
 
   describe('matchearFactura (factura después del cobro)', () => {
+    it.each([true, false])(
+      'cancela un saldo con centavos exactos (cobro vinculado a OT: %s)',
+      async (conOrden) => {
+        const monto = 86_939.99;
+        const cliente = await prisma.cliente.create({
+          data: {
+            tenantId,
+            nombre: `Decimal ${randomUUID()}`,
+            emailPrincipal: 'decimal@example.invalid',
+            telefonoCodigo: '11',
+            telefonoNumero: '5555-5555',
+            paisCodigo: 'AR',
+          },
+        });
+        const orden = await crearOrden(monto);
+        await prisma.ordenTrabajo.update({
+          where: { id: orden.id },
+          data: { clienteId: cliente.id },
+        });
+        const factura = await crearFactura([{ ordenId: orden.id, monto }]);
+        await prisma.comprobante.update({
+          where: { id: factura.id },
+          data: { clienteId: cliente.id },
+        });
+        const cobro = await crearCobro(conOrden ? orden.id : null, monto);
+        await prisma.cobro.update({
+          where: { id: cobro.id },
+          data: { clienteId: cliente.id },
+        });
+        await prisma.$transaction((tx) =>
+          motor.alEmitirComprobanteTx(tx, tenantId, factura.id),
+        );
+        expect(await saldoDe(factura.id)).toBe(0);
+        expect(
+          Number(
+            (
+              await prisma.cobroImputacion.findUniqueOrThrow({
+                where: {
+                  cobroId_comprobanteId: {
+                    cobroId: cobro.id,
+                    comprobanteId: factura.id,
+                  },
+                },
+              })
+            ).monto,
+          ),
+        ).toBe(monto);
+        await prisma.$transaction((tx) =>
+          motor.alEmitirComprobanteTx(tx, tenantId, factura.id),
+        );
+        expect(
+          await prisma.cobroImputacion.count({
+            where: { cobroId: cobro.id, comprobanteId: factura.id },
+          }),
+        ).toBe(1);
+        expect(await saldoDe(factura.id)).toBe(0);
+      },
+    );
+
     it('absorbe los cobros libres de la orden al emitirse', async () => {
       const orden = await crearOrden(120_000);
       const seña = await crearCobro(orden.id, 50_000, new Date('2026-06-10'));

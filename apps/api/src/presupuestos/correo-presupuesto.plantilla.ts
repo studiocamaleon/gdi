@@ -2,6 +2,8 @@ import {
   crearCorreoBase,
   escaparHtml,
 } from '../registro/plantillas/correo-base';
+import { formatearMonedaDoc, monedaDe } from '../common/moneda';
+import type { PresupuestoCargoVisible } from './presupuesto-cargos';
 
 export const ASUNTO_PRESUPUESTO = 'Tu presupuesto de {empresa} · {presupuesto}';
 export const MENSAJE_PRESUPUESTO =
@@ -24,11 +26,22 @@ export function crearCorreoPresupuesto(datos: {
   mensaje: string;
   url: string;
   responderA: string;
+  cargos?: PresupuestoCargoVisible[];
+  monedaCodigo?: string;
 }) {
   const e = escaparHtml;
+  const money = (n: number) =>
+    formatearMonedaDoc(n, monedaDe(datos.monedaCodigo));
+  const cargos = datos.cargos ?? [];
+  const cargosTexto = cargos.length
+    ? `\n\nCargos incluidos en el presupuesto:\n${cargos.map((cargo) => `${cargo.nombre}: ${money(cargo.total)}${cargo.descripcion ? `\n${cargo.descripcion}` : ''}`).join('\n')}\nImportes con impuestos incluidos.`
+    : '';
+  const cargosHtml = cargos.length
+    ? `<h2 style="margin:24px 0 12px;font-size:18px;">Cargos incluidos en el presupuesto</h2><table style="width:100%;border-collapse:collapse;">${cargos.map((cargo) => `<tr><td style="padding:10px 0;border-bottom:1px solid #deded7;word-break:break-word;"><strong>${e(cargo.nombre)}</strong>${cargo.descripcion ? `<br>${e(cargo.descripcion)}` : ''}</td><td style="padding:10px 0 10px 16px;border-bottom:1px solid #deded7;text-align:right;white-space:nowrap;">${e(money(cargo.total))}</td></tr>`).join('')}</table><p style="font-size:12px;color:#646668;">Importes con impuestos incluidos.</p>`
+    : '';
   return {
     subject: datos.asunto,
-    text: `${datos.mensaje}\n\nVer y aprobar presupuesto: ${datos.url}\n\nAdjunto: ${datos.numero}.pdf\nRespuestas: ${datos.responderA}\nEnviado por ${datos.empresa} a través de Grafo.`,
+    text: `${datos.mensaje}${cargosTexto}\n\nVer y aprobar presupuesto: ${datos.url}\n\nAdjunto: ${datos.numero}.pdf\nRespuestas: ${datos.responderA}\nEnviado por ${datos.empresa} a través de Grafo.`,
     html: crearCorreoBase({
       empresa: datos.empresa,
       titulo: datos.asunto,
@@ -36,6 +49,7 @@ export function crearCorreoPresupuesto(datos: {
       contenido: `<p style="margin:0 0 14px;font-size:12px;letter-spacing:1px;color:#646668;">PRESUPUESTO ${e(datos.numero)}</p>
         <h1 class="titulo" style="margin:0 0 26px;font-size:30px;line-height:36px;letter-spacing:-1px;">Tu próximo trabajo<span style="color:#ff7546;">.</span></h1>
         <div style="font-size:15px;line-height:25px;word-break:break-word;">${e(datos.mensaje).replace(/\r?\n/g, '<br>')}</div>
+        ${cargosHtml}
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:28px 0;"><tr><td bgcolor="#ff7546" style="border-radius:6px;background:#ff7546;">
           <a href="${e(datos.url)}" style="display:inline-block;padding:15px 22px;font-size:14px;font-weight:700;color:#17191b;text-decoration:none;">Ver y aprobar presupuesto →</a>
         </td></tr></table>

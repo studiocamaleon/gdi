@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import Redis from 'ioredis';
@@ -112,7 +113,9 @@ export class ControlTrabajosGeometriaService implements OnApplicationShutdown {
       ),
     });
     this.redis.on('error', (error) =>
-      this.logger.warn(`Redis de control de geometría: ${error.message}`),
+      this.logger.warn(
+        `Redis de control de geometría: ${textoErrorLog(error)}`,
+      ),
     );
     return this.redis;
   }

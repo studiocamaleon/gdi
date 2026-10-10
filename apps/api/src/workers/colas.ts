@@ -1,3 +1,5 @@
+import type { PreparacionAnalisisOpenNest } from '../motor-universal/geometria-vectorial/opennest-adapter';
+
 /**
  * Nombres y contratos compartidos entre productores y consumidores.
  *
@@ -94,6 +96,8 @@ export type ResultadoCommonLineTrabajo = {
 };
 
 export type NestingIrregularOpenNestData = {
+  /** Contexto interno necesario para reconstruir la vista; se admite con el job. */
+  contextoAnalisis?: PreparacionAnalisisOpenNest;
   /** Marcador escrito sólo por el motor, nunca copiado del DTO HTTP. */
   calculoCotizacion?: boolean;
   schemaVersion: 1;

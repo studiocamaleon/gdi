@@ -70,6 +70,21 @@ export function proyectarAsignacionPersonal(value: unknown, usuarioId: string) {
     : null;
 }
 
+/** La previsión automática no reserva el permiso de ejecución a una persona.
+ * El caller debe validar además permiso, empleado activo y estación del paso.
+ * Una decisión humana (supervisor o Mi mesa) conserva su exclusividad. */
+export function ejecucionCompartidaPorEquipo(paso: {
+  asignacionPersonalJson?: unknown;
+  asignacionManualJson?: unknown;
+  mesaUsuarioId?: string | null;
+}): boolean {
+  return (
+    !paso.asignacionManualJson &&
+    !paso.mesaUsuarioId &&
+    leerAsignacionPersonal(paso.asignacionPersonalJson)?.origen === 'automatica'
+  );
+}
+
 export type PersonalFijo = {
   empleadoIds?: string[];
   obligatorioId?: string;

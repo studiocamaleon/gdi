@@ -1,4 +1,10 @@
+import type { PaginaFacturacion, PaginaComprobantes } from "./listado-fiscal";
+import type { ReglaRetencion, CalendarioAcreditacion } from "./administracion";
 import { apiRequest } from "@/lib/api";
+import {
+  parametrosFacturacion,
+  type FiltrosFacturacion,
+} from "@/lib/facturacion-filtros";
 import type {
   Cobro,
   CobroPendienteAcreditacion,
@@ -22,7 +28,6 @@ import type {
   OrdenFacturable,
   ProveedorFacturacion,
   PuntoVenta,
-  ResultadoLoteFacturacion,
   TesoreriaKpis,
   ValorTesoreria,
 } from "@/lib/administracion";
@@ -109,13 +114,30 @@ export async function getComprobantes(params?: {
 
 // ── Facturación sobre órdenes ──────────────────────────────────────────
 
-export async function getFacturacionPendientes(): Promise<OrdenFacturable[]> {
-  return apiRequest(`/administracion/facturacion/pendientes`);
+export async function getFacturacionPagina(filtros: FiltrosFacturacion, pagina = 1, q = ""): Promise<PaginaFacturacion> {
+  const params = new URLSearchParams(parametrosFacturacion(filtros));
+  params.set("pagina", String(pagina));
+  if (q) params.set("q", q);
+  return apiRequest(`/administracion/facturacion/pendientes/pagina?${params}`);
+}
+export async function getComprobantesPagina(params: {pagina?: number; q?: string; estado?: string; tipo?: string} = {}): Promise<PaginaComprobantes> {
+  const query = new URLSearchParams();
+  for (const [k,v] of Object.entries(params)) if (v) query.set(k, String(v));
+  return apiRequest(`/administracion/comprobantes/pagina?${query}`);
+}
+
+export async function getFacturacionPendientes(
+  filtros: FiltrosFacturacion = {},
+): Promise<OrdenFacturable[]> {
+  const query = parametrosFacturacion(filtros);
+  return apiRequest(
+    `/administracion/facturacion/pendientes${query ? `?${query}` : ""}`,
+  );
 }
 
 export async function facturarOrden(
   ordenId: string,
-  payload: { monto?: number; concepto?: string; puntoVentaId?: string },
+  payload: { monto?: number; concepto?: string; puntoVentaId?: string; detalle?: "items" | "orden" },
 ): Promise<Comprobante> {
   return apiRequest(`/administracion/ordenes/${ordenId}/facturar`, {
     method: "POST",
@@ -139,11 +161,13 @@ export async function notaCreditoOrden(
 }
 
 export async function facturarLote(payload: {
+  claveSolicitud: string;
   ordenIds: string[];
   modo: "por_orden" | "agrupada";
+  detalle?: "items" | "orden";
   puntoVentaId?: string;
-}): Promise<ResultadoLoteFacturacion> {
-  return apiRequest(`/administracion/facturacion/lote`, {
+}): Promise<LoteFacturacion> {
+  return apiRequest(`/administracion/facturacion/lotes`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -182,9 +206,7 @@ export async function emitirComprobante(id: string): Promise<Comprobante> {
   });
 }
 
-export async function consultarEmisionComprobante(
-  id: string,
-): Promise<{
+export async function consultarEmisionComprobante(id: string): Promise<{
   aplicada: boolean;
   detalle: string | null;
   comprobante: ComprobanteDetalle;
@@ -254,6 +276,9 @@ export async function quitarImputacion(id: string): Promise<{ ok: boolean }> {
 }
 
 export type UpsertMetodoPagoPayload = {
+  calendarioAcreditacion?: CalendarioAcreditacion;
+  feriadosAdicionales?: string[];
+  retencionesConfig?: ReglaRetencion[];
   nombre: string;
   tipo: MetodoPagoTipo;
   comisionPct: number;
@@ -309,6 +334,7 @@ export async function getCuentasFondos(): Promise<CuentaFondosResumen[]> {
 // ── Tesorería ──────────────────────────────────────────────────────────
 
 export async function getTesoreria(): Promise<{
+  accesoRestringido?: boolean;
   monedaLocal: string;
   cuentas: CuentaFondos[];
   kpis: TesoreriaKpis;
@@ -516,6 +542,8 @@ export type CrearCobroPayload = {
   montoBruto: number;
   comisionPctAplicada: number;
   retenciones?: Array<{
+    agente?: string;
+    reglaId?: string;
     regimen: string;
     jurisdiccion?: string;
     base: number;
@@ -575,9 +603,20 @@ export async function getCobrosPendientesAcreditacion(): Promise<
   return apiRequest("/administracion/cobros/pendientes-acreditacion");
 }
 
-export async function acreditarCobro(id: string): Promise<Cobro> {
+export type AcreditarCobroPayload = {
+  fecha: string;
+  referencia: string;
+  comisionMonto: number;
+  comisionIvaMonto: number;
+  retenciones: NonNullable<CrearCobroPayload["retenciones"]>;
+};
+export async function acreditarCobro(
+  id: string,
+  payload: AcreditarCobroPayload,
+): Promise<Cobro> {
   return apiRequest(`/administracion/cobros/${id}/acreditar`, {
     method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 
@@ -588,3 +627,37 @@ export async function getFacturacionHabilitada(): Promise<boolean> {
   );
   return r.habilitada;
 }
+
+export type DestinoTransferencia = { id: string; nombre: string; moneda: string };
+export function getDestinosTransferencia(): Promise<DestinoTransferencia[]> { return apiRequest('/administracion/cuentas/destinos-transferencia'); }
+export function getArqueosCuenta(cuentaId: string): Promise<Array<{ id: string; actorNombre: string; createdAt: string; detalleJson: { esperado: number; contado: number; diferencia: number; moneda: string; notas: string | null } }>> {
+  return apiRequest(`/administracion/cuentas/${encodeURIComponent(cuentaId)}/arqueos`);
+}
+
+
+export type LoteFacturacion = {
+  id: string;
+  estado: "pendiente" | "procesando" | "esperando_envios" | "completado" | "con_observaciones";
+  createdAt: string;
+  items: {
+    id: string;
+    ordenIds: string[];
+    numeros: string[];
+    estado: "pendiente" | "emitiendo" | "emitida" | "error" | "verificar";
+    comprobanteId: string | null;
+    error: string | null;
+    avisoEstado: "pendiente" | "enviada" | "omitida" | "fallida" | "verificar";
+    avisoDetalle: string | null;
+    pdfEstado: string;
+  }[];
+};
+
+export const listarLotesFacturacion = (opciones: { activos?: boolean; cursor?: string } = {}) => {
+  const params = new URLSearchParams();
+  if (opciones.activos) params.set("activos", "true");
+  if (opciones.cursor) params.set("cursor", opciones.cursor);
+  return apiRequest<LoteFacturacion[]>(`/administracion/facturacion/lotes${params.size ? `?${params}` : ""}`);
+};
+
+export const obtenerLoteFacturacion = (id: string) =>
+  apiRequest<LoteFacturacion>(`/administracion/facturacion/lotes/${encodeURIComponent(id)}`);

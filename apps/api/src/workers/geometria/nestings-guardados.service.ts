@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { Injectable, Logger, Module } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -360,7 +361,7 @@ export class NestingsGuardadosService {
           this.logger.warn({
             event: 'plan_biblioteca_descartado_al_reutilizar',
             tenantId: input.tenantId,
-            message: error instanceof Error ? error.message : String(error),
+            message: textoErrorLog(error),
           });
         }
       }
@@ -387,7 +388,7 @@ export class NestingsGuardadosService {
       this.logger.warn({
         event: 'biblioteca_no_disponible_al_reutilizar',
         tenantId: input.tenantId,
-        message: error instanceof Error ? error.message : String(error),
+        message: textoErrorLog(error),
       });
       return actual;
     }
@@ -408,7 +409,7 @@ export class NestingsGuardadosService {
         event: 'nesting_validado_no_persistido',
         tenantId: input.tenantId,
         correlationId: input.correlationId,
-        message: error instanceof Error ? error.message : String(error),
+        message: textoErrorLog(error),
       });
     }
     try {
@@ -422,7 +423,7 @@ export class NestingsGuardadosService {
         event: 'nesting_validado_sin_relectura',
         tenantId: input.tenantId,
         correlationId: input.correlationId,
-        message: error instanceof Error ? error.message : String(error),
+        message: textoErrorLog(error),
       });
     }
     return candidato;

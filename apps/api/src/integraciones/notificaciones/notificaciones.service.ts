@@ -1,3 +1,4 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   ConflictException,
@@ -19,8 +20,13 @@ import { aE164 } from '../telefono';
 import { DespachoService } from './despacho.service';
 import { ESTADOS } from './estados';
 import type { CurrentAuth } from '../../auth/auth.types';
-import type { ResolverAvisoDto } from './notificaciones.dto';
+import type {
+  ResolverAvisoDto,
+  ReintentarAvisoDto,
+} from './notificaciones.dto';
 import { CANAL_WEB, esOrdenWeb, textoWhatsappWeb } from './whatsapp-web-texto';
+import { EVENTOS_ORDEN_LISTA } from './orden-lista';
+import { puedeReintentarAviso, versionReintento } from './reintento';
 
 /**
  * Encola notificaciones de WhatsApp y decide cuáles NO salen.
@@ -108,7 +114,7 @@ export class NotificacionesService {
       // transición de estado que disparó la notificación.
       this.logger.error(
         `Falló al encolar ${ctx.evento} de ${ctx.entidadId}.`,
-        error instanceof Error ? error.stack : String(error),
+        textoErrorLog(error),
       );
       return { encolada: false, motivo: 'Error interno al encolar.' };
     }
@@ -196,7 +202,25 @@ export class NotificacionesService {
     const tel = aE164(cliente);
     if (!tel.ok) return { encolada: false, motivo: tel.motivo };
 
-    const claveUnica = `${ctx.evento}:${ctx.entidadId}`;
+    const esLista = !!ctx.ordenId && EVENTOS_ORDEN_LISTA.includes(ctx.evento);
+    // exigirOperacionTx mantiene el lock de la empresa hasta el commit.
+    // Incluye claves históricas: cambiar saldo, canal o activar QR después
+    // de un primer aviso no debe disparar otra notificación de orden lista.
+    if (
+      esLista &&
+      (await tx.notificacionWhatsapp.findFirst({
+        where: {
+          tenantId,
+          ordenId: ctx.ordenId,
+          evento: { in: EVENTOS_ORDEN_LISTA },
+        },
+        select: { id: true },
+      }))
+    )
+      return { encolada: false, motivo: 'Ya se había notificado.' };
+    const claveUnica = esLista
+      ? `orden_lista:${ctx.ordenId}`
+      : `${ctx.evento}:${ctx.entidadId}`;
     const fila = await tx.notificacionWhatsapp.create({
       data: {
         tenantId,
@@ -369,6 +393,8 @@ export class NotificacionesService {
       evento: f.evento,
       titulo: POR_EVENTO.get(f.evento as never)?.titulo ?? f.evento,
       estado: f.estado,
+      estadoEntrega: f.estadoEntrega,
+      estadoEntregaEl: f.estadoEntregaEl,
       cliente: f.clienteId ? (nombre.get(f.clienteId) ?? null) : null,
       telefono: f.telefono,
       motivo: f.motivo,
@@ -376,7 +402,119 @@ export class NotificacionesService {
       programadaPara: f.programadaPara,
       enviadaEl: f.enviadaEl,
       createdAt: f.createdAt,
+      versionReintento: puedeReintentarAviso(f) ? versionReintento(f) : null,
     }));
+  }
+
+  async reintentar(auth: CurrentAuth, id: string, dto: ReintentarAvisoDto) {
+    if (auth.impersonacion)
+      throw new ForbiddenException(
+        'No se pueden reintentar envíos durante una impersonación.',
+      );
+    await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['identidad', 'whatsapp_automatico'],
+        ['whatsapp_automatico'],
+      );
+      const n = await tx.notificacionWhatsapp.findFirst({
+        where: { id, tenantId: auth.tenantId },
+      });
+      if (!n) throw new NotFoundException('No se encontró el aviso.');
+      if (!puedeReintentarAviso(n) || versionReintento(n) !== dto.version)
+        throw new ConflictException(
+          'El aviso cambió o no tiene un fallo confirmado. Actualizá el historial antes de reintentar.',
+        );
+      const config = await tx.configuracionNotificaciones.findFirst({
+        where: { tenantId: auth.tenantId },
+      });
+      if (config?.pausado !== false)
+        throw new ConflictException(
+          'Los avisos están pausados. Activá los envíos antes de reintentar.',
+        );
+      const plantilla = POR_EVENTO.get(n.evento as EventoNotificacion);
+      const evento = await tx.notificacionEvento.findFirst({
+        where: { tenantId: auth.tenantId, evento: n.evento },
+      });
+      if (!plantilla || !(evento?.activo ?? plantilla.activoPorDefecto))
+        throw new ConflictException(
+          'Este aviso está apagado en la configuración.',
+        );
+      const cliente = n.clienteId
+        ? await tx.cliente.findFirst({
+            where: { id: n.clienteId, tenantId: auth.tenantId },
+          })
+        : null;
+      if (
+        !cliente ||
+        cliente.aceptaWhatsapp === false ||
+        (plantilla.categoria === 'MARKETING' && cliente.aceptaWhatsapp !== true)
+      )
+        throw new ConflictException(
+          'El cliente ya no admite este aviso por WhatsApp.',
+        );
+      const integracion = await tx.integracionTenant.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          proveedor: 'WATI',
+          estado: 'CONECTADA',
+        },
+        select: { id: true },
+      });
+      if (!integracion)
+        throw new ConflictException('Conectá Wati antes de reintentar.');
+      const cambio = await tx.notificacionWhatsapp.updateMany({
+        where: {
+          id,
+          tenantId: auth.tenantId,
+          estado: 'fallida',
+          canal: 'WATI',
+          enviadaEl: null,
+          reservaToken: n.reservaToken,
+          intentos: n.intentos,
+        },
+        data: {
+          estado: 'pendiente',
+          plantilla: plantilla.codigo,
+          watiMensajeId: null,
+          watiConsultaEl: null,
+          estadoEntrega: null,
+          estadoEntregaEl: null,
+          reservaToken: null,
+          reservadaEl: null,
+          programadaPara: null,
+          motivo: null,
+        },
+      });
+      if (!cambio.count)
+        throw new ConflictException('El aviso cambió. Actualizá el historial.');
+      const actor = await tx.user.findUnique({
+        where: { id: auth.userId },
+        select: { nombreCompleto: true },
+      });
+      await tx.eventoSistema.create({
+        data: {
+          tenantId: auth.tenantId,
+          tipo: 'aviso.reintento',
+          entidadTipo: 'notificacion_whatsapp',
+          entidadId: id,
+          actorUserId: auth.userId,
+          actorNombre: (actor?.nombreCompleto || auth.email).slice(0, 200),
+          titulo: 'Reintento de aviso solicitado',
+          mensaje:
+            `Se solicitó otro intento tras ${n.intentos} intentos. Motivo anterior: ${n.motivo ?? 'sin detalle'}`.slice(
+              0,
+              600,
+            ),
+          topicos: [],
+        },
+      });
+    });
+    // Misma fila, destinatario y contenido. Mantiene el contador histórico,
+    // los horarios y la comprobación de aprobación del despacho normal.
+    void this.despacho.despachar(id).catch(() => undefined);
+    return { ok: true };
   }
 
   async resolver(auth: CurrentAuth, id: string, dto: ResolverAvisoDto) {
@@ -385,7 +523,11 @@ export class NotificacionesService {
         'identidad',
       ]);
       const n = await tx.notificacionWhatsapp.findFirst({
-        where: { id, tenantId: auth.tenantId, canal: { in: ['WATI', 'WHATSAPP_WEB'] } },
+        where: {
+          id,
+          tenantId: auth.tenantId,
+          canal: { in: ['WATI', 'WHATSAPP_WEB'] },
+        },
       });
       if (!n) throw new NotFoundException('No se encontró el aviso.');
       const incierta = ['wati_incierta', 'web_incierta'].includes(n.estado);
@@ -429,6 +571,7 @@ export class NotificacionesService {
           reservadaEl: null,
           programadaPara: null,
           enviadaEl: estado === 'enviada' ? new Date() : n.enviadaEl,
+          ...(n.canal === 'WATI' && estado === 'enviada' ? { estadoEntrega: 'confirmado_manualmente', estadoEntregaEl: new Date() } : {}),
           motivo: `${estado === 'enviada' ? 'Confirmado' : 'Descartado'} por ${actorNombre}: ${motivo}${n.motivo ? ` · Antecedente: ${n.motivo}` : ''}`,
         },
       });

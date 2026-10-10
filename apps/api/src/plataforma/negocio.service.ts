@@ -577,7 +577,7 @@ export class NegocioService {
   private async presupuestos(v: Ventana): Promise<number> {
     return this.prisma.cotizacion.count({
       where: {
-        numero: { not: null },
+        numero: { not: null }, versionVigente: true,
         fechaEnvio: { gte: v.desde, lt: v.hasta },
       },
     });
@@ -701,7 +701,7 @@ export class NegocioService {
         this.prisma.cotizacion
           .findMany({
             where: {
-              numero: { not: null },
+              numero: { not: null }, versionVigente: true,
               fechaEnvio: { gte: v.desde, lt: v.hasta },
             },
             distinct: ['tenantId'],
@@ -850,7 +850,7 @@ export class NegocioService {
                COUNT(*) FILTER (WHERE estado IN ('aprobado', 'convertido')) AS aprobadas,
                COALESCE(SUM(subtotal) FILTER (WHERE estado IN ('aprobado', 'convertido')), 0)::float8 AS aprobadasmonto
         FROM "Cotizacion"
-        WHERE numero IS NOT NULL
+        WHERE numero IS NOT NULL AND "versionVigente" = true
           AND "fechaEnvio" >= ${v.desde} AND "fechaEnvio" < ${v.hasta}
       `,
       this.prisma.$queryRaw<Array<{ produccion: bigint; entregadas: bigint }>>`
@@ -858,7 +858,7 @@ export class NegocioService {
                COUNT(*) FILTER (WHERE ot.estado = 'entregada') AS entregadas
         FROM "Cotizacion" cz
         JOIN "OrdenTrabajo" ot ON ot.id = cz."convertidaOrdenId"
-        WHERE cz.numero IS NOT NULL
+        WHERE cz.numero IS NOT NULL AND cz."versionVigente" = true
           AND cz."fechaEnvio" >= ${v.desde} AND cz."fechaEnvio" < ${v.hasta}
       `,
       this.prisma.$queryRaw<Array<{ motivo: string; cantidad: bigint }>>`
@@ -866,7 +866,7 @@ export class NegocioService {
                     ELSE COALESCE(NULLIF("motivoPerdida", ''), 'otro') END AS motivo,
                COUNT(*) AS cantidad
         FROM "Cotizacion"
-        WHERE numero IS NOT NULL
+        WHERE numero IS NOT NULL AND "versionVigente" = true
           AND estado IN ('rechazado', 'vencido')
           AND "fechaEnvio" >= ${v.desde} AND "fechaEnvio" < ${v.hasta}
         GROUP BY 1 ORDER BY cantidad DESC

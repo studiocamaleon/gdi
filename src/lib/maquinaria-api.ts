@@ -86,3 +86,8 @@ export async function setMaquinaActiva(id: string, activo: boolean) {
     body: JSON.stringify({ activo }),
   });
 }
+
+/** Identidad para selectores, sin costos, capacidades ni fichas de equipos. */
+export async function getMaquinasOpciones() {
+  return apiRequest<Array<{ id: string; nombre: string }>>("/maquinaria/opciones");
+}

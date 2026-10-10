@@ -1,3 +1,4 @@
+import { contieneSinAcentos, normalizarBusqueda } from '../../common/busqueda-texto';
 import { leerEquipoInbox } from './inbox/meta-equipo';
 import {
   contactosInbox,
@@ -256,7 +257,7 @@ export class MetaInboxGeneralService {
       ...scope,
       ...(destinatarioPrueba ? { contactoWaId: destinatarioPrueba } : {}),
     };
-    const busqueda = (query.busqueda ?? '').trim().toLocaleLowerCase();
+    const busqueda = normalizarBusqueda(query.busqueda ?? '');
     const filtro = query.filtro ?? 'TODAS';
     const estados = [
       ...new Set((query.estados ?? '').split(',').filter(Boolean)),
@@ -287,7 +288,6 @@ export class MetaInboxGeneralService {
       );
     // Fecha congelada en el cursor: una conversación puede moverse al recibir
     // mensajes. Volver a la primera página reconcilia ese movimiento.
-    const patron = `%${busqueda.replace(/[\\%_]/g, '\\$&')}%`;
     const numeros = busqueda.replace(/[\s()+.-]/g, '');
     const porNumero = /^\d+$/.test(numeros) ? `%${numeros}%` : null;
     const lista = await this.db.$queryRaw<Resumen[]>`
@@ -295,7 +295,7 @@ export class MetaInboxGeneralService {
       FROM "InboxConversacion" c LEFT JOIN "InboxContacto" k ON k."tenantId"=c."tenantId" AND k."vinculoId"=c."vinculoId" AND k."waId"=c."contactoWaId"
       WHERE c."tenantId"=${auth.tenantId}::uuid AND c."vinculoId"=${canal.id}::uuid AND (c."ultimoMensajeEl" IS NOT NULL OR ${destinatarioPrueba}::text IS NOT NULL)
       AND (${destinatarioPrueba}::text IS NULL OR c."contactoWaId"=${destinatarioPrueba})
-      AND (${busqueda}='' OR (k.eliminado=false AND k.nombre ILIKE ${patron}) OR (${porNumero}::text IS NOT NULL AND c."contactoWaId" LIKE ${porNumero}))
+      AND (${busqueda}='' OR (k.eliminado=false AND ${contieneSinAcentos(Prisma.sql`k.nombre`, busqueda)}) OR (${porNumero}::text IS NOT NULL AND c."contactoWaId" LIKE ${porNumero}))
       AND (${estados.length === 0} OR c.estado IN (${Prisma.join(estados.length ? estados : ['ACTIVA', 'RESUELTA'])}))
       AND (${query.sinLeer !== 'true'} OR c."entrantesRevision">c."leidaRevision")
       AND (${query.sinResponder !== 'true'} OR (SELECT m.direccion FROM "InboxMensaje" m WHERE m."tenantId"=c."tenantId" AND m."vinculoId"=c."vinculoId" AND m."conversacionId"=c.id AND m."enviadoEl" IS NOT NULL AND m.direccion IN ('ENTRANTE','SALIENTE') ORDER BY m."enviadoEl" DESC,m.id DESC LIMIT 1)='ENTRANTE')
@@ -405,10 +405,10 @@ export class MetaInboxGeneralService {
           select: { nombre: true },
         })
       : null;
-    if (query.clienteId && !auth.permisos?.has('crm.ver'))
+    if (query.clienteId && !auth.permisos?.has('crm.clientes.ver'))
       throw new ForbiddenException();
     const contexto =
-      conversacion && auth.permisos?.has('crm.ver')
+      conversacion && auth.permisos?.has('crm.clientes.ver')
         ? await this.clientes.contexto(auth, {
             telefono: `+${conversacion.contactoWaId}`,
             clienteId: query.clienteId,

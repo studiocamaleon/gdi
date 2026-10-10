@@ -35,6 +35,7 @@ describe('impresión directa habilitada explícitamente por plan', () => {
   const impresion = {
     configuracion: jest.fn(() => ({ firmaDisponible: true })),
     vistaPrevia: jest.fn(() => ({ numero: 'OT', paginas: ['png'] })),
+    descargarPdf: jest.fn(() => Buffer.from('%PDF-1.4\nEtiqueta ficticia')),
   };
   const documentos = {
     historial: jest.fn(() => ({ total: 1, envios: [] })),
@@ -112,6 +113,38 @@ describe('impresión directa habilitada explícitamente por plan', () => {
       .get(`/impresion/ordenes/${id}/etiqueta`)
       .expect(200);
     expect(await suscripciones.feature(id, 'centroCopiado')).toBe(true);
+  });
+  it.each(['produccion.ejecutar', 'produccion.tablero.ver'])(
+    'permite recuperar la etiqueta con %s sin acceso comercial ni configuración',
+    async (permiso) => {
+      suscripcion = null;
+      permisos = new Set(['acceso.por_vista', permiso]);
+      await request(app.getHttpServer() as Server)
+        .get(`/impresion/ordenes/${id}/etiqueta`)
+        .expect(200)
+        .expect('Cache-Control', 'no-store');
+      await request(app.getHttpServer() as Server)
+        .get(`/impresion/ordenes/${id}/etiqueta/pdf`)
+        .expect(200)
+        .expect('Content-Type', 'application/pdf')
+        .expect('Content-Disposition', 'attachment; filename="etiqueta.pdf"');
+      expect(impresion.descargarPdf).toHaveBeenLastCalledWith(
+        expect.objectContaining({ tenantId: id, permisos }),
+        id,
+      );
+      await request(app.getHttpServer() as Server)
+        .get('/impresion/configuracion')
+        .expect(403);
+    },
+  );
+  it('rechaza la etiqueta sin permisos de producción', async () => {
+    suscripcion = null;
+    permisos = new Set(['acceso.por_vista', 'comercial.ordenes.ver']);
+    for (const sufijo of ['', '/pdf']) {
+      await request(app.getHttpServer() as Server)
+        .get(`/impresion/ordenes/${id}/etiqueta${sufijo}`)
+        .expect(403);
+    }
   });
   it('autoriza únicamente la habilitación explícita y revalida al revocarla', async () => {
     suscripcion = {

@@ -131,7 +131,7 @@ export function GastosFijosPanel({
   const theme = useDesignTheme();
   const conCuentasPagar = useCapacidad("cuentas_pagar");
   const conRecurrentes = useCapacidad("gastos_recurrentes");
-  const permisoGestionar = usePuede("administracion.gestionar");
+  const permisoGestionar = usePuede("administracion.gastos.gestionar");
   const puedeProgramar = conCuentasPagar && conRecurrentes && permisoGestionar;
   const fmt = (v: number) =>
     formatearMoneda(v, moneda, { decimales: moneda.decimales });

@@ -61,8 +61,11 @@ async function preparar(tx: Prisma.TransactionClient, cliente: PrismaService) {
       return Reflect.get(target, prop) as unknown;
     },
   }) as unknown as PrismaService;
-  const tenant = await tx.tenant.findUniqueOrThrow({
-    where: { slug: 'gdi-demo' },
+  const tenant = await tx.tenant.create({
+    data: {
+      nombre: 'Empresa sintética de planes',
+      slug: `planes-${randomUUID()}`,
+    },
   });
   const actor = await tx.user.create({
     data: {

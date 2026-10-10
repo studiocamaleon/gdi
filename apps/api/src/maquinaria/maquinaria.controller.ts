@@ -18,7 +18,7 @@ import {
 import { MaquinariaService } from './maquinaria.service';
 import { Permiso } from '../auth/permiso.decorator';
 
-@Permiso('costos.ver')
+@Permiso("costos.maquinaria.ver")
 @Controller('maquinaria')
 export class MaquinariaController {
   constructor(private readonly maquinariaService: MaquinariaService) {}
@@ -31,6 +31,12 @@ export class MaquinariaController {
     return this.maquinariaService.findAll(auth, pagination);
   }
 
+  @Permiso('costos.maquinaria.ver', 'inventario.materiales.ver')
+  @Get('opciones')
+  opciones(@CurrentSession() auth: CurrentAuth) {
+    return this.maquinariaService.opciones(auth);
+  }
+
   @Get(':id')
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.maquinariaService.findOne(auth, id);
@@ -41,7 +47,7 @@ export class MaquinariaController {
     return this.maquinariaService.historial(auth, id);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.maquinaria.gestionar")
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -50,7 +56,7 @@ export class MaquinariaController {
     return this.maquinariaService.create(auth, payload);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.maquinaria.gestionar")
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -60,7 +66,7 @@ export class MaquinariaController {
     return this.maquinariaService.update(auth, id, payload);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso("costos.maquinaria.gestionar")
   @Patch(':id/activo')
   setActivo(
     @CurrentSession() auth: CurrentAuth,
@@ -71,7 +77,7 @@ export class MaquinariaController {
   }
 
   /** Compatibilidad temporal para clientes antiguos. */
-  @Permiso('costos.gestionar')
+  @Permiso("costos.maquinaria.gestionar")
   @Patch(':id/toggle')
   toggle(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.maquinariaService.toggle(auth, id);

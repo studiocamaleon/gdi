@@ -4,6 +4,7 @@ import {
   IsInt,
   IsNumber,
   IsOptional,
+  IsUUID,
   IsString,
   Max,
   MaxLength,
@@ -25,7 +26,8 @@ export class AjustarPuntosDto {
 }
 
 export class SimularFidelizacionDto {
-  @IsNumber() margen: number;
+  @IsOptional() @IsUUID() presupuestoBaseId?: string;
+  @IsOptional() @IsNumber() margen?: number;
   @IsNumber() @Min(0) total: number;
   @IsOptional() @IsInt() @Min(0) canjePuntos?: number;
 }

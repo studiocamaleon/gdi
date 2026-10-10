@@ -1,8 +1,11 @@
 "use client";
 import { useState } from "react";
 import { toast } from "sonner";
+import { UsersRound, UserCheck, Mail } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import styles from "./cupo-equipo.module.css";
 import {
   Table,
   TableBody,
@@ -40,36 +43,79 @@ export function CupoEquipo({
   }
   return (
     <div className="flex flex-col gap-3 pb-4">
-      <Alert>
-        <AlertTitle>
-          {datos.enUso}{" "}
-          {datos.limite === null
-            ? "lugares ocupados · Sin límite"
-            : `de ${datos.limite} lugares ocupados`}
-        </AlertTitle>
-        <AlertDescription>
-          {cupo && (
-            <p>
-              {cupo.activos} accesos habilitados · {cupo.invitacionesPendientes}{" "}
-              invitaciones pendientes.
-              {cupo.incluidos !== null &&
-                ` ${cupo.incluidos} incluidos + ${cupo.adicionales} adicionales.`}
+      <section className={styles.panel} aria-label="Lugares del equipo">
+        <div className={styles.resumen}>
+          <div className={styles.icono}>
+            <UsersRound aria-hidden="true" />
+          </div>
+          <div>
+            <span className={styles.etiqueta}>Tu equipo en Grafo</span>
+            <p className={styles.ocupacion}>
+              <strong>{datos.enUso}</strong>
+              <span>
+                {datos.enUso === 1 ? "lugar ocupado" : "lugares ocupados"}
+              </span>
             </p>
+          </div>
+          <span className={styles.limite}>
+            {datos.limite === null
+              ? "Sin límite de lugares"
+              : `Cupo total: ${datos.limite}`}
+          </span>
+        </div>
+        {cupo && (
+          <dl className={styles.metricas}>
+            <div>
+              <dt>
+                <UserCheck aria-hidden="true" /> Accesos habilitados
+              </dt>
+              <dd>{cupo.activos}</dd>
+            </div>
+            <div>
+              <dt>
+                <Mail aria-hidden="true" /> Invitaciones pendientes
+              </dt>
+              <dd>{cupo.invitacionesPendientes}</dd>
+            </div>
+          </dl>
+        )}
+        <div className={styles.pie}>
+          {datos.limite !== null && datos.limite > 0 && (
+            <Progress
+              className={styles.progreso}
+              value={Math.min(datos.enUso, datos.limite)}
+              max={datos.limite}
+              aria-label="Ocupación del equipo"
+              getAriaValueText={() =>
+                `${datos.enUso} de ${datos.limite} lugares ocupados`
+              }
+            />
           )}
           <p>
+            {cupo?.incluidos !== null && cupo?.incluidos !== undefined && (
+              <span>
+                {cupo.incluidos} incluidos + {cupo.adicionales}{" "}
+                adicionales.{" "}
+              </span>
+            )}
             Los accesos desactivados y las invitaciones vencidas no ocupan
             lugar.
           </p>
-          {lleno && (
-            <p>
-              {cupo?.excedidos
-                ? "El uso supera el cupo actual. Se conservan los accesos existentes."
-                : "El cupo está completo."}{" "}
-              Para sumar personas, liberá un lugar o solicitá ampliar el cupo.
-            </p>
-          )}
-        </AlertDescription>
-      </Alert>
+        </div>
+      </section>
+      {lleno && (
+        <Alert>
+          <AlertTitle>
+            {cupo?.excedidos
+              ? "El uso supera el cupo actual"
+              : "El cupo está completo"}
+          </AlertTitle>
+          <AlertDescription>
+            {cupo?.excedidos ? "Se conservan los accesos existentes. " : ""}
+            Para sumar personas, liberá un lugar o solicitá ampliar el cupo.
+          </AlertDescription>
+        </Alert>
+      )}
       {!!datos.invitaciones?.length && (
         <Table>
           <TableHeader>

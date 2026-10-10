@@ -102,18 +102,41 @@ function parseArgs(argv) {
     };
 }
 function parseAttributes(tag) {
-    const attrs = {};
-    const regex = /([:\w-]+)\s*=\s*("([^"]*)"|'([^']*)')/g;
-    let match;
-    while ((match = regex.exec(tag)) !== null) {
-        attrs[match[1]] = match[3] ?? match[4] ?? "";
+    const attrs = Object.create(null);
+    // Escáner lineal: nunca reintenta desde posiciones anteriores del atributo.
+    let index = /^<[\w:-]+/.exec(tag)?.[0].length ?? 0;
+    const espacios = () => { while (index < tag.length && /\s/.test(tag[index]))
+        index++; };
+    while (index < tag.length) {
+        espacios();
+        if (tag[index] === ">" || (tag[index] === "/" && tag[index + 1] === ">"))
+            break;
+        const inicioNombre = index;
+        while (index < tag.length && /[:\w-]/.test(tag[index]))
+            index++;
+        if (index === inicioNombre)
+            throw new Error("El SVG contiene un atributo inválido");
+        const nombre = tag.slice(inicioNombre, index);
+        espacios();
+        if (tag[index++] !== "=")
+            throw new Error("El SVG contiene un atributo inválido");
+        espacios();
+        const comilla = tag[index++];
+        if (comilla !== '"' && comilla !== "'")
+            throw new Error("El SVG contiene un atributo inválido");
+        const inicioValor = index;
+        while (index < tag.length && tag[index] !== comilla)
+            index++;
+        if (index === tag.length)
+            throw new Error("El SVG contiene un atributo inválido");
+        attrs[nombre] = tag.slice(inicioValor, index++);
     }
     return attrs;
 }
 function parseLengthMm(raw) {
     if (!raw)
         return undefined;
-    const match = raw.trim().match(/^([-+]?\d*\.?\d+(?:e[-+]?\d+)?)\s*(mm|cm|in|px)?$/i);
+    const match = raw.trim().match(/^([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)\s*(mm|cm|in|px)?$/i);
     if (!match)
         return undefined;
     const value = Number(match[1]);
@@ -1519,7 +1542,9 @@ function normalizeNegativeZero(value) {
     return Math.abs(value) < 0.5e-9 ? 0 : value;
 }
 function formatFeed(value) {
-    return Number.isInteger(value) ? String(value) : String(value).replace(/0+$/, "").replace(/\.$/, "");
+    // Number ya produce una representación sin ceros decimales sobrantes.
+    // Recortarlos con una regex también alteraba exponentes como 1e-10.
+    return String(value);
 }
 function makeReport(parsed, bridges, routeSvg, routeMachine, metrics, profile, originSvg, sourceName, warnings) {
     const machineBounds = boundsOfPoints(routeMachine);

@@ -186,12 +186,7 @@ export class PruebaDocumentoDto extends ImpresoraDto {
   dobleFaz!: boolean;
 }
 
-@Permiso(
-  'produccion.ver',
-  'produccion.ejecutar',
-  'configuracion.ver',
-  'comercial.gestionar',
-)
+@Permiso("produccion.tablero.ver", "produccion.ejecutar", "configuracion.impresoras.ver", "comercial.ordenes.gestionar")
 @UseGuards(ImpresionDirectaGuard)
 @Controller('impresion')
 export class ImpresionController {
@@ -201,17 +196,12 @@ export class ImpresionController {
     private readonly perfiles: PerfilesImpresionService,
   ) {}
   @Get('perfiles')
-  @Permiso(
-    'configuracion.ver',
-    'comercial.ver',
-    'produccion.ver',
-    'produccion.ejecutar',
-  )
+  @Permiso("configuracion.impresoras.ver", "comercial.ordenes.ver", "produccion.tablero.ver", "produccion.ejecutar")
   configuracionPerfiles(@CurrentSession() auth: CurrentAuth) {
     return this.perfiles.configuracion(auth);
   }
   @Post('destinos')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   crearDestino(
     @CurrentSession() auth: CurrentAuth,
     @Body() body: DestinoImpresionDto,
@@ -219,7 +209,7 @@ export class ImpresionController {
     return this.perfiles.guardarDestino(auth, body);
   }
   @Put('destinos/:id')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   editarDestino(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -228,7 +218,7 @@ export class ImpresionController {
     return this.perfiles.guardarDestino(auth, body, id);
   }
   @Post('destinos/:id/bandejas')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   crearBandeja(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -237,7 +227,7 @@ export class ImpresionController {
     return this.perfiles.agregarBandeja(auth, id, body);
   }
   @Put('destinos/:id/cad')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   guardarCad(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -246,7 +236,7 @@ export class ImpresionController {
     return this.perfiles.guardarCad(auth, id, body);
   }
   @Post('destinos/:id/prueba-cad')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   @Header('Cache-Control', 'no-store')
   pruebaCad(
     @CurrentSession() auth: CurrentAuth,
@@ -256,7 +246,7 @@ export class ImpresionController {
     return this.perfiles.pruebaCad(auth, id, body);
   }
   @Post('perfiles')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   crearPerfil(
     @CurrentSession() auth: CurrentAuth,
     @Body() body: PerfilImpresionDto,
@@ -264,7 +254,7 @@ export class ImpresionController {
     return this.perfiles.guardarPerfil(auth, body);
   }
   @Put('perfiles/:id')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   editarPerfil(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -273,7 +263,7 @@ export class ImpresionController {
     return this.perfiles.guardarPerfil(auth, body, id);
   }
   @Post('bandejas/:id/preparacion')
-  @Permiso('configuracion.gestionar', 'produccion.ejecutar')
+  @Permiso("configuracion.impresoras.gestionar", "produccion.ejecutar")
   prepararBandeja(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -282,7 +272,7 @@ export class ImpresionController {
     return this.perfiles.prepararBandeja(auth, id, body);
   }
   @Post('perfiles/:id/prueba')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   pruebaPerfil(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -300,13 +290,13 @@ export class ImpresionController {
     return this.service.buscarImpresoras();
   }
   @Post('detalles-impresoras')
-  @Permiso('configuracion.gestionar')
+  @Permiso("configuracion.impresoras.gestionar")
   @Header('Cache-Control', 'no-store')
   detallesImpresoras(@Body() body: DetallesImpresorasDto) {
     return this.service.detallesImpresoras(body.timestamp);
   }
   @Post('escuchar')
-  @Permiso('configuracion.ver', 'comercial.gestionar', 'produccion.ejecutar')
+  @Permiso("configuracion.impresoras.ver", "comercial.ordenes.gestionar", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   escuchar(@Body() body: EscucharImpresoraDto) {
     return this.service.escucharImpresora(
@@ -315,7 +305,7 @@ export class ImpresionController {
     );
   }
   @Post('prueba-documento')
-  @Permiso('configuracion.ver')
+  @Permiso("configuracion.impresoras.ver")
   @Header('Cache-Control', 'no-store')
   pruebaDocumento(@Body() body: PruebaDocumentoDto) {
     return this.service.prepararPruebaDocumento(
@@ -327,7 +317,7 @@ export class ImpresionController {
 
   @ColasImpresion()
   @Get('cola')
-  @Permiso('comercial.ver', 'produccion.ver', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.ver", "produccion.tablero.ver", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   cola(
     @CurrentSession() auth: CurrentAuth,
@@ -337,7 +327,7 @@ export class ImpresionController {
   }
   @ColasImpresion()
   @Post('cola/liberar')
-  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.gestionar", "produccion.ejecutar")
   liberarLote(
     @CurrentSession() auth: CurrentAuth,
     @Body() body: LiberarLoteDto,
@@ -351,7 +341,7 @@ export class ImpresionController {
   }
   @ColasImpresion()
   @Post('ordenes/:id/cola')
-  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.gestionar", "produccion.ejecutar")
   solicitar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -360,7 +350,7 @@ export class ImpresionController {
   }
   @ColasImpresion()
   @Post('ordenes/:id/liberar-impresion')
-  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.gestionar", "produccion.ejecutar")
   liberar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
@@ -377,7 +367,7 @@ export class ImpresionController {
 
   @ColasImpresion()
   @Get('ordenes/:id/documentos')
-  @Permiso('comercial.ver', 'produccion.ver', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.ver", "produccion.tablero.ver", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   vistaDocumentos(
     @CurrentSession() auth: CurrentAuth,
@@ -388,7 +378,7 @@ export class ImpresionController {
 
   @ImpresionRegistrada()
   @Get('ordenes/:id/historial-documentos')
-  @Permiso('comercial.ver', 'produccion.ver', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.ver", "produccion.tablero.ver", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   historialDocumentos(
     @CurrentSession() auth: CurrentAuth,
@@ -399,7 +389,7 @@ export class ImpresionController {
   }
   @ColasImpresion()
   @Post('ordenes/:id/documentos/:itemId')
-  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.gestionar", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   prepararDocumento(
     @CurrentSession() auth: CurrentAuth,
@@ -422,7 +412,7 @@ export class ImpresionController {
   }
   @ImpresionRegistrada()
   @Post('ordenes/:id/envios/:intentoId')
-  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.gestionar", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   estadoDocumento(
     @CurrentSession() auth: CurrentAuth,
@@ -440,7 +430,7 @@ export class ImpresionController {
   }
   @ImpresionRegistrada()
   @Post('ordenes/:id/confirmacion-documentos')
-  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Permiso("comercial.ordenes.gestionar", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   confirmarDocumentos(
     @CurrentSession() auth: CurrentAuth,
@@ -451,7 +441,7 @@ export class ImpresionController {
   }
   @ImpresionManual()
   @Get('ordenes/:id/etiqueta/pdf')
-  @Permiso('produccion.ver', 'produccion.ejecutar')
+  @Permiso("produccion.tablero.ver", "produccion.ejecutar")
   @Header('Content-Type', 'application/pdf')
   @Header('Content-Disposition', 'attachment; filename="etiqueta.pdf"')
   @Header('Cache-Control', 'no-store')
@@ -464,7 +454,7 @@ export class ImpresionController {
 
   @ImpresionManual()
   @Get('ordenes/:id/etiqueta')
-  @Permiso('produccion.ver', 'produccion.ejecutar')
+  @Permiso("produccion.tablero.ver", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   etiqueta(
     @CurrentSession() auth: CurrentAuth,
@@ -473,7 +463,7 @@ export class ImpresionController {
     return this.service.vistaPrevia(auth, id);
   }
   @Post('ordenes/:id/etiqueta')
-  @Permiso('produccion.ver', 'produccion.ejecutar')
+  @Permiso("produccion.tablero.ver", "produccion.ejecutar")
   @Header('Cache-Control', 'no-store')
   preparar(
     @CurrentSession() auth: CurrentAuth,

@@ -1,5 +1,5 @@
 import type {
-  ProductoRecetaRevision,
+  RevisionRecetaCotizacion,
   CotizarResponse,
 } from "./productos-servicios-api";
 import type { ConfiguracionGeometriasComerciales } from "./producto-geometrias";
@@ -20,7 +20,7 @@ export type GrupoPiezasCotizacion = {
 /** La pertenencia se toma de la interpretación guardada, nunca del nombre del archivo. */
 export function agruparPiezasCotizacion(
   fuentes: Fuente[],
-  componentes: ProductoRecetaRevision["componentes"],
+  componentes: RevisionRecetaCotizacion["componentes"],
   cantidad: number,
   calculados?: NonNullable<
     CotizarResponse["cotizacion"]

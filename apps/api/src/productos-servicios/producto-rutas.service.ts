@@ -162,6 +162,14 @@ export class ProductoRutasService {
         `Ruta alternativa ${rutaAltId} no encontrada`,
       );
 
+    if (
+      dto.esPreferida === true &&
+      (dto.activo ?? existente.activo) === false
+    ) {
+      throw new BadRequestException(
+        'Activá el flujo antes de marcarlo como preferido.',
+      );
+    }
     const data: Prisma.ProductoRutaAlternativaUpdateInput = {};
     if (dto.nombre !== undefined) data.nombre = dto.nombre;
     if (dto.esPreferida !== undefined) data.esPreferida = dto.esPreferida;
@@ -171,6 +179,7 @@ export class ProductoRutasService {
     }
     if (dto.orden !== undefined) data.orden = dto.orden;
     if (dto.activo !== undefined) data.activo = dto.activo;
+    if (dto.activo === false) data.esPreferida = false;
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.esPreferida === true) {
@@ -185,10 +194,31 @@ export class ProductoRutasService {
         });
       }
 
-      return tx.productoRutaAlternativa.update({
+      const actualizada = await tx.productoRutaAlternativa.update({
         where: { id: rutaAltId },
         data,
       });
+      if (dto.activo !== undefined) {
+        // La raíz se oculta del catálogo; sus revisiones e ítems históricos
+        // conservan todas sus referencias y snapshots.
+        await tx.productoReceta.updateMany({
+          where: { tenantId, rutaAlternativaId: rutaAltId },
+          data: { activo: dto.activo },
+        });
+      }
+      if (dto.activo === false && existente.esPreferida) {
+        const siguiente = await tx.productoRutaAlternativa.findFirst({
+          where: { tenantId, productoId: existente.productoId, activo: true },
+          orderBy: [{ esPreferida: 'desc' }, { orden: 'asc' }, { id: 'asc' }],
+          select: { id: true },
+        });
+        if (siguiente)
+          await tx.productoRutaAlternativa.update({
+            where: { id: siguiente.id },
+            data: { esPreferida: true },
+          });
+      }
+      return actualizada;
     });
   }
 
@@ -469,14 +499,35 @@ export class ProductoRutasService {
     await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const existente = await this.prisma.productoRutaAlternativa.findFirst({
       where: { id: rutaAltId, tenantId },
+      include: {
+        _count: { select: { recetas: true, recetaRevisiones: true } },
+      },
     });
     if (!existente)
-      throw new NotFoundException(
-        `Ruta alternativa ${rutaAltId} no encontrada`,
-      );
-    return this.prisma.productoRutaAlternativa.delete({
-      where: { id: rutaAltId },
-    });
+      throw new NotFoundException('Flujo de producción no encontrado.');
+    // El editor anterior enviaba DELETE incluso después de publicar. No se
+    // pueden borrar las referencias que conservan recetas y órdenes emitidas.
+    if (existente._count.recetas || existente._count.recetaRevisiones) {
+      return this.actualizarProductoRutaAlternativa(tenantId, rutaAltId, {
+        activo: false,
+      });
+    }
+    try {
+      return await this.prisma.productoRutaAlternativa.delete({
+        where: { id: rutaAltId },
+      });
+    } catch (error) {
+      // Una publicación concurrente pudo crear su primera revisión.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        return this.actualizarProductoRutaAlternativa(tenantId, rutaAltId, {
+          activo: false,
+        });
+      }
+      throw error;
+    }
   }
 
   private jsonOrNull(value: Prisma.JsonValue | null) {

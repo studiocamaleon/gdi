@@ -19,7 +19,7 @@ function texto(elemento: Element | null | undefined): string {
     .trim();
 }
 
-function filasVisibles(reporte: string, raiz: Element): FilaCsv[] {
+export function filasVisibles(reporte: string, raiz: Element): FilaCsv[] {
   const filas: FilaCsv[] = [
     ["Reporte", reporte],
     [
@@ -33,6 +33,9 @@ function filasVisibles(reporte: string, raiz: Element): FilaCsv[] {
   const periodo = texto(raiz.querySelector("[data-reporte-periodo]"));
   if (periodo) filas.push(["Período", periodo]);
 
+  const alcance = texto(raiz.querySelector("[data-reporte-alcance]"));
+  if (alcance) filas.push(["Alcance", alcance]);
+
   const kpis = Array.from(
     raiz.querySelectorAll("[data-reporte-indicador], .d-kpi"),
   );
@@ -42,7 +45,12 @@ function filasVisibles(reporte: string, raiz: Element): FilaCsv[] {
       filas.push([
         texto(kpi.querySelector("[data-reporte-etiqueta], .d-kpi-lbl")),
         texto(kpi.querySelector("[data-reporte-valor], .d-kpi-val")),
-        texto(kpi.querySelector("[data-reporte-detalle], .d-kpi-foot")),
+        [
+          texto(kpi.querySelector("[data-reporte-detalle], .d-kpi-foot")),
+          texto(kpi.querySelector("[data-reporte-iva]")),
+        ]
+          .filter(Boolean)
+          .join(" · "),
       ]);
     });
   }

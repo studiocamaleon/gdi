@@ -26,6 +26,15 @@ apps/api/**
 !apps/api/tsconfig*.json
 !apps/api/nest-cli.json
 !apps/api/requirements-opennest.txt
+!apps/api/requirements-build.txt
+!apps/api/test
+apps/api/test/**
+!apps/api/test/dependencias-prisma.test.cjs
+!apps/api/test/fixtures
+apps/api/test/fixtures/**
+!apps/api/test/fixtures/f6-planificacion
+apps/api/test/fixtures/f6-planificacion/**
+!apps/api/test/fixtures/f6-planificacion/exhibidor-controlado.ts
 !apps/api/src
 !apps/api/src/**
 !apps/api/prisma
@@ -40,6 +49,9 @@ apps/api/scripts/**
 !deploy
 deploy/**
 !deploy/Dockerfile
+!deploy/pdf
+deploy/pdf/**
+!deploy/pdf/Dockerfile
 **/node_modules
 **/.env*
 **/*.pem

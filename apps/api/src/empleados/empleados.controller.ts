@@ -21,9 +21,9 @@ import {
 } from './dto/upsert-empleado.dto';
 import { EmpleadosQueryDto } from './dto/empleados-query.dto';
 import type { CurrentAuth } from '../auth/auth.types';
-import { Permiso } from '../auth/permiso.decorator';
+import { Permiso, RequiereVista } from '../auth/permiso.decorator';
 
-@Permiso('registros.ver')
+@Permiso("registros.empleados.ver")
 @Controller('empleados')
 export class EmpleadosController {
   constructor(private readonly empleadosService: EmpleadosService) {}
@@ -36,6 +36,7 @@ export class EmpleadosController {
     return this.empleadosService.findAll(auth, pagination);
   }
 
+  @Permiso('registros.empleados.ver', 'comercial.campanas.ver', 'configuracion.usuarios.ver')
   @Get('opciones')
   opciones(@CurrentSession() auth: CurrentAuth) {
     return this.empleadosService.opciones(auth);
@@ -46,7 +47,8 @@ export class EmpleadosController {
     return this.empleadosService.findOne(auth, id);
   }
 
-  @Permiso('registros.gestionar_empleados')
+  @Permiso("registros.empleados.gestionar")
+  @RequiereVista("registros.empleados.ver")
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -55,7 +57,8 @@ export class EmpleadosController {
     return this.empleadosService.create(auth, payload);
   }
 
-  @Permiso('registros.gestionar_empleados')
+  @Permiso("registros.empleados.gestionar")
+  @RequiereVista("registros.empleados.ver")
   @Post('importar')
   importar(
     @CurrentSession() auth: CurrentAuth,
@@ -64,7 +67,8 @@ export class EmpleadosController {
     return this.empleadosService.importar(auth, payload.empleados);
   }
 
-  @Permiso('registros.gestionar_empleados')
+  @Permiso("registros.empleados.gestionar")
+  @RequiereVista("registros.empleados.ver")
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -74,7 +78,8 @@ export class EmpleadosController {
     return this.empleadosService.update(auth, id, payload);
   }
 
-  @Permiso('registros.gestionar_empleados')
+  @Permiso("registros.empleados.gestionar")
+  @RequiereVista("registros.empleados.ver")
   @Patch('estado')
   estadoMuchos(
     @CurrentSession() auth: CurrentAuth,
@@ -88,7 +93,8 @@ export class EmpleadosController {
     );
   }
 
-  @Permiso('registros.gestionar_empleados')
+  @Permiso("registros.empleados.gestionar")
+  @RequiereVista("registros.empleados.ver")
   @Patch(':id/estado')
   estado(
     @CurrentSession() auth: CurrentAuth,
@@ -103,7 +109,8 @@ export class EmpleadosController {
     );
   }
 
-  @Permiso('registros.gestionar_empleados')
+  @Permiso("registros.empleados.gestionar")
+  @RequiereVista("registros.empleados.ver")
   @Delete(':id')
   @HttpCode(204)
   async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {

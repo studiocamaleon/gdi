@@ -79,7 +79,7 @@ export type TableroPasoData = {
   gatesOperativos?: Array<{
     id: string;
     tipo: "MATERIAL" | "CALIDAD";
-    estado: "PENDIENTE" | "CUMPLIDO";
+    estado: "PENDIENTE" | "CUMPLIDO" | "OMITIDO_INICIO";
     detalle: string | null;
     resueltoEl: string | null;
     resueltoPorNombre: string | null;
@@ -150,6 +150,8 @@ export type TableroPasoData = {
   /** El paso está en MI mesa de trabajo (reclamo persistente por usuario). */
   mesaEsMia: boolean;
   asignacionPersonal?: ReturnType<typeof import("../../apps/api/src/produccion/asignacion-personal").proyectarAsignacionPersonal>;
+  /** Previsión automática compartida; sigue exigiendo permiso y pertenencia a la estación. */
+  ejecucionPorEquipo?: boolean;
   /** Quién lo tiene en su mesa (para el resto del taller); null = nadie. */
   mesaUsuarioNombre: string | null;
   /** === Tercerización (F2) ===: 'interno' (tablero) | 'tercerizado' (Compras). */

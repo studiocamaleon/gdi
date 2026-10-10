@@ -2,7 +2,11 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PresupuestoPdfDatos } from '../presupuesto-pdf.service';
-import { presupuestoFooter, presupuestoHtml } from './presupuesto-html';
+import {
+  presupuestoFooter,
+  presupuestoHtml,
+  VERSION_PRESUPUESTO_HTML,
+} from './presupuesto-html';
 
 export function pilotoPdfHabilitado(): boolean {
   return (
@@ -16,7 +20,10 @@ export function pilotoPdfHabilitado(): boolean {
 export class PresupuestoRenderService {
   private fuentes?: Promise<Array<{ nombre: string; contenido: Buffer }>>;
 
-  async generar(d: PresupuestoPdfDatos): Promise<Buffer> {
+  async generar(
+    d: PresupuestoPdfDatos,
+    version = VERSION_PRESUPUESTO_HTML,
+  ): Promise<Buffer> {
     const base = process.env.PDF_RENDER_URL?.trim();
     if (!base)
       throw new ServiceUnavailableException(
@@ -25,7 +32,7 @@ export class PresupuestoRenderService {
     const form = new FormData();
     form.append(
       'files',
-      new Blob([presupuestoHtml(d)], { type: 'text/html' }),
+      new Blob([presupuestoHtml(d, version)], { type: 'text/html' }),
       'index.html',
     );
     form.append(

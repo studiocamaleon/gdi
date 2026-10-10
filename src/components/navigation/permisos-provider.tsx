@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import type { PermisoClave } from "@/lib/permisos";
+import { expandirVistas } from "@/lib/permisos-vistas";
 
 /**
  * Los permisos del usuario, disponibles en cualquier componente de cliente.
@@ -25,7 +26,7 @@ export function PermisosProvider({
   children: React.ReactNode;
 }) {
   const valor = React.useMemo(
-    () => (permisos ? new Set(permisos) : null),
+    () => (permisos ? expandirVistas(permisos) : null),
     [permisos],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;

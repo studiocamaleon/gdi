@@ -120,6 +120,7 @@ export function CotizadorTercerizadoCostoManual({
     <>
       {pasos.map((cp) => {
         const estimado = tercerizadoCostoEstimado(cp);
+        const tieneEstimado = estimado != null || cp.tercerizadoConfigJson?.costoEstimadoDisponible === true;
         const valor = valores[cp.id];
         return (
           <div key={`terc-manual-${cp.id}`} className={seC.card}>
@@ -135,7 +136,7 @@ export function CotizadorTercerizadoCostoManual({
                   placeholder={
                     estimado != null
                       ? `Estimado: ${simboloMoneda} ${estimado}`
-                      : "Requerido — cotización del proveedor"
+                      : tieneEstimado ? "Se usará el estimado de referencia" : "Requerido — cotización del proveedor"
                   }
                   onChange={(event) =>
                     onChange(
@@ -146,7 +147,7 @@ export function CotizadorTercerizadoCostoManual({
                     )
                   }
                 />
-                {valor == null && estimado != null ? (
+                {valor == null && tieneEstimado ? (
                   <div className="ap-minimum-alert">
                     <span>
                       Cotiza con el estimado de referencia — confirmá el costo

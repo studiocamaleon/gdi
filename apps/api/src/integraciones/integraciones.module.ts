@@ -1,3 +1,4 @@
+import { WatiEntregaService } from './wati/wati-entrega.service';
 import { MetaEquipoService } from './meta/inbox/meta-equipo.service';
 import { MetaCargasService } from './meta/inbox/meta-cargas.service';
 import { MetaEnviosService } from './meta/inbox/meta-envios.service';
@@ -88,6 +89,7 @@ import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.mo
     IntegracionesService,
     WatiClient,
     WatiScheduler,
+    WatiEntregaService,
     DespachoService,
     NotificacionesService,
     NotificacionesOrdenesService,

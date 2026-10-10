@@ -91,9 +91,9 @@ function formatFieldValue(
   return formatTemplateTextValue(fieldKey, asText(value));
 }
 
-export function getVarianteDisplayName(
-  materiaPrima: MateriaPrima,
-  variante: MateriaPrimaVariante,
+export function getVarianteDisplayName<M extends Pick<MateriaPrima, "nombre" | "templateId">, V extends Pick<MateriaPrimaVariante, "nombreVariante" | "sku" | "atributosVariante">>(
+  materiaPrima: M,
+  variante: V,
   options?: { maxDimensiones?: number },
 ) {
   const nombreVariante = variante.nombreVariante?.trim();
@@ -123,18 +123,18 @@ export function getVarianteDisplayName(
   return variante.sku;
 }
 
-export function getMateriaPrimaVarianteLabel(
-  materiaPrima: MateriaPrima,
-  variante: MateriaPrimaVariante,
+export function getMateriaPrimaVarianteLabel<M extends Pick<MateriaPrima, "nombre" | "templateId">, V extends Pick<MateriaPrimaVariante, "nombreVariante" | "sku" | "atributosVariante">>(
+  materiaPrima: M,
+  variante: V,
   options?: { maxDimensiones?: number },
 ) {
   const varianteNombre = getVarianteDisplayName(materiaPrima, variante, options);
   return `${materiaPrima.nombre} - ${varianteNombre}`;
 }
 
-export function getVarianteOptionChips(
-  materiaPrima: MateriaPrima,
-  variante: MateriaPrimaVariante,
+export function getVarianteOptionChips<M extends Pick<MateriaPrima, "nombre" | "templateId">, V extends Pick<MateriaPrimaVariante, "nombreVariante" | "sku" | "atributosVariante">>(
+  materiaPrima: M,
+  variante: V,
   options?: { maxDimensiones?: number },
 ) {
   const template = getMateriaPrimaTemplate(materiaPrima.templateId);

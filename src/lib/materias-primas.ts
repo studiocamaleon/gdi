@@ -82,6 +82,7 @@ export type UnidadMateriaPrima =
   /** Alias legado aceptado desde datos antiguos; las altas nuevas usan "hoja". */
   | "pliego"
   | "resma"
+  | "barra"
   | "rollo"
   | "metro_lineal"
   | "m2"
@@ -113,8 +114,8 @@ export type MateriaPrimaVariante = {
   equivalenciaCompra?: number | null;
   equivalencias?: MaterialEquivalence[];
   moneda: string;
-  proveedorReferenciaId: string | null;
-  proveedorReferenciaNombre: string;
+  proveedorReferenciaId?: string | null;
+  proveedorReferenciaNombre?: string;
 };
 
 export type MateriaPrima = {
@@ -279,6 +280,7 @@ export const unidadMateriaPrimaItems: Array<{
   { value: "hoja", label: "Hoja" },
   { value: "placa", label: "Placa" },
   { value: "resma", label: "Resma" },
+  { value: "barra", label: "Barra" },
   { value: "rollo", label: "Rollo" },
   { value: "metro_lineal", label: "Metro lineal" },
   { value: "m2", label: "M2" },
@@ -292,3 +294,8 @@ export const unidadMateriaPrimaItems: Array<{
   { value: "pieza", label: "Pieza" },
   { value: "par", label: "Par" },
 ];
+
+/** Datos mínimos para elegir una variante y registrar existencias. */
+export type MateriaPrimaStock = Pick<MateriaPrima, "id" | "nombre" | "codigo" | "activo" | "templateId" | "unidadStock" | "unidadCompra" | "unidadUso"> & {
+  variantes: Omit<MateriaPrimaVariante, "proveedorReferenciaId" | "proveedorReferenciaNombre">[];
+};

@@ -1,3 +1,7 @@
+import { RecuperacionController } from './recuperacion.controller';
+import { RecuperacionService } from './recuperacion.service';
+import { RecuperacionScheduler } from './recuperacion.scheduler';
+import { CorreoTransaccionalModule } from '../registro/correo-transaccional.module';
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
@@ -27,13 +31,16 @@ if (
 @Module({
   imports: [
     StorageModule,
+    CorreoTransaccionalModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
     }),
   ],
-  controllers: [AuthController, PerfilController],
+  controllers: [AuthController, PerfilController, RecuperacionController],
   providers: [
     AuthService,
+    RecuperacionService,
+    RecuperacionScheduler,
     SessionCacheService,
     SesionesScheduler,
     MfaService,

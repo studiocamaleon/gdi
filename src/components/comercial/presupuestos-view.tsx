@@ -1,5 +1,6 @@
 "use client";
 
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 /**
@@ -83,7 +84,8 @@ function PresupuestosContent({
   const [busqueda, setBusqueda] = React.useState("");
   const [pagina, setPagina] = React.useState(0);
   const [configAbierta, setConfigAbierta] = React.useState(false);
-  const puedeAprobar = rol === "administrador" || rol === "supervisor";
+  const puedeGestionar = usePuede("comercial.presupuestos.gestionar");
+  const puedeAprobar = puedeGestionar && (rol === "administrador" || rol === "supervisor");
 
   const recargar = React.useCallback(async () => {
     try {
@@ -142,10 +144,11 @@ function PresupuestosContent({
     { k: "rechazado", label: "Rechazados" },
     { k: "vencido", label: "Vencidos" },
     { k: "convertido", label: "Convertidos" },
+    { k: "descartado", label: "Descartados" },
   ];
   const countChip = (k: PresupuestoEstado | "todos") =>
     k === "todos"
-      ? data.stats.reduce((s, estado) => s + estado.cantidad, 0)
+      ? data.stats.filter((estado) => estado.estado !== "descartado").reduce((s, estado) => s + estado.cantidad, 0)
       : statDe(k).cantidad;
 
   const filtroActivo = filtro !== "todos" || Boolean(busqueda.trim());
@@ -171,7 +174,9 @@ function PresupuestosContent({
     rechazado: CircleX,
     vencido: Clock3,
     convertido: ArrowRightLeft,
-  };
+    descartado: CircleX,
+    reemplazado: Layers3,
+  } satisfies Record<PresupuestoEstado | "todos", typeof Layers3>;
 
   return (
     <section
@@ -202,7 +207,7 @@ function PresupuestosContent({
               Configuración
             </ActionButton>
           ) : null}
-          {conPresupuestos && conCotizacion && <ActionLink href="/comercial/crear-propuesta">
+          {puedeGestionar && conPresupuestos && conCotizacion && <ActionLink href="/comercial/crear-propuesta">
             <PlusIcon size={15} aria-hidden />
             Nuevo presupuesto <ArrowUpRight aria-hidden />
           </ActionLink>}
@@ -326,12 +331,12 @@ function PresupuestosContent({
               <ActionButton variant="outline" onPress={limpiarFiltros}>
                 Limpiar filtros
               </ActionButton>
-            ) : (
+            ) : puedeGestionar && conPresupuestos && conCotizacion ? (
               <ActionLink href="/comercial/crear-propuesta">
                 <PlusIcon aria-hidden />
                 Nuevo presupuesto
               </ActionLink>
-            )}
+            ) : null}
           </div>
         ) : (
           <PresupuestosTable

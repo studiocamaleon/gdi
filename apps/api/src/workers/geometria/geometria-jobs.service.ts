@@ -1,7 +1,9 @@
+import { textoErrorLog } from '../../common/log-seguro';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { esPreparacionNesting, timeoutOpenNestMs } from './politica-busqueda';
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -21,7 +23,7 @@ import {
   type NestingIrregularOpenNestData,
   type NestingIrregularOpenNestResult,
 } from '../colas';
-import { conexionRedisApi } from '../redis';
+import { ColaCalculos } from '../cola-calculos';
 import {
   NestingsGuardadosService,
   firmaNesting,
@@ -85,6 +87,8 @@ export class GeometriaJobsService implements OnApplicationShutdown {
   async crear(input: {
     tenantId: string;
     dto: CrearTrabajoNestingOpenNestDto;
+    /** Sólo lo agrega el adaptador interno; nunca se copia del DTO HTTP. */
+    contextoAnalisis?: NestingIrregularOpenNestData['contextoAnalisis'];
   }): Promise<VistaTrabajoGeometria> {
     await this.capacidadesPlan.exigirTodas(input.tenantId, [
       'analisis_vectorial',
@@ -98,18 +102,35 @@ export class GeometriaJobsService implements OnApplicationShutdown {
   async crearParaCotizacion(input: {
     tenantId: string;
     dto: CrearTrabajoNestingOpenNestDto;
+    /** Sólo lo agrega el adaptador interno; nunca se copia del DTO HTTP. */
+    contextoAnalisis?: NestingIrregularOpenNestData['contextoAnalisis'];
   }) {
     await this.capacidadesPlan.exigir(input.tenantId, 'nesting_irregular');
     return this.encolar(input, true);
   }
 
   private async encolar(
-    input: { tenantId: string; dto: CrearTrabajoNestingOpenNestDto },
+    input: {
+      tenantId: string;
+      dto: CrearTrabajoNestingOpenNestDto;
+      contextoAnalisis?: NestingIrregularOpenNestData['contextoAnalisis'];
+    },
     calculoCotizacion: boolean,
   ): Promise<VistaTrabajoGeometria> {
+    if (
+      input.contextoAnalisis &&
+      (input.contextoAnalisis.tenantId !== input.tenantId ||
+        input.contextoAnalisis.schemaVersion !== 1)
+    )
+      throw new BadRequestException(
+        'El contexto no corresponde a este cálculo.',
+      );
     const correlationId = randomUUID();
     const data: NestingIrregularOpenNestData = {
       schemaVersion: 1,
+      ...(input.contextoAnalisis
+        ? { contextoAnalisis: input.contextoAnalisis }
+        : {}),
       calculoCotizacion,
       tenantId: input.tenantId,
       correlationId,
@@ -159,7 +180,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
           await this.biblioteca?.aprender(data, guardado);
         } catch (error) {
           this.logger.warn(
-            `No se pudo enriquecer la biblioteca: ${error instanceof Error ? error.message : String(error)}`,
+            `No se pudo enriquecer la biblioteca: ${textoErrorLog(error)}`,
           );
         }
         return {
@@ -173,9 +194,16 @@ export class GeometriaJobsService implements OnApplicationShutdown {
           resultado: guardado,
         };
       }
-      if (await this.control.leerCancelacion(jobId))
-        jobId = `${jobId}-${randomUUID()}`;
+      const cancelacionPrevia = await this.control.leerCancelacion(jobId);
+      const identidadSolicitud = cancelacionPrevia
+        ? `${jobId}-${cancelacionPrevia.solicitadaEl}`
+        : jobId;
+      if (cancelacionPrevia) jobId = `${jobId}-${randomUUID()}`;
       const queue = this.getQueue(complejidad.clase);
+      const previo = await queue.getJob(jobId);
+      // Cada reintento vuelve a pasar por admisión; conserva el diagnóstico anterior.
+      if (previo && (await previo.getState()) === 'failed')
+        jobId = `${jobId}-${randomUUID()}`;
       await this.capacidad.registrar(
         {
           jobId,
@@ -187,22 +215,16 @@ export class GeometriaJobsService implements OnApplicationShutdown {
       );
       const queued = await queue.add(TRABAJO_NESTING_IRREGULAR_OPENNEST, data, {
         jobId,
+        ...(scope ? { deduplication: { id: identidadSolicitud } } : {}),
         attempts: 1,
         priority: complejidad.prioridad,
         removeOnComplete: { age: 24 * 60 * 60, count: 1_000 },
         removeOnFail: { age: 7 * 24 * 60 * 60, count: 5_000 },
       });
       job = (await queue.getJob(jobId)) ?? queued;
-      // Reintentar desde el sheet debe volver a ejecutar un trabajo fallido,
-      // no devolver durante siete días el mismo error guardado en Redis.
-      if ((await job.getState()) === 'failed') {
-        try {
-          await job.retry('failed');
-        } catch (error) {
-          // Dos solicitudes pueden compartir el reintento ya puesto en cola.
-          if ((await job.getState()) === 'failed') throw error;
-        }
-        job = (await queue.getJob(jobId)) ?? job;
+      if (job.id && job.id !== jobId) {
+        await this.capacidad.cancelar(jobId);
+        jobId = job.id;
       }
       await this.capacidad.confirmar(jobId);
       if (scope) {
@@ -212,22 +234,27 @@ export class GeometriaJobsService implements OnApplicationShutdown {
           jobId,
         });
         if (anterior && anterior !== jobId) {
-          await this.control.solicitarCancelacion({
-            jobId: anterior,
-            tenantId: input.tenantId,
-            motivo: 'obsoleto',
-            reemplazadoPor: jobId,
-          });
-          await this.removerSiEspera(anterior);
+          const estadoAnterior = await (
+            await this.buscarJob(anterior)
+          )?.getState();
+          // Un trabajo ya terminado no necesita cancelación; conservar su
+          // identidad permite compartir reintentos de la misma solicitud.
+          if (estadoAnterior !== 'failed' && estadoAnterior !== 'completed') {
+            await this.control.solicitarCancelacion({
+              jobId: anterior,
+              tenantId: input.tenantId,
+              motivo: 'obsoleto',
+              reemplazadoPor: jobId,
+            });
+            await this.removerSiEspera(anterior);
+          }
         }
       }
       return await this.vistaDesdeJob(job);
     } catch (error) {
       await this.capacidad.cancelar(jobId).catch(() => undefined);
-      if (error instanceof NotFoundException) throw error;
-      this.logger.warn(
-        `No se pudo encolar nesting: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      if (error instanceof HttpException) throw error;
+      this.logger.warn(`No se pudo encolar nesting: ${textoErrorLog(error)}`);
       throw new ServiceUnavailableException(
         'El servicio de cálculos está temporalmente no disponible.',
       );
@@ -268,12 +295,24 @@ export class GeometriaJobsService implements OnApplicationShutdown {
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.warn(
-        `No se pudo consultar job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+        `No se pudo consultar job=${jobId}: ${textoErrorLog(error)}`,
       );
       throw new ServiceUnavailableException(
         'El servicio de cálculos está temporalmente no disponible.',
       );
     }
+  }
+
+  /** Lectura interna del contexto, con la misma pertenencia que el resultado. */
+  async leerContextoAnalisis(
+    tenantId: string,
+    jobId: string,
+  ): Promise<NestingIrregularOpenNestData['contextoAnalisis'] | null> {
+    exigirIdTrabajo(jobId);
+    const job = await this.buscarJob(jobId);
+    if (!job || job.data.tenantId !== tenantId)
+      throw new NotFoundException('No se encontró el trabajo de geometría.');
+    return job.data.contextoAnalisis ?? null;
   }
 
   async cancelar(
@@ -373,13 +412,13 @@ export class GeometriaJobsService implements OnApplicationShutdown {
   private getQueuePorNombre(nombre: string): GeometryQueue {
     const existente = this.queues.get(nombre);
     if (existente) return existente;
-    const queue = new Queue<
+    const queue = new ColaCalculos<
       NestingIrregularOpenNestData,
       NestingIrregularOpenNestResult,
       typeof TRABAJO_NESTING_IRREGULAR_OPENNEST
-    >(nombre, { connection: conexionRedisApi() });
+    >(nombre, (data) => data.tenantId);
     queue.on('error', (error) =>
-      this.logger.warn(`Cola de geometría ${nombre}: ${error.message}`),
+      this.logger.warn(`Cola de geometría ${nombre}: ${textoErrorLog(error)}`),
     );
     this.queues.set(nombre, queue);
     return queue;
@@ -527,6 +566,12 @@ export function idTrabajo(
     .update('\0')
     .update(
       JSON.stringify({
+        contextoAnalisisHash:
+          data.contextoAnalisis === undefined
+            ? undefined
+            : createHash('sha256')
+                .update(JSON.stringify(data.contextoAnalisis))
+                .digest('hex'),
         calculoCotizacion: data.calculoCotizacion === true,
         versionPoliticaOrientacion: VERSION_POLITICA_ORIENTACION_GRAFONEST,
         versionPoliticaBusqueda: VERSION_POLITICA_BUSQUEDA_GRAFONEST,

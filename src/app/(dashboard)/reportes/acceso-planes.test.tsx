@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PROPUESTA_PLANES } from "../../../../apps/api/src/plataforma/planes/catalogo-planes";
 vi.mock("@/lib/capacidades-server", () => ({ tieneCapacidad: vi.fn() }));
-vi.mock("@/lib/permisos-server", () => ({ tienePermiso: vi.fn(async () => true) }));
+vi.mock("@/lib/permisos-server", () => ({ tienePermiso: vi.fn(async () => true), tieneSeccion: vi.fn(async () => true) }));
 vi.mock("@/lib/auth-server", () => ({ zonaHorariaDelTenant: vi.fn(async () => "UTC") }));
 vi.mock("@/lib/panel-api", () => ({
   getPanelResumen: vi.fn(), getPanelComercial: vi.fn(), getPanelEmbudo: vi.fn(), getPanelFinanzas: vi.fn(),
   getPanelProducto: vi.fn(), getPanelClientes: vi.fn(), getPanelProduccion: vi.fn(), getPanelEquipo: vi.fn(), getPanelSaludEta: vi.fn(),
 }));
 import { tieneCapacidad } from "@/lib/capacidades-server";
-import { tienePermiso } from "@/lib/permisos-server";
+import { tienePermiso, tieneSeccion } from "@/lib/permisos-server";
 import * as api from "@/lib/panel-api";
 import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
@@ -34,7 +34,7 @@ const paginas = [
   ["equipo", "reportes_produccion", Equipo, api.getPanelEquipo],
   ["salud-eta", "reportes_produccion", Salud, api.getPanelSaludEta],
 ] as const;
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(tienePermiso).mockResolvedValue(true); });
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(tienePermiso).mockResolvedValue(true); vi.mocked(tieneSeccion).mockResolvedValue(true); });
 
 describe("acceso directo a reportes", () => {
   it.each([0, 1, 2])("plan %s: sólo consulta los datos de las páginas contratadas", async indice => {
@@ -54,7 +54,7 @@ describe("acceso directo a reportes", () => {
     expect(api.getPanelFinanzas).toHaveBeenCalledTimes(1);
   });
   it("el layout exige el permiso de Reportes antes de mostrar sus vistas", async () => {
-    vi.mocked(tienePermiso).mockResolvedValue(false);
+    vi.mocked(tieneSeccion).mockResolvedValue(false);
     expect((await Layout({ children: "Contenido" })).type).toBe(SinPermiso);
   });
 });

@@ -70,7 +70,11 @@ describe('planificador de trabajos de geometría', () => {
     const service = new GeometriaJobsService(
       {} as ControlTrabajosGeometriaService,
       capacidad(),
-      { exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never, { obtener } as unknown as NestingsGuardadosService,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+      } as never,
+      { obtener } as unknown as NestingsGuardadosService,
     );
     const vista = await service.crear({
       tenantId: data.tenantId,
@@ -97,7 +101,11 @@ describe('planificador de trabajos de geometría', () => {
         activarScope,
       } as unknown as ControlTrabajosGeometriaService,
       capacidad(),
-      { exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never, { obtener } as unknown as NestingsGuardadosService,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+      } as never,
+      { obtener } as unknown as NestingsGuardadosService,
     );
     const job = {
       id: 'nest-test',
@@ -135,31 +143,41 @@ describe('planificador de trabajos de geometría', () => {
   });
 });
 
-it('permite reintentar desde el sheet un trabajo que había fallado, compartiendo el mismo id', async () => {
+it('reintenta un trabajo fallido con nueva identidad para pasar otra vez por admisión', async () => {
   const data = entrada(5);
   const service = new GeometriaJobsService(
     {
       leerCancelacion: jest.fn().mockResolvedValue(null),
     } as unknown as ControlTrabajosGeometriaService,
     capacidad(),
-    { exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never, {
+    {
+      exigirTodas: jest.fn().mockResolvedValue(undefined),
+      exigir: jest.fn().mockResolvedValue(undefined),
+    } as never,
+    {
       obtener: jest.fn().mockResolvedValue(null),
     } as unknown as NestingsGuardadosService,
   );
-  let estado = 'failed';
-  const retry = jest.fn().mockImplementation(async () => {
-    estado = 'waiting';
-  });
+  const retry = jest.fn();
+  let nuevaId = '';
+  let encolado = false;
   const job = {
     id: 'nest-test',
     timestamp: Date.now(),
     data,
     retry,
-    getState: async () => estado,
+    getState: () => Promise.resolve(encolado ? 'waiting' : 'failed'),
   };
   jest
     .spyOn(service as unknown as { getQueue(): unknown }, 'getQueue')
-    .mockReturnValue({ add: async () => job, getJob: async () => job });
+    .mockReturnValue({
+      add: (_nombre: string, _data: unknown, opts: { jobId: string }) => {
+        nuevaId = opts.jobId;
+        encolado = true;
+        return Promise.resolve({ ...job, id: nuevaId });
+      },
+      getJob: () => Promise.resolve(encolado ? { ...job, id: nuevaId } : job),
+    });
   const vista = await service.crear({
     tenantId: data.tenantId,
     dto: {
@@ -167,7 +185,9 @@ it('permite reintentar desde el sheet un trabajo que había fallado, compartiend
       piezas: data.piezas.map((p) => ({ ...p, huecos: undefined })),
     },
   });
-  expect(retry).toHaveBeenCalledWith('failed');
+  expect(retry).not.toHaveBeenCalled();
+  expect(nuevaId).toMatch(/-[a-f0-9-]{36}$/);
+  expect(vista.id).toBe(nuevaId);
   expect(vista.estado).toBe('pendiente');
   expect(vista.error).toBeUndefined();
 });

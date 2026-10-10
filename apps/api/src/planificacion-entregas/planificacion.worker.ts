@@ -1,3 +1,5 @@
+import { reportarFallo } from '../common/observabilidad';
+import { textoErrorLog } from '../common/log-seguro';
 import {
   Injectable,
   Logger,
@@ -39,9 +41,19 @@ export class PlanificacionEntregasWorker
         name: `delivery-plans-${process.pid}`,
       },
     );
-    this.worker.on('error', (e) => this.logger.error(e.message));
+    this.worker.on('failed', (job, error) =>
+      reportarFallo(error, {
+        operacion: 'cola',
+        cola: 'planificacion',
+        tenant_id: job?.data.tenantId,
+      }),
+    );
+    this.worker.on('error', (error) =>
+      reportarFallo(error, { operacion: 'cola', cola: 'planificacion' }),
+    );
+    this.worker.on('error', (e) => this.logger.error(textoErrorLog(e)));
     this.worker.on('failed', (job, e) =>
-      this.logger.error(`Plan ${job?.id}: ${e.message}`),
+      this.logger.error(`Plan ${job?.id}: ${textoErrorLog(e)}`),
     );
     await this.worker.waitUntilReady();
     this.logger.log('Worker de propuestas de entregas listo.');
@@ -101,7 +113,7 @@ export class PlanificacionEntregasWorker
       clearInterval(renovacion);
       await this.concurrency
         .liberar(lease)
-        .catch((e: unknown) => this.logger.warn(String(e)));
+        .catch((e: unknown) => this.logger.warn(textoErrorLog(e)));
     }
   }
   async onApplicationShutdown() {
