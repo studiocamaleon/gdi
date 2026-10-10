@@ -36,6 +36,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D18 | La preparación se configura por tarifario: «Preparación incluida» como opción inicial y «Cargo fijo por pedido» como alternativa, con importe configurable y mostrado por separado. El cargo se aplica una sola vez al conjunto de Centro de copiado del pedido. Resuelve la preparación dentro de P06; los mínimos se definen en D19. | 2026-10-10 |
 | D19 | Los mínimos se configuran por tarifario: «Sin mínimo» como opción inicial y «Mínimo de importe por pedido» como alternativa. Se aplica una sola vez sobre impresión más preparación de Centro de copiado; las terminaciones se agregan aparte. Sólo se cobra la diferencia necesaria para alcanzar el mínimo, sin alterar cantidades reales ni tramos. Completa P06 junto con D16 a D18. | 2026-10-10 |
 | D20 | El tarifario del canal es la base; el acuerdo del cliente tiene prioridad dentro de su alcance. Los descuentos adicionales son explícitos y sujetos a permisos, sin acumulación automática. El precio manual es una excepción autorizada, con motivo y registro del importe anterior, que reemplaza el importe elegido sin volver a aplicarle el descuento previo. Se respeta el mínimo de D19 después de descuentos o precios manuales. Resuelve P07. | 2026-10-10 |
+| D21 | Ante una combinación ofrecida sin precio aplicable, la opción inicial es «Precio pendiente», con bloqueo del cierre. Cada tarifario puede configurar explícitamente un respaldo a otro tarifario compatible o al motor. Si el respaldo tampoco resuelve el precio, permanece pendiente. Se conserva el borrador y se identifica el origen del precio resuelto; el respaldo mantiene las reglas de preparación y mínimos del tarifario activo. Resuelve P08. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -188,7 +189,7 @@ archivos. Un archivo de una sola página configurado doble faz conserva la tarif
 doble en la opción inicial y pasa a simple en la alternativa. La reclasificación
 afecta al precio; no cambia las instrucciones físicas de impresión ni el consumo
 real de papel. La integración del armado de tomos conserva el pendiente P14 y
-la ausencia de una tarifa simple necesaria se resolverá según P08.
+la ausencia de una tarifa simple necesaria se resuelve según D21.
 
 ### Conceptos incluidos en el precio de la matriz
 
@@ -364,10 +365,55 @@ ajuste de $100 y se cobran $1.000 antes de terminaciones. No se acordó una
 excepción que permita ignorar ese mínimo.
 
 Los permisos concretos y su implementación se definirán al diseñar el recorrido;
-la política ante márgenes insuficientes o negativos conserva P12. P08 resolverá
+la política ante márgenes insuficientes o negativos conserva P12. D21 define
 qué hacer si no se puede obtener un precio, y P11 la conservación o revisión de
 estos valores al cambiar una cotización. El cálculo y desglose fiscal deben
 seguir D17 y las reglas del sistema, sin duplicar descuentos ni impuestos.
+
+### Combinaciones sin precio y respaldo explícito
+
+**Confirmado en D21:** una combinación no ofrecida no puede seleccionarse para
+la venta; un precio manual no modifica la oferta. Una combinación ofrecida puede
+tener el precio pendiente para la cantidad y el tramo solicitados.
+
+Cada tarifario permite elegir cómo resolver un precio faltante:
+
+| Política | Comportamiento |
+| --- | --- |
+| Precio pendiente, opción inicial | Informar la combinación y el tramo sin precio y esperar su resolución. |
+| Otro tarifario como respaldo | Consultar el tarifario compatible elegido explícitamente por el tenant e identificarlo como origen del precio. |
+| Motor como respaldo | Calcular el precio con el motor e identificar ese origen. |
+
+Si la fuente de respaldo no puede resolver el precio, éste permanece pendiente.
+No se busca una combinación parecida ni se toma silenciosamente otro papel,
+caras o tramo. Una celda vacía no equivale a $0; ni el descuento ni el mínimo
+del pedido pueden reemplazar un precio faltante.
+
+Ejemplo ficticio: el tarifario Online ofrece A3, Ilustración 150 g, CMYK y doble
+faz, pero no tiene precio para el tramo 100–199. Ante un pedido de 120 hojas,
+sin respaldo se informa «Precio pendiente para esta combinación y tramo».
+Con un respaldo configurado y válido, se usa el precio que esa fuente resuelva
+y se muestra su origen.
+
+Mientras exista un precio pendiente, se permite conservar el borrador. Los
+importes conocidos se muestran como parciales; no se permite confirmar la
+venta ni cobrarla como un pedido completo. Para el futuro portal, queda prevista
+la posibilidad de conservarlo como solicitud de cotización, sin confirmar una
+compra con total incompleto.
+
+Un usuario con los permisos correspondientes puede completar el tarifario o
+asignar un precio manual según D20 para resolver un caso puntual. Si un acuerdo
+aplicable del cliente ya define un precio válido, se respeta su prioridad y no
+queda pendiente por la sola ausencia del precio general. Un descuento que
+requiere una base todavía faltante no resuelve esa ausencia.
+
+La misma política se aplica si D15 requiere un precio simple faz para la última
+hoja y ese precio falta. El respaldo conserva las reglas del tarifario activo
+sobre preparación y mínimos: no importa ni duplica los cargos de la otra fuente.
+El precio recibido debe ser compatible con la unidad y el tratamiento de IVA
+del cálculo; no se confunde un precio por carilla con uno por hoja, ni un importe
+neto con uno final. Las validaciones de compatibilidad se precisarán en el diseño
+técnico.
 
 ## Base actual del módulo
 
@@ -392,8 +438,8 @@ documentos, grupos y cliente, pero todavía no recibe el canal de venta.
 Hay un [diseño anterior de precios manuales](centro-copiado-precio-manual-diseno.md),
 del 3 de agosto de 2026. Se conserva como antecedente. Las decisiones vigentes
 son las registradas arriba. El volumen por archivo queda como alternativa según
-D11; las propuestas de reglas con comodines y retorno automático al motor
-continúan sin confirmarse.
+D11. Las propuestas de reglas con comodines continúan sin confirmarse; el
+respaldo al motor sólo se admite con configuración explícita según D21.
 
 ## Modelo funcional propuesto
 
@@ -465,8 +511,9 @@ una misma matriz. Ejemplo ficticio:
 | Correo electrónico | Precio calculado por el motor |
 
 Se propone que un canal pueda heredar la política general, elegir un tarifario
-o usar el motor. Las opciones exactas, la herencia de precios faltantes y el
-comportamiento cuando todavía no se eligió canal siguen pendientes.
+o usar el motor. Las opciones exactas y el comportamiento cuando todavía no se
+eligió canal siguen pendientes en P09. Los precios faltantes y el respaldo
+explícito se resuelven según D21.
 
 Para el portal, el servidor debería determinar el canal según el origen del
 pedido y usar el mismo cálculo que la operación interna. El dispositivo desde
@@ -486,12 +533,11 @@ Los costos y márgenes conservarían sus permisos de acceso.
 ## Decisiones pendientes
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
-en D15, P06 en D16 a D19 y P07 en D20. Las preguntas restantes
+en D15, P06 en D16 a D19, P07 en D20 y P08 en D21. Las preguntas restantes
 deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P08 | ¿Qué ocurre ante una combinación sin precio? | Mostrar la falta de tarifa. Usar el motor o heredar otra matriz sólo si la política elegida lo permite explícitamente. |
 | P09 | ¿Cómo se elige la política por canal y qué pasa si se cambia el canal de una propuesta? | Definir la política general, la recotización de borradores y el tratamiento de documentos emitidos. Si se habilitan varios tarifarios dentro del pedido, resolver cuál determina el único cargo de preparación de D18 y el mínimo de D19. |
 | P10 | ¿Cómo se crean y actualizan los precios? | Elegir el alcance inicial entre carga manual, copia, sugerencias del motor, ajustes por porcentaje, redondeo e importación. |
 | P11 | ¿Cuándo entra en vigencia una versión y qué pasa con cotizaciones en curso? | Proponer borrador y versión activa, conservar la aplicada en documentos emitidos y detectar cambios entre vista previa y guardado. |
@@ -536,7 +582,11 @@ del archivo original.
 | Rangos propios | Tarifario con rangos generales 1–49, 50–199 y 200+, y una combinación con rangos propios 1–19, 20–99 y 100+. | Cada combinación busca su tramo en los rangos que le corresponden. La excepción conserva sus límites cuando cambian los generales. Compartir límites no comparte precios ni volumen. |
 | Cambio de canal | La misma carga en Presencial y Web. | Aplicar la política de cada canal y definir qué sucede al cambiarlo antes de guardar. |
 | Cambio de tarifa | Cotización con una versión y posterior activación de otra. | Definir conservación de emitidos y recotización de borradores. |
-| Oferta incompleta | Papel habilitado con un tamaño no ofrecido, o combinación ofrecida sin tarifa. | Distinguir combinación no vendible de precio pendiente, en interfaz y servidor. |
+| Oferta incompleta | Papel habilitado con un tamaño no ofrecido, o combinación ofrecida sin precio aplicable. | El tamaño no ofrecido no se puede seleccionar ni habilitar con un precio manual. La combinación ofrecida sigue D21: precio pendiente inicialmente o respaldo explícito. |
+| Precio pendiente | 120 hojas A3, Ilustración 150 g, CMYK y doble faz; celda del tramo 100–199 vacía y sin respaldo ni acuerdo aplicable. | Se conserva el borrador con aviso de precio pendiente, sin tratar la celda como $0 ni usar el mínimo para completar el precio. No se permite confirmar o cobrar el pedido como completo. |
+| Respaldo válido | El caso anterior con otro tarifario compatible o el motor elegidos explícitamente como respaldo. | Si la fuente resuelve el precio, se usa y se identifica su origen. Se mantienen la preparación y el mínimo del tarifario activo, sin duplicar cargos. Si no lo resuelve, continúa pendiente. |
+| Acuerdo con celda vacía | El tarifario general no tiene precio, pero un acuerdo aplicable del cliente define un precio válido para esa combinación. | Se usa el acuerdo según D20. La celda vacía del tarifario no causa por sí sola un precio pendiente. |
+| Última hoja sin tarifa simple | D15 exige reclasificar la última hoja a simple faz, pero falta el precio simple requerido. | Se aplica D21 a esa parte. No se inventa el precio dividiendo la tarifa doble ni se omite la hoja del total. |
 | Tomo con terminación | Dos originales agrupados con varios juegos y anillado. | Reconciliar tarifa de impresión, preparación, terminaciones, resumen y total guardado. |
 
 ## Integración técnica por definir
@@ -567,6 +617,13 @@ y su alcance, el descuento efectivo o precio manual, los permisos comprobados
 y el registro del ajuste. Ningún recorrido debe reaplicar un descuento ya
 incorporado al importe ni permitir omitir el mínimo mediante un precio manual.
 
+La política de D21 debe validarse en el servidor: conservar el estado pendiente
+y el total parcial en borradores, e impedir el cierre con precios sin resolver.
+El cálculo debe registrar la fuente de respaldo cuando se use, validar su
+compatibilidad y evitar referencias circulares entre tarifarios. Usar el motor
+como respaldo no debe agregar nuevamente preparación, mínimos o terminaciones
+que se resuelven por separado en el tarifario activo.
+
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
 desglose comercial y las validaciones de oferta deben conservarse en todos los
@@ -574,7 +631,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P07 resueltos en D09 a D20 y completar las reglas comerciales
+1. Partir de P01 a P08 resueltos en D09 a D21 y completar las reglas comerciales
    pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
@@ -617,3 +674,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | Preparación resuelta dentro de P06: incluida como opción inicial y cargo fijo por pedido como alternativa por tarifario. Incorporación de D18, ejemplo y separación entre costo operativo y cobro comercial. Los mínimos siguen pendientes. | Confirmado parcial |
 | 2026-10-10 | P06 resuelto: sin mínimo como opción inicial y mínimo de importe por pedido como alternativa por tarifario, sobre impresión más preparación y con terminaciones aparte. Incorporación de D19 y ejemplos del ajuste por la diferencia, sin alterar cantidades ni tramos. La prioridad frente a descuentos y ajustes se conserva en P07. | Confirmado |
 | 2026-10-10 | P07 resuelto: acuerdo del cliente prioritario dentro de su alcance, descuentos explícitos y precio manual autorizado, respetando el mínimo. Incorporación de D20, orden de aplicación y ejemplos por canal, descuento y ajuste manual. | Confirmado |
+| 2026-10-10 | P08 resuelto: precio pendiente con bloqueo del cierre como opción inicial y respaldo explícito a otro tarifario compatible o al motor como alternativa por tarifario. Incorporación de D21, conservación del borrador y ejemplos de respaldo, acuerdo aplicable y última hoja sin tarifa. | Confirmado |
