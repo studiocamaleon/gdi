@@ -21,11 +21,16 @@ export async function GET(request: NextRequest) {
   // En standalone request.url puede contener el host interno del contenedor.
   // Una ruta relativa conserva el origen del navegador, también detrás de Fly,
   // sin confiar en Host ni en X-Forwarded-Host aportados por el solicitante.
+  // Sólo hay dos accesos propios: nunca aceptar una URL de retorno arbitraria.
+  const destino =
+    request.nextUrl.searchParams.get("acceso") === "plataforma"
+      ? "/backoffice"
+      : "/login";
   const consulta = parametros.toString();
   const response = new NextResponse(null, {
     status: 307,
     headers: {
-      Location: `/login${consulta ? `?${consulta}` : ""}`,
+      Location: `${destino}${consulta ? `?${consulta}` : ""}`,
       "Cache-Control": "no-store",
     },
   });

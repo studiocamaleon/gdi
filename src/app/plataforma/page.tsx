@@ -34,7 +34,9 @@ export default async function PlataformaPage() {
     }
   }
 
-  if (sinSesion) redirect("/backoffice");
+  // Una sesión revocada puede conservar un JWT todavía vigente por reloj.
+  // Limpiar su cookie antes del login evita /login → /plataforma → /backoffice.
+  if (sinSesion) redirect("/salir?acceso=plataforma");
   if (!datos) return <PlataformaSinAcceso />;
   if (datos.esSesionPlataforma && datos.debeCambiarPassword)
     redirect("/backoffice/cambiar-clave");

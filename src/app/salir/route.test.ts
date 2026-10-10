@@ -40,6 +40,31 @@ describe("salida de una sesión revocada", () => {
     expect(response.headers.get("location")).toBe("/login");
   });
 
+  it("limpia la sesión rechazada antes de volver al acceso de Plataforma", async () => {
+    const response = await GET(
+      new NextRequest("https://staging.example.invalid/salir?acceso=plataforma", {
+        headers: { cookie: `${SESSION_COOKIE_NAME}=sesion-revocada` },
+      }),
+    );
+    expect(response.headers.get("location")).toBe("/backoffice");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.cookies.get(SESSION_COOKIE_NAME)).toMatchObject({
+      value: "",
+      path: "/",
+      expires: new Date(0),
+    });
+  });
+
+  it.each(["https://ajeno.example.invalid", "//ajeno.example.invalid", "/plataforma", "plataforma/otro"])(
+    "no acepta un destino arbitrario: %s",
+    async (acceso) => {
+      const response = await GET(
+        new NextRequest(`https://staging.example.invalid/salir?acceso=${encodeURIComponent(acceso)}`),
+      );
+      expect(response.headers.get("location")).toBe("/login");
+    },
+  );
+
   it("conserva el motivo como texto sin convertirlo en otro destino", async () => {
     const motivo = "//ajeno.example.invalid/?x=1&y=2";
     const response = await GET(
