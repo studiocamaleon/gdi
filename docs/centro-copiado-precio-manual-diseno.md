@@ -4,6 +4,11 @@
 **Estado:** DISEÑO — sin implementar (pospuesto). Analizado con el usuario; se
 documenta para retomar. Primero se resuelve el modelo de tiempo (ver §7).
 
+**Seguimiento del 10/10/2026:** las decisiones de oferta, matrices y canales se
+registran en [Centro de copiado decisiones de oferta y tarifarios](centro-copiado-oferta-tarifarios-decisiones.md).
+Este diseño se conserva como antecedente; sus recomendaciones no constituyen
+decisiones confirmadas para el nuevo alcance.
+
 ---
 
 ## 1. Problema
