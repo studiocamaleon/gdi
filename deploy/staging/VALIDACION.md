@@ -1400,3 +1400,30 @@ Compilaciones completas en Fly con TypeScript: API y web aprobadas. La web optim
 Fuente exacta cifrada y custodiada por 31 días e inventario actualizado. Copia previa `0117e7f8-f7d3-4158-9947-50754e6db574`, completada `2026-10-09T23:00:59.946Z`; posterior `b7ae4dc9-3c99-4e15-b370-2219e0a3fc79`, completada `2026-10-10T00:28:38.744Z`: firma válida, manifiesto descifrado, revisión, fuentes e imágenes exactas comprobadas; 312 migraciones y 24 archivos. El primer sondeo encontró todavía la copia anterior. **No se repitió restauración SQL.** Evidencias de navegador y operación guardadas fuera de Git.
 
 Reversión a `c9f30c26e`: API/ambos workers `registry.fly.io/grafoprint-staging-api@sha256:817b8a8d2614aae9801c0843c3c1264dfae68c8c610d92d0279905ca5b56ce5d`; web `registry.fly.io/grafoprint-staging-web@sha256:6df466b1d70f36ffa7989d0a53b889eaad3598030e47408a8233b2a469307c0d`. No requiere cambios de esquema. Conservar fechas e historial ya confirmados y actualizar el inventario del copiador si se revierte.
+
+## 2026-10-10, 04:05 UTC — Planificación compacta y ampliable (PR #58)
+
+Web en `53ba3fc53d0b4de15618cabe11b2de208d2a3db0`, [PR #58](https://github.com/studiocamaleon/gdi/pull/58), dependiente de #56, sin fusionar. Publicación solicitada en staging para prueba de Lucas antes de decidir la promoción. No incluye el límite de archivos de #57.
+
+- Web: `registry.fly.io/grafoprint-staging-web@sha256:5e847ce622cca4eba049457adac608685f334e19c7513a6ca210998d4cfbf521`.
+- API y ambos workers conservan `15014c4645fcbbc3a0d4191cbfe1f68715783c29` y `registry.fly.io/grafoprint-staging-api@sha256:c769f370c500ba40706b110a543c51691886f9b5b6cdaa143ab95fd519e6cc5f`. PDF y copiador conservan sus imágenes.
+- Seis máquinas iniciadas con los mismos tamaños. HTTPS web/API 200, API privada 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados en web, API y workers. Las seis imágenes y recursos de producción se contrastaron con el inventario previo y permanecen iguales.
+- Sin cambios de esquema, dependencias ni datos: 312 migraciones. Sin seeds, reprogramaciones guardadas ni envíos de prueba.
+
+### Validación
+
+Local: 67 pruebas relacionadas, ESLint de los archivos modificados, TypeScript dirigido, CSS guard y diff aprobados. Chrome con componentes reales y datos ficticios entre 320 × 568 y 1920 × 1080. La verificación global de tipos que agotó la memoria local se completó en Fly y CI, sin omitirla en las imágenes.
+
+[CI permisos y separación de empresas](https://github.com/studiocamaleon/gdi/actions/runs/38022066597) y [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/38022066738) aprobados sobre la revisión final. El primer intento de contenedores falló por DNS al descargar FFmpeg (`Could not resolve host: ffmpeg.org`); el segundo completó todos los controles. Ambas comprobaciones también habían pasado para la primera revisión `317c239fc`.
+
+Chrome autenticado en la empresa demo de staging: en 1134 × 647 el calendario pasó de 132 a 385 px de alto; ampliado ofrece 433 px de alto y 1108 de ancho, dentro de un diálogo que ocupa toda la pantalla. Resumen, búsqueda por OT, agrupación por órdenes, zoom 75%, selección y filas abiertas comprobados. Detalle → Reprogramar → edición de motivo → Escape → detalle → cierre conserva la ampliación; al cerrar vuelve el foco al botón. Se canceló sin guardar fechas.
+
+La primera revisión desplegada permitió detectar que la barra superior móvil de dos filas restaba 37 px adicionales al contenedor. Se corrigió el límite de altura, se reprodujo localmente con esa barra en 390 × 844 y 320 × 568, y se volvió a publicar sólo la web. En la imagen final de staging, Referencias, Estado y Ver detalle quedan dentro del alto visible de 390 × 844, sin desborde horizontal. Notebook y ampliación conservan sus medidas. Consola sin errores ni advertencias. Pestaña dejada abierta para prueba del usuario; evidencia visual privada fuera de Git.
+
+Compilación final remota con tipos: optimización de web en 116 segundos, TypeScript en 54 segundos y 44 páginas estáticas generadas. Imagen publicada correctamente y constructor temporal propio `fly-builder-holy-shadow-913` eliminado. Sin builds de producción en la Mac, reinicios de Docker ni alteraciones de otros proyectos.
+
+### Recuperación y reversión
+
+Fuentes exactas cifradas y custodiadas por 31 días e inventario del copiador actualizado. Copia previa `3f318cfd-ea6d-4181-9230-36b064e3d3eb`, completada `2026-10-10T03:00:58.983Z`. Copia final `93261266-76e7-4f58-9975-3d34c9228dcd`, completada `2026-10-10T04:03:10.048Z`: firma válida, manifiesto descifrado, revisión, fuentes e imágenes exactas verificadas, 312 migraciones y 24 archivos. El primer sondeo encontró la copia anterior. También se verificó el respaldo de la revisión intermedia `317c239fc`. **No se repitió restauración SQL.**
+
+Reversión de esta mejora: sólo web a `registry.fly.io/grafoprint-staging-web@sha256:e6aaaebc6c7194bc81d24303bac0da7185633a2325e41f9df087bca80a6272d0` (`15014c464`). Sin cambios de esquema ni restauración de datos. Actualizar también el inventario del copiador al revertir. Producción queda pendiente de la prueba de Lucas.
