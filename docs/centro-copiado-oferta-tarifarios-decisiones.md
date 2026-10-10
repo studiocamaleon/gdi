@@ -38,7 +38,8 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D20 | El tarifario del canal es la base; el acuerdo del cliente tiene prioridad dentro de su alcance. Los descuentos adicionales son explícitos y sujetos a permisos, sin acumulación automática. El precio manual es una excepción autorizada, con motivo y registro del importe anterior, que reemplaza el importe elegido sin volver a aplicarle el descuento previo. Se respeta el mínimo de D19 después de descuentos o precios manuales. Resuelve P07. | 2026-10-10 |
 | D21 | Ante una combinación ofrecida sin precio aplicable, la opción inicial es «Precio pendiente», con bloqueo del cierre. Cada tarifario puede configurar explícitamente un respaldo a otro tarifario compatible o al motor. Si el respaldo tampoco resuelve el precio, permanece pendiente. Se conserva el borrador y se identifica el origen del precio resuelto; el respaldo mantiene las reglas de preparación y mínimos del tarifario activo. Resuelve P08. | 2026-10-10 |
 | D22 | Centro de copiado tiene una política general, motor o tarifario predeterminado, que los canales heredan por defecto. Cada canal puede elegir un tarifario activo específico o usar el motor. Todo el pedido usa un canal y una política principal; cambiar el canal de un borrador recalcula Centro de copiado y muestra el impacto antes de confirmar. Los documentos emitidos conservan sus precios. Resuelve P09. | 2026-10-10 |
-| D23 | El alcance inicial para crear y actualizar precios incluye generación de la estructura, carga manual, pegado desde Excel, duplicación independiente de tarifarios, sugerencias del motor y ajustes masivos por porcentaje o importe por unidad, con redondeo opcional. Los cambios se preparan en borrador y se revisan antes de aplicarlos y activarlos. La importación de archivos Excel/CSV queda para una segunda etapa. Resuelve el alcance de P10; la vigencia se completa en P11. | 2026-10-10 |
+| D23 | El alcance inicial para crear y actualizar precios incluye generación de la estructura, carga manual, pegado desde Excel, duplicación independiente de tarifarios, sugerencias del motor y ajustes masivos por porcentaje o importe por unidad, con redondeo opcional. Los cambios se preparan en borrador y se revisan antes de aplicarlos y activarlos. La importación de archivos Excel/CSV queda para una segunda etapa. Resuelve el alcance de P10; la vigencia sigue D24. | 2026-10-10 |
+| D24 | Las versiones publicadas del tarifario son inmutables y se activan inmediatamente o de forma programada. Las cotizaciones nuevas usan la versión vigente; los borradores anteriores requieren actualización explícita antes de emitir. Se respetan los presupuestos emitidos durante su validez y los importes ya aprobados u órdenes emitidas. Se conserva el histórico y se revisa cualquier cambio de versión entre vista previa y confirmación. Resuelve P11. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -98,7 +99,7 @@ cantidades ya incluyen las copias:
 El alcance incluye las distintas aperturas y cargas de Centro de copiado del
 pedido actual. En un borrador, agregar, quitar o modificar documentos debe
 recalcular los grupos afectados. No se acumulan pedidos anteriores del cliente.
-El tratamiento de documentos emitidos conserva el pendiente P11.
+El tratamiento de versiones y documentos emitidos sigue D24.
 
 La acumulación es comercial: no une originales ni exige agruparlos en un tomo.
 Los archivos mantienen sus instrucciones de impresión. La preparación sigue
@@ -248,7 +249,7 @@ y se agregan por separado según D16, sin duplicar el impuesto.
 La revisión de cambios de D23 debe mostrar el impacto de editar un tarifario
 con precios cargados. La conversión de importes al cambiar la modalidad de IVA
 requiere precisión en el diseño de edición; no se debe tratar como un simple
-cambio de etiqueta. El tratamiento de cotizaciones existentes conserva P11.
+cambio de etiqueta. El tratamiento de cotizaciones existentes sigue D24.
 
 ### Preparación incluida o cargo fijo por pedido
 
@@ -370,7 +371,7 @@ excepción que permita ignorar ese mínimo.
 
 Los permisos concretos y su implementación se definirán al diseñar el recorrido;
 la política ante márgenes insuficientes o negativos conserva P12. D21 define
-qué hacer si no se puede obtener un precio, y P11 la conservación o revisión de
+qué hacer si no se puede obtener un precio, y D24 la conservación o revisión de
 estos valores al cambiar una cotización. El cálculo y desglose fiscal deben
 seguir D17 y las reglas del sistema, sin duplicar descuentos ni impuestos.
 
@@ -464,7 +465,7 @@ $10.000 en Presencial y $8.000 en Web. Al cambiar el canal del borrador, el
 sistema muestra ese efecto sobre el conjunto de Centro de copiado del pedido.
 
 Los documentos emitidos conservan sus precios. La vigencia de versiones y el
-tratamiento de cambios posteriores en los tarifarios se completarán en P11.
+tratamiento de cambios posteriores en los tarifarios siguen D24.
 La habilitación de estas políticas para tenants actuales conserva P15.
 
 ### Creación y actualización de precios
@@ -515,9 +516,57 @@ Las nuevas combinaciones y cambios de rangos deben señalar qué precios necesit
 completarse.
 
 Los cambios se preparan en borrador y se revisan antes de activarlos. La vigencia
-y el tratamiento de cotizaciones existentes conservan P11. La importación de
+y el tratamiento de cotizaciones existentes siguen D24. La importación de
 archivos Excel/CSV queda fuera del alcance inicial y se abordará en una segunda
 etapa; el pegado desde Excel sí forma parte de D23.
+
+### Vigencia de versiones y cotizaciones en curso
+
+**Confirmado en D24:** la versión del tarifario y la validez de un presupuesto
+son conceptos distintos. Actualizar el tarifario no modifica el precio de un
+presupuesto ya emitido ni acorta su validez.
+
+Cada actualización crea una nueva versión, que se prepara en borrador y se
+revisa antes de activar. Una versión publicada conserva sus precios y reglas;
+para modificarlos se crea otra. «Activar ahora» es la opción inicial y
+«Programar fecha y hora» la alternativa, usando la zona horaria del tenant.
+Al entrar en vigencia, la nueva versión reemplaza a la anterior para las
+cotizaciones nuevas. Las versiones anteriores permanecen en el historial.
+
+| Situación | Tratamiento acordado |
+| --- | --- |
+| Cotización nueva | Usar la versión vigente. |
+| Borrador con una versión anterior | Conservar lo mostrado, avisar que hay precios nuevos y exigir actualización explícita antes de emitir. |
+| Presupuesto emitido y válido | Mantener el precio ofrecido hasta su vencimiento. |
+| Presupuesto vencido sin aceptar | Conservar su histórico; para continuar, preparar una nueva revisión con precios vigentes. |
+| Presupuesto aprobado u orden emitida | Conservar los importes acordados aunque después cambie el tarifario. |
+
+Se reutiliza la validez del presupuesto que ya configura el tenant, sin agregar
+un segundo vencimiento propio de Centro de copiado. La nueva revisión de un
+presupuesto conserva la anterior según el recorrido de versiones existente.
+
+Ejemplo ficticio: se emite un presupuesto de $10.000 con siete días de validez.
+Al día siguiente entra en vigencia una versión que cotiza el mismo trabajo a
+$12.000. Las cotizaciones nuevas usan $12.000; el presupuesto emitido mantiene
+$10.000 durante su validez. Un borrador todavía no emitido muestra ambos
+importes y requiere revisar la actualización antes de emitir. Los siete días
+son ilustrativos, no un nuevo valor predeterminado.
+
+Actualizar un borrador recalcula todo Centro de copiado: cantidades y tramos,
+preparación, mínimo y acuerdos aplicables. Los descuentos y precios manuales se
+señalan para revisión. No se mezclan versiones al agregar archivos al pedido.
+Para conservar un precio anterior en un borrador se puede recurrir al precio
+manual autorizado de D20, respetando el mínimo vigente.
+
+Si la versión cambia entre la vista previa y la confirmación, el sistema avisa
+y exige revisar el nuevo cálculo. No confirma silenciosamente un importe
+diferente del mostrado. Cada cotización conserva la versión, las reglas y los
+importes usados, incluidos los provenientes de respaldos, acuerdos del cliente
+o ajustes manuales.
+
+El recorrido se integra con las [versiones de presupuestos](presupuestos-versiones-descarte.md)
+y la [conversión de presupuestos a órdenes](presupuestos-conversion-ot.md), que
+conserva los importes aceptados. No se sobrescriben documentos históricos.
 
 ## Base actual del módulo
 
@@ -584,7 +633,7 @@ rentabilidad se recalcularía usando ese precio y los costos y cargos aplicables
 
 Una actualización de costos podría señalar qué tarifas necesitan revisión.
 Los precios publicados no cambian automáticamente al actualizar costos según
-D23; la vigencia de las versiones conserva P11. La revisión de cambios señala
+D23; la vigencia de las versiones sigue D24. La revisión de cambios señala
 los descensos de total entre tramos sin modificar la regla de D13.
 
 Para editar los rangos se propone una opción «Usar rangos del tarifario», activa
@@ -615,12 +664,11 @@ Los costos y márgenes conservarían sus permisos de acceso.
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
 en D15, P06 en D16 a D19, P07 en D20, P08 en D21, P09 en D22 y el alcance de P10
-en D23. Las preguntas restantes deben resolverse antes de activar el recorrido
-completo.
+en D23; P11 queda resuelto en D24. Las preguntas restantes deben resolverse antes
+de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P11 | ¿Cuándo entra en vigencia una versión y qué pasa con cotizaciones en curso? | Proponer borrador y versión activa, conservar la aplicada en documentos emitidos y detectar cambios entre vista previa y guardado. |
 | P12 | ¿Qué ocurre si el precio deja un margen insuficiente o negativo? | Evaluar aviso, bloqueo o autorización según permisos. |
 | P13 | ¿La cobertura de impresión afecta el tarifario o solamente el costo? | La cobertura ya existe en el módulo; definir su relación con la matriz. |
 | P14 | ¿Cuál es el alcance inicial de tomos, terminaciones y planos CAD? | Proponer tarifas para impresión en hojas e integrar correctamente tomos y terminaciones existentes; evaluar un tarifario CAD por separado. |
@@ -668,7 +716,10 @@ del archivo original.
 | Copia independiente | Crear Online como copia de General y luego actualizar General. | Los precios de Online no cambian por esa actualización. Compartir un tarifario y usar un respaldo son operaciones diferentes de copiar. |
 | Referencia del motor | Tramos 50–199 y 200+ en un tarifario por hoja. | Se sugieren precios usando inicialmente 50 y 200 hojas, respectivamente, con referencia editable dentro del tramo. Los valores aceptados quedan fijos y editables; no siguen automáticamente los costos. |
 | Actualización masiva | Sólo las celdas Obra 80 g, CMYK; aumento del 12 % y redondeo hacia arriba a múltiplos de $10. | Una celda de $130 pasa a $145,60 y queda en $150. Se muestra el antes y después; no se alteran precios fuera de la selección. |
-| Cambio de tarifa | Cotización con una versión y posterior activación de otra. | Definir conservación de emitidos y recotización de borradores. |
+| Cambio de tarifa | Un trabajo cuesta $10.000 con la versión anterior y $12.000 con la nueva. | Cotizaciones nuevas: $12.000. Borradores anteriores: aviso y actualización explícita antes de emitir. Presupuestos emitidos vigentes: $10.000 durante su validez; aprobados u órdenes emitidas conservan sus importes. |
+| Activación programada | Una versión está programada para una fecha y hora del tenant. | La versión anterior sigue vigente hasta ese momento. Al activarse la nueva, se usa para cotizaciones nuevas sin sobrescribir el histórico. |
+| Presupuesto vencido | Presupuesto de $10.000 ya vencido y sin aceptar; versión vigente cotiza a $12.000. | El presupuesto anterior conserva sus importes. Para continuar se prepara una nueva revisión con precios vigentes, sin modificar el documento anterior. |
+| Cambio durante la confirmación | La vista previa usa una versión que se reemplaza antes de confirmar. | El sistema avisa y exige revisar el nuevo cálculo; no confirma silenciosamente un importe diferente. |
 | Oferta incompleta | Papel habilitado con un tamaño no ofrecido, o combinación ofrecida sin precio aplicable. | El tamaño no ofrecido no se puede seleccionar ni habilitar con un precio manual. La combinación ofrecida sigue D21: precio pendiente inicialmente o respaldo explícito. |
 | Precio pendiente | 120 hojas A3, Ilustración 150 g, CMYK y doble faz; celda del tramo 100–199 vacía y sin respaldo ni acuerdo aplicable. | Se conserva el borrador con aviso de precio pendiente, sin tratar la celda como $0 ni usar el mínimo para completar el precio. No se permite confirmar o cobrar el pedido como completo. |
 | Respaldo válido | El caso anterior con otro tarifario compatible o el motor elegidos explícitamente como respaldo. | Si la fuente resuelve el precio, se usa y se identifica su origen. Se mantienen la preparación y el mínimo del tarifario activo, sin duplicar cargos. Si no lo resuelve, continúa pendiente. |
@@ -721,10 +772,18 @@ de documentos emitidos.
 La edición de D23 debe identificar las celdas afectadas y mostrar el resultado
 antes de aplicarlo. Las sugerencias del motor deben registrar su cantidad de
 referencia y respetar la unidad, caras y conceptos del tarifario. La publicación
-no debe confundirse con guardar un borrador; la regla de activación se completa
-en P11. La conversión de importes al cambiar unidad o modalidad de IVA requiere
+no debe confundirse con guardar un borrador; la regla de activación sigue D24.
+La conversión de importes al cambiar unidad o modalidad de IVA requiere
 definirse explícitamente en el diseño de edición, sin reinterpretar valores
 existentes de forma silenciosa.
+
+La aplicación de D24 debe conservar las versiones publicadas y las reglas e
+importes efectivos de cada cotización, incluidas sus fuentes de respaldo. La
+activación inmediata o programada debe resolver una única versión vigente por
+tarifario y comprobar cambios entre vista previa y confirmación. Actualizar un
+borrador debe operar sobre todo Centro de copiado, sin mezclar versiones; los
+presupuestos emitidos o aprobados conservan sus importes según su estado y
+validez. La aprobación y conversión existentes deben usar esos valores guardados.
 
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
@@ -733,7 +792,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P10 resueltos en D09 a D23 y completar las reglas comerciales
+1. Partir de P01 a P11 resueltos en D09 a D24 y completar las reglas comerciales
    pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
@@ -779,3 +838,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | P08 resuelto: precio pendiente con bloqueo del cierre como opción inicial y respaldo explícito a otro tarifario compatible o al motor como alternativa por tarifario. Incorporación de D21, conservación del borrador y ejemplos de respaldo, acuerdo aplicable y última hoja sin tarifa. | Confirmado |
 | 2026-10-10 | P09 resuelto: política general heredada por defecto, excepciones por canal y una política principal por pedido, con recálculo al cambiar el canal del borrador. Incorporación de D22 y ejemplos; preparación y mínimo pertenecen al tarifario principal, y los documentos emitidos conservan sus precios. | Confirmado |
 | 2026-10-10 | Alcance de P10 resuelto: carga manual, pegado desde Excel, duplicación, sugerencias del motor y ajustes masivos con redondeo; importación de archivos para una segunda etapa. Incorporación de D23, cantidad de referencia por tramo, revisión de cambios y ejemplos. La vigencia se conserva en P11. | Confirmado |
+| 2026-10-10 | P11 resuelto: versiones publicadas inmutables, activación inmediata o programada y actualización explícita de borradores antes de emitir. Incorporación de D24, respeto de presupuestos vigentes y de importes aprobados, ejemplos y control de cambios entre vista previa y confirmación. | Confirmado |
