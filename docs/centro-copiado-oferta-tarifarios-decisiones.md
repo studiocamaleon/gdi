@@ -44,6 +44,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D26 | Los precios diferenciados por cobertura forman parte del alcance inicial. Su configuración por tarifario y el efecto sobre la acumulación de volumen se completan en D27. | 2026-10-10 |
 | D27 | Cada tarifario puede usar «Precio único para todas las coberturas» como opción inicial o «Precios por cobertura», ambas disponibles desde la primera entrega. En la segunda modalidad los importes por nivel son independientes y la cobertura separa la acumulación de volumen. Con precio único se comparte el grupo comercial y se conserva el costeo por cobertura de cada archivo. Resuelve P13 junto con D26. | 2026-10-10 |
 | D28 | El alcance inicial incluye simular con el motor los costos de todas las celdas de las matrices, para todas las combinaciones ofrecidas y tramos, incluso antes de cargar precios de venta. La matriz debe permitir comparar costos, precios y márgenes para decidir los importes comerciales. Cada simulación identifica sus cantidades y supuestos; no modifica automáticamente precios ni garantiza el margen de todo pedido posible. Amplía D23. | 2026-10-10 |
+| D29 | Los tomos se integran desde el alcance inicial: su impresión se calcula con la matriz y las terminaciones se agregan aparte según ejemplares y materiales. Los juegos determinan las copias efectivas de los archivos. Se conservan las reglas de acumulación del tarifario, preparación y mínimo por pedido, las reglas físicas de doble faz y los costos reales de preparación y armado. Resuelve tomos y terminaciones de P14; planos CAD sigue pendiente. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -112,8 +113,8 @@ El tratamiento de versiones y documentos emitidos sigue D24.
 
 La acumulación es comercial: no une originales ni exige agruparlos en un tomo.
 Los archivos mantienen sus instrucciones de impresión. La preparación sigue
-D18; las terminaciones se cobran aparte según D16 y su integración
-conserva P14. P02 queda resuelto. Sumar todas las combinaciones indistintamente
+D18; las terminaciones se cobran aparte según D16 y su integración con tomos
+sigue D29. P02 queda resuelto. Sumar todas las combinaciones indistintamente
 no forma parte de las modalidades
 acordadas.
 
@@ -202,7 +203,7 @@ volumen comercial no une originales ni permite reutilizar dorsos vacíos entre
 archivos. Un archivo de una sola página configurado doble faz conserva la tarifa
 doble en la opción inicial y pasa a simple en la alternativa. La reclasificación
 afecta al precio; no cambia las instrucciones físicas de impresión ni el consumo
-real de papel. La integración del armado de tomos conserva el pendiente P14 y
+real de papel. La integración del armado de tomos sigue D29 y
 la ausencia de una tarifa simple necesaria se resuelve según D21.
 
 ### Conceptos incluidos en el precio de la matriz
@@ -226,8 +227,8 @@ materiales de una terminación al agregar su importe. La visualización del
 desglose no cambia qué conceptos están incluidos.
 
 P06 queda resuelto en D16 a D19. El IVA se define en D17, la preparación en D18
-y los mínimos en D19. La política para calcular el precio de las terminaciones
-y su integración con tomos se completará en P14.
+y los mínimos en D19. Las terminaciones existentes se integran con los tomos
+según D29, conservando su cálculo separado de la impresión.
 
 ### IVA en los precios del tarifario
 
@@ -714,6 +715,56 @@ margen. Las sugerencias y su aceptación siguen D23, la publicación D24 y los
 controles de margen D25. Los costos y márgenes mantienen sus permisos internos;
 no se muestran al cliente por el hecho de tener un tarifario online.
 
+### Tomos y terminaciones
+
+**Confirmado en D29:** los tomos forman parte del alcance inicial. La impresión
+de sus archivos se calcula con la misma matriz que los documentos sueltos;
+las terminaciones se agregan aparte según los ejemplares y materiales que
+corresponden. Un tomo agrupa el armado, pero conserva las combinaciones
+comerciales de sus archivos.
+
+Los juegos del tomo determinan las copias efectivas de cada archivo. A partir
+de ellas se calculan las hojas o carillas y se aplica la clasificación de caras
+de D15 antes de buscar los tramos. La acumulación sigue D11, D12 y D27: por
+combinación puede sumar documentos compatibles de otros tomos o sueltos del
+mismo pedido; por archivo cada original conserva su grupo comercial. Generar
+un PDF unificado del tomo no convierte sus originales en un único archivo a
+efectos de esa regla comercial.
+
+Ejemplo ficticio: un tomo reúne un archivo de 20 páginas K y otro de 2 páginas
+CMYK, ambos A4 y simple faz, con 10 juegos anillados y tarifario por hoja.
+
+| Concepto | Cantidad y tratamiento |
+| --- | --- |
+| Impresión K | 200 hojas, con la combinación y el tramo que correspondan. |
+| Impresión CMYK | 20 hojas, con su propia combinación y tramo. |
+| Anillado | 10 anillados, con los materiales correspondientes a cada ejemplar. |
+
+Cada ejemplar contiene 22 hojas en este ejemplo. El cálculo del anillado debe
+usar el espesor y los materiales de ese ejemplar, no tratar las 220 hojas del
+pedido como un solo libro. La terminación seleccionada para el tomo se cobra
+una vez por ejemplar según su cálculo; no se repite por cada archivo incluido.
+Las terminaciones existentes conservan su configuración y cálculo separados
+de la impresión, incluidos sus materiales, según D16.
+
+La preparación comercial sigue D18 y el mínimo sigue D19: se resuelven una sola
+vez sobre impresión más preparación de Centro de copiado en el pedido. Crear
+varios tomos no multiplica esos cargos. El motor debe conservar los costos
+reales de preparación y armado, aunque el cobro comercial esté incluido o sea
+un cargo fijo por pedido. El control de margen sigue D25, con terminaciones
+aparte.
+
+Se conserva el armado físico existente: en doble faz cada original comienza
+en un frente y mantiene los reversos vacíos necesarios. Las reglas de D15 se
+aplican a las últimas hojas correspondientes de cada original y juego. Agrupar
+originales no habilita ocupar esos reversos con páginas del siguiente archivo
+ni cambia la cantidad real de papel.
+
+La vista previa, el tomo guardado, su edición y el resumen del pedido deben
+coincidir y conservar el desglose de impresión, preparación, ajuste por mínimo
+y terminaciones, aunque el tomo se muestre como un único renglón. Los planos
+CAD se resolverán por separado dentro de P14.
+
 ## Base actual del módulo
 
 La implementación revisada permite configurar por tenant papeles y gramajes,
@@ -731,6 +782,8 @@ documentos, grupos y cliente, pero todavía no recibe el canal de venta.
 | Pantalla de configuración | [Configuración de Centro de copiado](../src/components/comercial/centro-copiado-config-view.tsx) |
 | Formatos producibles y cálculo de hojas | [Adaptador de documentos](../apps/api/src/centro-copiado/adaptador.ts) y [opciones del navegador](../src/lib/centro-copiado-api.ts) |
 | Cobertura por archivo y consumo por nivel | [Selector de Centro de copiado](../src/components/comercial/centro-copiado-sheet.tsx) y [cobertura de tóner](../apps/api/src/productos-servicios/cobertura-toner.ts) |
+| Armado físico y cotización de tomos | [Tomos PDF y avisos](tomos-pdf-y-avisos.md) y [servicio de Centro de copiado](../apps/api/src/centro-copiado/centro-copiado.service.ts) |
+| Cotización actual de planos CAD | [Servicio CAD](../apps/api/src/centro-copiado/centro-copiado-cad.service.ts) y [catálogo comercial CAD](../apps/api/src/centro-copiado/catalogo-cad.service.ts) |
 | Cotización y guardado del módulo | [Servicio de Centro de copiado](../apps/api/src/centro-copiado/centro-copiado.service.ts) y [pedido de cotización](../apps/api/src/centro-copiado/dto/cotizar-centro-copiado.dto.ts) |
 | Canales existentes | [Canales de venta](../src/lib/canales-venta.ts) |
 | Guardado y recotización desde la ficha | [Ficha comercial](../src/components/comercial/propuesta-ficha.tsx) |
@@ -819,12 +872,13 @@ Los costos y márgenes conservarían sus permisos de acceso.
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
 en D15, P06 en D16 a D19, P07 en D20, P08 en D21, P09 en D22 y el alcance de P10
 en D23, P11 en D24, P12 en D25 y P13 en D26 y D27. D28 amplía el alcance inicial
-con la simulación de costos de todas las celdas de las matrices.
+con la simulación de costos de todas las celdas de las matrices. D29 resuelve
+tomos y terminaciones de P14; queda por definir el tratamiento de planos CAD.
 Las preguntas restantes deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P14 | ¿Cuál es el alcance inicial de tomos, terminaciones y planos CAD? | Proponer tarifas para impresión en hojas e integrar correctamente tomos y terminaciones existentes; evaluar un tarifario CAD por separado. |
+| P14 | ¿Cómo se integran las matrices de planos CAD? | Tomos y terminaciones resueltos en D29. Para CAD definir alcance, unidad de precio y tramos, formatos y medidas personalizadas, y relación con la política principal del pedido. Mantener el cálculo de costos y la simulación con el motor. |
 | P15 | ¿Cómo se habilita la nueva oferta en tenants existentes? | Proponer conservar su comportamiento hasta que configuren y activen los cambios. Definir el tratamiento de combinaciones nuevas o retiradas. |
 
 ## Casos para acordar resultados
@@ -889,7 +943,9 @@ del archivo original.
 | Respaldo válido | El caso anterior con otro tarifario compatible o el motor elegidos explícitamente como respaldo. | Si la fuente resuelve el precio, se usa y se identifica su origen. Se mantienen la preparación y el mínimo del tarifario activo, sin duplicar cargos. Si no lo resuelve, continúa pendiente. |
 | Acuerdo con celda vacía | El tarifario general no tiene precio, pero un acuerdo aplicable del cliente define un precio válido para esa combinación. | Se usa el acuerdo según D20. La celda vacía del tarifario no causa por sí sola un precio pendiente. |
 | Última hoja sin tarifa simple | D15 exige reclasificar la última hoja a simple faz, pero falta el precio simple requerido. | Se aplica D21 a esa parte. No se inventa el precio dividiendo la tarifa doble ni se omite la hoja del total. |
-| Tomo con terminación | Dos originales agrupados con varios juegos y anillado. | Reconciliar tarifa de impresión, preparación, terminaciones, resumen y total guardado. |
+| Tomo con terminación | Un archivo de 20 páginas K y otro de 2 páginas CMYK, ambos simple faz, con 10 juegos anillados y tarifa por hoja. | Se cotizan 200 hojas K y 20 CMYK con sus combinaciones y tramos, más 10 anillados con sus materiales. El espesor corresponde a 22 hojas por ejemplar. Preparación y mínimo siguen al nivel del pedido según D29. |
+| Volumen entre tomos y sueltos | Dos tomos y un documento suelto contienen archivos de la misma combinación comercial. | En acumulación por combinación suman sus unidades efectivas dentro del pedido. En modalidad por archivo, cada original conserva su grupo aunque se genere un PDF unificado del tomo. |
+| Tomo con originales impares | Dos originales de 3 páginas cada uno, ambos doble faz, con 10 juegos. | Cada original comienza en frente: 4 hojas por juego, 40 hojas y 60 carillas impresas en total. D15 define su clasificación comercial; no se reutilizan los dorsos vacíos entre originales. |
 
 ## Integración técnica por definir
 
@@ -972,6 +1028,14 @@ confundir un resultado anterior con una simulación actual. Las cantidades de
 referencia, unidades y supuestos productivos deben ser coherentes con D23,
 incluido el desglose de preparación, mínimo y cargos para evaluar D25.
 
+La integración de D29 debe resolver los precios de impresión antes de componer
+el renglón del tomo, conservando originales, juegos y cantidades comerciales.
+Los materiales y costos de terminación deben calcularse por ejemplar y sumarse
+sin duplicación. Los costos operativos de preparación deben separarse del cargo
+comercial único de D18; unificar o guardar un tomo no puede reiniciar los grupos
+del pedido ni aplicar otra vez su mínimo. La vista previa, edición, persistencia
+y resumen deben usar el mismo desglose.
+
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
 desglose comercial y las validaciones de oferta deben conservarse en todos los
@@ -980,13 +1044,14 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 ## Orden de trabajo propuesto
 
 1. Partir de P01 a P13 resueltos en D09 a D27 y del alcance de simulación de D28,
-   y completar las reglas comerciales pendientes que condicionan el primer alcance.
+   incorporar tomos y terminaciones según D29 y completar CAD y las reglas
+   comerciales pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluida la simulación
    de costos de todas las celdas de las matrices.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
    configuraciones existentes.
 4. Implementar matrices y asignación por canal como un conjunto, incorporando
-   versiones, precios por cobertura y resolución común del precio.
+   versiones, precios por cobertura, tomos, terminaciones y resolución común del precio.
 5. Verificar en local cotización, guardado, recotización, tomos, terminaciones,
    permisos y separación entre tenants con datos ficticios.
 6. Preparar un lote coherente para validación en staging según el
@@ -1031,3 +1096,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | Incorporación de D26: precios por cobertura dentro del alcance inicial. P13 se precisa para resolver modalidades por tarifario, selección de cobertura y acumulación de volumen; se incorpora una propuesta con ejemplo, todavía sin confirmar esas reglas. | Confirmado parcial |
 | 2026-10-10 | P13 resuelto con D27: precio único como opción inicial y precios independientes por cobertura como alternativa desde la primera entrega; la cobertura separa volumen sólo cuando se cobra diferenciada. Se actualizan D12, D26 y ejemplos. | Confirmado |
 | 2026-10-10 | Incorporación de D28: simulación con el motor de los costos de todas las celdas de las matrices desde el alcance inicial, incluidas las celdas sin precio. Comparación de costo, venta y margen con cantidades de referencia explícitas, sin modificar automáticamente precios. | Confirmado |
+| 2026-10-10 | Incorporación de D29: tomos desde el alcance inicial, impresión por matriz y terminaciones aparte por ejemplares y materiales. Se conservan acumulación, preparación y mínimo por pedido, armado físico y costeo real. Se actualizan ejemplos; P14 continúa abierto para planos CAD. | Confirmado parcial |
