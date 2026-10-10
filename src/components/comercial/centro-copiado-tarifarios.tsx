@@ -63,6 +63,7 @@ import {
 } from "./centro-copiado-tarifarios-controles";
 import { ReglasTarifario } from "./centro-copiado-tarifarios-reglas";
 import { EditorMatriz } from "./centro-copiado-tarifarios-matriz";
+import { SimulacionTarifario } from "./centro-copiado-tarifarios-simulacion";
 
 type Edicion = { nombre: string; contenido: api.ContenidoTarifario };
 const firma = (e: Edicion | null) =>
@@ -471,16 +472,24 @@ export function CentroCopiadoTarifarios({
                   </AlertDescription>
                 </Alert>
               )}
-              <p className="text-xs text-muted-foreground">
-                La simulación de costos de todas las celdas con el motor sigue
-                pendiente de implementación.
-              </p>
             </CardContent>
           </Card>
           <ReglasTarifario
             contenido={contenido}
             disabled={soloLectura}
             onChange={cambiar}
+          />
+          <SimulacionTarifario
+            key={`simulacion-${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}`}
+            tarifarioId={base?.id ?? null}
+            revision={base?.revision}
+            versionId={version?.id}
+            contenido={contenido}
+            guardado={version?.contenido ?? base?.contenido ?? null}
+            nombres={nombres}
+            perfiles={perfiles}
+            disabled={ocupado || recargaRequerida || ofertaSinGuardar}
+            onChange={soloLectura ? undefined : cambiar}
           />
           {ofertaSinGuardar && (
             <Alert>

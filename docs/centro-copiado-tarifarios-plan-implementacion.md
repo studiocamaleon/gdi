@@ -33,8 +33,8 @@ cobertura → acumular → buscar tramo → redondear ML → resolver precio/acu
 ajustes autorizados → preparación y mínimo únicos → terminaciones → control
 de margen. Un precio pendiente conserva su estado hasta resolverlo.
 
-La simulación reutilizará los adaptadores y el motor para todas las celdas;
-guardará cantidad, configuración productiva y errores. No publicará precios.
+La simulación reutiliza los adaptadores y el motor para todas las celdas;
+conserva temporalmente cantidad, referencias productivas y errores. No publica precios.
 Pouch reutilizará su familia del motor con un modo individual explícito, material
 compatible y selección persistida por segmento.
 
@@ -47,10 +47,10 @@ compatible y selección persistida por segmento.
 | Composición comercial del pedido | IVA, preparación y mínimo únicos, terminaciones aparte. | Implementado como cálculo puro y probado; resolución fiscal e integración pendientes |
 | Prioridad y controles comerciales | Acuerdos/ajustes autorizados, respaldos y margen. | Pendiente; la composición recibe importes ya resueltos |
 | Cantidades y tramos CAD | Consumo real en ML, acumulación, tramo y redondeo comercial del grupo. | Implementado como cálculo puro y probado con el planificador actual; conexión al cotizador pendiente |
-| Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | API de tarifarios, versiones y política general/canales en borrador con vista previa comprobada; interfaz y activación operativa pendientes |
+| Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | API y editor de tarifarios, versiones y política general/canales comprobados localmente; activación operativa pendiente |
 | Recorridos del pedido | Vista previa, guardado, recálculo y emisión comparten cantidades, versiones y precios. | Pendiente |
 | Pouch y tomos | Material por hoja, caras/copias/juegos correctos, edición y adicionales sin duplicación. | Pendiente |
-| Herramientas de precios | Matriz, pegado, duplicación, ajustes masivos y simulación de todas las celdas. | Pendiente |
+| Herramientas de precios | Matriz, pegado, duplicación, ajustes masivos y simulación de todas las celdas. | Editor y simulación de costos productivos implementados localmente; sugerencias del motor y cargos comerciales completos pendientes |
 | Validación del conjunto | Empresas sin activar, permisos, históricos y casos funcionales; después CI y staging autorizado. | Pendiente |
 
 Las pruebas usan datos ficticios. Las suites que necesitan PostgreSQL se
@@ -563,3 +563,81 @@ pendientes los respaldos, acuerdos/descuentos/autorización, control de márgene
 pouch y conexión operativa de cotizar/guardar/recotizar/emitir. La importación de
 archivos Excel/CSV sigue para segunda etapa. Este editor no aplica migraciones a
 bases con datos ni despliega staging o producción.
+
+### 10 de octubre de 2026 — simulación de costos de matrices
+
+Se incorpora la comparación de costos al editor de cada tarifario. La API toma
+la revisión guardada del borrador o una versión inmutable; exige permiso de
+Configuración de copiado **y** `finanzas.ver_margenes`. El contexto de empresa
+proviene de la sesión. Se rechazan revisiones desactualizadas, monedas distintas
+a la empresa, referencias ajenas y solicitudes de más de cinco celdas.
+
+- Se puede recorrer la matriz completa, las celdas filtradas o una selección,
+  incluidas las pendientes y las que usan rangos propios. La pantalla procesa
+  lotes secuenciales, muestra avance y permite detener al terminar el lote en
+  curso. Los errores permanecen por cobertura; detener o fallar no presenta el
+  resto de la matriz como calculado. Hay como máximo un lote simultáneo por
+  empresa en cada proceso de API.
+- Cada celda representa un pedido independiente. La referencia inicial es el
+  comienzo del tramo y puede cambiarse dentro de él. Hojas físicas y carillas
+  usan el adaptador del Centro de copiado y el motor; una última hoja impar
+  genera sólo su cara impresa. La preparación productiva se cuenta una vez,
+  aunque `cobraSetup` esté desactivado en la cotización anterior o el tarifario
+  incluya comercialmente la preparación. Se puede simular con el centro pausado;
+  se conservan las restricciones de oferta y producibilidad.
+- CAD se calcula por ML de papel consumido, con orientación, márgenes y copias
+  del planificador existente. Se muestra la geometría, rollo y máquina de
+  referencia. Se puede elegir una receta compatible y medidas personalizadas;
+  ante varias recetas no se elige una arbitrariamente. El tramo que empieza en
+  cero usa una referencia positiva. El redondeo comercial afecta la venta, no
+  el consumo de producción usado para el costo.
+- Con precio único se comparan Borrador, Normal y Alta contra el mismo precio;
+  con precios diferenciados se usa la cobertura de la fila. Los resultados
+  muestran costo total y por unidad, venta sin IVA, utilidad y margen productivo
+  sobre la venta neta. Preparación fija y ajuste por mínimo se componen una vez
+  usando la misma función que los pedidos. Las terminaciones están excluidas.
+  El IVA se resuelve por categoría del producto y régimen del tenant: ausencia
+  o ambigüedad no se convierte en IVA cero.
+- Los precios se pueden editar junto al resultado. La comparación comparte el
+  cálculo decimal y la composición comercial con la API, mediante `decimal.js`
+  como dependencia explícita; no carga Prisma en el navegador. El cambio de
+  precio, IVA, preparación o mínimo no vuelve a ejecutar el motor. Cambiar la
+  estructura invalida los resultados anteriores. Los costos conservan fecha,
+  período y referencias del producto/ruta/cambio utilizados; los cambios externos
+  de costos requieren una nueva simulación.
+- Son resultados temporales de la sesión del editor, no snapshots históricos ni
+  autorizaciones. Simular una versión publicada usa costos actuales y se informa
+  expresamente. El margen mostrado es **productivo**, antes de comisiones y otros
+  gastos comerciales: no sustituye el control completo de D25.
+
+Límites de referencia: hasta 1.000.000 de hojas/carillas o ML por escenario;
+CAD respeta hasta 10.000 copias y medidas positivas de hasta 100.000 mm. Para
+carillas impares en doble faz se admite un original de hasta 100.000 páginas.
+Con última hoja cobrada simple, la combinación doble sólo admite cantidades
+pares: se toma el primer par dentro del tramo o se informa que no hay referencia
+representable. Estos límites no recortan cantidades silenciosamente ni cambian
+los límites de la matriz.
+
+**Comprobación local:** 283 pruebas de API y 50 de frontend. Incluyen comparación
+sin IVA, mínimo y preparación únicos, precio pendiente/cero, cobertura, rangos,
+ML con giro y redondeo, preparación productiva y hoja impar, interrupción,
+edición sin recostear, invalidación, permisos conjuntos y aislamiento entre
+empresas con encabezado falsificado. PostgreSQL se migró en una base nueva y
+exclusiva de pruebas, sin seed ni datos reales; quedó sin empresas ni usuarios
+ficticios y se eliminó al terminar. Las pruebas del adaptador usan
+un motor sustituido; no acreditan una ejecución completa de producción con
+catálogo y costos reales. Se verificó además el editor real en navegador con
+una API ficticia, incluidas las tres coberturas y la aparición de pérdida al
+editar el precio. Las suites nuevas se incorporan al workflow existente.
+
+Los tipos se comprobaron sobre los archivos afectados y se ejecutó ESLint en
+los archivos nuevos y los formularios modificados. El chequeo global de tipos
+de la API excedió el límite local de memoria; no se realizó una compilación de
+producción en la Mac. La ejecución remota de CI y el PR siguen pendientes del
+acceso autenticado a GitHub.
+
+**Siguiente bloque:** sugerencias de precios del motor con revisión explícita
+antes de aplicarlas (D23) y cargos/control completo de márgenes (D25). Siguen
+pendientes acuerdos, descuentos/autorizaciones, respaldos, pouch y conexión
+operativa del tarifario con cotizar/guardar/recotizar/emitir. No se activaron
+matrices en pedidos ni se desplegó staging o producción.

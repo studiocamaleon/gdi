@@ -1517,6 +1517,31 @@ uso de matrices en pedidos.
 
 El alcance y las pruebas están en el
 [registro de implementación](centro-copiado-tarifarios-plan-implementacion.md).
-D23 y D28 conservan como pendiente dentro de la primera entrega la simulación de
-costos de todas las celdas y las sugerencias del motor. Las decisiones funcionales
+D23 conserva como pendiente dentro de la primera entrega la generación y
+aceptación revisada de sugerencias del motor. Las decisiones funcionales
 confirmadas no cambian.
+
+### Avance de implementación: simulación de costos (10/10/2026)
+
+El editor permite recorrer todas las celdas, las filtradas o una selección,
+incluidos los precios pendientes. Reutiliza el motor para hojas/carillas y CAD
+por ML consumidos. Muestra costo por unidad y total, cantidad, cobertura, fecha,
+geometría CAD, venta sin IVA y margen productivo. Editar un precio actualiza la
+comparación sin cambiar el costo ni su fecha. Preparación y mínimo comerciales
+se componen una vez por referencia; la preparación productiva se costea aunque
+comercialmente esté incluida. La última hoja impar sólo imprime una cara.
+
+El resultado es una referencia productiva, **antes de comisiones y otros gastos
+comerciales**, y no sustituye el futuro control completo de D25. Los resultados
+son temporales y corresponden a los costos consultados en ese momento, incluso
+al simular una versión histórica. Cambiar la estructura de la matriz invalida
+la comparación; los cambios externos de costos requieren volver a simular.
+Los permisos de configuración y de márgenes se exigen conjuntamente.
+
+Precisiones de referencia: el primer tramo CAD comienza en cero pero usa un
+consumo positivo representable; se pueden cambiar las medidas y copias. Si hay
+varias recetas CAD compatibles se exige elegir una. En doble faz por carilla
+con última hoja a simple, el volumen doble debe ser par: se usa el primer par
+del tramo, o se informa que esa celda no tiene referencia representable.
+Los errores de configuración y los recorridos detenidos permanecen explícitos.
+Detalles, límites técnicos y pruebas en el registro de implementación.

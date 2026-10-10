@@ -6,6 +6,18 @@ import type {
 } from "../../apps/api/src/centro-copiado/tarifarios/politica-precios";
 import type { PerfilCadCopiado } from "./centro-copiado-cad";
 export type { ContenidoTarifario, PoliticaPrecios, CanalCopiado };
+import type {
+  SolicitudSimulacion,
+  ResultadoCeldaSimulacion,
+} from "../../apps/api/src/centro-copiado/tarifarios/simulacion-tarifario.types";
+export const simularCeldasTarifario = (
+  id: string,
+  solicitud: SolicitudSimulacion,
+) =>
+  apiRequest<{ resultados: ResultadoCeldaSimulacion[] }>(
+    `/centro-copiado/tarifarios/${id}/simulaciones`,
+    { method: "POST", body: JSON.stringify(solicitud) },
+  );
 
 export type ResumenTarifario = {
   id: string;
