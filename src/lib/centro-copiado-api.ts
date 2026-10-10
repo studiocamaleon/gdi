@@ -250,6 +250,7 @@ export interface PapelOpcion {
   nombre: string;
   gramajes: number[];
   variantes: VariantePapelOpcion[];
+  formatosPorGramaje?: FormatosPorGramaje[] | null;
 }
 
 export interface OpcionesCentroCopiado {
@@ -285,6 +286,12 @@ export async function estadoCentroCopiado(): Promise<{
 export interface PapelConfigItem {
   materiaPrimaId: string;
   gramajes?: number[];
+  formatosPorGramaje?: FormatosPorGramaje[] | null;
+}
+
+export interface FormatosPorGramaje {
+  gramaje: number | null;
+  tamanos: string[];
 }
 
 export interface MaquinaOpcion {
@@ -334,6 +341,7 @@ export interface CentroCopiadoConfig {
       nombre: string;
       gramajes: number[];
       formatosProducibles: string[];
+      formatosPorGramaje?: FormatosPorGramaje[];
     }[];
     terminaciones: string[];
     terminacionesCatalogo: {
@@ -505,13 +513,24 @@ export function tamanosProducibles(
   let variantes = papel.variantes;
   if (gramaje != null) {
     const conGramaje = variantes.filter((v) => v.gramajeGr === gramaje);
-    if (conGramaje.length) variantes = conGramaje;
+    variantes = conGramaje;
   }
+  const gramajes = [...new Set(variantes.map((v) => v.gramajeGr))];
+  const efectivo = gramaje ?? (gramajes.length === 1 ? gramajes[0] : undefined);
+  const formatosPapel =
+    papel.formatosPorGramaje == null
+      ? null
+      : (papel.formatosPorGramaje.find((r) => r.gramaje === efectivo)
+          ?.tamanos ?? []);
   const menu =
-    ofrecidos && ofrecidos.length
+    ofrecidos != null
       ? CC_FORMATOS_MENU.filter((f) => ofrecidos.includes(f.nombre))
       : CC_FORMATOS_MENU;
-  return menu.filter((f) => variantes.some((v) => varianteCubre(v, f)));
+  return menu.filter(
+    (f) =>
+      (formatosPapel == null || formatosPapel.includes(f.nombre)) &&
+      variantes.some((v) => varianteCubre(v, f)),
+  );
 }
 
 export async function cotizarCentroCopiado(

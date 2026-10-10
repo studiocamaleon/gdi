@@ -7,6 +7,7 @@ import {
   GuardarConfiguracion,
 } from "@/components/configuracion/configuracion-workspace";
 import configStyles from "@/components/configuracion/configuracion-workspace.module.css";
+import { CentroCopiadoFormatosPapel } from "./centro-copiado-formatos-papel";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
@@ -77,6 +78,7 @@ import {
   type CentroCopiadoConfig,
   type EventoCentroCopiado,
   type SaludCentroCopiado,
+  type FormatosPorGramaje,
 } from "@/lib/centro-copiado-api";
 
 const AUTO = "__auto__";
@@ -91,6 +93,7 @@ type FirmaArgs = {
   setupMin: string;
   cleanupMin: string;
   papeles: Map<string, Set<number>>;
+  formatosPorPapel: Record<string, FormatosPorGramaje[] | null>;
   tamanos: Set<string>;
   terminaciones: Set<string>;
   tiposAnillo: Set<string>;
@@ -108,6 +111,18 @@ function firmaFormulario(args: FirmaArgs) {
       .map(([id, gs]) => [id, [...gs].sort((a, b) => a - b)])
       .sort(([a], [b]) => String(a).localeCompare(String(b))),
     tamanos: [...args.tamanos].sort(),
+    formatosPorPapel: Object.entries(args.formatosPorPapel)
+      .filter(([id, reglas]) => args.papeles.has(id) && reglas != null)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, reglas]) => [
+        id,
+        reglas!
+          .map((r) => ({
+            gramaje: r.gramaje,
+            tamanos: [...r.tamanos].sort(),
+          }))
+          .sort((a, b) => (a.gramaje ?? 0) - (b.gramaje ?? 0)),
+      ]),
     terminaciones: [...args.terminaciones].sort(),
     tiposAnillo: [...args.tiposAnillo].sort(),
     tramosMargen: [...args.tramosMargen].sort(
@@ -154,6 +169,9 @@ export function CentroCopiadoConfigView() {
     new Map(),
   );
   const [tamanos, setTamanos] = React.useState<Set<string>>(new Set());
+  const [formatosPorPapel, setFormatosPorPapel] = React.useState<
+    Record<string, FormatosPorGramaje[] | null>
+  >({});
   const [terminaciones, setTerminaciones] = React.useState<Set<string>>(
     new Set(),
   );
@@ -213,6 +231,12 @@ export function CentroCopiadoConfigView() {
       setupMin: String(config.setupMin ?? 0),
       cleanupMin: String(config.cleanupMin ?? 0),
       papeles: seleccionPapeles,
+      formatosPorPapel: Object.fromEntries(
+        (config.papeles ?? []).map((p) => [
+          p.materiaPrimaId,
+          p.formatosPorGramaje ?? null,
+        ]),
+      ),
       tamanos: new Set(
         config.tamanos ?? config.disponibles.formatos.map((f) => f.nombre),
       ),
@@ -242,6 +266,7 @@ export function CentroCopiadoConfigView() {
     setSetupMin(formulario.setupMin);
     setCleanupMin(formulario.cleanupMin);
     setPapeles(formulario.papeles);
+    setFormatosPorPapel(formulario.formatosPorPapel);
     setTamanos(formulario.tamanos);
     setTerminaciones(formulario.terminaciones);
     setTiposAnillo(formulario.tiposAnillo);
@@ -291,6 +316,7 @@ export function CentroCopiadoConfigView() {
         setupMin,
         cleanupMin,
         papeles,
+        formatosPorPapel,
         tamanos,
         terminaciones,
         tiposAnillo,
@@ -311,6 +337,7 @@ export function CentroCopiadoConfigView() {
       setupMin,
       cleanupMin,
       papeles,
+      formatosPorPapel,
       tamanos,
       terminaciones,
       tiposAnillo,
@@ -482,13 +509,24 @@ export function CentroCopiadoConfigView() {
         const disp = cfg.disponibles.papeles.find(
           (p) => p.materiaPrimaId === materiaPrimaId,
         );
-        return disp?.gramajes.length === gs.size
-          ? { materiaPrimaId }
-          : { materiaPrimaId, gramajes: [...gs] };
+        const formatos = formatosPorPapel[materiaPrimaId];
+        return {
+          materiaPrimaId,
+          ...(disp?.gramajes.length === gs.size ? {} : { gramajes: [...gs] }),
+          ...(formatos != null
+            ? {
+                formatosPorGramaje: formatos.filter((r) =>
+                  r.gramaje == null ? !gs.size : gs.has(r.gramaje),
+                ),
+              }
+            : {}),
+        };
       });
       const todosPapeles =
         papelesArr.length === cfg.disponibles.papeles.length &&
-        papelesArr.every((p) => !("gramajes" in p));
+        papelesArr.every(
+          (p) => !("gramajes" in p) && !("formatosPorGramaje" in p),
+        );
       const actualizada = await actualizarConfigCentroCopiado({
         version: cfg.version,
         activo,
@@ -547,20 +585,41 @@ export function CentroCopiadoConfigView() {
 
   const probarCotizacion = async () => {
     if (!cfg) return;
-    const papel = cfg.disponibles.papeles.find((p) =>
-      papeles.has(p.materiaPrimaId),
-    );
-    const nombres =
-      papel?.formatosProducibles.filter((f) => tamanos.has(f)) ?? [];
+    const combinaciones = cfg.disponibles.papeles.flatMap((papel) => {
+      const gramajes = papeles.get(papel.materiaPrimaId);
+      if (!gramajes) return [];
+      const reglas = formatosPorPapel[papel.materiaPrimaId];
+      const producibles =
+        papel.formatosPorGramaje ??
+        (papel.gramajes.length ? papel.gramajes : [null]).map((gramaje) => ({
+          gramaje,
+          tamanos: papel.formatosProducibles,
+        }));
+      return producibles.flatMap((posible) => {
+        if (posible.gramaje != null && !gramajes.has(posible.gramaje))
+          return [];
+        const nombres = posible.tamanos.filter(
+          (tamano) =>
+            tamanos.has(tamano) &&
+            (reglas == null ||
+              reglas.some(
+                (r) =>
+                  r.gramaje === posible.gramaje && r.tamanos.includes(tamano),
+              )),
+        );
+        return nombres.length
+          ? [{ papel, gramaje: posible.gramaje, nombres }]
+          : [];
+      });
+    });
+    const combinacion = combinaciones[0];
+    const { papel, gramaje, nombres = [] } = combinacion ?? {};
     const formato = cfg.disponibles.formatos.find(
       (f) => f.nombre === (nombres.includes("A4") ? "A4" : nombres[0]),
     );
-    const gramaje = papel
-      ? [...(papeles.get(papel.materiaPrimaId) ?? [])][0]
-      : null;
     if (!papel || !formato) {
       toast.error(
-        "No hay una combinación papel–formato producible para probar.",
+        "No hay una combinación de papel, gramaje y formato ofrecida para probar.",
       );
       return;
     }
@@ -633,7 +692,8 @@ export function CentroCopiadoConfigView() {
                     <p>
                       Para empezar necesitás una impresora láser lista y activa,
                       y un papel en hojas con una variante activa. Después podés
-                      inicializar el módulo y configurar precios y terminaciones.
+                      inicializar el módulo y configurar precios y
+                      terminaciones.
                     </p>
                     <div className="flex flex-wrap gap-3">
                       <Link
@@ -707,11 +767,13 @@ export function CentroCopiadoConfigView() {
                 Descartar
               </Button>
             )}
-            {puedeGestionar && <GuardarConfiguracion
-              cambios={cantidadCambios}
-              guardando={guardando}
-              onGuardar={() => void guardar()}
-            />}
+            {puedeGestionar && (
+              <GuardarConfiguracion
+                cambios={cantidadCambios}
+                guardando={guardando}
+                onGuardar={() => void guardar()}
+              />
+            )}
           </>
         }
       />
@@ -1051,13 +1113,16 @@ export function CentroCopiadoConfigView() {
                   <div>
                     <div className="text-sm font-medium">Prueba rápida</div>
                     <div className="text-xs text-muted-foreground">
-                      100 páginas, B/N, doble faz.
+                      {hayCambios
+                        ? "Guardá los cambios antes de probar."
+                        : "100 páginas, B/N, doble faz."}
                     </div>
                   </div>
                   <Button
                     variant="outline"
                     loading={cotizando}
                     loadingText="Cotizando…"
+                    disabled={hayCambios}
                     onClick={() => void probarCotizacion()}
                   >
                     Probar cotización
@@ -1266,8 +1331,8 @@ export function CentroCopiadoConfigView() {
             <CardHeader>
               <CardTitle>Papeles y gramajes</CardTitle>
               <CardDescription>
-                Cada papel muestra los formatos que sus variantes activas pueden
-                producir.
+                Elegí los papeles y gramajes, y qué formatos ofrecés para cada
+                uno.
               </CardDescription>
               <CardAction>
                 <Badge variant="outline">
@@ -1347,6 +1412,32 @@ export function CentroCopiadoConfigView() {
                           ))}
                         </div>
                       ) : null}
+                      {gs ? (
+                        <div className="sm:col-span-2">
+                          <CentroCopiadoFormatosPapel
+                            disponibles={(
+                              p.formatosPorGramaje ??
+                              p.gramajes.map((gramaje) => ({
+                                gramaje,
+                                tamanos: p.formatosProducibles,
+                              }))
+                            ).filter((r) =>
+                              r.gramaje == null ? !gs.size : gs.has(r.gramaje),
+                            )}
+                            seleccion={
+                              formatosPorPapel[p.materiaPrimaId] ?? null
+                            }
+                            generales={tamanos}
+                            disabled={!puedeGestionar}
+                            onChange={(reglas) =>
+                              setFormatosPorPapel((prev) => ({
+                                ...prev,
+                                [p.materiaPrimaId]: reglas,
+                              }))
+                            }
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -1356,9 +1447,10 @@ export function CentroCopiadoConfigView() {
           <div className="grid gap-4">
             <Card>
               <CardHeader>
-                <CardTitle>Formatos ofrecidos</CardTitle>
+                <CardTitle>Formatos generales</CardTitle>
                 <CardDescription>
-                  La compatibilidad final también se valida por papel.
+                  Se combinan con la selección de cada papel y gramaje. Un
+                  formato deshabilitado aquí no se ofrece en ningún papel.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3">
