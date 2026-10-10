@@ -31,9 +31,10 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D13 | El precio unitario del tramo alcanzado se aplica a todas las unidades del grupo comercial. En la alternativa por archivo, se aplica a todas las unidades de cada combinación comercial de ese archivo. La regla vale por hoja o por carilla según el tarifario; no se cobra progresivamente. Resuelve P03; D15 precisa la separación de la última hoja cuando corresponda. | 2026-10-10 |
 | D14 | Cada tarifario tiene rangos generales que las combinaciones usan inicialmente. Se pueden definir rangos propios como excepción por combinación. Compartir rangos no implica compartir precios ni acumular volumen entre combinaciones distintas. Resuelve P04. | 2026-10-10 |
 | D15 | El tratamiento de la última hoja con una sola cara impresa se configura por tarifario: «Mantener tarifa doble faz» como opción inicial y «Última hoja a simple faz» como alternativa. Se aplica por copia física, también a un archivo de una sola página configurado doble faz. Resuelve P05. | 2026-10-10 |
-| D16 | Cada precio de la matriz incluye el papel elegido y la impresión según color y caras. Las terminaciones se cobran aparte cuando se seleccionan, incluidos sus materiales. Aplica a tarifarios por hoja y por carilla. Resuelve parcialmente P06; el IVA se define en D17, la preparación en D18 y los mínimos siguen pendientes. | 2026-10-10 |
-| D17 | La interpretación del precio cargado se elige por tarifario: «IVA incluido» como opción inicial y «Más IVA» como alternativa. Aplica a todas sus combinaciones, incluidas las que tienen rangos propios. Resuelve el IVA dentro de P06; la preparación se define en D18 y los mínimos siguen pendientes. | 2026-10-10 |
-| D18 | La preparación se configura por tarifario: «Preparación incluida» como opción inicial y «Cargo fijo por pedido» como alternativa, con importe configurable y mostrado por separado. El cargo se aplica una sola vez al conjunto de Centro de copiado del pedido. Resuelve la preparación dentro de P06; los mínimos siguen pendientes. | 2026-10-10 |
+| D16 | Cada precio de la matriz incluye el papel elegido y la impresión según color y caras. Las terminaciones se cobran aparte cuando se seleccionan, incluidos sus materiales. Aplica a tarifarios por hoja y por carilla. Resuelve los conceptos incluidos de P06; el IVA se define en D17, la preparación en D18 y los mínimos en D19. | 2026-10-10 |
+| D17 | La interpretación del precio cargado se elige por tarifario: «IVA incluido» como opción inicial y «Más IVA» como alternativa. Aplica a todas sus combinaciones, incluidas las que tienen rangos propios. Resuelve el IVA dentro de P06; la preparación se define en D18 y los mínimos en D19. | 2026-10-10 |
+| D18 | La preparación se configura por tarifario: «Preparación incluida» como opción inicial y «Cargo fijo por pedido» como alternativa, con importe configurable y mostrado por separado. El cargo se aplica una sola vez al conjunto de Centro de copiado del pedido. Resuelve la preparación dentro de P06; los mínimos se definen en D19. | 2026-10-10 |
+| D19 | Los mínimos se configuran por tarifario: «Sin mínimo» como opción inicial y «Mínimo de importe por pedido» como alternativa. Se aplica una sola vez sobre impresión más preparación de Centro de copiado; las terminaciones se agregan aparte. Sólo se cobra la diferencia necesaria para alcanzar el mínimo, sin alterar cantidades reales ni tramos. Completa P06 junto con D16 a D18. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -126,8 +127,7 @@ Esta modalidad puede producir descensos del total al cambiar de tramo. En el
 ejemplo, 99 hojas cuestan $9.900, 100 cuestan $8.000 y 101 cuestan $8.080. P03
 queda resuelto con esos resultados; no se acordó una corrección automática de
 los saltos. Los ejemplos muestran la aplicación de la tarifa, que incluye papel
-e impresión según D16. El IVA sigue D17 y la preparación D18; los mínimos
-conservan el pendiente P06.
+e impresión según D16. El IVA sigue D17, la preparación D18 y los mínimos D19.
 
 ### Rangos generales y excepciones por combinación
 
@@ -209,8 +209,8 @@ se vuelve a sumar al precio comercial de la matriz. Tampoco se duplican los
 materiales de una terminación al agregar su importe. La visualización del
 desglose no cambia qué conceptos están incluidos.
 
-P06 queda parcialmente resuelto. El IVA se define en D17 y la preparación en
-D18; faltan los mínimos. La política para calcular el precio de las terminaciones
+P06 queda resuelto en D16 a D19. El IVA se define en D17, la preparación en D18
+y los mínimos en D19. La política para calcular el precio de las terminaciones
 y su integración con tomos se completará en P14.
 
 ### IVA en los precios del tarifario
@@ -273,8 +273,51 @@ tiempos de preparación y limpieza del costo del motor.
 Cobrar por archivo o por configuración de impresión no forma parte de las
 modalidades acordadas. Si P09 habilita varios tarifarios dentro de un pedido,
 deberá definir cuál determina el único cargo de preparación, sin multiplicarlo
-automáticamente por cada tarifario. La relación entre preparación y mínimos
-conserva P06.
+automáticamente por cada tarifario. La preparación integra el importe que se
+compara con el mínimo según D19.
+
+### Mínimo de importe por pedido
+
+**Confirmado en D19:** cada tarifario permite elegir entre:
+
+- **Sin mínimo**, como opción inicial: se cobra el importe calculado sin agregar
+  un ajuste por mínimo.
+- **Mínimo de importe por pedido**, como alternativa: se define un piso de cobro
+  para impresión más preparación de Centro de copiado.
+
+El mínimo se evalúa una sola vez para el conjunto de Centro de copiado del
+pedido, aunque haya varios archivos, combinaciones o cargas del módulo. Si la
+suma de impresión y preparación no alcanza el mínimo, se agrega únicamente la
+diferencia, identificada como «Ajuste por importe mínimo». Si ya lo alcanza o
+supera, no hay ajuste.
+
+Las terminaciones se suman después: su importe no permite alcanzar el mínimo
+de impresión y preparación. Tampoco se incluyen otros productos del pedido en
+esa comparación. El mínimo no exige imprimir más copias ni cambia las hojas,
+carillas, consumo de papel o cantidades usadas para buscar los tramos.
+
+Ejemplo ficticio con importes finales: 3 hojas a $100 suman $300 de impresión.
+La preparación por pedido cuesta $500; impresión más preparación suman $800.
+
+| Modalidad | Impresión más preparación | Ajuste por mínimo | Total antes de terminaciones |
+| --- | --- | --- | --- |
+| Sin mínimo | $800 | $0 | $800 |
+| Mínimo de $1.000 | $800 | $200 | $1.000 |
+
+Si se agrega un anillado de $1.200, los totales son $2.000 y $2.200,
+respectivamente. Si impresión más preparación ya suman $1.500, un mínimo de
+$1.000 no agrega ningún ajuste. Las 3 hojas reales del primer ejemplo se
+conservan en producción y en el cálculo del tramo.
+
+La comparación debe usar importes en la misma moneda y sobre la misma base de
+IVA, respetando D17 y la configuración fiscal del sistema. La prioridad de
+descuentos y ajustes manuales respecto del mínimo se resolverá en P07. Si P09
+habilita varios tarifarios dentro del pedido, deberá resolver cuál determina
+el mínimo único.
+
+El mínimo de hojas facturables por documento existente no es una modalidad del
+nuevo esquema acordado. Su migración y la habilitación de los tarifarios se
+resolverán en P15, sin cambiar automáticamente la operación de tenants actuales.
 
 ## Base actual del módulo
 
@@ -393,15 +436,14 @@ Los costos y márgenes conservarían sus permisos de acceso.
 ## Decisiones pendientes
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
-en D15. P06 está parcialmente resuelto en D16 a D18. Las preguntas restantes
+en D15. P06 está resuelto en D16 a D19. Las preguntas restantes
 deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P06 | ¿Cómo se aplican los mínimos? | Parcialmente resuelto en D16 a D18: papel e impresión incluidos, terminaciones aparte, IVA configurable y preparación incluida inicialmente con cargo fijo por pedido como alternativa. Falta definir mínimos, su alcance y relación con preparación y terminaciones para evitar cobros duplicados. |
-| P07 | ¿Qué prioridad tienen el tarifario, los acuerdos por cliente, descuentos y ajustes manuales? | Definir una prioridad única, permisos y explicación del resultado. |
+| P07 | ¿Qué prioridad tienen el tarifario, los acuerdos por cliente, descuentos y ajustes manuales? | Definir una prioridad única, permisos y explicación del resultado, incluida su relación con el mínimo de D19. |
 | P08 | ¿Qué ocurre ante una combinación sin precio? | Mostrar la falta de tarifa. Usar el motor o heredar otra matriz sólo si la política elegida lo permite explícitamente. |
-| P09 | ¿Cómo se elige la política por canal y qué pasa si se cambia el canal de una propuesta? | Definir la política general, la recotización de borradores y el tratamiento de documentos emitidos. Si se habilitan varios tarifarios dentro del pedido, resolver cuál determina el único cargo de preparación de D18. |
+| P09 | ¿Cómo se elige la política por canal y qué pasa si se cambia el canal de una propuesta? | Definir la política general, la recotización de borradores y el tratamiento de documentos emitidos. Si se habilitan varios tarifarios dentro del pedido, resolver cuál determina el único cargo de preparación de D18 y el mínimo de D19. |
 | P10 | ¿Cómo se crean y actualizan los precios? | Elegir el alcance inicial entre carga manual, copia, sugerencias del motor, ajustes por porcentaje, redondeo e importación. |
 | P11 | ¿Cuándo entra en vigencia una versión y qué pasa con cotizaciones en curso? | Proponer borrador y versión activa, conservar la aplicada en documentos emitidos y detectar cambios entre vista previa y guardado. |
 | P12 | ¿Qué ocurre si el precio deja un margen insuficiente o negativo? | Evaluar aviso, bloqueo o autorización según permisos. |
@@ -427,9 +469,12 @@ del archivo original.
 | Páginas y copias | Un archivo de 100 páginas con una copia frente a uno de 10 páginas con diez copias, simple faz. | Ambos aportan 100 unidades, por hoja o por carilla. A igualdad de combinación y tarifario y sin otros archivos, tienen la misma cantidad para buscar el tramo. |
 | Cantidades en doble faz | Un archivo de 10 páginas con una copia frente a diez archivos de una página, todos configurados en doble faz. | Suman 10 carillas, pero usan 5 y 10 hojas. La opción inicial conserva tarifa doble para todos; la alternativa reclasifica como simples las diez hojas de los archivos de una página. La acumulación sigue D11. |
 | Separación dentro de un archivo | Un archivo de 11 páginas con 3 copias, modo por archivo y última hoja a simple faz. | Busca el tramo doble con 15 hojas y el simple con 3; en un tarifario por carilla usa 30 y 3 respectivamente. No acumula otros archivos. |
-| Conceptos incluidos | Impresión en A4, Obra 80 g y K, con anillado seleccionado. | La matriz cubre papel e impresión. El anillado y sus materiales se agregan aparte una sola vez. Los costos de papel e impresión no se suman nuevamente al precio. El IVA sigue D17 y la preparación D18; los mínimos conservan P06. |
+| Conceptos incluidos | Impresión en A4, Obra 80 g y K, con anillado seleccionado. | La matriz cubre papel e impresión. El anillado y sus materiales se agregan aparte una sola vez. Los costos de papel e impresión no se suman nuevamente al precio. El IVA sigue D17, la preparación D18 y los mínimos D19. |
 | IVA incluido o adicional | Precio cargado de $121 por unidad, con una alícuota hipotética del 21 %. | IVA incluido: $100 netos + $21 de IVA = $121 finales. Más IVA: $121 netos + $25,41 de IVA = $146,41 finales. La alícuota y su aplicación provienen de la configuración fiscal, no de este ejemplo. |
 | Preparación por pedido | Tres archivos del mismo tarifario, dos A4 K y uno A4 CMYK, agregados en distintas cargas y con varias copias. | Preparación incluida: sin adicional. Cargo fijo final de $500: $500 una sola vez en el pedido. Cambiar las copias o aplicar última hoja a simple faz no agrega cargos. El costo operativo de preparación se conserva en ambas modalidades. |
+| Mínimo de importe | Importes finales ficticios: 3 hojas a $100, preparación de $500 y mínimo de $1.000. | Impresión más preparación suman $800; se agrega un ajuste de $200 y se cobran $1.000 antes de terminaciones. Sin mínimo se cobran $800. Se conservan las 3 hojas reales y su tramo. |
+| Mínimo con terminación | El caso anterior con anillado de $1.200. | Con mínimo, $1.000 más $1.200 de anillado: $2.200. El anillado no absorbe el ajuste de $200 ni permite alcanzar el mínimo. |
+| Mínimo alcanzado | Impresión más preparación suman $1.500 y el mínimo es $1.000. | No se agrega ajuste; se cobran $1.500 antes de terminaciones. El mínimo nunca reemplaza un importe mayor. |
 | Impresión mixta | Un pedido con K y CMYK, o con papeles distintos. | Por combinación, cada grupo acumula por separado según D12; por archivo, cada uno usa sus propias unidades. |
 | Varias cargas | Un archivo de 60 hojas y otro de 50 con la misma combinación, agregados en distintas aperturas de Centro de copiado al mismo pedido. | Por combinación, suman 110. Por archivo, mantienen 60 y 50. Agregar o quitar uno actualiza el volumen del grupo en el borrador. |
 | Rango de páginas | Imprimir sólo 10 páginas seleccionadas de un PDF de 100 páginas. | Distinguir la selección de páginas del tramo comercial por cantidad. |
@@ -458,8 +503,11 @@ antes de acumular volumen y seleccionar los tramos.
 
 La preparación de D18 debe resolverse al nivel del pedido y mantener un único
 cargo al agregar, editar o recotizar archivos. El cálculo del costo operativo
-de preparación debe separarse de la elección de cobrarlo aparte. Su relación
-con los mínimos se definirá al completar P06.
+de preparación debe separarse de la elección de cobrarlo aparte. El mínimo de
+D19 se evalúa una sola vez sobre impresión más preparación, con un ajuste por
+la diferencia y terminaciones aparte. Se debe conservar ese desglose sin
+modificar las cantidades reales ni aplicar simultáneamente el mínimo anterior
+por documento al nuevo tarifario. La prioridad frente a descuentos sigue P07.
 
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
@@ -468,9 +516,8 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P05 resueltos en D09 a D15 y de P06 parcialmente resuelto en
-   D16 a D18; completar las reglas comerciales pendientes que condicionan el primer
-   alcance.
+1. Partir de P01 a P06 resueltos en D09 a D19 y completar las reglas comerciales
+   pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
    configuraciones existentes.
@@ -510,3 +557,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | P06 parcialmente resuelto: papel e impresión incluidos en la tarifa; terminaciones y sus materiales aparte al seleccionarlas. Incorporación de D16. IVA, preparación y mínimos siguen pendientes. | Confirmado parcial |
 | 2026-10-10 | IVA resuelto dentro de P06: IVA incluido como opción inicial y más IVA como alternativa por tarifario. Incorporación de D17 y ejemplo de cálculo. Preparación y mínimos siguen pendientes. | Confirmado parcial |
 | 2026-10-10 | Preparación resuelta dentro de P06: incluida como opción inicial y cargo fijo por pedido como alternativa por tarifario. Incorporación de D18, ejemplo y separación entre costo operativo y cobro comercial. Los mínimos siguen pendientes. | Confirmado parcial |
+| 2026-10-10 | P06 resuelto: sin mínimo como opción inicial y mínimo de importe por pedido como alternativa por tarifario, sobre impresión más preparación y con terminaciones aparte. Incorporación de D19 y ejemplos del ajuste por la diferencia, sin alterar cantidades ni tramos. La prioridad frente a descuentos y ajustes se conserva en P07. | Confirmado |
