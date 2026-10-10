@@ -1373,3 +1373,30 @@ La publicación requirió renovar la autenticación normal del registro y reutil
 Fuente exacta cifrada y custodiada por 31 días; inventario del copiador actualizado con fuentes e imágenes activas. Copia previa `00b2b50d-8f7b-4712-a595-1e3627d20938`, completada `2026-10-09T21:00:58.809Z`; posterior `c3dbe486-fbe2-434c-aa31-2b505fea19c7`, completada `2026-10-09T22:14:38.100Z`. Firma válida y manifiesto descifrado, fuentes/digests exactos, 312 migraciones y 24 archivos. El primer sondeo encontró la copia anterior y el siguiente verificó la nueva. **No se repitió la restauración SQL aislada; esta verificación no constituye un nuevo ensayo de restauración completa.**
 
 Reversión a `4697aafee`: API y ambos workers `registry.fly.io/grafoprint-staging-api@sha256:f21eecdc319aec5dceed3c14c127446029e04977d04b3530eb9498bcc7abf632`; web `registry.fly.io/grafoprint-staging-web@sha256:0fe9d8385b862a9b627de9746536853acf67a690891c0722268eed432850018d`. Restablece las acciones separadas sin modificar esquema. Conservar fechas e historial ya confirmados; no restaurar la base para deshacer código. Actualizar también el inventario de recuperación.
+
+## 2026-10-10, 00:29 UTC — Análisis, seguimiento y reprogramación (PR #56)
+
+Código `15014c4645fcbbc3a0d4191cbfe1f68715783c29`, [PR #56](https://github.com/studiocamaleon/gdi/pull/56), dependiente de #54 y su cadena de planificación. Incluye la corrección independiente de #55. Se construyó una rama de publicación que conserva las correcciones anteriores; no se fusionaron PR ni se modificó `main` o la web comercial. El usuario autorizó promover los tres cambios a producción después de comprobar staging.
+
+- API y ambos workers: `registry.fly.io/grafoprint-staging-api@sha256:c769f370c500ba40706b110a543c51691886f9b5b6cdaa143ab95fd519e6cc5f`.
+- Web: `registry.fly.io/grafoprint-staging-web@sha256:e6aaaebc6c7194bc81d24303bac0da7185633a2325e41f9df087bca80a6272d0`.
+- PDF y copiador conservan sus imágenes. Seis máquinas iniciadas con los mismos tamaños. HTTPS web/API 200, API privada 403, BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados en los cuatro servicios publicados; consulta de Sentry de esta revisión sin incidentes en el momento de verificar.
+- Sin migraciones nuevas, dependencias ni cambios fiscales: 312 migraciones. Sin seeds ni envíos de prueba.
+
+### Pruebas
+
+Sobre el conjunto final: 41 pruebas web en cinco suites y la integración de referencias de IVA contra PostgreSQL local aprobadas. Esta última compara productos raíz, tasas distintas, exentos, documentos sin comprobante, cargos, filtros y separación de empresas. Se conservan además las pruebas de cada cambio registradas en sus PR. [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/38005967111) y [CI permisos/aislamiento/fiscal](https://github.com/studiocamaleon/gdi/actions/runs/38005967115) aprobados para el código publicado, incluidos los cambios de planificación cuyo CI previo había fallado por infraestructura.
+
+Análisis: comparación antes/después mediante transacciones explícitamente de sólo lectura. Los cálculos existentes de ventas netas, costos y márgenes de rentabilidad/comercial/producto/embudo se mantienen iguales; el bruto de referencia coincide con una suma independiente de los productos. En Chrome se verificaron Resumen, Comercial, Embudo, Clientes, Finanzas, Producto y Equipo: aclaración «No incluye cargos extra» y referencias con IVA visibles. Los cargos siguen excluidos de ventas y márgenes; no se infiere una tasa fija para el bruto. Consola sin errores ni advertencias.
+
+Seguimiento: un pedido existente mostró «Instalación de vinilo» en el paso manual después de actualizar la web. Los demás nombres amigables de familia se conservan. El nombre en el encabezado de paso actual y el fallback sin nombre están cubiertos por pruebas locales; no se cambiaron estados de producción para forzar ese escenario en cloud.
+
+Planificación: paso pendiente con recursos completos, compromiso del 7 al 19 de octubre. Automático propuso el 19 de 10:00 a 10:06; Conservar mantuvo el 12; Elegir inicio permitió el 13 manteniendo el compromiso del 19. Los tres habilitaron confirmación y las propuestas se invalidaron al cambiar de modo. Se cancelaron sin guardar y se comprobó el compromiso original. Un ítem con pasos previos sin estación quedó bloqueado por estimación parcial, sin forzar una fecha no calculable. Se volvió a comprobar el acceso al formulario con la web definitiva. Persistencia y concurrencia se probaron localmente; **no se confirmó una reprogramación sobre datos existentes de staging**.
+
+Compilaciones completas en Fly con TypeScript: API y web aprobadas. La web optimizó en 17,1 minutos, verificó tipos en 4,2 minutos y generó 44 páginas estáticas. La transferencia del backend requirió reintentos por rechazos del registro; se conservó y subió la misma imagen compilada, sin recompilar ni modificar recursos. Constructor temporal propio `fly-builder-floral-cove-8903` eliminado. Sin builds de producción en la Mac ni cambios en Docker/otros proyectos.
+
+### Recuperación
+
+Fuente exacta cifrada y custodiada por 31 días e inventario actualizado. Copia previa `0117e7f8-f7d3-4158-9947-50754e6db574`, completada `2026-10-09T23:00:59.946Z`; posterior `b7ae4dc9-3c99-4e15-b370-2219e0a3fc79`, completada `2026-10-10T00:28:38.744Z`: firma válida, manifiesto descifrado, revisión, fuentes e imágenes exactas comprobadas; 312 migraciones y 24 archivos. El primer sondeo encontró todavía la copia anterior. **No se repitió restauración SQL.** Evidencias de navegador y operación guardadas fuera de Git.
+
+Reversión a `c9f30c26e`: API/ambos workers `registry.fly.io/grafoprint-staging-api@sha256:817b8a8d2614aae9801c0843c3c1264dfae68c8c610d92d0279905ca5b56ce5d`; web `registry.fly.io/grafoprint-staging-web@sha256:6df466b1d70f36ffa7989d0a53b889eaad3598030e47408a8233b2a469307c0d`. No requiere cambios de esquema. Conservar fechas e historial ya confirmados y actualizar el inventario del copiador si se revierte.

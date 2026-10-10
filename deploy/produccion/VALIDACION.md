@@ -741,3 +741,30 @@ Chrome en producción: modal comprobado a **390×844**, con datos existentes, b�
 Fuente exacta cifrada y custodiada por 31 días e inventario del copiador actualizado. Copia previa `4f355d07-8b17-43ec-b212-eaaf049c9eee` (2026-10-09T18:01:42.446Z). Copia posterior `855ba8c9-8c7a-48f4-8a8c-98f215a128aa` (2026-10-09T18:39:37.248Z): firma válida, manifiesto descifrado, revisión, fuentes y digests exactos comprobados; 312 migraciones y 125 archivos. El primer sondeo todavía encontró la copia anterior. **No se repitió restauración SQL.** Constructor temporal eliminado; inventario final de apps igual al inicial.
 
 Reversión sólo de web: `registry.fly.io/grafoprint-production-web@sha256:42af339be2249afa3208db43fa6dd5261dcc9ff89ca87e347dcdd2c231b4f079` (`a2999b333`), sin modificar esquema ni registros. Actualizar también el inventario del copiador si se revierte.
+
+## 2026-10-10, 00:33 UTC — Análisis, seguimiento y reprogramación (PR #56)
+
+Código `15014c4645fcbbc3a0d4191cbfe1f68715783c29`, [PR #56](https://github.com/studiocamaleon/gdi/pull/56), dependiente de #54 y su cadena de planificación. Incorpora también la corrección de seguimiento de #55. El usuario autorizó publicar Análisis/seguimiento después de staging y confirmó expresamente incluir la reprogramación unificada. No se fusionaron PR ni se modificó `main` o la web comercial.
+
+- API y ambos workers: `registry.fly.io/grafoprint-production-api@sha256:c769f370c500ba40706b110a543c51691886f9b5b6cdaa143ab95fd519e6cc5f`.
+- Web: `registry.fly.io/grafoprint-production-web@sha256:e6aaaebc6c7194bc81d24303bac0da7185633a2325e41f9df087bca80a6272d0`.
+- Se copiaron las imágenes probadas en staging y se verificó la igualdad de sus manifiestos por SHA-256, sin recompilar para producción. Orden: worker, worker PDF, API y web. No había lotes fiscales activos en la comprobación previa. PDF y copiador conservan sus imágenes.
+- Seis máquinas iniciadas con tamaños originales, incluida API con 1 CPU performance / 2 GB. HTTPS web/API 200, API privada 403 y BFF anónimo 401. Revisión exacta y Sentry habilitado comprobados en los cuatro servicios actualizados. Sin nuevas migraciones: 312 aplicadas.
+
+### Validación
+
+Pruebas locales sobre el conjunto: 41 casos web y una integración de IVA en PostgreSQL aprobados, además de las suites de cada cambio. Compilaciones completas de API/web con tipos en Fly. [CI contenedores/tipos/migraciones/HTTP](https://github.com/studiocamaleon/gdi/actions/runs/38005967111) y [CI permisos/aislamiento/fiscal](https://github.com/studiocamaleon/gdi/actions/runs/38005967115) aprobados. Los recorridos de las siete vistas de Análisis, seguimiento y los tres modos de reprogramación se completaron en [staging](../staging/VALIDACION.md).
+
+Comparación antes/después de los reportes reales mediante transacciones explícitamente de sólo lectura: 45 órdenes del período fijo, incluida una con cargos. Los cálculos existentes de ventas netas, costos y márgenes de rentabilidad/comercial/producto/embudo se mantuvieron iguales; la referencia con IVA coincidió con una suma independiente de los productos. Los cargos siguen excluidos de ventas/márgenes. No se modificaron registros para hacer la comprobación.
+
+Chrome autenticado en producción: Resumen ejecutivo muestra «No incluye cargos extra» y el bruto de referencia bajo las ventas y sus tablas. El seguimiento del pedido de talonarios muestra «Abrochado» en el paso manual. Planificación abre el formulario unificado desde una colocación: Fecha con el cliente, Automático, Elegir inicio y Conservar visibles. Se canceló sin modificar fechas. Consolas de las tres pantallas sin errores ni advertencias. Persistencia y concurrencia de reprogramación están probadas localmente; **no se guardaron reprogramaciones reales como prueba de despliegue**.
+
+Control fiscal posterior: `deploy/verificar-worker-fiscal.mjs produccion` aprobó modo automático y configuración coherente entre API y worker. Desde el worker actualizado se consultó en ARCA un comprobante existente; autorización/CAE e importes coinciden con el registro previo. La consulta fue de sólo lectura: no se emitieron facturas ni se reenviaron avisos.
+
+Sentry: sin incidentes de esta revisión al verificar después del recorrido. Los errores encontrados en las últimas líneas de logs corresponden a momentos anteriores al despliegue (conexiones Redis/base y solicitudes web abortadas); no se presentan como errores nuevos ni como corregidos por esta publicación. Evidencias operativas y capturas privadas fuera de Git.
+
+### Recuperación y reversión
+
+Fuente exacta cifrada y custodiada por 31 días; inventario del copiador actualizado con fuentes e imágenes activas. Copia previa `d33f6bd6-2e12-4818-a774-0a0274e6dc88`, completada `2026-10-10T00:01:51.596Z`; posterior `9db3031f-52d3-4ece-aecb-80ec8b4b51f7`, completada `2026-10-10T00:33:48.797Z`: firma válida, manifiesto descifrado, revisión, fuentes y digests exactos comprobados; 312 migraciones y 136 archivos. El primer sondeo encontró todavía la copia anterior. **No se repitió restauración SQL.** Constructor temporal propio retirado e inventario de apps igual al inicial; sin cambios en Docker local ni otros proyectos.
+
+Reversión de código a API/ambos workers `registry.fly.io/grafoprint-production-api@sha256:b8c76956f068ee35e73fc06302c80c71a5381d397ed218999b8a330ba339ddad` (`afd1148ea`) y web `registry.fly.io/grafoprint-production-web@sha256:d6d06dc4d88a34640a65bfd01684e939d603981353e86bc2f0002b28998a131e` (`50e069b08`). No requiere revertir esquema. Conservar fechas e historial confirmados y revisar el tratamiento del inicio mínimo antes de volver al motor anterior; no restaurar la base para deshacer código. Actualizar también el inventario del copiador si se revierte.
