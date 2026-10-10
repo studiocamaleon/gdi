@@ -1505,3 +1505,18 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | D35 reemplaza la elección de unidades de D30: CAD sólo por ML en esta etapa. Precio por plano/formato y m² quedan pospuestos, incluida D34. Se actualizan alcance, ejemplos y simulación; P14 queda resuelto. | Confirmado |
 | 2026-10-10 | D36 confirma conservar la operación de empresas existentes hasta preparación, revisión y activación explícitas. D37 resuelve altas y retiros por criterio delegado: oferta nueva deshabilitada inicialmente, retiro sin borrar históricos, bloqueo de borradores afectados y respeto de compromisos emitidos. P15a y P15b quedan resueltos. | Confirmado / criterio delegado |
 | 2026-10-10 | D38 incorpora plastificado pouch al alcance inicial. Revisión del catálogo de CC, familia del motor, materiales y geometría existentes; definición del recorrido por hoja física y del trabajo de integración en tomos, configuración y guardado. Se cierra la definición funcional y se actualiza el orden de implementación. | Alcance confirmado; implementación pendiente |
+
+### Avance de implementación: editor de tarifarios y canales (10/10/2026)
+
+Disponible en la rama de desarrollo el editor de Configuración → Centro de
+copiado: matrices de hojas y CAD por ML, coberturas, reglas comerciales, rangos y
+excepciones, carga manual/pegado tabulado, ajustes masivos revisables, duplicación,
+versiones inmutables y asignación general con excepciones por canal. Las pantallas
+mantienen explícito el estado **en preparación**; publicar no activa todavía el
+uso de matrices en pedidos.
+
+El alcance y las pruebas están en el
+[registro de implementación](centro-copiado-tarifarios-plan-implementacion.md).
+D23 y D28 conservan como pendiente dentro de la primera entrega la simulación de
+costos de todas las celdas y las sugerencias del motor. Las decisiones funcionales
+confirmadas no cambian.

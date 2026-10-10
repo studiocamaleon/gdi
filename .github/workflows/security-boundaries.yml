@@ -157,6 +157,13 @@ jobs:
             src/archivos/storage/local-confinamiento.spec.ts \
             src/archivos/storage/local.driver.spec.ts \
             src/archivos/storage/subida-inmutable.spec.ts
+      - name: Comprobar editor de tarifarios y canales
+        run: |
+          npm ci --include=dev --no-audit --no-fund
+          node node_modules/vitest/vitest.mjs run \
+            src/lib/centro-copiado-tarifarios-editor.test.ts \
+            src/components/comercial/centro-copiado-tarifarios.test.tsx \
+            src/components/comercial/centro-copiado-config-view.test.tsx
       - name: Comprobar cálculos y contrato de tarifarios de Centro de copiado
         working-directory: apps/api
         run: |

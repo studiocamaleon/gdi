@@ -7,6 +7,8 @@ import {
   GuardarConfiguracion,
 } from "@/components/configuracion/configuracion-workspace";
 import configStyles from "@/components/configuracion/configuracion-workspace.module.css";
+import { CentroCopiadoTarifarios } from "./centro-copiado-tarifarios";
+import { CentroCopiadoCanales } from "./centro-copiado-tarifarios-canales";
 import { CentroCopiadoFormatosPapel } from "./centro-copiado-formatos-papel";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
@@ -148,6 +150,10 @@ function dinero(valor: number) {
 
 export function CentroCopiadoConfigView() {
   const puedeGestionar = usePuede("configuracion.copiado.gestionar");
+  const permiteCadTarifarios = useCapacidad("cotizacion_cad");
+  const [pestana, setPestana] = React.useState("general");
+  const [visitadas, setVisitadas] = React.useState<string[]>([]);
+  const [revisionTarifarios, setRevisionTarifarios] = React.useState(0);
   const conTerminaciones = useCapacidad("terminaciones_copiado");
   const [cfg, setCfg] = React.useState<CentroCopiadoConfig | null>(null);
   const [salud, setSalud] = React.useState<SaludCentroCopiado | null>(null);
@@ -673,7 +679,7 @@ export function CentroCopiadoConfigView() {
       <ConfiguracionPage>
         <ConfiguracionHeader
           titulo="Centro de copiado"
-          descripcion="Precios, materiales y producción para las ventas de mostrador."
+          descripcion="Oferta, producción, tarifarios y precios por canal."
         />
         <div className="flex min-h-72 items-center justify-center">
           {errorCarga ? (
@@ -752,29 +758,31 @@ export function CentroCopiadoConfigView() {
     <ConfiguracionPage className={configStyles.copyPage}>
       <ConfiguracionHeader
         titulo="Centro de copiado"
-        descripcion="Precios, materiales y producción para las ventas de mostrador."
+        descripcion="Oferta, producción, tarifarios y precios por canal."
         detalle={
           <Badge variant="outline">{activo ? "Activo" : "Pausado"}</Badge>
         }
         acciones={
-          <>
-            {hayCambios && (
-              <Button
-                variant="outline"
-                disabled={guardando}
-                onClick={() => cargarFormulario(cfg)}
-              >
-                Descartar
-              </Button>
-            )}
-            {puedeGestionar && (
-              <GuardarConfiguracion
-                cambios={cantidadCambios}
-                guardando={guardando}
-                onGuardar={() => void guardar()}
-              />
-            )}
-          </>
+          pestana !== "tarifarios" && pestana !== "canales" ? (
+            <>
+              {hayCambios && (
+                <Button
+                  variant="outline"
+                  disabled={guardando}
+                  onClick={() => cargarFormulario(cfg)}
+                >
+                  Descartar
+                </Button>
+              )}
+              {puedeGestionar && (
+                <GuardarConfiguracion
+                  cambios={cantidadCambios}
+                  guardando={guardando}
+                  onGuardar={() => void guardar()}
+                />
+              )}
+            </>
+          ) : undefined
         }
       />
 
@@ -851,10 +859,21 @@ export function CentroCopiadoConfigView() {
         ) : null}
       </Card>
 
-      <Tabs defaultValue="general" className="shrink-0">
+      <Tabs
+        value={pestana}
+        onValueChange={(v) => {
+          const p = String(v);
+          setPestana(p);
+          setVisitadas((anteriores) =>
+            anteriores.includes(p) ? anteriores : [...anteriores, p],
+          );
+        }}
+        className="shrink-0"
+      >
         <TabsList
           variant="graphite"
           aria-label="Configuración del centro de copiado"
+          className="max-w-full justify-start overflow-x-auto"
         >
           <TabsTrigger value="general">
             <Settings2 /> General
@@ -863,6 +882,8 @@ export function CentroCopiadoConfigView() {
             <Printer /> Ruta y terminaciones
           </TabsTrigger>
           <TabsTrigger value="oferta">Oferta</TabsTrigger>
+          <TabsTrigger value="tarifarios">Tarifarios</TabsTrigger>
+          <TabsTrigger value="canales">Canales</TabsTrigger>
           <TabsTrigger value="historial">
             <History /> Historial
           </TabsTrigger>
@@ -1476,6 +1497,34 @@ export function CentroCopiadoConfigView() {
           </div>
         </TabsContent>
 
+        <TabsContent
+          value="tarifarios"
+          keepMounted
+          className="pt-3 data-[hidden]:hidden"
+        >
+          {visitadas.includes("tarifarios") && (
+            <CentroCopiadoTarifarios
+              cfg={cfg}
+              puedeGestionar={puedeGestionar}
+              permiteCad={permiteCadTarifarios}
+              ofertaSinGuardar={hayCambios}
+              onGuardado={() => setRevisionTarifarios((v) => v + 1)}
+            />
+          )}
+        </TabsContent>
+        <TabsContent
+          value="canales"
+          keepMounted
+          className="pt-3 data-[hidden]:hidden"
+        >
+          {visitadas.includes("canales") && (
+            <CentroCopiadoCanales
+              puedeGestionar={puedeGestionar}
+              revisionTarifarios={revisionTarifarios}
+              activo={pestana === "canales"}
+            />
+          )}
+        </TabsContent>
         <TabsContent value="historial" className="pt-3">
           <Card>
             <CardHeader>

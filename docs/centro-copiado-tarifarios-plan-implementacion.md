@@ -494,3 +494,72 @@ alterar compromisos vigentes. La simulación de todas las celdas y pouch siguen 
 el alcance inicial. Este bloque no cambia el cotizador actual, ni aplica la
 migración en desarrollo con datos, staging o producción. PR y CI remota siguen
 pendientes por falta de GitHub autenticado en la sesión.
+
+### 10 de octubre de 2026 — editor de tarifarios y canales en Configuración
+
+Se agregan las pestañas **Tarifarios** y **Canales** dentro de Configuración →
+Centro de copiado. Consumen las APIs de borradores y versiones ya implementadas.
+La pantalla identifica el estado **en preparación**: publicar una versión o
+asignarla a un canal todavía no activa matrices en pedidos.
+
+- Crear y duplicar tarifarios independientes, guardar con control de revisión,
+  consultar publicaciones inmutables y publicar inmediatamente o para una fecha
+  futura. La fecha se interpreta en la zona horaria de la empresa, rechazando
+  horas inexistentes o ambiguas por cambios horarios. Después de publicar se
+  vuelve a leer la revisión; si esa lectura falla, se informa que la publicación
+  tuvo éxito y se bloquean nuevas escrituras hasta recargar.
+- Generar combinaciones de hojas desde la oferta **guardada**, respetando papel,
+  gramaje, formatos producibles y formatos ofrecidos. Agregar filas no pisa
+  precios ni excepciones existentes. CAD genera sus filas desde los perfiles
+  productivos, deduplicadas por papel, gramaje, ancho de rollo e impresión;
+  siempre por ML. El catálogo CAD del editor tiene una ruta de lectura con
+  permiso de configuración y mantiene las capacidades de Centro de copiado/CAD.
+- Editar simple/doble faz, K/CMYK y coberturas independientes, rangos generales y
+  excepciones por combinación. El tramo y el precio usan la misma unidad según
+  D10: hojas físicas o carillas; CAD usa ML consumidos. Las reglas de acumulación,
+  hoja impar, IVA, preparación, mínimo y redondeo CAD se pueden configurar.
+- Los importes viajan como cadenas decimales exactas; se acepta coma decimal, sin
+  separadores de miles. Vacío conserva `null` (pendiente); cero es un precio
+  explícito. La edición no convierte monedas. Una moneda incompatible se advierte
+  también en la selección por canal.
+- Pegado de bloques tabulados desde Excel sobre una celda y ajustes masivos por
+  porcentaje o importe por unidad, con incremento opcional de redondeo hacia
+  arriba. Ambos muestran antes/después y requieren aplicar al borrador; un bloque
+  inválido no modifica parcialmente precios. El ajuste afecta las combinaciones
+  que coinciden con la búsqueda, en todas sus páginas, y conserva pendientes.
+  El pegado se limita a las filas de la página visible, sin encabezados.
+- Cambiar cobertura o unidad exige revisión y deja pendientes los precios que ya
+  no son comparables. Cambiar IVA advierte que se conserva el número cargado y
+  cambia su interpretación. Al retirar rangos con precios se pide confirmación;
+  los inicios conservados mantienen sus importes y los nuevos quedan pendientes.
+- Los borradores se conservan al cambiar de pestaña. Cambiar de tarifario o
+  recargar con cambios requiere guardar o descartar; se advierte al cerrar o
+  recargar el navegador. Un conflicto de revisión conserva lo escrito. Esta
+  protección no intercepta aún toda navegación interna fuera de Configuración.
+- La política general permite motor o tarifario; mostrador, WhatsApp, email, Web
+  y app móvil permiten herencia o excepción. La vista previa consulta la selección
+  guardada, muestra origen/versión/pendiente y se oculta mientras hay cambios.
+  Una respuesta tardía no reemplaza una edición o un guardado posterior. La vista
+  se actualiza al volver a Canales o explícitamente, sin sondeo automático.
+- Consulta disponible con permiso de lectura; modificaciones con permiso de
+  gestión. Los selectores recorren todas las páginas del catálogo. Las matrices
+  muestran 20 combinaciones por página y la revisión masiva 50 celdas por página.
+
+La verificación local pasó **44 pruebas frontend y 40 de API**. Incluye reglas
+numéricas, generación y pegado, formularios,
+conflictos, publicación, lectura por permisos y respuestas tardías. Los tests de
+formularios sustituyen sólo los selectores flotantes por controles nativos porque
+jsdom no provee su geometría; los controles Base UI reales se comprobaron además
+en el navegador con datos ficticios y una API de demostración aislada. No se
+considera una prueba completa de pedido real. Las suites se agregan al workflow
+existente de CI; la ejecución remota depende de abrir el PR. Se comprobaron tipos
+y ESLint de los archivos afectados, además del YAML del workflow. La base aislada
+se migró sin seed, quedó sin empresas ni usuarios ficticios al terminar y se
+eliminó. No se compiló producción en la Mac.
+
+**Siguiente bloque:** simulación de costos de todas las celdas y sugerencias del
+motor (D23/D28), manteniendo precios por cobertura desde el inicio. Continúan
+pendientes los respaldos, acuerdos/descuentos/autorización, control de márgenes,
+pouch y conexión operativa de cotizar/guardar/recotizar/emitir. La importación de
+archivos Excel/CSV sigue para segunda etapa. Este editor no aplica migraciones a
+bases con datos ni despliega staging o producción.
