@@ -24,14 +24,41 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D06 | La configuración debe seguir siendo fácil y accesible desde Centro de copiado. | 2026-10-10 |
 | D07 | El diseño debe contemplar un futuro portal de pedidos desde el celular, con precios que puedan diferir de los de mostrador. | 2026-10-10 |
 | D08 | Registrar y resolver las decisiones antes de implementar. | 2026-10-10 |
+| D09 | La unidad se elige por tarifario: hoja física como opción inicial y carilla impresa como alternativa. | 2026-10-10 |
+| D10 | El precio y los tramos usan la misma unidad elegida en el tarifario. Un tramo de 100 en un tarifario por hoja significa 100 hojas físicas, también en doble faz. Resuelve P01 junto con D09. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
 ayuda para completar celdas podrá proponer valores, pero debe permitir editar
 cada precio.
 
-La decisión sobre caras no define todavía si se cobra por hoja física o carilla,
-ni qué cantidad determina el tramo. Esas preguntas siguen pendientes.
+### Unidad del precio y de los tramos
+
+**Confirmado en D09 y D10:** cada tarifario permite elegir entre hoja física y
+carilla impresa. La opción inicial es por hoja física; esa misma unidad expresa
+el precio de cada celda y los límites de los tramos. La elección pertenece al
+tarifario y debe mostrarse al cargar y consultar sus precios.
+
+En un tarifario por hoja, simple faz y doble faz tienen precios propios por hoja
+física. En uno por carilla, tienen precios propios por carilla impresa. La
+alternativa por carilla conserva el eje de caras confirmado en D04.
+
+Ejemplo ficticio de un archivo con 20 páginas seleccionadas y 3 copias, a una
+página por cara:
+
+| Modalidad | Hojas físicas | Carillas impresas | Cantidad para un tarifario por hoja | Cantidad para uno por carilla |
+| --- | --- | --- | --- | --- |
+| Simple faz | 60 | 60 | 60 | 60 |
+| Doble faz | 30 | 60 | 30 | 60 |
+
+Cada copia comienza en un frente. El conteo incluye las copias y sólo las páginas
+seleccionadas para imprimir. «100 doble faz» en el tarifario inicial significa
+100 hojas físicas, con hasta 200 caras impresas.
+
+P01 queda resuelto. La acumulación entre archivos (P02), la aplicación del tramo
+(P03) y el cobro de la última hoja con una sola cara impresa (P05) siguen
+pendientes. Mezclar una unidad para el precio y otra para los tramos no forma
+parte de la modalidad inicial acordada.
 
 ## Base actual del módulo
 
@@ -54,9 +81,9 @@ documentos, grupos y cliente, pero todavía no recibe el canal de venta.
 | Guardado y recotización desde la ficha | [Ficha comercial](../src/components/comercial/propuesta-ficha.tsx) |
 
 Hay un [diseño anterior de precios manuales](centro-copiado-precio-manual-diseno.md),
-del 3 de agosto de 2026. Se conserva como antecedente. Sus recomendaciones de
-reglas con comodines, cobro por hoja, volumen por documento y retorno automático
-al motor no se consideran decisiones confirmadas para este trabajo.
+del 3 de agosto de 2026. Se conserva como antecedente. Las decisiones vigentes
+son las registradas arriba; sus propuestas de reglas con comodines, volumen por
+documento y retorno automático al motor continúan sin confirmarse.
 
 ## Modelo funcional propuesto
 
@@ -84,9 +111,9 @@ La estructura propuesta es:
 
 **Papel y gramaje × tamaño × K o CMYK × simple o doble faz × tramo de cantidad.**
 
-La unidad del precio y la cantidad usada para buscar el tramo deben quedar
-explícitas. También debe definirse si los rangos son comunes a todo el tarifario
-o pueden variar entre combinaciones.
+La unidad del precio y de los tramos se elige por tarifario según D09 y D10:
+hoja física inicialmente, con carilla impresa como alternativa. Sigue pendiente
+si los rangos son comunes a todo el tarifario o pueden variar entre combinaciones.
 
 Se proponen dos acciones para generar una matriz:
 
@@ -138,12 +165,12 @@ Los costos y márgenes conservarían sus permisos de acceso.
 
 ## Decisiones pendientes
 
-Las primeras cinco preguntas definen cómo leer y calcular la matriz. Las demás
-deben resolverse antes de activar el recorrido completo.
+P01 está resuelto en D09 y D10. P02 a P05 completan la definición de cómo leer y
+calcular la matriz. Las demás preguntas deben resolverse antes de activar el
+recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P01 | ¿Qué unidad expresa el precio y cuál determina el tramo: hojas físicas, carillas impresas, copias o juegos? | Registrar ambas bases explícitamente; pueden ser distintas. Confirmar con casos ficticios que reproduzcan la operación. |
 | P02 | ¿El volumen se cuenta por archivo, tomo, carga o pedido completo? ¿Qué combinaciones pueden acumularse? | Evaluar una opción por documento y otra por combinación dentro del pedido; precisar si incluye varias cargas de Centro de copiado. |
 | P03 | ¿Se usa la tarifa del tramo para todas las unidades o un cobro progresivo por tramos? | Se propuso aplicar la tarifa alcanzada a todas las unidades; revisar saltos de total en los límites. |
 | P04 | ¿Cada matriz comparte rangos o una combinación puede tener sus propios límites? | Evitar imponer los mismos rangos a operaciones que los necesitan distintos. |
@@ -162,16 +189,17 @@ deben resolverse antes de activar el recorrido completo.
 ## Casos para acordar resultados
 
 Todos los ejemplos son ficticios. Los conteos describen documentos separados
-cuyas copias comienzan en un frente; no fijan todavía la unidad ni la regla de
-cobro. Las páginas son las seleccionadas para imprimir, no necesariamente todas
-las del archivo original.
+cuyas copias comienzan en un frente. La unidad sigue D09 y D10; la acumulación y
+las demás reglas comerciales conservan los pendientes indicados en cada caso.
+Las páginas son las seleccionadas para imprimir, no necesariamente todas las
+del archivo original.
 
-| Caso | Entrada | Resultado que falta acordar |
+| Caso | Entrada | Resultado acordado o decisión pendiente |
 | --- | --- | --- |
-| Simple y doble faz | El mismo documento de 10 páginas, una copia, A4 y K, en ambas opciones. | Usar las dos tarifas independientes de D04 y definir sus unidades. Conteo físico: 10 hojas simple y 5 doble. |
-| Última cara vacía | 11 páginas, 3 copias, doble faz. | Son 33 carillas y 18 hojas; decidir el tramo y el tratamiento de las 3 hojas finales con una cara sin imprimir. |
+| Simple y doble faz | El mismo documento de 10 páginas, una copia, A4 y K, en ambas opciones. | Tarifario por hoja: 10 unidades simple y 5 doble. Por carilla: 10 en ambas modalidades. Precios independientes según D04. |
+| Última cara vacía | 11 páginas, 3 copias, doble faz. | Conteo: 33 carillas y 18 hojas. D09 y D10 fijan la unidad; P05 debe resolver el tratamiento comercial de las 3 hojas finales con una cara sin imprimir. |
 | Volumen entre archivos | Un archivo de 100 páginas frente a dos de 50, con igual papel, tamaño, color y caras. | Determinar cuándo deben tener el mismo precio de impresión y cómo interviene la preparación. |
-| Páginas y copias | Un archivo de 100 páginas con una copia frente a uno de 10 páginas con diez copias, simple faz. | Ambos suman 100 carillas y hojas; decidir si alcanzan el mismo tramo. |
+| Páginas y copias | Un archivo de 100 páginas con una copia frente a uno de 10 páginas con diez copias, simple faz. | Ambos aportan 100 unidades, por hoja o por carilla. A igualdad de combinación y tarifario y sin otros archivos, tienen la misma cantidad para buscar el tramo. |
 | Cantidades en doble faz | Un archivo de 10 páginas con una copia frente a diez archivos de una página, todos configurados en doble faz. | Aunque sumen 10 carillas, usan 5 y 10 hojas respectivamente; precisar acumulación y tratamiento de caras vacías. |
 | Impresión mixta | Un pedido con K y CMYK, o con papeles distintos. | Definir qué unidades se acumulan para cada tramo y qué tarifa recibe cada parte. |
 | Rango de páginas | Imprimir sólo 10 páginas seleccionadas de un PDF de 100 páginas. | Distinguir la selección de páginas del tramo comercial por cantidad. |
@@ -201,8 +229,8 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Resolver P01 a P05 con ejemplos y completar las reglas comerciales que
-   condicionan el primer alcance.
+1. Partir de P01 resuelto en D09 y D10, resolver P02 a P05 con ejemplos y completar
+   las reglas comerciales que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
    configuraciones existentes.
@@ -234,3 +262,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | --- | --- | --- |
 | 2026-10-10 | Apertura del registro de oferta y matrices por tenant y canal. Incorporación de las propuestas y preguntas del análisis inicial. | Definición funcional en curso |
 | 2026-10-10 | Confirmación explícita de precios independientes para simple faz y doble faz como eje de la matriz, D04. | Confirmado |
+| 2026-10-10 | P01 resuelto: hoja física como opción inicial y carilla impresa como alternativa por tarifario; precio y tramos usan la misma unidad. Incorporación de D09 y D10 y actualización de ejemplos. | Confirmado |
