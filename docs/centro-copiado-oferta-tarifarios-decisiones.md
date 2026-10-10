@@ -29,6 +29,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D11 | La acumulación se configura por tarifario: por combinación dentro del pedido como opción inicial y por archivo como alternativa. | 2026-10-10 |
 | D12 | La combinación reúne el mismo papel y gramaje, tamaño, K/CMYK, simple/doble faz y tarifario. Se considera todo el pedido, incluidas distintas cargas de Centro de copiado. Resuelve P02 junto con D11. | 2026-10-10 |
 | D13 | El precio unitario del tramo alcanzado se aplica a todas las unidades del grupo comercial. En la alternativa por archivo, se aplica a todas las unidades de ese archivo. La regla vale por hoja o por carilla según el tarifario; no se cobra progresivamente. Resuelve P03. | 2026-10-10 |
+| D14 | Cada tarifario tiene rangos generales que las combinaciones usan inicialmente. Se pueden definir rangos propios como excepción por combinación. Compartir rangos no implica compartir precios ni acumular volumen entre combinaciones distintas. Resuelve P04. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -119,6 +120,30 @@ queda resuelto con esos resultados; no se acordó una corrección automática de
 los saltos. Los ejemplos muestran la aplicación de la tarifa; sus conceptos
 incluidos y cargos adicionales conservan el pendiente P06.
 
+### Rangos generales y excepciones por combinación
+
+**Confirmado en D14:** cada tarifario define unos rangos generales y las
+combinaciones los usan inicialmente. Cuando una combinación necesita límites
+diferentes, puede usar sus propios rangos. La unidad sigue siendo la elegida
+para todo el tarifario según D09 y D10.
+
+Ejemplo ficticio de un tarifario por hoja:
+
+| Combinación | Rangos en hojas | Origen de los rangos |
+| --- | --- | --- |
+| Obra 80 g, A4, K, simple faz | 1–49 / 50–199 / 200 o más | Generales del tarifario |
+| Obra 80 g, A4, K, doble faz | 1–49 / 50–199 / 200 o más | Generales del tarifario |
+| Obra 80 g, A3, CMYK, simple faz | 1–19 / 20–99 / 100 o más | Propios de la combinación |
+
+Cada combinación conserva sus precios independientes, incluso si comparte los
+límites con otras. La acumulación sigue D11 y D12: tener los mismos rangos no
+une los grupos comerciales.
+
+Las combinaciones con rangos propios conservan sus límites al modificar los
+generales; las que usan los generales siguen esa definición. P04 queda resuelto.
+La edición de límites y la carga de precios afectados deben considerarse juntas
+para que el tarifario mantenga una interpretación clara.
+
 ## Base actual del módulo
 
 La implementación revisada permite configurar por tenant papeles y gramajes,
@@ -172,8 +197,8 @@ La estructura propuesta es:
 **Papel y gramaje × tamaño × K o CMYK × simple o doble faz × tramo de cantidad.**
 
 La unidad del precio y de los tramos se elige por tarifario según D09 y D10:
-hoja física inicialmente, con carilla impresa como alternativa. Sigue pendiente
-si los rangos son comunes a todo el tarifario o pueden variar entre combinaciones.
+hoja física inicialmente, con carilla impresa como alternativa. Los rangos son
+generales por tarifario, con excepciones por combinación según D14.
 
 Se proponen dos acciones para generar una matriz:
 
@@ -194,6 +219,12 @@ tramo y las herramientas de edición masiva todavía requieren definición.
 Se propone que el simulador señale los descensos de total entre tramos para que
 el tenant revise los precios. Esta ayuda sigue como propuesta y no modifica la
 regla de cálculo confirmada en D13.
+
+Para editar los rangos se propone una opción «Usar rangos del tarifario», activa
+inicialmente en cada combinación. También se propone poder aplicar rangos a
+varias combinaciones seleccionadas y señalar los precios que falten al cambiar
+los límites, antes de activar la actualización. El detalle de esas herramientas
+conserva el pendiente P10.
 
 ### Asignación por canal
 
@@ -229,13 +260,12 @@ Los costos y márgenes conservarían sus permisos de acceso.
 
 ## Decisiones pendientes
 
-P01 está resuelto en D09 y D10, P02 en D11 y D12, y P03 en D13. P04 y P05
-completan la definición de cómo leer y calcular la matriz. Las demás preguntas
-deben resolverse antes de activar el recorrido completo.
+P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13 y P04 en D14. P05
+completa la definición inicial de cómo contar y cobrar las caras. Las demás
+preguntas deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P04 | ¿Cada matriz comparte rangos o una combinación puede tener sus propios límites? | Evitar imponer los mismos rangos a operaciones que los necesitan distintos. |
 | P05 | En doble faz, ¿cómo se cobra la última hoja cuando tiene una sola cara impresa? | Confirmar si toda la tirada lleva tarifa doble faz o si la última hoja usa tarifa simple. D04 no resuelve este caso. |
 | P06 | ¿Qué incluye el precio cargado? | Precisar papel, impresión, IVA, preparación, mínimos y terminaciones para evitar cobros duplicados. |
 | P07 | ¿Qué prioridad tienen el tarifario, los acuerdos por cliente, descuentos y ajustes manuales? | Definir una prioridad única, permisos y explicación del resultado. |
@@ -252,8 +282,8 @@ deben resolverse antes de activar el recorrido completo.
 
 Todos los ejemplos son ficticios. Los conteos describen documentos separados
 cuyas copias comienzan en un frente. La unidad sigue D09 y D10 y la acumulación,
-D11 y D12. El precio del tramo se aplica según D13. Las demás reglas conservan
-los pendientes indicados en cada caso.
+D11 y D12. El precio del tramo se aplica según D13 y los rangos siguen D14.
+Las demás reglas conservan los pendientes indicados en cada caso.
 Las páginas son las seleccionadas para imprimir, no necesariamente todas las
 del archivo original.
 
@@ -269,6 +299,7 @@ del archivo original.
 | Rango de páginas | Imprimir sólo 10 páginas seleccionadas de un PDF de 100 páginas. | Distinguir la selección de páginas del tramo comercial por cantidad. |
 | Límite de tramo | Tarifa ficticia de $100 por hoja de 1 a 99, y $80 desde 100. | D13 determina $9.900 para 99 hojas, $8.000 para 100 y $8.080 para 101. El aviso del simulador sigue como propuesta; no se acordó corregir automáticamente el descenso. |
 | Aplicación a todo el grupo | Dos archivos de 60 hojas de la misma combinación, tarifa ficticia de $80 desde 100. | Por combinación, las 120 hojas se cobran a $80: $4.800 por archivo y $9.600 en total. |
+| Rangos propios | Tarifario con rangos generales 1–49, 50–199 y 200+, y una combinación con rangos propios 1–19, 20–99 y 100+. | Cada combinación busca su tramo en los rangos que le corresponden. La excepción conserva sus límites cuando cambian los generales. Compartir límites no comparte precios ni volumen. |
 | Cambio de canal | La misma carga en Presencial y Web. | Aplicar la política de cada canal y definir qué sucede al cambiarlo antes de guardar. |
 | Cambio de tarifa | Cotización con una versión y posterior activación de otra. | Definir conservación de emitidos y recotización de borradores. |
 | Oferta incompleta | Papel habilitado con un tamaño no ofrecido, o combinación ofrecida sin tarifa. | Distinguir combinación no vendible de precio pendiente, en interfaz y servidor. |
@@ -295,7 +326,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P03 resueltos en D09 a D13, resolver P04 y P05 con ejemplos y
+1. Partir de P01 a P04 resueltos en D09 a D14, resolver P05 con ejemplos y
    completar las reglas comerciales que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
@@ -331,3 +362,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | P01 resuelto: hoja física como opción inicial y carilla impresa como alternativa por tarifario; precio y tramos usan la misma unidad. Incorporación de D09 y D10 y actualización de ejemplos. | Confirmado |
 | 2026-10-10 | P02 resuelto: acumulación por combinación dentro del pedido como opción inicial y por archivo como alternativa por tarifario. Incluye distintas cargas del mismo pedido y recálculo de los grupos afectados en borradores. Incorporación de D11 y D12 y actualización de ejemplos. | Confirmado |
 | 2026-10-10 | P03 resuelto: el precio unitario del tramo alcanzado se aplica a todas las unidades del grupo o archivo, según la modalidad de acumulación. Incorporación de D13 y ejemplos de cálculo y límites. El aviso del simulador conserva su estado de propuesta. | Confirmado |
+| 2026-10-10 | P04 resuelto: rangos generales por tarifario con excepciones por combinación. Incorporación de D14 y ejemplos; precios y acumulación permanecen independientes entre combinaciones. | Confirmado |
