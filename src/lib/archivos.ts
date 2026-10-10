@@ -70,7 +70,7 @@ export const EXTENSIONES_PERMITIDAS = [
 
 export const EXTENSIONES_LOGO = ["png", "jpg", "jpeg", "webp", "svg"] as const;
 
-export const MAX_BYTES = 100 * 1024 * 1024;
+export const MAX_BYTES = 500 * 1024 * 1024;
 
 export function extensionDe(nombre: string): string {
   const punto = nombre.lastIndexOf(".");
