@@ -1,6 +1,6 @@
 # Centro de copiado decisiones de oferta y tarifarios
 
-**Estado:** definición funcional cerrada para el alcance inicial; implementación pendiente.
+**Estado:** definición funcional cerrada para el alcance inicial; implementación local en curso por bloques.
 **Creado y actualizado:** 10 de octubre de 2026.
 
 Centro de copiado necesita representar la forma de vender de cada gráfica: una
@@ -12,6 +12,8 @@ Este es el registro vivo de ese trabajo. Las decisiones confirmadas provienen
 de lo acordado con Lucas; las propuestas y preguntas conservan su estado hasta
 resolverlas. El cierre funcional y el alcance vigente se resumen en D35 a D38.
 Este documento registra el diseño acordado; no acredita cambios implementados.
+El avance técnico y las comprobaciones se registran en el
+[plan de implementación](centro-copiado-tarifarios-plan-implementacion.md).
 
 ## Decisiones confirmadas
 
