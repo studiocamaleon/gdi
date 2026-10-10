@@ -8,11 +8,16 @@ import type {
 } from './composicion-pedido.types';
 import { DecimalComercial, exigir, identificador } from './validaciones';
 
-/** Admite totales de precio × cantidad segura, sin pasar por números binarios. */
-function importe(valor: string, etiqueta: string, enteros = 34) {
+/** ML (12 decimales) × precio (8): conservar hasta 20 hasta componer el dinero. */
+function importe(
+  valor: string,
+  etiqueta: string,
+  enteros = 34,
+  decimales = 20,
+) {
   exigir(
     typeof valor === 'string' &&
-      new RegExp(`^\\d{1,${enteros}}(\\.\\d{1,12})?$`).test(valor),
+      new RegExp(`^\\d{1,${enteros}}(\\.\\d{1,${decimales}})?$`).test(valor),
     `${etiqueta}: debe ser un decimal no negativo dentro del límite de cálculo.`,
   );
   return new DecimalComercial(valor);
@@ -105,10 +110,10 @@ function validarReglas(reglas: Readonly<ReglasComposicionComercial>) {
     'Modalidad de mínimo inválida.',
   );
   if (reglas.preparacion.modalidad === 'FIJA_PEDIDO') {
-    importe(reglas.preparacion.importe, 'Preparación fija', 18);
+    importe(reglas.preparacion.importe, 'Preparación fija', 18, 12);
   }
   if (reglas.minimo.modalidad === 'IMPORTE_PEDIDO') {
-    importe(reglas.minimo.importe, 'Importe mínimo', 18);
+    importe(reglas.minimo.importe, 'Importe mínimo', 18, 12);
   }
 }
 

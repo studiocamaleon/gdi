@@ -11,7 +11,7 @@ import type {
 } from './tipos';
 
 /** Precisión local: no modifica la configuración decimal usada por el motor. */
-export const DecimalComercial = Decimal.clone({ precision: 50 });
+export const DecimalComercial = Decimal.clone({ precision: 80 });
 
 export class ErrorCalculoComercial extends Error {
   constructor(message: string) {
@@ -98,6 +98,14 @@ export function validarRangos(rangos: readonly number[]) {
   });
 }
 
+export function validarPrecioMatriz(precio: string | null) {
+  if (precio === null) return;
+  exigir(
+    typeof precio === 'string' && /^\d{1,18}(\.\d{1,8})?$/.test(precio),
+    'El precio debe ser un decimal no negativo (hasta 18 enteros y 8 decimales) o quedar pendiente.',
+  );
+}
+
 export function indexarTarifario(
   tarifario: TarifarioCalculoHojas,
 ): Map<string, FilaMatrizHojas> {
@@ -141,14 +149,7 @@ export function indexarTarifario(
         'La combinación repite un precio para el mismo tramo.',
       );
       celdas.add(celda.desdeCantidad);
-      if (celda.precioUnitario !== null) {
-        // 18 enteros + 8 decimales y cantidades seguras caben en la precisión local.
-        exigir(
-          typeof celda.precioUnitario === 'string' &&
-            /^\d{1,18}(\.\d{1,8})?$/.test(celda.precioUnitario),
-          'El precio debe ser un decimal no negativo (hasta 18 enteros y 8 decimales) o quedar pendiente.',
-        );
-      }
+      validarPrecioMatriz(celda.precioUnitario);
     }
     filas.set(clave, fila);
   }

@@ -45,7 +45,7 @@ compatible y selección persistida por segmento.
 | Cantidades y tramos en hojas | D09–D15, D27 y cantidades de D29: acumulación del pedido, caras, cobertura y juegos. | Implementado como cálculo puro y probado; conexión al cotizador pendiente |
 | Composición comercial del pedido | IVA, preparación y mínimo únicos, terminaciones aparte. | Implementado como cálculo puro y probado; resolución fiscal e integración pendientes |
 | Prioridad y controles comerciales | Acuerdos/ajustes autorizados, respaldos y margen. | Pendiente; la composición recibe importes ya resueltos |
-| Cantidades y tramos CAD | Consumo real en ML, acumulación, tramo y redondeo comercial del grupo. | Pendiente |
+| Cantidades y tramos CAD | Consumo real en ML, acumulación, tramo y redondeo comercial del grupo. | Implementado como cálculo puro y probado con el planificador actual; conexión al cotizador pendiente |
 | Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | Pendiente |
 | Recorridos del pedido | Vista previa, guardado, recálculo y emisión comparten cantidades, versiones y precios. | Pendiente |
 | Pouch y tomos | Material por hoja, caras/copias/juegos correctos, edición y adicionales sin duplicación. | Pendiente |
@@ -210,7 +210,8 @@ unidad. Los subtotales suman los conceptos redondeados; el mínimo se redondea c
 la misma precisión y se compara contra esa suma cobrable. Con IVA incluido se
 conserva el total y el IVA es la diferencia con el neto redondeado; con más IVA se
 calcula sobre el neto redondeado. No se aplica este redondeo a las cantidades CAD.
-Se aceptan importes resueltos de hasta 34 enteros y 12 decimales; preparación y
+En este bloque se aceptaron importes resueltos de hasta 34 enteros y 12 decimales
+(ampliados a 20 decimales al incorporar CAD, según el registro siguiente); preparación y
 mínimo configurados admiten hasta 18 enteros. La aritmética decimal evita convertir
 los importes a `Number` y rechaza el desbordamiento de las sumas.
 
@@ -241,3 +242,93 @@ permisos. CAD por ML, publicación de versiones/canales, pouch y simulación de
 todas las celdas siguen dentro del alcance inicial pendiente. No se activó el
 nuevo esquema en tenants actuales. Comprobación global en CI y apertura del PR
 pendientes; la sesión no dispone de GitHub autenticado para crearlo.
+
+### 10 de octubre de 2026 — CAD por ML consumidos, tramos y redondeo
+
+Implementado en [comercial/calculo-cad.ts](../apps/api/src/centro-copiado/comercial/calculo-cad.ts),
+con [contratos CAD](../apps/api/src/centro-copiado/comercial/tipos-cad.ts) y
+[validaciones](../apps/api/src/centro-copiado/comercial/validaciones-cad.ts).
+Se implementa el cálculo puro de D31–D35: la única unidad comercial CAD es ML;
+los formatos estándar y las medidas personalizadas comparten ese cálculo.
+
+- Recibe todas las cargas CAD del pedido y una versión de la sección CAD del
+  tarifario principal. El servidor debe resolver antes la oferta, el gramaje y
+  la configuración productiva del rollo. Se verifica la empresa del tarifario y
+  se rechazan cargas o documentos duplicados, manteniendo los IDs locales de
+  cada carga separados. Los nombres de archivo no identifican el volumen.
+- Reutiliza `planPaginaCad`, el mismo planificador de orientación a escala real
+  usado en cotización e impresión. El largo consumido es el lado orientado en
+  avance más ambos márgenes productivos, por las copias efectivas. Se conservan
+  el plan, las medidas originales, el rollo, la orientación, los márgenes, las
+  copias y el consumo de cada página. Una lámina que no cabe se rechaza; nunca
+  se reduce automáticamente para hacerla entrar.
+- Respeta la selección de páginas originales y sus excepciones de copias. Las
+  excepciones fuera del rango no suman consumo; cada excepción reemplaza las
+  copias generales de esa página. Mantiene los límites actuales de 5.000 páginas
+  seleccionadas y 10.000 impresiones por documento, simple faz, sin tomos ni
+  terminaciones CAD. No cambia el límite productivo actual del planificador:
+  rollos de 300 a 914,4 mm y margen de 5 mm. Ampliar ese rango o los márgenes
+  requiere ampliar previamente la configuración productiva compartida.
+- Acumula por papel/gramaje, ancho de rollo, K/CMYK y cobertura cuando tiene
+  precios diferenciados. Distintas medidas de plano pueden acumular juntas.
+  La alternativa por archivo agrega la identidad de carga y documento al grupo.
+  La cobertura productiva siempre se conserva aunque el precio sea único.
+- Los rangos generales y sus excepciones CAD se expresan como inicios decimales
+  inclusivos desde cero; el próximo inicio es un límite superior exclusivo y el
+  último queda abierto. Esto permite consumos menores a un metro sin inventar
+  un mínimo de 1 ML. `4`, `4.0` y `4.00` identifican el mismo límite. Las
+  excepciones sustituyen los rangos generales; se rechazan duplicados, precios
+  sin tramo y límites desordenados. No se reutilizan los rangos de hojas.
+- Primero se suma el consumo real y se elige su tramo. Después se aplica, si
+  corresponde, el menor múltiplo del incremento que alcanza ese consumo. Se
+  redondea una sola vez por grupo, nunca por página o copia. El precio del tramo
+  alcanzado se aplica a todos los ML facturables, sin cobro progresivo. El
+  redondeo no habilita otro tramo ni aumenta el consumo físico de producción.
+- El grupo expone el importe de sus ML reales y el importe del ajuste comercial
+  por separado. Las partes conservan sus consumos e importes sin duplicar ese
+  ajuste. Al integrar renglones por archivo habrá que conservar ese total de
+  grupo; no volver a redondear cada parte ni perder el ajuste al persistir.
+- Un precio faltante conserva las cantidades y deja el total pendiente; el
+  parcial conocido queda identificado aparte. Un cero cargado explícitamente
+  sí es un precio. Los precios por combinación siguen siendo independientes.
+
+**Precisión:** las cantidades e incrementos usan cadenas decimales con hasta 12
+decimales de ML y límite de cantidad segura; se rechaza exceso de precisión o
+magnitud, sin redondearlo silenciosamente. El largo orientado y los márgenes se
+suman en decimal para evitar que un residuo binario agregue otro incremento al
+cobrar. Por ejemplo, 1,12 + 10 mm se conserva como 11,12 mm, aunque la suma binaria
+del plan resulte 11,120000000000001. No se cambia la geometría productiva.
+ML con 12 decimales por precio con 8 requieren hasta 20 decimales intermedios:
+se amplió la admisión de importes resueltos de la composición a ese límite y la
+precisión decimal local a 80 dígitos, sin cambiar la configuración del motor ni
+el redondeo monetario final. Preparación y mínimo configurados conservan sus
+límites anteriores. Hojas y CAD comparten la validación de precios de matriz.
+
+Ejemplos ficticios comprobados, con $5.000/ML desde 0 y $4.000/ML desde 4:
+
+| Caso | Consumo real | Facturable | Resultado |
+| --- | --- | --- | --- |
+| Plano 600 × 1.200 mm, margen 5 mm en ambos extremos, sin redondeo | 1,21 ML | 1,21 ML | $6.050. |
+| Dos copias del anterior, incremento 0,10 ML | 2,42 ML | 2,50 ML | $12.500; no se redondea cada copia. |
+| Archivos con 2,42 y 1,61 ML, acumulación por combinación e incremento 0,10 ML | 4,03 ML | 4,10 ML | $16.400 al precio del tramo desde 4. |
+| Mismos archivos, acumulación por archivo | 4,03 ML | 4,20 ML | $21.000; ambos archivos usan el tramo inicial. |
+| Consumo por debajo del cambio de tramo, incremento 0,10 ML | 3,96 ML | 4,00 ML | $20.000; el redondeo no habilita el precio desde 4. |
+| Múltiplo exacto del incremento de 0,10 ML | 1,30 ML | 1,30 ML | Sin incremento adicional. |
+| Pedido mixto: 3 hojas a $100, un plano de 1,21 ML, preparación $500 y mínimo $7.000, IVA incluido | 3 hojas y 1,21 ML, separados | Mismas cantidades | $6.350 de impresión + una preparación $500 + ajuste $150 = $7.000. |
+
+**Verificación:** 85 pruebas nuevas de CAD, las 177 del bloque anterior y 32
+pruebas existentes de geometría CAD, PDF y rangos de páginas: **294 pruebas
+aprobadas en 13 suites**, con Node 24.19.0. Tipos y ESLint sobre los nueve archivos
+TypeScript nuevos o modificados, con las reglas reales de la API y el programa
+limitado para respetar los recursos locales. Las pruebas no conectaron bases de
+datos ni enviaron trabajos a impresoras.
+
+**Pendientes de integración:** resolver oferta y configuraciones productivas
+vigentes desde el catálogo real, incorporar estas reglas a las versiones de
+tarifario y llevar el desglose a vista previa, guardado y emisión. La prueba de
+pedido mixto conecta matemáticamente hojas, CAD y composición; todavía no activa
+este recorrido en los endpoints existentes. Preparación y mínimo se compondrán
+una vez sobre todos los grupos de hojas y CAD, nunca en dos llamadas separadas.
+La simulación de todas las celdas deberá reutilizar estos mismos consumos. No
+se implementaron precio por plano/formato ni por m². Sin migraciones, cambios
+de datos, despliegues ni activaciones automáticas. CI global y PR siguen pendientes.

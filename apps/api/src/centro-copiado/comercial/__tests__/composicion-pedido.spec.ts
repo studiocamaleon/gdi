@@ -458,7 +458,7 @@ it.each([
   '1,5',
   '',
   ' 1',
-  '1.1234567890123',
+  '1.123456789012345678901',
   '1'.repeat(35),
 ])('rechaza importe malformado %s', (valor) => {
   expect(() =>
