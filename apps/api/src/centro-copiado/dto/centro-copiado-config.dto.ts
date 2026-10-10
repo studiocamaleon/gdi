@@ -13,6 +13,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -22,6 +23,20 @@ import {
  * al default). `@IsOptional` acepta null y undefined, así se distingue "no tocar"
  * (undefined) de "limpiar" (null) en el service.
  */
+class FormatosPorGramajeDto {
+  @ValidateIf((_obj, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  gramaje!: number | null;
+
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  tamanos!: string[];
+}
+
 class PapelConfigDto {
   @IsUUID()
   materiaPrimaId!: string;
@@ -34,6 +49,14 @@ class PapelConfigDto {
   @IsInt({ each: true })
   @Min(1, { each: true })
   gramajes?: number[];
+
+  /** Lista explícita; ausente/null mantiene los formatos generales. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => FormatosPorGramajeDto)
+  formatosPorGramaje?: FormatosPorGramajeDto[] | null;
 }
 
 class TramoMargenCentroCopiadoDto {

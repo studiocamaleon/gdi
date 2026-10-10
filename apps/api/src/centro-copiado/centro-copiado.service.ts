@@ -105,8 +105,13 @@ type Ctx = PlantillaContexto & {
   tapaContratapaMpId: string | null;
 };
 
-/** Papel ofrecido en la config: el tipo y, opcional, sus gramajes ofrecidos. */
-type PapelConfig = { materiaPrimaId: string; gramajes?: number[] };
+import {
+  errorOfertaPapel,
+  formatoOfrecido,
+  formatosProduciblesPorGramaje,
+  type PapelConfig,
+  type FormatosPorGramaje,
+} from './oferta';
 
 import {
   AgregarAOrdenCentroCopiadoDto,
@@ -350,6 +355,7 @@ export class CentroCopiadoService {
       materiaPrimaId: string;
       nombre: string;
       gramajes: number[];
+      formatosPorGramaje?: FormatosPorGramaje[] | null;
       variantes: {
         formatoComercial: string | null;
         anchoMm: number | null;
@@ -389,6 +395,9 @@ export class CentroCopiadoService {
       return {
         materiaPrimaId: p.materiaPrimaId,
         nombre: p.nombre,
+        formatosPorGramaje:
+          papelesCfg?.find((c) => c.materiaPrimaId === p.materiaPrimaId)
+            ?.formatosPorGramaje ?? null,
         gramajes: usaFiltro
           ? p.gramajes.filter((g) => gramajesOk.includes(g))
           : p.gramajes,
@@ -657,6 +666,7 @@ export class CentroCopiadoService {
           materiaPrimaId: p.materiaPrimaId,
           nombre: p.nombre,
           gramajes: p.gramajes,
+          formatosPorGramaje: formatosProduciblesPorGramaje(p.variantes),
           formatosProducibles: CENTRO_COPIADO_FORMATOS.filter((formato) =>
             p.variantes.some((variante) =>
               variantesCubre(variante, {
@@ -792,6 +802,9 @@ export class CentroCopiadoService {
     const papelIds = Array.from(
       new Set((dto.papeles ?? []).map((papel) => papel.materiaPrimaId)),
     );
+    if (papelIds.length !== (dto.papeles?.length ?? 0)) {
+      throw new BadRequestException('La oferta contiene papeles repetidos.');
+    }
     if (papelIds.length) {
       const cantidad = await this.prisma.materiaPrima.count({
         where: {
@@ -804,6 +817,16 @@ export class CentroCopiadoService {
         throw new BadRequestException(
           'Uno de los papeles seleccionados no pertenece al tenant o no es un sustrato de hoja.',
         );
+      }
+    }
+    if (dto.papeles?.some((p) => p.formatosPorGramaje != null)) {
+      const ctx = await this.contexto(tenantId);
+      for (const papel of dto.papeles) {
+        const disponible = ctx.papeles.find(
+          (p) => p.materiaPrimaId === papel.materiaPrimaId,
+        );
+        const error = errorOfertaPapel(papel, disponible?.variantes ?? []);
+        if (error) throw new BadRequestException(error);
       }
     }
     const tapaIds = Array.from(
@@ -1445,8 +1468,23 @@ export class CentroCopiadoService {
           `El gramaje seleccionado para "${doc.nombre ?? doc.id}" no está habilitado.`,
         );
       }
+      const papelConfig = papelesCfg?.find(
+        (p) => p.materiaPrimaId === papel.materiaPrimaId,
+      );
       if (
-        tamanosPermitidos?.length &&
+        !formatoOfrecido(
+          papelConfig,
+          doc.gramaje,
+          doc.tamano,
+          papel.variantes.map((v) => v.gramajeGr),
+        )
+      ) {
+        throw new BadRequestException(
+          `El tamaño ${doc.tamano} no está ofrecido para ese papel y gramaje.`,
+        );
+      }
+      if (
+        tamanosPermitidos != null &&
         !tamanosPermitidos.includes(doc.tamano)
       ) {
         throw new BadRequestException(
