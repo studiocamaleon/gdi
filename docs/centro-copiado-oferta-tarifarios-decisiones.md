@@ -4,8 +4,8 @@
 **Creado y actualizado:** 10 de octubre de 2026.
 
 Centro de copiado necesita representar la forma de vender de cada gráfica: una
-oferta de papeles y tamaños, matrices de precios por cantidad, tipo de impresión
-y caras, y la posibilidad de cobrar distinto según el canal de compra. La
+oferta de papeles y tamaños, matrices de precios por cantidad, tipo de impresión,
+caras y cobertura, y la posibilidad de cobrar distinto según el canal de compra. La
 configuración debe seguir siendo sencilla y accesible desde el módulo.
 
 Este es el registro vivo de ese trabajo. Las decisiones confirmadas provienen
@@ -41,6 +41,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D23 | El alcance inicial para crear y actualizar precios incluye generación de la estructura, carga manual, pegado desde Excel, duplicación independiente de tarifarios, sugerencias del motor y ajustes masivos por porcentaje o importe por unidad, con redondeo opcional. Los cambios se preparan en borrador y se revisan antes de aplicarlos y activarlos. La importación de archivos Excel/CSV queda para una segunda etapa. Resuelve el alcance de P10; la vigencia sigue D24. | 2026-10-10 |
 | D24 | Las versiones publicadas del tarifario son inmutables y se activan inmediatamente o de forma programada. Las cotizaciones nuevas usan la versión vigente; los borradores anteriores requieren actualización explícita antes de emitir. Se respetan los presupuestos emitidos durante su validez y los importes ya aprobados u órdenes emitidas. Se conserva el histórico y se revisa cualquier cambio de versión entre vista previa y confirmación. Resuelve P11. | 2026-10-10 |
 | D25 | Cada tarifario tiene un mínimo de margen configurable. Por debajo se exige autorización con motivo como opción inicial, incluido el margen negativo; el bloqueo estricto es la alternativa. Se evalúa impresión más preparación después de ajustes comerciales y mínimo de importe, con terminaciones aparte. No se elevan automáticamente los precios de la matriz. El margen no verificable requiere revisión y las aprobaciones corresponden al cálculo revisado. Se respetan los compromisos de D24. Resuelve P12. | 2026-10-10 |
+| D26 | Los precios diferenciados por cobertura forman parte del alcance inicial. Quedan por resolver en P13 su configuración por tarifario y el efecto de la cobertura en la acumulación de volumen. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -81,6 +82,10 @@ que comparten papel y gramaje, tamaño, tipo de impresión, caras y tarifario
 dentro del mismo pedido. Cada archivo conserva su cantidad; el volumen del
 grupo determina el tramo comercial. Simple y doble faz acumulan por separado,
 igual que K y CMYK. La unidad de acumulación sigue D09 y D10.
+
+La incorporación de precios por cobertura al alcance inicial está confirmada
+en D26. Su efecto sobre la agrupación de D12 se resolverá en P13; los ejemplos
+de esta sección comparan archivos con la misma cobertura.
 
 Como alternativa por tarifario, el tenant puede elegir «Por archivo». En ese
 modo cada archivo determina su tramo con sus propias unidades, incluidas sus
@@ -620,6 +625,38 @@ emitidas conservan el tratamiento de D24. Una suba posterior de costos puede
 generar una alerta interna, pero no modifica el precio comprometido ni lo
 somete retroactivamente a este bloqueo.
 
+### Precios por cobertura
+
+**Confirmado en D26:** el alcance inicial incluye precios diferenciados por
+cobertura. La configuración debe permitir representar su efecto comercial
+además de conservar su uso para calcular costos y margen.
+
+**Propuesta pendiente de confirmar en P13:** ofrecer dos modalidades por
+tarifario desde la primera entrega: «Precio único para todas las coberturas»
+como opción inicial y «Precios por cobertura» como alternativa. La primera
+mantiene una celda por combinación y tramo; la segunda permite cargar importes
+independientes para los niveles existentes Borrador, Normal y Alta. No se
+propone imponer un recargo porcentual entre niveles. Las ayudas de copia y
+ajuste masivo de D23 podrían facilitar la carga de esos importes.
+
+En la modalidad con precios diferenciados se propone sumar la cobertura a la
+combinación comercial de D12: cada nivel acumula su propio volumen y busca su
+tramo. Con precio único, la cobertura no separaría la acumulación comercial,
+pero cada archivo conservaría su costeo. La alternativa por archivo de D11
+seguiría sin sumar unidades de otros archivos.
+
+Ejemplo propuesto: 60 hojas con cobertura Normal y 50 con cobertura Alta,
+con el mismo papel, tamaño, color y caras, en acumulación por combinación.
+Con precios diferenciados buscarían sus tramos con 60 y 50 hojas, respectivamente.
+Con precio único buscarían el tramo con 110 hojas, manteniendo los costos de
+cada archivo. Esta regla de acumulación todavía requiere confirmación.
+
+El diseño deberá precisar la selección y el registro de cobertura, su uso en
+las sugerencias del motor y su compatibilidad con rangos propios, acuerdos,
+respaldo de precios y versiones. El futuro portal debe poder identificar el
+nivel que determina el precio sin presuponer que el archivo ya fue analizado
+automáticamente.
+
 ## Base actual del módulo
 
 La implementación revisada permite configurar por tenant papeles y gramajes,
@@ -636,6 +673,7 @@ documentos, grupos y cliente, pero todavía no recibe el canal de venta.
 | Configuración por tenant | [CentroCopiadoConfig](../apps/api/prisma/schema.prisma) y [campos de configuración](../apps/api/src/centro-copiado/dto/centro-copiado-config.dto.ts) |
 | Pantalla de configuración | [Configuración de Centro de copiado](../src/components/comercial/centro-copiado-config-view.tsx) |
 | Formatos producibles y cálculo de hojas | [Adaptador de documentos](../apps/api/src/centro-copiado/adaptador.ts) y [opciones del navegador](../src/lib/centro-copiado-api.ts) |
+| Cobertura por archivo y consumo por nivel | [Selector de Centro de copiado](../src/components/comercial/centro-copiado-sheet.tsx) y [cobertura de tóner](../apps/api/src/productos-servicios/cobertura-toner.ts) |
 | Cotización y guardado del módulo | [Servicio de Centro de copiado](../apps/api/src/centro-copiado/centro-copiado.service.ts) y [pedido de cotización](../apps/api/src/centro-copiado/dto/cotizar-centro-copiado.dto.ts) |
 | Canales existentes | [Canales de venta](../src/lib/canales-venta.ts) |
 | Guardado y recotización desde la ficha | [Ficha comercial](../src/components/comercial/propuesta-ficha.tsx) |
@@ -670,7 +708,11 @@ temporal de stock se trataría por separado de la habilitación comercial.
 
 La estructura propuesta es:
 
-**Papel y gramaje × tamaño × K o CMYK × simple o doble faz × tramo de cantidad.**
+**Papel y gramaje × tamaño × K o CMYK × simple o doble faz × cobertura × tramo de cantidad.**
+
+La disponibilidad de precios por cobertura desde el alcance inicial sigue D26.
+La modalidad de precio único y el efecto sobre la acumulación conservan su
+estado de propuesta en P13.
 
 La unidad del precio y de los tramos se elige por tarifario según D09 y D10:
 hoja física inicialmente, con carilla impresa como alternativa. Los rangos son
@@ -717,12 +759,13 @@ Los costos y márgenes conservarían sus permisos de acceso.
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
 en D15, P06 en D16 a D19, P07 en D20, P08 en D21, P09 en D22 y el alcance de P10
-en D23, P11 en D24 y P12 en D25. Las preguntas restantes deben resolverse antes
-de activar el recorrido completo.
+en D23, P11 en D24 y P12 en D25. D26 confirma que los precios por cobertura
+entran en el alcance inicial; P13 conserva las reglas restantes por resolver.
+Las preguntas restantes deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P13 | ¿La cobertura de impresión afecta el tarifario o solamente el costo? | La cobertura ya existe en el módulo; definir su relación con la matriz. |
+| P13 | ¿Cómo se configuran los precios por cobertura y cómo acumulan volumen? | D26 confirma su inclusión inicial. Propuesta: precio único o importes independientes por nivel, configurables por tarifario; separar la acumulación por cobertura sólo en la modalidad diferenciada. Precisar selección del nivel e integración con las demás reglas. |
 | P14 | ¿Cuál es el alcance inicial de tomos, terminaciones y planos CAD? | Proponer tarifas para impresión en hojas e integrar correctamente tomos y terminaciones existentes; evaluar un tarifario CAD por separado. |
 | P15 | ¿Cómo se habilita la nueva oferta en tenants existentes? | Proponer conservar su comportamiento hasta que configuren y activen los cambios. Definir el tratamiento de combinaciones nuevas o retiradas. |
 
@@ -778,6 +821,7 @@ del archivo original.
 | Costeo incompleto | Existe precio de venta, pero faltan costos necesarios para verificar el margen. | Se muestra «Margen no verificable» y se exige revisión; no se reemplazan costos desconocidos por cero. |
 | Pedido modificado tras autorizar | Un borrador recibe aprobación de margen y luego cambian cantidades, precio o costos del cálculo. | Se reevalúa el margen; la aprobación anterior no autoriza un resultado distinto. Un presupuesto ya emitido conserva D24. |
 | Costos posteriores a la emisión | Aumenta el costo de un trabajo con presupuesto emitido todavía válido. | Puede mostrarse una alerta interna; se mantiene el precio comprometido sin aplicar retroactivamente el bloqueo de D25. |
+| Coberturas distintas | 60 hojas con cobertura Normal y 50 con cobertura Alta, iguales los demás atributos, en acumulación por combinación. | Precios por cobertura disponibles desde el alcance inicial según D26. Pendiente P13: se propone acumular 60 y 50 por separado con precios diferenciados, o 110 con precio único, manteniendo los costos de cada archivo. |
 | Oferta incompleta | Papel habilitado con un tamaño no ofrecido, o combinación ofrecida sin precio aplicable. | El tamaño no ofrecido no se puede seleccionar ni habilitar con un precio manual. La combinación ofrecida sigue D21: precio pendiente inicialmente o respaldo explícito. |
 | Precio pendiente | 120 hojas A3, Ilustración 150 g, CMYK y doble faz; celda del tramo 100–199 vacía y sin respaldo ni acuerdo aplicable. | Se conserva el borrador con aviso de precio pendiente, sin tratar la celda como $0 ni usar el mínimo para completar el precio. No se permite confirmar o cobrar el pedido como completo. |
 | Respaldo válido | El caso anterior con otro tarifario compatible o el motor elegidos explícitamente como respaldo. | Si la fuente resuelve el precio, se usa y se identifica su origen. Se mantienen la preparación y el mínimo del tarifario activo, sin duplicar cargos. Si no lo resuelve, continúa pendiente. |
@@ -852,6 +896,11 @@ debe precisar la integración con los permisos y controles generales del tenant,
 conservar el cálculo autorizado y reevaluar los borradores modificados. No se
 deben alterar importes históricos ni compromisos vigentes de D24.
 
+El diseño inicial debe contemplar los precios por cobertura de D26 en la
+estructura, edición, resolución de precios y guardado del cálculo histórico.
+La composición de los grupos comerciales y la selección del nivel se
+completarán al resolver P13.
+
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
 desglose comercial y las validaciones de oferta deben conservarse en todos los
@@ -865,7 +914,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
    configuraciones existentes.
 4. Implementar matrices y asignación por canal como un conjunto, incorporando
-   versiones y resolución común del precio.
+   versiones, precios por cobertura y resolución común del precio.
 5. Verificar en local cotización, guardado, recotización, tomos, terminaciones,
    permisos y separación entre tenants con datos ficticios.
 6. Preparar un lote coherente para validación en staging según el
@@ -907,3 +956,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | Alcance de P10 resuelto: carga manual, pegado desde Excel, duplicación, sugerencias del motor y ajustes masivos con redondeo; importación de archivos para una segunda etapa. Incorporación de D23, cantidad de referencia por tramo, revisión de cambios y ejemplos. La vigencia se conserva en P11. | Confirmado |
 | 2026-10-10 | P11 resuelto: versiones publicadas inmutables, activación inmediata o programada y actualización explícita de borradores antes de emitir. Incorporación de D24, respeto de presupuestos vigentes y de importes aprobados, ejemplos y control de cambios entre vista previa y confirmación. | Confirmado |
 | 2026-10-10 | P12 resuelto: mínimo de margen configurable por tarifario, autorización con motivo por debajo del mínimo incluido el margen negativo y bloqueo estricto como alternativa. Incorporación de D25, cálculo sobre impresión más preparación, terminaciones aparte, revisión del costeo incompleto y de pedidos modificados, sin cambiar automáticamente los precios ni alterar compromisos vigentes. | Confirmado |
+| 2026-10-10 | Incorporación de D26: precios por cobertura dentro del alcance inicial. P13 se precisa para resolver modalidades por tarifario, selección de cobertura y acumulación de volumen; se incorpora una propuesta con ejemplo, todavía sin confirmar esas reglas. | Confirmado parcial |
