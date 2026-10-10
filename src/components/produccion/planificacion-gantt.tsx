@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Diamond, Factory, Layers3, Package, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -25,7 +25,23 @@ export function fechaPlan(fecha: string | null) {
   return `${d}/${m}/${y}`;
 }
 
+export type PosicionCalendarioPlan = {
+  modo: "recursos" | "ordenes";
+  desde: string;
+  volverAlInicio: number;
+  izquierda: number;
+  arriba: number;
+  alFinal: boolean;
+  escala: number;
+};
+
+function estaAlFinal(elemento: HTMLElement) {
+  return elemento.scrollLeft > 0 && Math.abs(elemento.scrollWidth - elemento.clientWidth - elemento.scrollLeft) < 1;
+}
+
 type Props = {
+  leerPosicion?: () => PosicionCalendarioPlan | null;
+  guardarPosicion?: (posicion: PosicionCalendarioPlan) => void;
   grupos: GrupoPlan[];
   entregas: HitoEntregaPlan[];
   modo: "recursos" | "ordenes";
@@ -55,14 +71,15 @@ export function grupoAbierto(grupo: GrupoPlan, abiertos: Record<string, boolean>
 export function PlanificacionGantt(props: Props) {
   const { grupos, entregas, modo, eje, desde, hasta, zona, ahora, zoom, volverAlInicio, abiertos, seleccionId, relacionadas, mostrarDependencias, seleccionar, alternar, riesgo } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollAnterior = useRef(0);
+  const posicionRef = useRef<PosicionCalendarioPlan | null>(null);
+  const { leerPosicion, guardarPosicion } = props;
   const [anchoDisponible, setAnchoDisponible] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const elemento = scrollRef.current;
     if (!elemento) return;
-    const observar = new ResizeObserver(() => {
-      setAnchoDisponible(elemento.clientWidth - parseFloat(getComputedStyle(elemento).getPropertyValue("--columna")));
-    });
+    const medir = () => setAnchoDisponible(Math.max(0, elemento.clientWidth - (parseFloat(getComputedStyle(elemento).getPropertyValue("--columna")) || 0)));
+    medir();
+    const observar = new ResizeObserver(medir);
     observar.observe(elemento);
     return () => observar.disconnect();
   }, [grupos.length, eje.dias.length]);
@@ -71,18 +88,20 @@ export function PlanificacionGantt(props: Props) {
   const anchoDia = Math.max(360, anchoDisponible / 2) * zoom / 100;
   const escala = anchoDia / Math.max(1, eje.jornadaMin);
   const ancho = Math.max(anchoDia, eje.totalMin * escala);
-  const vistaAnterior = useRef({ desde, escala, volverAlInicio });
   useLayoutEffect(() => {
     const elemento = scrollRef.current;
-    const anterior = vistaAnterior.current;
-    if (elemento) {
-      // Capturado antes del resize: el navegador puede haber recortado ya
-      // scrollLeft al nuevo ancho cuando se aleja cerca del final del período.
-      elemento.scrollLeft = anterior.desde !== desde || anterior.volverAlInicio !== volverAlInicio ? 0 : anclarZoom({ scrollLeft: scrollAnterior.current, offsetX: 0, zAnterior: anterior.escala, zNuevo: escala });
-      scrollAnterior.current = elemento.scrollLeft;
-    }
-    vistaAnterior.current = { desde, escala, volverAlInicio };
-  }, [desde, escala, volverAlInicio]);
+    const anterior = posicionRef.current ?? leerPosicion?.();
+    // Esperar el ancho real evita recortar la posición con una escala transitoria
+    // al abrir el modal, especialmente cerca del final del calendario.
+    if (!elemento || anchoDisponible <= 0) return;
+    const mismoPeriodo = anterior?.modo === modo && anterior.desde === desde && anterior.volverAlInicio === volverAlInicio;
+    // La posición vive fuera del calendario para conservarla al moverlo al modal.
+    // Guardamos la escala: un viewport más ancho no debe cambiar el día visible.
+    elemento.scrollLeft = !mismoPeriodo ? 0 : anterior.alFinal ? elemento.scrollWidth - elemento.clientWidth : anclarZoom({ scrollLeft: anterior.izquierda, offsetX: 0, zAnterior: anterior.escala, zNuevo: escala });
+    elemento.scrollTop = mismoPeriodo ? anterior.arriba : 0;
+    posicionRef.current = { modo, desde, volverAlInicio, izquierda: elemento.scrollLeft, arriba: elemento.scrollTop, alFinal: estaAlFinal(elemento), escala };
+    guardarPosicion?.(posicionRef.current);
+  }, [anchoDisponible, desde, escala, modo, leerPosicion, guardarPosicion, volverAlInicio]);
   const diasVisibles = eje.dias.filter((dia) => dia.fecha >= desde && dia.fecha <= hasta);
   const hitosPorPosicion = useMemo(() => {
     const puntos = new Map<number, HitoEntregaPlan[]>();
@@ -148,7 +167,7 @@ export function PlanificacionGantt(props: Props) {
       <EmptyDescription>{!filas.length ? "Probá con otra búsqueda o revisá las órdenes pendientes de producción." : "Cambiá el período para consultar la siguiente jornada de trabajo."}</EmptyDescription></EmptyHeader>
   </Empty>;
 
-  return <TooltipProvider delay={200}><div ref={scrollRef} className={styles.scroll} data-mode={modo} onScroll={event => { scrollAnterior.current = event.currentTarget.scrollLeft; }} tabIndex={0} role="region" aria-label={`Calendario de planificación por ${modo}; desplazamiento horizontal y vertical`}>
+  return <TooltipProvider delay={200}><div ref={scrollRef} className={styles.scroll} data-mode={modo} onScroll={event => { posicionRef.current = { modo, desde, volverAlInicio, izquierda: event.currentTarget.scrollLeft, arriba: event.currentTarget.scrollTop, alFinal: estaAlFinal(event.currentTarget), escala }; guardarPosicion?.(posicionRef.current); }} tabIndex={0} role="region" aria-label={`Calendario de planificación por ${modo}; desplazamiento horizontal y vertical`}>
     <div className={styles.canvas} style={{ width: `calc(var(--columna) + ${ancho}px)`, minWidth: "100%" }}>
       <div className={styles.calendarHeader}>
         <div className={styles.corner}><span>{modo === "recursos" ? "Recurso / estación" : "Orden / operación"}</span><small>Horas pendientes</small></div>
