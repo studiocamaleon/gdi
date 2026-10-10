@@ -35,6 +35,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D17 | La interpretación del precio cargado se elige por tarifario: «IVA incluido» como opción inicial y «Más IVA» como alternativa. Aplica a todas sus combinaciones, incluidas las que tienen rangos propios. Resuelve el IVA dentro de P06; la preparación se define en D18 y los mínimos en D19. | 2026-10-10 |
 | D18 | La preparación se configura por tarifario: «Preparación incluida» como opción inicial y «Cargo fijo por pedido» como alternativa, con importe configurable y mostrado por separado. El cargo se aplica una sola vez al conjunto de Centro de copiado del pedido. Resuelve la preparación dentro de P06; los mínimos se definen en D19. | 2026-10-10 |
 | D19 | Los mínimos se configuran por tarifario: «Sin mínimo» como opción inicial y «Mínimo de importe por pedido» como alternativa. Se aplica una sola vez sobre impresión más preparación de Centro de copiado; las terminaciones se agregan aparte. Sólo se cobra la diferencia necesaria para alcanzar el mínimo, sin alterar cantidades reales ni tramos. Completa P06 junto con D16 a D18. | 2026-10-10 |
+| D20 | El tarifario del canal es la base; el acuerdo del cliente tiene prioridad dentro de su alcance. Los descuentos adicionales son explícitos y sujetos a permisos, sin acumulación automática. El precio manual es una excepción autorizada, con motivo y registro del importe anterior, que reemplaza el importe elegido sin volver a aplicarle el descuento previo. Se respeta el mínimo de D19 después de descuentos o precios manuales. Resuelve P07. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -310,14 +311,63 @@ $1.000 no agrega ningún ajuste. Las 3 hojas reales del primer ejemplo se
 conservan en producción y en el cálculo del tramo.
 
 La comparación debe usar importes en la misma moneda y sobre la misma base de
-IVA, respetando D17 y la configuración fiscal del sistema. La prioridad de
-descuentos y ajustes manuales respecto del mínimo se resolverá en P07. Si P09
+IVA, respetando D17 y la configuración fiscal del sistema. El mínimo se respeta
+después de descuentos y precios manuales según D20. Si P09
 habilita varios tarifarios dentro del pedido, deberá resolver cuál determina
 el mínimo único.
 
 El mínimo de hojas facturables por documento existente no es una modalidad del
 nuevo esquema acordado. Su migración y la habilitación de los tarifarios se
 resolverán en P15, sin cambiar automáticamente la operación de tenants actuales.
+
+### Prioridad de precios y descuentos
+
+**Confirmado en D20:** el precio se resuelve con este orden:
+
+1. El tarifario del canal determina el precio base por combinación y tramo.
+2. Un acuerdo aplicable del cliente reemplaza ese precio dentro de su alcance.
+   Fuera de las combinaciones y canales cubiertos, se usa el tarifario del canal.
+3. Un descuento adicional se aplica explícitamente sobre el precio resultante,
+   con los permisos correspondientes. El precio por volumen ya está incorporado
+   en el tramo; no se repite como un descuento adicional.
+4. Se agrega la preparación y se comprueba el mínimo sobre impresión más
+   preparación, considerando los descuentos o precios manuales aplicados.
+5. Las terminaciones se agregan aparte según D16 y D19.
+
+No se elige automáticamente el menor precio entre tarifario y acuerdo. El
+alcance del acuerdo debe ser explícito: por ejemplo, un cliente con A4 K a $90
+sólo en mostrador paga esa tarifa allí y puede usar los $80 del tarifario online.
+Si el acuerdo de $90 cubre ambos canales, prevalece en los dos.
+
+Ejemplo ficticio con preparación incluida, sin mínimo y un descuento aplicado
+sólo a impresión; los importes mostrados son finales:
+
+| Paso | Importe |
+| --- | --- |
+| Tarifario del canal para 100 hojas a $100 | $10.000 |
+| Acuerdo aplicable del cliente a $90 por hoja | $9.000 |
+| Descuento adicional autorizado del 10 % | $8.100 |
+
+Tener un precio especial no impide un descuento adicional, pero éste debe ser
+explícito. Se admite un único descuento efectivo por concepto, porcentual o por
+importe; uno nuevo reemplaza al anterior. No se acumulan descuentos
+automáticamente ni se modifica el costo de producción al aplicarlos.
+
+El precio manual requiere permiso y motivo. Reemplaza el importe del concepto
+elegido y conserva el valor anterior para explicar el cambio; el descuento
+previo de ese concepto no se vuelve a aplicar sobre el importe manual. Deben
+quedar registrados el origen del precio, el ajuste, su motivo y quién lo realizó.
+
+Tanto los descuentos como los precios manuales respetan el mínimo del tarifario.
+Si impresión más preparación quedan en $900 y el mínimo es $1.000, se agrega un
+ajuste de $100 y se cobran $1.000 antes de terminaciones. No se acordó una
+excepción que permita ignorar ese mínimo.
+
+Los permisos concretos y su implementación se definirán al diseñar el recorrido;
+la política ante márgenes insuficientes o negativos conserva P12. P08 resolverá
+qué hacer si no se puede obtener un precio, y P11 la conservación o revisión de
+estos valores al cambiar una cotización. El cálculo y desglose fiscal deben
+seguir D17 y las reglas del sistema, sin duplicar descuentos ni impuestos.
 
 ## Base actual del módulo
 
@@ -436,12 +486,11 @@ Los costos y márgenes conservarían sus permisos de acceso.
 ## Decisiones pendientes
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
-en D15. P06 está resuelto en D16 a D19. Las preguntas restantes
+en D15, P06 en D16 a D19 y P07 en D20. Las preguntas restantes
 deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P07 | ¿Qué prioridad tienen el tarifario, los acuerdos por cliente, descuentos y ajustes manuales? | Definir una prioridad única, permisos y explicación del resultado, incluida su relación con el mínimo de D19. |
 | P08 | ¿Qué ocurre ante una combinación sin precio? | Mostrar la falta de tarifa. Usar el motor o heredar otra matriz sólo si la política elegida lo permite explícitamente. |
 | P09 | ¿Cómo se elige la política por canal y qué pasa si se cambia el canal de una propuesta? | Definir la política general, la recotización de borradores y el tratamiento de documentos emitidos. Si se habilitan varios tarifarios dentro del pedido, resolver cuál determina el único cargo de preparación de D18 y el mínimo de D19. |
 | P10 | ¿Cómo se crean y actualizan los precios? | Elegir el alcance inicial entre carga manual, copia, sugerencias del motor, ajustes por porcentaje, redondeo e importación. |
@@ -475,6 +524,10 @@ del archivo original.
 | Mínimo de importe | Importes finales ficticios: 3 hojas a $100, preparación de $500 y mínimo de $1.000. | Impresión más preparación suman $800; se agrega un ajuste de $200 y se cobran $1.000 antes de terminaciones. Sin mínimo se cobran $800. Se conservan las 3 hojas reales y su tramo. |
 | Mínimo con terminación | El caso anterior con anillado de $1.200. | Con mínimo, $1.000 más $1.200 de anillado: $2.200. El anillado no absorbe el ajuste de $200 ni permite alcanzar el mínimo. |
 | Mínimo alcanzado | Impresión más preparación suman $1.500 y el mínimo es $1.000. | No se agrega ajuste; se cobran $1.500 antes de terminaciones. El mínimo nunca reemplaza un importe mayor. |
+| Acuerdo y descuento | 100 hojas con tarifa de $100, acuerdo aplicable de $90 y descuento explícito del 10 % sobre impresión; preparación incluida y sin mínimo. | El acuerdo reemplaza el precio del canal: $9.000. El descuento autorizado deja $8.100. No se descuenta nuevamente por volumen. |
+| Acuerdo por canal | A4 K a $90 para un cliente sólo en mostrador; tarifario online a $80. | En mostrador se aplica el acuerdo de $90 y online la tarifa de $80. Si el acuerdo cubriera ambos canales, se aplicarían $90 en los dos; no se elige el menor automáticamente. |
+| Precio manual | Impresión a $9.000 y descuento previo del 10 %; un usuario autorizado fija un importe manual de $8.500, con motivo; preparación incluida y sin mínimo. | La impresión queda en $8.500. Se registra el valor anterior de $8.100 y el nuevo importe, sin volver a descontar el 10 % sobre éste. |
+| Descuento o precio manual frente al mínimo | Impresión más preparación quedan en $900 después de aplicar descuentos o un precio manual, con mínimo de $1.000. | Se agrega un ajuste de $100 y se cobran $1.000 antes de terminaciones. El mínimo se mantiene según D20. |
 | Impresión mixta | Un pedido con K y CMYK, o con papeles distintos. | Por combinación, cada grupo acumula por separado según D12; por archivo, cada uno usa sus propias unidades. |
 | Varias cargas | Un archivo de 60 hojas y otro de 50 con la misma combinación, agregados en distintas aperturas de Centro de copiado al mismo pedido. | Por combinación, suman 110. Por archivo, mantienen 60 y 50. Agregar o quitar uno actualiza el volumen del grupo en el borrador. |
 | Rango de páginas | Imprimir sólo 10 páginas seleccionadas de un PDF de 100 páginas. | Distinguir la selección de páginas del tramo comercial por cantidad. |
@@ -507,7 +560,12 @@ de preparación debe separarse de la elección de cobrarlo aparte. El mínimo de
 D19 se evalúa una sola vez sobre impresión más preparación, con un ajuste por
 la diferencia y terminaciones aparte. Se debe conservar ese desglose sin
 modificar las cantidades reales ni aplicar simultáneamente el mínimo anterior
-por documento al nuevo tarifario. La prioridad frente a descuentos sigue P07.
+por documento al nuevo tarifario. La prioridad frente a descuentos sigue D20.
+
+La resolución común de D20 debe conservar el precio base, el acuerdo aplicado
+y su alcance, el descuento efectivo o precio manual, los permisos comprobados
+y el registro del ajuste. Ningún recorrido debe reaplicar un descuento ya
+incorporado al importe ni permitir omitir el mínimo mediante un precio manual.
 
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
@@ -516,7 +574,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P06 resueltos en D09 a D19 y completar las reglas comerciales
+1. Partir de P01 a P07 resueltos en D09 a D20 y completar las reglas comerciales
    pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluido el simulador.
 3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
@@ -558,3 +616,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | IVA resuelto dentro de P06: IVA incluido como opción inicial y más IVA como alternativa por tarifario. Incorporación de D17 y ejemplo de cálculo. Preparación y mínimos siguen pendientes. | Confirmado parcial |
 | 2026-10-10 | Preparación resuelta dentro de P06: incluida como opción inicial y cargo fijo por pedido como alternativa por tarifario. Incorporación de D18, ejemplo y separación entre costo operativo y cobro comercial. Los mínimos siguen pendientes. | Confirmado parcial |
 | 2026-10-10 | P06 resuelto: sin mínimo como opción inicial y mínimo de importe por pedido como alternativa por tarifario, sobre impresión más preparación y con terminaciones aparte. Incorporación de D19 y ejemplos del ajuste por la diferencia, sin alterar cantidades ni tramos. La prioridad frente a descuentos y ajustes se conserva en P07. | Confirmado |
+| 2026-10-10 | P07 resuelto: acuerdo del cliente prioritario dentro de su alcance, descuentos explícitos y precio manual autorizado, respetando el mínimo. Incorporación de D20, orden de aplicación y ejemplos por canal, descuento y ajuste manual. | Confirmado |
