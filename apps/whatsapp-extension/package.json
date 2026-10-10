@@ -11,6 +11,6 @@
     "linkedom": "0.18.13"
   },
   "dependencies": {
-    "@wppconnect/wa-js": "4.6.0"
+    "@wppconnect/wa-js": "4.6.1"
   }
 }
