@@ -20,11 +20,12 @@ presente expresa una lista explícita de formatos. Una lista vacía ofrece cero
 formatos. El selector y el servidor cruzan oferta y posibilidad productiva.
 El JSON existente permite esta ampliación sin migrar ni borrar datos.
 
-Los tarifarios requerirán identidades estables y revisiones separadas: borrador
-editable con versión optimista, y publicaciones inmutables con vigencia. Cada
-publicación incluye reglas y celdas; una cotización guarda la versión usada y
-el desglose. Canales referencian una política general heredada o una excepción.
-La activación explícita es independiente de guardar o simular un borrador.
+Los tarifarios tienen identidades estables y revisiones separadas: borrador
+editable con control de revisión, y publicaciones inmutables con vigencia. Cada
+publicación incluye las reglas y celdas implementadas. La integración pendiente
+hará que una cotización guarde la versión usada y el desglose, y que los canales
+referencien una política general heredada o una excepción. La activación
+explícita es independiente de guardar o simular un borrador.
 
 El cálculo comercial trabajará con cantidades decimales controladas y cantidades
 físicas independientes. Orden: resolver política/oferta → clasificar caras y
@@ -46,7 +47,7 @@ compatible y selección persistida por segmento.
 | Composición comercial del pedido | IVA, preparación y mínimo únicos, terminaciones aparte. | Implementado como cálculo puro y probado; resolución fiscal e integración pendientes |
 | Prioridad y controles comerciales | Acuerdos/ajustes autorizados, respaldos y margen. | Pendiente; la composición recibe importes ya resueltos |
 | Cantidades y tramos CAD | Consumo real en ML, acumulación, tramo y redondeo comercial del grupo. | Implementado como cálculo puro y probado con el planificador actual; conexión al cotizador pendiente |
-| Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | Pendiente |
+| Tarifarios y canales | Persistencia, edición, versiones, activación y herencia con aislamiento por tenant. | Persistencia y versiones implementadas en la API y comprobadas con PostgreSQL; interfaz, asignación a canales y activación operativa pendientes |
 | Recorridos del pedido | Vista previa, guardado, recálculo y emisión comparten cantidades, versiones y precios. | Pendiente |
 | Pouch y tomos | Material por hoja, caras/copias/juegos correctos, edición y adicionales sin duplicación. | Pendiente |
 | Herramientas de precios | Matriz, pegado, duplicación, ajustes masivos y simulación de todas las celdas. | Pendiente |
@@ -332,3 +333,83 @@ una vez sobre todos los grupos de hojas y CAD, nunca en dos llamadas separadas.
 La simulación de todas las celdas deberá reutilizar estos mismos consumos. No
 se implementaron precio por plano/formato ni por m². Sin migraciones, cambios
 de datos, despliegues ni activaciones automáticas. CI global y PR siguen pendientes.
+
+### 10 de octubre de 2026 — guardado y versiones de tarifarios
+
+Implementada la base de persistencia de D24 en
+[tarifarios](../apps/api/src/centro-copiado/tarifarios/centro-copiado-tarifarios.service.ts).
+La migración aditiva crea `CentroCopiadoTarifario` para el borrador y
+`CentroCopiadoTarifarioVersion` para cada publicación; no convierte configuraciones
+existentes ni activa precios en la operación.
+
+- Cada borrador guarda nombre, revisión y contenido validado. El contenido de
+  esquema 1 incluye moneda, sección de hojas y/o CAD por ML, rangos generales y
+  excepciones, precios independientes, cobertura, acumulación, última hoja impar,
+  redondeo CAD, convención de IVA, preparación y mínimo. La tasa de IVA sigue
+  perteneciendo al sistema fiscal. La modalidad de cobertura es por tarifario.
+- Se reutilizan las validaciones semánticas del cálculo comercial. Se rechazan
+  combinaciones o tramos repetidos, precios para tramos inexistentes, estructuras
+  inválidas y propiedades no admitidas. Los precios conservan cadenas decimales;
+  `null` o celda ausente siguen pendientes y cero sigue siendo explícito.
+  Límites de entrada: 5.000 combinaciones por sección y 100 tramos por lista.
+- Los papeles deben existir en la empresa autenticada. Guardar un precio no
+  habilita el papel ni el formato: la oferta y la capacidad productiva se
+  comprobarán de nuevo al activar/cotizar. No se copian precios ni identidades
+  de otra empresa. Un tarifario puede prepararse con celdas pendientes sin que
+  eso permita cerrar un pedido; el bloqueo operativo de D21 sigue por integrar.
+- Editar y publicar exigen la revisión vista por el usuario. Una escritura
+  concurrente queda rechazada con conflicto y pide recargar. Publicar incrementa
+  la revisión del borrador y el número de publicación en la misma transacción.
+  Nombre, reglas y precios pertenecen siempre a la revisión que se confirmó.
+- Cada publicación copia el contenido completo y registra autor y fecha.
+  Se impiden cambios y borrados individuales también en PostgreSQL. La
+  eliminación integral de una empresa conserva el comportamiento en cascada del
+  sistema; las pruebas comprueban que sus fixtures pueden retirarse completos.
+- La vigencia inmediata usa la hora del servidor. La programada exige un instante
+  futuro ISO con zona horaria explícita, hasta milisegundos; la futura interfaz
+  lo convertirá desde la zona del tenant. No se admiten fechas ambiguas ni dos
+  publicaciones del mismo tarifario para el mismo instante.
+- La consulta de versión vigente elige la mayor fecha de vigencia no posterior
+  al instante consultado. No requiere un cron que mute el historial. El número
+  de publicación indica el orden de creación, no reemplaza la fecha de vigencia.
+  Publicar otra versión inmediata conserva las publicaciones futuras ya
+  programadas; la interfaz deberá mostrarlas al revisar la publicación.
+- Reintentar la misma publicación y revisión devuelve la versión existente,
+  incluso con solicitudes simultáneas. Cambiar su modo o fecha en un reintento
+  produce conflicto. No se reprograman versiones publicadas silenciosamente.
+- Creación, edición y publicación se auditan dentro de su transacción. Un fallo
+  de auditoría revierte también la escritura, el contador y la revisión.
+
+**API:** `GET/POST /centro-copiado/tarifarios`, `GET/PUT /:id`,
+`GET /:id/versiones`, `GET /:id/versiones/:versionId`, `GET /:id/vigente` y
+`POST /:id/publicar`, bajo el mismo prefijo. Listados de hasta 50 registros con
+`desplazamiento` y siguiente página; el contenido se obtiene por detalle.
+Las lecturas exigen `configuracion.copiado.ver`, las escrituras
+`configuracion.copiado.gestionar`, además de la capacidad Centro de copiado.
+Empresa y autor salen de la sesión; los IDs de recursos se filtran por empresa.
+Las consultas no crean configuraciones ni eventos. No hay rutas para editar o
+eliminar versiones publicadas.
+
+**Verificación local:** 48 pruebas nuevas, incluidas las de HTTP con sesiones,
+roles y guardas reales; 294 de regresión: **342 aprobadas en 15 suites**, Node
+24.19.0. Se aplicaron las 313 migraciones desde cero, sin seeds, en una base
+PostgreSQL local exclusiva de test, retirada al finalizar después de comprobar
+que los fixtures se eliminaron. Se comprobaron escrituras simultáneas,
+reintentos, límites exactos de vigencia, conversión de huso horario, historial
+inmutable, aislamiento por empresa/material, permisos y reversión transaccional.
+Una prueba lee la versión persistida y calcula seis hojas doble faz con diez
+carillas a $100,50/hoja: $603, conservando los IDs de tarifario y versión.
+Tipos y ESLint sin errores ni advertencias en los siete archivos nuevos;
+el grafo del módulo también resuelve el controlador y servicio agregados.
+Se agregaron estas suites y las de cálculo comercial al workflow de CI.
+
+**Alcance pendiente:** esta API aún no tiene editor visual ni asignación general
+por canal. Publicar no cambia las cotizaciones existentes ni activa la matriz
+para un tenant. El contrato persistido se ampliará con respaldos y controles de
+margen al implementar sus resolvedores; esas decisiones no se consideran
+implementadas por guardar la matriz. Faltan también la actualización explícita
+de borradores de pedidos antes de emitir, el respeto de versiones en los
+recorridos operativos, herramientas de carga/simulación de todas las celdas y
+pouch. Permanecen dentro del alcance inicial. No se aplicó la migración sobre
+bases de desarrollo con datos, staging ni producción. CI global y apertura de
+PR pendientes por falta de GitHub autenticado en la sesión.
