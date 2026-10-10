@@ -27,7 +27,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D09 | Para impresión en hojas, la unidad se elige por tarifario: hoja física como opción inicial y carilla impresa como alternativa. La sección CAD tiene su propia unidad según D30. | 2026-10-10 |
 | D10 | El precio y los tramos usan la misma unidad elegida en el tarifario. Un tramo de 100 en un tarifario por hoja significa 100 hojas físicas, también en doble faz. Resuelve P01 junto con D09. | 2026-10-10 |
 | D11 | La acumulación se configura por tarifario: por combinación dentro del pedido como opción inicial y por archivo como alternativa. | 2026-10-10 |
-| D12 | La combinación reúne el mismo papel y gramaje, tamaño, K/CMYK, simple/doble faz y tarifario; D27 incorpora la cobertura cuando se cobra diferenciada. Se considera todo el pedido, incluidas distintas cargas de Centro de copiado. Resuelve P02 junto con D11. | 2026-10-10 |
+| D12 | En impresión en hojas, la combinación reúne el mismo papel y gramaje, tamaño, K/CMYK, simple/doble faz y tarifario; D27 incorpora la cobertura cuando se cobra diferenciada. Se considera todo el pedido, incluidas distintas cargas de Centro de copiado. Resuelve P02 junto con D11; los grupos CAD siguen D33. | 2026-10-10 |
 | D13 | El precio unitario del tramo alcanzado se aplica a todas las unidades del grupo comercial. En la alternativa por archivo, se aplica a todas las unidades de cada combinación comercial de ese archivo. La regla vale por hoja o por carilla según el tarifario; no se cobra progresivamente. Resuelve P03; D15 precisa la separación de la última hoja cuando corresponda. | 2026-10-10 |
 | D14 | Cada tarifario tiene rangos generales que las combinaciones usan inicialmente. Se pueden definir rangos propios como excepción por combinación. Compartir rangos no implica compartir precios ni acumular volumen entre combinaciones distintas. Resuelve P04. | 2026-10-10 |
 | D15 | El tratamiento de la última hoja con una sola cara impresa se configura por tarifario: «Mantener tarifa doble faz» como opción inicial y «Última hoja a simple faz» como alternativa. Se aplica por copia física, también a un archivo de una sola página configurado doble faz. Resuelve P05. | 2026-10-10 |
@@ -45,9 +45,10 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D27 | Cada tarifario puede usar «Precio único para todas las coberturas» como opción inicial o «Precios por cobertura», ambas disponibles desde la primera entrega. En la segunda modalidad los importes por nivel son independientes y la cobertura separa la acumulación de volumen. Con precio único se comparte el grupo comercial y se conserva el costeo por cobertura de cada archivo. Resuelve P13 junto con D26. | 2026-10-10 |
 | D28 | El alcance inicial incluye simular con el motor los costos de todas las celdas de las matrices, para todas las combinaciones ofrecidas y tramos, incluso antes de cargar precios de venta. La matriz debe permitir comparar costos, precios y márgenes para decidir los importes comerciales. Cada simulación identifica sus cantidades y supuestos; no modifica automáticamente precios ni garantiza el margen de todo pedido posible. Amplía D23. | 2026-10-10 |
 | D29 | Los tomos se integran desde el alcance inicial: su impresión se calcula con la matriz y las terminaciones se agregan aparte según ejemplares y materiales. Los juegos determinan las copias efectivas de los archivos. Se conservan las reglas de acumulación del tarifario, preparación y mínimo por pedido, las reglas físicas de doble faz y los costos reales de preparación y armado. Resuelve tomos y terminaciones de P14; el alcance y las unidades CAD se definen en D30. | 2026-10-10 |
-| D30 | CAD forma parte del alcance inicial con una sección propia dentro del tarifario. Ofrece precio por plano y formato como opción inicial, y por m² o metro lineal (ML) como alternativas configurables. ML es un requisito obligatorio desde la primera entrega y puede quedar guardado como modo habitual del tarifario. Precio y tramos usan la misma unidad CAD, sin acumular hojas. Se mantiene una política principal por pedido, preparación y mínimo únicos, y simulación de costos de todas las celdas. La base facturable en ML se define en D31; las demás reglas de medidas y acumulación CAD continúan en P14. | 2026-10-10 |
+| D30 | CAD forma parte del alcance inicial con una sección propia dentro del tarifario. Ofrece precio por plano y formato como opción inicial, y por m² o metro lineal (ML) como alternativas configurables. ML es un requisito obligatorio desde la primera entrega y puede quedar guardado como modo habitual del tarifario. Precio y tramos usan la misma unidad CAD, sin acumular hojas. Se mantiene una política principal por pedido, preparación y mínimo únicos, y simulación de costos de todas las celdas. La base facturable en ML se define en D31 y la acumulación en D33; las demás reglas de medidas CAD continúan en P14. | 2026-10-10 |
 | D31 | En CAD por ML se cobra el largo de papel consumido previsto para producir el trabajo, incluidos los márgenes de avance de la configuración productiva. Se determina según el rollo y la orientación de impresión y se multiplica por las copias efectivas. Es la base del precio y del tramo; no se ofrece el largo del plano sin márgenes como modalidad de cobro. El redondeo comercial se define en D32; la base facturable de m² sigue pendiente en P14. | 2026-10-10 |
-| D32 | En CAD por ML, «Sin redondeo comercial» es la opción inicial y «Redondear hacia arriba» es la alternativa configurable por tarifario, con un incremento positivo expresado en ML. Se conservan por separado el consumo previsto y la cantidad facturada tras el redondeo. El alcance de la acumulación, el momento de aplicar el redondeo y su relación con la selección del tramo se completarán en P14. | 2026-10-10 |
+| D32 | En CAD por ML, «Sin redondeo comercial» es la opción inicial y «Redondear hacia arriba» es la alternativa configurable por tarifario, con un incremento positivo expresado en ML. Se conservan por separado el consumo previsto y la cantidad facturada tras el redondeo. La acumulación, el momento de redondear y la cantidad para seleccionar el tramo siguen D33. | 2026-10-10 |
+| D33 | En CAD se acumula por combinación dentro del pedido como opción inicial y por archivo como alternativa por tarifario. En ML se agrupa por papel y gramaje, ancho de rollo, K/CMYK y tarifario, con cobertura separada cuando tiene precios diferenciados; se pueden sumar planos de distintas medidas. Por plano se separan los formatos y por m² se suman las superficies facturables de la misma combinación. En ML, el consumo sin redondear determina el tramo y el redondeo comercial se aplica una sola vez al total del grupo; en la alternativa por archivo, a cada combinación dentro de éste. El precio del tramo alcanzado se aplica a toda la cantidad facturada. Resuelve la acumulación y el orden del redondeo de P14; la base facturable de m² sigue pendiente. | 2026-10-10 |
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -93,6 +94,10 @@ que comparten papel y gramaje, tamaño, tipo de impresión, caras y tarifario
 dentro del mismo pedido. Cada archivo conserva su cantidad; el volumen del
 grupo determina el tramo comercial. Simple y doble faz acumulan por separado,
 igual que K y CMYK. La unidad de acumulación sigue D09 y D10.
+
+Esta composición de grupos corresponde a impresión en hojas. En CAD se usan
+los criterios de D33: en ML, planos de distintas medidas pueden compartir
+grupo si coinciden las condiciones comerciales y el ancho de rollo.
 
 Según D26 y D27, la cobertura también separa los grupos cuando el tarifario
 cobra precios diferenciados por nivel. Con precio único para todas las
@@ -821,10 +826,10 @@ y la configuración productiva. Todas las celdas CAD, incluidas las expresadas
 en ML, deben poder simularse según D28. El precio comercial no cambia las
 medidas físicas del plano. Se conserva el recorrido actual de simple faz.
 
-La medida facturable en ML sigue D31 y la modalidad de redondeo, D32. P14
+La medida facturable en ML sigue D31 y la modalidad de redondeo, D32. D33
+define la acumulación entre tamaños y archivos y el orden del redondeo. P14
 continúa abierto para definir la base facturable en m², formatos personalizados
-sin precio por plano, acumulación entre tamaños y archivos, aplicación del
-redondeo a esos grupos y detalle de las combinaciones CAD.
+sin precio por plano y los detalles restantes de las combinaciones CAD.
 
 ### Largo facturable de papel en CAD por ML
 
@@ -844,11 +849,11 @@ Los márgenes del ejemplo son ilustrativos; se usan los de la configuración
 productiva correspondiente.
 
 Cada copia aporta su largo de salida previsto. Dos copias del ejemplo aportan
-2,42 ML. Ese consumo es la base para determinar el tramo y multiplicar el
-precio unitario que corresponda. La agrupación de distintos tamaños o archivos
-y el momento de aplicar el redondeo se resolverán en P14. D32 establece la
-opción inicial sin redondeo y la alternativa con incremento configurable;
-el consumo previsto se conserva en ambas modalidades.
+2,42 ML al grupo que corresponda según D33. El consumo acumulado sin redondear
+determina el tramo. D32 establece la opción inicial sin redondeo y la alternativa
+con incremento configurable; D33 aplica ese redondeo una sola vez al total del
+grupo. El precio unitario del tramo se multiplica por la cantidad facturada,
+conservando por separado el consumo previsto.
 
 La cotización debe mostrar la medida original, el rollo y orientación previstos,
 los márgenes y los ML resultantes. El ancho identifica el material y la tarifa;
@@ -886,10 +891,70 @@ comercial. Se deben conservar y mostrar por separado el consumo previsto,
 la regla de redondeo y la cantidad facturada, también en la simulación de D28.
 El redondeo de cantidades de D32 es distinto del redondeo de precios de D23.
 
-La decisión confirma las modalidades y la configuración por tarifario. Al
-resolver la acumulación CAD en P14 se precisará si se redondea por ejemplar,
-archivo o grupo, y qué cantidad determina el tramo. Estos detalles no quedan
-implícitamente aprobados por habilitar la alternativa de redondeo.
+Según D33, primero se acumula el consumo previsto del grupo y se determina
+el tramo con esa cantidad sin redondear. Después se aplica el redondeo una
+sola vez al total del grupo. En la alternativa por archivo se sigue el mismo
+orden para cada combinación comercial de ese archivo, incluidas sus copias.
+
+### Acumulación del volumen en planos CAD
+
+**Confirmado en D33:** CAD conserva «Por combinación dentro del pedido» como
+opción inicial y «Por archivo» como alternativa por tarifario. Se consideran
+las páginas seleccionadas y sus copias efectivas, incluidas las distintas
+cargas de Centro de copiado del mismo pedido. No se suman pedidos anteriores
+ni unidades de impresión en hojas.
+
+En ML, una combinación reúne el mismo papel y gramaje, ancho de rollo, K/CMYK
+y tarifario. La cobertura separa el volumen cuando tiene precios diferenciados
+según D27; con precio único no lo separa y se conservan los costos particulares.
+Los planos pueden tener medidas diferentes y acumular juntos si coinciden esas
+condiciones. Cambiar papel, ancho de rollo o tipo de impresión genera otro grupo.
+
+Ejemplo ficticio de dos archivos con planos de medidas diferentes, iguales
+condiciones comerciales y el mismo ancho de rollo. Los consumos incluyen
+márgenes de avance y todas las copias:
+
+| Archivo | Consumo previsto | Cantidad para el tramo por combinación | Cantidad para el tramo por archivo |
+| --- | --- | --- | --- |
+| A | 2,42 ML | 4,03 ML | 2,42 ML |
+| B | 1,61 ML | 4,03 ML | 1,61 ML |
+
+En acumulación por combinación, el orden de cálculo en ML es:
+
+1. Sumar los consumos previstos del grupo: **4,03 ML**.
+2. Seleccionar el tramo usando esos **4,03 ML sin redondear**.
+3. Aplicar una sola vez el redondeo de D32, si está habilitado. Con incremento
+   de 0,10 ML, la cantidad facturada es **4,10 ML**; sin redondeo, **4,03 ML**.
+4. Multiplicar toda la cantidad facturada por el precio unitario del tramo
+   seleccionado, sin cobro progresivo conforme a D13.
+
+En la alternativa por archivo, cada combinación de cada archivo realiza esa
+secuencia por separado. En el ejemplo, con incremento de 0,10 ML, A busca el
+tramo con 2,42 ML y factura 2,50 ML; B busca con 1,61 ML y factura 1,70 ML.
+El total facturado es 4,20 ML, con los precios que correspondan a cada tramo.
+No se redondea previamente cada página ni cada copia.
+
+El redondeo comercial no genera volumen para alcanzar otro tramo. Por ejemplo,
+si un tramo comienza en 4 ML y un grupo consume 3,96 ML, facturar 4,00 ML por
+redondeo no habilita ese tramo: se usa el que corresponda a 3,96 ML. El costo
+productivo conserva el consumo previsto, sin sumar el incremento comercial.
+
+Las otras unidades CAD conservan la misma elección de alcance:
+
+- **Por plano y formato:** se suman los ejemplares del mismo formato y
+  combinación. Tres A1 y dos A1 aportan cinco A1; los A0 buscan su tramo aparte.
+  Un PDF con varios formatos se divide por combinación, incluso en la
+  alternativa por archivo.
+- **Por m²:** se suman las superficies facturables de la misma combinación,
+  aunque cambien las medidas de los planos. La definición de esa superficie
+  sigue pendiente en P14; D33 no elige entre área del plano y papel consumido.
+
+Agregar, quitar o modificar archivos, copias o condiciones de un borrador
+recalcula los grupos afectados. Cada archivo conserva sus instrucciones y su
+consumo físico. Preparación y mínimo se resuelven una sola vez por pedido según
+D18 y D19; la vigencia de cotizaciones sigue D24. La simulación de D28 debe
+mostrar consumo, grupo, cantidad para el tramo y cantidad facturada usando
+estas mismas reglas.
 
 ## Base actual del módulo
 
@@ -955,8 +1020,9 @@ tarifario según D09 y D10: hoja física inicialmente, con carilla impresa como
 alternativa. Los rangos son generales por tarifario, con excepciones por
 combinación según D14.
 La sección CAD usa su propia unidad y precios conforme a D30; las medidas
-en ML se cobran por el largo de papel consumido según D31. La agrupación y
-las demás reglas CAD se completarán en P14.
+en ML se cobran por el largo de papel consumido según D31, con redondeo
+configurable según D32 y acumulación según D33. Las demás reglas CAD se
+completarán en P14.
 
 La generación de estructura, carga manual, pegado desde Excel, duplicación,
 sugerencias del motor y actualizaciones masivas están confirmadas en D23.
@@ -1005,13 +1071,14 @@ en D23, P11 en D24, P12 en D25 y P13 en D26 y D27. D28 amplía el alcance inicia
 con la simulación de costos de todas las celdas de las matrices. D29 resuelve
 tomos y terminaciones de P14, D30 el alcance y las unidades de CAD y D31 el
 largo de papel consumido como base facturable en ML. D32 define las modalidades
-de redondeo comercial; P14 conserva su aplicación a los grupos y las demás
-reglas restantes de CAD.
+de redondeo comercial y D33 la acumulación, el tramo sobre consumo sin redondear
+y el redondeo una sola vez por grupo en ML. P14 conserva las reglas restantes
+de medidas CAD.
 Las preguntas restantes deben resolverse antes de activar el recorrido completo.
 
 | Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
 | --- | --- | --- |
-| P14 | ¿Cómo se completan las reglas de medidas y volumen CAD? | D30 confirma las tres unidades, D31 el consumo facturable en ML y D32 las modalidades de redondeo. Definir acumulación, momento de redondear y cantidad para el tramo, base facturable en m², formatos personalizados no tarifados y detalle de combinaciones. Mantener la simulación de costos con el motor. |
+| P14 | ¿Cómo se completan las reglas de medidas CAD? | D30 confirma las tres unidades, D31 el consumo facturable en ML, D32 las modalidades de redondeo y D33 la acumulación y el orden de cálculo. Definir la base facturable en m², formatos personalizados no tarifados y detalles restantes de combinaciones. Mantener la simulación de costos con el motor. |
 | P15 | ¿Cómo se habilita la nueva oferta en tenants existentes? | Proponer conservar su comportamiento hasta que configuren y activen los cambios. Definir el tratamiento de combinaciones nuevas o retiradas. |
 
 ## Casos para acordar resultados
@@ -1022,6 +1089,8 @@ D11 y D12, con cobertura diferenciada según D27. El precio del tramo se aplica
 según D13 y los rangos siguen D14.
 La clasificación comercial de la última hoja sigue D15. Las demás reglas
 conservan los pendientes indicados en cada caso.
+Los casos CAD siguen D30 a D33, con el tramo en ML determinado antes del
+redondeo comercial del grupo.
 Las páginas son las seleccionadas para imprimir, no necesariamente todas las
 del archivo original.
 
@@ -1081,8 +1150,13 @@ del archivo original.
 | Tomo con originales impares | Dos originales de 3 páginas cada uno, ambos doble faz, con 10 juegos. | Cada original comienza en frente: 4 hojas por juego, 40 hojas y 60 carillas impresas en total. D15 define su clasificación comercial; no se reutilizan los dorsos vacíos entre originales. |
 | CAD en ML | Cantidad comercial de 3 ML, con precio aplicable de $2.500 por ML para su material y ancho de rollo. | Impresión: $7.500. El tramo se busca con 3 ML; se conservan aparte las cantidades físicas y medidas del trabajo. |
 | CAD personalizado con márgenes | Plano de 600 × 1.200 mm, con 600 mm a lo ancho de un rollo compatible y 5 mm de margen al comienzo y al final. | Sin redondeo comercial, se cobran 1,21 ML de papel consumido según D31; a $5.000 por ML son $6.050 de impresión. Los 1,20 m del plano no sustituyen el largo de salida. |
-| Copias en ML | Dos copias del plano anterior, con la misma configuración productiva. | Aportan 2,42 ML de papel consumido como base del tramo y del precio. D32 define las modalidades de redondeo; su momento de aplicación se resolverá con la acumulación en P14. |
+| Copias en ML | Dos copias del plano anterior, con la misma configuración productiva y sin otros archivos en el grupo. | Aportan 2,42 ML de papel consumido para elegir el tramo. Sin redondeo se facturan 2,42 ML; con incremento de 0,10 ML, 2,50 ML. El redondeo se aplica una sola vez al grupo, no por copia, según D33. |
 | Redondeo comercial en ML | Cantidad base de 1,21 ML y tarifa aplicable de $5.000 por ML. | Sin redondeo: 1,21 ML y $6.050. Con incremento de 0,10 ML: 1,30 ML y $6.500. El consumo productivo sigue siendo 1,21 ML; D32 no modifica la geometría ni el costo por ese ajuste comercial. |
+| CAD acumulado entre medidas | Archivos A y B con planos de medidas diferentes, misma combinación ML y ancho de rollo, consumos de 2,42 y 1,61 ML incluidas las copias, e incremento de 0,10 ML. | Por combinación, el tramo se elige con 4,03 ML y se facturan 4,10 ML al precio de ese tramo. Incluye cargas separadas dentro del pedido. |
+| CAD por archivo | Los mismos archivos, con la alternativa de acumulación por archivo. | A busca el tramo con 2,42 ML y factura 2,50 ML; B busca con 1,61 ML y factura 1,70 ML. Se facturan 4,20 ML en total, cada parte al precio de su tramo. |
+| CAD con distinto rollo | Archivos con el mismo papel y K, pero distinto ancho de rollo. | En ML forman grupos separados; cada uno determina su tramo y aplica su redondeo. |
+| Redondeo junto al límite | Consumo del grupo de 3,96 ML, incremento de 0,10 ML y un tramo que comienza en 4 ML. | Se facturan 4,00 ML, pero el tramo se elige con 3,96 ML. El redondeo no habilita el tramo de 4 ML. |
+| CAD por formato | Tres planos A1 y dos A1 de la misma combinación, más un A0, en acumulación por combinación. | El grupo A1 busca su tramo con cinco ejemplares; el A0 lo busca con uno. No se mezclan formatos para seleccionar el tramo. |
 | Modalidad CAD guardada | Un tarifario tiene CAD configurado por metro lineal y se abre un pedido nuevo que lo utiliza. | Se aplica ML sin volver a la opción inicial por plano/formato ni pedir que se elija otra vez. |
 | Pedido mixto | Documentos por hoja y planos por ML dentro del mismo pedido y política principal. | Los tramos se calculan por separado en sus unidades. Preparación y mínimo siguen siendo únicos para el pedido; las celdas de ambas secciones pueden simularse con el motor. |
 
@@ -1185,15 +1259,23 @@ valores guardados de forma silenciosa. En ML, D31 requiere obtener la cantidad
 comercial del largo de salida previsto por página y sus copias efectivas,
 incluidos los márgenes de avance, conservando por separado las dimensiones del
 original. La simulación, vista previa y guardado deben compartir ese cálculo.
-La base facturable de m², las agrupaciones y el momento del redondeo se
-completarán en P14.
+La base facturable de m² continúa pendiente en P14. Las agrupaciones y el
+momento del redondeo siguen D33.
 
 La configuración de D32 debe pertenecer a la versión del tarifario y conservar
 la cantidad previa y posterior al ajuste comercial. El cálculo debe manejar
 los incrementos decimales sin agregar un paso de redondeo cuando ya se alcanza
 un múltiplo exacto. No debe modificar las medidas ni los consumos usados para
-costear, ni repetir el ajuste en vista previa, guardado o recotización. La
-relación entre redondeo, acumulación y selección del tramo se completará en P14.
+costear, ni repetir el ajuste en vista previa, guardado o recotización.
+
+La integración de D33 debe agrupar dentro del pedido y tenant correspondientes,
+respetando la modalidad por combinación o por archivo. En ML se conserva la
+cantidad sin redondear que determina el tramo y se aplica el incremento una
+sola vez al total del grupo. Vista previa, guardado, recotización y simulación
+deben compartir ese orden y registrar la composición del grupo, consumo,
+tramo, regla de redondeo y cantidad facturada. Si el guardado separa renglones
+por archivo, el diseño debe conservar el total comercial del grupo sin
+repetir su redondeo ni perder el desglose de consumos físicos.
 
 El modelo de almacenamiento y el punto exacto de integración se definirán
 después de las reglas funcionales. La separación por tenant, los permisos, el
@@ -1204,7 +1286,7 @@ recorridos. El tarifario no cambia las cantidades físicas usadas por producció
 
 1. Partir de P01 a P13 resueltos en D09 a D27 y del alcance de simulación de D28,
    incorporar tomos y terminaciones según D29, CAD y sus unidades según D30
-   y el largo facturable y modalidades de redondeo en ML según D31 y D32,
+   y el largo facturable, redondeo y acumulación según D31 a D33,
    y completar las reglas comerciales pendientes que condicionan el primer alcance.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluida la simulación
    de costos de todas las celdas de las matrices.
@@ -1261,3 +1343,4 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | Incorporación de D30: CAD desde el inicio, por plano y formato como opción inicial y por m² o ML como alternativas. ML queda explícitamente obligatorio, configurable y persistente como modo habitual. Se precisa la separación respecto de las unidades de hojas, la política principal del pedido y la simulación completa. P14 conserva medidas personalizadas y demás reglas CAD. | Confirmado parcial |
 | 2026-10-10 | Incorporación de D31: en ML se cobra el largo de papel consumido previsto, incluidos los márgenes de avance, según rollo, orientación y copias. Se descarta cobrar sólo el largo del plano como modalidad. Se agregan ejemplos; redondeos y base facturable de m² permanecen pendientes en P14. | Confirmado parcial |
 | 2026-10-10 | Incorporación de D32: sin redondeo comercial como opción inicial en ML y redondeo hacia arriba por incremento configurable por tarifario como alternativa. Se conservan consumo y cantidad facturada por separado. El momento del redondeo y la cantidad para seleccionar el tramo se resolverán con la acumulación CAD en P14. | Confirmado parcial |
+| 2026-10-10 | Incorporación de D33: acumulación CAD por combinación dentro del pedido como opción inicial y por archivo como alternativa. En ML se agrupa por papel, gramaje, ancho de rollo, impresión y tarifario, con cobertura cuando se cobra diferenciada; las medidas pueden variar. El consumo sin redondear determina el tramo y se redondea una sola vez por grupo. Se agregan ejemplos de límites, copias y formatos; P14 conserva la base facturable de m² y demás reglas de medidas pendientes. | Confirmado parcial |
