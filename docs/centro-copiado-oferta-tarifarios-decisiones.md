@@ -1,6 +1,6 @@
 # Centro de copiado decisiones de oferta y tarifarios
 
-**Estado:** definición funcional en curso, antes de implementar.
+**Estado:** definición funcional cerrada para el alcance inicial; implementación pendiente.
 **Creado y actualizado:** 10 de octubre de 2026.
 
 Centro de copiado necesita representar la forma de vender de cada gráfica: una
@@ -10,7 +10,8 @@ configuración debe seguir siendo sencilla y accesible desde el módulo.
 
 Este es el registro vivo de ese trabajo. Las decisiones confirmadas provienen
 de lo acordado con Lucas; las propuestas y preguntas conservan su estado hasta
-resolverlas. Crear este documento no aprueba todavía una implementación.
+resolverlas. El cierre funcional y el alcance vigente se resumen en D35 a D38.
+Este documento registra el diseño acordado; no acredita cambios implementados.
 
 ## Decisiones confirmadas
 
@@ -24,7 +25,7 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D06 | La configuración debe seguir siendo fácil y accesible desde Centro de copiado. | 2026-10-10 |
 | D07 | El diseño debe contemplar un futuro portal de pedidos desde el celular, con precios que puedan diferir de los de mostrador. | 2026-10-10 |
 | D08 | Registrar y resolver las decisiones antes de implementar. | 2026-10-10 |
-| D09 | Para impresión en hojas, la unidad se elige por tarifario: hoja física como opción inicial y carilla impresa como alternativa. La sección CAD tiene su propia unidad según D30. | 2026-10-10 |
+| D09 | Para impresión en hojas, la unidad se elige por tarifario: hoja física como opción inicial y carilla impresa como alternativa. La sección CAD utiliza ML según D35. | 2026-10-10 |
 | D10 | El precio y los tramos usan la misma unidad elegida en el tarifario. Un tramo de 100 en un tarifario por hoja significa 100 hojas físicas, también en doble faz. Resuelve P01 junto con D09. | 2026-10-10 |
 | D11 | La acumulación se configura por tarifario: por combinación dentro del pedido como opción inicial y por archivo como alternativa. | 2026-10-10 |
 | D12 | En impresión en hojas, la combinación reúne el mismo papel y gramaje, tamaño, K/CMYK, simple/doble faz y tarifario; D27 incorpora la cobertura cuando se cobra diferenciada. Se considera todo el pedido, incluidas distintas cargas de Centro de copiado. Resuelve P02 junto con D11; los grupos CAD siguen D33. | 2026-10-10 |
@@ -44,12 +45,19 @@ resolverlas. Crear este documento no aprueba todavía una implementación.
 | D26 | Los precios diferenciados por cobertura forman parte del alcance inicial. Su configuración por tarifario y el efecto sobre la acumulación de volumen se completan en D27. | 2026-10-10 |
 | D27 | Cada tarifario puede usar «Precio único para todas las coberturas» como opción inicial o «Precios por cobertura», ambas disponibles desde la primera entrega. En la segunda modalidad los importes por nivel son independientes y la cobertura separa la acumulación de volumen. Con precio único se comparte el grupo comercial y se conserva el costeo por cobertura de cada archivo. Resuelve P13 junto con D26. | 2026-10-10 |
 | D28 | El alcance inicial incluye simular con el motor los costos de todas las celdas de las matrices, para todas las combinaciones ofrecidas y tramos, incluso antes de cargar precios de venta. La matriz debe permitir comparar costos, precios y márgenes para decidir los importes comerciales. Cada simulación identifica sus cantidades y supuestos; no modifica automáticamente precios ni garantiza el margen de todo pedido posible. Amplía D23. | 2026-10-10 |
-| D29 | Los tomos se integran desde el alcance inicial: su impresión se calcula con la matriz y las terminaciones se agregan aparte según ejemplares y materiales. Los juegos determinan las copias efectivas de los archivos. Se conservan las reglas de acumulación del tarifario, preparación y mínimo por pedido, las reglas físicas de doble faz y los costos reales de preparación y armado. Resuelve tomos y terminaciones de P14; el alcance y las unidades CAD se definen en D30. | 2026-10-10 |
-| D30 | CAD forma parte del alcance inicial con una sección propia dentro del tarifario. Ofrece precio por plano y formato como opción inicial, y por m² o metro lineal (ML) como alternativas configurables. ML es un requisito obligatorio desde la primera entrega y puede quedar guardado como modo habitual del tarifario. Precio y tramos usan la misma unidad CAD, sin acumular hojas. Se mantiene una política principal por pedido, preparación y mínimo únicos, y simulación de costos de todas las celdas. La base facturable en ML se define en D31 y la acumulación en D33; las demás reglas de medidas CAD continúan en P14. | 2026-10-10 |
-| D31 | En CAD por ML se cobra el largo de papel consumido previsto para producir el trabajo, incluidos los márgenes de avance de la configuración productiva. Se determina según el rollo y la orientación de impresión y se multiplica por las copias efectivas. Es la base del precio y del tramo; no se ofrece el largo del plano sin márgenes como modalidad de cobro. El redondeo comercial se define en D32 y la base facturable de m² en D34. | 2026-10-10 |
+| D29 | Los tomos se integran desde el alcance inicial: su impresión se calcula con la matriz y las terminaciones se agregan aparte según ejemplares y materiales. Los juegos determinan las copias efectivas de los archivos. Se conservan las reglas de acumulación del tarifario, preparación y mínimo por pedido, las reglas físicas de doble faz y los costos reales de preparación y armado. Resuelve tomos y terminaciones de P14; CAD sigue D35 y pouch amplía las terminaciones en D38. | 2026-10-10 |
+| D30 | CAD forma parte del alcance inicial con una sección propia dentro del tarifario, una política principal por pedido, preparación y mínimo únicos y simulación de costos de todas sus celdas. Precio y tramos usan la misma unidad CAD, sin acumular hojas. La elección original entre plano/formato, m² y ML queda reemplazada por D35: inicialmente sólo ML. | 2026-10-10 |
+| D31 | En CAD por ML se cobra el largo de papel consumido previsto para producir el trabajo, incluidos los márgenes de avance de la configuración productiva. Se determina según el rollo y la orientación de impresión y se multiplica por las copias efectivas. Es la base del precio y del tramo; no se ofrece el largo del plano sin márgenes como modalidad de cobro. El redondeo comercial se define en D32. | 2026-10-10 |
 | D32 | En CAD por ML, «Sin redondeo comercial» es la opción inicial y «Redondear hacia arriba» es la alternativa configurable por tarifario, con un incremento positivo expresado en ML. Se conservan por separado el consumo previsto y la cantidad facturada tras el redondeo. La acumulación, el momento de redondear y la cantidad para seleccionar el tramo siguen D33. | 2026-10-10 |
-| D33 | En CAD se acumula por combinación dentro del pedido como opción inicial y por archivo como alternativa por tarifario. En ML se agrupa por papel y gramaje, ancho de rollo, K/CMYK y tarifario, con cobertura separada cuando tiene precios diferenciados; se pueden sumar planos de distintas medidas. Por plano se separan los formatos y por m² se suman las superficies facturables de la misma combinación. En ML, el consumo sin redondear determina el tramo y el redondeo comercial se aplica una sola vez al total del grupo; en la alternativa por archivo, a cada combinación dentro de éste. El precio del tramo alcanzado se aplica a toda la cantidad facturada. Resuelve la acumulación y el orden del redondeo de P14; la base facturable de m² sigue D34. | 2026-10-10 |
-| D34 | En CAD por m² se cobra la superficie de papel consumido prevista: ancho completo del rollo por largo consumido, incluidos los márgenes de avance y las copias efectivas. Se usa el consumo previo a cualquier redondeo comercial de ML. Se mantiene m² como alternativa de menor prioridad operativa; ML es la prioridad expresada por Lucas y sigue siendo obligatorio desde el inicio. Resuelve la base facturable de m² dentro de P14. | 2026-10-10 |
+| D33 | En CAD se acumula por combinación dentro del pedido como opción inicial y por archivo como alternativa por tarifario. En ML se agrupa por papel y gramaje, ancho de rollo, K/CMYK y tarifario, con cobertura separada cuando tiene precios diferenciados; se pueden sumar planos de distintas medidas. El consumo sin redondear determina el tramo y el redondeo comercial se aplica una sola vez al total del grupo; en la alternativa por archivo, a cada combinación dentro de éste. El precio del tramo alcanzado se aplica a toda la cantidad facturada. Las reglas antes contempladas para plano/formato y m² quedan fuera del alcance inicial por D35. | 2026-10-10 |
+| D34 | Antecedente para una posible modalidad futura de m²: ancho completo del rollo por largo de papel consumido, incluidos márgenes y copias, previo al redondeo comercial de ML. D35 retira m² del alcance inicial por pedido de Lucas; esta referencia no obliga a implementarlo en esta etapa. | 2026-10-10 |
+| D35 | En esta etapa, CAD ofrece únicamente precio por ML. Sustituye la elección de unidades de D30 y pospone plano/formato y m², incluida D34. Los tamaños estándar y personalizados se cotizan por el consumo de D31, con las combinaciones, tramos y redondeo de D32 y D33. Sólo se admiten medidas producibles y condiciones ofrecidas; los precios faltantes siguen D21. Resuelve P14. | 2026-10-10 |
+| D36 | Los tenants existentes conservan su comportamiento y configuración hasta que un usuario autorizado prepare, revise y active expresamente la nueva oferta y política de precios. Se muestran los cambios antes de activar; no se publica una matriz vacía automáticamente. Los borradores requieren revisión explícita al pasar a la nueva política y los documentos emitidos conservan D24. Resuelve P15a. | 2026-10-10 |
+| D37 | Por criterio delegado por Lucas, las combinaciones nuevas se preparan deshabilitadas y se habilitan explícitamente; las celdas nuevas no heredan precios por aproximación y siguen D21. Retirar una combinación impide nuevas ventas y bloquea la emisión de borradores que aún la usan hasta resolverlos. Se conservan versiones, históricos y compromisos vigentes de D24; no se elimina información usada por pedidos. Cambiar los atributos de una combinación crea otra identidad. Resuelve P15b. | 2026-10-10 |
+| D38 | Plastificado pouch se incorpora como terminación posible desde el alcance inicial, habilitable por tenant y cotizada aparte de la impresión, con material y trabajo incluidos en su propio cálculo. Se reutiliza la familia existente del motor y se integra en configuración, selección, cotización y persistencia. Los criterios de integración de esta etapa se detallan abajo. | 2026-10-10 |
+
+**Alcance vigente de CAD: sólo ML (D35).** D34 y los ejemplos anteriores de
+otras unidades conservados en el registro de cambios son antecedentes.
 
 **Simple faz y doble faz tienen precios propios.** La tarifa doble faz no debe
 quedar obligatoriamente calculada como dos veces la tarifa simple faz. Una futura
@@ -64,7 +72,7 @@ física; esa misma unidad expresa el precio de cada celda y los límites de los
 tramos. La elección pertenece al tarifario y debe mostrarse al cargar y
 consultar sus precios.
 
-La sección CAD elige su unidad por separado según D30. Un mismo tarifario puede
+La sección CAD usa ML según D35. Un mismo tarifario puede
 cotizar documentos por hoja y planos CAD por ML, conservando la política
 principal del pedido sin mezclar sus cantidades para determinar tramos.
 
@@ -166,7 +174,7 @@ e impresión según D16. El IVA sigue D17, la preparación D18 y los mínimos D1
 combinaciones los usan inicialmente. Cuando una combinación necesita límites
 diferentes, puede usar sus propios rangos. La unidad sigue siendo la elegida
 para la sección de impresión en hojas según D09 y D10; la sección CAD utiliza
-la unidad propia de D30. Sus rangos se expresan en esa unidad y no reutilizan
+ML según D35. Sus rangos se expresan en esa unidad y no reutilizan
 automáticamente los límites definidos para hojas o carillas.
 
 Ejemplo ficticio de un tarifario por hoja:
@@ -351,7 +359,7 @@ incorpora el mínimo de esa otra fuente.
 
 El mínimo de hojas facturables por documento existente no es una modalidad del
 nuevo esquema acordado. Su migración y la habilitación de los tarifarios se
-resolverán en P15, sin cambiar automáticamente la operación de tenants actuales.
+resuelven en D36, sin cambiar automáticamente la operación de tenants actuales.
 
 ### Prioridad de precios y descuentos
 
@@ -493,7 +501,7 @@ sistema muestra ese efecto sobre el conjunto de Centro de copiado del pedido.
 
 Los documentos emitidos conservan sus precios. La vigencia de versiones y el
 tratamiento de cambios posteriores en los tarifarios siguen D24.
-La habilitación de estas políticas para tenants actuales conserva P15.
+La habilitación de estas políticas para tenants actuales sigue D36.
 
 ### Creación y actualización de precios
 
@@ -704,8 +712,8 @@ inicialmente el comienzo, editable dentro del rango. Por ejemplo, la celda
 50–199 se simula inicialmente con 50 unidades y permite comprobar 100 o 199;
 la celda 200+ comienza con 200. Esto cubre todas las celdas de la matriz, sin
 presentar una simulación a una cantidad como garantía para todo el tramo.
-Las unidades son hojas o carillas en la sección de documentos, o las unidades
-CAD elegidas según D30. En CAD también se deben identificar las medidas
+Las unidades son hojas o carillas en la sección de documentos y ML en CAD
+según D35. En CAD también se deben identificar las medidas
 y el rollo usados en el escenario, necesarios para convertir las unidades
 comerciales en un trabajo que el motor pueda costear.
 
@@ -761,8 +769,9 @@ CMYK, ambos A4 y simple faz, con 10 juegos anillados y tarifario por hoja.
 
 Cada ejemplar contiene 22 hojas en este ejemplo. El cálculo del anillado debe
 usar el espesor y los materiales de ese ejemplar, no tratar las 220 hojas del
-pedido como un solo libro. La terminación seleccionada para el tomo se cobra
-una vez por ejemplar según su cálculo; no se repite por cada archivo incluido.
+pedido como un solo libro. El anillado seleccionado para el tomo se cobra
+una vez por ejemplar; no se repite por cada archivo incluido. El pouch de D38
+usa las hojas físicas seleccionadas, con los juegos del tomo como copias.
 Las terminaciones existentes conservan su configuración y cálculo separados
 de la impresión, incluidos sus materiales, según D16.
 
@@ -782,40 +791,30 @@ ni cambia la cantidad real de papel.
 La vista previa, el tomo guardado, su edición y el resumen del pedido deben
 coincidir y conservar el desglose de impresión, preparación, ajuste por mínimo
 y terminaciones, aunque el tomo se muestre como un único renglón. Los planos
-CAD tienen el alcance propio de D30 y las reglas restantes de P14.
+CAD tienen el alcance propio de D35. El plastificado pouch se integra según D38.
 
 ### Alcance y unidades de planos CAD
 
-**Confirmado en D30:** CAD se integra desde la primera entrega con una sección
-propia dentro del tarifario del canal. El tenant elige su modalidad comercial:
+**Confirmado en D35:** CAD se integra desde la primera entrega con una sección
+propia dentro del tarifario del canal y **únicamente precio por metro lineal**.
+Esta decisión reemplaza la elección inicial de D30. Plano/formato y m² quedan
+fuera de esta etapa y no deben aparecer como modos disponibles ni generar
+celdas que el tenant tenga que completar.
 
-| Modalidad | Precio y cantidad para el tramo |
-| --- | --- |
-| Por plano y formato | Precio por ejemplar del formato correspondiente; el tramo se expresa en cantidad de planos. Es la opción inicial al crear la sección CAD. |
-| Por metro cuadrado | Precio por m² de papel consumido según D34; el tramo se expresa en m². |
-| Por metro lineal | Precio por ML de papel consumido según D31 para el material y ancho de rollo correspondientes; el tramo se expresa en ML. |
+Precio y tramos se expresan en ML de papel consumido según D31. El ancho de
+rollo y el material quedan identificados, porque el mismo largo en rollos de
+distinto ancho no representa el mismo consumo ni necesariamente el mismo precio.
 
-**Metro lineal es obligatorio en el alcance inicial.** Debe poder configurarse,
-guardarse y utilizarse como modalidad habitual del tarifario. «Por plano y
-formato» es sólo el valor inicial al crear la configuración: no sustituye una
-elección guardada de ML ni exige volver a elegirla en cada pedido. El ancho de
-rollo y el material deben quedar identificados, porque el mismo largo en rollos
-de distinto ancho no representa el mismo consumo ni necesariamente el mismo
-precio.
+Ejemplo ficticio: 3 ML facturables a $2.500 por ML dan $7.500 de impresión,
+antes de preparación, mínimo y demás ajustes aplicables. El tramo considera
+metros lineales con cantidades decimales. No se acumulan cantidades CAD con
+las de impresión en hojas.
 
-Ejemplos ficticios, con cantidades comerciales ya determinadas y un precio
-unitario aplicable al tramo correspondiente:
-
-| Modalidad | Cantidad | Precio unitario | Importe de impresión |
-| --- | --- | --- | --- |
-| Plano y formato | 3 planos A1 | $3.000 por plano | $9.000 |
-| Metro cuadrado | 2,5 m² | $4.000 por m² | $10.000 |
-| Metro lineal | 3 ML en un ancho de rollo determinado | $2.500 por ML | $7.500 |
-
-Son ejemplos independientes, antes de preparación, mínimo y demás ajustes
-aplicables. Un tramo CAD de 3 ML considera 3 metros lineales, no 3 planos ni
-3 hojas. Los m² y ML admiten cantidades decimales. No se acumulan cantidades
-CAD con las de impresión en hojas para buscar tramos.
+Los formatos estándar y las medidas personalizadas usan el mismo cálculo de
+consumo. Se valida que quepan en el rollo según orientación y márgenes, sin
+reescalar automáticamente el original. Si las medidas no son producibles,
+se explica el impedimento; si la combinación está ofrecida pero no tiene precio
+en su tramo, se aplica D21. No hace falta una tarifa fija por cada medida.
 
 CAD y documentos conservan una política principal por pedido según D22. La
 sección CAD tiene su unidad y precios propios; no crea otro cargo de preparación
@@ -828,10 +827,10 @@ en ML, deben poder simularse según D28. El precio comercial no cambia las
 medidas físicas del plano. Se conserva el recorrido actual de simple faz.
 
 La medida facturable en ML sigue D31 y la modalidad de redondeo, D32. D33
-define la acumulación entre tamaños y archivos y el orden del redondeo. D34
-define la superficie facturable en m² y conserva ML como prioridad operativa.
-P14 continúa abierto para formatos personalizados sin precio por plano y la
-revisión final de las combinaciones CAD.
+define la acumulación entre tamaños y archivos y el orden del redondeo.
+La combinación comercial queda formada por papel y gramaje, ancho de rollo,
+K/CMYK, tarifario y cobertura cuando se cobra diferenciada. Se conserva simple
+faz para CAD. D35 cierra P14 sin exigir otras modalidades de precio.
 
 ### Largo facturable de papel en CAD por ML
 
@@ -863,8 +862,7 @@ la cantidad en ML corresponde al avance sobre ese rollo. La simulación de D28
 debe usar el mismo consumo que el cálculo comercial y conservar su desglose.
 Los importes comprometidos siguen las reglas de vigencia de D24.
 
-La modalidad m² utiliza ese mismo largo consumido y el ancho completo del
-rollo para determinar la superficie facturable según D34.
+El antecedente de m² de D34 queda fuera de esta etapa según D35.
 
 ### Redondeo comercial de cantidades CAD
 
@@ -940,15 +938,7 @@ si un tramo comienza en 4 ML y un grupo consume 3,96 ML, facturar 4,00 ML por
 redondeo no habilita ese tramo: se usa el que corresponda a 3,96 ML. El costo
 productivo conserva el consumo previsto, sin sumar el incremento comercial.
 
-Las otras unidades CAD conservan la misma elección de alcance:
-
-- **Por plano y formato:** se suman los ejemplares del mismo formato y
-  combinación. Tres A1 y dos A1 aportan cinco A1; los A0 buscan su tramo aparte.
-  Un PDF con varios formatos se divide por combinación, incluso en la
-  alternativa por archivo.
-- **Por m²:** se suman las superficies facturables de la misma combinación,
-  aunque cambien las medidas de los planos. D34 define esa superficie como
-  el papel consumido previsto, incluidos los márgenes y las copias.
+La acumulación por plano/formato o por m² queda fuera de esta etapa por D35.
 
 Agregar, quitar o modificar archivos, copias o condiciones de un borrador
 recalcula los grupos afectados. Cada archivo conserva sus instrucciones y su
@@ -957,9 +947,11 @@ D18 y D19; la vigencia de cotizaciones sigue D24. La simulación de D28 debe
 mostrar consumo, grupo, cantidad para el tramo y cantidad facturada usando
 estas mismas reglas.
 
-### Superficie facturable en CAD por m²
+### Antecedente fuera del alcance inicial: CAD por m²
 
-**Confirmado en D34:** se cobra la superficie del papel consumido previsto
+**D34 queda pospuesta por D35.** Se conserva como referencia para una eventual
+ampliación futura, sin comprometer su implementación. El criterio acordado fue
+cobrar la superficie del papel consumido previsto
 para producir el trabajo. Para cada página seleccionada, se multiplica el
 ancho completo del rollo por el largo de salida previsto, incluidos los
 márgenes de avance, y por sus copias efectivas. Luego se suman las superficies
@@ -976,10 +968,118 @@ ese incremento no representa papel adicional consumido ni debe aumentar la
 superficie calculada. La simulación con el motor conserva este mismo desglose,
 las medidas originales y la configuración productiva utilizada.
 
-Lucas considera m² una modalidad de uso poco frecuente en su operación. Se
-mantiene como alternativa dentro del alcance de D30, con **ML como prioridad
-operativa y requisito desde la primera entrega**. Esta definición no agrega
-nuevas variantes comerciales de m².
+Lucas decidió después limitar la oferta inicial a ML. La simulación de matrices
+de esta etapa cubre todas las celdas de las modalidades vigentes: hojas/carillas
+y CAD por ML; no requiere construir una matriz de m² o de precio por plano.
+
+### Activación en tenants existentes
+
+**Confirmado en D36:** publicar esta mejora no cambia automáticamente la forma
+de cotizar de las empresas existentes. Se conserva su operación con el motor,
+oferta y ajustes actuales hasta una activación expresa por un usuario autorizado.
+
+La configuración inicial se prepara como borrador a partir de la oferta actual.
+El tenant revisa papeles, gramajes, tamaños, terminaciones, política general,
+canales, precios y reglas. La revisión muestra diferencias, combinaciones sin
+precio y simulaciones de costos. Crear la estructura no equivale a publicarla.
+Los faltantes siguen D21 y no se convierten en precios cero.
+
+La activación utiliza las versiones y fechas de D24. Los pedidos nuevos usan
+la política activa; los borradores anteriores se conservan y requieren revisión
+explícita y recálculo antes de emitir bajo la nueva política, sin mezclar precios
+viejos y nuevos. Los presupuestos emitidos vigentes y órdenes mantienen sus
+compromisos. No se reutilizan mínimos o cargos anteriores como una segunda
+capa sobre los de D18 y D19.
+
+La migración debe preservar también las selecciones que hoy usan `null` para
+«todos» o valores por defecto. Ampliar el catálogo de terminaciones con pouch
+no debe habilitarlo automáticamente en empresas que sólo ofrecían anillado.
+
+### Altas, cambios y retiro de combinaciones
+
+**Resuelto en D37 por criterio delegado por Lucas:** la oferta se modifica de
+forma explícita y conserva su histórico. Agregar materia prima o una variante
+al inventario no la habilita automáticamente para la nueva oferta comercial.
+
+| Cambio | Tratamiento |
+| --- | --- |
+| Combinación nueva | Preparar deshabilitada; al habilitarla, crear sus celdas vacías o cargar precios expresamente. Si usa tarifario y falta precio, rige D21; si el canal usa motor, debe poder cotizarse por esa política. |
+| Cambio de papel, gramaje, tamaño, impresión u otro atributo de identidad | Crear una combinación distinta, conservando la anterior y sus referencias. No reinterpretar cotizaciones guardadas. |
+| Retiro comercial | Deshabilitar para nuevas ventas y conservar precios/versiones e histórico. No borrar los registros usados por pedidos. |
+| Borrador con combinación retirada | Conservar el contenido, mostrar el motivo y bloquear emisión/cierre hasta elegir una alternativa ofrecida o reactivar expresamente la combinación y revisar el cálculo. Un precio manual o respaldo no habilita una oferta retirada. |
+| Presupuesto emitido vigente u orden aceptada | Conservar lo comprometido según D24. Si existe un impedimento productivo real, resolverlo comercialmente mediante una revisión explícita, sin sustitución ni recálculo silencioso. |
+| Duplicar un pedido antiguo o revisar uno vencido | Validar contra la oferta y política vigentes; copiar el pedido no reactiva combinaciones retiradas ni prolonga precios vencidos. |
+
+La oferta debe conservar una referencia de versión o instantánea suficiente
+para explicar lo vendido. Los cambios se aplican al confirmar su activación;
+el servidor vuelve a validar oferta y tarifario al emitir para detectar retiros
+ocurridos después de la vista previa. El stock temporal se gestiona por separado
+de la decisión comercial de ofrecer una combinación.
+
+### Plastificado pouch como terminación
+
+**Alcance confirmado en D38:** incorporar «Plastificado pouch» a Centro de
+copiado, junto con las terminaciones existentes. Su material y trabajo se
+cotizan aparte de la impresión según D16. El siguiente criterio de integración
+se define a partir del código relevado, para una operación inicial sencilla.
+
+- El tenant habilita pouch desde la configuración de terminaciones y elige
+  los materiales/variantes ofrecidos por formato, espesor en micrones y acabado
+  disponibles en su catálogo. La selección para una venta debe quedar visible.
+- La unidad es **una hoja física plastificada individualmente, con un pouch**.
+  Simple y doble faz consumen un pouch por hoja; elegir precio de impresión
+  por carilla no cambia este conteo. Se usan las hojas físicas reales, incluida
+  la última hoja impar, sin duplicar el material por caras.
+- El selector muestra sólo variantes habilitadas que contienen la hoja con
+  el margen de sellado del material. Se comprueban dimensiones y orientación;
+  una etiqueta «A4» u «Oficio» por sí sola no acredita compatibilidad.
+  No se cambia de espesor/acabado ni se achica el original automáticamente.
+- Inicialmente se plastifican todas las hojas físicas del archivo seleccionado.
+  Para plastificar sólo una parte, se configura como segmento separado. En un
+  tomo, el pouch se elige por archivo/segmento y usa sus juegos como copias
+  efectivas; el anillado sigue siendo una terminación del tomo por ejemplar.
+- Pouch y anillado pueden coexistir donde el armado sea producible. El espesor
+  final y las dimensiones de las hojas plastificadas deben participar en la
+  validación del anillo y las tapas. Se preserva la selección por segmento al
+  guardar y reabrir el tomo.
+- El motor calcula material, tiempo y precio de esta terminación con su
+  configuración. El importe se agrega una sola vez después del mínimo de
+  impresión más preparación; no altera el volumen de impresión ni agrega
+  otro cargo de preparación del pedido. Los costos operativos del paso se
+  conservan y su IVA se desglosa sin duplicación.
+- Si faltan material compatible, configuración productiva o costeo, se conserva
+  el borrador con el motivo y se bloquea el cierre de esa selección. No se
+  omite el pouch silenciosamente ni se lo cobra como gratuito.
+
+Ejemplos ficticios: un documento de 10 páginas, tres copias y simple faz genera
+30 hojas y 30 pouches; en doble faz genera 15 hojas y 15 pouches. Uno de 11
+páginas, tres copias y doble faz genera 18 hojas y 18 pouches, cualquiera sea
+el tratamiento comercial de la última cara de D15.
+
+La oferta inicial de pouch corresponde a hojas y segmentos de tomos. La ruta
+actual CAD conserva sus restricciones de terminaciones; ofrecer CAD por ML
+no habilita automáticamente plastificar rollos. El alcance del motor general
+para acomodar varias piezas en un pouch también se conserva: este recorrido
+de Centro de copiado debe solicitar expresamente plastificado individual.
+
+**Base existente y trabajo necesario:**
+
+| Punto | Evidencia y cambio previsto |
+| --- | --- |
+| Familia del motor | [Familias de pasos](../apps/api/src/productos-servicios/pasos/familias.ts): `plastificado_pouch`, opcional, material obligatorio en slot `pouch`, relación M-0 y tiempo T-2. Reutilizarla; no exigir una nueva plantilla de máquina para poder ofrecer la terminación. |
+| Material y unidades | [Presets de materiales](../apps/api/prisma/seed-modulos/material-presets.js) y [unidades](../apps/api/src/inventario/material-units.ts): `LAMINADO_POUCH`, variantes con medidas, micrones, acabado y unidades por pack. Usar costo/consumo por pouch, respetando la conversión de compra por pack; no confundir una funda con dos unidades por sus caras. |
+| Geometría | [Dispatcher del motor](../apps/api/src/motor-universal/nesting-dispatcher.ts) y [configuración de geometría](../apps/api/src/motor-universal/nesting-config.ts): el cálculo actual puede acomodar varias piezas por pouch y descuenta el margen no usable. Agregar un modo explícito de plastificado individual para CC, conservando la validación de encaje y el comportamiento general existente. |
+| Catálogo y configuración de CC | [Dominio](../apps/api/src/centro-copiado/centro-copiado.domain.ts), [DTO de configuración](../apps/api/src/centro-copiado/dto/centro-copiado-config.dto.ts) y [pantalla](../src/components/comercial/centro-copiado-config-view.tsx): hoy el catálogo y el DTO sólo admiten Anillado. Ampliar catálogo, habilitación, variantes y validación por tenant. |
+| Ruta y disponibilidad | [Provisión de plantilla](../apps/api/src/centro-copiado/provisionar-plantilla.ts) y [salud](../apps/api/src/centro-copiado/centro-copiado-salud.service.ts): incorporar el paso opcional de forma idempotente, sin alterar pasos existentes; comprobar material y configuración de tiempo/costo antes de ofrecerlo. |
+| Cotización y guardado | [Servicio](../apps/api/src/centro-copiado/centro-copiado.service.ts), [adaptador](../apps/api/src/centro-copiado/adaptador.ts) y [persistencia de tomos](../apps/api/src/centro-copiado/persistencia-tomo.ts): actualmente el desglose está centrado en anillado. Generalizar el resultado de terminaciones, conservar pouch por segmento y separar impresión por matriz del adicional calculado por el motor. |
+| Contrato y venta | [API del navegador](../src/lib/centro-copiado-api.ts) y [selector de CC](../src/components/comercial/centro-copiado-sheet.tsx): transportar variante, cantidad y desglose de pouch en vista previa, guardado, edición y resumen. La unidad del documento sigue siendo hoja/libro según corresponda; agregar pouch no lo convierte en libro. |
+
+El modo individual debe contar una funda por hoja efectiva, sin fingir medidas
+mayores para impedir el acomodo. La separación de importes debe usar el mismo
+cálculo en todos los recorridos. El código actual desglosa anillado comparando
+cotizaciones con y sin el paso; al incorporar matrices y varias terminaciones
+hay que preservar un desglose coherente que no cobre nuevamente impresión,
+preparación o mínimos ni reste resultados de políticas de precio diferentes.
 
 ## Base actual del módulo
 
@@ -1044,10 +1144,9 @@ La unidad del precio y de los tramos de impresión en hojas se elige por
 tarifario según D09 y D10: hoja física inicialmente, con carilla impresa como
 alternativa. Los rangos son generales por tarifario, con excepciones por
 combinación según D14.
-La sección CAD usa su propia unidad y precios conforme a D30; las medidas
+La sección CAD usa únicamente ML conforme a D35; las medidas
 en ML se cobran por el largo de papel consumido según D31, con redondeo
-configurable según D32 y acumulación según D33. En m² se cobra superficie de
-papel consumido según D34. Las demás reglas CAD se completarán en P14.
+configurable según D32 y acumulación según D33.
 
 La generación de estructura, carga manual, pegado desde Excel, duplicación,
 sugerencias del motor y actualizaciones masivas están confirmadas en D23.
@@ -1088,50 +1187,45 @@ Durante la venta se mostrarían las opciones habilitadas y el origen del precio,
 por ejemplo: «Tarifario online · A4 · Obra 80 g · K · doble faz · tramo 100–499».
 Los costos y márgenes conservarían sus permisos de acceso.
 
-## Decisiones pendientes
+## Cierre de decisiones funcionales
 
 P01 está resuelto en D09 y D10, P02 en D11 y D12, P03 en D13, P04 en D14 y P05
 en D15, P06 en D16 a D19, P07 en D20, P08 en D21, P09 en D22 y el alcance de P10
 en D23, P11 en D24, P12 en D25 y P13 en D26 y D27. D28 amplía el alcance inicial
 con la simulación de costos de todas las celdas de las matrices. D29 resuelve
-tomos y terminaciones de P14, D30 el alcance y las unidades de CAD y D31 el
-largo de papel consumido como base facturable en ML. D32 define las modalidades
-de redondeo comercial y D33 la acumulación, el tramo sobre consumo sin redondear
-y el redondeo una sola vez por grupo en ML. D34 resuelve la superficie facturable
-en m². P14 conserva el cierre de formatos personalizados y combinaciones CAD.
-Las preguntas restantes deben resolverse antes de activar el recorrido completo.
+tomos y terminaciones de P14. D31 a D33 definen el consumo, redondeo y
+acumulación CAD. D35 cierra P14 limitando esta etapa a ML; D34 queda como
+antecedente fuera de alcance. D36 y D37 cierran P15. D38 incorpora pouch.
 
-| Referencia | Pregunta por resolver | Propuesta inicial o aspecto a contrastar |
+| Referencia | Tema | Resolución |
 | --- | --- | --- |
-| P14 | ¿Cómo se resuelven formatos CAD personalizados sin precio por plano? | D30 a D34 resuelven unidades, consumo, acumulación y redondeo en ML. Propuesta: en ML o m², calcular el consumo para medidas producibles y ofrecidas; por plano/formato, usar precio específico o la política explícita de D21, sin asignar automáticamente otro formato. Revisar con este cierre los detalles restantes de las combinaciones CAD. |
-| P15a | ¿Cómo se habilita la nueva oferta en tenants existentes? | Parte de P15. Propuesta: conservar su comportamiento actual hasta que configuren, revisen y activen expresamente la nueva oferta y sus tarifarios. |
-| P15b | ¿Qué ocurre al agregar o retirar combinaciones de la oferta? | Parte de P15. Propuesta: las nuevas requieren habilitación y precio o respaldo explícito; las retiradas dejan de ofrecerse para nuevas ventas, conservando históricos y compromisos de D24. Precisar el efecto en borradores. |
+| P14 | Formatos y modalidades CAD | Resuelto por D35: sólo ML, con consumo de medidas estándar o personalizadas producibles y ofrecidas. Sin precio por plano/formato o m² en esta etapa. |
+| P15a | Empresas existentes | Resuelto por D36: conservar su operación hasta configuración, revisión y activación explícitas. |
+| P15b | Altas y retiros de oferta | Resuelto por D37 con criterio delegado: habilitación expresa, retiro sin borrar históricos, revisión de borradores y respeto de compromisos emitidos. |
+| Ampliación | Plastificado pouch | Incorporado por D38, con integración sobre la familia del motor existente y cobro por hoja física plastificada. |
 
-Con lo relevado, quedan **tres definiciones de negocio para cerrar el documento**:
-P14, P15a y P15b. Las propuestas de esta tabla aún no están confirmadas.
-Separar P15 en dos partes hace explícitos sus pendientes; no agrega alcance.
+**No quedan decisiones de negocio bloqueantes identificadas para el alcance
+inicial.** La definición funcional queda cerrada con las decisiones vigentes.
 
-Después se prepara el diseño de pantallas, modelo de datos, permisos concretos,
-integración del cálculo y plan de pruebas e implementación. Estos detalles se
-resolverán usando las decisiones confirmadas; sólo se volverá a consultar si
-aparece una elección que cambie el comportamiento comercial acordado. El cierre
-del documento permitirá pasar a esa etapa sin extender la ronda de decisiones
-por cada detalle técnico.
+El trabajo restante es diseño técnico, implementación y validación: pantallas,
+modelo de datos, permisos concretos e integración del cálculo. Sólo se volverá
+a consultar si aparece una elección que cambie el comportamiento comercial
+acordado. Las ideas antiguas de comodines y las modalidades CAD pospuestas
+no agregan requisitos a la primera entrega.
 
-## Casos para acordar resultados
+## Casos y resultados esperados
 
 Todos los ejemplos son ficticios. Los conteos describen documentos separados
 cuyas copias comienzan en un frente. La unidad sigue D09 y D10 y la acumulación,
 D11 y D12, con cobertura diferenciada según D27. El precio del tramo se aplica
 según D13 y los rangos siguen D14.
-La clasificación comercial de la última hoja sigue D15. Las demás reglas
-conservan los pendientes indicados en cada caso.
-Los casos CAD siguen D30 a D34, con el tramo en ML determinado antes del
-redondeo comercial del grupo.
+La clasificación comercial de la última hoja sigue D15. Los casos CAD vigentes
+siguen D31 a D33 y D35, con el tramo en ML determinado antes del redondeo
+comercial del grupo. Activación y oferta siguen D36 y D37; pouch sigue D38.
 Las páginas son las seleccionadas para imprimir, no necesariamente todas las
 del archivo original.
 
-| Caso | Entrada | Resultado acordado o decisión pendiente |
+| Caso | Entrada | Resultado esperado |
 | --- | --- | --- |
 | Simple y doble faz | El mismo documento de 10 páginas, una copia, A4 y K, en ambas opciones. | Tarifario por hoja: 10 unidades simple y 5 doble. Por carilla: 10 en ambas modalidades. Precios independientes según D04. |
 | Última cara vacía | 11 páginas, 3 copias, doble faz. | Opción inicial: 18 hojas o 33 carillas a tarifa doble. Alternativa: 15 hojas dobles y 3 simples, o 30 carillas dobles y 3 simples. Cada parte busca su tramo según D15. |
@@ -1193,10 +1287,16 @@ del archivo original.
 | CAD por archivo | Los mismos archivos, con la alternativa de acumulación por archivo. | A busca el tramo con 2,42 ML y factura 2,50 ML; B busca con 1,61 ML y factura 1,70 ML. Se facturan 4,20 ML en total, cada parte al precio de su tramo. |
 | CAD con distinto rollo | Archivos con el mismo papel y K, pero distinto ancho de rollo. | En ML forman grupos separados; cada uno determina su tramo y aplica su redondeo. |
 | Redondeo junto al límite | Consumo del grupo de 3,96 ML, incremento de 0,10 ML y un tramo que comienza en 4 ML. | Se facturan 4,00 ML, pero el tramo se elige con 3,96 ML. El redondeo no habilita el tramo de 4 ML. |
-| CAD por formato | Tres planos A1 y dos A1 de la misma combinación, más un A0, en acumulación por combinación. | El grupo A1 busca su tramo con cinco ejemplares; el A0 lo busca con uno. No se mezclan formatos para seleccionar el tramo. |
-| CAD por superficie consumida | Plano de 600 × 1.200 mm, colocado con 600 mm a lo ancho de un rollo de 900 mm, 5 mm de margen inicial y final y dos copias. | Cada copia aporta 0,90 × 1,21 = 1,089 m²; dos aportan 2,178 m². El área incluye todo el ancho del papel y usa el largo consumido sin redondeo comercial de ML, según D34. |
-| Modalidad CAD guardada | Un tarifario tiene CAD configurado por metro lineal y se abre un pedido nuevo que lo utiliza. | Se aplica ML sin volver a la opción inicial por plano/formato ni pedir que se elija otra vez. |
+| CAD sólo ML | Se crea un tarifario y se cotizan planos estándar y personalizados. | Precio y tramos se expresan en ML de papel consumido. No se ofrecen ni se generan matrices por plano/formato o m². |
 | Pedido mixto | Documentos por hoja y planos por ML dentro del mismo pedido y política principal. | Los tramos se calculan por separado en sus unidades. Preparación y mínimo siguen siendo únicos para el pedido; las celdas de ambas secciones pueden simularse con el motor. |
+| Empresa sin activar tarifarios | Se publica la mejora y una empresa continúa con su configuración anterior. | Conserva su comportamiento; crear borradores de oferta o tarifas no los activa. Pouch no se agrega automáticamente a su oferta. |
+| Oferta retirada en borrador | Un borrador contiene una combinación retirada antes de emitir. | Se conserva para editar, se muestra el motivo y se bloquea emisión/cierre hasta resolver la oferta y revisar el cálculo. |
+| Oferta retirada con compromiso | Se retira un papel usado por un presupuesto emitido vigente. | Se conserva el precio y la configuración comprometidos según D24; las nuevas ventas no ofrecen ese papel. |
+| Pouch y caras | Documento de 10 páginas, tres copias, plastificado individual de todas sus hojas. | Simple faz: 30 hojas y 30 pouches. Doble faz: 15 hojas y 15 pouches. El conteo no depende de si la impresión se cobra por hoja o carilla. |
+| Pouch con última hoja impar | Documento de 11 páginas, tres copias, doble faz. | 18 hojas y 18 pouches. D15 puede cambiar el precio de impresión de la última hoja, pero no el consumo de fundas. |
+| Pouch dentro de tomo | Tomo de cinco juegos con un segmento de dos páginas simple faz seleccionado para pouch y el resto sin plastificar. | 10 pouches para ese segmento; el anillado, si se selecciona, se calcula sobre cinco ejemplares con su espesor final. Reabrir el tomo conserva ambas selecciones sin duplicar cantidades. |
+| Pouch incompatible | Hoja que no cabe en el material elegido descontando su margen de sellado. | Se explica la incompatibilidad y se bloquea el cierre hasta corregirla; no se reduce la hoja ni se omite la terminación. |
+| Pouch y mínimo | Impresión más preparación quedan bajo el mínimo y se selecciona pouch. | Primero se aplica el mínimo de D19 a impresión más preparación; luego se suma el pouch con su material, trabajo e IVA correspondientes. |
 
 ## Integración técnica por definir
 
@@ -1287,19 +1387,16 @@ comercial único de D18; unificar o guardar un tomo no puede reiniciar los grupo
 del pedido ni aplicar otra vez su mínimo. La vista previa, edición, persistencia
 y resumen deben usar el mismo desglose.
 
-La implementación de D30 debe separar las unidades comerciales CAD del conteo
+La implementación de D35 debe separar los ML comerciales CAD del conteo
 de páginas y copias y conservar las medidas reales por página. ML debe
 persistirse como modalidad del tarifario y participar en vista previa, guardado,
 edición y simulación desde el alcance inicial. Los límites y referencias de
-los tramos de m² y ML deben contemplar cantidades decimales. Cambiar de unidad
-requiere revisar los rangos e importes de la nueva versión, sin reinterpretar
-valores guardados de forma silenciosa. En ML, D31 requiere obtener la cantidad
-comercial del largo de salida previsto por página y sus copias efectivas,
+los tramos de ML deben contemplar cantidades decimales. D31 requiere obtener
+la cantidad comercial del largo de salida previsto por página y sus copias efectivas,
 incluidos los márgenes de avance, conservando por separado las dimensiones del
 original. La simulación, vista previa y guardado deben compartir ese cálculo.
-En m², D34 utiliza el ancho completo del rollo multiplicado por ese largo
-consumido y sus copias, antes de ajustes comerciales de ML. Las agrupaciones
-y el momento del redondeo en ML siguen D33.
+Las agrupaciones y el momento del redondeo en ML siguen D33. No se requiere
+implementar conversión comercial a m² o precio fijo por formato en esta etapa.
 
 La configuración de D32 debe pertenecer a la versión del tarifario y conservar
 la cantidad previa y posterior al ajuste comercial. El cálculo debe manejar
@@ -1316,27 +1413,46 @@ tramo, regla de redondeo y cantidad facturada. Si el guardado separa renglones
 por archivo, el diseño debe conservar el total comercial del grupo sin
 repetir su redondeo ni perder el desglose de consumos físicos.
 
+La implementación de D36 y D37 debe preservar los valores efectivos de la
+configuración anterior, versionar o conservar instantáneas de la oferta y
+validar su vigencia al emitir. Las migraciones deben ser aditivas y conservar
+datos e históricos; no deben regenerar precios ni activar nuevas terminaciones
+por ampliar listas por defecto. El cambio de política debe alcanzar todos los
+recorridos de cotización y guardado sin alterar pedidos ya comprometidos.
+
+D38 requiere separar las terminaciones por hoja de las de armado por ejemplar.
+El registro de cada segmento debe conservar variante de pouch, cantidad física,
+consumo, tiempo, precio e impuestos del cálculo. La selección y el modo
+individual se validan en el servidor. Los cambios al motor general deben
+conservar sus usos existentes de varias piezas por pouch; la configuración
+especial de Centro de copiado no debe alterar otras recetas del tenant.
+
 El modelo de almacenamiento y el punto exacto de integración se definirán
-después de las reglas funcionales. La separación por tenant, los permisos, el
+en el diseño técnico. La separación por tenant, los permisos, el
 desglose comercial y las validaciones de oferta deben conservarse en todos los
 recorridos. El tarifario no cambia las cantidades físicas usadas por producción.
 
 ## Orden de trabajo propuesto
 
-1. Partir de P01 a P13 resueltos en D09 a D27 y del alcance de simulación de D28,
-   incorporar tomos y terminaciones según D29, CAD y sus unidades según D30
-   y el largo facturable, redondeo, acumulación y superficie según D31 a D34.
-   Cerrar las tres definiciones comerciales restantes: P14, P15a y P15b.
+1. Diseñar el modelo de oferta, versiones, tarifarios y cálculo común con las
+   decisiones D01 a D38 vigentes y el cierre CAD sólo ML de D35. Precisar las
+   migraciones aditivas y la activación compatible de D36 y D37.
 2. Diseñar la experiencia de Oferta, Tarifarios y Canales, incluida la simulación
-   de costos de todas las celdas de las matrices.
-3. Implementar la oferta de tamaños por papel y gramaje con compatibilidad para
-   configuraciones existentes.
-4. Implementar matrices y asignación por canal como un conjunto, incorporando
-   versiones, precios por cobertura, tomos, terminaciones, CAD con ML desde el
-   inicio y resolución común del precio.
-5. Verificar en local cotización, guardado, recotización, tomos, terminaciones,
-   permisos y separación entre tenants con datos ficticios.
-6. Preparar un lote coherente para validación en staging según el
+   de costos de todas las celdas y la configuración de pouch de D38.
+3. Implementar oferta, matrices, versiones y canales con un cálculo comercial
+   compartido. Integrar hojas/carillas, cobertura, CAD por ML, prioridad de
+   precios, preparación, mínimos y controles de margen.
+4. Integrar tomos y terminaciones, incluido pouch: catálogo y materiales,
+   paso opcional, modo individual, selección por segmento y persistencia del
+   desglose. Reutilizar el motor para costos y adicionales.
+5. Implementar las herramientas de carga/actualización y simulación completa,
+   y conectar edición, recotización y emisión al mismo cálculo.
+6. Verificar en local con datos ficticios los casos acordados, la preservación
+   de empresas sin activar y la separación por tenant. Para pouch comprobar
+   simple/doble faz, impares, copias/juegos, encaje, unidades de pack, combinación
+   con anillado, guardado/reapertura y ausencia de cargos duplicados. Verificar
+   que el modo general de varias piezas por pouch siga funcionando.
+7. Preparar un lote coherente para validación en staging según el
    [flujo de trabajo del proyecto](flujo-pull-requests.md).
 
 El portal online es un consumidor futuro de esta base. Su construcción y las
@@ -1384,3 +1500,6 @@ resueltos dejarán de aparecer como preguntas abiertas.
 | 2026-10-10 | Incorporación de D32: sin redondeo comercial como opción inicial en ML y redondeo hacia arriba por incremento configurable por tarifario como alternativa. Se conservan consumo y cantidad facturada por separado. El momento del redondeo y la cantidad para seleccionar el tramo se resolverán con la acumulación CAD en P14. | Confirmado parcial |
 | 2026-10-10 | Incorporación de D33: acumulación CAD por combinación dentro del pedido como opción inicial y por archivo como alternativa. En ML se agrupa por papel, gramaje, ancho de rollo, impresión y tarifario, con cobertura cuando se cobra diferenciada; las medidas pueden variar. El consumo sin redondear determina el tramo y se redondea una sola vez por grupo. Se agregan ejemplos de límites, copias y formatos; P14 conserva la base facturable de m² y demás reglas de medidas pendientes. | Confirmado parcial |
 | 2026-10-10 | Incorporación de D34: en m² se cobra el ancho completo del rollo por largo consumido, con márgenes y copias, antes del redondeo comercial de ML. Se registra ML como prioridad operativa y m² como alternativa de uso secundario. Revisión de pendientes: quedan P14, P15a y P15b para el cierre funcional; sus propuestas aún requieren confirmación. | Confirmado parcial |
+| 2026-10-10 | D35 reemplaza la elección de unidades de D30: CAD sólo por ML en esta etapa. Precio por plano/formato y m² quedan pospuestos, incluida D34. Se actualizan alcance, ejemplos y simulación; P14 queda resuelto. | Confirmado |
+| 2026-10-10 | D36 confirma conservar la operación de empresas existentes hasta preparación, revisión y activación explícitas. D37 resuelve altas y retiros por criterio delegado: oferta nueva deshabilitada inicialmente, retiro sin borrar históricos, bloqueo de borradores afectados y respeto de compromisos emitidos. P15a y P15b quedan resueltos. | Confirmado / criterio delegado |
+| 2026-10-10 | D38 incorpora plastificado pouch al alcance inicial. Revisión del catálogo de CC, familia del motor, materiales y geometría existentes; definición del recorrido por hoja física y del trabajo de integración en tomos, configuración y guardado. Se cierra la definición funcional y se actualiza el orden de implementación. | Alcance confirmado; implementación pendiente |
