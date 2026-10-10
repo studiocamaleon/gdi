@@ -11,9 +11,10 @@ import { textoWhatsappWeb } from '../notificaciones/whatsapp-web-texto';
 const raw = new PrismaClient();
 const db = raw.$extends(tenantGuardExtension) as unknown as PrismaService;
 const service = new AutomaticosWebService(db);
-const numero = '5492966123456';
+const numero = '5492966456789';
 let tenantId: string, clienteId: string;
 const dispositivoId = randomUUID();
+const planId = randomUUID();
 const ctx = () => ({ tenantId, dispositivoId, numero });
 const dentro = <T>(fn: () => Promise<T>) => runWithTenant(tenantId, fn);
 async function nueva() {
@@ -37,16 +38,29 @@ async function nueva() {
   });
 }
 beforeAll(async () => {
+  if (!new URL(process.env.DATABASE_URL!).pathname.endsWith('_test'))
+    throw new Error('Requiere una base de test.');
   const tenant = await raw.tenant.create({
     data: { nombre: 'Test avisos Web', slug: `test-web-${randomUUID()}` },
   });
   tenantId = tenant.id;
+  await raw.plan.create({
+    data: {
+      id: planId,
+      codigo: `avisos-web-${planId}`,
+      nombre: 'Plan ficticio con avisos',
+      precioMensual: 0,
+      publico: false,
+      featuresJson: { whatsapp: true },
+      suscripciones: { create: { tenantId, estado: 'activa', proveedor: 'manual' } },
+    },
+  });
   const cliente = await raw.cliente.create({
     data: {
       tenantId,
       nombre: 'Prueba',
       telefonoCodigo: '+54',
-      telefonoNumero: '2966123456',
+      telefonoNumero: '2966456789',
       paisCodigo: 'AR',
     },
   });
@@ -78,6 +92,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await raw.tenant.deleteMany({ where: { id: tenantId } });
+  await raw.plan.deleteMany({ where: { id: planId } });
   await raw.$disconnect();
 });
 
@@ -212,10 +227,10 @@ test('el canal se congela al encolar; los avisos antiguos conservan WATI', async
       parametros: ['Cliente', 'OT-2', '11/09/2026', 'https://example.com/ot'],
     };
     const a = await queue.encolar(event);
-    expect(a.encolada).toBe(true);
+    expect(a).toEqual({ encolada: true, id: expect.any(String) });
     await service.configurar(tenantId, { ...ctx(), modo: 'WHATSAPP_WEB' });
     const b = await queue.encolar({ ...event, entidadId: randomUUID() });
-    expect(b.encolada).toBe(true);
+    expect(b).toEqual({ encolada: true, id: expect.any(String) });
     const rows = await raw.notificacionWhatsapp.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'asc' },
