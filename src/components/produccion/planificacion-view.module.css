@@ -12,6 +12,8 @@
   width: 100%;
   min-width: 0;
   height: calc(100dvh - 52px);
+  /* La barra superior puede ocupar dos filas o incluir avisos del entorno. */
+  max-height: 100%;
   padding: 20px 24px 16px;
   min-height: 0;
   background: var(--canvas-background);
