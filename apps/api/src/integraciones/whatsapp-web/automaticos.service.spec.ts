@@ -91,9 +91,14 @@ beforeEach(async () => {
   });
 });
 afterAll(async () => {
-  await raw.tenant.deleteMany({ where: { id: tenantId } });
-  await raw.plan.deleteMany({ where: { id: planId } });
-  await raw.$disconnect();
+  try {
+    if (tenantId) {
+      await raw.tenant.deleteMany({ where: { id: tenantId } });
+      await raw.plan.deleteMany({ where: { id: planId } });
+    }
+  } finally {
+    await raw.$disconnect();
+  }
 });
 
 test('una reserva y un inicio entre múltiples emisores; confirmar dos veces no duplica', async () =>

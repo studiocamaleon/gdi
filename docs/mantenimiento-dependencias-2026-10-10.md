@@ -19,4 +19,4 @@ La restricción de versiones se aplica al mantenimiento ordinario. Las alertas d
 
 ## Evidencia
 
-Validación en curso. Las revisiones, imágenes, resultados y límites se completarán en este documento y en los registros de staging y producción antes de cerrar el lote. No interpretar esta preparación como una publicación terminada.
+Publicado y comprobado en staging y producción con revisión `9efc08ffe89afa9a833cf04970e1018ad1939550`. Pasaron 1.224 pruebas locales, CI completo, CodeQL y preview de Vercel. Ver [staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md) para digests, respaldos, limitaciones y reversión. El commit de integración final conserva los commits de #60, #61 y #67; el cierre de los PR incluidos se verifica al fusionar #70.

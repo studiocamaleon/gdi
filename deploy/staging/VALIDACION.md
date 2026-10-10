@@ -1,5 +1,36 @@
 # Validación de staging — historial
 
+## 10/10/2026 — Mantenimiento de dependencias (#70)
+
+**Revisión ejecutada:** `9efc08ffe89afa9a833cf04970e1018ad1939550`. PR incluidos: #60, #61 y #67, con sus commits conservados. El titular autorizó el lote, las pruebas, staging y producción.
+
+| Servicio | Digest |
+| --- | --- |
+| api | `sha256:8d0323160ae2294449c57c7b4aa3431f26ec9839ecca774ed917bd3d5699d209` |
+| web | `sha256:922d3719b203818e1dbd101ea9320efb671790d087b588a3ab249d5b62c44ff6` |
+| respaldo | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+La imagen de API se comparte con los workers general y PDF. Gotenberg conserva su imagen anterior. Seis máquinas iniciadas y saludables, sin cambios de tamaños, redes ni credenciales; 312 migraciones, sin migraciones nuevas ni seeds.
+
+Pasaron 1.224 pruebas locales (incluidas 429 de Grafo3D), CI HTTP, dependencias de ejecución, CodeQL, Vercel y contenedores completos. Se corrigió un escenario antiguo de prueba de WhatsApp con teléfono ficticio inválido y se agregó su plan explícito; no cambió el comportamiento comercial de la aplicación. La restauración aislada comprobó PostgreSQL, rol lector, cifrado, recuperación y cuatro archivos ficticios.
+
+El worker de staging ejecutó una cola sintética con BullMQ 6.3.11, fallo provocado, reintento y confirmación del segundo intento; se retiraron los recursos de ensayo. En Chrome se comprobó Planificación normal y ampliada, carga de Facturación y su enlace al historial, y el formulario de cliente con Argentina y limpieza de un teléfono ficticio pegado con separadores; no se guardaron registros.
+
+Staging mantiene el proveedor fiscal manual: ese recorrido no prueba ARCA. La consulta fiscal real de sólo lectura se comprueba en el worker de producción.
+
+**Respaldo posterior:** `6189d834-2751-4372-b12f-b8f120865bbb`, completado `2026-10-10T07:06:10.773Z`; firma y manifiesto descifrado comprobados, 312 migraciones y 24 archivos. Incluye fuentes custodiadas y referencias exactas a las imágenes. Esta lectura del respaldo real no repite una restauración SQL completa; la restauración con datos sintéticos se probó por separado.
+
+**Límites:** la extensión se actualiza y comprueba en el repositorio; no se instala en navegadores de clientes. Las pruebas automáticas no equivalen a todas las interacciones posibles. Los PR #63, #64, #68 y #69 conservan verificaciones independientes; #62, #65 y #66 se cerraron sin incorporar por incompatibilidad o política de soporte.
+
+**Reversión:** sin cambios de esquema, volver a las imágenes previas registradas:
+
+- api: `registry.fly.io/grafoprint-staging-api@sha256:a28ee9c0bbd573f646cda5ad9310a4125f2c6c107b045674c0ff26238561c126`.
+- web: `registry.fly.io/grafoprint-staging-web@sha256:d9ea0620d4f9d30bd29353a1d29ff2379e20ed90b4c00259b8c39c708ab9fc99`.
+- respaldo: `registry.fly.io/grafoprint-staging-respaldo@sha256:766e1ba841ffc48c6ca2425ae02c385a2fbded3942083aed3abcf1a30107b2b4`.
+
+Actualizar el inventario de respaldo y comprobar salud si se revierte. El merge final podrá diferir de la revisión ejecutada sólo por documentación, limpieza del escenario de prueba y el commit de integración.
+
+
 ## Primer ingreso e impresión rígida con corte — 01/10/2026, 16:20 UTC
 
 - Publicación conjunta autorizada. API y ambos workers ejecutan `b378ae41ead10c5a6ad08b0432aabecb660a5859`, imagen `registry.fly.io/grafoprint-staging-api@sha256:f4171c0f2035177c75d8794a52a0cbfc526687f1b9897726a9e57088ab8e0319`. Web conserva `c42d6d506`; PDF y copiador conservan sus imágenes. Mismas máquinas y tamaños; sin nuevas migraciones, seeds, resets ni cambios de DNS.
