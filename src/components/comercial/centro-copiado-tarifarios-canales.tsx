@@ -24,7 +24,6 @@ import {
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import * as api from "@/lib/centro-copiado-tarifarios-api";
 import {
-  AvisoPreparacion,
   Elegir,
   ErrorTarifa,
   mensajeErrorTarifa,
@@ -193,14 +192,15 @@ export function CentroCopiadoCanales({
     !cambios && preview && preview.borrador.revision === base?.revision;
   return (
     <div className="grid gap-4">
-      <AvisoPreparacion />
       <ErrorTarifa error={error} />
       <Card>
         <CardHeader>
           <CardTitle>Precios por canal de venta</CardTitle>
           <CardDescription>
             Definí una política general y sólo las excepciones que necesites.
-            Varios canales pueden compartir un tarifario sin duplicarlo.
+            Varios canales pueden compartir un tarifario. Guardá y revisá esta
+            asignación antes de activarla en pedidos; los presupuestos emitidos
+            conservan sus precios.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
@@ -247,7 +247,13 @@ export function CentroCopiadoCanales({
             )
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <Badge variant="outline">En preparación</Badge>
+            <Badge variant="outline">
+              {base?.activaRevision === base?.revision
+                ? "Asignación activa"
+                : base?.operativa
+                  ? "Cambios pendientes de activar"
+                  : "En preparación"}
+            </Badge>
             {cambios && <Badge variant="secondary">Cambios sin guardar</Badge>}
             <div className="flex flex-wrap gap-2 sm:ml-auto">
               <Button
@@ -262,6 +268,41 @@ export function CentroCopiadoCanales({
                   ? "Recargar asignación guardada"
                   : "Actualizar vista previa"}
               </Button>
+              {puedeGestionar && (
+                <Button
+                  variant="outline"
+                  disabled={
+                    ocupado ||
+                    cambios ||
+                    !base?.revision ||
+                    base.activaRevision === base.revision ||
+                    !previewActual ||
+                    preview.canales.some((c) => c.estado === "PENDIENTE")
+                  }
+                  onClick={async () => {
+                    if (!base || bloqueo.current) return;
+                    bloqueo.current = true;
+                    setOcupado(true);
+                    setError(null);
+                    try {
+                      const nueva = await api.activarPoliticaTarifarios(
+                        base.revision,
+                      );
+                      setBase(nueva);
+                      toast.success(
+                        "Política activada. Los borradores deberán revisar sus precios antes de emitir.",
+                      );
+                    } catch (e) {
+                      setError(mensajeErrorTarifa(e));
+                    } finally {
+                      bloqueo.current = false;
+                      setOcupado(false);
+                    }
+                  }}
+                >
+                  Activar asignación en pedidos
+                </Button>
+              )}
               {puedeGestionar && (
                 <Button
                   loading={ocupado}

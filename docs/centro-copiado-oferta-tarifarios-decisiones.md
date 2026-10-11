@@ -1571,3 +1571,18 @@ reales de D25 siguen pendientes de integración**, junto con la activación
 operativa de tarifarios. No se cambian las decisiones confirmadas ni se activa
 la matriz por guardar o publicar. Alcance y evidencia en el
 [registro de implementación](centro-copiado-tarifarios-plan-implementacion.md).
+
+### Avance de implementación: pedidos y control de emisión (10/10/2026)
+
+D25 ya dispone de revisión persistida, bloqueo en el servidor y autorización con
+responsable, motivo y permisos. Configuración permite activar explícitamente la
+asignación por canal; el borrador de configuración sigue separado de lo operativo.
+La ficha reúne el volumen de todas las cargas y conserva los snapshots revisados
+al guardar y emitir. Los presupuestos ya emitidos mantienen sus precios.
+
+Este avance reemplaza el pendiente de conexión señalado en el registro anterior,
+con el alcance de emisión inicial y revisión de borradores. Conserva las
+reglas funcionales confirmadas. Los cambios económicos posteriores de órdenes
+emitidas, canjes/cupones sobre copiado, precio manual, respaldos y pouch tienen
+pendientes explícitos en el [registro de implementación](centro-copiado-tarifarios-plan-implementacion.md).
+No se activó ninguna empresa real ni se desplegaron estos cambios.

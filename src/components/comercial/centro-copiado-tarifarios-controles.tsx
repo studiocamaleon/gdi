@@ -96,11 +96,11 @@ export function ErrorTarifa({ error }: { error: string | null }) {
 export function AvisoPreparacion() {
   return (
     <Alert>
-      <AlertTitle>Tarifarios en preparación</AlertTitle>
+      <AlertTitle>Versiones y activación</AlertTitle>
       <AlertDescription>
-        Podés cargar precios, publicar versiones y preparar su asignación por
-        canal. La conexión de estas matrices con los pedidos todavía está
-        pendiente: hoy se sigue cotizando con el motor.
+        Publicá los precios y activá su asignación desde Canales. Los pedidos
+        revisan el tarifario vigente antes de emitir; los presupuestos ya
+        enviados conservan sus precios.
       </AlertDescription>
     </Alert>
   );

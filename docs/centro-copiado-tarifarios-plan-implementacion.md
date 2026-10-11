@@ -707,3 +707,90 @@ pedido y recalcular al cambiarlo; aplicar bloqueo estricto en el servidor y
 control independiente de terminaciones. Los estados del simulador son diagnósticos,
 no autorizaciones. También siguen pendientes acuerdos/descuentos/respaldo,
 activación por canal, pouch y cierre del recorrido operativo. Sin despliegues.
+
+### 10 de octubre de 2026 — tarifarios en pedidos y autorización al emitir
+
+Implementado localmente sobre el mismo bloque de tarifarios aún sin integrar:
+
+- Configuración permite **Activar asignación en pedidos** después de guardar y
+  revisar los canales. La política operativa es un snapshot distinto del borrador.
+  Requiere versiones vigentes, moneda compatible y política de margen definida.
+  Guardar o publicar una matriz no activa por sí solo el uso de tarifarios en una
+  empresa. Las empresas sin activación conservan el motor.
+- La ficha incorpora **Actualizar precios de copiado**. El servidor reconstruye
+  los trabajos guardados y reúne todas las cargas de hojas, tomos y CAD; aplica
+  tramos, cobertura, última hoja impar, preparación y mínimo únicos, IVA y
+  terminaciones separadas. CAD acumula el papel realmente consumido y redondea
+  una vez por grupo. El acuerdo de cliente devuelto por el motor prevalece en
+  impresión; el descuento explícito se aplica antes del mínimo. No se toma un
+  costo ni una autorización enviados por el navegador.
+- Cada revisión crea nuevos snapshots y conserva los anteriores. Vincula canal,
+  cliente, tratamiento fiscal, versión, trabajos, precios y costos comprobados.
+  Cambiar el borrador invalida la revisión; cambiar de canal inicia su recálculo.
+  Reabrir un borrador recupera el estado y la autorización guardados. Guardar o
+  emitir utiliza los mismos snapshots revisados, sin volver a pisarlos con la
+  venta del motor. Los pedidos mixtos conservan los vínculos de entrega.
+- El margen de impresión + preparación + mínimo usa costos productivos reales
+  del motor, incluyendo una sola cara en la hoja impar, más comisiones e
+  impuestos internos según sus bases. Las terminaciones tienen control separado
+  de pérdida (piso cero en este bloque); sus ganancias no compensan la impresión.
+  Los snapshots fiscales y comerciales se toman de la nueva corrida; el costo
+  comercial exacto se distingue de la ejecución productiva de origen.
+- Se controla en la transacción que emite una OT directa, saca una OT del
+  borrador o envía un presupuesto. Precio pendiente, costo/cargas desconocidos y
+  bloqueo estricto impiden emitir. La modalidad AUTORIZACION exige una acción
+  explícita, motivo de 10–1000 caracteres y responsable registrado. Requiere
+  `comercial.aprobar_descuento` **y** `finanzas.ver_margenes`; no equivale al permiso
+  de cotizar ni al de precio manual. Tener permiso no autoriza automáticamente.
+- La autorización corresponde a la revisión exacta. El servidor comprueba
+  integridad, pertenencia a la empresa, selección completa y vigencia, incluso
+  si se intenta emitir por API. Activar, publicar y emitir se coordinan mediante
+  bloqueo transaccional por empresa; recotizar comparte el bloqueo del snapshot.
+  Los presupuestos ya emitidos mantienen su precio al reenviar o convertir; las
+  nuevas versiones del presupuesto sí pasan por la revisión vigente.
+- La tarjeta, alertas y diálogo usan componentes y tokens GRAFO. Los importes de
+  costos, cargas y porcentajes sólo se devuelven con permiso financiero. La
+  interfaz muestra responsable y motivo de una excepción; si cambia el cálculo,
+  solicita revisión de nuevo. Comprobada a 390 × 844 y en escritorio con datos
+  ficticios y componentes reales, usando API de prueba.
+
+**Límites explícitos:** este bloque cubre la emisión inicial y la nueva revisión
+comercial de borradores. El circuito específico de modificaciones económicas de
+órdenes ya emitidas conserva sus reglas anteriores y requiere una integración
+posterior con esta autorización. Los canjes/cupones que alteran el importe de
+copiado después de la revisión se bloquean al emitir: todavía no se incorporan a
+este cálculo. No se permiten mezclas de alícuotas de impresión dentro de una
+misma revisión sin definir cómo distribuir preparación y mínimo. Siguen
+pendientes el editor de precio manual con motivo, el respaldo explícito a otro
+tarifario/motor, plastificado pouch y el recorrido integral con catálogo real.
+Una publicación programada que deja de tener costos/precios verificables no se
+convierte en un permiso para emitir.
+
+**Migración:** `20261011100000_copiado_pedidos_margenes` es aditiva. Agrega el
+snapshot de política activada y revisiones/autorizaciones comerciales, sin
+activar ninguna empresa ni cambiar cotizaciones existentes. Se aplicó en la
+base nueva y desechable `grafo_copiado_pedidos_20261011_test`, sin seeds ni datos
+reales. No se aplicó a las bases operativas de local, staging o producción.
+
+**Validación local del bloque:** 384 pruebas de Centro de copiado (incluidas
+18 nuevas de cálculo/persistencia/HTTP) y 141 de regresión de presupuestos,
+reservas y descuentos; 78 de frontend. La última corrección de fixture de
+cobertura se volvió a ejecutar junto con toda la suite nueva y pasó. Los tests
+comprueban selección completa, manipulación de snapshots, versión nueva,
+autorización explícita, permisos separados, aislamiento entre empresas,
+recuperación del borrador, descuentos, hojas impares, acumulación de CAD y
+conservación del precio revisado al emitir desde la ficha.
+
+TypeScript sin diagnósticos sobre los archivos afectados. ESLint de los archivos
+nuevos de API usa un proyecto temporal acotado porque el proyecto global supera
+el límite local de memoria; sin errores. Frontend sin errores y con una
+advertencia previa de importación no usada en la ficha. Las pruebas de negocio
+utilizan el cálculo comercial real y PostgreSQL real; sustituyen el costeador
+productivo con resultados ficticios. No equivalen al recorrido integral con un
+catálogo real. No se hizo build de producción en esta Mac.
+
+Al cerrar la comprobación, la base desechable quedó con cero empresas, usuarios
+y revisiones de copiado y se eliminó. El control de CSS confirmó que no se
+agregaron clases globales. Las suites nuevas quedaron incorporadas al workflow
+existente. CI remoto y PR siguen pendientes del acceso autenticado a GitHub;
+este registro no acredita un despliegue.

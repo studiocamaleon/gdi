@@ -1,4 +1,13 @@
 "use client";
+import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
+import {
+  claveRevisionCopiado,
+  ponerPrecioCopiado,
+  revisarPedidoCopiado,
+  estadoPedidoCopiado,
+  type RevisionCopiado,
+} from "@/lib/centro-copiado-pedidos-api";
+
 import {
   useImpresionDirecta,
   useColasImpresion,
@@ -4765,7 +4774,9 @@ function rehidratarOrdenItem(
       (resumen?.ejecucion
         ?.minimoComercialAplicado as CotizacionPropuestaSnapshot["minimoComercialAplicado"]) ??
       null,
-    costos: resumen?.ejecucion?.costos ?? costosHistoricos,
+    costos: (snap?.resumen as { copiadoComercial?: unknown } | undefined)?.copiadoComercial
+      ? costosHistoricos
+      : resumen?.ejecucion?.costos ?? costosHistoricos,
     pasos: trazabilidad?.pasos ?? [],
     // La cotización persiste el árbol completo de componentes dentro de la
     // trazabilidad. Rehidratar sólo los pasos del producto raíz conservaba el
@@ -5929,6 +5940,78 @@ function PropuestaFichaContenido({
    * Prepara snapshots nuevos para las altas y ediciones sin sobrescribir los
    * históricos. El guardado en lote aplica después toda la proyección.
    */
+  const [revisionCopiado, setRevisionCopiado] =
+    React.useState<RevisionCopiado | null>(null);
+  const [revisionCopiadoClave, setRevisionCopiadoClave] = React.useState<
+    string | null
+  >(null);
+  const [revisandoCopiado, setRevisandoCopiado] = React.useState(false);
+  const revisionCopiadoCache = React.useRef<{
+    clave: string;
+    cotizacionId?: string;
+    planes: Record<string, VinculoPlanEntrega>;
+  } | null>(null);
+  const claveCopiado = claveRevisionCopiado(
+    items,
+    canalVenta,
+    clienteId,
+    sinComprobante,
+  );
+  const claveCopiadoRef = React.useRef(claveCopiado);
+  claveCopiadoRef.current = claveCopiado;
+  const copiadoRevisado = revisionCopiadoClave === claveCopiado;
+  React.useEffect(() => {
+    if (
+      revisionCopiado ||
+      !canalVenta ||
+      !items.some((i) => metaCentroCopiado(i.jobContext)) ||
+      items.some((i) => !i.cotizacionItemId)
+    )
+      return;
+    let vigente = true;
+    const inicio = claveCopiado;
+    void estadoPedidoCopiado({
+      items: items.map((i) => i.cotizacionItemId!),
+      canalVenta,
+      clienteId: clienteId || undefined,
+      tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
+    })
+      .then((estado) => {
+        if (!vigente || !estado || claveCopiadoRef.current !== inicio) return;
+        setRevisionCopiado(estado.revision);
+        if (
+          estado.vigente &&
+          estado.revision.modalidad === "TARIFARIO" &&
+          items.every((i) => {
+            const precio =
+              estado.revision.modalidad === "TARIFARIO"
+                ? estado.revision.items.find((p) => p.id === i.cotizacionItemId)
+                : null;
+            return (
+              !!precio &&
+              precio.subtotal === i.subtotal &&
+              precio.total === i.total
+            );
+          })
+        )
+          setRevisionCopiadoClave(inicio);
+      })
+      .catch(() => {
+        /* La revisión explícita informa el error y la emisión revalida. */
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [
+    claveCopiado,
+    revisionCopiado,
+    items,
+    canalVenta,
+    clienteId,
+    sinComprobante,
+  ]);
+
+
   const prepararItemOrden = React.useCallback(
     async (item: PropuestaItem) => {
       if (!orden) throw new Error("No se cargó la orden de trabajo.");
@@ -5936,6 +6019,9 @@ function PropuestaFichaContenido({
         throw new Error(
           `"${item.productoNombre}" no tiene datos de cotización para persistir.`,
         );
+      }
+      if (revisionCopiadoCache.current?.clave === claveCopiadoRef.current && item.cotizacionItemId) {
+        return { item, cotizacionItemId: item.cotizacionItemId, payload: itemToOrdenItemPayload(item, item.cotizacionItemId) };
       }
       const meta = metaCentroCopiado(item.jobContext);
       if (meta?.esTomo) {
@@ -6347,99 +6433,249 @@ function PropuestaFichaContenido({
    * su cotizacionItemId. Compartido por Emitir OT y Guardar borrador.
    */
 
-  const persistirSnapshotsItems = React.useCallback(async () => {
-    let cotizacionId: string | undefined;
-    const itemsConSnapshot: Array<{
-      item: PropuestaItem;
-      cotizacionItemId?: string;
-      planEntrega?: VinculoPlanEntrega;
-    }> = [];
-    for (const item of items) {
-      const previa =
-        !orden && ordenTipo === "orden"
-          ? await entregasPrevias.paraGuardar(item)
-          : null;
-      if (previa) {
-        itemsConSnapshot.push({ item, ...previa });
-        continue;
+  const persistirSnapshotsItems = React.useCallback(
+    async (actualizarCopiado = false) => {
+      if (
+        !actualizarCopiado &&
+        revisionCopiadoCache.current?.clave === claveCopiadoRef.current
+      ) {
+        return {
+          cotizacionId: revisionCopiadoCache.current.cotizacionId,
+          itemsConSnapshot: items.map((item) => ({
+            item,
+            cotizacionItemId: item.cotizacionItemId,
+            planEntrega: revisionCopiadoCache.current?.planes[item.id],
+          })),
+        };
       }
-      if (item.cotizacionItemId && ordenTipo !== "presupuesto") {
-        itemsConSnapshot.push({
-          item,
-          cotizacionItemId: item.cotizacionItemId,
-        });
-        continue;
-      }
-      // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
-      // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
-      const metaTomo = metaCentroCopiado(item.jobContext);
-      if (metaTomo?.esTomo) {
-        const huellaTomo = `${item.id}:${item.cotizacion?.tipoCambio?.id ?? ""}:${JSON.stringify(metaTomo)}`;
-        const idempotencyKey =
-          tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
-        tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
-        const resp = await guardarTomoCentroCopiado({
-          ...solicitudTomo(metaTomo, clienteId),
-          cotizacionId,
-          clienteId: clienteId || null,
-          idempotencyKey,
-        });
-        if (resp.error || !resp.cotizacionItemId) {
+      let cotizacionId: string | undefined;
+      const itemsConSnapshot: Array<{
+        item: PropuestaItem;
+        cotizacionItemId?: string;
+        planEntrega?: VinculoPlanEntrega;
+      }> = [];
+      for (const item of items) {
+        const previa =
+          !orden && ordenTipo === "orden"
+            ? await entregasPrevias.paraGuardar(item)
+            : null;
+        if (previa) {
+          itemsConSnapshot.push({ item, ...previa });
+          continue;
+        }
+        if (
+          item.cotizacionItemId &&
+          ordenTipo !== "presupuesto" &&
+          !(actualizarCopiado && metaCentroCopiado(item.jobContext))
+        ) {
+          itemsConSnapshot.push({
+            item,
+            cotizacionItemId: item.cotizacionItemId,
+          });
+          continue;
+        }
+        // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
+        // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
+        const metaTomo = metaCentroCopiado(item.jobContext);
+        if (metaTomo?.esTomo) {
+          const huellaTomo = `${item.id}:${item.cotizacion?.tipoCambio?.id ?? ""}:${JSON.stringify(metaTomo)}`;
+          const idempotencyKey =
+            tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
+          tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
+          const resp = await guardarTomoCentroCopiado({
+            ...solicitudTomo(metaTomo, clienteId),
+            cotizacionId,
+            clienteId: clienteId || null,
+            idempotencyKey,
+          });
+          if (resp.error || !resp.cotizacionItemId) {
+            throw new Error(
+              resp.error ??
+                `No se pudo guardar el tomo ${item.productoNombre}.`,
+            );
+          }
+          cotizacionId = resp.cotizacionId ?? cotizacionId;
+          itemsConSnapshot.push({
+            item: actualizarCopiado
+              ? ponerPrecioCopiado(
+                  item,
+                  { subtotal: resp.subtotal, iva: resp.iva, total: resp.total },
+                  resp.cotizacionItemId,
+                )
+              : item,
+            cotizacionItemId: resp.cotizacionItemId,
+          });
+          continue;
+        }
+        if (!item.motorCodigo || !item.jobContext) {
           throw new Error(
-            resp.error ?? `No se pudo guardar el tomo ${item.productoNombre}.`,
+            `"${item.productoNombre}" no tiene una cotización persistible. Volvé a configurarlo antes de guardar la orden.`,
           );
         }
-        cotizacionId = resp.cotizacionId ?? cotizacionId;
-        itemsConSnapshot.push({
-          item,
-          cotizacionItemId: resp.cotizacionItemId,
+        const response = await cotizarYGuardar({
+          ordenTrabajoId: orden?.id,
+          contextoMateriales: solicitudPrevisionMateriales(
+            items.filter((i) => i.id !== item.id),
+          ).materiales,
+          productoId: item.motorCodigo,
+          rutaAlternativaId: item.rutaAlternativaId ?? null,
+          jobContext: item.jobContext as never,
+          clienteId: clienteId || null,
+          periodo: getCurrentPeriodo(),
+          descuento: descuentoParaMotor(item.descuentoInput),
+          cotizacionId,
         });
-        continue;
+        if (!response.result.exitoso) {
+          throw new Error(
+            response.result.errores?.[0]?.mensaje ??
+              `No se pudo guardar la cotización de ${item.productoNombre}.`,
+          );
+        }
+        cotizacionId = response.cotizacionId ?? cotizacionId;
+        const recotizada = response.result.cotizacion;
+        const desglose = recotizada?.desglosePrecio;
+        itemsConSnapshot.push({
+          item:
+            actualizarCopiado &&
+            metaCentroCopiado(item.jobContext) &&
+            response.cotizacionItemId &&
+            recotizada &&
+            desglose
+              ? ponerPrecioCopiado(
+                  { ...item, cotizacion: recotizada },
+                  {
+                    subtotal: desglose.precioNetoTotal,
+                    iva: desglose.precioBrutoTotal - desglose.precioNetoTotal,
+                    total: desglose.precioBrutoTotal,
+                  },
+                  response.cotizacionItemId,
+                )
+              : item,
+          cotizacionItemId: response.cotizacionItemId,
+        });
       }
-      if (!item.motorCodigo || !item.jobContext) {
+      // Cada ítem conserva su cotización de origen. Las preparadas antes del
+      // guardado pueden pertenecer a distintos snapshots comerciales.
+      return {
+        itemsConSnapshot,
+        cotizacionId: itemsConSnapshot.some((i) => i.planEntrega)
+          ? undefined
+          : cotizacionId,
+      };
+    },
+    [
+      items,
+      clienteId,
+      orden,
+      ordenTipo,
+      entregasPrevias,
+      cotizarYGuardar,
+      guardarTomoCentroCopiado,
+    ],
+  );
+
+  const revisarCopiadoEnPedido = React.useCallback(async () => {
+    if (revisandoCopiado || !validarCanalVenta()) return;
+    const claveInicio = claveCopiadoRef.current;
+    setRevisandoCopiado(true);
+    try {
+      const preparados = await persistirSnapshotsItems(true);
+      const ids = preparados.itemsConSnapshot.map((p) => p.cotizacionItemId);
+      if (ids.some((id) => !id))
         throw new Error(
-          `"${item.productoNombre}" no tiene una cotización persistible. Volvé a configurarlo antes de guardar la orden.`,
+          "Falta guardar un trabajo antes de revisar sus precios.",
         );
-      }
-      const response = await cotizarYGuardar({
-        ordenTrabajoId: orden?.id,
-        contextoMateriales: solicitudPrevisionMateriales(items.filter((i) => i.id !== item.id)).materiales,
-        productoId: item.motorCodigo,
-        rutaAlternativaId: item.rutaAlternativaId ?? null,
-        jobContext: item.jobContext as never,
-        clienteId: clienteId || null,
-        periodo: getCurrentPeriodo(),
-        descuento: descuentoParaMotor(item.descuentoInput),
-        cotizacionId,
+      const resultado = await revisarPedidoCopiado({
+        items: ids as string[],
+        descuentos: preparados.itemsConSnapshot.flatMap((p) =>
+          metaCentroCopiado(p.item.jobContext) &&
+          p.cotizacionItemId &&
+          p.item.descuentoInput
+            ? [
+                {
+                  cotizacionItemId: p.cotizacionItemId,
+                  tipo: p.item.descuentoInput.tipo,
+                  valor: p.item.descuentoInput.valor,
+                },
+              ]
+            : [],
+        ),
+        canalVenta,
+        clienteId: clienteId || undefined,
+        tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
       });
-      if (!response.result.exitoso) {
+      if (claveCopiadoRef.current !== claveInicio)
         throw new Error(
-          response.result.errores?.[0]?.mensaje ??
-            `No se pudo guardar la cotización de ${item.productoNombre}.`,
+          "El pedido cambió durante la revisión. Actualizá los precios nuevamente.",
         );
+      setRevisionCopiado(resultado);
+      if (resultado.modalidad === "TARIFARIO" && !resultado.id) {
+        revisionCopiadoCache.current = null;
+        setRevisionCopiadoClave(claveInicio);
+        return;
       }
-      cotizacionId = response.cotizacionId ?? cotizacionId;
-      itemsConSnapshot.push({
-        item,
-        cotizacionItemId: response.cotizacionItemId,
+      const nuevos = preparados.itemsConSnapshot.map((p) => {
+        const precio =
+          resultado.modalidad === "TARIFARIO"
+            ? resultado.items.find((i) => i.anteriorId === p.cotizacionItemId)
+            : null;
+        return precio
+          ? ponerPrecioCopiado(p.item, precio, precio.id)
+          : { ...p.item, cotizacionItemId: p.cotizacionItemId };
       });
+      revisionCopiadoCache.current = {
+        clave: claveRevisionCopiado(
+          nuevos,
+          canalVenta,
+          clienteId,
+          sinComprobante,
+        ),
+        cotizacionId:
+          resultado.modalidad === "TARIFARIO"
+            ? (resultado.cotizacionId ?? undefined)
+            : preparados.cotizacionId,
+        planes: Object.fromEntries(
+          preparados.itemsConSnapshot.flatMap((p) =>
+            p.planEntrega ? [[p.item.id, p.planEntrega]] : [],
+          ),
+        ),
+      };
+      setRevisionCopiadoClave(revisionCopiadoCache.current.clave);
+      setItems(nuevos);
+      if (orden)
+        setEditadosIds(
+          (prev) => new Set([...prev, ...nuevos.map((i) => i.id)]),
+        );
+      toast.success("Precios de copiado actualizados para todo el pedido.");
+    } catch (e) {
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "No se pudieron actualizar los precios de copiado.",
+      );
+    } finally {
+      setRevisandoCopiado(false);
     }
-    // Cada ítem conserva su cotización de origen. Las preparadas antes del
-    // guardado pueden pertenecer a distintos snapshots comerciales.
-    return {
-      itemsConSnapshot,
-      cotizacionId: itemsConSnapshot.some((i) => i.planEntrega)
-        ? undefined
-        : cotizacionId,
-    };
   }, [
-    items,
+    revisandoCopiado,
+    validarCanalVenta,
+    persistirSnapshotsItems,
+    canalVenta,
     clienteId,
+    sinComprobante,
     orden,
-    ordenTipo,
-    entregasPrevias,
-    cotizarYGuardar,
-    guardarTomoCentroCopiado,
+  ]);
+  const canalCopiadoAnterior = React.useRef(canalVenta);
+  React.useEffect(() => {
+    if (canalCopiadoAnterior.current === canalVenta) return;
+    canalCopiadoAnterior.current = canalVenta;
+    if (revisionCopiado && puedeModificarProductos && canalVenta)
+      void revisarCopiadoEnPedido();
+  }, [
+    canalVenta,
+    revisionCopiado,
+    puedeModificarProductos,
+    revisarCopiadoEnPedido,
   ]);
 
   /**
@@ -7617,6 +7853,12 @@ function PropuestaFichaContenido({
                       }}
                     />
                   )}
+                {items.some(i => metaCentroCopiado(i.jobContext)) && (!orden || orden.estado === "borrador") && <CentroCopiadoPedidoPrecios
+                  revision={revisionCopiado} vigente={copiadoRevisado} ocupado={revisandoCopiado}
+                  editable={puedeModificarProductos && !guardandoEdicion && !emitiendo && !emitiendoPresupuesto}
+                  onRevisar={() => void revisarCopiadoEnPedido()}
+                  onAutorizado={r => { if (claveCopiadoRef.current === claveCopiado) setRevisionCopiado(r); }}
+                />}
                 <OrdenFinancialActions
                   empty={items.length === 0}
                   emitiendo={emitiendo || emitiendoPresupuesto}

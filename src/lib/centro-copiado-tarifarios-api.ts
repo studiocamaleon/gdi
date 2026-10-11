@@ -43,7 +43,9 @@ export type VersionTarifario = ResumenVersion & {
 };
 export type BorradorPolitica = {
   estado: "BORRADOR";
-  operativa: false;
+  operativa: boolean;
+  activaRevision?: number | null;
+  activadaEl?: string | null;
   revision: number;
   contenido: PoliticaPrecios;
   actualizadoEl: string | null;
@@ -140,3 +142,9 @@ export const guardarPoliticaTarifarios = (
   });
 export const previsualizarCanales = () =>
   apiRequest<VistaCanales>(`${politica}/previsualizacion`);
+
+export const activarPoliticaTarifarios = (revision: number) =>
+  apiRequest<BorradorPolitica>(
+    "/centro-copiado/politica-precios/borrador/activar",
+    { method: "POST", body: JSON.stringify({ revision }) },
+  );

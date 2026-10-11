@@ -12,9 +12,16 @@ import { PropuestaFicha } from "./propuesta-ficha";
 
 const mocks = vi.hoisted(() => ({
   guardar: vi.fn(),
+  revisarCopiado: vi.fn(),
+  copiado: false,
   emitir: vi.fn(),
   replace: vi.fn(),
   confirmar: null as null | ((canal: CanalPresupuesto) => void),
+}));
+vi.mock("@/lib/centro-copiado-pedidos-api", async original => ({
+  ...(await original<typeof import("@/lib/centro-copiado-pedidos-api")>()),
+  revisarPedidoCopiado: mocks.revisarCopiado,
+  estadoPedidoCopiado: vi.fn(async () => null),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -58,7 +65,7 @@ vi.mock("./agregar-producto-sheet", () => ({
             50000,
           ),
           motorCodigo: "producto-qa",
-          jobContext: { cantidad: 500 },
+          jobContext: { cantidad: 500, ...(mocks.copiado ? { _centroCopiado: { paginas: 500, copias: 1, faz: 1 } } : {}) },
           fechaEntrega: "2099-01-10",
         })
       }
@@ -97,6 +104,7 @@ function avisoDeSalida() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.confirmar = null;
+  mocks.copiado = false;
   avisoAlNavegar = [];
   mocks.replace.mockImplementation(() => {
     avisoAlNavegar.push(avisoDeSalida());
@@ -291,4 +299,18 @@ it("no marca guardado si falla la cotización previa y mantiene el aviso de sali
   expect(mocks.emitir).not.toHaveBeenCalled();
   expect(mocks.replace).not.toHaveBeenCalled();
   expect(avisoDeSalida()).toBe(true);
+});
+
+it("revisa copiado completo y emite con los mismos precios y snapshots revisados", async () => {
+  mocks.copiado = true;
+  mocks.revisarCopiado.mockResolvedValue({ modalidad: "TARIFARIO", id: "calculo-qa", huella: "a".repeat(64), cotizacionId: "cotizacion-revisada", nombre: "Mostrador ficticio", numero: 1,
+    calculado: { estado: "CALCULADO", grupos: [], control: { estado: "CUMPLE" }, terminaciones: [] },
+    items: [{ anteriorId: "snapshot-qa", id: "snapshot-revisado", subtotal: 100, iva: 21, total: 121, descuentoMonto: 0 }] });
+  mocks.emitir.mockResolvedValue({ id: "presupuesto-qa", numero: "PRES-QA", estado: "enviado" });
+  await preparar();
+  await click("Actualizar precios de copiado");
+  expect(mocks.revisarCopiado).toHaveBeenCalledWith(expect.objectContaining({ items: ["snapshot-qa"], canalVenta: "mostrador" }));
+  await click("Confirmar emisión de prueba");
+  expect(mocks.guardar).toHaveBeenCalledOnce();
+  expect(mocks.emitir).toHaveBeenCalledWith(expect.objectContaining({ cotizacionId: "cotizacion-revisada", items: [expect.objectContaining({ cotizacionItemId: "snapshot-revisado", subtotal: 100, total: 121 })] }));
 });
