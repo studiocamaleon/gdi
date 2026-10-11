@@ -923,3 +923,30 @@ Después se pueden volver a simular los costos de la matriz actualizada.
   y a 390 px: encabezado, pestañas, avisos y canales sin desbordamiento de página.
   Se comprobó navegación con flechas y apertura/cancelación de la conciliación
   desde el aviso. No se modificaron datos reales ni se desplegó.
+
+### 11 de octubre de 2026 — motor, margen y redondeo dentro de la matriz
+
+- Se retiró «Costos y sugerencias» de la navegación del tarifario. El simulador
+  comparte sus resultados con las matrices de hojas y CAD, manteniendo lotes de
+  cinco celdas, parada, control de estructura y permiso de ver márgenes.
+- El asistente integrado calcula costos y propone precios con margen objetivo
+  sobre venta neta, cargas sobre neto/bruto, IVA, preparación aparte y redondeo
+  hacia arriba. Conserva el piso del pedido sin usarlo para vaciar la matriz.
+  La precisión fiscal se comprueba para no quedar bajo el margen objetivo.
+- La matriz compara precio editable, costo, margen actual y propuesta. Permite
+  revisar sólo vacíos o incluir los cargados, destaca «Por aplicar» y deja la
+  escritura al borrador para una acción explícita. Mantiene cero, alcance por
+  color/cobertura/búsqueda y todas las páginas; detecta revisiones desactualizadas.
+- El detalle usa FormSheet de GRAFO y permite ajustar la referencia o calcular
+  una sola celda. Mostrar/ocultar costos conserva el formato compacto de carga.
+  No se modifican políticas de emisión, autorizaciones ni versiones publicadas.
+- Verificación: 117 pruebas del circuito, incluidas margen sobre neto, cargas,
+  IVA, preparación/mínimo, CAD por ML, redondeo fiscal, cobertura incompleta,
+  preservación de ceros, alcance filtrado/completo, revisiones desactualizadas,
+  edición manual, consulta sin escritura y pérdida de permiso. La suite del
+  asistente se volvió a ejecutar tras los ajustes finales (siete pruebas).
+  TypeScript acotado a 32 archivos sin diagnósticos; ESLint y CSS guard aprobados.
+- Comprobación visual con componentes reales y API ficticia: completar un vacío,
+  editar su precio y observar el nuevo margen, revisar sustituciones en la tabla,
+  consultar detalle lateral y usar el asistente a 390 px sin desbordar la página.
+  Se conservaron los servicios locales; sin migraciones, datos reales ni despliegue.

@@ -69,8 +69,12 @@ import {
   type MatrizHojas,
 } from "@/lib/centro-copiado-tarifarios-editor";
 
+import { MotorEnMatriz } from "./centro-copiado-motor-matriz";
+import type { MotorTarifario } from "./centro-copiado-tarifarios-simulacion";
+
 type Matriz = MatrizHojas | MatrizCad;
 export function EditorMatriz({
+  motor,
   matriz,
   nombres,
   formatos = [],
@@ -80,6 +84,7 @@ export function EditorMatriz({
   onChange,
   onGenerar,
 }: {
+  motor?: MotorTarifario | null;
   matriz: Matriz;
   nombres: Record<string, string>;
   formatos?: { nombre: string; anchoMm: number; altoMm: number }[];
@@ -309,100 +314,118 @@ export function EditorMatriz({
             Ajustar precios
           </Button>
         </div>
-        <Tabs
-          selectedKey={color}
-          onSelectionChange={(v) => {
-            setColor(v as "COLOR" | "BN");
-            setPagina(0);
-          }}
-          className="min-w-0"
+        <MotorEnMatriz
+          motor={motor}
+          seccion={cad ? "cad" : "hojas"}
+          indices={indices}
+          disabled={disabled}
         >
-          <NavigationTabList
-            variant="detailed"
-            tone="graphite"
-            label={cad ? "Impresión CAD" : "Tipo de impresión"}
-            items={[
-              { id: "COLOR", label: "Color · CMYK", icon: <Palette /> },
-              { id: "BN", label: "Blanco y negro · K", icon: <Contrast /> },
-            ]}
-          />
-          <Tabs.Panel id={color} className="min-w-0 grid gap-4 pt-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {matriz.reglas.cobertura === "DIFERENCIADA" ? (
-                <SegmentedControl
-                  aria-label={cad ? "Cobertura CAD" : "Cobertura de impresión"}
-                  value={cobertura}
-                  options={[
-                    { value: "borrador", label: "Borrador", icon: null },
-                    { value: "normal", label: "Normal", icon: null },
-                    { value: "alta", label: "Alta", icon: null },
-                  ]}
-                  onChange={(v) => {
-                    setCobertura(v);
-                    setPagina(0);
-                  }}
-                />
-              ) : (
-                <span className="text-sm text-muted-foreground">
-                  Precio único para todas las coberturas
-                </span>
-              )}
-              <EstadoCopiado>
-                {cargados} de {preciosVista.length} precios cargados en esta
-                vista
-              </EstadoCopiado>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Precio por {unidad}, en la moneda del tarifario. Vacío =
-              pendiente; 0 = gratuito. Podés pegar desde Excel siguiendo los
-              papeles y columnas de una misma tabla
-              {cad ? "." : ": simple y doble faz de cada tramo."}
-            </p>
-            {!papeles.length ? (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>
-                    {matriz.filas.length
-                      ? "Sin coincidencias en esta vista"
-                      : "Todavía no hay combinaciones"}
-                  </EmptyTitle>
-                  <EmptyDescription>
-                    {matriz.filas.length
-                      ? "Probá otra búsqueda, tipo de impresión o cobertura."
-                      : "Agregá las combinaciones disponibles y completá sus precios por tramo."}
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <CuadriculaPrecios
-                matriz={matriz}
-                grupos={gruposVisibles}
-                nombres={nombres}
-                formatos={formatos}
-                disabled={disabled}
-                descripcion={descripcion}
-                onPrecio={(c) => aplicarCambios([c])}
-                onOpciones={setOpciones}
-                onPegar={(texto, filas, inicio, columna) => {
-                  try {
-                    const c = pegarCuadricula(
-                      texto,
-                      matriz,
-                      filas,
-                      inicio,
-                      columna,
-                    );
-                    setPaginaRevision(0);
-                    setCambios(c);
-                    setError(null);
-                  } catch (err) {
-                    toast.error(mensajeErrorTarifa(err));
-                  }
+          {(detalleCelda) => (
+            <>
+              <Tabs
+                selectedKey={color}
+                onSelectionChange={(v) => {
+                  setColor(v as "COLOR" | "BN");
+                  setPagina(0);
                 }}
-              />
-            )}
-          </Tabs.Panel>
-        </Tabs>
+                className="min-w-0"
+              >
+                <NavigationTabList
+                  variant="detailed"
+                  tone="graphite"
+                  label={cad ? "Impresión CAD" : "Tipo de impresión"}
+                  items={[
+                    { id: "COLOR", label: "Color · CMYK", icon: <Palette /> },
+                    {
+                      id: "BN",
+                      label: "Blanco y negro · K",
+                      icon: <Contrast />,
+                    },
+                  ]}
+                />
+                <Tabs.Panel id={color} className="min-w-0 grid gap-4 pt-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    {matriz.reglas.cobertura === "DIFERENCIADA" ? (
+                      <SegmentedControl
+                        aria-label={
+                          cad ? "Cobertura CAD" : "Cobertura de impresión"
+                        }
+                        value={cobertura}
+                        options={[
+                          { value: "borrador", label: "Borrador", icon: null },
+                          { value: "normal", label: "Normal", icon: null },
+                          { value: "alta", label: "Alta", icon: null },
+                        ]}
+                        onChange={(v) => {
+                          setCobertura(v);
+                          setPagina(0);
+                        }}
+                      />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Precio único para todas las coberturas
+                      </span>
+                    )}
+                    <EstadoCopiado>
+                      {cargados} de {preciosVista.length} precios cargados en
+                      esta vista
+                    </EstadoCopiado>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Precio por {unidad}, en la moneda del tarifario. Vacío =
+                    pendiente; 0 = gratuito. Podés pegar desde Excel siguiendo
+                    los papeles y columnas de una misma tabla
+                    {cad ? "." : ": simple y doble faz de cada tramo."}
+                  </p>
+                  {!papeles.length ? (
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyTitle>
+                          {matriz.filas.length
+                            ? "Sin coincidencias en esta vista"
+                            : "Todavía no hay combinaciones"}
+                        </EmptyTitle>
+                        <EmptyDescription>
+                          {matriz.filas.length
+                            ? "Probá otra búsqueda, tipo de impresión o cobertura."
+                            : "Agregá las combinaciones disponibles y completá sus precios por tramo."}
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  ) : (
+                    <CuadriculaPrecios
+                      detalleCelda={detalleCelda}
+                      matriz={matriz}
+                      grupos={gruposVisibles}
+                      nombres={nombres}
+                      formatos={formatos}
+                      disabled={disabled}
+                      descripcion={descripcion}
+                      onPrecio={(c) => aplicarCambios([c])}
+                      onOpciones={setOpciones}
+                      onPegar={(texto, filas, inicio, columna) => {
+                        try {
+                          const c = pegarCuadricula(
+                            texto,
+                            matriz,
+                            filas,
+                            inicio,
+                            columna,
+                          );
+                          setPaginaRevision(0);
+                          setCambios(c);
+                          setError(null);
+                        } catch (err) {
+                          toast.error(mensajeErrorTarifa(err));
+                        }
+                      }}
+                    />
+                  )}
+                </Tabs.Panel>
+              </Tabs>
+            </>
+          )}
+        </MotorEnMatriz>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm text-muted-foreground">
             {papeles.length} filas de papel · Página {actual + 1} de{" "}

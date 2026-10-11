@@ -1,4 +1,5 @@
 "use client";
+import type { RenderDetalleCelda } from "./centro-copiado-motor-matriz";
 import { Button, Input } from "./centro-copiado-ui";
 import { MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ import {
 import styles from "./centro-copiado-tarifarios.module.css";
 
 export function CuadriculaPrecios({
+  detalleCelda,
   matriz,
   grupos,
   nombres,
@@ -37,6 +39,7 @@ export function CuadriculaPrecios({
   onPegar,
   onOpciones,
 }: {
+  detalleCelda?: RenderDetalleCelda;
   matriz: Matriz;
   grupos: GrupoCuadricula[];
   nombres: Record<string, string>;
@@ -91,6 +94,7 @@ export function CuadriculaPrecios({
         )}
         <Table
           className={styles.priceGrid}
+          data-analysis={!!detalleCelda || undefined}
           aria-label={`Precios ${grupo.formato} · ${grupo.propios ? "rangos propios" : "rangos generales"}`}
         >
           <TableHeader>
@@ -219,6 +223,7 @@ export function CuadriculaPrecios({
                           }}
                         />
                       </Field>
+                      {detalleCelda?.(celda.fila, celda.tramo)}
                     </TableCell>
                   );
                 })}

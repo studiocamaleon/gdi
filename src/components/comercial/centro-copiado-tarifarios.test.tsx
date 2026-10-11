@@ -12,6 +12,7 @@ import {
 import * as api from "@/lib/centro-copiado-tarifarios-api";
 vi.mock("@/lib/centro-copiado-tarifarios-api", () => ({
   listarTarifarios: vi.fn(),
+  simularCeldasTarifario: vi.fn(),
   obtenerTarifario: vi.fn(),
   guardarTarifario: vi.fn(),
   versionesTarifario: vi.fn(),
@@ -143,7 +144,7 @@ afterEach(async () => {
 });
 const boton = (texto: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-    (b) => b.textContent === texto,
+    (b) => b.textContent?.trim() === texto,
   )!;
 const entrada = (label: string) => {
   const etiqueta = [...document.querySelectorAll("label")].find(
@@ -435,16 +436,18 @@ it("los rangos propios de una fila no cambian los generales ni las demás combin
   expect(matriz.filas[1].rangosPropios).toBeUndefined();
 });
 
-it("el acceso desde matrices abre costos sin guardar ni simular automáticamente", async () => {
+it("el motor se abre dentro de matrices sin guardar ni simular automáticamente", async () => {
   await abrir();
-  await click("Generar costos de referencia");
+  await click("Calcular precios con el motor");
   expect(
     [...el.querySelectorAll('[role="tab"]')]
-      .find((t) => t.textContent === "Costos y sugerencias")
+      .find((t) => t.textContent === "Matrices")
       ?.getAttribute("aria-selected"),
   ).toBe("true");
-  expect(boton("Simular matriz (6)").disabled).toBe(false);
+  expect(el.textContent).not.toContain("Costos y sugerencias");
+  expect(boton("Calcular 6 precios").disabled).toBe(false);
   expect(api.guardarTarifario).not.toHaveBeenCalled();
+  expect(api.simularCeldasTarifario).not.toHaveBeenCalled();
 });
 
 it("revisa y aplica las bajas de la oferta sólo al borrador, sin publicar ni guardar automáticamente", async () => {

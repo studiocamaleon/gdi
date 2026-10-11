@@ -7,15 +7,23 @@ import {
   CardDescription,
   CardContent,
   DialogContent,
+  EstadoCopiado,
 } from "./centro-copiado-ui";
+import { FormSheet } from "@/components/design-system/form-sheet";
 import { SugerenciasTarifario } from "./centro-copiado-tarifarios-sugerencias";
 import styles from "./centro-copiado-tarifarios.module.css";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Play, Square } from "lucide-react";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import {
@@ -64,6 +72,23 @@ type Celda = CeldaSimulacion & {
   hasta?: string;
 };
 type Guardado = { estructura: string; resultado: ResultadoCeldaSimulacion };
+export type MotorTarifario = {
+  contenido: ContenidoTarifario;
+  estructura: string;
+  celdas: Celda[];
+  resultados: Record<string, ResultadoCeldaSimulacion>;
+  desactualizadas: Set<string>;
+  habilitada: boolean;
+  ocupada: boolean;
+  puedeAplicar: boolean;
+  motivoBloqueo: string | null;
+  error: string | null;
+  progreso: { hechas: number; total: number; estado: string } | null;
+  simular: (celdas: CeldaSimulacion[]) => Promise<void>;
+  detener: () => void;
+  detalle: (celda: CeldaSimulacion) => void;
+  aplicar?: (contenido: ContenidoTarifario) => void;
+};
 const TAMANO_PAGINA = 8;
 export function SimulacionTarifario(props: {
   tarifarioId: string | null;
@@ -75,10 +100,11 @@ export function SimulacionTarifario(props: {
   perfiles: PerfilCadCopiado[];
   disabled: boolean;
   onChange?: (contenido: ContenidoTarifario) => void;
+  children?: (motor: MotorTarifario | null) => ReactNode;
 }) {
   const puede = usePuede("finanzas.ver_margenes");
   // Desmontar los resultados ante pérdida de permiso, incluso si ya se costearon.
-  return puede ? <Simulador {...props} /> : null;
+  return puede ? <Simulador {...props} /> : (props.children?.(null) ?? null);
 }
 
 function Simulador({
@@ -91,6 +117,7 @@ function Simulador({
   perfiles,
   disabled,
   onChange,
+  children,
 }: Parameters<typeof SimulacionTarifario>[0]) {
   const { zonaHoraria } = useConfigRegional();
   const [filtro, setFiltro] = useState("");
@@ -108,6 +135,7 @@ function Simulador({
     estado: "EN_CURSO" | "DETENIDA" | "FINALIZADA";
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [inspeccion, setInspeccion] = useState<Celda | null>(null);
   const [detalle, setDetalle] = useState<Celda | null>(null);
   const [cantidad, setCantidad] = useState("");
   const [perfilId, setPerfilId] = useState("AUTO");
@@ -132,6 +160,10 @@ function Simulador({
   const actual = useRef(estructura);
   useEffect(() => {
     actual.current = estructura;
+    // Los índices pueden pasar a representar otro papel o tramo.
+    setReferencias({});
+    setDetalle(null);
+    setInspeccion(null);
   }, [estructura]);
   const estructuraGuardada = guardado && estructuraSimulacion(guardado);
   const celdas = useMemo(
@@ -381,18 +413,18 @@ function Simulador({
         data-negative={control?.negativo ?? false}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Badge variant="outline">{escenario.cobertura}</Badge>
-          <Badge
-            variant={
+          <EstadoCopiado>{escenario.cobertura}</EstadoCopiado>
+          <EstadoCopiado
+            tono={
               estado === "CUMPLE"
-                ? "secondary"
+                ? "success"
                 : estado === "NO_VERIFICABLE"
-                  ? "outline"
-                  : "destructive"
+                  ? "neutral"
+                  : "warning"
             }
           >
             {etiqueta}
-          </Badge>
+          </EstadoCopiado>
         </div>
         <p className="text-xs text-muted-foreground">
           {escenario.cantidadReferencia}{" "}
@@ -565,328 +597,432 @@ function Simulador({
     return resumen;
   }, [celdas, resultados, estructura, normalizado, contenido]);
 
+  const vigentes = Object.fromEntries(
+    Object.entries(resultados)
+      .filter(([, r]) => r.estructura === estructura)
+      .map(([k, r]) => [k, r.resultado]),
+  );
+  const motor: MotorTarifario = {
+    contenido,
+    estructura,
+    celdas,
+    resultados: vigentes,
+    desactualizadas: new Set(
+      Object.entries(resultados)
+        .filter(([, r]) => r.estructura !== estructura)
+        .map(([k]) => k),
+    ),
+    habilitada,
+    ocupada,
+    puedeAplicar: !!onChange && !disabled && !ocupada,
+    motivoBloqueo:
+      !tarifarioId || estructura !== estructuraGuardada
+        ? "Guardá las combinaciones del borrador para calcular sus costos."
+        : disabled
+          ? "Guardá los cambios de Oferta o recargá el tarifario antes de calcular."
+          : null,
+    error,
+    progreso: progreso?.estructura === estructura ? progreso : null,
+    simular: (seleccionadas) => {
+      const claves = new Set(seleccionadas.map(claveCeldaSimulacion));
+      return simular(celdas.filter((c) => claves.has(claveCeldaSimulacion(c))));
+    },
+    detener: () => {
+      ejecucion.current.detener = true;
+    },
+    detalle: (celda) =>
+      setInspeccion(
+        celdas.find(
+          (c) => claveCeldaSimulacion(c) === claveCeldaSimulacion(celda),
+        ) ?? null,
+      ),
+    aplicar: !disabled && !ocupada ? onChange : undefined,
+  };
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle>Costos, sugerencias y márgenes</CardTitle>
-        <CardDescription>
-          Usá «Simular matriz» para generar los costos de todas las celdas,
-          incluso las que todavía no tienen precio de venta. Compará los precios
-          con pedidos de referencia. Incluye papel, impresión y preparación
-          productiva; las terminaciones se cotizan aparte.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="min-w-0 flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          Cada celda representa un pedido con una cantidad dentro del tramo. El
-          margen final descuenta costos productivos, comisiones e impuestos
-          internos de la venta sin IVA. Estos resultados corresponden a la fecha
-          de simulación; cada pedido real necesitará su propio control antes de
-          emitirse.
-        </p>
-        {estructura !== estructuraGuardada && (
-          <Alert>
-            <AlertTitle>Guardá las combinaciones antes de simular</AlertTitle>
-            <AlertDescription>
-              Los precios, la preparación y el mínimo se pueden editar para
-              comparar con el costo ya calculado. Los cambios de estructura
-              necesitan una nueva simulación.
-            </AlertDescription>
-          </Alert>
-        )}
-        <dl className={styles.metrics}>
-          <div className={styles.metric}>
-            <dt>Celdas en la matriz</dt>
-            <dd>{celdas.length}</dd>
-          </div>
-          <div className={styles.metric}>
-            <dt>Costos calculados</dt>
-            <dd>
-              {resumen.calculados} de {resumen.total}
-            </dd>
-          </div>
-          <div className={styles.metric}>
-            <dt>Errores de cálculo</dt>
-            <dd>{resumen.errores}</dd>
-          </div>
-          <div className={styles.metric}>
-            <dt>Costos pendientes</dt>
-            <dd>{resumen.costosPendientes}</dd>
-          </div>
-        </dl>
-        <p className="text-sm text-muted-foreground">
-          Márgenes: {resumen.cumplen} cumplen el mínimo ·{" "}
-          {resumen.insuficientes} insuficientes · {resumen.pendientes} sin
-          verificar. Los costos se calculan aunque falten precios de venta; el
-          margen necesita esos precios.
-          {[contenido.hojas, contenido.cad].some(
-            (s) => s?.reglas.cobertura === "UNICA",
-          ) && (
-            <>
-              {" "}
-              Cada celda con precio único se prueba en tres coberturas:
-              borrador, normal y alta.
-            </>
-          )}
-        </p>
-        <div className={styles.simulationFilters}>
-          <TextoTarifa
-            etiqueta="Filtrar simulación"
-            valor={filtro}
-            onChange={(v) => {
-              setFiltro(v);
-              setPagina(0);
-            }}
-            placeholder="Papel, tamaño, caras, cobertura o CAD"
-          />
-          <Elegir
-            etiqueta="Estado de las referencias"
-            valor={estadoFiltro}
-            opciones={[
-              { value: "TODAS", label: "Todas las referencias" },
-              { value: "PENDIENTES", label: "Pendientes de simular" },
-              { value: "ERROR", label: "Con errores de cálculo" },
-              { value: "CALCULADAS", label: "Costos completos" },
-            ]}
-            onChange={(v) => {
-              setEstadoFiltro(v);
-              setPagina(0);
-            }}
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            disabled={!habilitada || !celdas.length}
-            onClick={() => void simular(celdas)}
-          >
-            <Play data-icon="inline-start" />
-            Simular matriz ({celdas.length})
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!habilitada || !filtradas.length}
-            onClick={() => void simular(filtradas)}
-          >
-            Simular filtradas ({filtradas.length})
-          </Button>
-          <Button
-            variant="outline"
-            disabled={
-              !habilitada ||
-              !celdas.some((c) => seleccion.has(claveCeldaSimulacion(c)))
-            }
-            onClick={() =>
-              void simular(
-                celdas.filter((c) => seleccion.has(claveCeldaSimulacion(c))),
-              )
-            }
-          >
-            Simular selección ({seleccion.size})
-          </Button>
-          {ocupada && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                ejecucion.current.detener = true;
-              }}
-            >
-              <Square data-icon="inline-start" />
-              Detener al terminar el lote
-            </Button>
-          )}
-        </div>
-        {progreso && (
-          <p role="status" className="text-sm">
-            {progreso.estructura !== estructura
-              ? "Resultados de una estructura anterior"
-              : progreso.estado === "EN_CURSO"
-                ? "Simulando"
-                : progreso.estado === "DETENIDA"
-                  ? "Simulación parcial"
-                  : "Recorrido finalizado"}
-            : {progreso.hechas} de {progreso.total} celdas procesadas.{" "}
-            {resumen.errores > 0
-              ? `${resumen.errores} escenarios con error; sus márgenes siguen sin verificar.`
-              : "Revisá la cobertura y la fecha de cada resultado."}
-          </p>
-        )}
-        <ErrorTarifa error={error} />
-        <SugerenciasTarifario
-          contenido={contenido}
-          tarifarioId={tarifarioId}
-          fuentes={filtradas.map(fuenteSugerencia)}
-          seleccionadas={celdas
-            .filter((c) => seleccion.has(claveCeldaSimulacion(c)))
-            .map(fuenteSugerencia)}
-          disabled={disabled || ocupada}
-          onChange={onChange}
-        />
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10">Elegir</TableHead>
-              <TableHead>Combinación y tramo</TableHead>
-              <TableHead>Precio unitario</TableHead>
-              <TableHead className="text-right">Referencia</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visibles.map((c) => {
-              const clave = claveCeldaSimulacion(c);
-              const guardadoCelda = resultados[clave];
-              const vigente = guardadoCelda?.estructura === estructura;
-              return (
-                <Fragment key={clave}>
-                  <TableRow>
-                    <TableCell>
-                      <Checkbox
-                        aria-label={`Seleccionar ${c.etiqueta}, desde ${c.desde}`}
-                        disabled={ocupada}
-                        checked={seleccion.has(clave)}
-                        onCheckedChange={(checked) =>
-                          setSeleccion((prev) => {
-                            const next = new Set(prev);
-                            if (checked) next.add(clave);
-                            else next.delete(clave);
-                            return next;
-                          })
-                        }
-                      />
-                    </TableCell>
-                    <TableCell className="whitespace-normal">
-                      <p className="font-medium">{c.etiqueta}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Desde {c.desde}
-                        {c.hasta
-                          ? ` hasta menos de ${c.hasta}`
-                          : " en adelante"}{" "}
-                        {c.seccion === "cad"
-                          ? "ML"
-                          : contenido.hojas!.reglas.unidad === "HOJA"
-                            ? "hojas"
-                            : "carillas"}
-                      </p>
-                    </TableCell>
-                    <TableCell className="min-w-36 max-w-44">
-                      <TextoTarifa
-                        etiqueta={`Precio de venta, desde ${c.desde}`}
-                        valor={
-                          contenido[c.seccion]!.filas[c.fila].precios.find(
-                            (p) =>
-                              claveRango(p.desdeCantidad) ===
-                              claveRango(c.desde),
-                          )?.precioUnitario ?? ""
-                        }
-                        disabled={!onChange}
-                        placeholder="Pendiente"
-                        onChange={(valor) => {
-                          if (!onChange) return;
-                          const next = structuredClone(contenido);
-                          const matriz = next[c.seccion]!;
-                          const fila = matriz.filas[c.fila];
-                          const precio = fila.precios.find(
-                            (p) =>
-                              claveRango(p.desdeCantidad) ===
-                              claveRango(c.desde),
-                          );
-                          if (precio) precio.precioUnitario = valor || null;
-                          else if (c.seccion === "hojas")
-                            next.hojas!.filas[c.fila].precios.push({
-                              desdeCantidad: Number(c.desde),
-                              precioUnitario: valor || null,
-                            });
-                          else
-                            next.cad!.filas[c.fila].precios.push({
-                              desdeCantidad: c.desde,
-                              precioUnitario: valor || null,
-                            });
-                          onChange(next);
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={ocupada}
-                        onClick={() => abrir(c)}
-                      >
-                        Ajustar referencia
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell
-                      colSpan={4}
-                      className="whitespace-normal bg-muted/20"
-                    >
-                      <div className={styles.scenarioGrid}>
-                        {vigente ? (
-                          guardadoCelda.resultado.escenarios.map((e) => (
-                            <div key={e.cobertura}>
-                              {e.estado === "ERROR" ? (
-                                <p className="text-destructive">
-                                  {e.cobertura}: {e.motivo} Margen sin
-                                  verificar.
-                                </p>
-                              ) : (
-                                verEscenario(e, c.seccion)
-                              )}
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-muted-foreground">
-                            {guardadoCelda
-                              ? "La referencia cambió. Volvé a simular para comparar."
-                              : "Sin simular. El precio puede estar pendiente y aun así se puede calcular su costo."}
-                          </p>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                </Fragment>
-              );
-            })}
-            {!visibles.length && (
-              <TableRow>
-                <TableCell colSpan={4}>
-                  No hay celdas para este filtro.
-                </TableCell>
-              </TableRow>
+    <>
+      {children ? (
+        children(motor)
+      ) : (
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>Costos, sugerencias y márgenes</CardTitle>
+            <CardDescription>
+              Usá «Simular matriz» para generar los costos de todas las celdas,
+              incluso las que todavía no tienen precio de venta. Compará los
+              precios con pedidos de referencia. Incluye papel, impresión y
+              preparación productiva; las terminaciones se cotizan aparte.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="min-w-0 flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Cada celda representa un pedido con una cantidad dentro del tramo.
+              El margen final descuenta costos productivos, comisiones e
+              impuestos internos de la venta sin IVA. Estos resultados
+              corresponden a la fecha de simulación; cada pedido real necesitará
+              su propio control antes de emitirse.
+            </p>
+            {estructura !== estructuraGuardada && (
+              <Alert>
+                <AlertTitle>
+                  Guardá las combinaciones antes de simular
+                </AlertTitle>
+                <AlertDescription>
+                  Los precios, la preparación y el mínimo se pueden editar para
+                  comparar con el costo ya calculado. Los cambios de estructura
+                  necesitan una nueva simulación.
+                </AlertDescription>
+              </Alert>
             )}
-          </TableBody>
-        </Table>
-        {filtradas.length > TAMANO_PAGINA && (
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={numPagina === 0}
-              onClick={() => setPagina(numPagina - 1)}
-            >
-              Anterior
-            </Button>
-            <span className="text-sm">
-              Página {numPagina + 1} de{" "}
-              {Math.ceil(filtradas.length / TAMANO_PAGINA)}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={(numPagina + 1) * TAMANO_PAGINA >= filtradas.length}
-              onClick={() => setPagina(numPagina + 1)}
-            >
-              Siguiente
-            </Button>
+            <dl className={styles.metrics}>
+              <div className={styles.metric}>
+                <dt>Celdas en la matriz</dt>
+                <dd>{celdas.length}</dd>
+              </div>
+              <div className={styles.metric}>
+                <dt>Costos calculados</dt>
+                <dd>
+                  {resumen.calculados} de {resumen.total}
+                </dd>
+              </div>
+              <div className={styles.metric}>
+                <dt>Errores de cálculo</dt>
+                <dd>{resumen.errores}</dd>
+              </div>
+              <div className={styles.metric}>
+                <dt>Costos pendientes</dt>
+                <dd>{resumen.costosPendientes}</dd>
+              </div>
+            </dl>
+            <p className="text-sm text-muted-foreground">
+              Márgenes: {resumen.cumplen} cumplen el mínimo ·{" "}
+              {resumen.insuficientes} insuficientes · {resumen.pendientes} sin
+              verificar. Los costos se calculan aunque falten precios de venta;
+              el margen necesita esos precios.
+              {[contenido.hojas, contenido.cad].some(
+                (s) => s?.reglas.cobertura === "UNICA",
+              ) && (
+                <>
+                  {" "}
+                  Cada celda con precio único se prueba en tres coberturas:
+                  borrador, normal y alta.
+                </>
+              )}
+            </p>
+            <div className={styles.simulationFilters}>
+              <TextoTarifa
+                etiqueta="Filtrar simulación"
+                valor={filtro}
+                onChange={(v) => {
+                  setFiltro(v);
+                  setPagina(0);
+                }}
+                placeholder="Papel, tamaño, caras, cobertura o CAD"
+              />
+              <Elegir
+                etiqueta="Estado de las referencias"
+                valor={estadoFiltro}
+                opciones={[
+                  { value: "TODAS", label: "Todas las referencias" },
+                  { value: "PENDIENTES", label: "Pendientes de simular" },
+                  { value: "ERROR", label: "Con errores de cálculo" },
+                  { value: "CALCULADAS", label: "Costos completos" },
+                ]}
+                onChange={(v) => {
+                  setEstadoFiltro(v);
+                  setPagina(0);
+                }}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                disabled={!habilitada || !celdas.length}
+                onClick={() => void simular(celdas)}
+              >
+                <Play data-icon="inline-start" />
+                Simular matriz ({celdas.length})
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!habilitada || !filtradas.length}
+                onClick={() => void simular(filtradas)}
+              >
+                Simular filtradas ({filtradas.length})
+              </Button>
+              <Button
+                variant="outline"
+                disabled={
+                  !habilitada ||
+                  !celdas.some((c) => seleccion.has(claveCeldaSimulacion(c)))
+                }
+                onClick={() =>
+                  void simular(
+                    celdas.filter((c) =>
+                      seleccion.has(claveCeldaSimulacion(c)),
+                    ),
+                  )
+                }
+              >
+                Simular selección ({seleccion.size})
+              </Button>
+              {ocupada && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    ejecucion.current.detener = true;
+                  }}
+                >
+                  <Square data-icon="inline-start" />
+                  Detener al terminar el lote
+                </Button>
+              )}
+            </div>
+            {progreso && (
+              <p role="status" className="text-sm">
+                {progreso.estructura !== estructura
+                  ? "Resultados de una estructura anterior"
+                  : progreso.estado === "EN_CURSO"
+                    ? "Simulando"
+                    : progreso.estado === "DETENIDA"
+                      ? "Simulación parcial"
+                      : "Recorrido finalizado"}
+                : {progreso.hechas} de {progreso.total} celdas procesadas.{" "}
+                {resumen.errores > 0
+                  ? `${resumen.errores} escenarios con error; sus márgenes siguen sin verificar.`
+                  : "Revisá la cobertura y la fecha de cada resultado."}
+              </p>
+            )}
+            <ErrorTarifa error={error} />
+            <SugerenciasTarifario
+              contenido={contenido}
+              tarifarioId={tarifarioId}
+              fuentes={filtradas.map(fuenteSugerencia)}
+              seleccionadas={celdas
+                .filter((c) => seleccion.has(claveCeldaSimulacion(c)))
+                .map(fuenteSugerencia)}
+              disabled={disabled || ocupada}
+              onChange={onChange}
+            />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">Elegir</TableHead>
+                  <TableHead>Combinación y tramo</TableHead>
+                  <TableHead>Precio unitario</TableHead>
+                  <TableHead className="text-right">Referencia</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibles.map((c) => {
+                  const clave = claveCeldaSimulacion(c);
+                  const guardadoCelda = resultados[clave];
+                  const vigente = guardadoCelda?.estructura === estructura;
+                  return (
+                    <Fragment key={clave}>
+                      <TableRow>
+                        <TableCell>
+                          <Checkbox
+                            aria-label={`Seleccionar ${c.etiqueta}, desde ${c.desde}`}
+                            disabled={ocupada}
+                            checked={seleccion.has(clave)}
+                            onCheckedChange={(checked) =>
+                              setSeleccion((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.add(clave);
+                                else next.delete(clave);
+                                return next;
+                              })
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className="whitespace-normal">
+                          <p className="font-medium">{c.etiqueta}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Desde {c.desde}
+                            {c.hasta
+                              ? ` hasta menos de ${c.hasta}`
+                              : " en adelante"}{" "}
+                            {c.seccion === "cad"
+                              ? "ML"
+                              : contenido.hojas!.reglas.unidad === "HOJA"
+                                ? "hojas"
+                                : "carillas"}
+                          </p>
+                        </TableCell>
+                        <TableCell className="min-w-36 max-w-44">
+                          <TextoTarifa
+                            etiqueta={`Precio de venta, desde ${c.desde}`}
+                            valor={
+                              contenido[c.seccion]!.filas[c.fila].precios.find(
+                                (p) =>
+                                  claveRango(p.desdeCantidad) ===
+                                  claveRango(c.desde),
+                              )?.precioUnitario ?? ""
+                            }
+                            disabled={!onChange}
+                            placeholder="Pendiente"
+                            onChange={(valor) => {
+                              if (!onChange) return;
+                              const next = structuredClone(contenido);
+                              const matriz = next[c.seccion]!;
+                              const fila = matriz.filas[c.fila];
+                              const precio = fila.precios.find(
+                                (p) =>
+                                  claveRango(p.desdeCantidad) ===
+                                  claveRango(c.desde),
+                              );
+                              if (precio) precio.precioUnitario = valor || null;
+                              else if (c.seccion === "hojas")
+                                next.hojas!.filas[c.fila].precios.push({
+                                  desdeCantidad: Number(c.desde),
+                                  precioUnitario: valor || null,
+                                });
+                              else
+                                next.cad!.filas[c.fila].precios.push({
+                                  desdeCantidad: c.desde,
+                                  precioUnitario: valor || null,
+                                });
+                              onChange(next);
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={ocupada}
+                            onClick={() => abrir(c)}
+                          >
+                            Ajustar referencia
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="whitespace-normal bg-muted/20"
+                        >
+                          <div className={styles.scenarioGrid}>
+                            {vigente ? (
+                              guardadoCelda.resultado.escenarios.map((e) => (
+                                <div key={e.cobertura}>
+                                  {e.estado === "ERROR" ? (
+                                    <p className="text-destructive">
+                                      {e.cobertura}: {e.motivo} Margen sin
+                                      verificar.
+                                    </p>
+                                  ) : (
+                                    verEscenario(e, c.seccion)
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-muted-foreground">
+                                {guardadoCelda
+                                  ? "La referencia cambió. Volvé a simular para comparar."
+                                  : "Sin simular. El precio puede estar pendiente y aun así se puede calcular su costo."}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </Fragment>
+                  );
+                })}
+                {!visibles.length && (
+                  <TableRow>
+                    <TableCell colSpan={4}>
+                      No hay celdas para este filtro.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+            {filtradas.length > TAMANO_PAGINA && (
+              <div className="flex items-center justify-end gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={numPagina === 0}
+                  onClick={() => setPagina(numPagina - 1)}
+                >
+                  Anterior
+                </Button>
+                <span className="text-sm">
+                  Página {numPagina + 1} de{" "}
+                  {Math.ceil(filtradas.length / TAMANO_PAGINA)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={(numPagina + 1) * TAMANO_PAGINA >= filtradas.length}
+                  onClick={() => setPagina(numPagina + 1)}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Resultados temporales: se pierden al salir de este tarifario.
+              Editar precios actualiza la comparación, sin modificar el costo ni
+              su fecha. Volvé a simular cuando cambien tus costos. Una
+              simulación no publica precios ni autoriza ventas con pérdida.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+      {inspeccion && (
+        <FormSheet
+          title="Costo y margen del precio actual"
+          description={`${inspeccion.etiqueta} · desde ${inspeccion.desde}`}
+          onClose={() => setInspeccion(null)}
+          footer={
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={ocupada || disabled}
+                onClick={() => {
+                  abrir(inspeccion);
+                  setInspeccion(null);
+                }}
+              >
+                Ajustar referencia
+              </Button>
+              <Button
+                disabled={!habilitada}
+                loading={ocupada}
+                onClick={() => void simular([inspeccion])}
+              >
+                Calcular esta celda
+              </Button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            {vigentes[claveCeldaSimulacion(inspeccion)]?.escenarios.map((e) =>
+              e.estado === "CALCULADO" ? (
+                <Fragment key={e.cobertura}>
+                  {verEscenario(e, inspeccion.seccion)}
+                </Fragment>
+              ) : (
+                <Alert key={e.cobertura} variant="destructive">
+                  <AlertTitle>{e.cobertura}: no se pudo calcular</AlertTitle>
+                  <AlertDescription>{e.motivo}</AlertDescription>
+                </Alert>
+              ),
+            ) ?? (
+              <p>
+                Sin costo vigente. Calculá esta celda o ajustá su pedido de
+                referencia.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              El margen es orientativo para este pedido de referencia. No
+              publica precios ni autoriza ventas; el pedido real se controla al
+              emitir.
+            </p>
           </div>
-        )}
-        <p className="text-xs text-muted-foreground">
-          Resultados temporales: se pierden al salir de este tarifario. Editar
-          precios actualiza la comparación, sin modificar el costo ni su fecha.
-          Volvé a simular cuando cambien tus costos. Una simulación no publica
-          precios ni autoriza ventas con pérdida.
-        </p>
-      </CardContent>
+        </FormSheet>
+      )}
       <Dialog
         open={!!detalle}
         onOpenChange={(open) => {
@@ -913,7 +1049,7 @@ function Simulador({
             ayuda="Dejá vacío para usar el inicio del tramo. En CAD se mide el papel consumido; con medidas personalizadas se obtiene desde esas medidas."
           />
           {detalle?.seccion === "cad" && (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               <Elegir
                 etiqueta="Configuración CAD de referencia"
                 valor={perfilId}
@@ -962,6 +1098,6 @@ function Simulador({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   );
 }

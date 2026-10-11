@@ -1648,3 +1648,33 @@ errores y costos completos sin confundirlos con el estado del margen.
 Los controles, superficies, diálogos y estados usan el sistema visual de GRAFO,
 incluida la revisión de precios del pedido. Estos ajustes no modifican las
 reglas comerciales confirmadas ni activan precios automáticamente.
+
+### Ajuste confirmado: sugerencias dentro de la matriz (11/10/2026)
+
+La matriz pasa a ser el lugar único de carga, cálculo orientativo y revisión de
+precios. Este recorrido reemplaza el acceso a una pestaña separada de «Costos y
+sugerencias». El asistente «Calcular precios con el motor» permite elegir margen
+objetivo, redondeo comercial hacia arriba y alcance: la vista filtrada (color,
+cobertura y búsqueda, incluidas todas sus páginas) o toda la matriz de hojas/CAD.
+El margen objetivo es una herramienta de edición; no cambia el margen mínimo ni
+la política de autorización del tarifario.
+
+Cada celda puede mostrar costo de referencia, margen del precio actual y precio
+propuesto con su margen resultante. Cambiar margen, redondeo o precio manual
+reutiliza los costos ya calculados; los cambios de estructura requieren guardar
+y volver a calcular. El interruptor «Mostrar costos y márgenes» permite volver
+a la carga compacta. El desglose y la cantidad/geometría de referencia se
+consultan desde cada celda; se puede recalcular una celda individualmente.
+
+La propuesta usa margen sobre venta neta, descontando costos y cargas comerciales,
+convirtiendo IVA una sola vez y descontando preparación cobrada aparte antes de
+dividir por las unidades facturables. No usa el mínimo del pedido para rebajar el
+precio unitario. Precio único requiere las tres coberturas y toma la propuesta
+más exigente; cobertura diferenciada usa su propia referencia. CAD conserva ML
+consumidos/facturables. No se proponen precios desde resultados incompletos.
+
+La aplicación inicial completa sólo vacíos y conserva ceros explícitos. Para
+reemplazar precios existentes se elige «También cargados». Se revisa el alcance
+y se comparan valores en las mismas celdas antes de aplicar. Una revisión pierde
+validez si cambia el contenido, alcance o resultado de cálculo. Aplicar sólo
+edita el borrador; guardar, publicar y activar conservan sus pasos y permisos.

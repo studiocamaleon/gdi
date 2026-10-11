@@ -1,0 +1,508 @@
+"use client";
+
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  Calculator,
+  ChevronDown,
+  Info,
+  Square,
+  WandSparkles,
+} from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { FieldGroup } from "@/components/ui/field";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { Button, EstadoCopiado, AvisoCopiado } from "./centro-copiado-ui";
+import {
+  TextoTarifa,
+  ErrorTarifa,
+  mensajeErrorTarifa,
+} from "./centro-copiado-tarifarios-controles";
+import type { MotorTarifario } from "./centro-copiado-tarifarios-simulacion";
+import {
+  ajustarPrecio,
+  normalizarContenido,
+} from "@/lib/centro-copiado-tarifarios-editor";
+import {
+  sugerirCelda,
+  ponerPrecio,
+  leerMargenObjetivo,
+  caidasEntreTramos,
+} from "@/lib/centro-copiado-tarifarios-sugerencias";
+import {
+  claveCeldaSimulacion,
+  type CeldaSimulacion,
+  type ResultadoCeldaSimulacion,
+} from "../../../apps/api/src/centro-copiado/tarifarios/simulacion-tarifario.types";
+import { compararSimulacion } from "../../../apps/api/src/centro-copiado/comercial/comparacion-simulacion";
+import { DecimalComercial as D } from "../../../apps/api/src/centro-copiado/comercial/validaciones";
+import styles from "./centro-copiado-motor-matriz.module.css";
+
+type Sugerencia = ReturnType<typeof sugerirCelda>;
+type Propuesta = { celda: CeldaSimulacion; sugerencia: Sugerencia };
+export type RenderDetalleCelda = (fila: number, tramo: number) => ReactNode;
+
+/** Una sola matriz: la revisión agrega valores propuestos sin tocar los inputs. */
+export function MotorEnMatriz({
+  motor,
+  seccion,
+  indices,
+  disabled,
+  children,
+}: {
+  motor?: MotorTarifario | null;
+  seccion: "hojas" | "cad";
+  indices: number[];
+  disabled: boolean;
+  children: (detalle?: RenderDetalleCelda) => ReactNode;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [mostrar, setMostrar] = useState(false);
+  const [margen, setMargen] = useState("30");
+  const [redondeo, setRedondeo] = useState("");
+  const [alcance, setAlcance] = useState("VISTA");
+  const [destino, setDestino] = useState("VACIOS");
+  const [revision, setRevision] = useState<{
+    firma: string;
+    propuestas: Propuesta[];
+    caidas: number;
+  } | null>(null);
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
+  const contenido = motor?.contenido;
+  const normalizado = useMemo(() => {
+    try {
+      return contenido ? normalizarContenido(contenido) : null;
+    } catch {
+      return null;
+    }
+  }, [contenido]);
+  const celdas =
+    motor?.celdas.filter(
+      (c) =>
+        c.seccion === seccion &&
+        (alcance === "MATRIZ" || indices.includes(c.fila)),
+    ) ?? [];
+  let errorOpciones: string | null = null;
+  try {
+    leerMargenObjetivo(margen);
+    if (redondeo.trim()) ajustarPrecio("1", "IMPORTE", "0", redondeo);
+  } catch (e) {
+    errorOpciones = mensajeErrorTarifa(e);
+  }
+  const sugerencias = useMemo(() => {
+    const mapa = new Map<string, { sugerencia?: Sugerencia; error?: string }>();
+    if (!motor || !normalizado || errorOpciones || !abierto) return mapa;
+    for (const c of motor.celdas.filter((c) => c.seccion === seccion)) {
+      const clave = claveCeldaSimulacion(c);
+      const r = motor.resultados[clave];
+      if (!r) continue;
+      try {
+        mapa.set(clave, {
+          sugerencia: sugerirCelda(
+            normalizado,
+            r,
+            redondeo.trim() || undefined,
+            margen,
+          ),
+        });
+      } catch (e) {
+        mapa.set(clave, { error: mensajeErrorTarifa(e) });
+      }
+    }
+    return mapa;
+  }, [motor, normalizado, errorOpciones, abierto, seccion, redondeo, margen]);
+  if (!motor) return children();
+  const dinero = (v: string) =>
+    new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: motor.contenido.monedaCodigo,
+      maximumFractionDigits: 4,
+    }).format(Number(v));
+  const propuestas: Propuesta[] = celdas.flatMap((celda) => {
+    const s = sugerencias.get(claveCeldaSimulacion(celda))?.sugerencia;
+    return s &&
+      (destino === "TODOS" || s.anterior == null) &&
+      (s.anterior == null || !new D(s.anterior).eq(s.nuevo))
+      ? [{ celda, sugerencia: s }]
+      : [];
+  });
+  const omitidas = celdas.filter(
+    (c) => !sugerencias.get(claveCeldaSimulacion(c))?.sugerencia,
+  ).length;
+  const firma = JSON.stringify({
+    contenido,
+    resultados: motor.resultados,
+    margen,
+    redondeo,
+    destino,
+    claves: celdas.map(claveCeldaSimulacion),
+  });
+  const revisionVigente = revision?.firma === firma;
+  const editables = !disabled && motor.puedeAplicar;
+  const revisar = () => {
+    if (!normalizado || !editables || !propuestas.length) return;
+    const nuevo = structuredClone(normalizado);
+    propuestas.forEach((p) => ponerPrecio(nuevo, p.celda, p.sugerencia.nuevo));
+    const filas = new Set(propuestas.map((p) => p.celda.fila));
+    setRevision({
+      firma,
+      propuestas,
+      caidas: caidasEntreTramos(nuevo).filter(
+        (c) => c.seccion === seccion && filas.has(c.fila),
+      ).length,
+    });
+    setMostrar(true);
+  };
+  const aplicar = () => {
+    if (
+      !revision ||
+      !revisionVigente ||
+      !editables ||
+      !normalizado ||
+      !motor.aplicar
+    )
+      return;
+    const nuevo = structuredClone(normalizado);
+    revision.propuestas.forEach((p) =>
+      ponerPrecio(nuevo, p.celda, p.sugerencia.nuevo),
+    );
+    motor.aplicar(nuevo);
+    setRevision(null);
+  };
+  const calcular = () => {
+    setMostrar(true);
+    setRevision(null);
+    setErrorAccion(null);
+    void motor
+      .simular(celdas)
+      .catch((e) => setErrorAccion(mensajeErrorTarifa(e)));
+  };
+  const detalleCelda: RenderDetalleCelda = (fila, tramo) => {
+    const celda = { seccion, fila, tramo };
+    const clave = claveCeldaSimulacion(celda);
+    const resultado = motor.resultados[clave];
+    const esperadas =
+      motor.contenido[seccion]!.reglas.cobertura === "UNICA" ? 3 : 1;
+    const completas =
+      resultado?.escenarios.length === esperadas &&
+      resultado.escenarios.every((e) => e.estado === "CALCULADO");
+    const errores = resultado?.escenarios.some((e) => e.estado === "ERROR");
+    const controles =
+      completas && normalizado
+        ? resultado.escenarios.flatMap((e) => {
+            try {
+              return e.estado === "CALCULADO"
+                ? [compararSimulacion(normalizado, seccion, e).control]
+                : [];
+            } catch {
+              return [];
+            }
+          })
+        : [];
+    const margenActual = peorMargen(controles);
+    const sugerida = sugerencias.get(clave);
+    const revisada =
+      revisionVigente &&
+      revision?.propuestas.find((p) => claveCeldaSimulacion(p.celda) === clave)
+        ?.sugerencia;
+    const costo = completas ? costoMayor(resultado) : null;
+    return (
+      <div className={styles.cellInfo} data-review={!!revisada || undefined}>
+        <div className={styles.cellCost}>
+          <span>{esperadas > 1 ? "Costo máx." : "Costo"}</span>
+          <strong>
+            {costo == null
+              ? errores
+                ? "Error de cálculo"
+                : motor.desactualizadas.has(clave)
+                  ? "Volvé a calcular"
+                  : "Sin calcular"
+              : dinero(costo)}
+          </strong>
+        </div>
+        <div
+          className={styles.cellMargin}
+          data-state={margenActual?.estado ?? "NO_VERIFICABLE"}
+        >
+          <span>Margen actual</span>
+          <strong>
+            {margenActual?.porcentaje == null
+              ? "Sin verificar"
+              : `${margenActual.porcentaje}%`}
+          </strong>
+        </div>
+        {margenActual && margenActual.estado !== "CUMPLE" && (
+          <span className={styles.cellWarning}>
+            {margenActual.negativo
+              ? "Deja pérdida"
+              : margenActual.estado === "BLOQUEADO"
+                ? "Bajo mínimo · bloqueo"
+                : margenActual.estado === "REQUIERE_AUTORIZACION"
+                  ? "Requiere autorización"
+                  : "Sin verificar"}
+          </span>
+        )}
+        {abierto && sugerida?.sugerencia && (
+          <div className={styles.cellSuggestion}>
+            <span>{revisada ? "Por aplicar" : "Sugerido"}</span>
+            <strong>{dinero(sugerida.sugerencia.nuevo)}</strong>
+            <small>
+              Margen{" "}
+              {peorMargen(sugerida.sugerencia.controles)?.porcentaje ?? "—"}%
+            </small>
+            {sugerida.sugerencia.controles.some(
+              (c) => c.estado !== "CUMPLE",
+            ) && (
+              <small className={styles.cellWarning}>
+                Revisar mínimo del tarifario
+              </small>
+            )}
+          </div>
+        )}
+        {abierto && sugerida?.error && (
+          <span className={styles.cellWarning} title={sugerida.error}>
+            Sin sugerencia · ver detalle
+          </span>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => motor.detalle(celda)}
+          aria-label={`Ver costo y margen de ${motor.celdas.find((c) => claveCeldaSimulacion(c) === clave)?.etiqueta}, desde ${motor.celdas.find((c) => claveCeldaSimulacion(c) === clave)?.desde}`}
+        >
+          <Info /> Detalle
+        </Button>
+        {abierto && sugerida?.error && <small>{sugerida.error}</small>}
+      </div>
+    );
+  };
+  return (
+    <>
+      <section
+        className={styles.assistant}
+        aria-label={`Motor de precios de ${seccion === "cad" ? "CAD" : "hojas"}`}
+      >
+        <div className={styles.toolbar}>
+          <Button
+            variant="outline"
+            aria-expanded={abierto}
+            onClick={() => {
+              setAbierto(!abierto);
+              if (!abierto) setMostrar(true);
+            }}
+          >
+            <Calculator /> Calcular precios con el motor <ChevronDown />
+          </Button>
+          <label className={styles.visibility}>
+            <Switch
+              aria-label="Mostrar costos y márgenes"
+              checked={mostrar}
+              onCheckedChange={setMostrar}
+            />{" "}
+            Mostrar costos y márgenes
+          </label>
+        </div>
+        {abierto && (
+          <div className={styles.panel}>
+            <div className={styles.intro}>
+              <span className={styles.eyebrow}>ASISTENTE DE PRECIOS</span>
+              <p>
+                Calculá costos y probá tu margen. Los precios actuales se
+                conservan hasta que apliques la propuesta.
+              </p>
+            </div>
+            <FieldGroup className={styles.fields}>
+              <TextoTarifa
+                etiqueta="Margen objetivo (%)"
+                valor={margen}
+                onChange={setMargen}
+                inputMode="decimal"
+                ayuda="Sobre venta neta, después de costos y cargas."
+              />
+              <TextoTarifa
+                etiqueta="Redondear hacia arriba a"
+                valor={redondeo}
+                onChange={setRedondeo}
+                inputMode="decimal"
+                placeholder="Sin redondeo · ej. 10 o 100"
+                ayuda={`Importe en ${motor.contenido.monedaCodigo}.`}
+              />
+              <div className={styles.scope}>
+                <span>Alcance del cálculo y la aplicación</span>
+                <SegmentedControl
+                  aria-label="Alcance del motor"
+                  value={alcance}
+                  onChange={setAlcance}
+                  options={[
+                    { value: "VISTA", label: "Vista filtrada", icon: null },
+                    { value: "MATRIZ", label: "Toda la matriz", icon: null },
+                  ]}
+                />
+                <small>
+                  {celdas.length} precios ·{" "}
+                  {alcance === "VISTA"
+                    ? "color, cobertura y búsqueda actuales, en todas sus páginas"
+                    : "todos los colores, coberturas y tamaños de esta matriz"}
+                </small>
+              </div>
+            </FieldGroup>
+            <ErrorTarifa error={errorOpciones ?? errorAccion ?? motor.error} />
+            {motor.motivoBloqueo && (
+              <p className={styles.help}>{motor.motivoBloqueo}</p>
+            )}
+            <div className={styles.actions}>
+              <Button
+                disabled={
+                  !motor.habilitada || !!errorOpciones || !celdas.length
+                }
+                onClick={calcular}
+                loading={motor.ocupada}
+              >
+                <Calculator />{" "}
+                {Object.keys(motor.resultados).length
+                  ? "Recalcular"
+                  : "Calcular"}{" "}
+                {celdas.length} precios
+              </Button>
+              {motor.ocupada && (
+                <Button variant="outline" onClick={motor.detener}>
+                  <Square /> Detener al terminar el lote
+                </Button>
+              )}
+              <span className={styles.help}>
+                Cambiar margen o redondeo reutiliza los costos calculados.
+              </span>
+            </div>
+            {motor.progreso && (
+              <div role="status" className={styles.progress}>
+                <progress
+                  aria-label="Cálculo de costos"
+                  value={motor.progreso.hechas}
+                  max={Math.max(1, motor.progreso.total)}
+                />
+                <span>
+                  {motor.ocupada
+                    ? "Calculando"
+                    : motor.progreso.estado === "FINALIZADA"
+                      ? "Cálculo terminado"
+                      : "Cálculo detenido"}
+                  : {motor.progreso.hechas} de {motor.progreso.total} precios
+                </span>
+              </div>
+            )}
+            {!!sugerencias.size && (
+              <div className={styles.application}>
+                <div className={styles.actions}>
+                  <SegmentedControl
+                    aria-label="Precios a completar"
+                    value={destino}
+                    onChange={setDestino}
+                    options={[
+                      { value: "VACIOS", label: "Sólo vacíos", icon: null },
+                      { value: "TODOS", label: "También cargados", icon: null },
+                    ]}
+                  />
+                  <Button
+                    variant="outline"
+                    disabled={
+                      !editables || !propuestas.length || !!errorOpciones
+                    }
+                    onClick={revisar}
+                  >
+                    <WandSparkles /> Revisar{" "}
+                    {cantidadPrecios(propuestas.length)}
+                  </Button>
+                  <span className={styles.help}>
+                    {omitidas > 0
+                      ? `${omitidas} sin sugerencia verificable. `
+                      : ""}
+                    {destino === "VACIOS" && !propuestas.length && !omitidas
+                      ? "No hay vacíos en este alcance. Elegí «También cargados» para revisar sus precios."
+                      : "El cero es un precio cargado."}
+                  </span>
+                </div>
+                {revision && (
+                  <div className={styles.review}>
+                    <EstadoCopiado tono={revisionVigente ? "brand" : "warning"}>
+                      {revisionVigente
+                        ? `${revision.propuestas.length} precios por aplicar`
+                        : "La propuesta cambió"}
+                    </EstadoCopiado>
+                    <p>
+                      {revisionVigente
+                        ? "Compará actual y propuesto en las celdas marcadas. Podés recorrer colores y coberturas; el alcance elegido determina qué se aplica."
+                        : "Cambió un precio, la selección o el cálculo. Volvé a revisar antes de aplicar."}
+                    </p>
+                    {!!revision.caidas && (
+                      <AvisoCopiado
+                        icono={<Info />}
+                        tono="warning"
+                        titulo="Revisá los saltos entre tramos"
+                      >
+                        {revision.caidas} fronteras de tramo reducen el total al
+                        aumentar la cantidad, con preparación y mínimo
+                        incluidos.
+                      </AvisoCopiado>
+                    )}
+                    <div className={styles.actions}>
+                      <Button
+                        disabled={!revisionVigente || !editables}
+                        onClick={aplicar}
+                      >
+                        Aplicar {cantidadPrecios(revision.propuestas.length)} al
+                        borrador
+                      </Button>
+                      <Button variant="ghost" onClick={() => setRevision(null)}>
+                        Cancelar revisión
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <p className={styles.help}>
+              Precios{" "}
+              {motor.contenido.composicion.iva === "INCLUIDO"
+                ? "con IVA incluido"
+                : "más IVA"}
+              . Preparación aparte descontada una vez; terminaciones aparte. El
+              mínimo no reduce el precio sugerido. Con precio único se toma la
+              cobertura más exigente.
+            </p>
+          </div>
+        )}
+      </section>
+      {children(mostrar ? detalleCelda : undefined)}
+      {mostrar && (
+        <p className={styles.help}>
+          Costos productivos según pedidos de referencia. El margen usa
+          preparación, mínimo y cargas comerciales. Resultados temporales;
+          recalculá si cambian tus costos. Aplicar sólo edita el borrador:
+          después guardá y publicá para actualizar los canales que comparten
+          este tarifario.
+        </p>
+      )}
+    </>
+  );
+}
+
+function costoMayor(r: ResultadoCeldaSimulacion) {
+  return r.escenarios
+    .reduce(
+      (v, e) => (e.estado === "CALCULADO" ? D.max(v, e.costoUnitario) : v),
+      new D(0),
+    )
+    .toFixed();
+}
+function peorMargen(
+  controles: ReturnType<typeof compararSimulacion>["control"][],
+) {
+  if (!controles.length || controles.some((c) => c.porcentaje == null))
+    return null;
+  return controles.reduce((peor, c) =>
+    new D(c.porcentaje!).lt(peor.porcentaje!) ? c : peor,
+  );
+}
+
+function cantidadPrecios(n: number) {
+  return `${n} ${n === 1 ? "precio" : "precios"}`;
+}

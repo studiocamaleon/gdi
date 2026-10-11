@@ -14,7 +14,6 @@ import {
 import { Tabs } from "@heroui/react";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import styles from "./centro-copiado-tarifarios.module.css";
-import { usePuede } from "@/components/navigation/permisos-provider";
 import { useEffect, useRef, useState } from "react";
 import {
   Copy,
@@ -22,7 +21,6 @@ import {
   Save,
   Upload,
   RefreshCw,
-  Calculator,
   TriangleAlert,
   Grid3X3,
   Settings2,
@@ -102,7 +100,6 @@ export function CentroCopiadoTarifarios({
   ofertaSinGuardar: boolean;
   onGuardado: () => void;
 }) {
-  const verMargenes = usePuede("finanzas.ver_margenes");
   const { moneda, zonaHoraria } = useConfigRegional();
   const [lista, setLista] = useState<api.ResumenTarifario[]>([]);
   const [base, setBase] = useState<api.BorradorTarifario | null>(null);
@@ -576,15 +573,6 @@ export function CentroCopiadoTarifarios({
                   label: "Reglas y márgenes",
                   icon: <Settings2 />,
                 },
-                ...(verMargenes
-                  ? [
-                      {
-                        id: "simulacion",
-                        label: "Costos y sugerencias",
-                        icon: <Calculator />,
-                      },
-                    ]
-                  : []),
                 ...(base
                   ? [{ id: "versiones", label: "Versiones", icon: <History /> }]
                   : []),
@@ -595,132 +583,138 @@ export function CentroCopiadoTarifarios({
               shouldForceMount
               className={styles.editorPanel}
             >
-              {verMargenes && (
-                <AvisoCopiado
-                  tono="brand"
-                  icono={<Calculator />}
-                  titulo="Costos de referencia del motor"
-                  accion={
-                    <Button
-                      variant="outline"
-                      onClick={() => setPestana("simulacion")}
-                    >
-                      Generar costos de referencia
-                    </Button>
-                  }
-                >
-                  Guardá las combinaciones y simulá sus costos, incluso si
-                  todavía no cargaste precios de venta.
-                </AvisoCopiado>
-              )}
-              {ofertaSinGuardar && (
-                <AvisoCopiado
-                  tono="warning"
-                  icono={<Save />}
-                  titulo="Hay cambios de configuración sin guardar"
-                >
-                  Guardá la configuración de Oferta antes de actualizar las
-                  combinaciones del tarifario.
-                </AvisoCopiado>
-              )}
-              {contenido.hojas && (
-                <>
-                  {!version && fueraDeOferta > 0 && (
-                    <AvisoCopiado
-                      tono="warning"
-                      icono={<TriangleAlert />}
-                      titulo={`${fueraDeOferta} combinaciones ya no se ofrecen`}
-                      accion={
-                        puedeGestionar && (
+              <SimulacionTarifario
+                tarifarioId={base?.id ?? null}
+                revision={base?.revision}
+                versionId={version?.id}
+                contenido={contenido}
+                guardado={version?.contenido ?? base?.contenido ?? null}
+                nombres={nombres}
+                perfiles={perfiles}
+                disabled={ocupado || recargaRequerida || ofertaSinGuardar}
+                onChange={soloLectura ? undefined : cambiar}
+              >
+                {(motor) => (
+                  <>
+                    {ofertaSinGuardar && (
+                      <AvisoCopiado
+                        tono="warning"
+                        icono={<Save />}
+                        titulo="Hay cambios de configuración sin guardar"
+                      >
+                        Guardá la configuración de Oferta antes de actualizar
+                        las combinaciones del tarifario.
+                      </AvisoCopiado>
+                    )}
+                    {contenido.hojas && (
+                      <>
+                        {!version && fueraDeOferta > 0 && (
+                          <AvisoCopiado
+                            tono="warning"
+                            icono={<TriangleAlert />}
+                            titulo={`${fueraDeOferta} combinaciones ya no se ofrecen`}
+                            accion={
+                              puedeGestionar && (
+                                <Button
+                                  variant="outline"
+                                  disabled={soloLectura || ofertaSinGuardar}
+                                  onClick={() => void generar("hojas")}
+                                >
+                                  Revisar cambios de oferta
+                                </Button>
+                              )
+                            }
+                          >
+                            La oferta guardada cambió. Revisá qué filas se
+                            retiran del borrador; las versiones publicadas se
+                            conservan.
+                          </AvisoCopiado>
+                        )}
+                        <EditorMatriz
+                          key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-hojas`}
+                          motor={motor}
+                          matriz={contenido.hojas}
+                          nombres={nombres}
+                          formatos={cfg.disponibles.formatos}
+                          disabled={soloLectura}
+                          generando={ocupado}
+                          permiteGenerar={!ofertaSinGuardar}
+                          onGenerar={() => void generar("hojas")}
+                          onChange={(m) =>
+                            cambiar({ ...contenido, hojas: m as MatrizHojas })
+                          }
+                        />
+                      </>
+                    )}
+                    {contenido.cad && (
+                      <EditorMatriz
+                        key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-cad`}
+                        motor={motor}
+                        matriz={contenido.cad}
+                        nombres={nombres}
+                        formatos={cfg.disponibles.formatos}
+                        disabled={soloLectura}
+                        generando={ocupado}
+                        permiteGenerar={permiteCad && !ofertaSinGuardar}
+                        onGenerar={() => void generar("cad")}
+                        onChange={(m) =>
+                          cambiar({ ...contenido, cad: m as MatrizCad })
+                        }
+                      />
+                    )}
+                    {!soloLectura && (
+                      <div className="flex flex-wrap gap-2">
+                        {!contenido.hojas && (
                           <Button
                             variant="outline"
-                            disabled={soloLectura || ofertaSinGuardar}
-                            onClick={() => void generar("hojas")}
+                            onClick={() => {
+                              const hojas = contenidoInicial(
+                                contenido.monedaCodigo,
+                              ).hojas!;
+                              hojas.reglas.cobertura =
+                                contenido.cad!.reglas.cobertura;
+                              cambiar({ ...contenido, hojas });
+                            }}
                           >
-                            Revisar cambios de oferta
+                            Agregar matriz de hojas
                           </Button>
-                        )
-                      }
-                    >
-                      La oferta guardada cambió. Revisá qué filas se retiran del
-                      borrador; las versiones publicadas se conservan.
-                    </AvisoCopiado>
-                  )}
-                  <EditorMatriz
-                    key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-hojas`}
-                    matriz={contenido.hojas}
-                    nombres={nombres}
-                    formatos={cfg.disponibles.formatos}
-                    disabled={soloLectura}
-                    generando={ocupado}
-                    permiteGenerar={!ofertaSinGuardar}
-                    onGenerar={() => void generar("hojas")}
-                    onChange={(m) =>
-                      cambiar({ ...contenido, hojas: m as MatrizHojas })
-                    }
-                  />
-                </>
-              )}
-              {contenido.cad && (
-                <EditorMatriz
-                  key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-cad`}
-                  matriz={contenido.cad}
-                  nombres={nombres}
-                  formatos={cfg.disponibles.formatos}
-                  disabled={soloLectura}
-                  generando={ocupado}
-                  permiteGenerar={permiteCad && !ofertaSinGuardar}
-                  onGenerar={() => void generar("cad")}
-                  onChange={(m) =>
-                    cambiar({ ...contenido, cad: m as MatrizCad })
-                  }
-                />
-              )}
-              {!soloLectura && (
-                <div className="flex flex-wrap gap-2">
-                  {!contenido.hojas && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const hojas = contenidoInicial(
-                          contenido.monedaCodigo,
-                        ).hojas!;
-                        hojas.reglas.cobertura =
-                          contenido.cad!.reglas.cobertura;
-                        cambiar({ ...contenido, hojas });
-                      }}
-                    >
-                      Agregar matriz de hojas
-                    </Button>
-                  )}
-                  {!contenido.cad && permiteCad && (
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        cambiar({
-                          ...contenido,
-                          cad: cadInicial(contenido.hojas!.reglas.cobertura),
-                        })
-                      }
-                    >
-                      Agregar matriz CAD por ML
-                    </Button>
-                  )}
-                  {contenido.hojas && contenido.cad && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        onClick={() => setRetirar("hojas")}
-                      >
-                        Quitar matriz de hojas
-                      </Button>
-                      <Button variant="ghost" onClick={() => setRetirar("cad")}>
-                        Quitar matriz CAD
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
+                        )}
+                        {!contenido.cad && permiteCad && (
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              cambiar({
+                                ...contenido,
+                                cad: cadInicial(
+                                  contenido.hojas!.reglas.cobertura,
+                                ),
+                              })
+                            }
+                          >
+                            Agregar matriz CAD por ML
+                          </Button>
+                        )}
+                        {contenido.hojas && contenido.cad && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              onClick={() => setRetirar("hojas")}
+                            >
+                              Quitar matriz de hojas
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => setRetirar("cad")}
+                            >
+                              Quitar matriz CAD
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </SimulacionTarifario>
             </Tabs.Panel>
             <Tabs.Panel
               id="reglas"
@@ -733,26 +727,6 @@ export function CentroCopiadoTarifarios({
                 onChange={cambiar}
               />
             </Tabs.Panel>
-            {verMargenes && (
-              <Tabs.Panel
-                id="simulacion"
-                shouldForceMount
-                className={styles.editorPanel}
-              >
-                <SimulacionTarifario
-                  key={`simulacion-${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}`}
-                  tarifarioId={base?.id ?? null}
-                  revision={base?.revision}
-                  versionId={version?.id}
-                  contenido={contenido}
-                  guardado={version?.contenido ?? base?.contenido ?? null}
-                  nombres={nombres}
-                  perfiles={perfiles}
-                  disabled={ocupado || recargaRequerida || ofertaSinGuardar}
-                  onChange={soloLectura ? undefined : cambiar}
-                />
-              </Tabs.Panel>
-            )}
             {base && (
               <Tabs.Panel id="versiones" className={styles.editorPanel}>
                 <Card>

@@ -554,3 +554,8 @@
     flex-basis: 100%;
   }
 }
+
+.priceGrid[data-analysis] .priceCell {
+  min-width: 155px;
+  vertical-align: top;
+}
