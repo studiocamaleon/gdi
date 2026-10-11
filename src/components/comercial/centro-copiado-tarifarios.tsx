@@ -1,4 +1,13 @@
 "use client";
+import {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  DialogContent,
+} from "./centro-copiado-ui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { useEffect, useRef, useState } from "react";
@@ -6,17 +15,9 @@ import { Copy, Plus, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
+
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -46,12 +47,14 @@ import * as api from "@/lib/centro-copiado-tarifarios-api";
 import {
   cadInicial,
   contenidoInicial,
+  conciliarFilas,
+  claveCombinacion,
   fechaProgramada,
   filasCad,
   filasOferta,
   normalizarContenido,
   resumenCeldas,
-  sumarFilas,
+  type FilaMatriz,
   type MatrizCad,
   type MatrizHojas,
 } from "@/lib/centro-copiado-tarifarios-editor";
@@ -104,6 +107,12 @@ export function CentroCopiadoTarifarios({
   } | null>(null);
   const [errorPublicacion, setErrorPublicacion] = useState<string | null>(null);
   const [retirar, setRetirar] = useState<"hojas" | "cad" | null>(null);
+  const [actualizacion, setActualizacion] = useState<{
+    seccion: "hojas" | "cad";
+    propuesta: ReturnType<typeof conciliarFilas<FilaMatriz>>;
+    firmaContenido: string;
+    firmaOferta: string;
+  } | null>(null);
   const bloqueo = useRef(false);
   const cambios = !!edicion && firma(edicion) !== firma(base);
   useAvisoCambios(cambios);
@@ -242,30 +251,40 @@ export function CentroCopiadoTarifarios({
     if (!soloLectura && edicion) setEdicion({ ...edicion, contenido: c });
   }
   async function generar(seccion: "hojas" | "cad") {
-    if (soloLectura || !contenido) return;
+    if (soloLectura || !contenido || ofertaSinGuardar) return;
     await trabajo(async () => {
-      const c = structuredClone(contenido);
-      if (seccion === "hojas" && c.hojas) {
-        const nuevas = filasOferta(cfg, c.hojas);
-        const antes = c.hojas.filas.length;
-        c.hojas.filas = sumarFilas(c.hojas.filas, nuevas);
-        toast.info(
-          `${c.hojas.filas.length - antes} combinaciones agregadas. Los precios existentes se conservaron.`,
-        );
-      }
-      if (seccion === "cad" && c.cad) {
+      const matriz = contenido[seccion];
+      if (!matriz) return;
+      let nuevas: FilaMatriz[] = [];
+      if (seccion === "hojas" && contenido.hojas)
+        nuevas = filasOferta(cfg, contenido.hojas);
+      if (seccion === "cad" && contenido.cad) {
         const catalogo = await api.catalogoCadTarifarios();
         setPerfiles(catalogo.perfiles);
-        const antes = c.cad.filas.length;
-        c.cad.filas = sumarFilas(
-          c.cad.filas,
-          filasCad(catalogo.perfiles, c.cad),
-        );
-        toast.info(
-          `${c.cad.filas.length - antes} combinaciones CAD agregadas. Se usan los rollos y modos de impresión configurados.`,
-        );
+        nuevas = filasCad(catalogo.perfiles, contenido.cad);
       }
-      setEdicion((e) => e && { ...e, contenido: c });
+      const propuesta = conciliarFilas<FilaMatriz>(matriz.filas, nuevas);
+      if (!propuesta.altas.length && !propuesta.bajas.length) {
+        toast.info("Las combinaciones ya están actualizadas con la oferta.");
+        return;
+      }
+      if (!matriz.filas.length) {
+        const c = structuredClone(contenido);
+        if (seccion === "hojas" && c.hojas)
+          c.hojas.filas = propuesta.filas as MatrizHojas["filas"];
+        if (seccion === "cad" && c.cad)
+          c.cad.filas = propuesta.filas as MatrizCad["filas"];
+        setEdicion((e) => e && { ...e, contenido: c });
+        toast.info(
+          `${propuesta.altas.length} combinaciones agregadas. Guardá el borrador para simular sus costos.`,
+        );
+      } else
+        setActualizacion({
+          seccion,
+          propuesta,
+          firmaContenido: JSON.stringify(contenido),
+          firmaOferta: JSON.stringify(cfg),
+        });
     });
   }
   async function publicar() {
@@ -320,6 +339,23 @@ export function CentroCopiadoTarifarios({
     }
   }
   const resumen = contenido ? resumenCeldas(contenido) : null;
+  const clavesOferta = new Set(
+    contenido?.hojas
+      ? filasOferta(cfg, contenido.hojas).map((f) =>
+          claveCombinacion(f.combinacion),
+        )
+      : [],
+  );
+  const fueraDeOferta =
+    contenido?.hojas?.filas.filter(
+      (f) => !clavesOferta.has(claveCombinacion(f.combinacion)),
+    ).length ?? 0;
+  const actualizacionVigente =
+    actualizacion &&
+    !soloLectura &&
+    !ofertaSinGuardar &&
+    actualizacion.firmaContenido === JSON.stringify(contenido) &&
+    actualizacion.firmaOferta === JSON.stringify(cfg);
   return (
     <div className="grid min-w-0 gap-4">
       <AvisoPreparacion />
@@ -495,6 +531,7 @@ export function CentroCopiadoTarifarios({
                     Costos y sugerencias
                   </TabsTrigger>
                 )}
+                {base && <TabsTrigger value="versiones">Versiones</TabsTrigger>}
               </TabsList>
             </div>
             <TabsContent
@@ -536,18 +573,34 @@ export function CentroCopiadoTarifarios({
                 </Alert>
               )}
               {contenido.hojas && (
-                <EditorMatriz
-                  key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-hojas`}
-                  matriz={contenido.hojas}
-                  nombres={nombres}
-                  formatos={cfg.disponibles.formatos}
-                  disabled={soloLectura}
-                  generando={ocupado}
-                  onGenerar={() => void generar("hojas")}
-                  onChange={(m) =>
-                    cambiar({ ...contenido, hojas: m as MatrizHojas })
-                  }
-                />
+                <>
+                  {!version && fueraDeOferta > 0 && (
+                    <Alert>
+                      <AlertTitle>
+                        {fueraDeOferta} combinaciones ya no se ofrecen
+                      </AlertTitle>
+                      <AlertDescription>
+                        La oferta guardada cambió. Usá «Actualizar
+                        combinaciones» para revisar qué filas se retiran de este
+                        borrador. Los precios vigentes se conservan hasta que
+                        publiques una nueva versión.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <EditorMatriz
+                    key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-hojas`}
+                    matriz={contenido.hojas}
+                    nombres={nombres}
+                    formatos={cfg.disponibles.formatos}
+                    disabled={soloLectura}
+                    generando={ocupado}
+                    permiteGenerar={!ofertaSinGuardar}
+                    onGenerar={() => void generar("hojas")}
+                    onChange={(m) =>
+                      cambiar({ ...contenido, hojas: m as MatrizHojas })
+                    }
+                  />
+                </>
               )}
               {contenido.cad && (
                 <EditorMatriz
@@ -557,7 +610,7 @@ export function CentroCopiadoTarifarios({
                   formatos={cfg.disponibles.formatos}
                   disabled={soloLectura}
                   generando={ocupado}
-                  permiteGenerar={permiteCad}
+                  permiteGenerar={permiteCad && !ofertaSinGuardar}
                   onGenerar={() => void generar("cad")}
                   onChange={(m) =>
                     cambiar({ ...contenido, cad: m as MatrizCad })
@@ -641,85 +694,88 @@ export function CentroCopiadoTarifarios({
                 />
               </TabsContent>
             )}
+            {base && (
+              <TabsContent value="versiones" className="pt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Versiones publicadas</CardTitle>
+                    <CardDescription>
+                      Las versiones publicadas son inmutables. Abrilas para
+                      consultar sus reglas y precios, o duplicalas como otro
+                      tarifario.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {historial.length ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Versión</TableHead>
+                            <TableHead>Vigencia ({zonaHoraria})</TableHead>
+                            <TableHead>Publicada</TableHead>
+                            <TableHead>Consulta</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {historial.map((v) => (
+                            <TableRow key={v.id}>
+                              <TableCell>
+                                {v.numero} · {v.nombre}
+                                {vigente?.id === v.id && (
+                                  <Badge className="ml-2" variant="secondary">
+                                    Vigente
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {fecha(v.vigenteDesde)}
+                                {new Date(v.vigenteDesde) > new Date() && (
+                                  <Badge variant="outline" className="ml-2">
+                                    Programada
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>{fecha(v.publicadoEl)}</TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={ocupado || cambios}
+                                  onClick={() =>
+                                    void trabajo(async () => {
+                                      setPestana("matrices");
+                                      setVersion(
+                                        await api.leerVersionTarifario(
+                                          base.id,
+                                          v.id,
+                                        ),
+                                      );
+                                    })
+                                  }
+                                >
+                                  Ver versión {v.numero}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Todavía no hay versiones publicadas.
+                      </p>
+                    )}
+                    {cambios && (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Guardá o descartá los cambios antes de consultar otra
+                        versión.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
           </Tabs>
-          {base && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Versiones publicadas</CardTitle>
-                <CardDescription>
-                  Las versiones publicadas son inmutables. Abrilas para
-                  consultar sus reglas y precios, o duplicalas como otro
-                  tarifario.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {historial.length ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Versión</TableHead>
-                        <TableHead>Vigencia ({zonaHoraria})</TableHead>
-                        <TableHead>Publicada</TableHead>
-                        <TableHead>Consulta</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {historial.map((v) => (
-                        <TableRow key={v.id}>
-                          <TableCell>
-                            {v.numero} · {v.nombre}
-                            {vigente?.id === v.id && (
-                              <Badge className="ml-2" variant="secondary">
-                                Vigente
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {fecha(v.vigenteDesde)}
-                            {new Date(v.vigenteDesde) > new Date() && (
-                              <Badge variant="outline" className="ml-2">
-                                Programada
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>{fecha(v.publicadoEl)}</TableCell>
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={ocupado || cambios}
-                              onClick={() =>
-                                void trabajo(async () => {
-                                  setVersion(
-                                    await api.leerVersionTarifario(
-                                      base.id,
-                                      v.id,
-                                    ),
-                                  );
-                                })
-                              }
-                            >
-                              Ver versión {v.numero}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Todavía no hay versiones publicadas.
-                  </p>
-                )}
-                {cambios && (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Guardá o descartá los cambios antes de consultar otra
-                    versión.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
         </>
       ) : (
         !cargando && (
@@ -758,6 +814,114 @@ export function CentroCopiadoTarifarios({
           }
         }}
       />
+      <Dialog
+        open={!!actualizacion}
+        onOpenChange={(open) => {
+          if (!open) setActualizacion(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Actualizar combinaciones del borrador</DialogTitle>
+            <DialogDescription>
+              Revisá los cambios de la oferta. Las combinaciones que continúan
+              conservan sus precios y rangos propios. Las versiones publicadas
+              no cambian.
+            </DialogDescription>
+          </DialogHeader>
+          {actualizacion && (
+            <>
+              <dl className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <dt>Se agregan</dt>
+                  <dd>{actualizacion.propuesta.altas.length}</dd>
+                </div>
+                <div>
+                  <dt>Se conservan</dt>
+                  <dd>{actualizacion.propuesta.conservadas}</dd>
+                </div>
+                <div>
+                  <dt>Se retiran</dt>
+                  <dd>{actualizacion.propuesta.bajas.length}</dd>
+                </div>
+              </dl>
+              <p className="text-sm text-muted-foreground">
+                Las nuevas quedan con precio pendiente. Se retirarán{" "}
+                {actualizacion.propuesta.bajas.reduce(
+                  (n, f) =>
+                    n +
+                    f.precios.filter((p) => p.precioUnitario !== null).length,
+                  0,
+                )}{" "}
+                precios cargados de las combinaciones que ya no se ofrecen.
+              </p>
+              {!!actualizacion.propuesta.bajas.length && (
+                <div className="max-h-60 overflow-auto">
+                  <p className="mb-2 text-sm font-medium">
+                    Combinaciones a retirar
+                  </p>
+                  <ul className="flex flex-col gap-2 text-sm">
+                    {actualizacion.propuesta.bajas.slice(0, 50).map((f) => {
+                      const c = f.combinacion;
+                      return (
+                        <li key={claveCombinacion(c)}>
+                          {nombres[c.papelMateriaPrimaId] ??
+                            "Papel no disponible"}{" "}
+                          ·{" "}
+                          {c.gramaje == null ? "Sin gramaje" : `${c.gramaje} g`}{" "}
+                          ·{" "}
+                          {"tamano" in c
+                            ? `${c.tamano} · ${c.faz === 1 ? "Simple faz" : "Doble faz"}`
+                            : `${c.anchoRolloMm} mm`}{" "}
+                          · {c.color === "COLOR" ? "Color" : "Blanco y negro"} ·{" "}
+                          {c.cobertura ?? "Todas las coberturas"}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {actualizacion.propuesta.bajas.length > 50 && (
+                    <p className="mt-2 text-sm">
+                      Y {actualizacion.propuesta.bajas.length - 50}{" "}
+                      combinaciones más.
+                    </p>
+                  )}
+                </div>
+              )}
+              {!actualizacionVigente && (
+                <ErrorTarifa error="La oferta o el borrador cambió. Cerrá esta revisión y volvé a actualizar las combinaciones." />
+              )}
+            </>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActualizacion(null)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!actualizacionVigente}
+              onClick={() => {
+                if (!actualizacion || !contenido || !actualizacionVigente)
+                  return;
+                const c = structuredClone(contenido);
+                if (actualizacion.seccion === "hojas" && c.hojas)
+                  c.hojas.filas = structuredClone(
+                    actualizacion.propuesta.filas,
+                  ) as MatrizHojas["filas"];
+                if (actualizacion.seccion === "cad" && c.cad)
+                  c.cad.filas = structuredClone(
+                    actualizacion.propuesta.filas,
+                  ) as MatrizCad["filas"];
+                cambiar(c);
+                setActualizacion(null);
+                toast.success(
+                  "Combinaciones actualizadas. Guardá el borrador para conservar los cambios.",
+                );
+              }}
+            >
+              Aplicar actualización
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!retirar}
         onOpenChange={(v) => {

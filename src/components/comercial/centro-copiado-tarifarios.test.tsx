@@ -174,14 +174,18 @@ async function elegir(label: string, valor: string) {
     campo.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
-const renderEditor = (puedeGestionar = true) =>
+const renderEditor = (
+  puedeGestionar = true,
+  cfg = configTarifarios,
+  ofertaSinGuardar = false,
+) =>
   act(async () =>
     root.render(
       <CentroCopiadoTarifarios
-        cfg={configTarifarios}
+        cfg={cfg}
         puedeGestionar={puedeGestionar}
         permiteCad={false}
-        ofertaSinGuardar={false}
+        ofertaSinGuardar={ofertaSinGuardar}
         onGuardado={() => {}}
       />,
     ),
@@ -248,7 +252,7 @@ it("el lector puede consultar pero no editar ni publicar", async () => {
   expect(entrada("Nombre del tarifario").disabled).toBe(true);
   expect(boton("Guardar borrador")).toBeUndefined();
   expect(boton("Publicar versión")).toBeUndefined();
-  expect(boton("Agregar combinaciones de la oferta").disabled).toBe(true);
+  expect(boton("Actualizar combinaciones").disabled).toBe(true);
   expect(api.guardarTarifario).not.toHaveBeenCalled();
 });
 it("publica la revisión guardada y recarga la revisión posterior", async () => {
@@ -430,5 +434,58 @@ it("el acceso desde matrices abre costos sin guardar ni simular automáticamente
     "true",
   );
   expect(boton("Simular matriz (6)").disabled).toBe(false);
+  expect(api.guardarTarifario).not.toHaveBeenCalled();
+});
+
+it("revisa y aplica las bajas de la oferta sólo al borrador, sin publicar ni guardar automáticamente", async () => {
+  const base = borrador();
+  base.contenido.hojas!.filas = filasOferta(
+    configTarifarios,
+    base.contenido.hojas!,
+  );
+  for (const f of base.contenido.hojas!.filas)
+    for (const p of f.precios) p.precioUnitario = "123.456789";
+  vi.mocked(api.obtenerTarifario).mockResolvedValue(base);
+  await abrir();
+  const cfg = structuredClone(configTarifarios);
+  cfg.tamanos = ["A4"];
+  await renderEditor(true, cfg);
+  expect(el.textContent).toContain("combinaciones ya no se ofrecen");
+  await click("Actualizar combinaciones");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Combinaciones a retirar",
+  );
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "A3",
+  );
+  await click("Cancelar");
+  expect(boton("Guardar borrador").disabled).toBe(true);
+  await click("Actualizar combinaciones");
+  await click("Aplicar actualización");
+  expect(api.guardarTarifario).not.toHaveBeenCalled();
+  expect(api.publicarTarifario).not.toHaveBeenCalled();
+  expect(
+    base.contenido.hojas!.filas.some((f) => f.combinacion.tamano === "A3"),
+  ).toBe(true);
+  await click("Guardar borrador");
+  const guardado = vi.mocked(api.guardarTarifario).mock.calls[0][1].contenido
+    .hojas!;
+  expect(guardado.filas.every((f) => f.combinacion.tamano === "A4")).toBe(true);
+  expect(
+    guardado.filas.every((f) =>
+      f.precios.every((p) => p.precioUnitario === "123.456789"),
+    ),
+  ).toBe(true);
+});
+it("no actualiza combinaciones con oferta sin guardar ni acepta una revisión que cambió", async () => {
+  await abrir();
+  await renderEditor(true, configTarifarios, true);
+  expect(boton("Actualizar combinaciones").disabled).toBe(true);
+  await renderEditor();
+  await click("Actualizar combinaciones");
+  const cfg = structuredClone(configTarifarios);
+  cfg.tamanos = ["A4"];
+  await renderEditor(true, cfg);
+  expect(boton("Aplicar actualización").disabled).toBe(true);
   expect(api.guardarTarifario).not.toHaveBeenCalled();
 });

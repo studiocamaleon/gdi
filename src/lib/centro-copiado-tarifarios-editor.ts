@@ -196,6 +196,35 @@ export function sumarFilas<T extends FilaMatriz>(
     throw new Error("La matriz admite hasta 5.000 combinaciones.");
   return [...mapa.values()];
 }
+/** Actualiza sólo el borrador. Las filas que siguen en oferta conservan
+ * precios, rangos propios y orden; las altas nacen con precios pendientes. */
+export function conciliarFilas<T extends FilaMatriz>(
+  actuales: T[],
+  oferta: T[],
+) {
+  const disponibles = new Set(
+    oferta.map((f) => claveCombinacion(f.combinacion)),
+  );
+  const existentes = new Set(
+    actuales.map((f) => claveCombinacion(f.combinacion)),
+  );
+  const conservadas = actuales.filter((f) =>
+    disponibles.has(claveCombinacion(f.combinacion)),
+  );
+  const bajas = actuales.filter(
+    (f) => !disponibles.has(claveCombinacion(f.combinacion)),
+  );
+  const altas = sumarFilas<T>(
+    [],
+    oferta.filter((f) => !existentes.has(claveCombinacion(f.combinacion))),
+  );
+  return {
+    filas: sumarFilas(conservadas, altas),
+    conservadas: conservadas.length,
+    altas,
+    bajas,
+  };
+}
 export function cambiarCobertura(
   contenido: ContenidoTarifario,
   cobertura: "UNICA" | "DIFERENCIADA",

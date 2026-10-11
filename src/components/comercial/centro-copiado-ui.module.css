@@ -1,0 +1,120 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: none;
+}
+.cardHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.cardTitle {
+  grid-column: 1;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.35;
+}
+.description {
+  grid-column: 1;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.65;
+  max-width: 90ch;
+}
+.cardAction {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+.cardContent {
+  min-width: 0;
+  padding: 22px 24px;
+}
+.cardFooter {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-secondary);
+}
+.input {
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.dialog.dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-width: min(900px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 24px;
+  gap: 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--overlay-shadow);
+  background: var(--surface);
+}
+.dialog [data-slot="dialog-header"] {
+  padding: 0 30px 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dialog [data-slot="dialog-title"] {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+.dialog [data-slot="dialog-description"] {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-text);
+}
+.dialog [data-slot="dialog-footer"] {
+  position: sticky;
+  bottom: -24px;
+  margin: 0 -24px -24px;
+  padding: 16px 24px;
+  border-radius: 0;
+  background: var(--surface-secondary);
+}
+.dialog [data-slot="dialog-close"] {
+  top: 18px;
+  right: 18px;
+}
+@media (max-width: 640px) {
+  .cardHeader,
+  .cardContent {
+    padding: 18px 16px;
+  }
+  .cardFooter {
+    padding: 14px 16px;
+  }
+  .cardHeader {
+    gap: 8px;
+  }
+  .cardAction {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .dialog.dialog {
+    padding: 20px 16px;
+  }
+  .dialog [data-slot="dialog-footer"] {
+    bottom: -20px;
+    margin: 0 -16px -20px;
+    padding: 16px;
+  }
+}

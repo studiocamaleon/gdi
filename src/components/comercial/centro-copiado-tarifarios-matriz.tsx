@@ -1,16 +1,18 @@
 "use client";
-import { useState } from "react";
-import { toast } from "sonner";
-import { Plus, SlidersHorizontal } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
+  Button,
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
   CardContent,
-} from "@/components/ui/card";
+  DialogContent,
+} from "./centro-copiado-ui";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Plus, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
 import { FieldGroup } from "@/components/ui/field";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CuadriculaPrecios } from "./centro-copiado-tarifarios-cuadricula";
@@ -34,7 +36,6 @@ import {
 } from "@/components/ui/empty";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -270,8 +271,14 @@ export function EditorMatriz({
             loading={generando}
             onClick={onGenerar}
           >
-            <Plus data-icon="inline-start" />
-            Agregar combinaciones de {cad ? "CAD" : "la oferta"}
+            {matriz.filas.length ? (
+              <RefreshCw data-icon="inline-start" />
+            ) : (
+              <Plus data-icon="inline-start" />
+            )}
+            {matriz.filas.length
+              ? "Actualizar combinaciones"
+              : `Agregar combinaciones de ${cad ? "CAD" : "la oferta"}`}
           </Button>
           <Button
             variant="outline"

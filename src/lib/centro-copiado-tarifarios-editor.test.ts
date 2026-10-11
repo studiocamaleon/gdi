@@ -5,6 +5,7 @@ import {
   cadInicial,
   cambiarCobertura,
   contenidoInicial,
+  conciliarFilas,
   decimalEditor,
   fechaProgramada,
   filasCad,
@@ -215,4 +216,72 @@ it("recorre todas las páginas del catálogo y detecta cursores inválidos", asy
   await expect(
     todasLasPaginas(async () => ({ items: [], siguiente: 0 })),
   ).rejects.toThrow("listado");
+});
+
+it("actualiza la oferta retirando formatos desactivados sin modificar precios ni excepciones vigentes", () => {
+  const matriz = contenidoInicial("ARS").hojas!;
+  matriz.reglas.cobertura = "DIFERENCIADA";
+  const originales = filasOferta(config, matriz);
+  const conservada = originales.find((f) => f.combinacion.tamano === "A4")!;
+  conservada.rangosPropios = [1, 25];
+  conservada.precios = [
+    { desdeCantidad: 1, precioUnitario: "0" },
+    { desdeCantidad: 25, precioUnitario: "123.456789" },
+  ];
+  const antes = structuredClone(originales);
+  const nuevaOferta = structuredClone(config);
+  nuevaOferta.tamanos = ["A4"];
+  const resultado = conciliarFilas(
+    originales,
+    filasOferta(nuevaOferta, matriz),
+  );
+  expect(resultado.bajas.length).toBeGreaterThan(0);
+  expect(resultado.bajas.every((f) => f.combinacion.tamano === "A3")).toBe(
+    true,
+  );
+  expect(resultado.filas.every((f) => f.combinacion.tamano === "A4")).toBe(
+    true,
+  );
+  expect(resultado.filas).toContainEqual(conservada);
+  expect(originales).toEqual(antes);
+  expect(resultado.altas).toHaveLength(0);
+  expect(
+    new Set(resultado.bajas.map((f) => f.combinacion.cobertura)).size,
+  ).toBe(3);
+});
+it("las altas quedan pendientes y retirar toda la oferta no modifica las filas de origen", () => {
+  const matriz = contenidoInicial("ARS").hojas!;
+  const oferta = filasOferta(config, matriz);
+  const parcial = conciliarFilas(oferta.slice(0, 1), oferta);
+  expect(parcial.conservadas).toBe(1);
+  expect(
+    parcial.altas.every((f) =>
+      f.precios.every((p) => p.precioUnitario === null),
+    ),
+  ).toBe(true);
+  const vacia = conciliarFilas(oferta, []);
+  expect(vacia.filas).toEqual([]);
+  expect(vacia.bajas).toEqual(oferta);
+  expect(oferta.length).toBeGreaterThan(0);
+});
+it("actualiza CAD por ancho, papel, color y cobertura conservando los tramos de ML propios", () => {
+  const matriz = cadInicial("UNICA");
+  const perfil = {
+    papelMateriaPrimaId: "papel-ficticio",
+    gramaje: 80,
+    color: "BN",
+    rollo: { anchoRolloMm: 914, margenMm: 10 },
+  } as PerfilCadCopiado;
+  const filas = filasCad(
+    [perfil, { ...perfil, rollo: { anchoRolloMm: 610, margenMm: 10 } }],
+    matriz,
+  );
+  filas[0].rangosPropios = ["0", "2.5"];
+  filas[0].precios = [
+    { desdeCantidad: "0", precioUnitario: "100" },
+    { desdeCantidad: "2.5", precioUnitario: "90" },
+  ];
+  const resultado = conciliarFilas(filas, filasCad([perfil], matriz));
+  expect(resultado.filas).toEqual([filas[0]]);
+  expect(resultado.bajas).toEqual([filas[1]]);
 });
