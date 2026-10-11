@@ -1608,3 +1608,16 @@ referencia» → «Simular matriz». Los precios pueden quedar pendientes. Consu
 simular. Las sugerencias requieren revisión y aceptación, y sólo modifican el
 borrador; la simulación no publica ni activa precios. Se mantienen los permisos
 financieros y las reglas de cálculo ya confirmadas.
+
+### Corrección: papeles disponibles y lectura de costos (10/10/2026)
+
+La plantilla administrada de Centro de copiado consulta los papeles y variantes
+activos de la empresa al calcular. Un papel incorporado después de crear esa
+plantilla puede simularse sin regenerarla. Se conservan las restricciones de la
+oferta, la validación productiva y las recetas configuradas para otros productos.
+
+La pantalla distingue costos calculados, errores y referencias pendientes de
+los márgenes sin verificar. El costo por hoja, carilla o ML queda visible sin
+abrir el detalle. Tener un precio de venta pendiente no impide obtener el costo;
+sí impide verificar el margen. Con precio único se calculan tres referencias por
+celda, una por cobertura. No cambia ninguna decisión comercial confirmada.

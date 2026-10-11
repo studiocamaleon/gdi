@@ -385,6 +385,15 @@ function Simulador({
         </p>
         <dl className={styles.amounts}>
           <div>
+            <dt>
+              Costo por{" "}
+              {escenario.unidad === "ML"
+                ? "ML"
+                : escenario.unidad.toLowerCase()}
+            </dt>
+            <dd>{dinero(escenario.costoUnitario)}</dd>
+          </div>
+          <div>
             <dt>Venta sin IVA</dt>
             <dd>
               {comparacion?.composicion.total
@@ -430,10 +439,8 @@ function Simulador({
           <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground">
             <p>{escenario.referencia}</p>
             <p>
-              Costo por {escenario.unidad.toLowerCase()}:{" "}
-              {dinero(escenario.costoUnitario)}. Facturable:{" "}
-              {escenario.cantidadFacturable} {escenario.unidad}. IVA:{" "}
-              {escenario.ivaPorcentaje}%.
+              Facturable: {escenario.cantidadFacturable} {escenario.unidad}.
+              IVA: {escenario.ivaPorcentaje}%.
             </p>
             {control?.cargas.map((c) => (
               <p key={JSON.stringify(c)}>
@@ -488,11 +495,6 @@ function Simulador({
           );
         })
       : [];
-  const errores = Object.values(resultados)
-    .filter((r) => r.estructura === estructura)
-    .flatMap((r) => r.resultado.escenarios)
-    .filter((e) => e.estado === "ERROR").length;
-
   const fuenteSugerencia = (c: Celda) => {
     const r = resultados[claveCeldaSimulacion(c)];
     return {
@@ -502,19 +504,31 @@ function Simulador({
     };
   };
   const resumen = useMemo(() => {
-    const resumen = { cumplen: 0, insuficientes: 0, pendientes: 0 };
+    const resumen = {
+      total: 0,
+      calculados: 0,
+      errores: 0,
+      costosPendientes: 0,
+      cumplen: 0,
+      insuficientes: 0,
+      pendientes: 0,
+    };
     for (const c of celdas) {
       const guardadoCelda = resultados[claveCeldaSimulacion(c)];
       const r =
         guardadoCelda?.estructura === estructura
           ? guardadoCelda.resultado
           : undefined;
-      if (!r) {
-        resumen.pendientes +=
-          contenido[c.seccion]!.reglas.cobertura === "UNICA" ? 3 : 1;
-        continue;
-      }
+      const esperados =
+        contenido[c.seccion]!.reglas.cobertura === "UNICA" ? 3 : 1;
+      const pendientes = Math.max(0, esperados - (r?.escenarios.length ?? 0));
+      resumen.total += esperados;
+      resumen.costosPendientes += pendientes;
+      resumen.pendientes += pendientes;
+      if (!r) continue;
       for (const e of r.escenarios) {
+        if (e.estado === "CALCULADO") resumen.calculados++;
+        else resumen.errores++;
         try {
           const estado =
             e.estado === "CALCULADO" && normalizado
@@ -566,18 +580,35 @@ function Simulador({
             <dd>{celdas.length}</dd>
           </div>
           <div className={styles.metric}>
-            <dt>Referencias verificadas</dt>
-            <dd>{resumen.cumplen}</dd>
+            <dt>Costos calculados</dt>
+            <dd>
+              {resumen.calculados} de {resumen.total}
+            </dd>
           </div>
           <div className={styles.metric}>
-            <dt>Margen insuficiente</dt>
-            <dd>{resumen.insuficientes}</dd>
+            <dt>Errores de cálculo</dt>
+            <dd>{resumen.errores}</dd>
           </div>
           <div className={styles.metric}>
-            <dt>Referencias sin verificar</dt>
-            <dd>{resumen.pendientes}</dd>
+            <dt>Costos pendientes</dt>
+            <dd>{resumen.costosPendientes}</dd>
           </div>
         </dl>
+        <p className="text-sm text-muted-foreground">
+          Márgenes: {resumen.cumplen} cumplen el mínimo ·{" "}
+          {resumen.insuficientes} insuficientes · {resumen.pendientes} sin
+          verificar. Los costos se calculan aunque falten precios de venta; el
+          margen necesita esos precios.
+          {[contenido.hojas, contenido.cad].some(
+            (s) => s?.reglas.cobertura === "UNICA",
+          ) && (
+            <>
+              {" "}
+              Cada celda con precio único se prueba en tres coberturas:
+              borrador, normal y alta.
+            </>
+          )}
+        </p>
         <TextoTarifa
           etiqueta="Filtrar simulación"
           valor={filtro}
@@ -638,8 +669,8 @@ function Simulador({
                   ? "Simulación parcial"
                   : "Recorrido finalizado"}
             : {progreso.hechas} de {progreso.total} celdas procesadas.{" "}
-            {errores > 0
-              ? `${errores} escenarios con error; sus márgenes siguen sin verificar.`
+            {resumen.errores > 0
+              ? `${resumen.errores} escenarios con error; sus márgenes siguen sin verificar.`
               : "Revisá la cobertura y la fecha de cada resultado."}
           </p>
         )}

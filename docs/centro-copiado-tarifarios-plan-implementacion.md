@@ -829,3 +829,37 @@ La muestra simula respuestas del motor; no acredita costos del catálogo real.
 TypeScript: cero diagnósticos en 22 archivos del circuito. ESLint sin errores
 y control de CSS sin clases globales nuevas. Servicios locales conservados;
 sin build de producción ni despliegue.
+
+### Corrección de costos con catálogo local — 10/10/2026
+
+La plantilla de copiado conservaba los materiales disponibles al provisionarla.
+Los tipos de papel agregados posteriormente figuraban en la oferta, pero el
+motor rechazaba su selección como sustrato principal. Se reprodujo ese rechazo
+con el catálogo local y las tres coberturas de una misma celda.
+
+El motor ahora carga en memoria los papeles y variantes activos de la empresa
+para el sustrato comercial de la plantilla administrada de copiado. La condición
+exige los códigos y marcas de sistema del producto y la ruta. Conserva las
+restricciones de otros productos, rutas, familias, slots y modos de selección,
+y no escribe ni regenera la receta. Tampoco conserva defaults inactivos.
+
+La pantalla cuenta costos calculados, errores y pendientes por separado del
+estado del margen, e informa las tres coberturas cuando el precio es único.
+El costo unitario queda visible junto al costo total aun sin precio de venta.
+Un cambio de estructura invalida también esos contadores.
+
+Comprobación con el motor y catálogo reales de local: 438 celdas, 1.314 escenarios
+calculados y cero errores, incluidas hojas y CAD. La ejecución utilizó servicios
+reales dentro de transacciones PostgreSQL de sólo lectura; no escribió precios,
+cotizaciones, pedidos ni configuración. No es una prueba de emisión de pedidos
+ni una activación del tarifario. Sin migraciones, seeds ni despliegue.
+
+Validación adicional: 26 pruebas de API y 34 de frontend aprobadas. Incluyen
+papeles nuevos, catálogo vacío, aislamiento del catálogo por empresa, exclusión
+de otras recetas, costo sin precio, coberturas diferenciadas, recorridos
+parciales y descarte de resultados al cambiar la estructura. Las suites
+modificadas se volvieron a ejecutar después de los últimos ajustes. TypeScript
+acotado de API y frontend sin diagnósticos, y ESLint de los archivos nuevos y la
+pantalla sin errores. El chequeo de API utiliza un proyecto temporal acotado
+para respetar la memoria local. API recargada y comprobada con base disponible;
+web conservada en el puerto de desarrollo. No se realizó build de producción.

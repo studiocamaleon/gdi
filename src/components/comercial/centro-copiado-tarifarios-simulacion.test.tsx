@@ -155,6 +155,9 @@ const boton = (texto: string) =>
 const click = async (texto: string) => {
   await act(async () => boton(texto).click());
 };
+const metrica = (etiqueta: string) =>
+  [...el.querySelectorAll("dt")].find((dt) => dt.textContent === etiqueta)
+    ?.nextElementSibling?.textContent;
 async function escribir(input: HTMLInputElement, valor: string) {
   await act(async () => {
     Object.getOwnPropertyDescriptor(
@@ -171,6 +174,7 @@ it("recorre todas las celdas en lotes, compara sin IVA y actualiza el precio sin
   expect(simularCeldasTarifario).toHaveBeenCalledTimes(2);
   expect(el.textContent).toContain("6 de 6 celdas procesadas");
   expect(el.textContent).toContain("40.00%");
+  expect(metrica("Costos calculados")).toBe("6 de 18");
   const precio = [...el.querySelectorAll("input")].find(
     (i) => i.value === "121",
   )!;
@@ -184,6 +188,8 @@ it("cambiar condiciones de producción oculta los márgenes anteriores y exige g
   await click("Simular matriz (6)");
   await click("Cambiar unidad de prueba");
   expect(el.textContent).not.toContain("40.00%");
+  expect(metrica("Costos calculados")).toBe("0 de 18");
+  expect(metrica("Costos pendientes")).toBe("18");
   expect(el.textContent).toContain("La referencia cambió");
   expect(boton("Simular matriz (6)").disabled).toBe(true);
 });
@@ -210,6 +216,8 @@ it("detener conserva resultados parciales sin marcarlos como matriz completa", a
   );
   expect(el.textContent).toContain("Simulación parcial: 5 de 6");
   expect(simularCeldasTarifario).toHaveBeenCalledTimes(1);
+  expect(metrica("Costos calculados")).toBe("5 de 18");
+  expect(metrica("Costos pendientes")).toBe("13");
 });
 
 it("errores del motor quedan visibles sin fabricar un costo o margen", async () => {
@@ -231,6 +239,10 @@ it("errores del motor quedan visibles sin fabricar un costo o margen", async () 
   expect(el.textContent).toContain("6 escenarios con error");
   expect(el.textContent).toContain("Falta tarifa de máquina");
   expect(el.textContent).not.toContain("40.00%");
+  expect(metrica("Costos calculados")).toBe("0 de 18");
+  expect(metrica("Errores de cálculo")).toBe("6");
+  expect(metrica("Costos pendientes")).toBe("12");
+  expect(metrica("Costo por hoja")).toBeUndefined();
 });
 
 it("selección explícita envía sólo la celda elegida y su cantidad ajustada", async () => {
@@ -271,6 +283,44 @@ function respuestaCompleta(s: SolicitudSimulacion) {
   });
   return r;
 }
+it("muestra los costos por hoja y cuenta las tres coberturas aunque el precio y margen sigan pendientes", async () => {
+  for (const fila of contenido.hojas!.filas)
+    for (const p of fila.precios) p.precioUnitario = null;
+  vi.mocked(simularCeldasTarifario).mockImplementation(async (_id, s) =>
+    respuestaCompleta(s),
+  );
+  await montar();
+  expect(metrica("Costos calculados")).toBe("0 de 18");
+  expect(metrica("Costos pendientes")).toBe("18");
+  await click("Simular matriz (6)");
+  expect(metrica("Costos calculados")).toBe("18 de 18");
+  expect(metrica("Costos pendientes")).toBe("0");
+  expect(metrica("Errores de cálculo")).toBe("0");
+  expect(el.textContent).toContain(
+    "0 cumplen el mínimo · 0 insuficientes · 18 sin verificar",
+  );
+  const costos = [...el.querySelectorAll("dt")].filter(
+    (dt) => dt.textContent === "Costo por hoja",
+  );
+  expect(costos).toHaveLength(18);
+  expect(costos.every((dt) => !dt.closest("details"))).toBe(true);
+  expect(
+    costos.every((dt) => dt.nextElementSibling?.textContent?.includes("60")),
+  ).toBe(true);
+  expect(el.textContent).toContain("Precio pendiente");
+});
+it("cuenta una referencia por celda cuando la cobertura está diferenciada", async () => {
+  contenido.hojas!.reglas.cobertura = "DIFERENCIADA";
+  for (const fila of contenido.hojas!.filas)
+    fila.combinacion.cobertura = "normal";
+  await montar();
+  expect(metrica("Costos pendientes")).toBe("6");
+  await click("Simular matriz (6)");
+  expect(metrica("Costos calculados")).toBe("6 de 6");
+  expect(metrica("Costos pendientes")).toBe("0");
+  expect(el.textContent).not.toContain("Cada celda con precio único");
+});
+
 it("revisa sugerencias con coberturas completas, permite cancelar y aplica sólo al confirmar", async () => {
   vi.mocked(simularCeldasTarifario).mockImplementation(async (_id, s) =>
     respuestaCompleta(s),

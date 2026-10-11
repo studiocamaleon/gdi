@@ -1,3 +1,4 @@
+import { cargarPapelesMotorCopiado } from '../centro-copiado/papeles-motor';
 import {
   costosPasosPrecio,
   escalarCostosPasos,
@@ -11517,6 +11518,14 @@ export class MotorUniversalService {
         })),
       });
     });
+
+    await cargarPapelesMotorCopiado(
+      this.prisma,
+      tenantId,
+      producto,
+      rutaAlt.ruta,
+      pasos,
+    );
 
     const pasoByRutaPasoId = new Map(
       pasos.map((paso) => [paso.rutaPasoId, paso] as const),

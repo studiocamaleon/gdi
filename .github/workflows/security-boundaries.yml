@@ -178,6 +178,7 @@ jobs:
             src/centro-copiado/tarifarios/__tests__/contenido-tarifario.spec.ts \
             src/centro-copiado/tarifarios/__tests__/politica-precios.spec.ts \
             src/centro-copiado/tarifarios/__tests__/simulacion.spec.ts \
+            src/centro-copiado/__tests__/papeles-motor.spec.ts \
             src/centro-copiado/comercial/__tests__/control-margen.spec.ts \
             src/centro-copiado/comercial/__tests__/calculo-hojas.spec.ts \
             src/centro-copiado/comercial/__tests__/validaciones.spec.ts \
