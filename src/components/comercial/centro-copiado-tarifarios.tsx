@@ -7,11 +7,27 @@ import {
   CardDescription,
   CardContent,
   DialogContent,
+  CardFooter,
+  AvisoCopiado,
+  EstadoCopiado,
 } from "./centro-copiado-ui";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs } from "@heroui/react";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import styles from "./centro-copiado-tarifarios.module.css";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { useEffect, useRef, useState } from "react";
-import { Copy, Plus, Save, Upload } from "lucide-react";
+import {
+  Copy,
+  Plus,
+  Save,
+  Upload,
+  RefreshCw,
+  Calculator,
+  TriangleAlert,
+  Grid3X3,
+  Settings2,
+  History,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { Badge } from "@/components/ui/badge";
@@ -412,180 +428,223 @@ export function CentroCopiadoTarifarios({
         </CardContent>
       </Card>
       <ErrorTarifa error={error} />
-      {base && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            disabled={ocupado}
-            onClick={() => navegar(() => void cargar(base.id))}
-          >
-            Recargar tarifario guardado
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            Vigencia según {zonaHoraria}
-            {vigente
-              ? ` · Versión vigente: ${vigente.numero}`
-              : " · Sin versión vigente"}
-          </span>
-        </div>
-      )}
       {contenido && edicion ? (
         <>
           <Card>
-            <CardContent className="grid gap-4 pt-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={version ? "secondary" : "outline"}>
+            <CardContent className={styles.tariffIdentity}>
+              <div className={styles.tariffName}>
+                <div className={styles.tariffEyebrow}>
+                  <span className={styles.eyebrow}>TARIFARIO DE COPIADO</span>
+                  <EstadoCopiado tono={version ? "neutral" : "brand"}>
                     {version
                       ? `Versión ${version.numero} · sólo lectura`
                       : "Borrador"}
-                  </Badge>
+                  </EstadoCopiado>
                   {cambios && (
-                    <Badge variant="secondary">Cambios sin guardar</Badge>
-                  )}
-                  <Badge variant="outline">{contenido.monedaCodigo}</Badge>
-                  <Badge variant="outline">
-                    {resumen!.pendientes} de {resumen!.total} precios pendientes
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {version && (
-                    <Button
-                      variant="outline"
-                      disabled={ocupado}
-                      onClick={() => setVersion(null)}
-                    >
-                      Volver al borrador
-                    </Button>
-                  )}
-                  {puedeGestionar && (
-                    <>
-                      <Button
-                        variant="outline"
-                        disabled={ocupado}
-                        onClick={() => nuevo(true)}
-                      >
-                        <Copy data-icon="inline-start" />
-                        Duplicar tarifario
-                      </Button>
-                      {!version && (
-                        <>
-                          <Button
-                            variant="outline"
-                            loading={ocupado}
-                            disabled={soloLectura || !cambios}
-                            onClick={() => void guardar()}
-                          >
-                            <Save data-icon="inline-start" />
-                            Guardar borrador
-                          </Button>
-                          <Button
-                            disabled={soloLectura || cambios || !base}
-                            onClick={() => {
-                              setErrorPublicacion(null);
-                              setPublicacion({ modo: "INMEDIATA", fecha: "" });
-                            }}
-                          >
-                            <Upload data-icon="inline-start" />
-                            Publicar versión
-                          </Button>
-                        </>
-                      )}
-                    </>
+                    <EstadoCopiado tono="warning">
+                      Cambios sin guardar
+                    </EstadoCopiado>
                   )}
                 </div>
+                <TextoTarifa
+                  etiqueta="Nombre del tarifario"
+                  maxLength={120}
+                  disabled={soloLectura}
+                  valor={version?.nombre ?? edicion.nombre}
+                  onChange={(nombre) => setEdicion({ ...edicion, nombre })}
+                  placeholder="Por ejemplo: Mostrador"
+                />
+                <p className={styles.tariffCurrency}>
+                  Moneda del tarifario ·{" "}
+                  <strong>{contenido.monedaCodigo}</strong>
+                </p>
               </div>
-              <TextoTarifa
-                etiqueta="Nombre del tarifario"
-                maxLength={120}
-                disabled={soloLectura}
-                valor={version?.nombre ?? edicion.nombre}
-                onChange={(nombre) => setEdicion({ ...edicion, nombre })}
-                placeholder="Por ejemplo: Mostrador"
-                ayuda="La moneda se toma de la empresa al crear el tarifario; no se convierten precios automáticamente."
-              />
+              <div className={styles.priceProgress}>
+                <span className={styles.eyebrow}>CARGA DE PRECIOS</span>
+                <p>
+                  <strong>{resumen!.total - resumen!.pendientes}</strong>
+                  <span>de {resumen!.total} precios cargados</span>
+                </p>
+                <progress
+                  aria-label="Precios cargados"
+                  value={resumen!.total - resumen!.pendientes}
+                  max={Math.max(1, resumen!.total)}
+                />
+                <span>
+                  {resumen!.total === 0
+                    ? "Agregá combinaciones para comenzar"
+                    : resumen!.pendientes
+                      ? `${resumen!.pendientes} precios pendientes`
+                      : "Todos los precios están cargados"}
+                </span>
+              </div>
               {contenido.monedaCodigo !== moneda.codigo && (
-                <Alert variant="destructive">
-                  <AlertTitle>Moneda diferente a la empresa</AlertTitle>
-                  <AlertDescription>
+                <div className={styles.fullWidth}>
+                  <AvisoCopiado
+                    tono="warning"
+                    icono={<TriangleAlert />}
+                    titulo="Moneda diferente a la empresa"
+                  >
                     Este tarifario usa {contenido.monedaCodigo}; la empresa usa{" "}
                     {moneda.codigo}. Su selección por canal quedará pendiente
                     por moneda incompatible.
-                  </AlertDescription>
-                </Alert>
+                  </AvisoCopiado>
+                </div>
               )}
             </CardContent>
+            <CardFooter className={styles.tariffActions}>
+              <div className={styles.tariffMeta}>
+                <span>
+                  {vigente
+                    ? `Versión ${vigente.numero} vigente`
+                    : "Sin versión vigente"}
+                </span>
+                <small>Vigencia según {zonaHoraria}</small>
+                {base && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={ocupado}
+                    onClick={() => navegar(() => void cargar(base.id))}
+                  >
+                    <RefreshCw />
+                    Recargar tarifario guardado
+                  </Button>
+                )}
+              </div>
+              <div className={styles.actionGroup}>
+                {version && (
+                  <Button
+                    variant="outline"
+                    disabled={ocupado}
+                    onClick={() => setVersion(null)}
+                  >
+                    Volver al borrador
+                  </Button>
+                )}
+                {puedeGestionar && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      disabled={ocupado}
+                      onClick={() => nuevo(true)}
+                    >
+                      <Copy />
+                      Duplicar tarifario
+                    </Button>
+                    {!version && (
+                      <>
+                        <Button
+                          variant="outline"
+                          loading={ocupado}
+                          disabled={soloLectura || !cambios}
+                          onClick={() => void guardar()}
+                        >
+                          <Save />
+                          Guardar borrador
+                        </Button>
+                        <Button
+                          disabled={soloLectura || cambios || !base}
+                          onClick={() => {
+                            setErrorPublicacion(null);
+                            setPublicacion({ modo: "INMEDIATA", fecha: "" });
+                          }}
+                        >
+                          <Upload />
+                          Publicar versión
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </CardFooter>
           </Card>
           <Tabs
             className="min-w-0"
-            value={pestana}
-            onValueChange={(v) => setPestana(String(v))}
+            selectedKey={pestana}
+            onSelectionChange={(v) => setPestana(String(v))}
             key={`editor-${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}`}
           >
-            <div className="overflow-x-auto pb-2">
-              <TabsList variant="line" aria-label="Editor del tarifario">
-                <TabsTrigger value="matrices">Matrices</TabsTrigger>
-                <TabsTrigger value="reglas">Reglas y márgenes</TabsTrigger>
-                {verMargenes && (
-                  <TabsTrigger value="simulacion">
-                    Costos y sugerencias
-                  </TabsTrigger>
-                )}
-                {base && <TabsTrigger value="versiones">Versiones</TabsTrigger>}
-              </TabsList>
-            </div>
-            <TabsContent
-              value="matrices"
-              keepMounted
-              className="pt-4 flex flex-col gap-4 data-[hidden]:hidden"
+            <NavigationTabList
+              label="Editor del tarifario"
+              variant="inset"
+              items={[
+                { id: "matrices", label: "Matrices", icon: <Grid3X3 /> },
+                {
+                  id: "reglas",
+                  label: "Reglas y márgenes",
+                  icon: <Settings2 />,
+                },
+                ...(verMargenes
+                  ? [
+                      {
+                        id: "simulacion",
+                        label: "Costos y sugerencias",
+                        icon: <Calculator />,
+                      },
+                    ]
+                  : []),
+                ...(base
+                  ? [{ id: "versiones", label: "Versiones", icon: <History /> }]
+                  : []),
+              ]}
+            />
+            <Tabs.Panel
+              id="matrices"
+              shouldForceMount
+              className={styles.editorPanel}
             >
               {verMargenes && (
-                <Alert>
-                  <AlertTitle>
-                    Generá costos de referencia antes de definir tus precios
-                  </AlertTitle>
-                  <AlertDescription>
-                    <p>
-                      Agregá las combinaciones y guardá el borrador, aunque los
-                      precios estén vacíos. Después usá «Simular matriz» para
-                      calcular sus costos con el motor.
-                    </p>
+                <AvisoCopiado
+                  tono="brand"
+                  icono={<Calculator />}
+                  titulo="Costos de referencia del motor"
+                  accion={
                     <Button
                       variant="outline"
-                      size="sm"
                       onClick={() => setPestana("simulacion")}
                     >
                       Generar costos de referencia
                     </Button>
-                  </AlertDescription>
-                </Alert>
+                  }
+                >
+                  Guardá las combinaciones y simulá sus costos, incluso si
+                  todavía no cargaste precios de venta.
+                </AvisoCopiado>
               )}
               {ofertaSinGuardar && (
-                <Alert>
-                  <AlertTitle>
-                    Hay cambios de configuración sin guardar
-                  </AlertTitle>
-                  <AlertDescription>
-                    La generación usa la oferta guardada. Guardá la
-                    configuración de Oferta antes de agregar combinaciones
-                    nuevas.
-                  </AlertDescription>
-                </Alert>
+                <AvisoCopiado
+                  tono="warning"
+                  icono={<Save />}
+                  titulo="Hay cambios de configuración sin guardar"
+                >
+                  Guardá la configuración de Oferta antes de actualizar las
+                  combinaciones del tarifario.
+                </AvisoCopiado>
               )}
               {contenido.hojas && (
                 <>
                   {!version && fueraDeOferta > 0 && (
-                    <Alert>
-                      <AlertTitle>
-                        {fueraDeOferta} combinaciones ya no se ofrecen
-                      </AlertTitle>
-                      <AlertDescription>
-                        La oferta guardada cambió. Usá «Actualizar
-                        combinaciones» para revisar qué filas se retiran de este
-                        borrador. Los precios vigentes se conservan hasta que
-                        publiques una nueva versión.
-                      </AlertDescription>
-                    </Alert>
+                    <AvisoCopiado
+                      tono="warning"
+                      icono={<TriangleAlert />}
+                      titulo={`${fueraDeOferta} combinaciones ya no se ofrecen`}
+                      accion={
+                        puedeGestionar && (
+                          <Button
+                            variant="outline"
+                            disabled={soloLectura || ofertaSinGuardar}
+                            onClick={() => void generar("hojas")}
+                          >
+                            Revisar cambios de oferta
+                          </Button>
+                        )
+                      }
+                    >
+                      La oferta guardada cambió. Revisá qué filas se retiran del
+                      borrador; las versiones publicadas se conservan.
+                    </AvisoCopiado>
                   )}
                   <EditorMatriz
                     key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-hojas`}
@@ -662,23 +721,23 @@ export function CentroCopiadoTarifarios({
                   )}
                 </div>
               )}
-            </TabsContent>
-            <TabsContent
-              value="reglas"
-              keepMounted
-              className="pt-4 data-[hidden]:hidden"
+            </Tabs.Panel>
+            <Tabs.Panel
+              id="reglas"
+              shouldForceMount
+              className={styles.editorPanel}
             >
               <ReglasTarifario
                 contenido={contenido}
                 disabled={soloLectura}
                 onChange={cambiar}
               />
-            </TabsContent>
+            </Tabs.Panel>
             {verMargenes && (
-              <TabsContent
-                value="simulacion"
-                keepMounted
-                className="pt-4 data-[hidden]:hidden"
+              <Tabs.Panel
+                id="simulacion"
+                shouldForceMount
+                className={styles.editorPanel}
               >
                 <SimulacionTarifario
                   key={`simulacion-${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}`}
@@ -692,10 +751,10 @@ export function CentroCopiadoTarifarios({
                   disabled={ocupado || recargaRequerida || ofertaSinGuardar}
                   onChange={soloLectura ? undefined : cambiar}
                 />
-              </TabsContent>
+              </Tabs.Panel>
             )}
             {base && (
-              <TabsContent value="versiones" className="pt-4">
+              <Tabs.Panel id="versiones" className={styles.editorPanel}>
                 <Card>
                   <CardHeader>
                     <CardTitle>Versiones publicadas</CardTitle>
@@ -773,7 +832,7 @@ export function CentroCopiadoTarifarios({
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </Tabs.Panel>
             )}
           </Tabs>
         </>

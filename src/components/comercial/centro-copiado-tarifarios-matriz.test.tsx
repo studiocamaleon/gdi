@@ -95,9 +95,11 @@ async function render(disabled = false) {
   );
 }
 async function click(texto: string) {
-  const b = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-    (b) => b.textContent === texto,
-  )!;
+  const b = [
+    ...document.querySelectorAll<HTMLElement>(
+      'button, [role="tab"], [role="radio"]',
+    ),
+  ].find((b) => b.textContent === texto)!;
   expect(b).toBeTruthy();
   await act(async () => b.click());
 }

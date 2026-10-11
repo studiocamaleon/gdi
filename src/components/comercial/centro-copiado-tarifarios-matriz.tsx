@@ -7,14 +7,25 @@ import {
   CardDescription,
   CardContent,
   DialogContent,
+  CardAction,
+  EstadoCopiado,
 } from "./centro-copiado-ui";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, RefreshCw, SlidersHorizontal } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import {
+  Plus,
+  RefreshCw,
+  SlidersHorizontal,
+  Palette,
+  Contrast,
+  Layers,
+} from "lucide-react";
+import { Tabs } from "@heroui/react";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import styles from "./centro-copiado-tarifarios.module.css";
 
 import { FieldGroup } from "@/components/ui/field";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CuadriculaPrecios } from "./centro-copiado-tarifarios-cuadricula";
 import {
   agruparCuadricula,
@@ -225,12 +236,18 @@ export function EditorMatriz({
             ? "Se cobra el largo de papel consumido, incluidos los márgenes de avance. Cada ancho de rollo tiene su precio."
             : "El tramo alcanzado se aplica a todas las unidades del grupo. Simple y doble faz tienen precios independientes."}
         </CardDescription>
+        <CardAction>
+          <EstadoCopiado>{matriz.filas.length} combinaciones</EstadoCopiado>
+        </CardAction>
       </CardHeader>
       <CardContent className="grid gap-4 min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{matriz.filas.length} combinaciones</Badge>
-          <span className="text-sm text-muted-foreground">
-            Tramos generales desde {matriz.rangosGenerales.join(" · ")}{" "}
+        <div className={styles.volumeBar}>
+          <div className={styles.volumeLabel}>
+            <Layers aria-hidden />
+            <span>Tramos por volumen</span>
+          </div>
+          <span className={styles.volumeRanges}>
+            Desde {matriz.rangosGenerales.join(" · ")}{" "}
             {cad
               ? "ML"
               : matriz.reglas.unidad === "HOJA"
@@ -253,8 +270,8 @@ export function EditorMatriz({
             Editar rangos generales
           </Button>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-48 flex-1">
+        <div className={styles.matrixToolbar}>
+          <div className={styles.matrixSearch}>
             <TextoTarifa
               etiqueta="Buscar combinaciones"
               valor={busqueda}
@@ -293,53 +310,47 @@ export function EditorMatriz({
           </Button>
         </div>
         <Tabs
-          value={color}
-          onValueChange={(v) => {
+          selectedKey={color}
+          onSelectionChange={(v) => {
             setColor(v as "COLOR" | "BN");
             setPagina(0);
           }}
           className="min-w-0"
         >
-          <TabsList
-            variant="graphite"
-            aria-label={cad ? "Impresión CAD" : "Tipo de impresión"}
-          >
-            <TabsTrigger value="COLOR">Color · CMYK</TabsTrigger>
-            <TabsTrigger value="BN">Blanco y negro · K</TabsTrigger>
-          </TabsList>
-          <TabsContent value={color} className="min-w-0 grid gap-4 pt-2">
+          <NavigationTabList
+            variant="detailed"
+            tone="graphite"
+            label={cad ? "Impresión CAD" : "Tipo de impresión"}
+            items={[
+              { id: "COLOR", label: "Color · CMYK", icon: <Palette /> },
+              { id: "BN", label: "Blanco y negro · K", icon: <Contrast /> },
+            ]}
+          />
+          <Tabs.Panel id={color} className="min-w-0 grid gap-4 pt-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {matriz.reglas.cobertura === "DIFERENCIADA" ? (
-                <Tabs
+                <SegmentedControl
+                  aria-label={cad ? "Cobertura CAD" : "Cobertura de impresión"}
                   value={cobertura}
-                  onValueChange={(v) => {
-                    setCobertura(String(v));
+                  options={[
+                    { value: "borrador", label: "Borrador", icon: null },
+                    { value: "normal", label: "Normal", icon: null },
+                    { value: "alta", label: "Alta", icon: null },
+                  ]}
+                  onChange={(v) => {
+                    setCobertura(v);
                     setPagina(0);
                   }}
-                >
-                  <TabsList
-                    variant="line"
-                    aria-label={
-                      cad ? "Cobertura CAD" : "Cobertura de impresión"
-                    }
-                  >
-                    <TabsTrigger value="borrador">Borrador</TabsTrigger>
-                    <TabsTrigger value="normal">Normal</TabsTrigger>
-                    <TabsTrigger value="alta">Alta</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value={cobertura} className="sr-only">
-                    Precios de cobertura {cobertura}
-                  </TabsContent>
-                </Tabs>
+                />
               ) : (
                 <span className="text-sm text-muted-foreground">
                   Precio único para todas las coberturas
                 </span>
               )}
-              <Badge variant="secondary">
+              <EstadoCopiado>
                 {cargados} de {preciosVista.length} precios cargados en esta
                 vista
-              </Badge>
+              </EstadoCopiado>
             </div>
             <p className="text-xs text-muted-foreground">
               Precio por {unidad}, en la moneda del tarifario. Vacío =
@@ -390,7 +401,7 @@ export function EditorMatriz({
                 }}
               />
             )}
-          </TabsContent>
+          </Tabs.Panel>
         </Tabs>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm text-muted-foreground">

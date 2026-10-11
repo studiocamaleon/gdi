@@ -901,3 +901,25 @@ web conservada en el puerto de desarrollo. No se realizó build de producción.
 Recorrido de uso: **Oferta → Guardar cambios → Tarifarios → abrir borrador →
 Actualizar combinaciones → revisar → Aplicar actualización → Guardar borrador**.
 Después se pueden volver a simular los costos de la matriz actualizada.
+
+### 11 de octubre de 2026 — ajuste visual del editor y vista de canales
+
+- Se retiraron los atributos heredados que hacían aplicar estilos globales del
+  componente anterior a los paneles, botones y campos de copiado. El módulo
+  conserva sus propios estilos y los controles del sistema visual GRAFO.
+- El encabezado del tarifario muestra progreso de carga, moneda y estado; las
+  acciones de guardar, duplicar y publicar quedan agrupadas. La navegación del
+  editor y de color usa NavigationTabList; las coberturas, SegmentedControl.
+  Cambiar de pestaña conserva las ediciones y las simulaciones montadas.
+- Los avisos tienen icono, jerarquía y acción propia. El aviso de combinaciones
+  retiradas abre directamente la revisión, sin aplicar ni guardar cambios.
+- La vista previa de canales usa filas adaptables con identidad del canal,
+  herencia o excepción, motor o tarifario/version vigente y estado pendiente.
+  Fecha, zona horaria y alcance de la vista quedan en el pie del panel.
+- Validación: 105 pruebas aprobadas en nueve suites; comprobación de tipos en
+  30 archivos sin diagnósticos, ESLint sin errores y CSS sin globales nuevas.
+  Se volvió a ejecutar la suite del editor tras el último ajuste de textos.
+- Revisión visual de los componentes reales con datos ficticios, en escritorio
+  y a 390 px: encabezado, pestañas, avisos y canales sin desbordamiento de página.
+  Se comprobó navegación con flechas y apertura/cancelación de la conciliación
+  desde el aviso. No se modificaron datos reales ni se desplegó.

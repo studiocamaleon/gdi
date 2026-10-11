@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
-import { Input as BrandInput } from "@heroui/react";
+import { Input as BrandInput, Alert as BrandAlert, Chip } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { DialogContent as PrimitiveDialogContent } from "@/components/ui/dialog";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
@@ -61,7 +61,6 @@ export function Button({
   return (
     <ActionButton
       {...props}
-      data-slot="button"
       variant={
         variant === "default" || variant === "brand"
           ? "primary"
@@ -93,7 +92,6 @@ export function Input({
   return (
     <BrandInput
       {...props}
-      data-slot="input"
       className={cn(focus.singleBorder, s.input, className)}
     />
   );
@@ -101,13 +99,15 @@ export function Input({
 
 type Box = HTMLAttributes<HTMLDivElement>;
 export function Card({ className, ...props }: Box) {
-  return <div {...props} data-slot="card" className={cn(s.card, className)} />;
+  return (
+    <div {...props} data-copiado="card" className={cn(s.card, className)} />
+  );
 }
 export function CardHeader({ className, ...props }: Box) {
   return (
     <div
       {...props}
-      data-slot="card-header"
+      data-copiado="card-header"
       className={cn(s.cardHeader, className)}
     />
   );
@@ -119,7 +119,7 @@ export function CardTitle({
   return (
     <h3
       {...props}
-      data-slot="card-title"
+      data-copiado="card-title"
       className={cn(s.cardTitle, className)}
     />
   );
@@ -128,7 +128,7 @@ export function CardDescription({ className, ...props }: Box) {
   return (
     <div
       {...props}
-      data-slot="card-description"
+      data-copiado="card-description"
       className={cn(s.description, className)}
     />
   );
@@ -137,7 +137,7 @@ export function CardContent({ className, ...props }: Box) {
   return (
     <div
       {...props}
-      data-slot="card-content"
+      data-copiado="card-content"
       className={cn(s.cardContent, className)}
     />
   );
@@ -146,7 +146,7 @@ export function CardAction({ className, ...props }: Box) {
   return (
     <div
       {...props}
-      data-slot="card-action"
+      data-copiado="card-action"
       className={cn(s.cardAction, className)}
     />
   );
@@ -155,7 +155,7 @@ export function CardFooter({ className, ...props }: Box) {
   return (
     <div
       {...props}
-      data-slot="card-footer"
+      data-copiado="card-footer"
       className={cn(s.cardFooter, className)}
     />
   );
@@ -168,5 +168,58 @@ export function DialogContent({
 }: ComponentProps<typeof PrimitiveDialogContent>) {
   return (
     <PrimitiveDialogContent {...props} className={cn(s.dialog, className)} />
+  );
+}
+
+/** Avisos con jerarquía y acción propia, dentro del sistema visual de GRAFO. */
+export function AvisoCopiado({
+  titulo,
+  children,
+  icono,
+  accion,
+  tono = "neutral",
+}: {
+  titulo: ReactNode;
+  children: ReactNode;
+  icono: ReactNode;
+  accion?: ReactNode;
+  tono?: "neutral" | "brand" | "warning" | "danger";
+}) {
+  return (
+    <BrandAlert
+      status={
+        tono === "danger"
+          ? "danger"
+          : tono === "warning"
+            ? "warning"
+            : "default"
+      }
+      className={s.notice}
+      data-tone={tono}
+    >
+      <BrandAlert.Indicator className={s.noticeIcon}>
+        {icono}
+      </BrandAlert.Indicator>
+      <BrandAlert.Content className={s.noticeContent}>
+        <BrandAlert.Title className={s.noticeTitle}>{titulo}</BrandAlert.Title>
+        <BrandAlert.Description className={s.noticeDescription}>
+          {children}
+        </BrandAlert.Description>
+      </BrandAlert.Content>
+      {accion && <div className={s.noticeAction}>{accion}</div>}
+    </BrandAlert>
+  );
+}
+export function EstadoCopiado({
+  children,
+  tono = "neutral",
+}: {
+  children: ReactNode;
+  tono?: "neutral" | "brand" | "warning" | "success";
+}) {
+  return (
+    <Chip size="sm" variant="soft" className={s.status} data-tone={tono}>
+      <Chip.Label>{children}</Chip.Label>
+    </Chip>
   );
 }

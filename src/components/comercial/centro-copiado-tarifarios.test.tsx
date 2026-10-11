@@ -161,7 +161,11 @@ async function escribir(input: HTMLInputElement, valor: string) {
   });
 }
 async function click(texto: string) {
-  const b = boton(texto);
+  const b =
+    boton(texto) ??
+    [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (t) => t.textContent === texto,
+    );
   expect(b, `Botón ${texto}`).toBeTruthy();
   await act(async () => b.click());
 }
@@ -341,7 +345,9 @@ it("permite editar la política general y excepciones sin mostrar una vista prev
   );
   await elegir("Política general", "Mostrador de prueba");
   await elegir("Web", "Motor de cotización");
-  expect(el.querySelectorAll("tbody tr")).toHaveLength(0);
+  expect(
+    el.querySelectorAll('[aria-label="Precios resueltos por canal"] > li'),
+  ).toHaveLength(0);
   expect(el.textContent).toContain("Guardá los cambios");
   await click("Guardar canales");
   expect(api.guardarPoliticaTarifarios).toHaveBeenCalledWith(1, {
@@ -355,7 +361,9 @@ it("permite editar la política general y excepciones sin mostrar una vista prev
       app_movil: { modalidad: "HEREDAR" },
     },
   });
-  expect(el.querySelectorAll("tbody tr")).toHaveLength(0);
+  expect(
+    el.querySelectorAll('[aria-label="Precios resueltos por canal"] > li'),
+  ).toHaveLength(0);
 });
 it("refrescar el catálogo al publicar otro tarifario conserva la política editada", async () => {
   await act(async () =>
@@ -430,9 +438,11 @@ it("los rangos propios de una fila no cambian los generales ni las demás combin
 it("el acceso desde matrices abre costos sin guardar ni simular automáticamente", async () => {
   await abrir();
   await click("Generar costos de referencia");
-  expect(boton("Costos y sugerencias").getAttribute("aria-selected")).toBe(
-    "true",
-  );
+  expect(
+    [...el.querySelectorAll('[role="tab"]')]
+      .find((t) => t.textContent === "Costos y sugerencias")
+      ?.getAttribute("aria-selected"),
+  ).toBe("true");
   expect(boton("Simular matriz (6)").disabled).toBe(false);
   expect(api.guardarTarifario).not.toHaveBeenCalled();
 });
@@ -451,7 +461,7 @@ it("revisa y aplica las bajas de la oferta sólo al borrador, sin publicar ni gu
   cfg.tamanos = ["A4"];
   await renderEditor(true, cfg);
   expect(el.textContent).toContain("combinaciones ya no se ofrecen");
-  await click("Actualizar combinaciones");
+  await click("Revisar cambios de oferta");
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
     "Combinaciones a retirar",
   );
@@ -488,4 +498,72 @@ it("no actualiza combinaciones con oferta sin guardar ni acepta una revisión qu
   await renderEditor(true, cfg);
   expect(boton("Aplicar actualización").disabled).toBe(true);
   expect(api.guardarTarifario).not.toHaveBeenCalled();
+});
+
+it("distingue motor, versión de tarifario y pendientes en la vista por canal", async () => {
+  const preview = vista();
+  preview.canales = [
+    { canalVenta: "mostrador", origen: "GENERAL", estado: "MOTOR" },
+    {
+      canalVenta: "web",
+      origen: "CANAL",
+      estado: "TARIFARIO",
+      version: {
+        id: "version-ficticia",
+        numero: 3,
+        nombre: "Web de prueba",
+        vigenteDesde: "2026-10-10T12:00:00Z",
+      },
+    },
+    {
+      canalVenta: "email",
+      origen: "CANAL",
+      estado: "PENDIENTE",
+      motivo: "SIN_VERSION_VIGENTE",
+    },
+  ];
+  vi.mocked(api.previsualizarCanales).mockResolvedValue(preview);
+  await act(async () =>
+    root.render(
+      <CentroCopiadoCanales puedeGestionar revisionTarifarios={0} activo />,
+    ),
+  );
+  const filas = el.querySelectorAll(
+    '[aria-label="Precios resueltos por canal"] > li',
+  );
+  expect(filas).toHaveLength(3);
+  expect(filas[0].textContent).toContain("Hereda la política general");
+  expect(filas[0].textContent).toContain("Motor de cotización");
+  expect(filas[1].textContent).toContain("Sin versión vigente");
+  expect(filas[2].textContent).toContain("Web de prueba");
+  expect(filas[2].textContent).toContain("Versión 3");
+  expect(boton("Activar asignación en pedidos").disabled).toBe(true);
+});
+
+it("la navegación GRAFO conserva la edición al pasar entre matriz y reglas", async () => {
+  await abrir();
+  const campoPrecio = precio(1);
+  await escribir(campoPrecio, "123.45");
+  await click("Reglas y márgenes");
+  expect(campoPrecio.isConnected).toBe(true);
+  expect(campoPrecio.closest("[data-inert]")).not.toBeNull();
+  await click("Matrices");
+  expect(precio(1).value).toBe("123.45");
+  await click("Guardar borrador");
+  expect(api.guardarTarifario).toHaveBeenCalledWith(
+    id,
+    expect.objectContaining({
+      contenido: expect.objectContaining({
+        hojas: expect.objectContaining({
+          filas: expect.arrayContaining([
+            expect.objectContaining({
+              precios: expect.arrayContaining([
+                expect.objectContaining({ precioUnitario: "123.45" }),
+              ]),
+            }),
+          ]),
+        }),
+      }),
+    }),
+  );
 });

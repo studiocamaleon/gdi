@@ -32,7 +32,7 @@
 .health > summary::-webkit-details-marker {
   display: none;
 }
-.health > [data-slot="card"] {
+.health > [data-copiado="card"] {
   border: 0;
   border-top: 1px solid var(--border);
   border-radius: 0;

@@ -7,23 +7,29 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
+  CardAction,
+  CardFooter,
+  AvisoCopiado,
+  EstadoCopiado,
 } from "./centro-copiado-ui";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
+import {
+  Store,
+  MessageCircle,
+  Mail,
+  Globe,
+  Smartphone,
+  ArrowRight,
+  Info,
+  Clock3,
+  Route,
+} from "lucide-react";
 
 import { FieldGroup } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
-import {
-  Table,
-  TableHeader,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-} from "@/components/ui/table";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import * as api from "@/lib/centro-copiado-tarifarios-api";
 import {
@@ -34,11 +40,11 @@ import {
 } from "./centro-copiado-tarifarios-controles";
 
 const canales = [
-  { value: "mostrador", label: "Mostrador" },
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "email", label: "Email" },
-  { value: "web", label: "Web" },
-  { value: "app_movil", label: "App móvil" },
+  { value: "mostrador", label: "Mostrador", icon: Store },
+  { value: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { value: "email", label: "Email", icon: Mail },
+  { value: "web", label: "Web", icon: Globe },
+  { value: "app_movil", label: "App móvil", icon: Smartphone },
 ] as const;
 const pendientes = {
   SIN_VERSION_VIGENTE: "Sin versión vigente",
@@ -270,14 +276,16 @@ export function CentroCopiadoCanales({
             )
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <Badge variant="outline">
+            <EstadoCopiado>
               {base?.activaRevision === base?.revision
                 ? "Asignación activa"
                 : base?.operativa
                   ? "Cambios pendientes de activar"
                   : "En preparación"}
-            </Badge>
-            {cambios && <Badge variant="secondary">Cambios sin guardar</Badge>}
+            </EstadoCopiado>
+            {cambios && (
+              <EstadoCopiado tono="warning">Cambios sin guardar</EstadoCopiado>
+            )}
             <div className="flex flex-wrap gap-2 sm:ml-auto">
               <Button
                 variant="outline"
@@ -346,53 +354,125 @@ export function CentroCopiadoCanales({
             {cambios
               ? "Guardá los cambios para comprobar qué versión resolvería cada canal."
               : previewActual
-                ? `Evaluada el ${new Intl.DateTimeFormat("es-AR", { timeZone: zonaHoraria, dateStyle: "short", timeStyle: "short" }).format(new Date(preview.evaluadoEl))} (${zonaHoraria}). Moneda: ${preview.monedaCodigo}. Actualizá la vista para comprobar una vigencia programada.`
+                ? "Así se resolverían los precios de cada canal con la asignación guardada."
                 : "Actualizá la vista previa para comprobar la asignación."}
           </CardDescription>
+          {previewActual && (
+            <CardAction>
+              <EstadoCopiado
+                tono={
+                  preview.canales.some((c) => c.estado === "PENDIENTE")
+                    ? "warning"
+                    : "neutral"
+                }
+              >
+                {preview.canales.length} canales · {preview.monedaCodigo}
+              </EstadoCopiado>
+            </CardAction>
+          )}
         </CardHeader>
         <CardContent>
-          {previewActual && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Canal</TableHead>
-                  <TableHead>Origen</TableHead>
-                  <TableHead>Selección</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {preview.canales.map((c) => (
-                  <TableRow key={c.canalVenta}>
-                    <TableCell>
-                      {canales.find((x) => x.value === c.canalVenta)?.label}
-                    </TableCell>
-                    <TableCell>
-                      {c.origen === "GENERAL"
-                        ? "Política general"
-                        : "Excepción del canal"}
-                    </TableCell>
-                    <TableCell>
-                      {c.estado === "MOTOR" ? (
-                        "Motor de cotización"
-                      ) : c.estado === "PENDIENTE" ? (
-                        <Badge variant="outline">
-                          Pendiente · {pendientes[c.motivo]}
-                        </Badge>
-                      ) : (
-                        `${c.version.nombre} · versión ${c.version.numero}`
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          {previewActual ? (
+            <ol
+              className={styles.channelPreview}
+              aria-label="Precios resueltos por canal"
+            >
+              {canales.flatMap((canal) => {
+                const c = preview.canales.find(
+                  (p) => p.canalVenta === canal.value,
+                );
+                if (!c) return [];
+                const Icono = canal.icon;
+                return [
+                  <li
+                    className={styles.channelResolution}
+                    key={c.canalVenta}
+                    data-pending={c.estado === "PENDIENTE" || undefined}
+                  >
+                    <div className={styles.channelIdentity}>
+                      <span className={styles.channelIcon}>
+                        <Icono aria-hidden />
+                      </span>
+                      <div>
+                        <h4>{canal.label}</h4>
+                        <p>
+                          {c.origen === "GENERAL"
+                            ? "Hereda la política general"
+                            : "Excepción del canal"}
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className={styles.channelArrow} aria-hidden />
+                    <div className={styles.channelSelection}>
+                      <strong>
+                        {c.estado === "MOTOR"
+                          ? "Motor de cotización"
+                          : c.estado === "PENDIENTE"
+                            ? pendientes[c.motivo]
+                            : c.version.nombre}
+                      </strong>
+                      <span>
+                        {c.estado === "MOTOR"
+                          ? "Calcula el precio para cada pedido"
+                          : c.estado === "PENDIENTE"
+                            ? "Resolvé este pendiente antes de activar"
+                            : `Versión ${c.version.numero} · desde ${new Intl.DateTimeFormat("es-AR", { timeZone: zonaHoraria, dateStyle: "short", timeStyle: "short" }).format(new Date(c.version.vigenteDesde))}`}
+                      </span>
+                    </div>
+                    <EstadoCopiado
+                      tono={
+                        c.estado === "PENDIENTE"
+                          ? "warning"
+                          : c.estado === "TARIFARIO"
+                            ? "brand"
+                            : "neutral"
+                      }
+                    >
+                      {c.estado === "MOTOR"
+                        ? "Motor"
+                        : c.estado === "PENDIENTE"
+                          ? "Pendiente"
+                          : "Tarifario"}
+                    </EstadoCopiado>
+                  </li>,
+                ];
+              })}
+            </ol>
+          ) : (
+            <AvisoCopiado
+              icono={<Route />}
+              titulo={
+                cambios
+                  ? "Hay una nueva asignación por revisar"
+                  : "Sin vista previa actualizada"
+              }
+            >
+              {cambios
+                ? "Guardá los canales para ver los precios que usaría cada uno."
+                : "Actualizá la vista previa desde las acciones de arriba."}
+            </AvisoCopiado>
           )}
-          <p className="mt-3 text-xs text-muted-foreground">
+        </CardContent>
+        <CardFooter className={styles.previewFooter}>
+          {previewActual && (
+            <p>
+              <Clock3 aria-hidden />
+              Evaluada el{" "}
+              {new Intl.DateTimeFormat("es-AR", {
+                timeZone: zonaHoraria,
+                dateStyle: "short",
+                timeStyle: "short",
+              }).format(new Date(preview.evaluadoEl))}{" "}
+              · {zonaHoraria}
+            </p>
+          )}
+          <p>
+            <Info aria-hidden />
             Esta vista comprueba la selección de tarifario y versión; no
             verifica que cada combinación tenga precio ni activa el cálculo de
             pedidos.
           </p>
-        </CardContent>
+        </CardFooter>
       </Card>
       <ConfirmacionSalida
         open={descartar}

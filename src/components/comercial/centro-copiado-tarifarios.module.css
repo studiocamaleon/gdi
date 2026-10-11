@@ -257,3 +257,300 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Editor y resolución por canal, sobre las superficies propias de GRAFO. */
+.tariffIdentity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.38fr);
+  align-items: center;
+  gap: 24px 40px;
+}
+.tariffName {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.tariffEyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.tariffEyebrow .eyebrow {
+  margin: 0 4px 0 0;
+}
+.tariffCurrency {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.tariffCurrency strong {
+  font: 11px var(--brand-mono);
+  color: var(--foreground);
+}
+.priceProgress {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding-left: 28px;
+  border-left: 1px solid var(--border);
+}
+.priceProgress p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.priceProgress strong {
+  font: 32px/1.1 var(--brand-mono);
+  letter-spacing: -0.06em;
+}
+.priceProgress span {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.priceProgress progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  border-radius: 3px;
+  appearance: none;
+  background: var(--surface-secondary);
+  overflow: hidden;
+}
+.priceProgress progress::-webkit-progress-bar {
+  background: var(--surface-secondary);
+}
+.priceProgress progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 3px;
+}
+.priceProgress progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 3px;
+}
+.fullWidth {
+  grid-column: 1 / -1;
+}
+.tariffActions {
+  justify-content: space-between;
+  gap: 16px 24px;
+}
+.tariffMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.tariffMeta > span {
+  font-size: 12px;
+  font-weight: 500;
+}
+.tariffMeta small {
+  color: var(--muted-text);
+  font-size: 10px;
+}
+.actionGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.editorPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 0 0;
+  min-width: 0;
+}
+.editorPanel[data-inert] {
+  display: none;
+}
+.channelPreview {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.channelResolution {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 24px minmax(180px, 1.4fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.channelResolution[data-pending] {
+  border-inline-start: 3px solid var(--warning);
+}
+.channelIdentity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.channelIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+}
+.channelIcon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.6;
+}
+.channelIdentity h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.channelIdentity p {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.channelArrow {
+  width: 16px;
+  height: 16px;
+  color: var(--muted-text-2);
+}
+.channelSelection {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.channelSelection strong {
+  font-weight: 500;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.channelSelection span {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.previewFooter {
+  display: grid;
+  gap: 8px;
+}
+.previewFooter p {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.previewFooter svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+@media (max-width: 800px) {
+  .tariffIdentity {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.45fr);
+    gap: 22px;
+  }
+  .priceProgress {
+    padding-left: 20px;
+  }
+  .channelResolution {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+  }
+  .channelIdentity {
+    grid-column: 1;
+  }
+  .channelArrow {
+    display: none;
+  }
+  .channelSelection {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 12px 0 0 52px;
+    border-top: 1px solid var(--border);
+  }
+  .channelResolution > :last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+@media (max-width: 540px) {
+  .tariffIdentity {
+    grid-template-columns: 1fr;
+  }
+  .priceProgress {
+    padding: 16px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .channelResolution {
+    padding: 14px;
+    gap: 12px;
+  }
+  .channelIdentity {
+    gap: 10px;
+  }
+  .channelIcon {
+    width: 30px;
+    height: 30px;
+  }
+  .channelSelection {
+    padding-left: 0;
+  }
+}
+.volumeBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+}
+.volumeLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.volumeLabel svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted-text);
+}
+.volumeRanges {
+  flex: 1;
+  font: 11px/1.6 var(--brand-mono);
+  color: var(--muted-text);
+}
+.matrixToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+.matrixSearch {
+  min-width: min(100%, 240px);
+  flex: 1;
+}
+@media (max-width: 540px) {
+  .matrixSearch {
+    flex-basis: 100%;
+  }
+  .volumeRanges {
+    flex-basis: 100%;
+  }
+}
