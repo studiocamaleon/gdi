@@ -5,6 +5,7 @@ import type {
 import type {
   CeldaSimulacion,
   ResultadoCeldaSimulacion,
+  EscenarioSimulado,
 } from "../../apps/api/src/centro-copiado/tarifarios/simulacion-tarifario.types";
 import { DecimalComercial as D } from "../../apps/api/src/centro-copiado/comercial/validaciones";
 import { compararSimulacion } from "../../apps/api/src/centro-copiado/comercial/comparacion-simulacion";
@@ -55,6 +56,7 @@ export function sugerirCelda(
   c: ContenidoTarifario,
   r: ResultadoCeldaSimulacion,
   redondeo?: string,
+  margenObjetivo?: string,
 ) {
   const { fila, desde, precio } = precioCelda(c, r.celda);
   const coberturas = fila.combinacion.cobertura
@@ -74,7 +76,10 @@ export function sugerirCelda(
   for (const e of r.escenarios) {
     if (e.estado !== "CALCULADO")
       throw new Error("Hay una cobertura sin costo verificable.");
-    if (e.comercial?.ventaMotorNeta == null || e.comercial.cargas == null)
+    if (
+      e.comercial?.cargas == null ||
+      (margenObjetivo === undefined && e.comercial.ventaMotorNeta == null)
+    )
       throw new Error(
         e.comercial?.motivo ??
           "Volvé a simular para obtener el precio del motor.",
@@ -89,7 +94,11 @@ export function sugerirCelda(
       );
     avisos.push(...e.avisos);
     const factor = new D(1).plus(new D(e.ivaPorcentaje).div(100));
-    const enConvencion = new D(e.comercial.ventaMotorNeta).times(
+    const ventaNeta =
+      margenObjetivo === undefined
+        ? new D(e.comercial.ventaMotorNeta!)
+        : ventaParaMargen(e, margenObjetivo);
+    const enConvencion = ventaNeta.times(
       c.composicion.iva === "INCLUIDO" ? factor : 1,
     );
     const preparacion =
@@ -108,11 +117,58 @@ export function sugerirCelda(
         "La preparación cubre el precio de referencia del motor; revisá el precio cero sugerido.",
       );
   }
-  const nuevo = redondeo
+  let nuevo = redondeo
     ? ajustarPrecio(mayor.toFixed(), "IMPORTE", "0", redondeo)
     : mayor.toFixed();
   if (nuevo == null || !/^\d{1,18}(\.\d{1,8})?$/.test(nuevo))
     throw new Error("El precio sugerido supera el importe admitido.");
+  if (margenObjetivo !== undefined) {
+    // La composición fiscal y las cargas se redondean a precisión monetaria.
+    // Corregir hacia arriba si ese redondeo deja el resultado bajo el objetivo.
+    const objetivo = leerMargenObjetivo(margenObjetivo).div(100);
+    for (let intento = 0; intento < 12; intento++) {
+      let aumento = new D(0);
+      for (const e of r.escenarios) {
+        if (e.estado !== "CALCULADO") continue;
+        const { control, composicion } = compararSimulacion(
+          c,
+          r.celda.seccion,
+          e,
+          nuevo,
+        );
+        if (!composicion.total || control.cargasTotal == null)
+          throw new Error(control.motivo);
+        const neto = new D(composicion.total.neto);
+        const utilidad = neto.minus(e.costoTotal).minus(control.cargasTotal);
+        if (neto.gt(0) && utilidad.gte(neto.times(objetivo))) continue;
+        const factor = new D(1).plus(new D(e.ivaPorcentaje).div(100));
+        const pasoNeto = D.max(
+          new D(10).pow(-e.decimalesPrecio),
+          neto.times(objetivo).minus(utilidad),
+        );
+        aumento = D.max(
+          aumento,
+          pasoNeto
+            .div(denominadorMargen(e, objetivo))
+            .times(c.composicion.iva === "INCLUIDO" ? factor : 1)
+            .div(e.cantidadFacturable),
+        );
+      }
+      if (aumento.isZero()) break;
+      if (intento === 11)
+        throw new Error(
+          "No se pudo alcanzar el margen objetivo en todas las coberturas.",
+        );
+      nuevo = new D(nuevo)
+        .plus(aumento)
+        .toDecimalPlaces(8, D.ROUND_CEIL)
+        .toFixed();
+      if (redondeo) nuevo = ajustarPrecio(nuevo, "IMPORTE", "0", redondeo)!;
+      if (!/^\d{1,18}(\.\d{1,8})?$/.test(nuevo))
+        throw new Error("El precio sugerido supera el importe admitido.");
+    }
+  }
+
   const controles = r.escenarios.flatMap((e) =>
     e.estado === "CALCULADO"
       ? [
@@ -128,6 +184,43 @@ export function sugerirCelda(
       "Precio único: se usa la mayor sugerencia de las tres coberturas.",
     );
   return { anterior: precio, nuevo, controles, avisos: [...new Set(avisos)] };
+}
+
+export function leerMargenObjetivo(valor: string) {
+  const limpio = valor.trim().replace(",", ".");
+  if (!/^\d+(\.\d+)?$/.test(limpio) || new D(limpio).gte(100))
+    throw new Error("Usá un margen objetivo desde 0 y menor que 100%.");
+  return new D(limpio);
+}
+
+function denominadorMargen(
+  e: EscenarioSimulado,
+  margen: InstanceType<typeof D>,
+) {
+  const factorIva = new D(1).plus(new D(e.ivaPorcentaje).div(100));
+  const cargas = e.comercial?.cargas;
+  if (!cargas) throw new Error("Faltan cargas comerciales verificables.");
+  const tasa = cargas.reduce(
+    (s, c) =>
+      s.plus(
+        new D(c.porcentaje)
+          .div(100)
+          .times(c.base === "BRUTO_COBRADO" ? factorIva : 1),
+      ),
+    new D(0),
+  );
+  const denominador = new D(1).minus(margen).minus(tasa);
+  if (!denominador.gt(0))
+    throw new Error(
+      "El margen objetivo y las cargas comerciales no permiten calcular un precio.",
+    );
+  return denominador;
+}
+
+function ventaParaMargen(e: EscenarioSimulado, objetivo: string) {
+  return new D(e.costoTotal).div(
+    denominadorMargen(e, leerMargenObjetivo(objetivo).div(100)),
+  );
 }
 
 export function canalesDelTarifario(p: PoliticaPrecios, id: string) {
