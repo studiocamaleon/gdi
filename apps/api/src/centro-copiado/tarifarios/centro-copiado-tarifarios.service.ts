@@ -226,6 +226,7 @@ export class CentroCopiadoTarifariosService {
     const fecha = fechaSolicitada(dto);
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`copiado-precios:${tenantId}`}, 0))`;
         const whereRevision = {
           tenantId,
           tarifarioId: id,

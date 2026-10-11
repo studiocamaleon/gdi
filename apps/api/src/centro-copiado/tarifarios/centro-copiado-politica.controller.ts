@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Put,
+  Post,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,7 +11,10 @@ import type { Request } from 'express';
 import { Permiso } from '../../auth/permiso.decorator';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { CentroCopiadoPoliticaService } from './centro-copiado-politica.service';
-import { GuardarPoliticaPreciosDto } from './politica-precios.dto';
+import {
+  ActivarPoliticaPreciosDto,
+  GuardarPoliticaPreciosDto,
+} from './politica-precios.dto';
 
 interface RequestConAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -44,6 +48,16 @@ export class CentroCopiadoPoliticaController {
   ) {
     const { tenantId, userId } = await this.contexto(req);
     return this.politica.guardarBorrador(tenantId, userId, dto);
+  }
+
+  @Post('activar')
+  @Permiso('configuracion.copiado.gestionar')
+  async activar(
+    @Req() req: RequestConAuth,
+    @Body() dto: ActivarPoliticaPreciosDto,
+  ) {
+    const { tenantId, userId } = await this.contexto(req);
+    return this.politica.activar(tenantId, userId, dto.revision);
   }
 
   @Get('previsualizacion')

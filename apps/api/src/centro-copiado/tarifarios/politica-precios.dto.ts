@@ -10,3 +10,10 @@ export class GuardarPoliticaPreciosDto {
   @IsObject()
   contenido!: object;
 }
+
+export class ActivarPoliticaPreciosDto {
+  @IsInt()
+  @Min(1)
+  @Max(2147483646)
+  revision!: number;
+}

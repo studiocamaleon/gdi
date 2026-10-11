@@ -36,7 +36,9 @@ export class CentroCopiadoPoliticaService {
     });
     return {
       estado: 'BORRADOR' as const,
-      operativa: false as const,
+      operativa: guardado?.activaRevision != null,
+      activaRevision: guardado?.activaRevision ?? null,
+      activadaEl: guardado?.activadaEl ?? null,
       revision: guardado?.revision ?? 0,
       contenido: guardado
         ? validarPoliticaPrecios(guardado.contenido)
@@ -44,6 +46,107 @@ export class CentroCopiadoPoliticaService {
       actualizadoPorId: guardado?.actualizadoPorId ?? null,
       actualizadoEl: guardado?.updatedAt ?? null,
     };
+  }
+
+  /** Serializa activación, publicación y emisión, también entre procesos. */
+  async bloquear(tx: Prisma.TransactionClient, tenantId: string) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`copiado-precios:${tenantId}`}, 0))`;
+  }
+
+  async activar(tenantId: string, actorUserId: string, revision: number) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.bloquear(tx, tenantId);
+      const contexto = await this.cargarContexto(tenantId, tx);
+      if (!revision || contexto.borrador.revision !== revision)
+        throw new ConflictException(
+          'La política cambió. Guardá y revisá los canales antes de activar.',
+        );
+      const tarifas = await this.cargarTarifarios(
+        tenantId,
+        idsTarifariosPolitica(contexto.borrador.contenido),
+        new Date(),
+        tx,
+      );
+      for (const canal of ORDEN_CANALES_VENTA) {
+        const seleccion = this.resolverSeleccion(
+          tenantId,
+          contexto,
+          seleccionarPolitica(contexto.borrador.contenido, canal),
+          tarifas,
+        );
+        if (seleccion.estado === 'PENDIENTE')
+          throw new BadRequestException(
+            `El canal ${canal} necesita un tarifario vigente en la moneda de la empresa.`,
+          );
+        if (
+          seleccion.estado === 'TARIFARIO' &&
+          !seleccion.version.contenido.margen
+        )
+          throw new BadRequestException(
+            `Configurá el margen mínimo y publicá el tarifario de ${canal} antes de activar.`,
+          );
+      }
+      const cambio = await tx.centroCopiadoPoliticaBorrador.updateMany({
+        where: { tenantId, revision },
+        data: {
+          activaRevision: revision,
+          activaContenido: contexto.borrador.contenido,
+          activadaPorId: actorUserId,
+          activadaEl: new Date(),
+        },
+      });
+      if (cambio.count !== 1)
+        throw new ConflictException(
+          'La política cambió. Revisala antes de activar.',
+        );
+      await this.auditoria.registrar(tx, {
+        tenantId,
+        actorUserId,
+        tipo: 'POLITICA_PRECIOS_ACTIVADA',
+        descripcion:
+          'Política de precios activada para nuevos cálculos de pedidos.',
+        datos: { revision, contenido: contexto.borrador.contenido },
+      });
+      return this.obtenerBorrador(tenantId, tx);
+    });
+  }
+
+  async resolverActiva(
+    tenantId: string,
+    canal: unknown,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    const guardado = await db.centroCopiadoPoliticaBorrador.findUnique({
+      where: { tenantId },
+    });
+    const datos = await db.datosEmpresa.findUnique({
+      where: { tenantId },
+      select: { monedaCodigo: true },
+    });
+    const contenido = guardado?.activaContenido
+      ? validarPoliticaPrecios(guardado.activaContenido)
+      : politicaPreciosInicial();
+    // Empresas sin política activada conservan su circuito anterior.
+    const canalVenta = validarCanalCopiado(
+      canal ?? (guardado?.activaRevision == null ? 'mostrador' : canal),
+    );
+    const borrador = {
+      ...(await this.obtenerBorrador(tenantId, db)),
+      contenido,
+      revision: guardado?.activaRevision ?? 0,
+    };
+    const tarifas = await this.cargarTarifarios(
+      tenantId,
+      idsTarifariosPolitica(contenido),
+      new Date(),
+      db,
+    );
+    return this.resolverSeleccion(
+      tenantId,
+      { borrador, monedaCodigo: datos?.monedaCodigo ?? MONEDA_DEFAULT },
+      seleccionarPolitica(contenido, canalVenta),
+      tarifas,
+    );
   }
 
   async guardarBorrador(

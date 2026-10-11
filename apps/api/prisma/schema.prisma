@@ -899,6 +899,7 @@ model Tenant {
   centroCopiadoTarifarios                          CentroCopiadoTarifario[]
   centroCopiadoTarifarioVersiones                  CentroCopiadoTarifarioVersion[]
   centroCopiadoPoliticaBorrador                     CentroCopiadoPoliticaBorrador?
+  centroCopiadoCalculos                            CentroCopiadoPedidoCalculo[]
   destinosImpresion                                ImpresionDestino[]
   bandejasImpresion                                ImpresionBandeja[]
   perfilesImpresion                                ImpresionPerfil[]
@@ -1077,6 +1078,10 @@ model CentroCopiadoTarifarioVersion {
 
 /// Configuración comercial en preparación: guardarla no activa matrices en pedidos.
 model CentroCopiadoPoliticaBorrador {
+  activaRevision   Int?
+  activaContenido  Json?
+  activadaPorId    String? @db.Uuid
+  activadaEl       DateTime?
   tenantId         String   @id @db.Uuid
   revision         Int      @default(1)
   contenido        Json
@@ -1084,6 +1089,29 @@ model CentroCopiadoPoliticaBorrador {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// Cálculo comercial del pedido; sólo el servidor genera precios y su huella.
+/// Una autorización identifica este cálculo exacto y nunca modifica sus importes.
+model CentroCopiadoPedidoCalculo {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  cotizacionId     String   @db.Uuid
+  clienteId        String?  @db.Uuid
+  canalVenta       String
+  tratamientoFiscal String
+  referenciaJson   Json
+  resultadoJson    Json
+  huella           String   @db.VarChar(64)
+  autorizadoPorId  String?  @db.Uuid
+  autorizadoNombre String?
+  autorizacionMotivo String? @db.VarChar(1000)
+  autorizadoEl     DateTime?
+  creadoPorId      String   @db.Uuid
+  createdAt        DateTime @default(now())
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, cotizacionId])
 }
 
 /// Resultado de mutaciones reintentables del módulo. La clave es aportada por

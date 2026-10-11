@@ -1534,7 +1534,7 @@ export class CentroCopiadoService {
    * La preparación productiva se incluye aunque comercialmente esté incluida.
    * Una última cara impar no consume impresión del dorso; setup se cuenta una vez.
    */
-  async simularCostoHojas(tenantId: string, doc: DocumentoInput) {
+  async simularCostoHojas(tenantId: string, doc: DocumentoInput, opciones: { clienteId?: string; tipoCambioId?: string; preparar?: boolean } = {}) {
     await this.capacidades.exigirIncluida(tenantId, 'centro_copiado');
     const ctx = await this.contexto(tenantId);
     if (doc.modo === 'CAD' || doc.terminaciones?.length || doc.grupoId)
@@ -1586,13 +1586,14 @@ export class CentroCopiadoService {
     for (const [i, parte] of partes.entries()) {
       const segmento = construirSegmento(
         parte,
-        { ...ctx, cobraSetup: i === 0 },
+        { ...ctx, cobraSetup: i === 0 && opciones.preparar !== false },
         parte.copias,
         papel.varianteId,
       );
       const resultado = await this.motor.cotizar({
         tenantId,
-        tipoCambioId: resultados[0]?.cotizacion?.tipoCambio?.id,
+        tipoCambioId: resultados[0]?.cotizacion?.tipoCambio?.id ?? opciones.tipoCambioId,
+        clienteId: opciones.clienteId,
         productoId: ctx.productoId,
         rutaAlternativaId: ctx.rutaAlternativaId,
         jobContext: segmento.jobContext as Parameters<

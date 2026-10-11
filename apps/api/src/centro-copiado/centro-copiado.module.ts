@@ -1,3 +1,6 @@
+import { CentroCopiadoPedidosService } from './pedidos/centro-copiado-pedidos.service';
+import { CentroCopiadoEmisionService } from './pedidos/centro-copiado-emision.service';
+import { CentroCopiadoPedidosController } from './pedidos/centro-copiado-pedidos.controller';
 import { CatalogoCadModule } from './catalogo-cad.module';
 import { CentroCopiadoCadService } from './centro-copiado-cad.service';
 import { Module } from '@nestjs/common';
@@ -29,12 +32,15 @@ import { CentroCopiadoSimulacionController } from './tarifarios/centro-copiado-s
     CatalogoCadModule,
   ],
   controllers: [
+    CentroCopiadoPedidosController,
     CentroCopiadoSimulacionController,
     CentroCopiadoController,
     CentroCopiadoTarifariosController,
     CentroCopiadoPoliticaController,
   ],
   providers: [
+    CentroCopiadoPedidosService,
+    CentroCopiadoEmisionService,
     CentroCopiadoSimulacionService,
     CentroCopiadoCadService,
     CentroCopiadoService,

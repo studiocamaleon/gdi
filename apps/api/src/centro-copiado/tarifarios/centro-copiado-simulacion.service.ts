@@ -1,3 +1,4 @@
+import { resolverIvaCopiado } from './iva-copiado';
 import {
   BadRequestException,
   ConflictException,
@@ -181,44 +182,6 @@ export class CentroCopiadoSimulacionService {
     }
   }
 
-  private async iva(tenantId: string, productoId: string) {
-    const [producto, fiscal, tasas] = await Promise.all([
-      this.prisma.producto.findFirst({
-        where: { tenantId, id: productoId },
-        select: { categoriaFiscal: true },
-      }),
-      this.prisma.configuracionFiscal.findUnique({
-        where: { tenantId },
-        select: { condicionFiscal: true },
-      }),
-      this.prisma.productoImpuestoCatalogo.findMany({
-        where: {
-          tenantId,
-          activo: true,
-          alcance: 'PRODUCTO',
-          traslado: 'POR_FUERA',
-        },
-      }),
-    ]);
-    if (!producto)
-      throw new BadRequestException(
-        'El producto de referencia ya no está disponible.',
-      );
-    const categoria = producto.categoriaFiscal ?? 'general';
-    if (
-      ['monotributo', 'exento'].includes(fiscal?.condicionFiscal ?? '') ||
-      categoria === 'exento'
-    )
-      return '0';
-    const compatibles = tasas.filter(
-      (t) => (t.categoriaFiscal ?? 'general') === categoria,
-    );
-    if (compatibles.length !== 1)
-      throw new BadRequestException(
-        'Falta una alícuota fiscal inequívoca para comparar el precio sin IVA.',
-      );
-    return String(compatibles[0].porcentaje);
-  }
 
   private async escenario(
     tenantId: string,
@@ -447,7 +410,7 @@ export class CentroCopiadoSimulacionService {
         'La propuesta del motor incluye su mínimo comercial de origen. Revisala junto con el mínimo propio del tarifario.',
       );
     const alicuotas = await Promise.all(
-      cotizaciones.map((c) => this.iva(tenantId, c.productoId)),
+      cotizaciones.map((c) => resolverIvaCopiado(this.prisma, tenantId, c.productoId)),
     );
     if (new Set(alicuotas).size !== 1)
       throw new BadRequestException(

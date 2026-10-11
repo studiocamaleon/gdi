@@ -193,8 +193,9 @@ export class CentroCopiadoCadService {
       const jobContext = {
         cantidad,
         caras: 1 as const,
+        cobertura: doc.cobertura ?? 'alta',
         ...(simulacion
-          ? { cobertura: doc.cobertura ?? 'alta', omitirSetupCleanup: false }
+          ? { omitirSetupCleanup: false }
           : {}),
         modoColor: p.color === 'BN' ? 'BN' : 'CMYK',
         piezas: seleccionadas.map((pagina) => ({
@@ -227,6 +228,7 @@ export class CentroCopiadoCadService {
             ? { copiasPorPagina: doc.copiasPorPagina }
             : {}),
           color: doc.color,
+          cobertura: doc.cobertura ?? 'alta',
           faz: 1,
           tamano: 'CAD',
           tamanoAnchoMm: seleccionadas[0].anchoMm,

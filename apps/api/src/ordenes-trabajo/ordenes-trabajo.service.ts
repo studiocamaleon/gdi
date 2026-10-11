@@ -1,3 +1,5 @@
+import { CentroCopiadoEmisionService } from '../centro-copiado/pedidos/centro-copiado-emision.service';
+import type { ContextoEmisionCopiado } from '../centro-copiado/pedidos/centro-copiado-pedidos.service';
 import { idsClientesPorNombre } from '../clientes/busqueda-clientes';
 import { asignarNumeroOrden, esReferenciaBorrador, numeroOrdenVisible, referenciaBorrador } from './numero-orden';
 import {
@@ -817,6 +819,10 @@ export class OrdenesTrabajoService {
     ),
     private readonly previsionMateriales: PrevisionMaterialesService = new PrevisionMaterialesService(prisma, capacidades),
   ) {}
+
+  async exigirCopiadoEmitibleTx(tx: Prisma.TransactionClient, auth: CurrentAuth, contexto: ContextoEmisionCopiado) {
+    return new CentroCopiadoEmisionService(this.prisma).exigirEmitibleTx(tx, auth, contexto);
+  }
 
   /** Adopción transaccional compartida por la creación y la edición del plan. */
   async sincronizarLotesEntrega(
@@ -2050,6 +2056,10 @@ export class OrdenesTrabajoService {
     let creada: { id: string };
     try {
       creada = await this.prisma.$transaction(async (tx) => {
+        if (emitida && !conversion) await this.exigirCopiadoEmitibleTx(tx, auth, {
+          canalVenta: payload.canalVenta, clienteId: payload.clienteId, tratamientoFiscal,
+          items,
+        });
         await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
           'cotizacion',
         ]);
@@ -2692,10 +2702,12 @@ export class OrdenesTrabajoService {
             !historicosSinCambio.has(snapshot.id),
         )
       ) {
-        if (!payload.tipoCambioId)
-          throw new BadRequestException(
-            'Algún producto no pertenece a la cotización de la orden.',
-          );
+        if (!payload.tipoCambioId) {
+          const nuevos = snapshots.filter(s => !historicosSinCambio.has(s.id));
+          const contenedores = [...new Set(nuevos.map(s => s.cotizacionId))];
+          const revisionCopiado = contenedores.length === 1 && await this.prisma.centroCopiadoPedidoCalculo.findFirst({ where: { tenantId: auth.tenantId, cotizacionId: contenedores[0] } });
+          if (!revisionCopiado) throw new BadRequestException('Algún producto no pertenece a la cotización de la orden.');
+        }
         // Una revisión monetaria crea snapshots nuevos y conserva intacta la
         // cotización de origen (incluido un presupuesto convertido).
         const usadoEnOtraOrden = await this.prisma.ordenTrabajoItem.findFirst({
@@ -4760,6 +4772,10 @@ export class OrdenesTrabajoService {
       await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
         'identidad',
       ]);
+      if (desde === 'borrador' && hacia !== 'cancelada') {
+        const itemsCopiado = await tx.ordenTrabajoItem.findMany({ where: { tenantId: auth.tenantId, ordenId: orden.id }, select: { cotizacionItemId: true, subtotal: true, total: true } });
+        await this.exigirCopiadoEmitibleTx(tx, auth, { canalVenta: orden.canalVenta, clienteId: orden.clienteId, tratamientoFiscal: orden.tratamientoFiscal, items: itemsCopiado });
+      }
       if (desde === 'borrador' && hacia !== 'cancelada')
         await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, {
           puntosEstimados: orden.fidelizacionPuntosEstimados,
