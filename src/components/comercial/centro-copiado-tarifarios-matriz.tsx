@@ -11,8 +11,13 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { FieldGroup } from "@/components/ui/field";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CuadriculaPrecios } from "./centro-copiado-tarifarios-cuadricula";
+import {
+  agruparCuadricula,
+  pegarCuadricula,
+} from "@/lib/centro-copiado-tarifarios-cuadricula";
 import {
   Table,
   TableHeader,
@@ -43,11 +48,8 @@ import {
 } from "./centro-copiado-tarifarios-controles";
 import {
   ajustarPrecio,
-  claveCombinacion,
   claveRango,
-  decimalEditor,
   leerRangos,
-  pegarPrecios,
   preciosConRangos,
   type CambioPrecio,
   type FilaMatriz,
@@ -59,6 +61,7 @@ type Matriz = MatrizHojas | MatrizCad;
 export function EditorMatriz({
   matriz,
   nombres,
+  formatos = [],
   disabled,
   generando,
   permiteGenerar = true,
@@ -67,6 +70,7 @@ export function EditorMatriz({
 }: {
   matriz: Matriz;
   nombres: Record<string, string>;
+  formatos?: { nombre: string; anchoMm: number; altoMm: number }[];
   disabled: boolean;
   generando?: boolean;
   permiteGenerar?: boolean;
@@ -79,6 +83,16 @@ export function EditorMatriz({
     : matriz.reglas.unidad === "HOJA"
       ? "hoja"
       : "carilla";
+  const [color, setColor] = useState<"COLOR" | "BN">(
+    matriz.filas.some((f) => f.combinacion.color === "COLOR") ||
+      !matriz.filas.length
+      ? "COLOR"
+      : "BN",
+  );
+  const [cobertura, setCobertura] = useState("normal");
+  const coberturaActiva =
+    matriz.reglas.cobertura === "UNICA" ? null : cobertura;
+  const [opciones, setOpciones] = useState<number[] | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [pagina, setPagina] = useState(0);
   const [rangos, setRangos] = useState<{
@@ -104,13 +118,29 @@ export function EditorMatriz({
     return `${nombres[c.papelMateriaPrimaId] ?? "Papel no disponible"}${c.gramaje === null ? "" : ` · ${c.gramaje} g`} · ${"tamano" in c ? c.tamano : `${c.anchoRolloMm} mm`} · ${c.color === "BN" ? "K" : "CMYK"}${"faz" in c ? ` · ${c.faz === 1 ? "Simple faz" : "Doble faz"}` : ""}${c.cobertura ? ` · ${c.cobertura}` : ""}`;
   };
   const indices = matriz.filas.flatMap((f, i) =>
+    f.combinacion.color === color &&
+    f.combinacion.cobertura === coberturaActiva &&
     descripcion(f).toLocaleLowerCase().includes(busqueda.toLocaleLowerCase())
       ? [i]
       : [],
   );
-  const ultima = Math.max(0, Math.ceil(indices.length / 20) - 1);
+  const grupos = agruparCuadricula(matriz, indices);
+  const papeles = grupos.flatMap((g) => g.papeles);
+  const ultima = Math.max(0, Math.ceil(papeles.length / 20) - 1);
   const actual = Math.min(pagina, ultima);
-  const visibles = indices.slice(actual * 20, actual * 20 + 20);
+  const visibles = new Set(papeles.slice(actual * 20, actual * 20 + 20));
+  const gruposVisibles = grupos
+    .map((g) => ({ ...g, papeles: g.papeles.filter((p) => visibles.has(p)) }))
+    .filter((g) => g.papeles.length);
+  const preciosVista = indices.flatMap((i) =>
+    preciosConRangos(
+      matriz.filas[i],
+      matriz.filas[i].rangosPropios ?? matriz.rangosGenerales,
+    ),
+  );
+  const cargados = preciosVista.filter(
+    (p) => p.precioUnitario != null && p.precioUnitario.trim() !== "",
+  ).length;
   function cambiar(mutacion: (m: Matriz) => void) {
     if (disabled) return;
     const copia = structuredClone(matriz);
@@ -255,181 +285,110 @@ export function EditorMatriz({
             Ajustar precios
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Precio por {unidad}, en la moneda del tarifario. Vacío = pendiente; 0
-          = gratuito. Podés pegar un bloque de Excel sobre una celda: filas y
-          tramos deben coincidir con esta página, sin encabezados ni separadores
-          de miles.
-        </p>
-        {!visibles.length ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>
-                {matriz.filas.length
-                  ? "Sin coincidencias"
-                  : "Todavía no hay combinaciones"}
-              </EmptyTitle>
-              <EmptyDescription>
-                {matriz.filas.length
-                  ? "Probá otra búsqueda."
-                  : "Agregá las combinaciones disponibles y completá sus precios por tramo."}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Combinación</TableHead>
-                <TableHead>Precios por tramo</TableHead>
-                <TableHead>
-                  <span className="sr-only">Acciones de la combinación</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibles.map((indice, j) => {
-                const fila = matriz.filas[indice];
-                const rangosFila = fila.rangosPropios ?? matriz.rangosGenerales;
-                const label = descripcion(fila);
-                return (
-                  <TableRow key={claveCombinacion(fila.combinacion)}>
-                    <TableCell className="w-56 whitespace-normal align-top">
-                      <div className="max-w-56 whitespace-normal font-medium">
-                        {label}
-                      </div>
-                      {fila.rangosPropios && (
-                        <Badge variant="outline" className="mt-2">
-                          Rangos propios
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <FieldGroup className="flex flex-row flex-wrap gap-3 min-w-64">
-                        {rangosFila.map((rango, columna) => {
-                          const precio =
-                            fila.precios.find(
-                              (p) =>
-                                claveRango(p.desdeCantidad) ===
-                                claveRango(rango),
-                            )?.precioUnitario ?? "";
-                          let invalido = false;
-                          try {
-                            decimalEditor(precio);
-                          } catch {
-                            invalido = true;
-                          }
-                          const id = `tarifa-${cad ? "cad" : "hoja"}-${indice}-${columna}`;
-                          return (
-                            <Field
-                              key={String(rango)}
-                              className="w-28"
-                              data-invalid={invalido}
-                            >
-                              <FieldLabel htmlFor={id}>
-                                Desde {rango}
-                                {cad
-                                  ? " ML"
-                                  : ` ${unidad}${Number(rango) === 1 ? "" : "s"}`}
-                              </FieldLabel>
-                              <Input
-                                id={id}
-                                aria-label={`${label}, desde ${rango}, precio por ${unidad}`}
-                                aria-invalid={invalido}
-                                title={
-                                  invalido
-                                    ? "Revisá el importe; no uses separadores de miles."
-                                    : undefined
-                                }
-                                className="tabular-nums"
-                                inputMode="decimal"
-                                placeholder="Pendiente"
-                                disabled={disabled}
-                                value={precio}
-                                onChange={(e) =>
-                                  aplicarCambios([
-                                    {
-                                      fila: indice,
-                                      tramo: columna,
-                                      antes: precio,
-                                      despues: e.target.value || null,
-                                    },
-                                  ])
-                                }
-                                onPaste={(e) => {
-                                  const texto =
-                                    e.clipboardData.getData("text/plain");
-                                  if (!/[\t\n\r]/.test(texto) || disabled)
-                                    return;
-                                  e.preventDefault();
-                                  try {
-                                    const c = pegarPrecios(
-                                      texto,
-                                      matriz.filas,
-                                      visibles,
-                                      j,
-                                      columna,
-                                      matriz.rangosGenerales,
-                                    );
-                                    setPaginaRevision(0);
-                                    setCambios(c);
-                                    setError(null);
-                                  } catch (err) {
-                                    toast.error(mensajeErrorTarifa(err));
-                                  }
-                                }}
-                              />
-                            </Field>
-                          );
-                        })}
-                      </FieldGroup>
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={disabled}
-                          onClick={() => {
-                            setError(null);
-                            setRangos({
-                              fila: indice,
-                              texto: rangosFila.join("; "),
-                              heredar: !fila.rangosPropios,
-                            });
-                          }}
-                        >
-                          Rangos
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={disabled}
-                          aria-label={`Quitar ${label}`}
-                          onClick={() =>
-                            setConfirmar({
-                              titulo: "Quitar combinación del borrador",
-                              detalle: `${label}. Se quitarán sus precios de este borrador. Las versiones publicadas se conservan.`,
-                              aplicar: () =>
-                                cambiar((m) => {
-                                  m.filas.splice(indice, 1);
-                                }),
-                            })
-                          }
-                        >
-                          Quitar
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
+        <Tabs
+          value={color}
+          onValueChange={(v) => {
+            setColor(v as "COLOR" | "BN");
+            setPagina(0);
+          }}
+          className="min-w-0"
+        >
+          <TabsList
+            variant="graphite"
+            aria-label={cad ? "Impresión CAD" : "Tipo de impresión"}
+          >
+            <TabsTrigger value="COLOR">Color · CMYK</TabsTrigger>
+            <TabsTrigger value="BN">Blanco y negro · K</TabsTrigger>
+          </TabsList>
+          <TabsContent value={color} className="min-w-0 grid gap-4 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {matriz.reglas.cobertura === "DIFERENCIADA" ? (
+                <Tabs
+                  value={cobertura}
+                  onValueChange={(v) => {
+                    setCobertura(String(v));
+                    setPagina(0);
+                  }}
+                >
+                  <TabsList
+                    variant="line"
+                    aria-label={
+                      cad ? "Cobertura CAD" : "Cobertura de impresión"
+                    }
+                  >
+                    <TabsTrigger value="borrador">Borrador</TabsTrigger>
+                    <TabsTrigger value="normal">Normal</TabsTrigger>
+                    <TabsTrigger value="alta">Alta</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value={cobertura} className="sr-only">
+                    Precios de cobertura {cobertura}
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  Precio único para todas las coberturas
+                </span>
+              )}
+              <Badge variant="secondary">
+                {cargados} de {preciosVista.length} precios cargados en esta
+                vista
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Precio por {unidad}, en la moneda del tarifario. Vacío =
+              pendiente; 0 = gratuito. Podés pegar desde Excel siguiendo los
+              papeles y columnas de una misma tabla
+              {cad ? "." : ": simple y doble faz de cada tramo."}
+            </p>
+            {!papeles.length ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>
+                    {matriz.filas.length
+                      ? "Sin coincidencias en esta vista"
+                      : "Todavía no hay combinaciones"}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {matriz.filas.length
+                      ? "Probá otra búsqueda, tipo de impresión o cobertura."
+                      : "Agregá las combinaciones disponibles y completá sus precios por tramo."}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <CuadriculaPrecios
+                matriz={matriz}
+                grupos={gruposVisibles}
+                nombres={nombres}
+                formatos={formatos}
+                disabled={disabled}
+                descripcion={descripcion}
+                onPrecio={(c) => aplicarCambios([c])}
+                onOpciones={setOpciones}
+                onPegar={(texto, filas, inicio, columna) => {
+                  try {
+                    const c = pegarCuadricula(
+                      texto,
+                      matriz,
+                      filas,
+                      inicio,
+                      columna,
+                    );
+                    setPaginaRevision(0);
+                    setCambios(c);
+                    setError(null);
+                  } catch (err) {
+                    toast.error(mensajeErrorTarifa(err));
+                  }
+                }}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm text-muted-foreground">
-            {indices.length} resultados · Página {actual + 1} de {ultima + 1}
+            {papeles.length} filas de papel · Página {actual + 1} de{" "}
+            {ultima + 1}
           </span>
           <div className="flex gap-2">
             <Button
@@ -451,6 +410,73 @@ export function EditorMatriz({
           </div>
         </div>
       </CardContent>
+      <Dialog
+        open={!!opciones}
+        onOpenChange={(v) => {
+          if (!v) setOpciones(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Combinaciones del papel</DialogTitle>
+            <DialogDescription>
+              Editá los rangos o quitá una combinación de este borrador.
+            </DialogDescription>
+          </DialogHeader>
+          {opciones?.map((indice) => {
+            const fila = matriz.filas[indice];
+            if (!fila) return null;
+            return (
+              <div key={indice} className="grid gap-2 rounded-lg border p-3">
+                <p className="text-sm font-medium">{descripcion(fila)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {fila.rangosPropios ? "Rangos propios" : "Rangos generales"} ·
+                  desde{" "}
+                  {(fila.rangosPropios ?? matriz.rangosGenerales).join(" · ")}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => {
+                      setOpciones(null);
+                      setError(null);
+                      setRangos({
+                        fila: indice,
+                        texto: (
+                          fila.rangosPropios ?? matriz.rangosGenerales
+                        ).join("; "),
+                        heredar: !fila.rangosPropios,
+                      });
+                    }}
+                  >
+                    Rangos
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => {
+                      setOpciones(null);
+                      setConfirmar({
+                        titulo: "Quitar combinación del borrador",
+                        detalle: `${descripcion(fila)}. Se quitarán sus precios de este borrador. Las versiones publicadas se conservan.`,
+                        aplicar: () =>
+                          cambiar((m) => {
+                            m.filas.splice(indice, 1);
+                          }),
+                      });
+                    }}
+                  >
+                    Quitar
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!rangos}
         onOpenChange={(v) => {
@@ -547,8 +573,8 @@ export function EditorMatriz({
             <DialogTitle>Ajustar precios en borrador</DialogTitle>
             <DialogDescription>
               Afecta todos los tramos de las {indices.length} combinaciones que
-              coinciden con la búsqueda, en todas las páginas. Las celdas
-              pendientes se conservan.
+              coinciden con el color, cobertura y búsqueda de esta vista, en
+              todas las páginas. Las celdas pendientes se conservan.
             </DialogDescription>
           </DialogHeader>
           {ajuste && (

@@ -186,6 +186,14 @@ const renderEditor = (puedeGestionar = true) =>
       />,
     ),
   );
+const precio = (desde: number, faz = "Simple faz") =>
+  [
+    ...el.querySelectorAll<HTMLInputElement>('input[placeholder="Pendiente"]'),
+  ].find(
+    (i) =>
+      i.getAttribute("aria-label") ===
+      `Obra de prueba · 80 g · A4 · K · ${faz}, desde ${desde}, precio por hoja`,
+  )!;
 async function abrir() {
   await renderEditor();
   await elegir("Tarifario a editar", "Mostrador de prueba");
@@ -195,11 +203,9 @@ it("crea con precios exactos: celda vacía pendiente y cero gratuito", async () 
   await click("Nuevo tarifario");
   await escribir(entrada("Nombre del tarifario"), "Web ficticia");
   await click("Agregar combinaciones de la oferta");
-  const precios = el.querySelectorAll<HTMLInputElement>(
-    'input[placeholder="Pendiente"]',
-  );
-  await escribir(precios[0], "999999999999999999,12345678");
-  await escribir(precios[1], "0");
+  await click("Blanco y negro · K");
+  await escribir(precio(1), "999999999999999999,12345678");
+  await escribir(precio(100), "0");
   await click("Guardar borrador");
   expect(api.guardarTarifario).toHaveBeenCalledWith(
     null,
@@ -305,20 +311,17 @@ it("cambiar a carilla requiere confirmar, reinicia precios y cambia la unidad de
   expect(input.value).toBe("120");
   await click("Confirmar cambio");
   expect(input.value).toBe("");
-  expect(el.textContent).toContain("Desde 100 carillas");
+  expect(el.textContent).toContain("100–499 carillas");
 });
 it("editar rangos generales conserva inicios comunes y avisa al retirar precios", async () => {
   await abrir();
-  const inputs = el.querySelectorAll<HTMLInputElement>(
-    'input[placeholder="Pendiente"]',
-  );
-  await escribir(inputs[1], "80");
+  await escribir(precio(100), "80");
   await click("Editar rangos generales");
   await escribir(entrada("Inicios de los tramos"), "1; 50; 500");
   await click("Aplicar rangos");
   expect(document.body.textContent).toContain("Se eliminarán 1 precios");
   await click("Confirmar");
-  expect(el.textContent).toContain("Desde 50 hojas");
+  expect(el.textContent).toContain("50–499 hojas");
   await click("Guardar borrador");
   const c = vi.mocked(api.guardarTarifario).mock.calls[0][1].contenido;
   expect(c.hojas!.rangosGenerales).toEqual([1, 50, 500]);
@@ -403,6 +406,11 @@ it("una vista previa tardía no reemplaza una asignación que ya se editó y gua
 
 it("los rangos propios de una fila no cambian los generales ni las demás combinaciones", async () => {
   await abrir();
+  await act(async () =>
+    el
+      .querySelector<HTMLButtonElement>('button[aria-label^="Opciones de"]')!
+      .click(),
+  );
   await click("Rangos");
   await elegir("Origen de los rangos", "Usar rangos propios");
   await escribir(entrada("Inicios de los tramos"), "1; 20");
@@ -413,4 +421,14 @@ it("los rangos propios de una fila no cambian los generales ni las demás combin
   expect(matriz.rangosGenerales).toEqual([1, 100, 500]);
   expect(matriz.filas[0].rangosPropios).toEqual([1, 20]);
   expect(matriz.filas[1].rangosPropios).toBeUndefined();
+});
+
+it("el acceso desde matrices abre costos sin guardar ni simular automáticamente", async () => {
+  await abrir();
+  await click("Generar costos de referencia");
+  expect(boton("Costos y sugerencias").getAttribute("aria-selected")).toBe(
+    "true",
+  );
+  expect(boton("Simular matriz (6)").disabled).toBe(false);
+  expect(api.guardarTarifario).not.toHaveBeenCalled();
 });

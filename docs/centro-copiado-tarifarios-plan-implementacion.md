@@ -794,3 +794,38 @@ y revisiones de copiado y se eliminó. El control de CSS confirmó que no se
 agregaron clases globales. Las suites nuevas quedaron incorporadas al workflow
 existente. CI remoto y PR siguen pendientes del acceso autenticado a GitHub;
 este registro no acredita un despliegue.
+
+
+### Cuadrícula y acceso a costos — 10/10/2026
+
+- Matriz organizada por color, cobertura y tamaño; papeles en filas y tramos con
+  columnas simple/doble faz. CAD conserva ML por ancho de rollo. Estética GRAFO,
+  columna de papel fija al desplazar horizontalmente y tabla contenida en móvil.
+- Los rangos propios se separan por combinación. Opciones de cada papel permiten
+  editar rangos o retirar una cara del borrador. El contador informa precios
+  cargados/posibles de la vista; la paginación agrupa ambas caras de cada papel.
+- El pegado sigue el orden visual de papeles, tramos y caras, con revisión antes
+  de aplicar. Rechaza cruces de tabla/página y valores en combinaciones ausentes.
+  Los ajustes masivos afectan el color, cobertura y búsqueda elegidos en todas
+  las páginas. Se conservan precisión decimal, cero gratuito y precios pendientes.
+- Acceso directo desde Matrices a «Costos y sugerencias», con instrucciones para
+  guardar combinaciones y simular aun sin precios. No ejecuta el motor ni guarda
+  precios por el solo hecho de abrir esa pestaña.
+- Sin migraciones ni cambios de datos. No se activó ningún tarifario ni se
+  publicaron precios en las empresas locales. El entorno preparado en el bloque
+  anterior se documenta en [desarrollo local](desarrollo-local.md).
+
+Validación: 75 pruebas de frontend del editor, cuadrícula, simulación,
+sugerencias y revisión de pedidos. Se cubren índices originales al filtrar,
+caras/tramos al pegar, excepciones, límites CAD continuos, persistencia de la
+edición al cambiar color/cobertura, alcance del ajuste y consulta sin edición.
+Las suites nuevas se agregan al workflow existente.
+
+Verificación visual en escritorio y 390 × 844 con componentes reales y catálogo
+ficticio en una muestra aislada. No se usó la sesión del tenant: el control del
+navegador rechazó el acceso a la pantalla de ingreso por su política de URL.
+La muestra simula respuestas del motor; no acredita costos del catálogo real.
+
+TypeScript: cero diagnósticos en 22 archivos del circuito. ESLint sin errores
+y control de CSS sin clases globales nuevas. Servicios locales conservados;
+sin build de producción ni despliegue.

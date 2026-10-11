@@ -87,6 +87,7 @@ export function CentroCopiadoTarifarios({
   const { moneda, zonaHoraria } = useConfigRegional();
   const [lista, setLista] = useState<api.ResumenTarifario[]>([]);
   const [base, setBase] = useState<api.BorradorTarifario | null>(null);
+  const [pestana, setPestana] = useState("matrices");
   const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [version, setVersion] = useState<api.VersionTarifario | null>(null);
   const [historial, setHistorial] = useState<api.ResumenVersion[]>([]);
@@ -167,6 +168,7 @@ export function CentroCopiadoTarifarios({
     }
   }
   async function cargar(id: string) {
+    setPestana("matrices");
     await trabajo(async () => {
       const [b, h, v] = await Promise.all([
         api.obtenerTarifario(id),
@@ -187,6 +189,7 @@ export function CentroCopiadoTarifarios({
     else accion();
   }
   function nuevo(duplicar = false) {
+    setPestana("matrices");
     if (!puedeGestionar) return;
     setBase(null);
     setVersion(null);
@@ -479,7 +482,8 @@ export function CentroCopiadoTarifarios({
           </Card>
           <Tabs
             className="min-w-0"
-            defaultValue="matrices"
+            value={pestana}
+            onValueChange={(v) => setPestana(String(v))}
             key={`editor-${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}`}
           >
             <div className="overflow-x-auto pb-2">
@@ -498,6 +502,27 @@ export function CentroCopiadoTarifarios({
               keepMounted
               className="pt-4 flex flex-col gap-4 data-[hidden]:hidden"
             >
+              {verMargenes && (
+                <Alert>
+                  <AlertTitle>
+                    Generá costos de referencia antes de definir tus precios
+                  </AlertTitle>
+                  <AlertDescription>
+                    <p>
+                      Agregá las combinaciones y guardá el borrador, aunque los
+                      precios estén vacíos. Después usá «Simular matriz» para
+                      calcular sus costos con el motor.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPestana("simulacion")}
+                    >
+                      Generar costos de referencia
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
               {ofertaSinGuardar && (
                 <Alert>
                   <AlertTitle>
@@ -515,6 +540,7 @@ export function CentroCopiadoTarifarios({
                   key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-hojas`}
                   matriz={contenido.hojas}
                   nombres={nombres}
+                  formatos={cfg.disponibles.formatos}
                   disabled={soloLectura}
                   generando={ocupado}
                   onGenerar={() => void generar("hojas")}
@@ -528,6 +554,7 @@ export function CentroCopiadoTarifarios({
                   key={`${base?.id ?? "nuevo"}-${version?.id ?? "borrador"}-cad`}
                   matriz={contenido.cad}
                   nombres={nombres}
+                  formatos={cfg.disponibles.formatos}
                   disabled={soloLectura}
                   generando={ocupado}
                   permiteGenerar={permiteCad}

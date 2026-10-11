@@ -536,9 +536,10 @@ function Simulador({
       <CardHeader>
         <CardTitle>Costos, sugerencias y márgenes</CardTitle>
         <CardDescription>
-          Compará los precios con pedidos de referencia. Incluye papel,
-          impresión y preparación productiva; las terminaciones se cotizan
-          aparte.
+          Usá «Simular matriz» para generar los costos de todas las celdas,
+          incluso las que todavía no tienen precio de venta. Compará los precios
+          con pedidos de referencia. Incluye papel, impresión y preparación
+          productiva; las terminaciones se cotizan aparte.
         </CardDescription>
       </CardHeader>
       <CardContent className="min-w-0 flex flex-col gap-4">

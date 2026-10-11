@@ -1586,3 +1586,25 @@ reglas funcionales confirmadas. Los cambios económicos posteriores de órdenes
 emitidas, canjes/cupones sobre copiado, precio manual, respaldos y pouch tienen
 pendientes explícitos en el [registro de implementación](centro-copiado-tarifarios-plan-implementacion.md).
 No se activó ninguna empresa real ni se desplegaron estos cambios.
+
+
+### Ajuste de uso: matriz por papel, tramo y caras (10/10/2026)
+
+Se adopta la vista solicitada: papeles y gramajes en filas, tamaños en secciones,
+tramos en columnas y simple/doble faz juntos dentro de cada tramo. Color CMYK y
+blanco y negro K tienen pestañas separadas. En cobertura diferenciada se elige
+Borrador, Normal o Alta; precio único sigue mostrando una sola matriz por color.
+No se modifica la modalidad comercial al cambiar de pestaña.
+
+Las excepciones de rangos se muestran en tablas separadas: nunca se coloca un
+precio bajo un encabezado que no le corresponde. Una cara ausente se muestra sin
+campo editable. CAD conserva una columna por tramo de ML y secciones por ancho
+de rollo. Los límites en ML son continuos y el superior es exclusivo.
+
+Se agrega el acceso «Generar costos de referencia» desde Matrices. Recorrido:
+«Agregar combinaciones de la oferta» → «Guardar borrador» → «Generar costos de
+referencia» → «Simular matriz». Los precios pueden quedar pendientes. Consultar
+«Ajustar referencia» para otra cantidad del tramo o geometría CAD y volver a
+simular. Las sugerencias requieren revisión y aceptación, y sólo modifican el
+borrador; la simulación no publica ni activa precios. Se mantienen los permisos
+financieros y las reglas de cálculo ya confirmadas.
