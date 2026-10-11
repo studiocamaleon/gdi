@@ -1,8 +1,8 @@
 "use client";
+import { Button, Input } from "./centro-copiado-ui";
 import { MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { Field } from "@/components/ui/field";
 import {
   Table,

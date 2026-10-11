@@ -1,20 +1,21 @@
 "use client";
-import { useId, useState } from "react";
-import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
+  Button,
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
+  DialogContent,
+} from "./centro-copiado-ui";
+import { useId, useState } from "react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,

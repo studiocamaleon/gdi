@@ -18,6 +18,7 @@ vi.mock("@/components/navigation/capacidades-provider", () => ({
   useCapacidad: () => false,
 }));
 vi.mock("@/components/configuracion/configuracion-workspace", () => ({
+  useConfiguracionInicio: vi.fn(),
   ConfiguracionPage: ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
   ),
@@ -117,12 +118,12 @@ const boton = (texto: string) =>
   [...el.querySelectorAll<HTMLButtonElement>("button")].find(
     (b) => b.textContent === texto,
   )!;
-const casilla = (label: string, contenedor: Element = el) => {
-  const etiqueta = [...contenedor.querySelectorAll("label")].find(
-    (l) => l.textContent === label,
+const control = (label: string) =>
+  el.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
+const modo = (texto: string) =>
+  [...el.querySelectorAll<HTMLButtonElement>("[role=radio]")].find(
+    (b) => b.textContent === texto,
   )!;
-  return document.getElementById(etiqueta.htmlFor) as HTMLInputElement;
-};
 async function montar() {
   await act(async () => root.render(<CentroCopiadoConfigView />));
 }
@@ -133,11 +134,8 @@ async function oferta() {
 it("guarda formatos explícitos aunque todos los papeles estén seleccionados y los recupera", async () => {
   await montar();
   await oferta();
-  await act(async () => casilla("Elegir formatos por gramaje").click());
-  const gramaje80 = [...el.querySelectorAll("fieldset")].find(
-    (f) => f.querySelector("legend")?.textContent === "80 g",
-  )!;
-  await act(async () => casilla("A3", gramaje80).click());
+  await act(async () => modo("Personalizar").click());
+  await act(async () => control("A3 para 80 g").click());
   await act(async () => boton("Guardar cambios").click());
   expect(mocks.guardar.mock.calls[0][0].papeles).toEqual([
     {
@@ -148,9 +146,9 @@ it("guarda formatos explícitos aunque todos los papeles estén seleccionados y 
       ]),
     },
   ]);
-  expect(casilla("A3", gramaje80).checked).toBe(false);
+  expect(control("A3 para 80 g").getAttribute("aria-pressed")).toBe("false");
   expect(boton("Guardar cambios").disabled).toBe(true);
-  await act(async () => casilla("Elegir formatos por gramaje").click());
+  await act(async () => modo("Formatos generales").click());
   await act(async () => boton("Guardar cambios").click());
   expect(mocks.guardar.mock.calls.at(-1)![0].papeles).toBeNull();
 });
@@ -180,8 +178,8 @@ it("no permite editar formatos sin permiso de gestión", async () => {
   mocks.gestionar = false;
   await montar();
   await oferta();
-  await act(async () => casilla("Elegir formatos por gramaje").click());
-  expect(casilla("Elegir formatos por gramaje").checked).toBe(false);
+  await act(async () => modo("Personalizar").click());
+  expect(modo("Personalizar").getAttribute("aria-checked")).toBe("false");
   expect(mocks.guardar).not.toHaveBeenCalled();
 });
 
@@ -189,15 +187,9 @@ it("permite dejar un gramaje sin formatos y no habilita formatos desactivados gl
   mocks.cargar.mockResolvedValue({ ...config, tamanos: ["A4"] });
   await montar();
   await oferta();
-  await act(async () => casilla("Elegir formatos por gramaje").click());
-  const gramaje150 = [...el.querySelectorAll("fieldset")].find(
-    (f) => f.querySelector("legend")?.textContent === "150 g",
-  )!;
-  await act(async () => casilla("A4", gramaje150).click());
-  const gramaje80 = [...el.querySelectorAll("fieldset")].find(
-    (f) => f.querySelector("legend")?.textContent === "80 g",
-  )!;
-  expect(casilla("A3", gramaje80).disabled).toBe(true);
+  await act(async () => modo("Personalizar").click());
+  await act(async () => control("A4 para 150 g").click());
+  expect(control("A3 para 80 g").disabled).toBe(true);
   await act(async () => boton("Guardar cambios").click());
   expect(
     mocks.guardar.mock.calls[0][0].papeles[0].formatosPorGramaje,

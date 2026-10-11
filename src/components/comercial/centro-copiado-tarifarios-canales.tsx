@@ -1,15 +1,18 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import styles from "./centro-copiado-tarifarios.module.css";
 import {
+  Button,
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
   CardContent,
-} from "@/components/ui/card";
+} from "./centro-copiado-ui";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import { Badge } from "@/components/ui/badge";
+
 import { FieldGroup } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
@@ -204,6 +207,17 @@ export function CentroCopiadoCanales({
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
+          <ol className={styles.workflow}>
+            <li>
+              <span>01</span> Elegí la política general
+            </li>
+            <li>
+              <span>02</span> Guardá las excepciones
+            </li>
+            <li>
+              <span>03</span> Revisá y activá en pedidos
+            </li>
+          </ol>
           {cargando ? (
             <Skeleton className="h-40 w-full" />
           ) : (
@@ -223,24 +237,33 @@ export function CentroCopiadoCanales({
                     ayuda="Los canales sin excepción heredan esta elección."
                   />
                 </FieldGroup>
-                <FieldGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <FieldGroup className={styles.channelList}>
                   {canales.map((c) => (
-                    <Elegir
-                      key={c.value}
-                      etiqueta={c.label}
-                      valor={valorAsignacion(contenido.canales[c.value])}
-                      opciones={opciones(contenido.canales[c.value], true)}
-                      disabled={!puedeGestionar || ocupado}
-                      onChange={(v) =>
-                        editar({
-                          ...contenido,
-                          canales: {
-                            ...contenido.canales,
-                            [c.value]: desdeSeleccion(v),
-                          },
-                        })
-                      }
-                    />
+                    <div key={c.value} className={styles.channelRow}>
+                      <div>
+                        <strong>{c.label}</strong>
+                        <p>
+                          {contenido.canales[c.value].modalidad === "HEREDAR"
+                            ? `Usa la política general: ${contenido.general.modalidad === "MOTOR" ? "Motor de cotización" : (lista.find((t) => t.id === valorAsignacion(contenido.general))?.nombre ?? "Tarifario no disponible")}`
+                            : "Precio específico para este canal"}
+                        </p>
+                      </div>
+                      <Elegir
+                        etiqueta={c.label}
+                        valor={valorAsignacion(contenido.canales[c.value])}
+                        opciones={opciones(contenido.canales[c.value], true)}
+                        disabled={!puedeGestionar || ocupado}
+                        onChange={(v) =>
+                          editar({
+                            ...contenido,
+                            canales: {
+                              ...contenido.canales,
+                              [c.value]: desdeSeleccion(v),
+                            },
+                          })
+                        }
+                      />
+                    </div>
                   ))}
                 </FieldGroup>
               </>

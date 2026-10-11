@@ -1,22 +1,30 @@
 "use client";
-import { useState } from "react";
-import { FieldGroup } from "@/components/ui/field";
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
+  Button,
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardDescription,
-} from "@/components/ui/card";
+  DialogContent,
+} from "./centro-copiado-ui";
+import { useState } from "react";
+import styles from "./centro-copiado-tarifarios.module.css";
+import {
+  FieldGroup,
+  FieldSet,
+  FieldLegend,
+  FieldDescription,
+} from "@/components/ui/field";
+
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
 import {
   Elegir,
   TextoTarifa,
@@ -60,259 +68,292 @@ export function ReglasTarifario({
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6">
-        <FieldGroup className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Elegir
-            etiqueta="Cobertura"
-            disabled={disabled}
-            valor={c.hojas?.reglas.cobertura ?? c.cad!.reglas.cobertura}
-            opciones={[
-              {
-                value: "UNICA",
-                label: "Precio único para todas las coberturas",
-              },
-              { value: "DIFERENCIADA", label: "Precios por cobertura" },
-            ]}
-            onChange={(v) => {
-              setError(null);
-              setConfirmacion({
-                texto:
-                  "Cambiar la cobertura reorganiza ambas matrices. Sus precios quedarán pendientes y sus rangos volverán a los generales. Cargá cada cobertura de forma independiente.",
-                aplicar: () => cambiarCobertura(c, v),
-              });
-            }}
-            ayuda="Con precios por cobertura, el volumen se acumula por separado."
-          />
-          <Elegir
-            etiqueta="IVA de los precios"
-            disabled={disabled}
-            valor={c.composicion.iva}
-            opciones={[
-              { value: "INCLUIDO", label: "IVA incluido" },
-              { value: "MAS_IVA", label: "Más IVA" },
-            ]}
-            onChange={(v) => {
-              setError(null);
-              setConfirmacion({
-                texto:
-                  "Los importes cargados conservarán su valor numérico. Cambiar la condición de IVA modifica su interpretación y el total a cobrar; revisá los precios antes de publicar.",
-                aplicar: () => ({
-                  ...c,
-                  composicion: { ...c.composicion, iva: v },
-                }),
-              });
-            }}
-          />
-          <Elegir
-            etiqueta="Preparación"
-            disabled={disabled}
-            valor={c.composicion.preparacion.modalidad}
-            opciones={[
-              { value: "INCLUIDA", label: "Incluida" },
-              { value: "FIJA_PEDIDO", label: "Cargo fijo por pedido" },
-            ]}
-            onChange={(v) =>
-              cambiar((x) => {
-                x.composicion.preparacion =
-                  v === "INCLUIDA"
-                    ? { modalidad: v }
-                    : { modalidad: v, importe: "" };
-              })
-            }
-          />
-          {c.composicion.preparacion.modalidad === "FIJA_PEDIDO" && (
-            <TextoTarifa
-              etiqueta="Importe de preparación"
-              inputMode="decimal"
-              disabled={disabled}
-              valor={c.composicion.preparacion.importe}
-              onChange={(v) =>
-                cambiar((x) => {
-                  x.composicion.preparacion = {
-                    modalidad: "FIJA_PEDIDO",
-                    importe: v,
-                  };
-                })
-              }
-            />
-          )}
-          <Elegir
-            etiqueta="Mínimo del pedido"
-            disabled={disabled}
-            valor={c.composicion.minimo.modalidad}
-            opciones={[
-              { value: "SIN_MINIMO", label: "Sin mínimo" },
-              { value: "IMPORTE_PEDIDO", label: "Mínimo de importe" },
-            ]}
-            onChange={(v) =>
-              cambiar((x) => {
-                x.composicion.minimo =
-                  v === "SIN_MINIMO"
-                    ? { modalidad: v }
-                    : { modalidad: v, importe: "" };
-              })
-            }
-            ayuda="Sobre impresión más preparación, después de los ajustes. Terminaciones aparte."
-          />
-          {c.composicion.minimo.modalidad === "IMPORTE_PEDIDO" && (
-            <TextoTarifa
-              etiqueta="Importe mínimo"
-              inputMode="decimal"
-              disabled={disabled}
-              valor={c.composicion.minimo.importe}
-              onChange={(v) =>
-                cambiar((x) => {
-                  x.composicion.minimo = {
-                    modalidad: "IMPORTE_PEDIDO",
-                    importe: v,
-                  };
-                })
-              }
-            />
-          )}
-        </FieldGroup>
-        <FieldGroup className="grid gap-4 md:grid-cols-2">
-          <TextoTarifa
-            etiqueta="Margen mínimo (%)"
-            inputMode="decimal"
-            disabled={disabled}
-            valor={c.margen?.minimoPorcentaje ?? ""}
-            placeholder="Definí el piso de este tarifario"
-            onChange={(v) =>
-              cambiar((x) => {
-                x.margen = {
-                  minimoPorcentaje: v,
-                  anteInsuficiente:
-                    x.margen?.anteInsuficiente ?? "AUTORIZACION",
-                };
-              })
-            }
-          />
-          <Elegir
-            etiqueta="Si el margen es insuficiente"
-            disabled={disabled}
-            valor={c.margen?.anteInsuficiente ?? "AUTORIZACION"}
-            opciones={[
-              {
-                value: "AUTORIZACION",
-                label: "Requerir autorización con motivo",
-              },
-              { value: "BLOQUEO", label: "Bloquear hasta alcanzar el mínimo" },
-            ]}
-            onChange={(v) =>
-              cambiar((x) => {
-                x.margen = {
-                  minimoPorcentaje: x.margen?.minimoPorcentaje ?? "",
-                  anteInsuficiente: v,
-                };
-              })
-            }
-            ayuda="Sobre venta sin IVA, después de costos, comisiones e impuestos internos. Las terminaciones se evalúan aparte. Se conserva como política para los pedidos por matriz."
-          />
-        </FieldGroup>
-        {c.hojas && (
-          <FieldGroup className="grid gap-4 md:grid-cols-3">
+        <FieldSet className={styles.ruleSection}>
+          <FieldLegend>Precio y coberturas</FieldLegend>
+          <FieldDescription>
+            Cómo se expresa el precio y qué incluye cada pedido.
+          </FieldDescription>
+          <FieldGroup className="grid gap-4 md:grid-cols-2">
             <Elegir
-              etiqueta="Unidad del precio de hojas"
+              etiqueta="Cobertura"
               disabled={disabled}
-              valor={c.hojas.reglas.unidad}
+              valor={c.hojas?.reglas.cobertura ?? c.cad!.reglas.cobertura}
               opciones={[
-                { value: "HOJA", label: "Por hoja física" },
-                { value: "CARILLA", label: "Por carilla impresa" },
+                {
+                  value: "UNICA",
+                  label: "Precio único para todas las coberturas",
+                },
+                { value: "DIFERENCIADA", label: "Precios por cobertura" },
               ]}
               onChange={(v) => {
                 setError(null);
                 setConfirmacion({
                   texto:
-                    "Cambiar la unidad deja pendientes todos los precios de hojas para evitar reutilizar un importe con otra unidad. Los mismos inicios de tramo pasarán a expresarse en la nueva unidad.",
-                  aplicar: () => {
-                    const nuevo = structuredClone(c);
-                    nuevo.hojas!.reglas.unidad = v;
-                    for (const f of nuevo.hojas!.filas)
-                      for (const p of f.precios) p.precioUnitario = null;
-                    return nuevo;
-                  },
+                    "Cambiar la cobertura reorganiza ambas matrices. Sus precios quedarán pendientes y sus rangos volverán a los generales. Cargá cada cobertura de forma independiente.",
+                  aplicar: () => cambiarCobertura(c, v),
                 });
               }}
-              ayuda="El tramo y el precio usan la misma unidad: hojas físicas o carillas impresas."
+              ayuda="Con precios por cobertura, el volumen se acumula por separado."
             />
             <Elegir
-              etiqueta="Acumulación de hojas"
+              etiqueta="IVA de los precios"
               disabled={disabled}
-              valor={c.hojas.reglas.acumulacion}
-              opciones={acumulacion}
-              onChange={(v) =>
-                cambiar((x) => {
-                  x.hojas!.reglas.acumulacion = v;
-                })
-              }
-            />
-            <Elegir
-              etiqueta="Última hoja impar"
-              disabled={disabled}
-              valor={c.hojas.reglas.ultimaHojaImpar}
+              valor={c.composicion.iva}
               opciones={[
-                { value: "MANTENER_DOBLE", label: "Mantener precio doble faz" },
-                {
-                  value: "COBRAR_SIMPLE",
-                  label: "Cobrar esa hoja como simple faz",
-                },
+                { value: "INCLUIDO", label: "IVA incluido" },
+                { value: "MAS_IVA", label: "Más IVA" },
+              ]}
+              onChange={(v) => {
+                setError(null);
+                setConfirmacion({
+                  texto:
+                    "Los importes cargados conservarán su valor numérico. Cambiar la condición de IVA modifica su interpretación y el total a cobrar; revisá los precios antes de publicar.",
+                  aplicar: () => ({
+                    ...c,
+                    composicion: { ...c.composicion, iva: v },
+                  }),
+                });
+              }}
+            />
+            <Elegir
+              etiqueta="Preparación"
+              disabled={disabled}
+              valor={c.composicion.preparacion.modalidad}
+              opciones={[
+                { value: "INCLUIDA", label: "Incluida" },
+                { value: "FIJA_PEDIDO", label: "Cargo fijo por pedido" },
               ]}
               onChange={(v) =>
                 cambiar((x) => {
-                  x.hojas!.reglas.ultimaHojaImpar = v;
-                })
-              }
-            />
-          </FieldGroup>
-        )}
-        {c.cad && (
-          <FieldGroup className="grid gap-4 md:grid-cols-3">
-            <Elegir
-              etiqueta="Acumulación CAD"
-              disabled={disabled}
-              valor={c.cad.reglas.acumulacion}
-              opciones={acumulacion}
-              onChange={(v) =>
-                cambiar((x) => {
-                  x.cad!.reglas.acumulacion = v;
-                })
-              }
-            />
-            <Elegir
-              etiqueta="Redondeo comercial CAD"
-              disabled={disabled}
-              valor={c.cad.reglas.redondeo.modalidad}
-              opciones={[
-                { value: "SIN_REDONDEO", label: "Sin redondeo" },
-                { value: "HACIA_ARRIBA", label: "Hacia arriba por incremento" },
-              ]}
-              onChange={(v) =>
-                cambiar((x) => {
-                  x.cad!.reglas.redondeo =
-                    v === "SIN_REDONDEO"
+                  x.composicion.preparacion =
+                    v === "INCLUIDA"
                       ? { modalidad: v }
-                      : { modalidad: v, incrementoMl: "0.1" };
+                      : { modalidad: v, importe: "" };
                 })
               }
-              ayuda="El tramo usa el consumo sin redondear. El cobro se redondea una vez por grupo."
             />
-            {c.cad.reglas.redondeo.modalidad === "HACIA_ARRIBA" && (
+            {c.composicion.preparacion.modalidad === "FIJA_PEDIDO" && (
               <TextoTarifa
-                etiqueta="Incremento de redondeo (ML)"
+                etiqueta="Importe de preparación"
                 inputMode="decimal"
                 disabled={disabled}
-                valor={c.cad.reglas.redondeo.incrementoMl}
+                valor={c.composicion.preparacion.importe}
                 onChange={(v) =>
                   cambiar((x) => {
-                    x.cad!.reglas.redondeo = {
-                      modalidad: "HACIA_ARRIBA",
-                      incrementoMl: v,
+                    x.composicion.preparacion = {
+                      modalidad: "FIJA_PEDIDO",
+                      importe: v,
+                    };
+                  })
+                }
+              />
+            )}
+            <Elegir
+              etiqueta="Mínimo del pedido"
+              disabled={disabled}
+              valor={c.composicion.minimo.modalidad}
+              opciones={[
+                { value: "SIN_MINIMO", label: "Sin mínimo" },
+                { value: "IMPORTE_PEDIDO", label: "Mínimo de importe" },
+              ]}
+              onChange={(v) =>
+                cambiar((x) => {
+                  x.composicion.minimo =
+                    v === "SIN_MINIMO"
+                      ? { modalidad: v }
+                      : { modalidad: v, importe: "" };
+                })
+              }
+              ayuda="Sobre impresión más preparación, después de los ajustes. Terminaciones aparte."
+            />
+            {c.composicion.minimo.modalidad === "IMPORTE_PEDIDO" && (
+              <TextoTarifa
+                etiqueta="Importe mínimo"
+                inputMode="decimal"
+                disabled={disabled}
+                valor={c.composicion.minimo.importe}
+                onChange={(v) =>
+                  cambiar((x) => {
+                    x.composicion.minimo = {
+                      modalidad: "IMPORTE_PEDIDO",
+                      importe: v,
                     };
                   })
                 }
               />
             )}
           </FieldGroup>
+        </FieldSet>
+        <FieldSet className={styles.ruleSection}>
+          <FieldLegend>Protección del margen</FieldLegend>
+          <FieldDescription>
+            Definí cuándo un pedido requiere autorización o debe bloquearse.
+          </FieldDescription>
+          <FieldGroup className="grid gap-4 md:grid-cols-2">
+            <TextoTarifa
+              etiqueta="Margen mínimo (%)"
+              inputMode="decimal"
+              disabled={disabled}
+              valor={c.margen?.minimoPorcentaje ?? ""}
+              placeholder="Definí el piso de este tarifario"
+              onChange={(v) =>
+                cambiar((x) => {
+                  x.margen = {
+                    minimoPorcentaje: v,
+                    anteInsuficiente:
+                      x.margen?.anteInsuficiente ?? "AUTORIZACION",
+                  };
+                })
+              }
+            />
+            <Elegir
+              etiqueta="Si el margen es insuficiente"
+              disabled={disabled}
+              valor={c.margen?.anteInsuficiente ?? "AUTORIZACION"}
+              opciones={[
+                {
+                  value: "AUTORIZACION",
+                  label: "Requerir autorización con motivo",
+                },
+                {
+                  value: "BLOQUEO",
+                  label: "Bloquear hasta alcanzar el mínimo",
+                },
+              ]}
+              onChange={(v) =>
+                cambiar((x) => {
+                  x.margen = {
+                    minimoPorcentaje: x.margen?.minimoPorcentaje ?? "",
+                    anteInsuficiente: v,
+                  };
+                })
+              }
+              ayuda="Sobre venta sin IVA, después de costos, comisiones e impuestos internos. Las terminaciones se evalúan aparte. Se conserva como política para los pedidos por matriz."
+            />
+          </FieldGroup>
+        </FieldSet>
+        {c.hojas && (
+          <FieldSet className={styles.ruleSection}>
+            <FieldLegend>Impresión en hojas</FieldLegend>
+            <FieldDescription>
+              Unidad de cobro, acumulación del volumen y última hoja impar.
+            </FieldDescription>
+            <FieldGroup className="grid gap-4 md:grid-cols-3">
+              <Elegir
+                etiqueta="Unidad del precio de hojas"
+                disabled={disabled}
+                valor={c.hojas.reglas.unidad}
+                opciones={[
+                  { value: "HOJA", label: "Por hoja física" },
+                  { value: "CARILLA", label: "Por carilla impresa" },
+                ]}
+                onChange={(v) => {
+                  setError(null);
+                  setConfirmacion({
+                    texto:
+                      "Cambiar la unidad deja pendientes todos los precios de hojas para evitar reutilizar un importe con otra unidad. Los mismos inicios de tramo pasarán a expresarse en la nueva unidad.",
+                    aplicar: () => {
+                      const nuevo = structuredClone(c);
+                      nuevo.hojas!.reglas.unidad = v;
+                      for (const f of nuevo.hojas!.filas)
+                        for (const p of f.precios) p.precioUnitario = null;
+                      return nuevo;
+                    },
+                  });
+                }}
+                ayuda="El tramo y el precio usan la misma unidad: hojas físicas o carillas impresas."
+              />
+              <Elegir
+                etiqueta="Acumulación de hojas"
+                disabled={disabled}
+                valor={c.hojas.reglas.acumulacion}
+                opciones={acumulacion}
+                onChange={(v) =>
+                  cambiar((x) => {
+                    x.hojas!.reglas.acumulacion = v;
+                  })
+                }
+              />
+              <Elegir
+                etiqueta="Última hoja impar"
+                disabled={disabled}
+                valor={c.hojas.reglas.ultimaHojaImpar}
+                opciones={[
+                  {
+                    value: "MANTENER_DOBLE",
+                    label: "Mantener precio doble faz",
+                  },
+                  {
+                    value: "COBRAR_SIMPLE",
+                    label: "Cobrar esa hoja como simple faz",
+                  },
+                ]}
+                onChange={(v) =>
+                  cambiar((x) => {
+                    x.hojas!.reglas.ultimaHojaImpar = v;
+                  })
+                }
+              />
+            </FieldGroup>
+          </FieldSet>
+        )}
+        {c.cad && (
+          <FieldSet className={styles.ruleSection}>
+            <FieldLegend>Planos CAD</FieldLegend>
+            <FieldDescription>
+              Metro lineal de papel consumido y redondeo comercial.
+            </FieldDescription>
+            <FieldGroup className="grid gap-4 md:grid-cols-3">
+              <Elegir
+                etiqueta="Acumulación CAD"
+                disabled={disabled}
+                valor={c.cad.reglas.acumulacion}
+                opciones={acumulacion}
+                onChange={(v) =>
+                  cambiar((x) => {
+                    x.cad!.reglas.acumulacion = v;
+                  })
+                }
+              />
+              <Elegir
+                etiqueta="Redondeo comercial CAD"
+                disabled={disabled}
+                valor={c.cad.reglas.redondeo.modalidad}
+                opciones={[
+                  { value: "SIN_REDONDEO", label: "Sin redondeo" },
+                  {
+                    value: "HACIA_ARRIBA",
+                    label: "Hacia arriba por incremento",
+                  },
+                ]}
+                onChange={(v) =>
+                  cambiar((x) => {
+                    x.cad!.reglas.redondeo =
+                      v === "SIN_REDONDEO"
+                        ? { modalidad: v }
+                        : { modalidad: v, incrementoMl: "0.1" };
+                  })
+                }
+                ayuda="El tramo usa el consumo sin redondear. El cobro se redondea una vez por grupo."
+              />
+              {c.cad.reglas.redondeo.modalidad === "HACIA_ARRIBA" && (
+                <TextoTarifa
+                  etiqueta="Incremento de redondeo (ML)"
+                  inputMode="decimal"
+                  disabled={disabled}
+                  valor={c.cad.reglas.redondeo.incrementoMl}
+                  onChange={(v) =>
+                    cambiar((x) => {
+                      x.cad!.reglas.redondeo = {
+                        modalidad: "HACIA_ARRIBA",
+                        incrementoMl: v,
+                      };
+                    })
+                  }
+                />
+              )}
+            </FieldGroup>
+          </FieldSet>
         )}
       </CardContent>
       <Dialog

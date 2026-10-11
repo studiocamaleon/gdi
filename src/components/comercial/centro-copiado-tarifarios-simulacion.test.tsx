@@ -420,3 +420,52 @@ it("invalida una propuesta pendiente si llega una simulación más reciente", as
   );
   expect(boton("Aplicar 6 precios al borrador").disabled).toBe(true);
 });
+
+it("filtra errores, costos completos y pendientes sin reutilizar referencias desactualizadas", async () => {
+  contenido.hojas!.reglas.cobertura = "DIFERENCIADA";
+  for (const fila of contenido.hojas!.filas)
+    fila.combinacion.cobertura = "normal";
+  vi.mocked(simularCeldasTarifario).mockImplementation(
+    async (_id, solicitud) => ({
+      resultados: respuesta(solicitud).resultados.map((r) =>
+        r.celda.tramo === 0
+          ? {
+              ...r,
+              escenarios: [
+                {
+                  estado: "ERROR" as const,
+                  cobertura: "normal" as const,
+                  calculadoEl: "2026-10-10T15:00:00Z",
+                  motivo: "Falta costo de prueba",
+                },
+              ],
+            }
+          : r,
+      ),
+    }),
+  );
+  const filtrar = async (valor: string) => {
+    const select = [...el.querySelectorAll("select")].find((s) =>
+      s.parentElement?.textContent?.includes("Estado de las referencias"),
+    )!;
+    await act(async () => {
+      select.value = valor;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  };
+  await montar();
+  await filtrar("PENDIENTES");
+  expect(boton("Simular filtradas (6)")).toBeDefined();
+  await click("Simular matriz (6)");
+  expect(boton("Simular filtradas (0)").disabled).toBe(true);
+  await filtrar("ERROR");
+  expect(boton("Simular filtradas (2)")).toBeDefined();
+  expect(el.textContent).toContain("Falta costo de prueba");
+  await filtrar("CALCULADAS");
+  expect(boton("Simular filtradas (4)")).toBeDefined();
+  expect(el.textContent).not.toContain("Falta costo de prueba");
+  await click("Cambiar unidad de prueba");
+  expect(boton("Simular filtradas (0)").disabled).toBe(true);
+  await filtrar("PENDIENTES");
+  expect(boton("Simular filtradas (6)").disabled).toBe(true);
+});

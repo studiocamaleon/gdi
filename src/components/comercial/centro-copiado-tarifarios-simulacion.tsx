@@ -1,20 +1,23 @@
 "use client";
+import {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  DialogContent,
+} from "./centro-copiado-ui";
 import { SugerenciasTarifario } from "./centro-copiado-tarifarios-sugerencias";
 import styles from "./centro-copiado-tarifarios.module.css";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Play, Square } from "lucide-react";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
-import { Button } from "@/components/ui/button";
+
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
+
 import {
   Table,
   TableHeader,
@@ -25,7 +28,6 @@ import {
 } from "@/components/ui/table";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -92,6 +94,7 @@ function Simulador({
 }: Parameters<typeof SimulacionTarifario>[0]) {
   const { zonaHoraria } = useConfigRegional();
   const [filtro, setFiltro] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState("TODAS");
   const [pagina, setPagina] = useState(0);
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [resultados, setResultados] = useState<Record<string, Guardado>>({});
@@ -161,12 +164,29 @@ function Simulador({
   );
   const filtradas = useMemo(
     () =>
-      celdas.filter((c) =>
-        c.etiqueta
-          .toLocaleLowerCase("es")
-          .includes(filtro.toLocaleLowerCase("es")),
-      ),
-    [celdas, filtro],
+      celdas.filter((c) => {
+        const guardado = resultados[claveCeldaSimulacion(c)];
+        const r =
+          guardado?.estructura === estructura ? guardado.resultado : undefined;
+        const esperadas =
+          contenido[c.seccion]!.reglas.cobertura === "UNICA" ? 3 : 1;
+        const coincideEstado =
+          estadoFiltro === "TODAS" ||
+          (estadoFiltro === "PENDIENTES" &&
+            (!r || r.escenarios.length < esperadas)) ||
+          (estadoFiltro === "ERROR" &&
+            r?.escenarios.some((e) => e.estado === "ERROR")) ||
+          (estadoFiltro === "CALCULADAS" &&
+            r?.escenarios.length === esperadas &&
+            r.escenarios.every((e) => e.estado === "CALCULADO"));
+        return (
+          coincideEstado &&
+          c.etiqueta
+            .toLocaleLowerCase("es")
+            .includes(filtro.toLocaleLowerCase("es"))
+        );
+      }),
+    [celdas, filtro, estadoFiltro, resultados, estructura, contenido],
   );
   const numPagina = Math.min(
     pagina,
@@ -609,15 +629,31 @@ function Simulador({
             </>
           )}
         </p>
-        <TextoTarifa
-          etiqueta="Filtrar simulación"
-          valor={filtro}
-          onChange={(v) => {
-            setFiltro(v);
-            setPagina(0);
-          }}
-          placeholder="Papel, tamaño, caras, cobertura o CAD"
-        />
+        <div className={styles.simulationFilters}>
+          <TextoTarifa
+            etiqueta="Filtrar simulación"
+            valor={filtro}
+            onChange={(v) => {
+              setFiltro(v);
+              setPagina(0);
+            }}
+            placeholder="Papel, tamaño, caras, cobertura o CAD"
+          />
+          <Elegir
+            etiqueta="Estado de las referencias"
+            valor={estadoFiltro}
+            opciones={[
+              { value: "TODAS", label: "Todas las referencias" },
+              { value: "PENDIENTES", label: "Pendientes de simular" },
+              { value: "ERROR", label: "Con errores de cálculo" },
+              { value: "CALCULADAS", label: "Costos completos" },
+            ]}
+            onChange={(v) => {
+              setEstadoFiltro(v);
+              setPagina(0);
+            }}
+          />
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button
             disabled={!habilitada || !celdas.length}

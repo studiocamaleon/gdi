@@ -1,12 +1,8 @@
 "use client";
 
-import {
-  useDesignScope,
-  useDesignTheme,
-} from "@/components/design-system/appearance";
+import { FormDialog } from "@/components/design-system/form-dialog";
 
 import * as React from "react";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   cotizarCentroCopiado,
@@ -88,35 +84,9 @@ export default function CentroCopiadoPreciosSheet({
   items,
   moneda,
 }: Props) {
-  const designScope = useDesignScope();
-  const designClass = useDesignTheme();
   const [resumen, setResumen] = React.useState<Resumen | null>(null);
   const [cargando, setCargando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  // Esc cierra.
-  React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  // Bloquear scroll de fondo.
-  React.useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
 
   // Al abrir: reconstruye las hojas de la OT y las cotiza para el $/hoja por config.
   React.useEffect(() => {
@@ -266,120 +236,96 @@ export default function CentroCopiadoPreciosSheet({
     final: hojas > 0 ? final / hojas : 0,
   });
 
-  const contenido = (
-    <>
-      <div className={s.backdrop} onClick={onClose} />
-      <div
-        {...designScope}
-        className={`${designClass} ${s.sheet}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Precios de impresión"
-      >
-        <header className={s.head}>
-          <div>
-            <div className={s.eyebrow}>Centro de copiado</div>
-            <h2 className={s.titulo}>Precios de impresión</h2>
-            <p className={s.sub}>
-              Precio por hoja de cada papel y configuración (neto y final con
-              IVA).
-            </p>
+  return (
+    <FormDialog
+      isOpen={open}
+      onOpenChange={(abierto) => {
+        if (!abierto) onClose();
+      }}
+      title="Precios de impresión"
+      description="Precio por hoja de cada papel y configuración, con su importe neto y total con IVA."
+      className={s.sheet}
+    >
+      <div className={s.body}>
+        {cargando ? (
+          <div className={s.estado}>Calculando precios…</div>
+        ) : error ? (
+          <div className={s.estado}>No se pudo calcular: {error}</div>
+        ) : !resumen || resumen.grupos.length === 0 ? (
+          <div className={s.estado}>
+            No hay impresiones de centro de copiado en esta orden.
           </div>
-          <button
-            type="button"
-            className={s.close}
-            onClick={onClose}
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </header>
-
-        <div className={s.body}>
-          {cargando ? (
-            <div className={s.estado}>Calculando precios…</div>
-          ) : error ? (
-            <div className={s.estado}>No se pudo calcular: {error}</div>
-          ) : !resumen || resumen.grupos.length === 0 ? (
-            <div className={s.estado}>
-              No hay impresiones de centro de copiado en esta orden.
-            </div>
-          ) : (
-            resumen.grupos.map((g) => {
-              const subHoja = porHoja(g.netoTotal, g.finalTotal, g.hojas);
-              return (
-                <div key={g.papelLabel} className={s.papel}>
-                  <div className={s.papelHead}>
-                    <span className={s.papelNombre}>{g.papelLabel}</span>
-                    <span className={s.papelHojas}>{g.hojas} hojas</span>
-                  </div>
-                  {g.filas.map((f) => {
-                    const ph = porHoja(f.netoTotal, f.finalTotal, f.hojas);
-                    return (
-                      <div key={claveConfig(f)} className={s.fila}>
-                        <div className={s.config}>
-                          <span className={s.configLbl}>{configLabel(f)}</span>
-                          <span className={s.configMeta}>{f.hojas} hojas</span>
-                        </div>
-                        <div className={s.hoja}>
-                          <span className={s.hojaCap}>Por hoja</span>
-                          <span className={s.hojaNeto}>
-                            {formatCurrency(ph.neto, moneda)}
-                          </span>
-                          <span className={s.hojaFinal}>
-                            {formatCurrency(ph.final, moneda)} c/IVA
-                          </span>
-                        </div>
-                        <div className={s.sub2}>
-                          <span className={s.hojaCap}>Subtotal</span>
-                          <span className={s.sub2Neto}>
-                            {formatCurrency(f.netoTotal, moneda)}
-                          </span>
-                          <span className={s.sub2Final}>
-                            {formatCurrency(f.finalTotal, moneda)} c/IVA
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className={s.papelTotal}>
-                    <span className={s.papelTotalLbl}>
-                      Subtotal {g.papelLabel} · prom.{" "}
-                      {formatCurrency(subHoja.neto, moneda)}/hoja
-                    </span>
-                    <span className={s.sub2Neto}>
-                      {formatCurrency(g.netoTotal, moneda)}
-                    </span>
-                    <span className={s.sub2Final}>
-                      {formatCurrency(g.finalTotal, moneda)} c/IVA
-                    </span>
-                  </div>
+        ) : (
+          resumen.grupos.map((g) => {
+            const subHoja = porHoja(g.netoTotal, g.finalTotal, g.hojas);
+            return (
+              <div key={g.papelLabel} className={s.papel}>
+                <div className={s.papelHead}>
+                  <span className={s.papelNombre}>{g.papelLabel}</span>
+                  <span className={s.papelHojas}>{g.hojas} hojas</span>
                 </div>
-              );
-            })
-          )}
-        </div>
-
-        {resumen && resumen.grupos.length > 0 && (
-          <footer className={s.foot}>
-            <span className={s.footLbl}>
-              Total impresión · {resumen.hojas} hojas
-            </span>
-            <div className={s.footNums}>
-              <div className={s.footNeto}>
-                {formatCurrency(resumen.netoTotal, moneda)}
+                {g.filas.map((f) => {
+                  const ph = porHoja(f.netoTotal, f.finalTotal, f.hojas);
+                  return (
+                    <div key={claveConfig(f)} className={s.fila}>
+                      <div className={s.config}>
+                        <span className={s.configLbl}>{configLabel(f)}</span>
+                        <span className={s.configMeta}>{f.hojas} hojas</span>
+                      </div>
+                      <div className={s.hoja}>
+                        <span className={s.hojaCap}>Por hoja</span>
+                        <span className={s.hojaNeto}>
+                          {formatCurrency(ph.neto, moneda)}
+                        </span>
+                        <span className={s.hojaFinal}>
+                          {formatCurrency(ph.final, moneda)} c/IVA
+                        </span>
+                      </div>
+                      <div className={s.sub2}>
+                        <span className={s.hojaCap}>Subtotal</span>
+                        <span className={s.sub2Neto}>
+                          {formatCurrency(f.netoTotal, moneda)}
+                        </span>
+                        <span className={s.sub2Final}>
+                          {formatCurrency(f.finalTotal, moneda)} c/IVA
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className={s.papelTotal}>
+                  <span className={s.papelTotalLbl}>
+                    Subtotal {g.papelLabel} · prom.{" "}
+                    {formatCurrency(subHoja.neto, moneda)}/hoja
+                  </span>
+                  <span className={s.sub2Neto}>
+                    {formatCurrency(g.netoTotal, moneda)}
+                  </span>
+                  <span className={s.sub2Final}>
+                    {formatCurrency(g.finalTotal, moneda)} c/IVA
+                  </span>
+                </div>
               </div>
-              <div className={s.footFinal}>
-                {formatCurrency(resumen.finalTotal, moneda)} con IVA
-              </div>
-            </div>
-          </footer>
+            );
+          })
         )}
       </div>
-    </>
-  );
 
-  return typeof document === "undefined"
-    ? null
-    : createPortal(contenido, document.body);
+      {resumen && resumen.grupos.length > 0 && (
+        <footer className={s.foot}>
+          <span className={s.footLbl}>
+            Total impresión · {resumen.hojas} hojas
+          </span>
+          <div className={s.footNums}>
+            <div className={s.footNeto}>
+              {formatCurrency(resumen.netoTotal, moneda)}
+            </div>
+            <div className={s.footFinal}>
+              {formatCurrency(resumen.finalTotal, moneda)} con IVA
+            </div>
+          </div>
+        </footer>
+      )}
+    </FormDialog>
+  );
 }

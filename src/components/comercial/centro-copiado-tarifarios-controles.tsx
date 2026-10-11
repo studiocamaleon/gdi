@@ -1,16 +1,10 @@
 "use client";
+import { Input } from "./centro-copiado-ui";
 import { useEffect, useId } from "react";
+import styles from "./centro-copiado-tarifarios.module.css";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/design-system/select-field";
 
 export function Elegir<T extends string>({
   etiqueta,
@@ -31,27 +25,17 @@ export function Elegir<T extends string>({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{etiqueta}</FieldLabel>
-      <Select
+      <SelectField
+        id={id}
+        aria-label={etiqueta}
         value={valor}
-        items={opciones}
+        options={opciones}
         disabled={disabled}
-        onValueChange={(v) => {
-          if (v !== null) onChange(v);
+        onChange={(v) => {
+          const elegida = opciones.find((o) => o.value === v);
+          if (elegida) onChange(elegida.value);
         }}
-      >
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {opciones.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+      />
       {ayuda && <FieldDescription>{ayuda}</FieldDescription>}
     </Field>
   );
@@ -95,14 +79,20 @@ export function ErrorTarifa({ error }: { error: string | null }) {
 }
 export function AvisoPreparacion() {
   return (
-    <Alert>
-      <AlertTitle>Versiones y activación</AlertTitle>
-      <AlertDescription>
-        Publicá los precios y activá su asignación desde Canales. Los pedidos
-        revisan el tarifario vigente antes de emitir; los presupuestos ya
-        enviados conservan sus precios.
-      </AlertDescription>
-    </Alert>
+    <ol className={styles.workflow} aria-label="Pasos del tarifario">
+      <li>
+        <span>01</span>Combinaciones y precios
+      </li>
+      <li>
+        <span>02</span>Costos y márgenes
+      </li>
+      <li>
+        <span>03</span>Publicar versión
+      </li>
+      <li>
+        <span>04</span>Asignar en Canales
+      </li>
+    </ol>
   );
 }
 export function useAvisoCambios(cambios: boolean) {

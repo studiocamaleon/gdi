@@ -1,11 +1,27 @@
 "use client";
+import {
+  Button,
+  Input,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "./centro-copiado-ui";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import {
   ConfiguracionPage,
   ConfiguracionHeader,
   GuardarConfiguracion,
+  useConfiguracionInicio,
 } from "@/components/configuracion/configuracion-workspace";
+import s from "./centro-copiado-config.module.css";
+import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
+import { Elegir } from "./centro-copiado-tarifarios-controles";
+import { cn } from "@/lib/utils";
 import configStyles from "@/components/configuracion/configuracion-workspace.module.css";
 import { CentroCopiadoTarifarios } from "./centro-copiado-tarifarios";
 import { CentroCopiadoCanales } from "./centro-copiado-tarifarios-canales";
@@ -14,6 +30,7 @@ import { CentroCopiadoFormatosPapel } from "./centro-copiado-formatos-papel";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import Link from "next/link";
+import { ActionLink } from "@/components/design-system/action-link";
 import {
   AlertCircle,
   ArrowRight,
@@ -22,6 +39,8 @@ import {
   Clock3,
   History,
   Printer,
+  FileText,
+  Check,
   Plus,
   Search,
   Settings2,
@@ -37,16 +56,7 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
@@ -56,15 +66,7 @@ import {
   FieldLabel,
   FieldTitle,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PreciosEspecialesClientesCard } from "@/components/productos-servicios/tab-precio-completo";
@@ -152,6 +154,7 @@ export function CentroCopiadoConfigView() {
   const puedeGestionar = usePuede("configuracion.copiado.gestionar");
   const permiteCadTarifarios = useCapacidad("cotizacion_cad");
   const [pestana, setPestana] = React.useState("general");
+  useConfiguracionInicio(pestana);
   const [visitadas, setVisitadas] = React.useState<string[]>([]);
   const [revisionTarifarios, setRevisionTarifarios] = React.useState(0);
   const conTerminaciones = useCapacidad("terminaciones_copiado");
@@ -416,17 +419,7 @@ export function CentroCopiadoConfigView() {
       else n.set(id, new Set(todos));
       return n;
     });
-  const toggleGramaje = (id: string, g: number) =>
-    setPapeles((prev) => {
-      const actual = prev.get(id);
-      if (!actual) return prev;
-      const gs = new Set(actual);
-      if (gs.has(g) && gs.size > 1) gs.delete(g);
-      else gs.add(g);
-      const n = new Map(prev);
-      n.set(id, gs);
-      return n;
-    });
+
   const toggleSet = (
     valor: string,
     setter: React.Dispatch<React.SetStateAction<Set<string>>>,
@@ -755,7 +748,7 @@ export function CentroCopiadoConfigView() {
         ? "default"
         : "secondary";
   return (
-    <ConfiguracionPage className={configStyles.copyPage}>
+    <ConfiguracionPage className={s.page}>
       <ConfiguracionHeader
         titulo="Centro de copiado"
         descripcion="Oferta, producción, tarifarios y precios por canal."
@@ -763,7 +756,7 @@ export function CentroCopiadoConfigView() {
           <Badge variant="outline">{activo ? "Activo" : "Pausado"}</Badge>
         }
         acciones={
-          pestana !== "tarifarios" && pestana !== "canales" ? (
+          (pestana !== "tarifarios" && pestana !== "canales") || hayCambios ? (
             <>
               {hayCambios && (
                 <Button
@@ -786,78 +779,93 @@ export function CentroCopiadoConfigView() {
         }
       />
 
-      <Card className="shrink-0">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {salud?.estado === "OPERATIVO" ? (
-              <CheckCircle2 className="size-4 text-emerald-600" />
-            ) : salud?.estado === "ERROR" ? (
-              <AlertCircle className="size-4 text-destructive" />
-            ) : (
-              <TriangleAlert className="size-4 text-amber-600" />
-            )}
-            Estado operativo
-          </CardTitle>
-          <CardDescription>
-            Verifica plantilla, ruta, máquinas, materiales y terminaciones sin
-            modificar datos.
-          </CardDescription>
-          <CardAction>
-            <Badge variant={estadoBadge}>{salud?.estado ?? "Cargando"}</Badge>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {salud
-            ? [
-                ["Impresoras", salud.resumen.impresoras],
-                ["Papeles", salud.resumen.papeles],
-                [
-                  "Con costo",
-                  `${salud.resumen.variantesCosteadas}/${salud.resumen.variantesPapel}`,
-                ],
-                ["Anilladoras", salud.resumen.anilladoras],
-                ["Anillos", salud.resumen.tiposAnillo],
-                ["Tapas", salud.resumen.tapas],
-              ].map(([e, v]) => (
-                <div key={String(e)} className="rounded-lg border p-3">
-                  <div className="text-lg font-semibold">{v}</div>
-                  <div className="text-xs text-muted-foreground">{e}</div>
-                </div>
-              ))
-            : null}
-        </CardContent>
-        {salud?.chequeos.some((c) => c.nivel !== "OK") ? (
-          <CardFooter className="flex flex-wrap justify-between gap-3">
-            <div className="text-sm text-muted-foreground">
-              {salud.chequeos.find((c) => c.nivel !== "OK")?.detalle}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {salud.chequeos.some(
-                (chequeo) =>
-                  chequeo.codigo === "costos_papel" && chequeo.nivel !== "OK",
-              ) ? (
-                <Button
-                  variant="outline"
-                  nativeButton={false}
-                  render={<Link href="/inventario/materias-primas/costos" />}
-                >
-                  Abrir costos de materiales
-                </Button>
-              ) : null}
-              {puedeGestionar && salud.puedeReparar ? (
-                <Button
-                  variant="outline"
-                  loading={reparando}
-                  loadingText="Reparando…"
-                  onClick={() => void reparar()}
-                >
-                  <Wrench /> Reparar infraestructura
-                </Button>
-              ) : null}
-            </div>
-          </CardFooter>
-        ) : null}
-      </Card>
+      <details className={s.health}>
+        <summary>
+          <strong>Estado del centro de copiado</strong>
+          <Badge variant={estadoBadge}>
+            {salud?.estado === "OPERATIVO"
+              ? "Operativo"
+              : salud?.estado === "ERROR"
+                ? "Requiere atención"
+                : "Revisar configuración"}
+          </Badge>
+          <span className={s.healthHint}>
+            {papeles.size} papeles · {tamanos.size} tamaños habilitados · Ver
+            diagnóstico
+          </span>
+        </summary>
+        <Card className="shrink-0">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {salud?.estado === "OPERATIVO" ? (
+                <CheckCircle2 className="size-4" />
+              ) : salud?.estado === "ERROR" ? (
+                <AlertCircle className="size-4 text-destructive" />
+              ) : (
+                <TriangleAlert className="size-4" />
+              )}
+              Estado operativo
+            </CardTitle>
+            <CardDescription>
+              Verifica plantilla, ruta, máquinas, materiales y terminaciones sin
+              modificar datos.
+            </CardDescription>
+            <CardAction>
+              <Badge variant={estadoBadge}>{salud?.estado ?? "Cargando"}</Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent className={s.healthMetrics}>
+            {salud
+              ? [
+                  ["Impresoras", salud.resumen.impresoras],
+                  ["Papeles", salud.resumen.papeles],
+                  [
+                    "Con costo",
+                    `${salud.resumen.variantesCosteadas}/${salud.resumen.variantesPapel}`,
+                  ],
+                  ["Anilladoras", salud.resumen.anilladoras],
+                  ["Anillos", salud.resumen.tiposAnillo],
+                  ["Tapas", salud.resumen.tapas],
+                ].map(([e, v]) => (
+                  <div key={String(e)} className={s.healthMetric}>
+                    <strong>{v}</strong>
+                    <span>{e}</span>
+                  </div>
+                ))
+              : null}
+          </CardContent>
+          {salud?.chequeos.some((c) => c.nivel !== "OK") ? (
+            <CardFooter className="flex flex-wrap justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                {salud.chequeos.find((c) => c.nivel !== "OK")?.detalle}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {salud.chequeos.some(
+                  (chequeo) =>
+                    chequeo.codigo === "costos_papel" && chequeo.nivel !== "OK",
+                ) ? (
+                  <ActionLink
+                    variant="outline"
+                    href="/inventario/materias-primas/costos"
+                  >
+                    Abrir costos de materiales
+                  </ActionLink>
+                ) : null}
+                {puedeGestionar && salud.puedeReparar ? (
+                  <Button
+                    variant="outline"
+                    loading={reparando}
+                    loadingText="Reparando…"
+                    onClick={() => void reparar()}
+                  >
+                    <Wrench /> Reparar infraestructura
+                  </Button>
+                ) : null}
+              </div>
+            </CardFooter>
+          ) : null}
+        </Card>
+      </details>
 
       <Tabs
         value={pestana}
@@ -892,609 +900,693 @@ export function CentroCopiadoConfigView() {
           value="general"
           className={`${configStyles.copyColumns} grid gap-4 pt-3 lg:grid-cols-2`}
         >
-          <Card>
-            <CardHeader>
-              <CardTitle>Disponibilidad</CardTitle>
-              <CardDescription>
-                Controla si la carga rápida aparece en las órdenes de trabajo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FieldGroup>
-                <Field orientation="horizontal">
-                  <FieldContent>
-                    <FieldTitle>Módulo activo</FieldTitle>
-                    <FieldDescription>
-                      Al pausarlo se conserva toda la configuración.
-                    </FieldDescription>
-                  </FieldContent>
-                  <Switch
-                    checked={activo}
-                    onCheckedChange={setActivo}
-                    aria-label="Módulo activo"
-                  />
-                </Field>
-                <Field orientation="horizontal">
-                  <FieldContent>
-                    <FieldTitle>Cobrar preparación y limpieza</FieldTitle>
-                    <FieldDescription>
-                      Útil si las cargas pequeñas deben absorber esos tiempos.
-                    </FieldDescription>
-                  </FieldContent>
-                  <Switch
-                    checked={cobraSetup}
-                    onCheckedChange={setCobraSetup}
-                    aria-label="Cobrar preparación y limpieza"
-                  />
-                </Field>
-                {cobraSetup ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="cc-setup">
-                        Preparación (min)
-                      </FieldLabel>
-                      <Input
-                        id="cc-setup"
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        value={setupMin}
-                        onChange={(e) => setSetupMin(e.target.value)}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="cc-cleanup">
-                        Limpieza (min)
-                      </FieldLabel>
-                      <Input
-                        id="cc-cleanup"
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        value={cleanupMin}
-                        onChange={(e) => setCleanupMin(e.target.value)}
-                      />
-                    </Field>
-                  </div>
-                ) : null}
-              </FieldGroup>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Política comercial</CardTitle>
-              <CardDescription>
-                Define cómo transforma el motor universal el costo real en
-                precio de venta.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel>Forma de calcular el margen</FieldLabel>
-                  <Select
-                    value={politicaPrecio}
-                    onValueChange={(value) =>
-                      setPoliticaPrecio(
-                        value as "MARGEN_FIJO" | "MARGEN_POR_VOLUMEN",
-                      )
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {politicaPrecio === "MARGEN_FIJO"
-                          ? "Margen único"
-                          : "Margen por volumen"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="MARGEN_FIJO">
-                          Margen único
-                        </SelectItem>
-                        <SelectItem value="MARGEN_POR_VOLUMEN">
-                          Margen por volumen
-                        </SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <FieldDescription>
-                    Por volumen permite reducir el margen a medida que aumenta
-                    la cantidad de hojas.
-                  </FieldDescription>
-                </Field>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="cc-margen">
-                      Margen objetivo (%)
-                    </FieldLabel>
-                    <Input
-                      id="cc-margen"
-                      type="number"
-                      min={0}
-                      value={margen}
-                      onChange={(e) => setMargen(e.target.value)}
-                      disabled={politicaPrecio === "MARGEN_POR_VOLUMEN"}
+          <fieldset
+            disabled={!puedeGestionar || guardando}
+            className={s.editorFields}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>Disponibilidad</CardTitle>
+                <CardDescription>
+                  Controla si la carga rápida aparece en las órdenes de trabajo.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup>
+                  <Field orientation="horizontal">
+                    <FieldContent>
+                      <FieldTitle>Módulo activo</FieldTitle>
+                      <FieldDescription>
+                        Al pausarlo se conserva toda la configuración.
+                      </FieldDescription>
+                    </FieldContent>
+                    <Switch
+                      checked={activo}
+                      onCheckedChange={setActivo}
+                      aria-label="Módulo activo"
                     />
                   </Field>
-                  <Field>
-                    <FieldLabel htmlFor="cc-margen-min">
-                      Margen mínimo (%)
-                    </FieldLabel>
-                    <Input
-                      id="cc-margen-min"
-                      type="number"
-                      min={0}
-                      value={margenMin}
-                      onChange={(e) => setMargenMin(e.target.value)}
+                  <Field orientation="horizontal">
+                    <FieldContent>
+                      <FieldTitle>Costear preparación y limpieza</FieldTitle>
+                      <FieldDescription>
+                        Incluye estos tiempos productivos en el cálculo. El
+                        cargo comercial por pedido se define en las reglas del
+                        tarifario.
+                      </FieldDescription>
+                    </FieldContent>
+                    <Switch
+                      checked={cobraSetup}
+                      onCheckedChange={setCobraSetup}
+                      aria-label="Costear preparación y limpieza"
                     />
                   </Field>
-                </div>
-                {politicaPrecio === "MARGEN_POR_VOLUMEN" ? (
-                  <Field>
-                    <FieldLabel>Tramos por hojas</FieldLabel>
-                    <div className="flex flex-col gap-2">
-                      {tramosMargen.map((tramo, index) => (
-                        <div
-                          key={`${index}-${tramo.desdeCantidad}`}
-                          className="grid grid-cols-[1fr_1fr_auto] items-end gap-2"
-                        >
-                          <Field>
-                            <FieldLabel htmlFor={`cc-tramo-desde-${index}`}>
-                              Desde
-                            </FieldLabel>
-                            <Input
-                              id={`cc-tramo-desde-${index}`}
-                              type="number"
-                              min={1}
-                              step={1}
-                              value={tramo.desdeCantidad}
-                              disabled={index === 0}
-                              onChange={(event) =>
-                                actualizarTramo(
-                                  index,
-                                  "desdeCantidad",
-                                  Number(event.target.value),
-                                )
-                              }
-                            />
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor={`cc-tramo-margen-${index}`}>
-                              Margen (%)
-                            </FieldLabel>
-                            <Input
-                              id={`cc-tramo-margen-${index}`}
-                              type="number"
-                              min={0}
-                              max={99}
-                              value={tramo.margenPct}
-                              onChange={(event) =>
-                                actualizarTramo(
-                                  index,
-                                  "margenPct",
-                                  Number(event.target.value),
-                                )
-                              }
-                            />
-                          </Field>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            disabled={index === 0 || tramosMargen.length === 1}
-                            aria-label={`Eliminar tramo desde ${tramo.desdeCantidad} hojas`}
-                            onClick={() =>
-                              setTramosMargen((prev) =>
-                                prev.filter((_, i) => i !== index),
-                              )
-                            }
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={tramosMargen.length >= 10}
-                      onClick={agregarTramo}
-                    >
-                      <Plus data-icon="inline-start" /> Agregar tramo
-                    </Button>
-                  </Field>
-                ) : null}
-                <Field>
-                  <FieldLabel htmlFor="cc-minimo-hojas">
-                    Hojas mínimas facturables por documento
-                  </FieldLabel>
-                  <Input
-                    id="cc-minimo-hojas"
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={minimoHojas}
-                    onChange={(event) => setMinimoHojas(event.target.value)}
-                  />
-                  <FieldDescription>
-                    Usá 0 para cobrar siempre la cantidad real. El mínimo
-                    también se calcula dentro del motor universal.
-                  </FieldDescription>
-                </Field>
-                <Alert>
-                  <AlertTitle>No existe un tarifario paralelo</AlertTitle>
-                  <AlertDescription>
-                    Papel, tóner, máquina, tiempo y terminaciones continúan
-                    cotizados por el motor universal.
-                  </AlertDescription>
-                </Alert>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-                  <div>
-                    <div className="text-sm font-medium">Prueba rápida</div>
-                    <div className="text-xs text-muted-foreground">
-                      {hayCambios
-                        ? "Guardá los cambios antes de probar."
-                        : "100 páginas, B/N, doble faz."}
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    loading={cotizando}
-                    loadingText="Cotizando…"
-                    disabled={hayCambios}
-                    onClick={() => void probarCotizacion()}
-                  >
-                    Probar cotización
-                  </Button>
-                  {cotizacionPrueba ? (
-                    <div className="basis-full border-t pt-3 text-sm">
-                      <strong>{dinero(cotizacionPrueba.total)}</strong> ·{" "}
-                      {cotizacionPrueba.hojas} hojas ·{" "}
-                      {cotizacionPrueba.descripcion}
+                  {cobraSetup ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor="cc-setup">
+                          Preparación (min)
+                        </FieldLabel>
+                        <Input
+                          id="cc-setup"
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={setupMin}
+                          onChange={(e) => setSetupMin(e.target.value)}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="cc-cleanup">
+                          Limpieza (min)
+                        </FieldLabel>
+                        <Input
+                          id="cc-cleanup"
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={cleanupMin}
+                          onChange={(e) => setCleanupMin(e.target.value)}
+                        />
+                      </Field>
                     </div>
                   ) : null}
-                </div>
-              </FieldGroup>
-            </CardContent>
-          </Card>
+                </FieldGroup>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Precios sugeridos por el motor</CardTitle>
+                <CardDescription>
+                  Estas reglas se usan al cotizar por motor y como referencia
+                  para sus sugerencias. Cada tarifario tiene sus propias reglas
+                  comerciales.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup>
+                  <Elegir
+                    etiqueta="Forma de calcular el margen"
+                    valor={politicaPrecio}
+                    disabled={!puedeGestionar || guardando}
+                    opciones={[
+                      { value: "MARGEN_FIJO", label: "Margen único" },
+                      {
+                        value: "MARGEN_POR_VOLUMEN",
+                        label: "Margen por volumen",
+                      },
+                    ]}
+                    onChange={setPoliticaPrecio}
+                    ayuda="Por volumen permite reducir el margen a medida que aumenta la cantidad de hojas."
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="cc-margen">
+                        Margen objetivo (%)
+                      </FieldLabel>
+                      <Input
+                        id="cc-margen"
+                        type="number"
+                        min={0}
+                        value={margen}
+                        onChange={(e) => setMargen(e.target.value)}
+                        disabled={politicaPrecio === "MARGEN_POR_VOLUMEN"}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="cc-margen-min">
+                        Margen mínimo (%)
+                      </FieldLabel>
+                      <Input
+                        id="cc-margen-min"
+                        type="number"
+                        min={0}
+                        value={margenMin}
+                        onChange={(e) => setMargenMin(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                  {politicaPrecio === "MARGEN_POR_VOLUMEN" ? (
+                    <Field>
+                      <FieldLabel>Tramos por hojas</FieldLabel>
+                      <div className="flex flex-col gap-2">
+                        {tramosMargen.map((tramo, index) => (
+                          <div
+                            key={`${index}-${tramo.desdeCantidad}`}
+                            className="grid grid-cols-[1fr_1fr_auto] items-end gap-2"
+                          >
+                            <Field>
+                              <FieldLabel htmlFor={`cc-tramo-desde-${index}`}>
+                                Desde
+                              </FieldLabel>
+                              <Input
+                                id={`cc-tramo-desde-${index}`}
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={tramo.desdeCantidad}
+                                disabled={index === 0}
+                                onChange={(event) =>
+                                  actualizarTramo(
+                                    index,
+                                    "desdeCantidad",
+                                    Number(event.target.value),
+                                  )
+                                }
+                              />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor={`cc-tramo-margen-${index}`}>
+                                Margen (%)
+                              </FieldLabel>
+                              <Input
+                                id={`cc-tramo-margen-${index}`}
+                                type="number"
+                                min={0}
+                                max={99}
+                                value={tramo.margenPct}
+                                onChange={(event) =>
+                                  actualizarTramo(
+                                    index,
+                                    "margenPct",
+                                    Number(event.target.value),
+                                  )
+                                }
+                              />
+                            </Field>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              disabled={
+                                index === 0 || tramosMargen.length === 1
+                              }
+                              aria-label={`Eliminar tramo desde ${tramo.desdeCantidad} hojas`}
+                              onClick={() =>
+                                setTramosMargen((prev) =>
+                                  prev.filter((_, i) => i !== index),
+                                )
+                              }
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={tramosMargen.length >= 10}
+                        onClick={agregarTramo}
+                      >
+                        <Plus data-icon="inline-start" /> Agregar tramo
+                      </Button>
+                    </Field>
+                  ) : null}
+                  <Field>
+                    <FieldLabel htmlFor="cc-minimo-hojas">
+                      Hojas mínimas facturables por documento
+                    </FieldLabel>
+                    <Input
+                      id="cc-minimo-hojas"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={minimoHojas}
+                      onChange={(event) => setMinimoHojas(event.target.value)}
+                    />
+                    <FieldDescription>
+                      Usá 0 para cobrar siempre la cantidad real. El mínimo
+                      también se calcula dentro del motor universal.
+                    </FieldDescription>
+                  </Field>
+                  <Alert>
+                    <AlertTitle>
+                      Motor y tarifarios cumplen funciones distintas
+                    </AlertTitle>
+                    <AlertDescription>
+                      El motor calcula costos y precios sugeridos. Si un canal
+                      usa un tarifario, el precio de venta sale de su matriz;
+                      configurá sus mínimos y preparación en «Reglas y
+                      márgenes».
+                    </AlertDescription>
+                  </Alert>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                    <div>
+                      <div className="text-sm font-medium">
+                        Prueba del motor
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {hayCambios
+                          ? "Guardá los cambios antes de probar."
+                          : "100 páginas, B/N, doble faz."}
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      loading={cotizando}
+                      loadingText="Cotizando…"
+                      disabled={hayCambios}
+                      onClick={() => void probarCotizacion()}
+                    >
+                      Probar cotización
+                    </Button>
+                    {cotizacionPrueba ? (
+                      <div className="basis-full border-t pt-3 text-sm">
+                        <strong>{dinero(cotizacionPrueba.total)}</strong> ·{" "}
+                        {cotizacionPrueba.hojas} hojas ·{" "}
+                        {cotizacionPrueba.descripcion}
+                      </div>
+                    ) : null}
+                  </div>
+                </FieldGroup>
+              </CardContent>
+            </Card>
+            {cfg.productoId ? (
+              <PreciosEspecialesClientesCard
+                productoId={cfg.productoId}
+                unidadComercial="hoja"
+                descripcion="Aplica la política particular del cliente sobre los costos calculados por el motor universal. Si no hay una regla activa, se usa la política general de Centro de Copiado."
+              />
+            ) : null}
+          </fieldset>
         </TabsContent>
 
         <TabsContent value="produccion" className="flex flex-col gap-4 pt-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ruta de producción</CardTitle>
-              <CardDescription>
-                Esta es la ruta que ejecuta Carga rápida. La impresión es
-                obligatoria y el anillado se activa por trabajo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-stretch gap-3 md:flex-row md:items-center">
-              <Card className="flex-1">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Printer /> 1. Impresión láser
-                  </CardTitle>
-                  <CardDescription>
-                    Papel, gramaje, formato, color y faz determinan el costo de
-                    las hojas.
-                  </CardDescription>
-                  <CardAction>
-                    <Badge>Obligatorio</Badge>
-                  </CardAction>
-                </CardHeader>
-              </Card>
-              <ArrowRight className="self-center text-muted-foreground max-md:rotate-90" />
-              <Card className="flex-1">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BookOpen /> 2. Anillado
-                  </CardTitle>
-                  <CardDescription>
-                    Espiral plástico o Wire-O, con máquina y consumibles del
-                    taller.
-                  </CardDescription>
-                  <CardAction>
-                    <Badge
-                      variant={
-                        terminaciones.has("Anillado") ? "secondary" : "outline"
-                      }
-                    >
-                      {terminaciones.has("Anillado")
-                        ? "Opcional activo"
-                        : "Desactivado"}
-                    </Badge>
-                  </CardAction>
-                </CardHeader>
-              </Card>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-4 lg:grid-cols-2">
+          <fieldset
+            disabled={!puedeGestionar || guardando}
+            className={s.editorFields}
+          >
             <Card>
               <CardHeader>
-                <CardTitle>Impresión</CardTitle>
+                <CardTitle>Ruta de producción</CardTitle>
                 <CardDescription>
-                  Automática usa las candidatas válidas de la ruta productiva.
+                  Esta es la ruta que ejecuta Carga rápida. La impresión es
+                  obligatoria y el anillado se activa por trabajo.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4">
-                <SelectorMaquina
-                  label="Impresora color"
-                  value={maquinaColor}
-                  setValue={setMaquinaColor}
-                  opciones={cfg.disponibles.maquinas.map((m) => ({
-                    id: m.id,
-                    nombre: `${m.nombre}${m.esColor ? " · color" : ""}`,
-                  }))}
-                />
-                <SelectorMaquina
-                  label="Impresora blanco y negro"
-                  value={maquinaBn}
-                  setValue={setMaquinaBn}
-                  opciones={cfg.disponibles.maquinas.map((m) => ({
-                    id: m.id,
-                    nombre: `${m.nombre}${m.esColor ? " · color" : ""}`,
-                  }))}
-                />
-              </CardContent>
-            </Card>
-            <fieldset
-              disabled={!conTerminaciones}
-              className="min-w-0 border-0 p-0 m-0"
-            >
-              {!conTerminaciones && (
-                <Alert>
-                  <AlertDescription>
-                    Las terminaciones no están incluidas en el plan. Se conserva
-                    la configuración guardada.
-                  </AlertDescription>
-                </Alert>
-              )}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BookOpen /> Anillado
-                  </CardTitle>
-                  <CardDescription>
-                    Configura el paso opcional y las dos tecnologías
-                    disponibles.
-                  </CardDescription>
-                  <CardAction>
-                    <Switch
-                      checked={terminaciones.has("Anillado")}
-                      onCheckedChange={() =>
-                        toggleSet("Anillado", setTerminaciones)
-                      }
-                      aria-label="Ofrecer anillado"
-                    />
-                  </CardAction>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  <FieldGroup>
-                    {cfg.disponibles.tiposAnillo.map((tipo) => (
-                      <Field
-                        key={tipo.value}
-                        orientation="horizontal"
-                        data-disabled={
-                          !terminaciones.has("Anillado") || !tipo.instalado
+              <CardContent className="flex flex-col items-stretch gap-3 md:flex-row md:items-center">
+                <Card className="flex-1">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Printer /> 1. Impresión láser
+                    </CardTitle>
+                    <CardDescription>
+                      Papel, gramaje, formato, color y faz determinan el costo
+                      de las hojas.
+                    </CardDescription>
+                    <CardAction>
+                      <Badge>Obligatorio</Badge>
+                    </CardAction>
+                  </CardHeader>
+                </Card>
+                <ArrowRight className="self-center text-muted-foreground max-md:rotate-90" />
+                <Card className="flex-1">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BookOpen /> 2. Anillado
+                    </CardTitle>
+                    <CardDescription>
+                      Espiral plástico o Wire-O, con máquina y consumibles del
+                      taller.
+                    </CardDescription>
+                    <CardAction>
+                      <Badge
+                        variant={
+                          terminaciones.has("Anillado")
+                            ? "secondary"
+                            : "outline"
                         }
                       >
-                        <FieldContent>
-                          <FieldTitle>{tipo.label}</FieldTitle>
-                          <FieldDescription>
-                            {tipo.instalado
-                              ? tipo.value === "WIRE_O"
-                                ? "Anillado metálico Wire-O."
-                                : "Espiral plástico seleccionado por capacidad."
-                              : "No hay consumibles instalados para este tipo."}
-                          </FieldDescription>
-                        </FieldContent>
-                        <Checkbox
-                          checked={tiposAnillo.has(tipo.value)}
-                          disabled={
-                            !terminaciones.has("Anillado") || !tipo.instalado
-                          }
-                          onCheckedChange={() =>
-                            toggleSet(tipo.value, setTiposAnillo)
-                          }
-                          aria-label={`Ofrecer ${tipo.label}`}
-                        />
-                      </Field>
-                    ))}
-                  </FieldGroup>
+                        {terminaciones.has("Anillado")
+                          ? "Opcional activo"
+                          : "Desactivado"}
+                      </Badge>
+                    </CardAction>
+                  </CardHeader>
+                </Card>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Impresión</CardTitle>
+                  <CardDescription>
+                    Automática usa las candidatas válidas de la ruta productiva.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
                   <SelectorMaquina
-                    label="Anilladora"
-                    value={maquinaAnilladora}
-                    setValue={setMaquinaAnilladora}
-                    opciones={cfg.disponibles.anilladoras}
+                    label="Impresora color"
+                    value={maquinaColor}
+                    setValue={setMaquinaColor}
+                    opciones={cfg.disponibles.maquinas.map((m) => ({
+                      id: m.id,
+                      nombre: `${m.nombre}${m.esColor ? " · color" : ""}`,
+                    }))}
                   />
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <SelectorMaquina
-                      label="Tapa frontal"
-                      value={tapaFrontal}
-                      setValue={setTapaFrontal}
-                      opciones={cfg.disponibles.tapas
-                        .filter((t) => t.esFrontal)
-                        .map((t) => ({
-                          id: t.materiaPrimaId,
-                          nombre: t.nombre,
-                        }))}
-                    />
-                    <SelectorMaquina
-                      label="Contratapa"
-                      value={tapaContratapa}
-                      setValue={setTapaContratapa}
-                      opciones={cfg.disponibles.tapas
-                        .filter((t) => !t.esFrontal)
-                        .map((t) => ({
-                          id: t.materiaPrimaId,
-                          nombre: t.nombre,
-                        }))}
-                    />
-                  </div>
+                  <SelectorMaquina
+                    label="Impresora blanco y negro"
+                    value={maquinaBn}
+                    setValue={setMaquinaBn}
+                    opciones={cfg.disponibles.maquinas.map((m) => ({
+                      id: m.id,
+                      nombre: `${m.nombre}${m.esColor ? " · color" : ""}`,
+                    }))}
+                  />
                 </CardContent>
               </Card>
-            </fieldset>
-          </div>
+              <fieldset
+                disabled={!conTerminaciones}
+                className="min-w-0 border-0 p-0 m-0"
+              >
+                {!conTerminaciones && (
+                  <Alert>
+                    <AlertDescription>
+                      Las terminaciones no están incluidas en el plan. Se
+                      conserva la configuración guardada.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BookOpen /> Anillado
+                    </CardTitle>
+                    <CardDescription>
+                      Configura el paso opcional y las dos tecnologías
+                      disponibles.
+                    </CardDescription>
+                    <CardAction>
+                      <Switch
+                        checked={terminaciones.has("Anillado")}
+                        onCheckedChange={() =>
+                          toggleSet("Anillado", setTerminaciones)
+                        }
+                        aria-label="Ofrecer anillado"
+                      />
+                    </CardAction>
+                  </CardHeader>
+                  <CardContent className="grid gap-4">
+                    <FieldGroup>
+                      {cfg.disponibles.tiposAnillo.map((tipo) => (
+                        <Field
+                          key={tipo.value}
+                          orientation="horizontal"
+                          data-disabled={
+                            !terminaciones.has("Anillado") || !tipo.instalado
+                          }
+                        >
+                          <FieldContent>
+                            <FieldTitle>{tipo.label}</FieldTitle>
+                            <FieldDescription>
+                              {tipo.instalado
+                                ? tipo.value === "WIRE_O"
+                                  ? "Anillado metálico Wire-O."
+                                  : "Espiral plástico seleccionado por capacidad."
+                                : "No hay consumibles instalados para este tipo."}
+                            </FieldDescription>
+                          </FieldContent>
+                          <Checkbox
+                            checked={tiposAnillo.has(tipo.value)}
+                            disabled={
+                              !terminaciones.has("Anillado") || !tipo.instalado
+                            }
+                            onCheckedChange={() =>
+                              toggleSet(tipo.value, setTiposAnillo)
+                            }
+                            aria-label={`Ofrecer ${tipo.label}`}
+                          />
+                        </Field>
+                      ))}
+                    </FieldGroup>
+                    <SelectorMaquina
+                      label="Anilladora"
+                      value={maquinaAnilladora}
+                      setValue={setMaquinaAnilladora}
+                      opciones={cfg.disponibles.anilladoras}
+                    />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <SelectorMaquina
+                        label="Tapa frontal"
+                        value={tapaFrontal}
+                        setValue={setTapaFrontal}
+                        opciones={cfg.disponibles.tapas
+                          .filter((t) => t.esFrontal)
+                          .map((t) => ({
+                            id: t.materiaPrimaId,
+                            nombre: t.nombre,
+                          }))}
+                      />
+                      <SelectorMaquina
+                        label="Contratapa"
+                        value={tapaContratapa}
+                        setValue={setTapaContratapa}
+                        opciones={cfg.disponibles.tapas
+                          .filter((t) => !t.esFrontal)
+                          .map((t) => ({
+                            id: t.materiaPrimaId,
+                            nombre: t.nombre,
+                          }))}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              </fieldset>
+            </div>
+          </fieldset>
         </TabsContent>
 
         <TabsContent value="oferta" className="grid gap-4 pt-3">
-          {cfg.productoId ? (
-            <PreciosEspecialesClientesCard
-              productoId={cfg.productoId}
-              unidadComercial="hoja"
-              descripcion="Aplica la política particular del cliente sobre los costos calculados por el motor universal. Si no hay una regla activa, se usa la política general de Centro de Copiado."
-            />
-          ) : null}
-          <Card>
-            <CardHeader>
-              <CardTitle>Papeles y gramajes</CardTitle>
-              <CardDescription>
-                Elegí los papeles y gramajes, y qué formatos ofrecés para cada
-                uno.
-              </CardDescription>
-              <CardAction>
-                <Badge variant="outline">
-                  {papeles.size} de {cfg.disponibles.papeles.length}
-                </Badge>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <div className="flex flex-wrap gap-2">
-                <div className="relative min-w-56 flex-1">
-                  <Search className="absolute left-2.5 top-2 size-4 text-muted-foreground" />
-                  <Input
-                    className="pl-8"
-                    placeholder="Buscar papel…"
-                    value={busquedaPapel}
-                    onChange={(e) => setBusquedaPapel(e.target.value)}
-                  />
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    setPapeles(
-                      new Map(
-                        cfg.disponibles.papeles.map((p) => [
-                          p.materiaPrimaId,
-                          new Set(p.gramajes),
-                        ]),
+          <fieldset
+            disabled={!puedeGestionar || guardando}
+            className={s.editorFields}
+          >
+            <div className={s.panelIntro}>
+              <div>
+                <h2>Lo que ofrecés en copiado</h2>
+                <p className={s.help}>
+                  Habilitá los tamaños del taller y después elegí en qué papeles
+                  y gramajes los vendés.
+                </p>
+              </div>
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>1. Tamaños del taller</CardTitle>
+                <CardDescription>
+                  Desactivar un tamaño lo retira de todos los papeles. Guardá la
+                  oferta y actualizá las combinaciones de cada tarifario.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ToggleButtonGroup
+                  aria-label="Formatos generales"
+                  selectionMode="multiple"
+                  isDetached
+                  isDisabled={!puedeGestionar || guardando}
+                  className={s.generalFormats}
+                  selectedKeys={new Set(tamanos)}
+                  onSelectionChange={(keys) =>
+                    setTamanos(
+                      new Set(
+                        cfg.disponibles.formatos
+                          .filter((f) => keys.has(f.nombre))
+                          .map((f) => f.nombre),
                       ),
                     )
                   }
                 >
-                  Seleccionar todos
-                </Button>
-                <Button variant="ghost" onClick={() => setPapeles(new Map())}>
-                  Limpiar
-                </Button>
-              </div>
-              <div className="grid gap-2">
-                {papelesFiltrados.map((p) => {
-                  const gs = papeles.get(p.materiaPrimaId);
-                  return (
-                    <div
-                      key={p.materiaPrimaId}
-                      className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(200px,1fr)_2fr]"
+                  {cfg.disponibles.formatos.map((f) => (
+                    <ToggleButton
+                      id={f.nombre}
+                      key={f.nombre}
+                      className={cn(s.formatChoice, s.generalFormat)}
+                      aria-label={`Ofrecer ${f.nombre}`}
                     >
-                      <label className="flex cursor-pointer items-start gap-3">
-                        <Checkbox
-                          checked={!!gs}
-                          onCheckedChange={() =>
-                            togglePapel(p.materiaPrimaId, p.gramajes)
-                          }
-                        />
-                        <span>
-                          <span className="block font-medium">{p.nombre}</span>
-                          <span className="text-xs text-muted-foreground">
-                            Produce:{" "}
-                            {p.formatosProducibles.join(", ") ||
-                              "sin formato compatible"}
-                          </span>
-                        </span>
-                      </label>
-                      {gs ? (
-                        <div className="flex flex-wrap gap-2">
-                          {p.gramajes.map((g) => (
-                            <label
-                              key={g}
-                              className="flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-xs"
-                            >
-                              <Checkbox
-                                checked={gs.has(g)}
-                                onCheckedChange={() =>
-                                  toggleGramaje(p.materiaPrimaId, g)
-                                }
-                              />{" "}
-                              {g} g
-                            </label>
-                          ))}
-                        </div>
-                      ) : null}
-                      {gs ? (
-                        <div className="sm:col-span-2">
-                          <CentroCopiadoFormatosPapel
-                            disponibles={(
-                              p.formatosPorGramaje ??
-                              p.gramajes.map((gramaje) => ({
-                                gramaje,
-                                tamanos: p.formatosProducibles,
-                              }))
-                            ).filter((r) =>
-                              r.gramaje == null ? !gs.size : gs.has(r.gramaje),
-                            )}
-                            seleccion={
-                              formatosPorPapel[p.materiaPrimaId] ?? null
-                            }
-                            generales={tamanos}
-                            disabled={!puedeGestionar}
-                            onChange={(reglas) =>
-                              setFormatosPorPapel((prev) => ({
-                                ...prev,
-                                [p.materiaPrimaId]: reglas,
-                              }))
-                            }
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-          <div className="grid gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Formatos generales</CardTitle>
-                <CardDescription>
-                  Se combinan con la selección de cada papel y gramaje. Un
-                  formato deshabilitado aquí no se ofrece en ningún papel.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {cfg.disponibles.formatos.map((f) => (
-                  <label
-                    key={f.nombre}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border p-3"
-                  >
-                    <Checkbox
-                      checked={tamanos.has(f.nombre)}
-                      onCheckedChange={() => toggleSet(f.nombre, setTamanos)}
-                    />
-                    <span>
-                      <span className="block font-medium">{f.nombre}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {f.anchoMm} × {f.altoMm} mm
+                      <span>
+                        <strong>{f.nombre}</strong>
+                        <small>
+                          {f.anchoMm} × {f.altoMm} mm
+                        </small>
                       </span>
-                    </span>
-                  </label>
-                ))}
+                      <Check aria-hidden="true" />
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
               </CardContent>
             </Card>
-          </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>2. Papeles, gramajes y tamaños</CardTitle>
+                <CardDescription>
+                  Elegí los papeles y gramajes, y qué formatos ofrecés para cada
+                  uno.
+                </CardDescription>
+                <CardAction>
+                  <Badge variant="outline">
+                    {papeles.size} de {cfg.disponibles.papeles.length}
+                  </Badge>
+                </CardAction>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Search className="absolute left-2.5 top-2 size-4 text-muted-foreground" />
+                    <Input
+                      className="pl-8"
+                      aria-label="Buscar papel"
+                      placeholder="Buscar papel…"
+                      value={busquedaPapel}
+                      onChange={(e) => setBusquedaPapel(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    disabled={!puedeGestionar || guardando}
+                    onClick={() =>
+                      setPapeles(
+                        new Map(
+                          cfg.disponibles.papeles.map((p) => [
+                            p.materiaPrimaId,
+                            new Set(p.gramajes),
+                          ]),
+                        ),
+                      )
+                    }
+                  >
+                    Ofrecer todos
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={!puedeGestionar || guardando}
+                    onClick={() => setPapeles(new Map())}
+                  >
+                    Desactivar todos
+                  </Button>
+                </div>
+                <div className={s.paperList}>
+                  {papelesFiltrados.map((p) => {
+                    const gs = papeles.get(p.materiaPrimaId);
+                    return (
+                      <section
+                        key={p.materiaPrimaId}
+                        className={s.paper}
+                        data-active={!!gs}
+                      >
+                        <div className={s.paperHeading}>
+                          <div className={s.paperName}>
+                            <FileText aria-hidden="true" />
+                            <div>
+                              <strong>{p.nombre}</strong>
+                              <small>
+                                {gs
+                                  ? `${p.gramajes.length ? `${gs.size} gramajes` : "Sin gramaje"} · ${formatosPorPapel[p.materiaPrimaId] == null ? "Formatos generales" : "Formatos personalizados"}`
+                                  : "Fuera de la oferta"}
+                              </small>
+                            </div>
+                          </div>
+                          <Switch
+                            checked={!!gs}
+                            disabled={!puedeGestionar || guardando}
+                            onCheckedChange={() =>
+                              togglePapel(p.materiaPrimaId, p.gramajes)
+                            }
+                            aria-label={`Ofrecer ${p.nombre}`}
+                          />
+                        </div>
+                        {gs && (
+                          <details
+                            className={s.paperDetails}
+                            open={
+                              papelesFiltrados.length === 1 ? true : undefined
+                            }
+                          >
+                            <summary>Configurar gramajes y tamaños</summary>
+                            <div className={s.paperBody}>
+                              {!!p.gramajes.length && (
+                                <div>
+                                  <p className={s.sectionHeading}>
+                                    Gramajes que ofrecés
+                                  </p>
+                                  <ToggleButtonGroup
+                                    aria-label={`Gramajes de ${p.nombre}`}
+                                    selectionMode="multiple"
+                                    isDetached
+                                    isDisabled={!puedeGestionar || guardando}
+                                    className={s.gramajes}
+                                    selectedKeys={new Set([...gs].map(String))}
+                                    onSelectionChange={(keys) => {
+                                      const nuevos = new Set(
+                                        p.gramajes.filter((g) =>
+                                          keys.has(String(g)),
+                                        ),
+                                      );
+                                      setPapeles((prev) => {
+                                        const m = new Map(prev);
+                                        if (nuevos.size)
+                                          m.set(p.materiaPrimaId, nuevos);
+                                        else m.delete(p.materiaPrimaId);
+                                        return m;
+                                      });
+                                    }}
+                                  >
+                                    {p.gramajes.map((g) => (
+                                      <ToggleButton
+                                        id={String(g)}
+                                        key={g}
+                                        className={s.gramaje}
+                                        aria-label={`${g} g de ${p.nombre}`}
+                                      >
+                                        {g} g
+                                      </ToggleButton>
+                                    ))}
+                                  </ToggleButtonGroup>
+                                </div>
+                              )}
+                              <CentroCopiadoFormatosPapel
+                                disponibles={(
+                                  p.formatosPorGramaje ??
+                                  (p.gramajes.length ? p.gramajes : [null]).map(
+                                    (gramaje) => ({
+                                      gramaje,
+                                      tamanos: p.formatosProducibles,
+                                    }),
+                                  )
+                                ).filter((r) =>
+                                  r.gramaje == null
+                                    ? !gs.size
+                                    : gs.has(r.gramaje),
+                                )}
+                                seleccion={
+                                  formatosPorPapel[p.materiaPrimaId] ?? null
+                                }
+                                generales={tamanos}
+                                disabled={!puedeGestionar || guardando}
+                                onChange={(reglas) =>
+                                  setFormatosPorPapel((prev) => ({
+                                    ...prev,
+                                    [p.materiaPrimaId]: reglas,
+                                  }))
+                                }
+                              />
+                            </div>
+                          </details>
+                        )}
+                      </section>
+                    );
+                  })}
+                  {!papelesFiltrados.length && (
+                    <p className={s.help}>
+                      No hay papeles que coincidan con la búsqueda.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </fieldset>
         </TabsContent>
 
         <TabsContent
@@ -1575,34 +1667,18 @@ function SelectorMaquina({
   setValue: (value: string | null) => void;
   opciones: { id: string; nombre: string }[];
 }) {
-  const opcionSeleccionada = value
-    ? opciones.find((opcion) => opcion.id === value)
-    : null;
   return (
-    <Field>
-      <FieldLabel>{label}</FieldLabel>
-      <Select
-        value={value ?? AUTO}
-        onValueChange={(nuevo) => setValue(nuevo === AUTO ? null : nuevo)}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue>
-            {value
-              ? (opcionSeleccionada?.nombre ?? "Selección no disponible")
-              : "Automática"}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            <SelectItem value={AUTO}>Automática</SelectItem>
-            {opciones.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.nombre}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </Field>
+    <Elegir
+      etiqueta={label}
+      valor={value ?? AUTO}
+      opciones={[
+        { value: AUTO, label: "Selección automática" },
+        ...opciones.map((o) => ({ value: o.id, label: o.nombre })),
+        ...(value && !opciones.some((o) => o.id === value)
+          ? [{ value, label: "Selección no disponible" }]
+          : []),
+      ]}
+      onChange={(nuevo) => setValue(nuevo === AUTO ? null : nuevo)}
+    />
   );
 }

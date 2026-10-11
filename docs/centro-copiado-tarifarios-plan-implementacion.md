@@ -863,3 +863,41 @@ acotado de API y frontend sin diagnósticos, y ESLint de los archivos nuevos y l
 pantalla sin errores. El chequeo de API utiliza un proyecto temporal acotado
 para respetar la memoria local. API recargada y comprobada con base disponible;
 web conservada en el puerto de desarrollo. No se realizó build de producción.
+
+### 11 de octubre de 2026 — sincronización de combinaciones y revisión de UI/UX
+
+- El borrador detecta combinaciones de hojas que ya no pertenecen a la oferta
+  guardada. «Actualizar combinaciones» prepara una revisión con altas,
+  conservadas, bajas y precios afectados. Aplicar sólo cambia la edición local;
+  guardar persiste el borrador. No modifica publicaciones ni activa precios.
+- La conciliación mantiene precios exactos, ceros, orden y rangos propios de
+  las combinaciones conservadas; agrega pendientes y retira sólo las bajas.
+  También contempla catálogo CAD por material y ancho de rollo. Una oferta o
+  matriz modificada durante la revisión invalida la propuesta pendiente.
+- Oferta pasa a paneles por papel con búsqueda, selección visual de tamaños,
+  gramajes desplegables y elección explícita entre herencia y personalización.
+  El guardado de Oferta sigue accesible si se navega al tarifario con cambios.
+- General separa el costo de preparación del cargo comercial. El diagnóstico
+  queda desplegable; Reglas se organiza por finalidad; Versiones tiene su
+  pestaña; Canales explica la política heredada. Simulación filtra referencias
+  pendientes, con error o completas y descarta resultados de estructuras viejas.
+- Acciones y selectores reutilizan el sistema GRAFO; campos, paneles y diálogos
+  del módulo comparten tokens de marca. El resumen de precios usa FormDialog
+  con foco, Escape y devolución del foco al disparador. La revisión y autorización
+  del margen del pedido conservan sus permisos y comportamiento.
+- Verificación: 103 pruebas web en nueve suites, incluidas conciliación de
+  formatos/gramajes/CAD, precios y rangos conservados, cancelación, guardado,
+  permisos, invalidación de propuestas y filtros de simulación. Tipos limitados
+  a los archivos de este circuito y ESLint sin errores. CSS guard sin nuevas
+  clases globales; no se ejecutó una compilación de producción en la Mac.
+- Revisión visual en navegador de los componentes reales con API simulada y
+  datos ficticios: se guardó una baja A3/75 g, se revisaron y retiraron sus doce
+  combinaciones, y A4 conservó su precio. Se revisaron las seis secciones de
+  Configuración y los diálogos de precios/margen. A 390 px, Oferta y Matrices
+  no ensanchan la página; las tablas mantienen su propio scroll horizontal.
+- No hubo migraciones, seeds, cambios de datos reales ni despliegues. La prueba
+  visual no sustituye un recorrido autenticado completo de un pedido real.
+
+Recorrido de uso: **Oferta → Guardar cambios → Tarifarios → abrir borrador →
+Actualizar combinaciones → revisar → Aplicar actualización → Guardar borrador**.
+Después se pueden volver a simular los costos de la matriz actualizada.

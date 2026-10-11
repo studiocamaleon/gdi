@@ -1,12 +1,12 @@
 "use client";
+import { Button, DialogContent } from "./centro-copiado-ui";
 import { useRef, useState } from "react";
 import { nombreCanalVenta } from "@/lib/canales-venta";
 import { WandSparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,

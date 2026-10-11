@@ -1621,3 +1621,30 @@ los márgenes sin verificar. El costo por hoja, carilla o ML queda visible sin
 abrir el detalle. Tener un precio de venta pendiente no impide obtener el costo;
 sí impide verificar el margen. Con precio único se calculan tres referencias por
 celda, una por cobertura. No cambia ninguna decisión comercial confirmada.
+
+### Ajuste de uso: actualizar combinaciones y ordenar la configuración (11/10/2026)
+
+La oferta guardada es la fuente para actualizar las combinaciones de un borrador.
+«Actualizar combinaciones» muestra las altas, las combinaciones que se conservan
+y las bajas antes de aplicar el cambio. Indica qué filas se retiran y cuántos
+precios cargados contienen. Las filas conservadas mantienen exactamente sus
+precios y excepciones de rangos; las nuevas quedan pendientes. Desactivar un
+formato en un papel/gramaje no retira ese formato de los demás papeles.
+
+La actualización es explícita por tarifario. Primero se guarda Oferta; después
+se revisa y aplica la actualización y se guarda el borrador del tarifario. Si
+la oferta o la matriz cambia durante la revisión, hay que generar una revisión
+nueva. Las publicaciones inmutables y los presupuestos emitidos se conservan.
+CAD actualiza sus combinaciones desde el catálogo vigente de materiales y rollos.
+
+La configuración agrupa cada papel en un panel desplegable, con gramajes y
+formatos generales o personalizados. Los tamaños desactivados globalmente no
+pueden seleccionarse en un papel. General diferencia los costos de preparación
+del motor del cargo comercial del tarifario. Reglas agrupa precio/cobertura,
+margen, hojas y CAD; Versiones tiene una pestaña propia. Canales muestra qué
+política general hereda cada canal. La simulación permite filtrar pendientes,
+errores y costos completos sin confundirlos con el estado del margen.
+
+Los controles, superficies, diálogos y estados usan el sistema visual de GRAFO,
+incluida la revisión de precios del pedido. Estos ajustes no modifican las
+reglas comerciales confirmadas ni activan precios automáticamente.
