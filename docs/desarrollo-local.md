@@ -147,3 +147,45 @@ solicitud sin respuesta. Una pestaña anterior debe actualizarse antes de inicia
 un lote. Ni este cambio ni las pruebas locales verifican por sí solos la
 estabilidad de Redis en producción: ese incidente requiere correlacionar
 latencias, recursos y errores del entorno remoto.
+
+## Centro de copiado — entorno preparado el 10/10/2026
+
+La aplicación, API y workers de cálculos/entregas y PDF están ejecutándose desde
+el checkout principal, en `codex/centro-copiado-tarifarios`, revisión `55ecd2faa`.
+No se cambiaron ramas de otros worktrees ni se reinició Docker.
+
+- Web: `http://localhost:3000`; configuración en
+  `http://localhost:3000/configuracion/centro-copiado`.
+- API: `http://127.0.0.1:3001/api`, comprobada con `status: ok` y base disponible.
+- Se aplicaron las cuatro migraciones pendientes mediante `migrate deploy`:
+  `20261008210000_facturacion_lotes_durables`, `20261010120000_copiado_tarifarios`,
+  `20261010140000_copiado_politica_borrador` y
+  `20261011100000_copiado_pedidos_margenes`. La base local suma 315 migraciones.
+- Sin seeds, resets ni borrados. Los conteos de empresas, usuarios, productos,
+  cotizaciones y órdenes se mantuvieron iguales antes y después de migrar.
+  Prisma regenerado y permisos SELECT/INSERT/UPDATE/DELETE de `grafo_app`
+  comprobados sobre las seis tablas nuevas.
+- Se usaron exclusivamente las conexiones locales existentes. Cron y Meta
+  permanecen desactivados; correo transaccional y telemetría externa están
+  deshabilitados en estos procesos. Las acciones manuales de integraciones
+  conservan su configuración anterior: esta prueba no envió mensajes, cobró
+  ni facturó. Los archivos mantienen el almacenamiento de desarrollo existente.
+- Node 24, web con Webpack en modo desarrollo, API y workers con recarga de
+  código fuente. Concurrencia de cotización/geometría/PDF limitada a uno; no
+  se compiló una imagen de producción ni se modificó memoria de Docker.
+- Los procesos quedaron independientes de la terminal de arranque. Sus PID y
+  logs privados están en `.tmp/local-copiado/` (ignorada por Git). La carpeta
+  contiene el lanzador utilizado; no volver a ejecutarlo si el servicio ya está
+  activo. Los comandos del apartado «Arranque de desarrollo» siguen vigentes.
+
+La pantalla de ingreso respondió HTTP 200 y el endpoint de tarifarios HTTP 401
+sin sesión, como corresponde. API y ambos workers iniciaron sin errores. El
+navegador de comprobación no tenía sesión local: no se alteraron usuarios ni
+contraseñas para ingresar. La verificación funcional autenticada se realiza con
+el usuario local habitual.
+
+Recorrido inicial: Configuración → Centro de copiado → Tarifarios; crear y
+cargar la matriz, definir el margen y publicar. Luego asignar el tarifario en
+Canales y activar la asignación. En un pedido borrador, cargar los trabajos y
+usar «Actualizar precios de copiado» antes de emitir. No se activó ninguna
+política ni se cargaron precios de prueba en las empresas existentes.
