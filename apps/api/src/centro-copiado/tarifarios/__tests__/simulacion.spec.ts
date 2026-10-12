@@ -5,6 +5,7 @@ import { CentroCopiadoCadService } from '../../centro-copiado-cad.service';
 import { contenidoEjemplo } from './fixtures';
 import { compararSimulacion } from '../../comercial/comparacion-simulacion';
 import type { EscenarioSimulado } from '../simulacion-tarifario.types';
+import { referenciasRangoSimulacion } from '../referencias-rango-simulacion';
 import { estructuraSimulacion } from '../simulacion-tarifario.types';
 const contiene = (texto: string): unknown => expect.stringContaining(texto);
 const objeto = (valor: Record<string, unknown>): unknown =>
@@ -85,9 +86,11 @@ function entorno() {
   );
   const ejecutar = (
     celda = { seccion: 'hojas', fila: 0, tramo: 0 } as object,
+    analizarRango = false,
   ) =>
     service.simular('empresa-ficticia', 'tarifario-ficticio', {
       revision: 2,
+      analizarRango,
       celdas: [celda],
     });
   const agregarCad = () => {
@@ -546,4 +549,127 @@ it('el adaptador CAD lleva la cobertura al motor y conserva la geometría del pl
       }),
     }),
   );
+});
+
+it('compara los extremos inclusivos del tramo y reutiliza el inicio sin alterar la referencia comercial', async () => {
+  const e = entorno();
+  const r = (await e.ejecutar(undefined, true)).resultados[0];
+  expect(r.escenarios[0]).toMatchObject({
+    cantidadReferencia: '1',
+    costoTotal: '60',
+  });
+  expect(r.rangoCostos?.puntos.map((p) => p.cantidadObjetivo)).toEqual([
+    '1',
+    '99',
+  ]);
+  expect(r.rangoCostos?.puntos[1].escenarios[0]).toMatchObject({
+    cantidadReferencia: '99',
+    costoUnitario: '0.60606061',
+  });
+  expect(e.copiado.simularCostoHojas).toHaveBeenCalledTimes(6);
+});
+
+it('usa rangos propios y conserva un único volumen cuando el tramo sólo tiene una cantidad', async () => {
+  const e = entorno();
+  e.contenido.hojas!.filas[0].rangosPropios = [1, 2];
+  e.contenido.hojas!.filas[0].precios = [];
+  const r = (await e.ejecutar(undefined, true)).resultados[0];
+  expect(r.rangoCostos?.puntos.map((p) => p.cantidadObjetivo)).toEqual([
+    '1',
+    '1',
+  ]);
+  expect(e.copiado.simularCostoHojas).toHaveBeenCalledTimes(3);
+});
+
+it('el último tramo usa una muestra duplicada o un tope explícito, sin cambiar el tarifario', async () => {
+  const e = entorno();
+  const celda = { seccion: 'hojas', fila: 0, tramo: 1 };
+  const r = (await e.ejecutar(celda, true)).resultados[0];
+  expect(r.rangoCostos).toMatchObject({
+    abierto: true,
+    puntos: [{ cantidadObjetivo: '100' }, { cantidadObjetivo: '200' }],
+  });
+  const editado = (await e.ejecutar({ ...celda, hastaReferencia: '500' }, true))
+    .resultados[0];
+  expect(editado.rangoCostos?.puntos[1].cantidadObjetivo).toBe('500');
+  expect(e.contenido.hojas!.rangosGenerales).toEqual([1, 100]);
+  expect(
+    (await e.ejecutar({ ...celda, hastaReferencia: '50' }, true)).resultados[0]
+      .rangoCostos?.motivo,
+  ).toContain('dentro del tramo');
+});
+
+it('una referencia personalizada no reemplaza los extremos y los volúmenes dobles separados usan pares', async () => {
+  const e = entorno();
+  e.contenido.hojas!.reglas.unidad = 'CARILLA';
+  e.contenido.hojas!.reglas.ultimaHojaImpar = 'COBRAR_SIMPLE';
+  const r = (
+    await e.ejecutar(
+      { seccion: 'hojas', fila: 0, tramo: 0, cantidadReferencia: '20' },
+      true,
+    )
+  ).resultados[0];
+  expect(r.escenarios[0]).toMatchObject({ cantidadReferencia: '20' });
+  expect(r.rangoCostos?.puntos.map((p) => p.cantidadObjetivo)).toEqual([
+    '2',
+    '98',
+  ]);
+});
+
+it('conserva errores en un extremo sin inventar costos ni perder la referencia principal', async () => {
+  const e = entorno();
+  const anterior = e.copiado.simularCostoHojas.getMockImplementation()!;
+  for (let i = 0; i < 3; i++)
+    e.copiado.simularCostoHojas.mockImplementationOnce(anterior);
+  e.copiado.simularCostoHojas.mockRejectedValueOnce(
+    new BadRequestException('Falta material en el extremo.'),
+  );
+  const r = (await e.ejecutar(undefined, true)).resultados[0];
+  expect(r.escenarios.every((e) => e.estado === 'CALCULADO')).toBe(true);
+  expect(r.rangoCostos?.puntos[1].escenarios[0]).toMatchObject({
+    estado: 'ERROR',
+    motivo: 'Falta material en el extremo.',
+  });
+});
+
+it('CAD compara ML consumidos dentro del tramo; el redondeo de venta no cambia la muestra', async () => {
+  const e = entorno();
+  e.agregarCad();
+  e.contenido.cad!.reglas.redondeo = {
+    modalidad: 'HACIA_ARRIBA',
+    incrementoMl: '0.5',
+  };
+  const r = (await e.ejecutar({ seccion: 'cad', fila: 0, tramo: 0 }, true))
+    .resultados[0];
+  expect(r.rangoCostos?.puntos.map((p) => p.cantidadObjetivo)).toEqual([
+    '1',
+    '9.999',
+  ]);
+  expect(r.rangoCostos?.puntos[1].escenarios[0]).toMatchObject({
+    cantidadReferencia: '9.999',
+    cantidadFacturable: '10',
+  });
+});
+
+it('CAD con medidas conserva el plano y toma cantidades de copias enteras, no cambia el ancho o largo', async () => {
+  const e = entorno();
+  e.agregarCad();
+  const celda = {
+    seccion: 'cad' as const,
+    fila: 0,
+    tramo: 0,
+    geometriaCad: { anchoMm: 594, altoMm: 841, copias: 2 },
+  };
+  const r = (await e.ejecutar(celda, true)).resultados[0];
+  expect(r.rangoCostos?.puntos.map((p) => p.cantidadObjetivo)).toEqual([
+    '1.208',
+    '9.664',
+  ]);
+  expect(r.rangoCostos?.puntos[1].escenarios[0]).toMatchObject({
+    cantidadReferencia: '9.664',
+  });
+  expect(
+    referenciasRangoSimulacion(e.contenido, celda, r.escenarios).puntos[1].celda
+      .geometriaCad,
+  ).toEqual({ anchoMm: 594, altoMm: 841, copias: 16 });
 });

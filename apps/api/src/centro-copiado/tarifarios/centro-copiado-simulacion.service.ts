@@ -1,3 +1,4 @@
+import { referenciasRangoSimulacion } from './referencias-rango-simulacion';
 import { resolverIvaCopiado } from './iva-copiado';
 import {
   BadRequestException,
@@ -39,6 +40,7 @@ import type {
 
 const solicitud = z
   .object({
+    analizarRango: z.boolean().optional(),
     revision: z.number().int().positive().optional(),
     versionId: z.uuid().optional(),
     celdas: z
@@ -49,6 +51,10 @@ const solicitud = z
             fila: z.number().int().min(0).max(4999),
             tramo: z.number().int().min(0).max(99),
             cantidadReferencia: z
+              .string()
+              .regex(/^\d{1,16}(\.\d{1,12})?$/)
+              .optional(),
+            hastaReferencia: z
               .string()
               .regex(/^\d{1,16}(\.\d{1,12})?$/)
               .optional(),
@@ -136,52 +142,103 @@ export class CentroCopiadoSimulacionService {
         const coberturas = fila.combinacion.cobertura
           ? [fila.combinacion.cobertura]
           : CENTRO_COPIADO_COBERTURAS;
-        const escenarios: ResultadoCeldaSimulacion['escenarios'] = [];
-        for (const cobertura of coberturas) {
+        const calcular = async (referencia: CeldaSimulacion) => {
+          const escenarios: ResultadoCeldaSimulacion['escenarios'] = [];
+          for (const cobertura of coberturas) {
+            try {
+              const escenario = await this.escenario(
+                tenantId,
+                tarifarioId,
+                contenido,
+                referencia,
+                cobertura,
+              );
+              escenarios.push({
+                ...escenario,
+                decimalesPrecio:
+                  regional.redondeoPrecio === 'entero'
+                    ? 0
+                    : regional.moneda.decimales,
+              });
+            } catch (error) {
+              if (
+                !(error instanceof HttpException) &&
+                !(error instanceof ErrorCalculoComercial)
+              )
+                this.logger.error(
+                  'Falló un escenario de costos de Centro de copiado.',
+                  error instanceof Error ? error.stack : undefined,
+                );
+              escenarios.push({
+                cobertura,
+                calculadoEl: new Date().toISOString(),
+                estado: 'ERROR',
+                motivo:
+                  error instanceof HttpException ||
+                  error instanceof ErrorCalculoComercial
+                    ? error.message
+                    : 'No se pudo simular esta referencia. Revisá la configuración del motor y volvé a intentar.',
+              });
+            }
+          }
+          return escenarios;
+        };
+        const escenarios = await calcular(celda);
+        const resultado: ResultadoCeldaSimulacion = { celda, escenarios };
+        if (dto.analizarRango) {
           try {
-            const escenario = await this.escenario(
-              tenantId,
-              tarifarioId,
+            const plan = referenciasRangoSimulacion(
               contenido,
               celda,
-              cobertura,
+              escenarios,
             );
-            escenarios.push({
-              ...escenario,
-              decimalesPrecio:
-                regional.redondeoPrecio === 'entero'
-                  ? 0
-                  : regional.moneda.decimales,
-            });
-          } catch (error) {
-            if (
-              !(error instanceof HttpException) &&
-              !(error instanceof ErrorCalculoComercial)
-            )
-              this.logger.error(
-                'Falló un escenario de costos de Centro de copiado.',
-                error instanceof Error ? error.stack : undefined,
+            const puntos: NonNullable<
+              ResultadoCeldaSimulacion['rangoCostos']
+            >['puntos'] = [];
+            for (const punto of plan.puntos) {
+              const mismaGeometria =
+                JSON.stringify(punto.celda.geometriaCad) ===
+                JSON.stringify(celda.geometriaCad);
+              // Reutilizar la corrida principal y extremos coincidentes, nunca mezclar corridas previas.
+              const reutilizable =
+                mismaGeometria &&
+                escenarios.every(
+                  (e) =>
+                    e.estado === 'CALCULADO' &&
+                    new DecimalComercial(e.cantidadReferencia).eq(
+                      punto.cantidadObjetivo,
+                    ),
+                );
+              const previo = puntos.find(
+                (p) => p.cantidadObjetivo === punto.cantidadObjetivo,
               );
-            escenarios.push({
-              cobertura,
-              calculadoEl: new Date().toISOString(),
-              estado: 'ERROR',
+              puntos.push({
+                extremo: punto.extremo,
+                cantidadObjetivo: punto.cantidadObjetivo,
+                escenarios:
+                  previo?.escenarios ??
+                  (reutilizable ? escenarios : await calcular(punto.celda)),
+              });
+            }
+            resultado.rangoCostos = { abierto: plan.abierto, puntos };
+          } catch (error) {
+            resultado.rangoCostos = {
+              abierto: rangos?.[celda.tramo + 1] == null,
+              puntos: [],
               motivo:
-                error instanceof HttpException ||
-                error instanceof ErrorCalculoComercial
+                error instanceof Error
                   ? error.message
-                  : 'No se pudo simular esta referencia. Revisá la configuración del motor y volvé a intentar.',
-            });
+                  : 'No se pudo comparar el rango.',
+            };
           }
         }
-        resultados.push({ celda, escenarios });
+        resultados.push(resultado);
       }
       return { resultados };
     } finally {
       this.enCurso.delete(tenantId);
     }
   }
-
 
   private async escenario(
     tenantId: string,
@@ -410,7 +467,9 @@ export class CentroCopiadoSimulacionService {
         'La propuesta del motor incluye su mínimo comercial de origen. Revisala junto con el mínimo propio del tarifario.',
       );
     const alicuotas = await Promise.all(
-      cotizaciones.map((c) => resolverIvaCopiado(this.prisma, tenantId, c.productoId)),
+      cotizaciones.map((c) =>
+        resolverIvaCopiado(this.prisma, tenantId, c.productoId),
+      ),
     );
     if (new Set(alicuotas).size !== 1)
       throw new BadRequestException(

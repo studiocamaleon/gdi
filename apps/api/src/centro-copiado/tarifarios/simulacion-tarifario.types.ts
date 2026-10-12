@@ -7,10 +7,13 @@ export type CeldaSimulacion = {
   fila: number;
   tramo: number;
   cantidadReferencia?: string;
+  /** Tope inclusivo de la muestra del último tramo; no cambia su rango comercial. */
+  hastaReferencia?: string;
   perfilCadId?: string;
   geometriaCad?: { anchoMm: number; altoMm: number; copias: number };
 };
 export type SolicitudSimulacion = {
+  analizarRango?: boolean;
   revision?: number;
   versionId?: string;
   celdas: CeldaSimulacion[];
@@ -47,17 +50,27 @@ export type EscenarioSimulado = {
   }[];
   avisos: string[];
 };
+export type ResultadoEscenarioSimulacion =
+  | EscenarioSimulado
+  | {
+      cobertura: CentroCopiadoCobertura;
+      calculadoEl: string;
+      estado: 'ERROR';
+      motivo: string;
+    };
+export type RangoCostosSimulado = {
+  abierto: boolean;
+  puntos: {
+    extremo: 'INICIO' | 'FIN';
+    cantidadObjetivo: string;
+    escenarios: ResultadoEscenarioSimulacion[];
+  }[];
+  motivo?: string;
+};
 export type ResultadoCeldaSimulacion = {
   celda: CeldaSimulacion;
-  escenarios: (
-    | EscenarioSimulado
-    | {
-        cobertura: CentroCopiadoCobertura;
-        calculadoEl: string;
-        estado: 'ERROR';
-        motivo: string;
-      }
-  )[];
+  escenarios: ResultadoEscenarioSimulacion[];
+  rangoCostos?: RangoCostosSimulado;
 };
 
 /** Firma legible, estable ante edición de precios y composición comercial.
