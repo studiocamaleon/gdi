@@ -9,6 +9,7 @@ import {
   DialogContent,
   CardAction,
   EstadoCopiado,
+  AvisoCopiado,
 } from "./centro-copiado-ui";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ import {
   Palette,
   Contrast,
   Layers,
+  Info,
 } from "lucide-react";
 import { Tabs } from "@heroui/react";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
@@ -63,6 +65,8 @@ import {
   claveRango,
   leerRangos,
   preciosConRangos,
+  resumenVistasMatriz,
+  vistaInicialMatriz,
   type CambioPrecio,
   type FilaMatriz,
   type MatrizCad,
@@ -100,17 +104,32 @@ export function EditorMatriz({
     : matriz.reglas.unidad === "HOJA"
       ? "hoja"
       : "carilla";
-  const [color, setColor] = useState<"COLOR" | "BN">(
-    matriz.filas.some((f) => f.combinacion.color === "COLOR") ||
-      !matriz.filas.length
-      ? "COLOR"
-      : "BN",
+  const [vistaInicial] = useState(() => vistaInicialMatriz(matriz));
+  const [color, setColor] = useState(vistaInicial.color);
+  const [cobertura, setCobertura] = useState<string>(
+    vistaInicial.cobertura ?? "normal",
   );
-  const [cobertura, setCobertura] = useState("normal");
+  const vistas = resumenVistasMatriz(matriz);
+  const vistaConPrecios = vistas.find((v) => v.cargados > 0);
+  const totalCargados = vistas.reduce((n, v) => n + v.cargados, 0);
+  const resumenColor = (tipo: "COLOR" | "BN") => {
+    const grupo = vistas.filter((v) => v.color === tipo);
+    const count = grupo.reduce((n, v) => n + v.cargados, 0);
+    return {
+      count,
+      description: `${count} de ${grupo.reduce((n, v) => n + v.total, 0)} precios cargados`,
+    };
+  };
+  const nombresCobertura: Record<string, string> = {
+    borrador: "Borrador",
+    normal: "Normal",
+    alta: "Alta",
+  };
   const coberturaActiva =
     matriz.reglas.cobertura === "UNICA" ? null : cobertura;
   const [opciones, setOpciones] = useState<number[] | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const descripcionVista = `${color === "COLOR" ? "Color" : "Blanco y negro"} · ${matriz.reglas.cobertura === "UNICA" ? "todas las coberturas" : `cobertura ${nombresCobertura[cobertura]}`}${busqueda ? ` · búsqueda: «${busqueda}»` : ""}`;
   const [pagina, setPagina] = useState(0);
   const [rangos, setRangos] = useState<{
     fila: number | null;
@@ -318,6 +337,7 @@ export function EditorMatriz({
           motor={motor}
           seccion={cad ? "cad" : "hojas"}
           indices={indices}
+          descripcionVista={descripcionVista}
           disabled={disabled}
         >
           {(detalleCelda) => (
@@ -335,32 +355,42 @@ export function EditorMatriz({
                   tone="graphite"
                   label={cad ? "Impresión CAD" : "Tipo de impresión"}
                   items={[
-                    { id: "COLOR", label: "Color · CMYK", icon: <Palette /> },
+                    {
+                      id: "COLOR",
+                      label: "Color · CMYK",
+                      ...resumenColor("COLOR"),
+                      icon: <Palette />,
+                    },
                     {
                       id: "BN",
                       label: "Blanco y negro · K",
                       icon: <Contrast />,
+                      ...resumenColor("BN"),
                     },
                   ]}
                 />
                 <Tabs.Panel id={color} className="min-w-0 grid gap-4 pt-2">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     {matriz.reglas.cobertura === "DIFERENCIADA" ? (
-                      <SegmentedControl
-                        aria-label={
-                          cad ? "Cobertura CAD" : "Cobertura de impresión"
-                        }
-                        value={cobertura}
-                        options={[
-                          { value: "borrador", label: "Borrador", icon: null },
-                          { value: "normal", label: "Normal", icon: null },
-                          { value: "alta", label: "Alta", icon: null },
-                        ]}
-                        onChange={(v) => {
-                          setCobertura(v);
-                          setPagina(0);
-                        }}
-                      />
+                      <div className={styles.coverageSelector}>
+                        <SegmentedControl
+                          aria-label={
+                            cad ? "Cobertura CAD" : "Cobertura de impresión"
+                          }
+                          value={cobertura}
+                          options={vistas
+                            .filter((v) => v.color === color)
+                            .map((v) => ({
+                              value: v.cobertura!,
+                              label: `${nombresCobertura[v.cobertura!]} · ${v.cargados}/${v.total}`,
+                              icon: null,
+                            }))}
+                          onChange={(v) => {
+                            setCobertura(v);
+                            setPagina(0);
+                          }}
+                        />
+                      </div>
                     ) : (
                       <span className="text-sm text-muted-foreground">
                         Precio único para todas las coberturas
@@ -371,6 +401,28 @@ export function EditorMatriz({
                       esta vista
                     </EstadoCopiado>
                   </div>
+                  {!busqueda && cargados === 0 && vistaConPrecios && (
+                    <AvisoCopiado
+                      icono={<Info />}
+                      titulo="Esta vista no tiene precios cargados"
+                      accion={
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setColor(vistaConPrecios.color);
+                            setCobertura(vistaConPrecios.cobertura ?? "normal");
+                            setPagina(0);
+                          }}
+                        >
+                          Ver precios cargados
+                        </Button>
+                      }
+                    >
+                      Los {totalCargados} precios cargados de esta matriz están
+                      en otros tipos de impresión o coberturas. Cada grupo tiene
+                      precios independientes.
+                    </AvisoCopiado>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Precio por {unidad}, en la moneda del tarifario. Vacío =
                     pendiente; 0 = gratuito. Podés pegar desde Excel siguiendo

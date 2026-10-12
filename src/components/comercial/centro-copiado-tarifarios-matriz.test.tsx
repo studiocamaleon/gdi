@@ -99,7 +99,13 @@ async function click(texto: string) {
     ...document.querySelectorAll<HTMLElement>(
       'button, [role="tab"], [role="radio"]',
     ),
-  ].find((b) => b.textContent === texto)!;
+  ].find(
+    (b) =>
+      b.textContent === texto ||
+      b.getAttribute("aria-label") === texto ||
+      b.getAttribute("aria-label")?.startsWith(`${texto} `) ||
+      b.textContent?.startsWith(`${texto} · `),
+  )!;
   expect(b).toBeTruthy();
   await act(async () => b.click());
 }

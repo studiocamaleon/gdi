@@ -314,6 +314,48 @@ export function resumenCeldas(c: ContenidoTarifario) {
       }
   return { total, pendientes };
 }
+/** Cuenta sólo tramos vigentes; cero es un precio cargado. */
+export function resumenVistasMatriz(matriz: MatrizHojas | MatrizCad) {
+  const niveles = matriz.reglas.cobertura === "UNICA" ? [null] : coberturas;
+  return (["COLOR", "BN"] as const).flatMap((color) =>
+    niveles.map((cobertura) => {
+      const precios = matriz.filas
+        .filter(
+          (f) =>
+            f.combinacion.color === color &&
+            f.combinacion.cobertura === cobertura,
+        )
+        .flatMap((f) =>
+          preciosConRangos(f, f.rangosPropios ?? matriz.rangosGenerales),
+        );
+      return {
+        color,
+        cobertura,
+        total: precios.length,
+        cargados: precios.filter(
+          (p) => p.precioUnitario != null && p.precioUnitario.trim() !== "",
+        ).length,
+      };
+    }),
+  );
+}
+export function vistaInicialMatriz(matriz: MatrizHojas | MatrizCad) {
+  const vistas = resumenVistasMatriz(matriz);
+  const color =
+    matriz.filas.some((f) => f.combinacion.color === "COLOR") ||
+    !matriz.filas.length
+      ? "COLOR"
+      : "BN";
+  const habitual = vistas.find(
+    (v) =>
+      v.color === color &&
+      v.cobertura === (matriz.reglas.cobertura === "UNICA" ? null : "normal"),
+  )!;
+  // Sólo se usa al abrir: editar o vaciar un precio no debe cambiar de pestaña.
+  return habitual.cargados
+    ? habitual
+    : (vistas.find((v) => v.cargados > 0) ?? habitual);
+}
 export function fechaProgramada(
   texto: string,
   zona: string,

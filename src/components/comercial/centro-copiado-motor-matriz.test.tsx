@@ -180,7 +180,13 @@ async function click(texto: string) {
 async function opcion(texto: string) {
   const b = [
     ...el.querySelectorAll<HTMLElement>('[role="radio"],[role="tab"]'),
-  ].find((b) => b.textContent === texto);
+  ].find(
+    (b) =>
+      b.textContent === texto ||
+      b.getAttribute("aria-label") === texto ||
+      b.getAttribute("aria-label")?.startsWith(`${texto} `) ||
+      b.textContent?.startsWith(`${texto} · `),
+  );
   expect(b).toBeTruthy();
   await act(async () => b!.click());
 }

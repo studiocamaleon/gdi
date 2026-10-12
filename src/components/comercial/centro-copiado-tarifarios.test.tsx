@@ -164,8 +164,14 @@ async function escribir(input: HTMLInputElement, valor: string) {
 async function click(texto: string) {
   const b =
     boton(texto) ??
-    [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find(
-      (t) => t.textContent === texto,
+    [
+      ...document.querySelectorAll<HTMLElement>('[role="tab"], [role="radio"]'),
+    ].find(
+      (t) =>
+        t.textContent === texto ||
+        t.getAttribute("aria-label") === texto ||
+        t.getAttribute("aria-label")?.startsWith(`${texto} `) ||
+        t.textContent?.startsWith(`${texto} · `),
     );
   expect(b, `Botón ${texto}`).toBeTruthy();
   await act(async () => b.click());
@@ -295,6 +301,136 @@ it("publica la revisión guardada y recarga la revisión posterior", async () =>
     id,
     expect.objectContaining({ revision: 5 }),
   );
+});
+it("aplica sugerencias en Alta, guarda y publica; al reabrir muestra esos precios sin completar otras coberturas", async () => {
+  let guardado = borrador();
+  const m = guardado.contenido.hojas!;
+  m.reglas.cobertura = "DIFERENCIADA";
+  m.filas = filasOferta(configTarifarios, m).filter(
+    (f) =>
+      f.combinacion.tamano === "A4" &&
+      f.combinacion.gramaje === 80 &&
+      f.combinacion.faz === 1,
+  );
+  let publicada: api.VersionTarifario | null = null;
+  vi.mocked(api.obtenerTarifario).mockImplementation(async () =>
+    structuredClone(guardado),
+  );
+  vi.mocked(api.guardarTarifario).mockImplementation(async (_id, datos) => {
+    guardado = structuredClone({
+      ...guardado,
+      ...datos,
+      revision: guardado.revision + 1,
+    });
+    return structuredClone(guardado);
+  });
+  vi.mocked(api.publicarTarifario).mockImplementation(async () => {
+    publicada = {
+      id: "version-ficticia",
+      tarifarioId: id,
+      numero: 1,
+      revisionBorrador: guardado.revision,
+      nombre: guardado.nombre,
+      contenido: structuredClone(guardado.contenido),
+      tipoVigencia: "INMEDIATA",
+      vigenteDesde: "2026-10-12T12:00:00Z",
+      publicadoEl: "2026-10-12T12:00:00Z",
+    };
+    guardado = {
+      ...guardado,
+      revision: guardado.revision + 1,
+      ultimoNumero: 1,
+    };
+    return structuredClone(publicada);
+  });
+  vi.mocked(api.versionesTarifario).mockImplementation(async () =>
+    publicada ? [structuredClone(publicada)] : [],
+  );
+  vi.mocked(api.vigenteTarifario).mockImplementation(async () => ({
+    version: structuredClone(publicada),
+  }));
+  vi.mocked(api.simularCeldasTarifario).mockImplementation(
+    async (_id, solicitud) => ({
+      resultados: solicitud.celdas.map((celda) => {
+        const f = guardado.contenido.hojas!.filas[celda.fila];
+        const cantidad = String(
+          guardado.contenido.hojas!.rangosGenerales[celda.tramo],
+        );
+        return {
+          celda,
+          escenarios: [
+            {
+              estado: "CALCULADO",
+              cobertura: f.combinacion.cobertura!,
+              calculadoEl: "2026-10-12T12:00:00Z",
+              costoTotal: String(700 * Number(cantidad)),
+              costoUnitario: "700",
+              cantidadReferencia: cantidad,
+              cantidadFacturable: cantidad,
+              unidad: "HOJA",
+              referencia: "Pedido ficticio",
+              grupos: [
+                {
+                  fila: celda.fila,
+                  desdeCantidad: cantidad,
+                  cantidadFacturable: cantidad,
+                },
+              ],
+              ivaPorcentaje: "21",
+              decimalesPrecio: 2,
+              trazas: [],
+              avisos: [],
+              comercial: {
+                cargas: [],
+                ventaMotorNeta: null,
+                metodosMotor: [],
+                motivo: null,
+              },
+            },
+          ],
+        };
+      }),
+    }),
+  );
+  const valoresVisibles = () =>
+    [
+      ...el.querySelectorAll<HTMLInputElement>(
+        'input[placeholder="Pendiente"]',
+      ),
+    ].map((i) => i.value);
+  await abrir();
+  await click("Alta");
+  await click("Calcular precios con el motor");
+  expect(el.textContent).toContain(
+    "Sólo Color · cobertura Alta. 3 de 18 precios",
+  );
+  await click("Calcular 3 precios");
+  await click("Revisar 3 precios");
+  await click("Aplicar 3 precios al borrador");
+  const preciosAplicados = valoresVisibles();
+  expect(preciosAplicados).toHaveLength(3);
+  expect(preciosAplicados.every((v) => Number(v) > 0)).toBe(true);
+  await click("Guardar borrador");
+  await click("Publicar versión");
+  expect(document.body.textContent).toContain("15 precios pendientes");
+  await click("Confirmar publicación");
+  await act(async () => root.unmount());
+  root = createRoot(el);
+  await abrir();
+  expect(
+    el.querySelector(
+      '[role="tab"][aria-selected="true"][aria-label="Color · CMYK 3"]',
+    ),
+  ).not.toBeNull();
+  expect(valoresVisibles()).toEqual(preciosAplicados);
+  expect(el.textContent).toContain("Alta · 3/3");
+  await click("Normal");
+  expect(valoresVisibles()).toEqual(["", "", ""]);
+  expect(el.textContent).toContain("Esta vista no tiene precios cargados");
+  await click("Ver precios cargados");
+  expect(valoresVisibles()).toEqual(preciosAplicados);
+  expect(api.guardarTarifario).toHaveBeenCalledTimes(1);
+  expect(api.publicarTarifario).toHaveBeenCalledTimes(1);
 });
 it("si la publicación termina pero falla la lectura, bloquea otra escritura hasta recargar", async () => {
   await abrir();
@@ -440,7 +576,7 @@ it("el motor se abre dentro de matrices sin guardar ni simular automáticamente"
   await abrir();
   await click("Calcular precios con el motor");
   expect(
-    [...el.querySelectorAll('[role="tab"]')]
+    [...el.querySelectorAll('[role="tab"], [role="radio"]')]
       .find((t) => t.textContent === "Matrices")
       ?.getAttribute("aria-selected"),
   ).toBe("true");

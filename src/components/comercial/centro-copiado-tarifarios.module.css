@@ -546,6 +546,13 @@
   min-width: min(100%, 240px);
   flex: 1;
 }
+.coverageSelector {
+  min-width: 0;
+  max-width: 100%;
+}
+.coverageSelector [role="radiogroup"] {
+  flex-wrap: wrap;
+}
 @media (max-width: 540px) {
   .matrixSearch {
     flex-basis: 100%;

@@ -971,3 +971,23 @@ Después se pueden volver a simular los costos de la matriz actualizada.
   390 px: tres costos por celda, desglose de extremos, cambio de muestra de
   101–202 a 101–500 y página sin desbordamiento. Sin cambios de datos reales,
   migraciones ni despliegues; API y web locales conservan sus puertos.
+
+### 12 de octubre de 2026 — precios visibles al reabrir el tarifario
+
+- Se corrigió una entrada confusa: el editor abría siempre la cobertura Normal,
+  incluso cuando los precios guardados estaban en Alta u otro grupo. Ahora,
+  si la vista habitual está vacía, abre un grupo con precios cargados. La edición
+  posterior conserva la pestaña elegida y no cambia importes ni coberturas.
+- La navegación muestra precios cargados por color y cobertura. Una vista vacía
+  informa si existen precios en otros grupos y permite ir a ellos. Conserva los
+  controles GRAFO y adapta las coberturas al ancho disponible en móvil.
+- El asistente identifica explícitamente color, cobertura y búsqueda incluidos,
+  con cantidad seleccionada frente al total. «Toda la matriz» sigue siendo una
+  elección explícita; aplicar sugerencias no completa otros grupos por defecto.
+- Verificación: 63 pruebas en cuatro suites, incluido aplicar sugerencias en una
+  cobertura, guardar, publicar, desmontar y reabrir el editor con API ficticia.
+  Se comprueban también cero gratuito, rangos propios, tramos retirados y CAD.
+  TypeScript acotado a siete archivos, ESLint y CSS guard sin errores. Revisión
+  visual con datos ficticios en escritorio y a 390 px, sin desbordamiento de página.
+- La investigación de persistencia fue de sólo lectura. Sin cambios de datos
+  reales, migraciones, nuevas publicaciones de tarifarios ni despliegues.

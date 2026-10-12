@@ -46,12 +46,14 @@ export function MotorEnMatriz({
   motor,
   seccion,
   indices,
+  descripcionVista,
   disabled,
   children,
 }: {
   motor?: MotorTarifario | null;
   seccion: "hojas" | "cad";
   indices: number[];
+  descripcionVista: string;
   disabled: boolean;
   children: (detalle?: RenderDetalleCelda) => ReactNode;
 }) {
@@ -111,6 +113,11 @@ export function MotorEnMatriz({
     return mapa;
   }, [motor, normalizado, errorOpciones, abierto, seccion, redondeo, margen]);
   if (!motor) return children();
+  const totalMatriz = motor.celdas.filter((c) => c.seccion === seccion).length;
+  const descripcionAlcance =
+    alcance === "VISTA"
+      ? `Sólo ${descripcionVista}. ${celdas.length} de ${totalMatriz} precios de esta matriz, en todas sus páginas.`
+      : `Toda la matriz de ${seccion === "cad" ? "CAD" : "hojas"}: ${celdas.length} precios, con todos sus colores, coberturas y tamaños.`;
   const dinero = (v: string) =>
     new Intl.NumberFormat("es-AR", {
       style: "currency",
@@ -385,12 +392,7 @@ export function MotorEnMatriz({
                     { value: "MATRIZ", label: "Toda la matriz", icon: null },
                   ]}
                 />
-                <small>
-                  {celdas.length} precios ·{" "}
-                  {alcance === "VISTA"
-                    ? "color, cobertura y búsqueda actuales, en todas sus páginas"
-                    : "todos los colores, coberturas y tamaños de esta matriz"}
-                </small>
+                <small>{descripcionAlcance}</small>
               </div>
             </FieldGroup>
             <ErrorTarifa error={errorOpciones ?? errorAccion ?? motor.error} />
@@ -477,7 +479,7 @@ export function MotorEnMatriz({
                     </EstadoCopiado>
                     <p>
                       {revisionVigente
-                        ? "Compará actual y propuesto en las celdas marcadas. Podés recorrer colores y coberturas; el alcance elegido determina qué se aplica."
+                        ? `${descripcionAlcance} Compará actual y propuesto en las celdas marcadas. Aplicar completa únicamente los precios revisados de este alcance.`
                         : "Cambió un precio, la selección o el cálculo. Volvé a revisar antes de aplicar."}
                     </p>
                     {!!revision.caidas && (

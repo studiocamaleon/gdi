@@ -15,10 +15,61 @@ import {
   pegarPrecios,
   preciosConRangos,
   resumenCeldas,
+  resumenVistasMatriz,
+  vistaInicialMatriz,
   sumarFilas,
 } from "./centro-copiado-tarifarios-editor";
 import type { PerfilCadCopiado } from "./centro-copiado-cad";
 import { todasLasPaginas } from "./centro-copiado-tarifarios-api";
+
+it("abre el grupo con precios vigentes, incluyendo cero y rangos propios, en hojas y CAD", () => {
+  const hojas = contenidoInicial("ARS").hojas!;
+  hojas.reglas.cobertura = "DIFERENCIADA";
+  hojas.filas = filasOferta(config, hojas);
+  const alta = hojas.filas.find(
+    (f) =>
+      f.combinacion.color === "COLOR" && f.combinacion.cobertura === "alta",
+  )!;
+  alta.rangosPropios = [1, 25];
+  alta.precios = [
+    { desdeCantidad: 1, precioUnitario: "0" },
+    { desdeCantidad: 100, precioUnitario: "999" },
+  ];
+  expect(vistaInicialMatriz(hojas)).toMatchObject({
+    color: "COLOR",
+    cobertura: "alta",
+    cargados: 1,
+  });
+  expect(resumenVistasMatriz(hojas).reduce((n, v) => n + v.cargados, 0)).toBe(
+    1,
+  );
+  alta.precios[0].precioUnitario = null;
+  expect(vistaInicialMatriz(hojas)).toMatchObject({
+    color: "COLOR",
+    cobertura: "normal",
+    cargados: 0,
+  });
+
+  const cad = cadInicial("UNICA");
+  cad.filas = [
+    {
+      combinacion: {
+        papelMateriaPrimaId: "papel-ficticio",
+        gramaje: 80,
+        anchoRolloMm: 914,
+        color: "BN",
+        cobertura: null,
+      },
+      precios: [{ desdeCantidad: "0.00", precioUnitario: "125.12345678" }],
+    },
+  ];
+  expect(vistaInicialMatriz(cad)).toMatchObject({
+    color: "BN",
+    cobertura: null,
+    total: 3,
+    cargados: 1,
+  });
+});
 
 it("usa la oferta por papel y gramaje, la intersección de formatos y las dos caras", () => {
   const c = structuredClone(config);
