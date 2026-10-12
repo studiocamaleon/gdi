@@ -1,8 +1,10 @@
+import type { ReferenciaTanda } from "../../apps/api/src/common/tandas-copiado";
 import { apiRequest } from "./api";
 import type { PropuestaItem } from "./propuestas";
 import type { ResultadoPedidoCopiado } from "../../apps/api/src/centro-copiado/pedidos/calculo-pedido";
 type FinanzasCopiado = {
   costoTotal: number | null;
+  ejecucion?: Pick<PropuestaItem["cotizacion"], "costos" | "pasos">;
   cargas:
     | {
         tipo: "IMPUESTO_INTERNO" | "COMISION";
@@ -12,7 +14,7 @@ type FinanzasCopiado = {
     | null;
 };
 export type RevisionCopiado =
-  | { modalidad: "MOTOR" }
+  | { modalidad: "MOTOR"; items?: ItemRevisionCopiado[] }
   | {
       modalidad: "TARIFARIO";
       id: string | null;
@@ -30,16 +32,18 @@ export type RevisionCopiado =
             Partial<ResultadoPedidoCopiado["control"]>;
         }[];
       };
-      items: {
-        anteriorId: string;
-        id: string;
-        subtotal: number;
-        iva: number;
-        total: number;
-        descuentoMonto: number;
-        finanzas?: FinanzasCopiado;
-      }[];
+      items: ItemRevisionCopiado[];
     };
+export type ItemRevisionCopiado = {
+  tandaImpresion?: ReferenciaTanda | null;
+  anteriorId: string;
+  id: string;
+  subtotal: number;
+  iva: number;
+  total: number;
+  descuentoMonto: number;
+  finanzas?: FinanzasCopiado;
+};
 export const revisarPedidoCopiado = (datos: {
   items: string[];
   descuentos?: {
@@ -91,6 +95,7 @@ export function claveRevisionCopiado(
 export function ponerPrecioCopiado(
   item: PropuestaItem,
   p: {
+    tandaImpresion?: ReferenciaTanda | null;
     subtotal: number;
     iva: number;
     total: number;
@@ -120,6 +125,13 @@ export function ponerPrecioCopiado(
   return {
     ...item,
     cotizacionItemId,
+    jobContext: item.jobContext?._centroCopiado ? {
+      ...item.jobContext,
+      _centroCopiado: {
+        ...(item.jobContext?._centroCopiado as Record<string, unknown>),
+        tandaImpresion: p.tandaImpresion ?? null,
+      },
+    } : item.jobContext,
     subtotal: p.subtotal,
     impuestoMonto: p.iva,
     total: p.total,
@@ -127,10 +139,12 @@ export function ponerPrecioCopiado(
     impuestoPorcentaje: p.subtotal > 0 ? (p.iva / p.subtotal) * 100 : 0,
     cotizacion: {
       ...item.cotizacion,
+      ...(finanzas?.ejecucion ?? {}),
       ...(finanzas?.costoTotal != null && item.cotizacion?.costos
         ? {
             costos: {
               ...item.cotizacion.costos,
+              ...(finanzas?.ejecucion?.costos ?? {}),
               total: finanzas.costoTotal,
               unitario: finanzas.costoTotal / cantidadPricing,
             },

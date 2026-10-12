@@ -107,7 +107,13 @@ export function evaluarMargen(input: {
         !['AUTORIZACION', 'BLOQUEO'].includes(p.anteInsuficiente)
       )
         return vacio('La política de margen no es válida.');
-      const cumple = porcentaje != null && porcentaje.gte(minimo);
+      // El objetivo se compara en moneda, con la misma precisión que venta,
+      // costos y cargos. No exigir una fracción de centavo que no puede cobrarse.
+      const objetivo = neto.times(minimo).div(100);
+      const monedaExacta = utilidad.decimalPlaces() <= input.decimales;
+      const cumple = neto.gt(0) && utilidad.gte(0) && utilidad.gte(
+        monedaExacta ? objetivo.toDecimalPlaces(input.decimales) : objetivo,
+      );
       estado = cumple
         ? 'CUMPLE'
         : p.anteInsuficiente === 'BLOQUEO'

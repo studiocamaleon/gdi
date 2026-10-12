@@ -4,6 +4,7 @@ import { urlDeArchivo, type Archivo } from "./archivos";
 
 export type SegmentoTomoPdf = Omit<FuenteTomoPdf, "cargar"> & {
   archivoNombre?: string;
+  archivoBytes?: number;
   file?: File | null;
   origenItemIds?: string[];
 };
@@ -44,6 +45,8 @@ function fuentesDeTomo(segmentos: SegmentoTomoPdf[], signal?: AbortSignal) {
           `No se pudo identificar «${nombre}». Revisá los originales de este tomo.`,
         );
       const archivo = candidatos[0];
+      if (s.archivoBytes != null && s.archivoBytes !== archivo.bytes)
+        throw new Error(`El original «${nombre}» cambió. Volvé a cotizar la tanda.`);
       if (leidos + archivo.bytes > MAX_BYTES_TOMO)
         throw new Error(
           "Los originales superan los 100 MB. Dividilos en tomos más pequeños.",

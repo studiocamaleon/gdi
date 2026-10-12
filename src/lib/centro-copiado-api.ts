@@ -21,6 +21,7 @@ export type FazDoc = 1 | 2;
 export interface CentroCopiadoSegmentoMeta {
   nombre?: string | null;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
@@ -38,6 +39,7 @@ export interface CentroCopiadoSegmentoMeta {
 
 /** Contrato de rehidratación; `version` es opcional para cargas históricas. */
 export interface CentroCopiadoMeta {
+  tandaImpresion?: import("../../apps/api/src/common/tandas-copiado").ReferenciaTanda | null;
   copiasPorPagina?: CopiasPaginaCad[];
   modo?: "HOJAS" | "CAD";
   cad?: SeleccionCad;
@@ -55,6 +57,7 @@ export interface CentroCopiadoMeta {
   tipoAnillo?: string | null;
   nombre?: string | null;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas?: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
@@ -116,6 +119,7 @@ export interface DocumentoCentroCopiado {
   id: string;
   nombre?: string;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;

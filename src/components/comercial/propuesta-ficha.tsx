@@ -6648,9 +6648,7 @@ function PropuestaFichaContenido({
       }
       const nuevos = preparados.itemsConSnapshot.map((p) => {
         const precio =
-          resultado.modalidad === "TARIFARIO"
-            ? resultado.items.find((i) => i.anteriorId === p.cotizacionItemId)
-            : null;
+          resultado.items?.find((i) => i.anteriorId === p.cotizacionItemId);
         return precio
           ? ponerPrecioCopiado(p.item, precio, precio.id)
           : { ...p.item, cotizacionItemId: p.cotizacionItemId };

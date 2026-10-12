@@ -1,3 +1,9 @@
+import {
+  planificarTandasCopiado,
+  maquinaTanda,
+  type ReferenciaTanda,
+} from '../../common/tandas-copiado';
+import type { CotizacionResultado } from '../../motor-universal/tipos';
 import { validarMonedaDocumento } from '../../cotizaciones/validar-moneda-documento';
 import { resolverIvaCopiado } from '../tarifarios/iva-copiado';
 import { CentroCopiadoEmisionService } from './centro-copiado-emision.service';
@@ -354,8 +360,44 @@ export class CentroCopiadoPedidosService {
         configuracion: unknown;
       }
     >();
+    const solicitudes = new Map(
+      copiados.map((item) => [
+        item.id,
+        solicitudDesdeSnapshot(item, clienteId ?? null),
+      ]),
+    );
+    const tandas = new Map<string, ReferenciaTanda>();
+    const plan = planificarTandasCopiado(
+      copiados.flatMap((item) =>
+        solicitudes.get(item.id)!.documentos.map((documento) => ({
+          documento,
+          maquina: maquinaTanda(objeto(item.jobContextJson)),
+          contexto: canonico([
+            item.productoId,
+            objeto(objeto(item.snapshotJson).tipoCambio).id,
+          ]),
+        })),
+      ),
+    );
+    for (const tanda of plan) {
+      const id = randomUUID();
+      tanda.documentos.forEach((documentoId, n) =>
+        tandas.set(documentoId, {
+          version: 1,
+          id,
+          documentos: tanda.documentos.length,
+          paginas: tanda.paginas,
+          prepara: n === 0,
+        }),
+      );
+    }
+    const ejecuciones = new Map<
+      string,
+      Pick<CotizacionResultado, 'costos' | 'pasos'>
+    >();
+    const tandasPorItem = new Map<string, ReferenciaTanda>();
     for (const item of copiados) {
-      const solicitud = solicitudDesdeSnapshot(item, clienteId ?? null);
+      const solicitud = solicitudes.get(item.id)!;
       const construir = async () => {
         const completo = (
           await this.copiado.construirItems(tenantId, solicitud)
@@ -399,6 +441,7 @@ export class CentroCopiadoPedidosService {
         const documentos: LineaPedidoCopiado['documentos'] = [];
         let costo: InstanceType<typeof D> | null = new D(0);
         let anterior = '';
+        const impresiones: CotizacionResultado[] = [];
         for (const doc of solicitud.documentos) {
           const sinGrupo = {
             ...doc,
@@ -447,14 +490,18 @@ export class CentroCopiadoPedidosService {
                 {
                   clienteId: clienteId ?? undefined,
                   tipoCambioId: solicitud.tipoCambioId,
-                  preparar: !doc.grupoId || clave !== anterior,
+                  preparar:
+                    tandas.get(doc.id)?.prepara ??
+                    (!doc.grupoId || clave !== anterior),
                 },
               );
-              for (const parte of partes)
+              for (const parte of partes) {
+                impresiones.push(parte.cotizacion!);
                 costo =
                   costo === null
                     ? null
                     : costo.plus(parte.cotizacion!.costos.total);
+              }
             } catch {
               costo = null;
             }
@@ -475,6 +522,23 @@ export class CentroCopiadoPedidosService {
           throw new BadRequestException(
             'El motor no pudo separar el importe de las terminaciones. Revisá su configuración.',
           );
+        const tanda = tandas.get(solicitud.documentos[0].id);
+        if (tanda && costo && impresiones.length) {
+          // Estos son exactamente los pasos usados para obtener el costo, incluida
+          // la última cara impar. La ficha y producción no conservan setups viejos.
+          const costos = { ...impresiones[0].costos };
+          for (const k of Object.keys(costos) as (keyof typeof costos)[]) {
+            costos[k] = impresiones.reduce((s, c) => s + (c.costos[k] ?? 0), 0);
+          }
+          costos.unitario = costos.total / Number(item.cantidad);
+          ejecuciones.set(item.id, {
+            costos,
+            pasos: impresiones
+              .flatMap((c) => c.pasos)
+              .map((p, n) => ({ ...p, rutaPasoOrden: n })),
+          });
+          tandasPorItem.set(item.id, tanda);
+        }
         const descuentoPedido = descuentos.get(item.id);
         lineas.push({
           id: item.id,
@@ -509,7 +573,7 @@ export class CentroCopiadoPedidosService {
         );
       else await construir();
     }
-    return { lineas, referenciasMotor };
+    return { lineas, referenciasMotor, ejecuciones, tandasPorItem };
   }
 
   async revisar(auth: CurrentAuth, dto: RevisarPedidoCopiado) {
@@ -557,7 +621,7 @@ export class CentroCopiadoPedidosService {
         throw new ConflictException(
           'El canal utiliza el motor. Volvé a cotizar la carga de copiado para reemplazar los precios del tarifario anterior.',
         );
-      return { modalidad: 'MOTOR' as const };
+      return this.revisarTandasMotor(auth, dto, originales);
     }
     validarMonedaDocumento(originales);
     const copiados = originales
@@ -580,13 +644,14 @@ export class CentroCopiadoPedidosService {
       throw new BadRequestException(
         'Actualizá el tipo de cambio de todos los trabajos antes de revisar los precios.',
       );
-    const { lineas, referenciasMotor } = await this.prepararLineas(
-      auth.tenantId,
-      dto.clienteId,
-      copiados,
-      decimales,
-      descuentos,
-    );
+    const { lineas, referenciasMotor, ejecuciones, tandasPorItem } =
+      await this.prepararLineas(
+        auth.tenantId,
+        dto.clienteId,
+        copiados,
+        decimales,
+        descuentos,
+      );
     const calculado = calcularPedidoCopiado({
       referencia: seleccion.referencia,
       contenido: seleccion.version.contenido,
@@ -649,6 +714,8 @@ export class CentroCopiadoPedidosService {
           )?.precio;
           const linea = lineas.find((l) => l.id === original.id);
           const motor = referenciasMotor.get(original.id);
+          const ejecucion = ejecuciones.get(original.id);
+          const tanda = tandasPorItem.get(original.id);
           const { id: _id, createdAt: _c, updatedAt: _u, ...datos } = original;
           void _id;
           void _c;
@@ -681,12 +748,19 @@ export class CentroCopiadoPedidosService {
                       costo?.div(cantidad).toFixed(decimales) ?? null,
                   }
                 : {}),
-              jobContextJson: json(datos.jobContextJson),
+              jobContextJson: esCopiado(original) ? json({
+                ...objeto(datos.jobContextJson),
+                _centroCopiado: {
+                  ...objeto(objeto(datos.jobContextJson)._centroCopiado),
+                  tandaImpresion: tanda ?? null,
+                },
+              }) : json(datos.jobContextJson),
               snapshotJson: precio
                 ? json({
                     ...objeto(original.snapshotJson),
                     ejecucion: {
                       ...objeto(objeto(original.snapshotJson).ejecucion),
+                      ...(ejecucion ? { costos: ejecucion.costos } : {}),
                       cantidadComercialPricing: cantidad.toNumber(),
                       minimoComercialAplicado: null,
                     },
@@ -703,8 +777,12 @@ export class CentroCopiadoPedidosService {
                     },
                   })
                 : json(datos.snapshotJson),
-              trazabilidadJson:
-                datos.trazabilidadJson === null
+              trazabilidadJson: ejecucion
+                ? json({
+                    ...objeto(datos.trazabilidadJson),
+                    pasos: ejecucion.pasos,
+                  })
+                : datos.trazabilidadJson === null
                   ? Prisma.DbNull
                   : json(datos.trazabilidadJson),
               precioConfigSnapshotJson:
@@ -793,6 +871,115 @@ export class CentroCopiadoPedidosService {
     );
   }
 
+  /** En canales de motor se conserva el precio cotizado; el costo productivo
+   * se reconcilia contra la misma tanda que se entregará en Archivos. */
+  private async revisarTandasMotor(
+    auth: CurrentAuth,
+    dto: RevisarPedidoCopiado,
+    originales: CotizacionItem[],
+  ) {
+    const copiados = originales
+      .filter(esCopiado)
+      .sort((a, b) => a.id.localeCompare(b.id));
+    if (
+      !copiados.some(
+        (i) => objeto(objeto(i.jobContextJson)._centroCopiado).archivoBytes,
+      )
+    )
+      return { modalidad: 'MOTOR' as const };
+    validarMonedaDocumento(copiados);
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const decimales =
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    const { ejecuciones, tandasPorItem } = await this.prepararLineas(
+      auth.tenantId,
+      dto.clienteId,
+      copiados,
+      decimales,
+    );
+    if (!tandasPorItem.size) return { modalidad: 'MOTOR' as const };
+    return this.prisma.$transaction(
+      async (tx) => {
+        for (const id of [
+          ...new Set(copiados.map((i) => i.cotizacionId)),
+        ].sort())
+          await tx.$queryRaw`SELECT "id" FROM "Cotizacion" WHERE "tenantId" = ${auth.tenantId}::uuid AND "id" = ${id}::uuid FOR UPDATE`;
+        const actuales = await tx.cotizacionItem.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            id: { in: copiados.map((i) => i.id) },
+          },
+        });
+        if (firma(actuales) !== firma(copiados))
+          throw new ConflictException(
+            'Un trabajo cambió. Volvé a revisar los precios.',
+          );
+        const items: Record<string, unknown>[] = [];
+        for (const original of copiados) {
+          const ejecucion = ejecuciones.get(original.id),
+            tanda = tandasPorItem.get(original.id);
+          if (!ejecucion || !tanda) continue;
+          const { id, createdAt, updatedAt, ...datos } = original;
+          void createdAt;
+          void updatedAt;
+          const copia = await tx.cotizacionItem.create({
+            data: {
+              ...datos,
+              costoTotal: String(ejecucion.costos.total),
+              costoUnitario: String(ejecucion.costos.unitario),
+              jobContextJson: esCopiado(original) ? json({
+                ...objeto(datos.jobContextJson),
+                _centroCopiado: {
+                  ...objeto(objeto(datos.jobContextJson)._centroCopiado),
+                  tandaImpresion: tanda,
+                },
+              }),
+              snapshotJson: json({
+                ...objeto(datos.snapshotJson),
+                ejecucion: {
+                  ...objeto(objeto(datos.snapshotJson).ejecucion),
+                  costos: ejecucion.costos,
+                },
+              }),
+              trazabilidadJson: json({
+                ...objeto(datos.trazabilidadJson),
+                pasos: ejecucion.pasos,
+              }),
+              precioConfigSnapshotJson:
+                datos.precioConfigSnapshotJson ?? Prisma.DbNull,
+              impuestosSnapshotJson:
+                datos.impuestosSnapshotJson ?? Prisma.DbNull,
+              comisionesSnapshotJson:
+                datos.comisionesSnapshotJson ?? Prisma.DbNull,
+              precioEspecialClienteSnapshotJson:
+                datos.precioEspecialClienteSnapshotJson ?? Prisma.DbNull,
+            },
+          });
+          items.push({
+            anteriorId: id,
+            id: copia.id,
+            tandaImpresion: tanda,
+            subtotal: Number(copia.precioNetoTotal),
+            iva: Number(copia.impuestosPorFueraTotal),
+            total: Number(copia.precioTotal),
+            descuentoMonto: Number(copia.descuentoMonto ?? 0),
+            ...(auth.permisos?.has('finanzas.ver_margenes')
+              ? {
+                  finanzas: {
+                    costoTotal: Number(copia.costoTotal),
+                    ejecucion,
+                    cargas: null,
+                  },
+                }
+              : {}),
+          });
+        }
+        return { modalidad: 'MOTOR' as const, items };
+      },
+      { timeout: 15000 },
+    );
+  }
+
   private publicar(auth: CurrentAuth, respuesta: Record<string, unknown>) {
     if (auth.permisos?.has('finanzas.ver_margenes')) return respuesta;
     const c = respuesta.calculado as ResultadoPedidoCopiado;
@@ -839,6 +1026,9 @@ export class CentroCopiadoPedidosService {
         const i = items.find((i) => i.id === o.id)!;
         return {
           ...o,
+          tandaImpresion:
+            objeto(objeto(i.jobContextJson)._centroCopiado).tandaImpresion ??
+            null,
           subtotal: Number(i.precioNetoTotal),
           iva: Number(i.impuestosPorFueraTotal),
           total: Number(i.precioTotal),
@@ -848,6 +1038,13 @@ export class CentroCopiadoPedidosService {
                 finanzas: {
                   costoTotal:
                     i.costoTotal == null ? null : Number(i.costoTotal),
+                  ejecucion: objeto(objeto(i.jobContextJson)._centroCopiado)
+                    .tandaImpresion
+                    ? {
+                        costos: objeto(objeto(i.snapshotJson).ejecucion).costos,
+                        pasos: objeto(i.trazabilidadJson).pasos,
+                      }
+                    : undefined,
                   cargas: r.lineas.find((l) => l.id === i.id)?.cargas ?? null,
                 },
               }

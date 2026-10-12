@@ -69,6 +69,7 @@ export function solicitudDesdeSnapshot(
         [
           'nombre',
           'archivoNombre',
+          'archivoBytes',
           'paginas',
           'paginasOriginales',
           'rangoPaginas',

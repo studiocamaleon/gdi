@@ -22,6 +22,7 @@ export interface DocumentoInput {
   id: string;
   nombre?: string;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;

@@ -84,3 +84,56 @@ it('rechaza tomos excesivos antes de cargar los originales', async () => {
   ).rejects.toThrow('5.000');
   expect(cargar).not.toHaveBeenCalled();
 });
+
+it('una tanda incluye copias distintas, cada una completa y en frente, leyendo cada original una vez', async () => {
+  const a = await fuente('A', 3, { copias: 2 });
+  const b = await fuente('B', 2, {
+    copias: 3,
+    paginas: 1,
+    paginasOriginales: 2,
+    rangoPaginas: '2',
+  });
+  const cargarA = jest.fn(a.cargar),
+    cargarB = jest.fn(b.cargar);
+  const r = await unificarTomoPdf([
+    { ...a, cargar: cargarA },
+    { ...b, cargar: cargarB },
+  ]);
+  expect(r).toMatchObject({ paginas: 14, blancos: 5 });
+  const pages = (await PDFDocument.load(r.bytes)).getPages();
+  expect(
+    pages.map(
+      (p) => p.node.get(PDFName.of('PaginaOriginal'))?.toString() ?? null,
+    ),
+  ).toEqual([
+    '1',
+    '2',
+    '3',
+    null,
+    '1',
+    '2',
+    '3',
+    null,
+    '2',
+    null,
+    '2',
+    null,
+    '2',
+    null,
+  ]);
+  expect(cargarA).toHaveBeenCalledTimes(1);
+  expect(cargarB).toHaveBeenCalledTimes(1);
+});
+it('rechaza copias inválidas y el límite de salida antes de descargar', async () => {
+  const cargar = jest.fn();
+  for (const copias of [0, -1, 1.5, NaN])
+    await expect(
+      unificarTomoPdf([{ nombre: 'A', paginas: 1, faz: 1, copias, cargar }]),
+    ).rejects.toThrow('páginas');
+  await expect(
+    unificarTomoPdf([
+      { nombre: 'A', paginas: 3, faz: 2, copias: 1251, cargar },
+    ]),
+  ).rejects.toThrow('5.000');
+  expect(cargar).not.toHaveBeenCalled();
+});

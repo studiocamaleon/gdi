@@ -21,6 +21,7 @@ export function cargasParaPreviewCopiado(
       id: `${item.id}:${n}`,
       nombre: seg.nombre ?? undefined,
       archivoNombre: seg.archivoNombre,
+      archivoBytes: seg.archivoBytes,
       paginas: seg.paginas ?? 1,
       paginasOriginales: seg.paginasOriginales,
       rangoPaginas: seg.rangoPaginas,

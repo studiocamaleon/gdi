@@ -18,6 +18,7 @@ import {
 } from '../tarifarios/politica-precios';
 import { DecimalComercial as D } from '../comercial/validaciones';
 import {
+  objeto,
   calculoDe,
   canonico,
   esCopiado,
@@ -122,7 +123,26 @@ export class CentroCopiadoEmisionService {
       contexto.canalVenta,
       tx,
     );
-    if (activa.estado === 'MOTOR' && items.every((i) => !calculoDe(i))) return;
+    if (activa.estado === 'MOTOR' && items.every((i) => !calculoDe(i))) {
+      for (const item of items) {
+        const tanda = objeto(
+          objeto(objeto(item.jobContextJson)._centroCopiado).tandaImpresion,
+        );
+        if (
+          tanda.id &&
+          items.filter(
+            (i) =>
+              objeto(
+                objeto(objeto(i.jobContextJson)._centroCopiado).tandaImpresion,
+              ).id === tanda.id,
+          ).length !== tanda.documentos
+        )
+          throw new ConflictException(
+            'Cambió una tanda de impresión. Actualizá los costos de copiado antes de emitir.',
+          );
+      }
+      return;
+    }
     const calculos = [...new Set(items.map(calculoDe))];
     if (calculos.length !== 1 || !calculos[0])
       throw new ConflictException(

@@ -71,6 +71,9 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
             jobContext: {
               cantidad: Math.ceil(d.paginas / d.faz) * d.copias,
               caras: d.faz,
+              ...(d.archivoBytes
+                ? { maquinaSeleccionada_demo: 'laser-ficticia' }
+                : {}),
             },
             subtotal: 150,
             total: 181.5,
@@ -83,10 +86,36 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
           })),
         }),
     ),
-    simularCostoHojas: jest.fn(() =>
-      Promise.resolve([
-        { exitoso: true, cotizacion: { costos: { total: costo } } },
-      ]),
+    simularCostoHojas: jest.fn(
+      (_tenant: string, _doc: unknown, opciones?: { preparar?: boolean }) => {
+        const tiempo =
+          opciones?.preparar === false ? 0 : Math.max(0, costo - 10);
+        return Promise.resolve([
+          {
+            exitoso: true,
+            cotizacion: {
+              costos: {
+                total: tiempo + 10,
+                unitario: tiempo + 10,
+                materialesTotal: 10,
+                tiempoTotal: tiempo,
+              },
+              pasos: [
+                {
+                  rutaPasoOrden: 0,
+                  familiaCodigo: 'impresion_laser',
+                  costoTotal: tiempo + 10,
+                  tiempo: {
+                    setupMin: tiempo ? 3 : 0,
+                    totalMin: tiempo ? 4 : 1,
+                    costo: tiempo,
+                  },
+                },
+              ],
+            },
+          },
+        ]);
+      },
     ),
   };
   const pedidos = new CentroCopiadoPedidosService(
@@ -143,6 +172,25 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
           },
         },
         snapshotJson: { producto: { codigo: 'SYS-IMPRESION-DOC' } },
+      },
+    });
+  }
+  async function fuentePdf() {
+    const f = await fuente();
+    const job = f.jobContextJson as Record<string, unknown>;
+    return db.cotizacionItem.update({
+      where: { id: f.id },
+      data: {
+        jobContextJson: {
+          ...job,
+          maquinaSeleccionada_demo: 'laser-ficticia',
+          _centroCopiado: {
+            ...(job._centroCopiado as Record<string, string | number>),
+            archivoNombre: 'Prueba.pdf',
+            archivoBytes: 1000,
+            paginasOriginales: 2,
+          },
+        } as never,
       },
     });
   }
@@ -387,6 +435,25 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     expect((await revisar([i.id])).body).toEqual({ modalidad: 'MOTOR' });
     await emitir([i.id]);
   });
+  it('en motor comparte preparación, conserva precios y rechaza emitir una tanda incompleta', async () => {
+    const a = await fuentePdf(),
+      b = await fuentePdf();
+    const r = await revisar([a.id, b.id], 'responsable');
+    expect(r.status).toBe(201);
+    expect(r.body.modalidad).toBe('MOTOR');
+    expect(r.body.items.map((i: { total: number }) => i.total)).toEqual([
+      181.5, 181.5,
+    ]);
+    expect(
+      r.body.items.reduce(
+        (s: number, i: { finanzas: { costoTotal: number } }) =>
+          s + i.finanzas.costoTotal,
+        0,
+      ),
+    ).toBe(100);
+    await emitir(r.body.items.map((i: { id: string }) => i.id));
+    await expect(emitir([r.body.items[0].id])).rejects.toThrow('tanda');
+  });
   it('un lector no recalcula y una sesión no puede leer trabajos de otra empresa', async () => {
     const a = await fuente(),
       b = await fuente(tenants[1]);
@@ -450,6 +517,69 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
         where: { tenantId: tenants[0], tipo: 'PEDIDO_MARGEN_AUTORIZADO' },
       }),
     ).toBeGreaterThan(0);
+  });
+  it('dos PDF de cargas distintas usan una preparación: precio, margen, detalle y reapertura concuerdan', async () => {
+    await activar();
+    const a = await fuentePdf(),
+      b = await fuentePdf();
+    const r = await revisar([a.id, b.id], 'responsable');
+    expect(r.status).toBe(201);
+    expect(r.body.calculado.control).toMatchObject({
+      estado: 'CUMPLE',
+      porcentaje: '50.00',
+    });
+    expect(r.body.items.map((i: { total: number }) => i.total)).toEqual([
+      121, 121,
+    ]);
+    expect(
+      new Set(
+        r.body.items.map(
+          (i: { tandaImpresion: { id: string } }) => i.tandaImpresion.id,
+        ),
+      ).size,
+    ).toBe(1);
+    expect(
+      r.body.items.filter(
+        (i: { tandaImpresion: { prepara: boolean } }) =>
+          i.tandaImpresion.prepara,
+      ),
+    ).toHaveLength(1);
+    const guardados = await db.cotizacionItem.findMany({
+      where: { id: { in: r.body.items.map((i: { id: string }) => i.id) } },
+    });
+    expect(guardados.reduce((s, i) => s + Number(i.costoTotal), 0)).toBe(100);
+    expect(
+      guardados.reduce(
+        (s, i) =>
+          s +
+          Number(
+            (i.snapshotJson as { ejecucion: { costos: { total: number } } })
+              .ejecucion.costos.total,
+          ),
+        0,
+      ),
+    ).toBe(100);
+    expect(
+      guardados
+        .flatMap(
+          (i) =>
+            (
+              i.trazabilidadJson as {
+                pasos: { tiempo: { setupMin: number } }[];
+              }
+            ).pasos,
+        )
+        .reduce((s, p) => s + p.tiempo.setupMin, 0),
+    ).toBe(3);
+    await emitir(guardados.map((i) => i.id));
+    await expect(emitir([guardados[0].id])).rejects.toThrow(
+      'cálculo de copiado cambió',
+    );
+    const individual = await revisar([guardados[0].id], 'responsable');
+    expect(individual.body.items[0].finanzas.costoTotal).toBe(90);
+    expect(individual.body.calculado.control.estado).toBe(
+      'REQUIERE_AUTORIZACION',
+    );
   });
   it('recupera la revisión sin filtrar costos y registra descuentos explícitos antes del mínimo', async () => {
     await activar();

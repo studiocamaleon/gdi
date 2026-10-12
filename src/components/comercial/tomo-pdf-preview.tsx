@@ -10,10 +10,12 @@ export function TomoPdfPreview({
   nombre,
   segmentos,
   configuracionMixta = false,
+  tanda = false,
 }: {
   nombre: string;
   segmentos: SegmentoTomoPdf[];
   configuracionMixta?: boolean;
+  tanda?: boolean;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [resultado, setResultado] = useState<{
@@ -85,7 +87,8 @@ export function TomoPdfPreview({
         isDisabled={!segmentos.length || faltanPdf || carasMixtas}
         isPending={ocupado}
       >
-        <FileText data-icon="inline-start" /> Ver PDF del tomo
+        <FileText data-icon="inline-start" />{" "}
+        {tanda ? "Ver PDF de la tanda" : "Ver PDF del tomo"}
       </ActionButton>
       <span className={styles.ayuda}>
         {faltanPdf
@@ -98,7 +101,11 @@ export function TomoPdfPreview({
         isOpen={abierto}
         onOpenChange={setAbierto}
         title={nombre || "Tomo"}
-        description="PDF unificado de un juego. Indicá la cantidad de copias al imprimir."
+        description={
+          tanda
+            ? "Listo para imprimir una sola vez: incluye todas las copias y los reversos en blanco."
+            : "PDF unificado de un juego. Indicá la cantidad de copias al imprimir."
+        }
         className={styles.dialog}
       >
         {resultado ? (

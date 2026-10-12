@@ -98,6 +98,7 @@ type DocRow = TamanoFila & {
   id: string;
   nombre: string;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas: number;
   rangoPaginas: string;
   orientacionesPaginas?: OrientacionPagina[];
@@ -587,6 +588,7 @@ function CentroCopiadoContenido({
             id: nextId(),
             nombre: seg.nombre ?? "Documento",
             archivoNombre: seg.archivoNombre,
+            archivoBytes: seg.archivoBytes,
             paginas: Number(seg.paginasOriginales ?? seg.paginas) || 1,
             rangoPaginas: seg.rangoPaginas ?? "",
             orientacionesPaginas: seg.orientacionesPaginas,
@@ -623,6 +625,7 @@ function CentroCopiadoContenido({
           id: nextId(),
           nombre: meta.nombre ?? it.varianteNombre ?? "Documento",
           archivoNombre: meta.archivoNombre,
+          archivoBytes: meta.archivoBytes,
           paginas: Number(meta.paginasOriginales ?? meta.paginas) || 1,
           rangoPaginas: meta.rangoPaginas ?? "",
           orientacionesPaginas: meta.orientacionesPaginas,
@@ -724,6 +727,7 @@ function CentroCopiadoContenido({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
           archivoNombre: d.file?.name ?? d.archivoNombre,
+          archivoBytes: d.file?.size ?? d.archivoBytes,
           ...paginasParaCotizar(d),
           copias: d.copias,
           tamano: d.tamano,
@@ -1159,6 +1163,7 @@ function CentroCopiadoContenido({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
           archivoNombre: d.file?.name ?? d.archivoNombre,
+          archivoBytes: d.file?.size ?? d.archivoBytes,
           ...paginasParaCotizar(d),
           copias: d.copias,
           tamano: d.tamano,
