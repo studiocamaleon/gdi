@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { withSentryConfig } from "@sentry/nextjs/config";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
@@ -30,11 +30,29 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  org: "grafoprint",
-  project: "grafoprint-web",
-  telemetry: false,
-  silent: true,
-  // Primera etapa: sin publicar mapas ni código fuente a un tercero.
-  sourcemaps: { disable: true },
-});
+export default async function configurarNext(phase: string) {
+  if (phase === PHASE_DEVELOPMENT_SERVER) {
+    return {
+      ...nextConfig,
+      // Liberar rutas inactivas antes de que la compilación local alcance 2 GB.
+      onDemandEntries: { maxInactiveAge: 15_000, pagesBufferLength: 2 },
+      experimental: {
+        webpackMemoryOptimizations: true,
+        turbopackMemoryEviction: "full",
+        optimizePackageImports: ["@heroui/react", "react-aria-components"],
+      },
+    } satisfies NextConfig;
+  }
+
+  // La instrumentación automática de cada módulo se usa en las imágenes
+  // publicadas. En desarrollo conservamos los errores de Next y el SDK manual.
+  const { withSentryConfig } = await import("@sentry/nextjs/config");
+  return withSentryConfig(nextConfig, {
+    org: "grafoprint",
+    project: "grafoprint-web",
+    telemetry: false,
+    silent: true,
+    // Primera etapa: sin publicar mapas ni código fuente a un tercero.
+    sourcemaps: { disable: true },
+  });
+}

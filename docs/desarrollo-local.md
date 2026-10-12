@@ -36,8 +36,13 @@ Usar Node 24. Las dependencias ya están instaladas. Ejecutar cada proceso en un
 Web, desde la raíz:
 
 ```sh
-NODE_OPTIONS=--max-old-space-size=2048 API_URL=http://127.0.0.1:3001/api NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api npm run dev:webpack -- --hostname 127.0.0.1
+NODE_OPTIONS=--max-old-space-size=2048 API_URL=http://127.0.0.1:3001/api NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api npm run dev -- --hostname 127.0.0.1
 ```
+
+La web usa Turbopack y libera la memoria de su caché después de guardarla en
+el disco. Mantener el límite de Node en 2 GB: Webpack compilando la ficha de OT
+puede agotarlo y dejar el puerto 3000 sin servicio. `dev:webpack` queda disponible
+para diagnósticos puntuales, no como arranque habitual de esta Mac.
 
 Los siguientes comandos se ejecutan desde `apps/api`:
 
