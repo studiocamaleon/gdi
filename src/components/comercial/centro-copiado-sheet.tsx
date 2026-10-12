@@ -1,4 +1,6 @@
 "use client";
+
+import { cargasParaPreviewCopiado } from "@/lib/centro-copiado-contexto-pedido";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import type { SeleccionCad } from "../../../apps/api/src/common/seleccion-cad";
 
@@ -142,6 +144,9 @@ interface Props {
   onAgregar: (items: PropuestaItem[]) => void | boolean;
   /** Cliente de la propuesta; habilita su precio especial en el motor. */
   clienteId?: string | null;
+  canalVenta?: string;
+  tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
+  itemsPedido?: PropuestaItem[];
   /** Edición: la CARGA completa (todos los renglones que entraron juntos). */
   editItems?: PropuestaItem[] | null;
   persistedItemIds?: ReadonlySet<string>;
@@ -329,9 +334,16 @@ function CentroCopiadoContenido({
   onOpenChange,
   onAgregar,
   clienteId,
+  canalVenta,
+  tratamientoFiscal,
+  itemsPedido,
   editItems,
   persistedItemIds,
 }: Props) {
+  const cargasPedido = React.useMemo(
+    () => cargasParaPreviewCopiado(itemsPedido ?? [], editItems ?? []),
+    [itemsPedido, editItems],
+  );
   const conCopiado = useCapacidad("centro_copiado");
   const conCad = useCapacidad("cotizacion_cad");
   const conTerminaciones = useCapacidad("terminaciones_copiado");
@@ -680,6 +692,10 @@ function CentroCopiadoContenido({
     setPreviewError(null);
     setCotizando(false);
     if (!open) return;
+    if (canalVenta === "") {
+      setPreviewError("Elegí el canal de venta en la orden antes de cotizar.");
+      return;
+    }
     if (errorPlan) {
       setPreviewError(errorPlan);
       return;
@@ -701,6 +717,9 @@ function CentroCopiadoContenido({
     const handle = setTimeout(() => {
       void cotizarCentroCopiado({
         clienteId: clienteId || undefined,
+        canalVenta,
+        tratamientoFiscal,
+        cargasPedido,
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
@@ -744,7 +763,7 @@ function CentroCopiadoContenido({
         });
     }, 350);
     return () => clearTimeout(handle);
-  }, [open, docs, grupos, clienteId, cotizarCentroCopiado, errorPlan]);
+  }, [open, docs, grupos, clienteId, canalVenta, tratamientoFiscal, cargasPedido, cotizarCentroCopiado, errorPlan]);
 
   const agregarDocs = React.useCallback(
     (
@@ -1133,6 +1152,9 @@ function CentroCopiadoContenido({
     try {
       const r = await construirItemsCentroCopiado({
         clienteId: clienteId || undefined,
+        canalVenta,
+        tratamientoFiscal,
+        cargasPedido,
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
@@ -1231,6 +1253,9 @@ function CentroCopiadoContenido({
     grupos,
     errorPlan,
     clienteId,
+    canalVenta,
+    tratamientoFiscal,
+    cargasPedido,
     onAgregar,
     onOpenChange,
     construirItemsCentroCopiado,
@@ -2539,7 +2564,7 @@ function CentroCopiadoContenido({
           </div>
           <div className={s.totalBox}>
             <div className={s.totalFinal}>
-              <span>Referencia del motor c/IVA</span>
+              <span>Total c/IVA</span>
               <strong aria-live="polite">
                 {cotizando
                   ? "…"
@@ -2566,8 +2591,9 @@ function CentroCopiadoContenido({
               )}
             </div>
             <div className={s.totalNetoSub}>
-              En el borrador, el precio final se aplica al agregar la carga,
-              según el canal y el volumen de todo el pedido.
+              {preview?.tarifario
+                ? `Tarifario ${preview.tarifario.nombre} · versión ${preview.tarifario.numero}. Incluye el volumen de las otras cargas del pedido.`
+                : "Precio calculado según el canal seleccionado en la orden."}
             </div>
           </div>
           <ActionButton

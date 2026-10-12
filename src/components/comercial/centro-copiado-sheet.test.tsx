@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react";
+import { act, type ComponentProps, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
@@ -142,6 +142,7 @@ async function montar(
   funciones?: Record<string, boolean>,
   onAgregar: (items: PropuestaItem[]) => boolean = () => false,
   persistido = false,
+  contexto: Partial<ComponentProps<typeof CentroCopiadoSheet>> = {},
 ) {
   const item = itemConstruidoAPropuestaItem({
     documentoId: "item",
@@ -163,6 +164,7 @@ async function montar(
     root.render(
       <CapacidadesProvider capacidades={{ funciones }}>
         <CentroCopiadoSheet
+          {...contexto}
           open
           onOpenChange={() => {}}
           onAgregar={onAgregar}
@@ -926,4 +928,28 @@ it("deshace un tomo guardado con los juegos actuales y conserva el origen de cad
       rangoPaginas: "2",
     }),
   ]);
+});
+
+
+it("envía el canal y vuelve a cotizar al cambiarlo sin aceptar una respuesta anterior", async () => {
+  let resolverAnterior!: (value: typeof preview & { tarifario: { nombre: string; numero: number } }) => void;
+  mocks.cotizar.mockImplementationOnce(() => new Promise((resolve) => { resolverAnterior = resolve; }));
+  await montar(doc, undefined, () => false, false, { canalVenta: "mostrador", tratamientoFiscal: "SIN_COMPROBANTE" });
+  await avanzar();
+  expect(mocks.cotizar).toHaveBeenLastCalledWith(expect.objectContaining({ canalVenta: "mostrador", tratamientoFiscal: "SIN_COMPROBANTE" }));
+  await montar(doc, undefined, () => false, false, { canalVenta: "whatsapp", tratamientoFiscal: "FISCAL" });
+  await avanzar();
+  expect(mocks.cotizar).toHaveBeenLastCalledWith(expect.objectContaining({ canalVenta: "whatsapp", tratamientoFiscal: "FISCAL" }));
+  await act(async () => resolverAnterior({ ...preview, tarifario: { nombre: "Lista anterior", numero: 1 } }));
+  expect(el.textContent).not.toContain("Lista anterior");
+  await act(async () => guardar()!.click());
+  expect(mocks.construir).toHaveBeenLastCalledWith(expect.objectContaining({ canalVenta: "whatsapp" }));
+});
+
+it("sin canal seleccionado pide elegirlo y no presenta el precio del motor", async () => {
+  await montar(doc, undefined, () => false, false, { canalVenta: "" });
+  await avanzar();
+  expect(mocks.cotizar).not.toHaveBeenCalled();
+  expect(el.textContent).toContain("Elegí el canal de venta");
+  expect(Array.from(el.querySelectorAll("button")).find(b => b.textContent === "Corregí los errores")?.disabled).toBe(true);
 });

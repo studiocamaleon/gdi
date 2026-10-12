@@ -57,6 +57,18 @@ export function calcularPedidoCopiado(input: {
   const importes = new Map(
     lineas.map((l) => [l.id, new D(0) as InstanceType<typeof D> | null]),
   );
+  const importesDocumentos = new Map<string, InstanceType<typeof D>>();
+  const acumularDocumento = (
+    cargaId: string,
+    documentoId: string,
+    importe: string,
+  ) => {
+    const clave = JSON.stringify([cargaId, documentoId]);
+    importesDocumentos.set(
+      clave,
+      (importesDocumentos.get(clave) ?? new D(0)).plus(importe),
+    );
+  };
   const grupos: {
     unidad: string;
     cantidad: string;
@@ -102,6 +114,12 @@ export function calcularPedidoCopiado(input: {
       });
       for (const p of grupo.partes) {
         const anterior = importes.get(p.referencia.cargaId)!;
+        if (p.importeMatriz !== null)
+          acumularDocumento(
+            p.referencia.cargaId,
+            p.referencia.documentoId,
+            p.importeMatriz,
+          );
         importes.set(
           p.referencia.cargaId,
           anterior === null || p.importeMatriz === null
@@ -141,6 +159,12 @@ export function calcularPedidoCopiado(input: {
             : new D(grupo.importeMatriz)
                 .times(p.consumoMl)
                 .div(grupo.cantidadParaTramo);
+        if (valor !== null)
+          acumularDocumento(
+            p.referencia.cargaId,
+            p.referencia.documentoId,
+            valor.toString(),
+          );
         importes.set(
           p.referencia.cargaId,
           anterior === null || valor === null ? null : anterior.plus(valor),
@@ -297,6 +321,9 @@ export function calcularPedidoCopiado(input: {
       : [],
   );
   return {
+    importesDocumentos: Object.fromEntries(
+      [...importesDocumentos].map(([id, importe]) => [id, importe.toString()]),
+    ),
     estado: composicion.estado,
     grupos,
     composicion,

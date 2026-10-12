@@ -9015,6 +9015,9 @@ function PropuestaFichaContenido({
         />
         <CentroCopiadoSheet
           open={copiadoOpen && puedeModificarProductos}
+          canalVenta={canalVenta}
+          tratamientoFiscal={sinComprobante ? "SIN_COMPROBANTE" : "FISCAL"}
+          itemsPedido={items}
           clienteId={clienteId || null}
           editItems={copiadoEditItems}
           persistedItemIds={persistedItemIds}

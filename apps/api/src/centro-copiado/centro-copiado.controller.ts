@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { CentroCopiadoPedidosService } from './pedidos/centro-copiado-pedidos.service';
 import { CentroCopiadoService } from './centro-copiado.service';
 import {
   AgregarAOrdenCentroCopiadoDto,
@@ -33,6 +34,7 @@ export class CentroCopiadoController {
     private readonly capacidades: CapacidadesEmpresaService,
     private readonly saludCentroCopiado: CentroCopiadoSaludService,
     private readonly auditoriaCentroCopiado: CentroCopiadoAuditoriaService,
+    private readonly precios: CentroCopiadoPedidosService,
   ) {}
 
   private async tenantHabilitado(req: RequestWithAuth): Promise<string> {
@@ -84,7 +86,7 @@ export class CentroCopiadoController {
     @Req() req: RequestWithAuth,
   ) {
     const tenantId = await this.tenantHabilitado(req);
-    return this.centroCopiado.cotizar(tenantId, dto);
+    return this.precios.cotizarCarga(tenantId, dto);
   }
 
   /**
@@ -100,7 +102,7 @@ export class CentroCopiadoController {
     @Req() req: RequestWithAuth,
   ) {
     const tenantId = await this.tenantHabilitado(req);
-    return this.centroCopiado.construirItems(tenantId, dto);
+    return this.precios.construirCarga(tenantId, dto);
   }
 
   /**

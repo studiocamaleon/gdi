@@ -17,6 +17,11 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { regionalDelTenant } from '../../common/regional';
+import type {
+  CotizarCentroCopiadoDto,
+  AgregarAOrdenCentroCopiadoDto,
+} from '../dto/cotizar-centro-copiado.dto';
+import type { ItemConstruido } from '../centro-copiado.service';
 import { CentroCopiadoService } from '../centro-copiado.service';
 import { CentroCopiadoCadService } from '../centro-copiado-cad.service';
 import { CentroCopiadoPoliticaService } from '../tarifarios/centro-copiado-politica.service';
@@ -26,6 +31,7 @@ import { referenciaComercialMotor } from '../tarifarios/referencia-comercial-mot
 import { DecimalComercial as D } from '../comercial/validaciones';
 import {
   calcularPedidoCopiado,
+  repartir,
   type LineaPedidoCopiado,
   type ResultadoPedidoCopiado,
 } from './calculo-pedido';
@@ -72,6 +78,17 @@ export type ResultadoGuardado = ResultadoPedidoCopiado & {
   nombre: string;
   numero: number;
 };
+type ItemCalculoCopiado = Pick<
+  CotizacionItem,
+  | 'id'
+  | 'productoId'
+  | 'cantidad'
+  | 'snapshotJson'
+  | 'jobContextJson'
+  | 'descuentoTipo'
+  | 'descuentoValor'
+>;
+
 const json = (v: unknown) =>
   JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 const firma = (items: CotizacionItem[]) =>
@@ -89,63 +106,245 @@ export class CentroCopiadoPedidosService {
     private readonly emision: CentroCopiadoEmisionService,
   ) {}
 
-  async revisar(auth: CurrentAuth, dto: RevisarPedidoCopiado) {
+  /** Cotización comercial sin guardar cotizaciones ni revisiones en la base. */
+  async cotizarCarga(tenantId: string, dto: CotizarCentroCopiadoDto) {
+    const preview = await this.copiado.cotizar(tenantId, dto);
+    if (!dto.canalVenta || !dto.documentos.length) return preview;
+    const comercial = await this.calcularCarga(tenantId, dto);
+    if (!comercial) return preview;
+    const { calculado, decimales, items, nombre, numero } = comercial;
+    for (const item of items) {
+      const precio = calculado.precios.find(
+        (p) => p.id === item.documentoId,
+      )?.precio;
+      const miembros = dto.documentos.filter((d) =>
+        item.grupoTomoId
+          ? d.grupoId === item.grupoTomoId
+          : d.id === item.documentoId,
+      );
+      const filas = miembros.map(
+        (d) => preview.documentos.find((p) => p.id === d.id)!,
+      );
+      const grupo = item.grupoTomoId
+        ? preview.grupos.find((g) => g.id === item.grupoTomoId)
+        : null;
+      if (!precio) {
+        for (const fila of filas) {
+          fila.error =
+            'Esta combinación no tiene precio en el tarifario del canal. Revisá tamaño, papel, color, cobertura y faz.';
+          fila.subtotal = fila.iva = fila.total = 0;
+        }
+        if (grupo) {
+          grupo.error = filas[0]?.error ?? 'Falta un precio en el tarifario.';
+          grupo.subtotal = grupo.iva = grupo.total = 0;
+        }
+        continue;
+      }
+      // Un tomo conserva el precio exacto del renglón; sus segmentos reparten
+      // impresión y preparación según lo que aporta cada uno a la matriz.
+      const pesos = miembros.map(
+        (_, n) =>
+          calculado.importesDocumentos[
+            JSON.stringify([item.documentoId, `${item.documentoId}:${n}`])
+          ] ?? '0',
+      );
+      const netos = repartir(precio.impresionNeto, pesos, decimales);
+      const ivas = repartir(
+        new D(precio.impresionTotal).minus(precio.impresionNeto).toString(),
+        pesos,
+        decimales,
+      );
+      filas.forEach((fila, n) => {
+        fila.subtotal = Number(netos[n]);
+        fila.iva = Number(ivas[n]);
+        fila.total = new D(netos[n]).plus(ivas[n]).toNumber();
+        if (!grupo && fila.anillado) {
+          Object.assign(fila.anillado, {
+            subtotal: Number(precio.terminaciones.neto),
+            iva: Number(precio.terminaciones.iva),
+            total: Number(precio.terminaciones.total),
+          });
+          fila.subtotal = Number(precio.neto);
+          fila.iva = Number(precio.iva);
+          fila.total = Number(precio.total);
+        }
+      });
+      if (grupo) {
+        Object.assign(grupo, {
+          subtotal: Number(precio.neto),
+          iva: Number(precio.iva),
+          total: Number(precio.total),
+        });
+        if (grupo.anillado)
+          Object.assign(grupo.anillado, {
+            subtotal: Number(precio.terminaciones.neto),
+            iva: Number(precio.terminaciones.iva),
+            total: Number(precio.terminaciones.total),
+          });
+      }
+    }
+    const filas = [
+      ...preview.documentos.filter((d) => !d.grupoId),
+      ...preview.grupos,
+    ];
+    for (const campo of ['subtotal', 'iva', 'total'] as const)
+      preview.totales[campo] = filas
+        .reduce((sum, fila) => sum.plus(fila[campo]), new D(0))
+        .toNumber();
+    return { ...preview, tarifario: { nombre, numero } };
+  }
+
+  async construirCarga(tenantId: string, dto: AgregarAOrdenCentroCopiadoDto) {
+    const construidos = await this.copiado.construirItems(tenantId, dto);
+    if (!dto.canalVenta || !dto.documentos.length) return construidos;
+    const comercial = await this.calcularCarga(
+      tenantId,
+      dto,
+      construidos.items,
+    );
+    if (!comercial) return construidos;
+    for (const item of construidos.items) {
+      const precio = comercial.calculado.precios.find(
+        (p) => p.id === item.documentoId,
+      )?.precio;
+      if (!precio) {
+        item.error =
+          'Esta combinación no tiene precio en el tarifario del canal.';
+        continue;
+      }
+      item.subtotal = Number(precio.neto);
+      item.impuestoMonto = Number(precio.iva);
+      item.total = Number(precio.total);
+      item.precioUnitario = new D(precio.neto).div(item.cantidad).toNumber();
+    }
+    return construidos;
+  }
+
+  private async calcularCarga(
+    tenantId: string,
+    dto: CotizarCentroCopiadoDto,
+    actuales?: ItemConstruido[],
+  ) {
     const seleccion = await this.politica.resolverActiva(
-      auth.tenantId,
-      dto.canalVenta,
+      tenantId,
+      dto.canalVenta!,
     );
     if (seleccion.estado === 'PENDIENTE')
       throw new ConflictException(
         'El canal no tiene un tarifario vigente disponible. Revisá Configuración.',
       );
-    const descuentos = new Map(
-      (dto.descuentos ?? []).map((d) => [d.cotizacionItemId, d]),
-    );
+    if (seleccion.estado === 'MOTOR') return null;
+    const items =
+      actuales ?? (await this.copiado.construirItems(tenantId, dto)).items;
     if (
-      descuentos.size !== (dto.descuentos?.length ?? 0) ||
-      [...descuentos.values()].some(
-        (d) =>
-          !dto.items.includes(d.cotizacionItemId) ||
-          (d.tipo === 'PORCENTAJE' && d.valor > 100),
-      )
+      dto.documentos.length +
+        (dto.cargasPedido ?? []).reduce(
+          (sum, carga) => sum + carga.documentos.length,
+          0,
+        ) >
+      100
     )
       throw new BadRequestException(
-        'Revisá el alcance y el porcentaje de los descuentos.',
+        'La vista previa admite hasta 100 documentos en el pedido.',
       );
-    const originales = await this.prisma.cotizacionItem.findMany({
-      where: { tenantId: auth.tenantId, id: { in: dto.items } },
-    });
-    if (
-      originales.length !== dto.items.length ||
-      new Set(dto.items).size !== dto.items.length
-    )
-      throw new NotFoundException(
-        'Algún trabajo no existe o no pertenece a esta empresa.',
+    const cambios = new Set(
+      [
+        dto.tipoCambioId,
+        ...(dto.cargasPedido ?? []).map((c) => c.tipoCambioId),
+      ].filter(Boolean),
+    );
+    if (cambios.size > 1)
+      throw new BadRequestException(
+        'Actualizá el tipo de cambio de todos los trabajos antes de cotizar.',
       );
-    if (
-      dto.clienteId &&
-      !(await this.prisma.cliente.count({
-        where: { tenantId: auth.tenantId, id: dto.clienteId, activo: true },
-      }))
-    )
-      throw new NotFoundException('No se encontró el cliente.');
-    if (seleccion.estado === 'MOTOR') {
-      if (originales.some(calculoDe))
-        throw new ConflictException(
-          'El canal utiliza el motor. Volvé a cotizar la carga de copiado para reemplazar los precios del tarifario anterior.',
-        );
-      return { modalidad: 'MOTOR' as const };
+    const descuentos = new Map<
+      string,
+      NonNullable<RevisarPedidoCopiado['descuentos']>[number]
+    >();
+    const restantes: ItemConstruido[] = [];
+    for (const [n, carga] of (dto.cargasPedido ?? []).entries()) {
+      const prefijo = `pedido-${n}:`;
+      const construida = await this.copiado.construirItems(tenantId, {
+        ...carga,
+        clienteId: dto.clienteId,
+        tipoCambioId: dto.tipoCambioId,
+        documentos: carga.documentos.map((d) => ({
+          ...d,
+          id: prefijo + d.id,
+          grupoId: d.grupoId ? prefijo + d.grupoId : undefined,
+        })),
+        grupos: carga.grupos?.map((g) => ({ ...g, id: prefijo + g.id })),
+      });
+      if (carga.descuento) {
+        if (
+          carga.descuento.tipo === 'PORCENTAJE' &&
+          carga.descuento.valor > 100
+        )
+          throw new BadRequestException(
+            'El descuento no puede superar el 100%.',
+          );
+        for (const item of construida.items)
+          descuentos.set(item.documentoId, {
+            cotizacionItemId: item.documentoId,
+            ...carga.descuento,
+          });
+      }
+      restantes.push(...construida.items);
     }
-    validarMonedaDocumento(originales);
-    const copiados = originales
-      .filter(esCopiado)
-      .sort((a, b) => a.id.localeCompare(b.id));
-    if (!copiados.length) return { modalidad: 'MOTOR' as const };
-    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const fuentes: ItemCalculoCopiado[] = [...items, ...restantes].map(
+      (item) => {
+        if (item.error || !item.cotizacion)
+          throw new BadRequestException(
+            item.error ?? 'No se pudo cotizar la carga.',
+          );
+        return {
+          id: item.documentoId,
+          productoId: item.productoId,
+          cantidad: new Prisma.Decimal(item.cantidad),
+          jobContextJson: json(item.jobContext) as Prisma.JsonObject,
+          snapshotJson: json(item.cotizacion) as Prisma.JsonObject,
+          descuentoTipo: null,
+          descuentoValor: null,
+        };
+      },
+    );
+    const regional = await regionalDelTenant(this.prisma, tenantId);
     const decimales =
       regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    const { lineas } = await this.prepararLineas(
+      tenantId,
+      dto.clienteId,
+      fuentes,
+      decimales,
+      descuentos,
+    );
+    const calculado = calcularPedidoCopiado({
+      referencia: seleccion.referencia,
+      contenido: seleccion.version.contenido,
+      lineas,
+      decimales,
+      tratamientoFiscal: dto.tratamientoFiscal ?? 'FISCAL',
+    });
+    return {
+      calculado,
+      decimales,
+      items,
+      nombre: seleccion.version.nombre,
+      numero: seleccion.version.numero,
+    };
+  }
+
+  private async prepararLineas(
+    tenantId: string,
+    clienteId: string | null | undefined,
+    copiados: ItemCalculoCopiado[],
+    decimales: number,
+    descuentos = new Map<
+      string,
+      NonNullable<RevisarPedidoCopiado['descuentos']>[number]
+    >(),
+  ) {
     const lineas: LineaPedidoCopiado[] = [];
-    const firmaOriginal = firma(originales);
     const referenciasMotor = new Map<
       string,
       {
@@ -155,23 +354,11 @@ export class CentroCopiadoPedidosService {
         configuracion: unknown;
       }
     >();
-    // Cada carga conserva el cambio ya revisado; nunca mezclar monedas o FX.
-    const cambios = [
-      ...new Set(
-        copiados.map(
-          (i) => objeto(objeto(i.snapshotJson).tipoCambio).id ?? null,
-        ),
-      ),
-    ];
-    if (cambios.length > 1)
-      throw new BadRequestException(
-        'Actualizá el tipo de cambio de todos los trabajos antes de revisar los precios.',
-      );
     for (const item of copiados) {
-      const solicitud = solicitudDesdeSnapshot(item, dto.clienteId ?? null);
+      const solicitud = solicitudDesdeSnapshot(item, clienteId ?? null);
       const construir = async () => {
         const completo = (
-          await this.copiado.construirItems(auth.tenantId, solicitud)
+          await this.copiado.construirItems(tenantId, solicitud)
         ).items[0];
         if (!completo || completo.error || !completo.cotizacion)
           throw new BadRequestException(
@@ -184,7 +371,7 @@ export class CentroCopiadoPedidosService {
         const base = tieneTerminaciones
           ? (
               await this.copiado.construirItems(
-                auth.tenantId,
+                tenantId,
                 sinTerminaciones(solicitud),
               )
             ).items[0]
@@ -199,7 +386,7 @@ export class CentroCopiadoPedidosService {
           throw new BadRequestException('Falta el desglose fiscal del motor.');
         const iva = await resolverIvaCopiado(
           this.prisma,
-          auth.tenantId,
+          tenantId,
           completo.productoId,
         );
         const referencia = referenciaComercialMotor([base.cotizacion], iva);
@@ -220,9 +407,9 @@ export class CentroCopiadoPedidosService {
             gramaje: doc.gramaje ?? null,
           };
           if (doc.modo === 'CAD') {
-            const perfil = (
-              await this.cad.opciones(auth.tenantId)
-            ).perfiles.find((p) => p.id === doc.cad?.cotizacion?.id);
+            const perfil = (await this.cad.opciones(tenantId)).perfiles.find(
+              (p) => p.id === doc.cad?.cotizacion?.id,
+            );
             if (!perfil)
               throw new BadRequestException(
                 'Actualizá la configuración del plano CAD.',
@@ -233,11 +420,11 @@ export class CentroCopiadoPedidosService {
               rolloProduccion: perfil.rollo,
             });
             const simulacion = await this.cad.construir(
-              auth.tenantId,
+              tenantId,
               sinGrupo,
               item.id,
               null,
-              dto.clienteId ?? undefined,
+              clienteId ?? undefined,
               true,
             );
             costo =
@@ -255,10 +442,10 @@ export class CentroCopiadoPedidosService {
             ]);
             try {
               const partes = await this.copiado.simularCostoHojas(
-                auth.tenantId,
+                tenantId,
                 sinGrupo,
                 {
-                  clienteId: dto.clienteId ?? undefined,
+                  clienteId: clienteId ?? undefined,
                   tipoCambioId: solicitud.tipoCambioId,
                   preparar: !doc.grupoId || clave !== anterior,
                 },
@@ -316,12 +503,90 @@ export class CentroCopiadoPedidosService {
       };
       if (this.motor.usaTipoCambio && solicitud.tipoCambioId)
         await this.motor.conTipoCambio(
-          auth.tenantId,
+          tenantId,
           solicitud.tipoCambioId,
           construir,
         );
       else await construir();
     }
+    return { lineas, referenciasMotor };
+  }
+
+  async revisar(auth: CurrentAuth, dto: RevisarPedidoCopiado) {
+    const seleccion = await this.politica.resolverActiva(
+      auth.tenantId,
+      dto.canalVenta,
+    );
+    if (seleccion.estado === 'PENDIENTE')
+      throw new ConflictException(
+        'El canal no tiene un tarifario vigente disponible. Revisá Configuración.',
+      );
+    const descuentos = new Map(
+      (dto.descuentos ?? []).map((d) => [d.cotizacionItemId, d]),
+    );
+    if (
+      descuentos.size !== (dto.descuentos?.length ?? 0) ||
+      [...descuentos.values()].some(
+        (d) =>
+          !dto.items.includes(d.cotizacionItemId) ||
+          (d.tipo === 'PORCENTAJE' && d.valor > 100),
+      )
+    )
+      throw new BadRequestException(
+        'Revisá el alcance y el porcentaje de los descuentos.',
+      );
+    const originales = await this.prisma.cotizacionItem.findMany({
+      where: { tenantId: auth.tenantId, id: { in: dto.items } },
+    });
+    if (
+      originales.length !== dto.items.length ||
+      new Set(dto.items).size !== dto.items.length
+    )
+      throw new NotFoundException(
+        'Algún trabajo no existe o no pertenece a esta empresa.',
+      );
+    if (
+      dto.clienteId &&
+      !(await this.prisma.cliente.count({
+        where: { tenantId: auth.tenantId, id: dto.clienteId, activo: true },
+      }))
+    )
+      throw new NotFoundException('No se encontró el cliente.');
+    if (seleccion.estado === 'MOTOR') {
+      if (originales.some(calculoDe))
+        throw new ConflictException(
+          'El canal utiliza el motor. Volvé a cotizar la carga de copiado para reemplazar los precios del tarifario anterior.',
+        );
+      return { modalidad: 'MOTOR' as const };
+    }
+    validarMonedaDocumento(originales);
+    const copiados = originales
+      .filter(esCopiado)
+      .sort((a, b) => a.id.localeCompare(b.id));
+    if (!copiados.length) return { modalidad: 'MOTOR' as const };
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const decimales =
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    const firmaOriginal = firma(originales);
+    // Cada carga conserva el cambio ya revisado; nunca mezclar monedas o FX.
+    const cambios = [
+      ...new Set(
+        copiados.map(
+          (i) => objeto(objeto(i.snapshotJson).tipoCambio).id ?? null,
+        ),
+      ),
+    ];
+    if (cambios.length > 1)
+      throw new BadRequestException(
+        'Actualizá el tipo de cambio de todos los trabajos antes de revisar los precios.',
+      );
+    const { lineas, referenciasMotor } = await this.prepararLineas(
+      auth.tenantId,
+      dto.clienteId,
+      copiados,
+      decimales,
+      descuentos,
+    );
     const calculado = calcularPedidoCopiado({
       referencia: seleccion.referencia,
       contenido: seleccion.version.contenido,

@@ -1,3 +1,4 @@
+import { CentroCopiadoPedidosService } from '../pedidos/centro-copiado-pedidos.service';
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
@@ -127,6 +128,13 @@ describe('Centro de Copiado: consultar no permite guardar cotizaciones', () => {
       controllers: [CentroCopiadoController],
       providers: [
         { provide: CentroCopiadoService, useValue: servicio },
+        {
+          provide: CentroCopiadoPedidosService,
+          useValue: {
+            cotizarCarga: servicio.cotizar,
+            construirCarga: servicio.construirItems,
+          },
+        },
         { provide: CapacidadesEmpresaService, useValue: capacidades },
         { provide: CentroCopiadoSaludService, useValue: {} },
         { provide: CentroCopiadoAuditoriaService, useValue: {} },

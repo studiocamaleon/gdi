@@ -153,6 +153,11 @@ export interface GrupoCentroCopiado {
 }
 
 export interface CotizarCentroCopiadoRequest {
+  canalVenta?: string;
+  tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
+  cargasPedido?: (Pick<CotizarCentroCopiadoRequest, "documentos" | "grupos" | "tipoCambioId"> & {
+    descuento?: { tipo: "PORCENTAJE" | "MONTO"; valor: number };
+  })[];
   tipoCambioId?: string;
   /** Cliente actual; el motor usa su precio especial si existe y está activo. */
   clienteId?: string | null;
@@ -200,6 +205,7 @@ export interface GrupoPreview {
 }
 
 export interface CotizarCentroCopiadoResponse {
+  tarifario?: { nombre: string; numero: number };
   documentos: DocumentoPreview[];
   grupos: GrupoPreview[];
   totales: {

@@ -48,7 +48,7 @@ export function calculoDe(i: Pick<CotizacionItem, 'snapshotJson'>) {
   return typeof id === 'string' ? id : null;
 }
 export function solicitudDesdeSnapshot(
-  i: CotizacionItem,
+  i: Pick<CotizacionItem, 'id' | 'jobContextJson' | 'snapshotJson'>,
   clienteId: string | null,
 ) {
   const m = objeto(objeto(i.jobContextJson)._centroCopiado);
@@ -123,7 +123,7 @@ export function solicitudDesdeSnapshot(
 
 /** Metadata editable no puede abaratar un trabajo productivo distinto. */
 export function exigirMismoTrabajo(
-  original: CotizacionItem,
+  original: Pick<CotizacionItem, 'productoId' | 'cantidad' | 'jobContextJson'>,
   generado: {
     productoId: string;
     cantidad: number;
