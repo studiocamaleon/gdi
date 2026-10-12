@@ -1678,3 +1678,34 @@ reemplazar precios existentes se elige «También cargados». Se revisa el alcan
 y se comparan valores en las mismas celdas antes de aplicar. Una revisión pierde
 validez si cambia el contenido, alcance o resultado de cálculo. Aplicar sólo
 edita el borrador; guardar, publicar y activar conservan sus pasos y permisos.
+
+
+### 11 de octubre de 2026 — costos mínimo, máximo y promedio por tramo
+
+La matriz muestra tres costos unitarios: mínimo, máximo y promedio entre dos
+cantidades simuladas del tramo. En hojas se usan el inicio y la última cantidad
+antes del tramo siguiente, respetando rangos propios y cantidades pares cuando
+la última carilla se cobra como simple faz. El motor calcula ambos costos; no
+se presume que el mayor volumen siempre tenga el menor costo.
+
+El promedio es `(costo mínimo + costo máximo) / 2`. Es una referencia aritmética,
+no el costo de producir la cantidad central ni un promedio ponderado de pedidos.
+Los extremos son los de estas dos muestras: no se recorren todas las cantidades
+intermedias. Si hay precio único para cobertura, se toma la cobertura más
+exigente en cada cantidad antes de comparar; no se mezcla borrador con alta.
+
+El último tramo comercial sigue abierto. La implementación inicial propone como
+tope de muestra el doble de la referencia inicial, hasta el límite técnico de
+1.000.000; puede editarse desde Detalle → Ajustar referencia. La celda identifica
+las cantidades efectivamente comparadas como «Muestra». Esto no establece un
+mínimo de costo para un volumen infinito ni cambia los rangos del tarifario.
+
+En CAD los costos se comparan por ML consumidos, independientemente del redondeo
+comercial. Para el tramo desde cero se parte de la referencia positiva. Con
+medidas propias se conserva el plano y sólo se varían sus copias enteras dentro
+del tramo; sin medidas propias se genera la geometría de referencia del rollo.
+
+La sugerencia de venta y su margen conservan la referencia comercial existente,
+identificada en la celda. El promedio no reemplaza automáticamente su costo.
+Si falta un extremo o una cobertura, no se presenta un rango parcial como
+verificado. Las referencias anteriores deben recalcularse para obtener el rango.

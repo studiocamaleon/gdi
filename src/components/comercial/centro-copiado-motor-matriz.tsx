@@ -31,10 +31,10 @@ import {
 import {
   claveCeldaSimulacion,
   type CeldaSimulacion,
-  type ResultadoCeldaSimulacion,
 } from "../../../apps/api/src/centro-copiado/tarifarios/simulacion-tarifario.types";
 import { compararSimulacion } from "../../../apps/api/src/centro-copiado/comercial/comparacion-simulacion";
 import { DecimalComercial as D } from "../../../apps/api/src/centro-copiado/comercial/validaciones";
+import { resumirCostosRango } from "@/lib/centro-copiado-costos-rango";
 import styles from "./centro-copiado-motor-matriz.module.css";
 
 type Sugerencia = ReturnType<typeof sugerirCelda>;
@@ -185,7 +185,7 @@ export function MotorEnMatriz({
     const completas =
       resultado?.escenarios.length === esperadas &&
       resultado.escenarios.every((e) => e.estado === "CALCULADO");
-    const errores = resultado?.escenarios.some((e) => e.estado === "ERROR");
+
     const controles =
       completas && normalizado
         ? resultado.escenarios.flatMap((e) => {
@@ -204,21 +204,59 @@ export function MotorEnMatriz({
       revisionVigente &&
       revision?.propuestas.find((p) => claveCeldaSimulacion(p.celda) === clave)
         ?.sugerencia;
-    const costo = completas ? costoMayor(resultado) : null;
+    const cobertura =
+      motor.contenido[seccion]!.filas[fila].combinacion.cobertura;
+    const costos = resultado
+      ? resumirCostosRango(
+          resultado,
+          cobertura ? [cobertura] : ["borrador", "normal", "alta"],
+        )
+      : null;
+    const unidad =
+      seccion === "cad"
+        ? "ML consumidos"
+        : motor.contenido.hojas!.reglas.unidad === "HOJA"
+          ? "hojas"
+          : "carillas";
+    const referencia = resultado?.escenarios.find(
+      (e) => e.estado === "CALCULADO",
+    )?.cantidadReferencia;
     return (
       <div className={styles.cellInfo} data-review={!!revisada || undefined}>
-        <div className={styles.cellCost}>
-          <span>{esperadas > 1 ? "Costo máx." : "Costo"}</span>
-          <strong>
-            {costo == null
-              ? errores
-                ? "Error de cálculo"
-                : motor.desactualizadas.has(clave)
-                  ? "Volvé a calcular"
-                  : "Sin calcular"
-              : dinero(costo)}
-          </strong>
+        <div
+          className={styles.costRange}
+          aria-label="Costos unitarios del rango"
+        >
+          {(
+            [
+              ["Costo mín.", costos?.minimo],
+              ["Costo máx.", costos?.maximo],
+              ["Promedio", costos?.promedio],
+            ] as const
+          ).map(([etiqueta, valor]) => (
+            <div className={styles.cellCost} key={etiqueta}>
+              <span>{etiqueta}</span>
+              <strong>{valor == null ? "—" : dinero(valor)}</strong>
+            </div>
+          ))}
+          <small
+            title={
+              costos?.motivo ??
+              "Extremos entre las dos cantidades simuladas. Promedio = (costo mínimo + costo máximo) / 2. No es el costo de la cantidad central del tramo."
+            }
+          >
+            {costos?.minimo != null
+              ? `${costos.abierto ? "Muestra" : "Comparación"}: ${costos.desde}–${costos.hasta} ${unidad}`
+              : motor.desactualizadas.has(clave)
+                ? "Volvé a calcular"
+                : (costos?.motivo ?? "Sin calcular")}
+          </small>
         </div>
+        {resultado?.escenarios.some((e) => e.estado === "ERROR") && (
+          <span className={styles.cellWarning}>
+            Error de cálculo · ver detalle
+          </span>
+        )}
         <div
           className={styles.cellMargin}
           data-state={margenActual?.estado ?? "NO_VERIFICABLE"}
@@ -230,6 +268,16 @@ export function MotorEnMatriz({
               : `${margenActual.porcentaje}%`}
           </strong>
         </div>
+        {referencia && (
+          <small className={styles.referenceNote}>
+            Margen y sugerencia a {referencia}{" "}
+            {Number(referencia) === 1
+              ? seccion === "cad"
+                ? "ML consumido"
+                : unidad.slice(0, -1)
+              : unidad}
+          </small>
+        )}
         {margenActual && margenActual.estado !== "CUMPLE" && (
           <span className={styles.cellWarning}>
             {margenActual.negativo
@@ -474,25 +522,20 @@ export function MotorEnMatriz({
       {children(mostrar ? detalleCelda : undefined)}
       {mostrar && (
         <p className={styles.help}>
-          Costos productivos según pedidos de referencia. El margen usa
-          preparación, mínimo y cargas comerciales. Resultados temporales;
-          recalculá si cambian tus costos. Aplicar sólo edita el borrador:
-          después guardá y publicá para actualizar los canales que comparten
-          este tarifario.
+          Costos mín. y máx.: extremos entre las dos cantidades simuladas,
+          usando la cobertura más exigente si el precio es único. Promedio:
+          media de esos dos costos, sin ponderar cantidades. En CAD se compara
+          por ML consumido. El tramo abierto usa una muestra con tope editable
+          en Detalle. El margen usa preparación, mínimo y cargas comerciales.
+          Resultados temporales; recalculá si cambian tus costos. Aplicar sólo
+          edita el borrador: después guardá y publicá para actualizar los
+          canales que comparten este tarifario.
         </p>
       )}
     </>
   );
 }
 
-function costoMayor(r: ResultadoCeldaSimulacion) {
-  return r.escenarios
-    .reduce(
-      (v, e) => (e.estado === "CALCULADO" ? D.max(v, e.costoUnitario) : v),
-      new D(0),
-    )
-    .toFixed();
-}
 function peorMargen(
   controles: ReturnType<typeof compararSimulacion>["control"][],
 ) {

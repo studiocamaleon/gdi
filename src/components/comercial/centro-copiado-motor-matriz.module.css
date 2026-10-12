@@ -126,6 +126,18 @@
 .cellCost {
   color: var(--muted-text);
 }
+.costRange {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+}
+.costRange small,
+.referenceNote {
+  font-size: 9px;
+  color: var(--muted-text);
+  line-height: 1.5;
+}
 .cellMargin[data-state="CUMPLE"] {
   color: var(--success);
 }

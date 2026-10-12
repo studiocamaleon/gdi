@@ -950,3 +950,24 @@ Después se pueden volver a simular los costos de la matriz actualizada.
   editar su precio y observar el nuevo margen, revisar sustituciones en la tabla,
   consultar detalle lateral y usar el asistente a 390 px sin desbordar la página.
   Se conservaron los servicios locales; sin migraciones, datos reales ni despliegue.
+
+
+### 11 de octubre de 2026 — comparación de costos dentro del tramo
+
+- La simulación admite análisis de rango, conserva el escenario comercial y
+  añade dos muestras de costos por celda. Reutiliza corridas coincidentes en el
+  mismo lote; mantiene el límite de cinco celdas y la exclusión por empresa.
+- La matriz presenta costo mínimo, máximo y promedio, cantidades comparadas y
+  referencia del margen. Mantiene los estilos GRAFO y el scroll de la tabla.
+  El detalle permite consultar cada extremo y ajustar el tope del tramo abierto.
+- No cambia los precios, rangos comerciales, IVA ni reglas de margen. Un error
+  parcial se muestra como rango sin verificar, nunca como costo cero.
+- Validación: 21 pruebas de simulación de la API y 40 pruebas web en cuatro
+  suites, incluyendo rangos propios, una sola cantidad, carillas pares, errores,
+  CAD consumido frente a redondeo facturable, geometría fija, coberturas, media
+  aritmética, edición del límite y conservación del criterio de sugerencias.
+  TypeScript acotado a ocho archivos, ESLint de web/API y CSS guard aprobados.
+- Prueba visual con componentes reales y datos ficticios en escritorio y a
+  390 px: tres costos por celda, desglose de extremos, cambio de muestra de
+  101–202 a 101–500 y página sin desbordamiento. Sin cambios de datos reales,
+  migraciones ni despliegues; API y web locales conservan sus puertos.

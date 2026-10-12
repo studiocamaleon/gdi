@@ -138,6 +138,7 @@ function Simulador({
   const [inspeccion, setInspeccion] = useState<Celda | null>(null);
   const [detalle, setDetalle] = useState<Celda | null>(null);
   const [cantidad, setCantidad] = useState("");
+  const [hastaReferencia, setHastaReferencia] = useState("");
   const [perfilId, setPerfilId] = useState("AUTO");
   const [geometria, setGeometria] = useState({
     ancho: "",
@@ -287,6 +288,7 @@ function Simulador({
         if (ejecucion.current.detener || actual.current !== firma) break;
         const respuesta = await simularCeldasTarifario(tarifarioId, {
           ...(versionId ? { versionId } : { revision }),
+          analizarRango: true,
           celdas: elegidas.slice(i, i + 5).map(referenciaDe),
         });
         if (!ejecucion.current.montado) return;
@@ -325,6 +327,7 @@ function Simulador({
     const ref = referenciaDe(c);
     setDetalle(c);
     setCantidad(ref.cantidadReferencia ?? "");
+    setHastaReferencia(ref.hastaReferencia ?? "");
     setPerfilId(ref.perfilCadId ?? "AUTO");
     setGeometria(
       ref.geometriaCad
@@ -341,6 +344,20 @@ function Simulador({
     const n = cantidad.trim().replace(",", ".");
     if (n && !/^\d+(\.\d+)?$/.test(n)) {
       setError("La cantidad de referencia debe ser un número positivo.");
+      return;
+    }
+    const tope = hastaReferencia.trim().replace(",", ".");
+    if (
+      tope &&
+      (!/^\d+(\.\d+)?$/.test(tope) ||
+        Number(tope) <= 0 ||
+        Number(tope) > 1000000 ||
+        Number(tope) < Number(detalle.desde) ||
+        (detalle.seccion === "hojas" && !Number.isInteger(Number(tope))))
+    ) {
+      setError(
+        "Usá un tope dentro del tramo, hasta 1.000.000; en hojas o carillas debe ser entero.",
+      );
       return;
     }
     const personalizada =
@@ -371,6 +388,7 @@ function Simulador({
         fila: detalle.fila,
         tramo: detalle.tramo,
         ...(n && !personalizada ? { cantidadReferencia: n } : {}),
+        ...(tope && detalle.hasta == null ? { hastaReferencia: tope } : {}),
         ...(detalle.seccion === "cad"
           ? {
               ...(perfilId !== "AUTO" ? { perfilCadId: perfilId } : {}),
@@ -1015,6 +1033,51 @@ function Simulador({
                 referencia.
               </p>
             )}
+            {vigentes[claveCeldaSimulacion(inspeccion)]?.rangoCostos &&
+              (() => {
+                const rango =
+                  vigentes[claveCeldaSimulacion(inspeccion)].rangoCostos!;
+                return (
+                  <details>
+                    <summary>Costos según cantidad del tramo</summary>
+                    <div className="mt-3 flex flex-col gap-4">
+                      <p className="text-xs text-muted-foreground">
+                        Se comparan dos cantidades. El promedio es la media de
+                        sus costos unitarios, no el costo de un pedido de
+                        cantidad intermedia ni un promedio de todas las
+                        cantidades.
+                        {rango.abierto &&
+                          " El último tramo no tiene tope: estos valores corresponden sólo a la muestra. Podés cambiar el límite en Ajustar referencia."}
+                      </p>
+                      {rango.motivo && <p role="status">{rango.motivo}</p>}
+                      {rango.puntos.map((punto) => (
+                        <div
+                          key={punto.extremo}
+                          className="flex flex-col gap-2"
+                        >
+                          <strong>
+                            {punto.extremo === "INICIO"
+                              ? "Inicio de la muestra"
+                              : "Fin de la muestra"}
+                            : {punto.cantidadObjetivo}
+                          </strong>
+                          {punto.escenarios.map((e) =>
+                            e.estado === "CALCULADO" ? (
+                              <Fragment key={e.cobertura}>
+                                {verEscenario(e, inspeccion.seccion)}
+                              </Fragment>
+                            ) : (
+                              <p key={e.cobertura} role="status">
+                                {e.cobertura}: {e.motivo}
+                              </p>
+                            ),
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })()}
             <p className="text-xs text-muted-foreground">
               El margen es orientativo para este pedido de referencia. No
               publica precios ni autoriza ventas; el pedido real se controla al
@@ -1048,6 +1111,16 @@ function Simulador({
             }
             ayuda="Dejá vacío para usar el inicio del tramo. En CAD se mide el papel consumido; con medidas personalizadas se obtiene desde esas medidas."
           />
+          {detalle && detalle.hasta == null && (
+            <TextoTarifa
+              etiqueta="Simular el tramo abierto hasta"
+              valor={hastaReferencia}
+              onChange={setHastaReferencia}
+              inputMode="decimal"
+              placeholder="Automático: el doble de la referencia inicial"
+              ayuda="Sólo limita la muestra de costos; el tramo comercial sigue sin tope. Máximo 1.000.000. En CAD se usa el consumo real en ML."
+            />
+          )}
           {detalle?.seccion === "cad" && (
             <div className="flex flex-col gap-3">
               <Elegir

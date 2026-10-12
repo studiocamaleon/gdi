@@ -94,7 +94,7 @@ beforeEach(() => {
   vi.mocked(simularCeldasTarifario).mockImplementation(async (_id, s) => ({
     resultados: s.celdas.map((celda) => {
       const cantidad = String(inicial.hojas!.rangosGenerales[celda.tramo]);
-      return {
+      const resultado = {
         celda,
         escenarios: [
           {
@@ -127,6 +127,39 @@ beforeEach(() => {
           },
         ],
       } as ResultadoCeldaSimulacion;
+      resultado.rangoCostos = {
+        abierto: celda.tramo === 1,
+        puntos: (["INICIO", "FIN"] as const).map((extremo) => {
+          const n =
+            extremo === "INICIO"
+              ? cantidad
+              : celda.tramo === 0
+                ? "99"
+                : (celda.hastaReferencia ?? "200");
+          return {
+            extremo,
+            cantidadObjetivo: n,
+            escenarios: resultado.escenarios.map((e) =>
+              e.estado === "CALCULADO"
+                ? {
+                    ...e,
+                    cantidadReferencia: n,
+                    cantidadFacturable: n,
+                    costoUnitario: extremo === "INICIO" ? "700" : "500",
+                    costoTotal: String(
+                      Number(n) * (extremo === "INICIO" ? 700 : 500),
+                    ),
+                    grupos: e.grupos.map((g) => ({
+                      ...g,
+                      cantidadFacturable: n,
+                    })),
+                  }
+                : e,
+            ),
+          };
+        }),
+      };
+      return resultado;
     }),
   }));
 });
@@ -295,4 +328,54 @@ it("el detalle permite ajustar la referencia y recalcular sólo esa celda", asyn
   ).toEqual([
     { seccion: "hojas", fila: 0, tramo: 0, cantidadReferencia: "20" },
   ]);
+});
+
+it("muestra mínimo, máximo y promedio de los extremos sin usar el promedio para sugerir", async () => {
+  await abrir();
+  await click("Calcular 4 precios");
+  expect(vi.mocked(simularCeldasTarifario).mock.calls[0][1].analizarRango).toBe(
+    true,
+  );
+  const celda = el
+    .querySelector('input[aria-label*="Doble faz"][aria-label*="desde 1,"]')!
+    .closest("td")!;
+  for (const [label, importe] of [
+    ["Costo mín.", "500,00"],
+    ["Costo máx.", "700,00"],
+    ["Promedio", "600,00"],
+  ]) {
+    const fila = [...celda.querySelectorAll("span")].find(
+      (s) => s.textContent === label,
+    )!.parentElement!;
+    expect(fila.textContent).toContain(importe);
+  }
+  expect(celda.textContent).toContain("Comparación: 1–99 hojas");
+  expect(celda.textContent).toContain("1.000,00");
+  expect(ultimo).toEqual(inicial);
+});
+
+it("permite ajustar sólo el tope de muestra del tramo abierto y exige recalcular", async () => {
+  await abrir();
+  await click("Calcular 4 precios");
+  const detalle = () =>
+    act(async () =>
+      el
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label^="Ver costo y margen"][aria-label$="desde 100"]',
+        )!
+        .click(),
+    );
+  await detalle();
+  await click("Ajustar referencia");
+  await escribir(campo("Simular el tramo abierto hasta"), "350");
+  await click("Guardar referencia");
+  expect(el.textContent).toContain("Sin calcular");
+  await detalle();
+  await click("Calcular esta celda");
+  expect(
+    vi.mocked(simularCeldasTarifario).mock.calls.at(-1)![1].celdas[0]
+      .hastaReferencia,
+  ).toBe("350");
+  expect(document.body.textContent).toContain("Muestra: 100–350 hojas");
+  expect(ultimo.hojas!.rangosGenerales).toEqual([1, 100]);
 });
