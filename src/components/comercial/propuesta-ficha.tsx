@@ -5946,6 +5946,15 @@ function PropuestaFichaContenido({
     string | null
   >(null);
   const [revisandoCopiado, setRevisandoCopiado] = React.useState(false);
+  const revisionCopiadoEnCurso = React.useRef(false);
+  const [solicitudRevisionCopiado, solicitarRevisionCopiado] = React.useReducer(
+    (n: number) => n + 1,
+    0,
+  );
+  const revisionAutomaticaProcesada = React.useRef(`0:${canalVenta}`);
+  const [errorRevisionCopiado, setErrorRevisionCopiado] = React.useState<string | null>(
+    null,
+  );
   const revisionCopiadoCache = React.useRef<{
     clave: string;
     cotizacionId?: string;
@@ -6074,6 +6083,7 @@ function PropuestaFichaContenido({
     setItems((current) =>
       current.filter((candidate) => candidate.id !== item.id),
     );
+    if (metaCentroCopiado(item.jobContext)) solicitarRevisionCopiado();
     setEditadosIds((prev) => {
       if (!prev.has(item.id)) return prev;
       const next = new Set(prev);
@@ -6115,6 +6125,10 @@ function PropuestaFichaContenido({
    */
   const guardarEdicion = React.useCallback(
     async (opciones?: { destino?: string }) => {
+      if (revisionCopiadoEnCurso.current) {
+        toast.info("Esperá a que termine la actualización de precios de copiado.");
+        return;
+      }
       if (!permisoEdicionRef.current || !orden) return;
       if (
         camposEditablesOrden(orden.estado).has("canalVenta") &&
@@ -6290,6 +6304,10 @@ function PropuestaFichaContenido({
    */
   const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const emitirBorrador = React.useCallback(async (imprimir = false) => {
+    if (revisionCopiadoEnCurso.current) {
+      toast.info("Esperá a que termine la actualización de precios de copiado.");
+      return;
+    }
     if (!conOrdenes) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -6575,9 +6593,17 @@ function PropuestaFichaContenido({
   );
 
   const revisarCopiadoEnPedido = React.useCallback(async () => {
-    if (revisandoCopiado || !validarCanalVenta()) return;
+    if (
+      revisionCopiadoEnCurso.current ||
+      !permisoProductosRef.current ||
+      !validarCanalVenta()
+    ) return;
     const claveInicio = claveCopiadoRef.current;
+    revisionCopiadoEnCurso.current = true;
     setRevisandoCopiado(true);
+    setErrorRevisionCopiado(null);
+    setRevisionCopiadoClave(null);
+    revisionCopiadoCache.current = null;
     try {
       const preparados = await persistirSnapshotsItems(true);
       const ids = preparados.itemsConSnapshot.map((p) => p.cotizacionItemId);
@@ -6604,7 +6630,10 @@ function PropuestaFichaContenido({
         clienteId: clienteId || undefined,
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
       });
-      if (claveCopiadoRef.current !== claveInicio)
+      if (
+        claveCopiadoRef.current !== claveInicio ||
+        !permisoProductosRef.current
+      )
         throw new Error(
           "El pedido cambió durante la revisión. Actualizá los precios nuevamente.",
         );
@@ -6612,6 +6641,9 @@ function PropuestaFichaContenido({
       if (resultado.modalidad === "TARIFARIO" && !resultado.id) {
         revisionCopiadoCache.current = null;
         setRevisionCopiadoClave(claveInicio);
+        toast.warning(
+          "Faltan precios en el tarifario para esta carga. Revisá el aviso de Centro de copiado antes de emitir.",
+        );
         return;
       }
       const nuevos = preparados.itemsConSnapshot.map((p) => {
@@ -6648,16 +6680,16 @@ function PropuestaFichaContenido({
         );
       toast.success("Precios de copiado actualizados para todo el pedido.");
     } catch (e) {
-      toast.error(
-        e instanceof Error
-          ? e.message
-          : "No se pudieron actualizar los precios de copiado.",
-      );
+      const mensaje = e instanceof Error
+        ? e.message
+        : "No se pudieron actualizar los precios de copiado.";
+      setErrorRevisionCopiado(mensaje);
+      toast.error(mensaje);
     } finally {
+      revisionCopiadoEnCurso.current = false;
       setRevisandoCopiado(false);
     }
   }, [
-    revisandoCopiado,
     validarCanalVenta,
     persistirSnapshotsItems,
     canalVenta,
@@ -6665,16 +6697,30 @@ function PropuestaFichaContenido({
     sinComprobante,
     orden,
   ]);
-  const canalCopiadoAnterior = React.useRef(canalVenta);
   React.useEffect(() => {
-    if (canalCopiadoAnterior.current === canalVenta) return;
-    canalCopiadoAnterior.current = canalVenta;
-    if (revisionCopiado && puedeModificarProductos && canalVenta)
+    const solicitud = `${solicitudRevisionCopiado}:${canalVenta}`;
+    if (!puedeModificarProductos || (orden && orden.estado !== "borrador")) {
+      revisionAutomaticaProcesada.current = solicitud;
+      return;
+    }
+    if (
+      solicitud === revisionAutomaticaProcesada.current ||
+      revisandoCopiado ||
+      revisionCopiadoEnCurso.current ||
+      !canalVenta
+    ) return;
+    revisionAutomaticaProcesada.current = solicitud;
+    if (items.some((i) => metaCentroCopiado(i.jobContext)))
       void revisarCopiadoEnPedido();
+    // Una carga o cambio de canal dispara una sola revisión. Si cambia durante
+    // el cálculo, la siguiente solicitud espera; los errores no se reintentan solos.
   }, [
+    solicitudRevisionCopiado,
+    revisandoCopiado,
     canalVenta,
-    revisionCopiado,
     puedeModificarProductos,
+    orden,
+    items,
     revisarCopiadoEnPedido,
   ]);
 
@@ -6692,6 +6738,10 @@ function PropuestaFichaContenido({
   const emisionPresupuestoEnCursoRef = React.useRef(false);
   const [canalPresupuestoAbierto, setCanalPresupuestoAbierto] = React.useState(false);
   const emitirPresupuestoCb = React.useCallback(async (canal: CanalPresupuesto = "whatsapp") => {
+    if (revisionCopiadoEnCurso.current) {
+      toast.info("Esperá a que termine la actualización de precios de copiado.");
+      return;
+    }
     if (emisionPresupuestoEnCursoRef.current) return;
     if (presupuestoGuardadoRef.current?.revision === revisionPropuesta) {
       router.replace(presupuestoGuardadoRef.current.destino);
@@ -6785,6 +6835,10 @@ function PropuestaFichaContenido({
   ]);
 
   const emitirOrden = React.useCallback(async (imprimir = false) => {
+    if (revisionCopiadoEnCurso.current) {
+      toast.info("Esperá a que termine la actualización de precios de copiado.");
+      return;
+    }
     if (!conOrdenes || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -6943,6 +6997,10 @@ function PropuestaFichaContenido({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
+    if (revisionCopiadoEnCurso.current) {
+      toast.info("Esperá a que termine la actualización de precios de copiado.");
+      return;
+    }
     if (!(ordenTipo === "presupuesto" ? conPresupuestos : conOrdenes) || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -7855,6 +7913,7 @@ function PropuestaFichaContenido({
                   )}
                 {items.some(i => metaCentroCopiado(i.jobContext)) && (!orden || orden.estado === "borrador") && <CentroCopiadoPedidoPrecios
                   revision={revisionCopiado} vigente={copiadoRevisado} ocupado={revisandoCopiado}
+                  error={errorRevisionCopiado} faltaCanal={!canalVenta}
                   editable={puedeModificarProductos && !guardandoEdicion && !emitiendo && !emitiendoPresupuesto}
                   onRevisar={() => void revisarCopiadoEnPedido()}
                   onAutorizado={r => { if (claveCopiadoRef.current === claveCopiado) setRevisionCopiado(r); }}
@@ -8470,12 +8529,7 @@ function PropuestaFichaContenido({
                     ? itemsEnEdicion
                       ? () => quitarItemDeOrden(item)
                       : undefined
-                    : () =>
-                        setItems((current) =>
-                          current.filter(
-                            (candidate) => candidate.id !== item.id,
-                          ),
-                        ),
+                    : () => quitarItemDeOrden(item),
                   onVerPrecios: esCentroCopiado(item)
                     ? () => setPreciosOpen(true)
                     : undefined,
@@ -8988,8 +9042,10 @@ function PropuestaFichaContenido({
                 : current;
               return [...base, ...nuevosConHerencia];
             });
+            if (!orden || orden.estado === "borrador") solicitarRevisionCopiado();
             // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
             // demasiado). Se los diferencia por la referencia (varianteNombre).
+            setTab("productos");
             setCopiadoOpen(false);
             setCopiadoEditItems(null);
             focusOrdenProductoDetalle(nuevosConHerencia[0].id);

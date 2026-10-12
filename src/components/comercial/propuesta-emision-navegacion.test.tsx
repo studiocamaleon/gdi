@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   confirmar: null as null | ((canal: CanalPresupuesto) => void),
 }));
-vi.mock("@/lib/centro-copiado-pedidos-api", async original => ({
+vi.mock("@/lib/centro-copiado-pedidos-api", async (original) => ({
   ...(await original<typeof import("@/lib/centro-copiado-pedidos-api")>()),
   revisarPedidoCopiado: mocks.revisarCopiado,
   estadoPedidoCopiado: vi.fn(async () => null),
@@ -65,7 +65,12 @@ vi.mock("./agregar-producto-sheet", () => ({
             50000,
           ),
           motorCodigo: "producto-qa",
-          jobContext: { cantidad: 500, ...(mocks.copiado ? { _centroCopiado: { paginas: 500, copias: 1, faz: 1 } } : {}) },
+          jobContext: {
+            cantidad: 500,
+            ...(mocks.copiado
+              ? { _centroCopiado: { paginas: 500, copias: 1, faz: 1 } }
+              : {}),
+          },
           fechaEntrega: "2099-01-10",
         })
       }
@@ -76,7 +81,41 @@ vi.mock("./agregar-producto-sheet", () => ({
 }));
 vi.mock("./canal-venta-selector", () => ({
   CanalVentaSelector: ({ onChange }: { onChange: (canal: string) => void }) => (
-    <button onClick={() => onChange("mostrador")}>Canal de prueba</button>
+    <>
+      <button onClick={() => onChange("mostrador")}>Canal de prueba</button>
+      <button onClick={() => onChange("web")}>Canal Web de prueba</button>
+    </>
+  ),
+}));
+vi.mock("./centro-copiado-sheet", () => ({
+  default: ({ onAgregar }: { onAgregar: (items: PropuestaItem[]) => void }) => (
+    <button
+      onClick={() =>
+        onAgregar([
+          {
+            ...productoDiseno(
+              crypto.randomUUID(),
+              "Copias ficticias",
+              100,
+              15000,
+            ),
+            motorCodigo: "producto-qa",
+            jobContext: {
+              cantidad: 100,
+              _centroCopiado: {
+                paginas: 100,
+                copias: 1,
+                faz: 1,
+                grupoCargaId: crypto.randomUUID(),
+              },
+            },
+            fechaEntrega: "2099-01-10",
+          },
+        ])
+      }
+    >
+      Agregar carga de copiado ficticia
+    </button>
   ),
 }));
 vi.mock("./presupuesto-correo-dialog", () => ({
@@ -105,6 +144,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.confirmar = null;
   mocks.copiado = false;
+  mocks.revisarCopiado.mockResolvedValue({ modalidad: "MOTOR" });
   avisoAlNavegar = [];
   mocks.replace.mockImplementation(() => {
     avisoAlNavegar.push(avisoDeSalida());
@@ -146,7 +186,14 @@ async function click(texto: string) {
   expect(button, texto).toBeDefined();
   await act(async () => button!.click());
 }
-async function preparar() {
+async function verDatos() {
+  const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+    (t) => t.getAttribute("aria-label")?.startsWith("Datos"),
+  )!;
+  expect(tab).toBeDefined();
+  await act(async () => tab.click());
+}
+async function montar() {
   await act(async () =>
     root.render(
       <CapacidadesProvider
@@ -160,6 +207,9 @@ async function preparar() {
       </CapacidadesProvider>,
     ),
   );
+}
+async function preparar() {
+  await montar();
   await click("Presupuesto");
   await click("Canal de prueba");
   await act(async () =>
@@ -303,14 +353,230 @@ it("no marca guardado si falla la cotización previa y mantiene el aviso de sali
 
 it("revisa copiado completo y emite con los mismos precios y snapshots revisados", async () => {
   mocks.copiado = true;
-  mocks.revisarCopiado.mockResolvedValue({ modalidad: "TARIFARIO", id: "calculo-qa", huella: "a".repeat(64), cotizacionId: "cotizacion-revisada", nombre: "Mostrador ficticio", numero: 1,
-    calculado: { estado: "CALCULADO", grupos: [], control: { estado: "CUMPLE" }, terminaciones: [] },
-    items: [{ anteriorId: "snapshot-qa", id: "snapshot-revisado", subtotal: 100, iva: 21, total: 121, descuentoMonto: 0 }] });
-  mocks.emitir.mockResolvedValue({ id: "presupuesto-qa", numero: "PRES-QA", estado: "enviado" });
+  mocks.revisarCopiado.mockResolvedValue({
+    modalidad: "TARIFARIO",
+    id: "calculo-qa",
+    huella: "a".repeat(64),
+    cotizacionId: "cotizacion-revisada",
+    nombre: "Mostrador ficticio",
+    numero: 1,
+    calculado: {
+      estado: "CALCULADO",
+      grupos: [],
+      control: { estado: "CUMPLE" },
+      terminaciones: [],
+    },
+    items: [
+      {
+        anteriorId: "snapshot-qa",
+        id: "snapshot-revisado",
+        subtotal: 100,
+        iva: 21,
+        total: 121,
+        descuentoMonto: 0,
+      },
+    ],
+  });
+  mocks.emitir.mockResolvedValue({
+    id: "presupuesto-qa",
+    numero: "PRES-QA",
+    estado: "enviado",
+  });
   await preparar();
   await click("Actualizar precios de copiado");
-  expect(mocks.revisarCopiado).toHaveBeenCalledWith(expect.objectContaining({ items: ["snapshot-qa"], canalVenta: "mostrador" }));
+  expect(mocks.revisarCopiado).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: ["snapshot-qa"],
+      canalVenta: "mostrador",
+    }),
+  );
   await click("Confirmar emisión de prueba");
   expect(mocks.guardar).toHaveBeenCalledOnce();
-  expect(mocks.emitir).toHaveBeenCalledWith(expect.objectContaining({ cotizacionId: "cotizacion-revisada", items: [expect.objectContaining({ cotizacionItemId: "snapshot-revisado", subtotal: 100, total: 121 })] }));
+  expect(mocks.emitir).toHaveBeenCalledWith(
+    expect.objectContaining({
+      cotizacionId: "cotizacion-revisada",
+      items: [
+        expect.objectContaining({
+          cotizacionItemId: "snapshot-revisado",
+          subtotal: 100,
+          total: 121,
+        }),
+      ],
+    }),
+  );
+});
+
+function revisionTarifario(items = ["snapshot-qa"]) {
+  return {
+    modalidad: "TARIFARIO",
+    id: "calculo-qa",
+    huella: "a".repeat(64),
+    cotizacionId: "cotizacion-revisada",
+    nombre: "Mostrador ficticio",
+    numero: 1,
+    calculado: {
+      estado: "CALCULADO",
+      grupos: [],
+      control: { estado: "CUMPLE" },
+      terminaciones: [],
+    },
+    items: items.map((id) => ({
+      anteriorId: id,
+      id: `${id}-revisado`,
+      subtotal: 100,
+      iva: 21,
+      total: 121,
+      descuentoMonto: 0,
+    })),
+  };
+}
+it("espera la revisión automática antes de emitir y conserva los precios revisados", async () => {
+  let terminar!: (r: unknown) => void;
+  let n = 0;
+  mocks.guardar.mockImplementation(async () => ({
+    result: { exitoso: true },
+    cotizacionId: "cotizacion-qa",
+    cotizacionItemId: `snapshot-${++n}`,
+  }));
+  mocks.revisarCopiado.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        terminar = resolve;
+      }),
+  );
+  mocks.emitir.mockResolvedValue({
+    id: "presupuesto-qa",
+    numero: "PRES-QA",
+    estado: "enviado",
+  });
+  await preparar();
+  await click("Agregar carga de copiado ficticia");
+  await click("Confirmar emisión de prueba");
+  expect(mocks.emitir).not.toHaveBeenCalled();
+  await act(async () =>
+    terminar(revisionTarifario(["snapshot-1", "snapshot-2"])),
+  );
+  await click("Confirmar emisión de prueba");
+  expect(mocks.guardar).toHaveBeenCalledTimes(2);
+  expect(mocks.emitir).toHaveBeenCalledWith(
+    expect.objectContaining({
+      cotizacionId: "cotizacion-revisada",
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          cotizacionItemId: "snapshot-2-revisado",
+          subtotal: 100,
+          total: 121,
+        }),
+      ]),
+    }),
+  );
+});
+it("al agregar una carga aplica automáticamente el tarifario y al agregar otra revisa el pedido completo", async () => {
+  let n = 0;
+  mocks.guardar.mockImplementation(async () => ({
+    result: { exitoso: true },
+    cotizacionId: "cotizacion-qa",
+    cotizacionItemId: `snapshot-${++n}`,
+  }));
+  mocks.revisarCopiado.mockImplementation(async ({ items }) =>
+    revisionTarifario(items),
+  );
+  await montar();
+  await click("Canal de prueba");
+  await click("Agregar carga de copiado ficticia");
+  expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
+  expect(container.textContent).toContain("Mostrador ficticio · v1");
+  expect(container.textContent).toContain("121,00");
+  await click("Agregar carga de copiado ficticia");
+  expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
+  expect(mocks.revisarCopiado).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      items: ["snapshot-2", "snapshot-3"],
+      canalVenta: "mostrador",
+    }),
+  );
+  expect(container.textContent).toContain("242,00");
+  const quitar = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Quitar Copias ficticias"]',
+  )!;
+  expect(quitar).not.toBeNull();
+  await act(async () => quitar.click());
+  expect(mocks.revisarCopiado).toHaveBeenCalledTimes(3);
+  expect(mocks.revisarCopiado).toHaveBeenLastCalledWith(
+    expect.objectContaining({ items: ["snapshot-4"] }),
+  );
+  expect(container.textContent).toContain("121,00");
+});
+it("espera el canal y recalcula cuando se elige, sin dar por revisado el precio del motor", async () => {
+  mocks.revisarCopiado.mockResolvedValue(revisionTarifario());
+  await montar();
+  await click("Agregar carga de copiado ficticia");
+  expect(mocks.guardar).not.toHaveBeenCalled();
+  expect(mocks.revisarCopiado).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("Elegí el canal de venta de la OT");
+  await verDatos();
+  await click("Canal de prueba");
+  expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
+  expect(container.textContent).toContain("Mostrador ficticio · v1");
+});
+it("si cambia el canal durante la revisión descarta la respuesta vieja y procesa el canal nuevo", async () => {
+  let terminar!: (r: unknown) => void;
+  mocks.revisarCopiado
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          terminar = resolve;
+        }),
+    )
+    .mockResolvedValue({ modalidad: "MOTOR" });
+  await montar();
+  await click("Canal de prueba");
+  await click("Agregar carga de copiado ficticia");
+  expect(container.textContent).toContain("Calculando precios del pedido");
+  await verDatos();
+  await click("Canal Web de prueba");
+  expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
+  await act(async () => terminar(revisionTarifario()));
+  expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
+  expect(mocks.revisarCopiado).toHaveBeenLastCalledWith(
+    expect.objectContaining({ canalVenta: "web" }),
+  );
+  expect(container.textContent).toContain(
+    "Este canal utiliza los precios del motor",
+  );
+  expect(container.textContent).not.toContain("Mostrador ficticio · v1");
+});
+it("un precio faltante se muestra bloqueado sin reintentar automáticamente ni inventar un precio", async () => {
+  mocks.revisarCopiado.mockResolvedValue({
+    ...revisionTarifario(),
+    id: null,
+    items: [],
+    calculado: {
+      estado: "PRECIO_PENDIENTE",
+      grupos: [],
+      control: { estado: "NO_VERIFICABLE" },
+      terminaciones: [],
+    },
+  });
+  await montar();
+  await click("Canal de prueba");
+  await click("Agregar carga de copiado ficticia");
+  expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
+  expect(container.textContent).toContain("Emisión bloqueada");
+  expect(container.textContent).toContain("Falta un precio en la matriz");
+});
+it("un fallo mantiene un aviso visible y permite reintentar explícitamente", async () => {
+  mocks.revisarCopiado.mockRejectedValueOnce(
+    new Error("Falló la revisión ficticia"),
+  );
+  await montar();
+  await click("Canal de prueba");
+  await click("Agregar carga de copiado ficticia");
+  expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
+  expect(container.textContent).toContain("Falló la revisión ficticia");
+  mocks.revisarCopiado.mockResolvedValue(revisionTarifario());
+  await click("Actualizar precios de copiado");
+  expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
+  expect(container.textContent).not.toContain("Falló la revisión ficticia");
+  expect(container.textContent).toContain("Mostrador ficticio · v1");
 });

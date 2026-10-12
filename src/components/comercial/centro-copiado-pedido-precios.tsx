@@ -40,6 +40,8 @@ export function CentroCopiadoPedidoPrecios({
   vigente,
   ocupado,
   editable,
+  error,
+  faltaCanal = false,
   onRevisar,
   onAutorizado,
 }: {
@@ -47,6 +49,8 @@ export function CentroCopiadoPedidoPrecios({
   vigente: boolean;
   ocupado: boolean;
   editable: boolean;
+  error?: string | null;
+  faltaCanal?: boolean;
   onRevisar(): void;
   onAutorizado(r: RevisionCopiado): void;
 }) {
@@ -66,21 +70,27 @@ export function CentroCopiadoPedidoPrecios({
     estados.includes("NO_VERIFICABLE") ||
     c?.estado === "PRECIO_PENDIENTE";
   const necesita = estados.includes("REQUIERE_AUTORIZACION");
-  const mensaje = !vigente
-    ? "Actualizá los precios para revisar todas las cargas del pedido."
-    : c?.estado === "PRECIO_PENDIENTE"
-      ? "Falta un precio en la matriz. Completalo antes de emitir."
-      : estados.includes("NO_VERIFICABLE")
-        ? "Hay costos sin verificar. Revisá la configuración antes de emitir."
-        : estados.includes("BLOQUEADO")
-          ? "El tarifario exige alcanzar el margen mínimo. Ajustá los precios antes de emitir."
-          : necesita && !r?.autorizado
-            ? "Se necesita una autorización con motivo antes de emitir."
-            : r?.autorizado
-              ? `Autorizado por ${r.autorizado.nombre}: ${r.autorizado.motivo}`
-              : revision?.modalidad === "MOTOR"
-                ? "Este canal utiliza los precios del motor."
-                : "Los precios y el margen están revisados.";
+  const mensaje = ocupado
+    ? "Aplicando la política del canal y el volumen de todas las cargas. Esperá a que termine para guardar o emitir."
+    : faltaCanal
+      ? "Elegí el canal de venta de la OT para aplicar automáticamente sus precios."
+      : error
+        ? error
+        : !vigente
+          ? "Los importes de copiado aún no están revisados para este pedido. Actualizá los precios antes de emitir."
+          : c?.estado === "PRECIO_PENDIENTE"
+            ? "Falta un precio en la matriz. Completalo antes de emitir."
+            : estados.includes("NO_VERIFICABLE")
+              ? "Hay costos sin verificar. Revisá la configuración antes de emitir."
+              : estados.includes("BLOQUEADO")
+                ? "El tarifario exige alcanzar el margen mínimo. Ajustá los precios antes de emitir."
+                : necesita && !r?.autorizado
+                  ? "Se necesita una autorización con motivo antes de emitir."
+                  : r?.autorizado
+                    ? `Autorizado por ${r.autorizado.nombre}: ${r.autorizado.motivo}`
+                    : revision?.modalidad === "MOTOR"
+                      ? "Este canal utiliza los precios del motor."
+                      : "Los precios y el margen están revisados.";
   async function autorizar() {
     if (!r?.id || !r.huella || !vigente || autorizando) return;
     setAutorizando(true);
@@ -102,11 +112,13 @@ export function CentroCopiadoPedidoPrecios({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>Precios de Centro de copiado</CardTitle>
           <Badge variant={bloqueado && vigente ? "destructive" : "outline"}>
-            {!vigente
-              ? "Pendiente de revisión"
-              : r
-                ? `${r.nombre} · v${r.numero}`
-                : "Motor"}
+            {ocupado
+              ? "Actualizando precios…"
+              : !vigente
+                ? "Pendiente de revisión"
+                : r
+                  ? `${r.nombre} · v${r.numero}`
+                  : "Motor"}
           </Badge>
         </div>
         <CardDescription>
@@ -117,13 +129,15 @@ export function CentroCopiadoPedidoPrecios({
       <CardContent className="grid gap-3">
         <Alert variant={bloqueado && vigente ? "destructive" : "default"}>
           <AlertTitle>
-            {!vigente
-              ? "Revisar precios"
-              : bloqueado
-                ? "Emisión bloqueada"
-                : necesita && !r?.autorizado
-                  ? "Requiere autorización"
-                  : "Revisión comercial"}
+            {ocupado
+              ? "Calculando precios del pedido"
+              : !vigente
+                ? "Revisar precios"
+                : bloqueado
+                  ? "Emisión bloqueada"
+                  : necesita && !r?.autorizado
+                    ? "Requiere autorización"
+                    : "Revisión comercial"}
           </AlertTitle>
           <AlertDescription>{mensaje}</AlertDescription>
         </Alert>

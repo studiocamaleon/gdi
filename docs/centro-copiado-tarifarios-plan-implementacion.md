@@ -991,3 +991,31 @@ Después se pueden volver a simular los costos de la matriz actualizada.
   visual con datos ficticios en escritorio y a 390 px, sin desbordamiento de página.
 - La investigación de persistencia fue de sólo lectura. Sin cambios de datos
   reales, migraciones, nuevas publicaciones de tarifarios ni despliegues.
+
+### 12 de octubre de 2026 — aplicación automática en el borrador de la OT
+
+- La carga rápida usaba el motor y el tarifario requería después pulsar
+  «Actualizar precios de copiado». Ahora agregar, reconstruir o quitar una carga
+  dispara la revisión comercial de todas las cargas del pedido borrador. El
+  canal selecciona su política activa y la versión vigente; el volumen,
+  preparación, mínimo, terminaciones y controles siguen resueltos en el servidor.
+- Si falta canal, la revisión espera su elección. Cambiarlo durante un cálculo
+  descarta la respuesta anterior y procesa el nuevo; no dispara pedidos paralelos
+  ni reintenta indefinidamente ante errores. Guardar y emitir esperan a que termine.
+- La OT muestra el tarifario y versión aplicados, precios pendientes o errores
+  persistentes y mantiene la autorización explícita de márgenes. Una revisión
+  fallida invalida la revisión y el caché previos, sin sustituir precios pendientes
+  por sugerencias. Al agregar una carga abre la pestaña Productos.
+- La ventana de carga identifica sus importes como referencia del motor. El
+  precio comercial se aplica al agregarla al pedido completo. Abrir una OT
+  existente no actualiza sus precios automáticamente: conserva la acción explícita
+  de actualización. Tampoco se recalculan documentos emitidos por estos eventos.
+- Validación: 60 pruebas web en cinco suites y 18 pruebas de cálculo e integración
+  de API, con empresas ficticias y base local de test. Se verificaron emisión con
+  los mismos snapshots y precios, acumulación al agregar/quitar, espera del canal,
+  cambios durante el cálculo, pendientes, errores y reintento manual. TypeScript
+  acotado a cuatro archivos sin diagnósticos; ESLint sin errores, con la advertencia
+  previa de un icono sin uso en PropuestaFicha.
+- Se aplicaron las tres migraciones existentes de tarifarios exclusivamente a
+  `gdi_saas_test`, que estaba atrasada. Sin reset ni seed. La empresa local sólo se
+  consultó: no se cambiaron asignaciones, precios, OTs ni versiones publicadas.

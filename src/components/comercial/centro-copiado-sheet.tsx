@@ -2539,7 +2539,7 @@ function CentroCopiadoContenido({
           </div>
           <div className={s.totalBox}>
             <div className={s.totalFinal}>
-              <span>Total de la carga c/IVA</span>
+              <span>Referencia del motor c/IVA</span>
               <strong aria-live="polite">
                 {cotizando
                   ? "…"
@@ -2564,6 +2564,10 @@ function CentroCopiadoContenido({
               ) : (
                 ""
               )}
+            </div>
+            <div className={s.totalNetoSub}>
+              En el borrador, el precio final se aplica al agregar la carga,
+              según el canal y el volumen de todo el pedido.
             </div>
           </div>
           <ActionButton
