@@ -66,13 +66,24 @@ it.each([
 /** Motor controlado: permite verificar importes, no sólo flags internos.
  * Conserva el adaptador, agregación, IVA, costos y metadata reales del servicio.
  */
-it.each([1, 10])(
-  'preview y tomo persistible coinciden: cinco originales, %i juegos y un setup',
-  async (juegos) => {
+it.each([
+  { juegos: 1, pouch: false },
+  { juegos: 10, pouch: false },
+  { juegos: 1, pouch: true },
+  { juegos: 10, pouch: true },
+])(
+  'preview y tomo persistible coinciden: $juegos juegos, pouch=$pouch y un setup',
+  async ({ juegos, pouch }) => {
     const cotizar = jest.fn(
       async ({ jobContext }: { jobContext: Record<string, unknown> }) => {
         const hojas = Number(jobContext.cantidad);
-        const neto = hojas * 10 + (jobContext.omitirSetupCleanup ? 0 : 100);
+        const plastificado = (
+          jobContext.opcionalesActivados as Record<string, boolean> | undefined
+        )?.pouch
+          ? hojas * 7
+          : 0;
+        const neto =
+          hojas * 10 + (jobContext.omitirSetupCleanup ? 0 : 100) + plastificado;
         return {
           exitoso: true,
           cotizacion: {
@@ -115,25 +126,52 @@ it.each([1, 10])(
       validarOperacion: () => Promise<void>;
       resolverPapel: () => unknown;
     };
-    jest.spyOn(internas, 'contexto').mockResolvedValue(ctx);
+    jest
+      .spyOn(internas, 'contexto')
+      .mockResolvedValue({
+        ...ctx,
+        pouchConfigPasoId: 'pouch',
+        pouchConfig: {
+          centroCostoId: 'centro-ficticio',
+          minutosPorHoja: 0.5,
+          formatos: [{ tamano: 'A4', varianteId: 'sobre-ficticio' }],
+        },
+        pouches: [
+          {
+            id: 'sobre-ficticio',
+            materiaPrimaId: 'pouch-ficticio',
+            nombre: 'Sobre ficticio',
+            anchoMm: 216,
+            altoMm: 303,
+            margenMm: 3,
+          },
+        ],
+      });
     jest.spyOn(internas, 'validarOperacion').mockResolvedValue(undefined);
     jest
       .spyOn(internas, 'resolverPapel')
       .mockReturnValue({ varianteId: 'variante', label: 'Obra' });
     const dto = {
       documentos: ['a', 'b', 'c', 'd', 'e'].map((id) => doc(id)),
-      grupos: [{ id: 'T', juegos, terminaciones: [] }],
+      grupos: [
+        { id: 'T', juegos, terminaciones: pouch ? ['Plastificado pouch'] : [] },
+      ],
     };
     const preview = await service.cotizar('tenant', dto);
     const construido = await service.construirItems('tenant', dto);
-    const esperado = 5 * 2 * juegos * 10 + 100;
+    const esperado = 5 * 2 * juegos * (pouch ? 17 : 10) + 100;
     expect(preview.totales.subtotal).toBe(esperado);
     expect(construido.items).toHaveLength(1);
     expect(construido.items[0].subtotal).toBe(esperado);
     expect(construido.items[0].total).toBeCloseTo(esperado * 1.21, 2);
     expect(construido.items[0].cotizacion?.costos.total).toBe(esperado);
-    expect(
-      cotizar.mock.calls.filter(([c]) => !c.jobContext.omitirSetupCleanup),
-    ).toHaveLength(2); // una en cada recorrido
+    if (pouch)
+      expect(preview.documentos.map((d) => d.pouch?.subtotal)).toEqual(
+        Array(5).fill(2 * juegos * 7),
+      );
+    else
+      expect(
+        cotizar.mock.calls.filter(([c]) => !c.jobContext.omitirSetupCleanup),
+      ).toHaveLength(2); // una en cada recorrido
   },
 );

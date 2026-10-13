@@ -10,12 +10,14 @@ const mocks = vi.hoisted(() => ({
   guardar: vi.fn(),
   cotizar: vi.fn(),
   gestionar: true,
+  terminaciones: false,
 }));
 vi.mock("@/components/navigation/permisos-provider", () => ({
   usePuede: () => mocks.gestionar,
 }));
 vi.mock("@/components/navigation/capacidades-provider", () => ({
-  useCapacidad: () => false,
+  useCapacidad: (cap: string) =>
+    cap === "terminaciones_copiado" && mocks.terminaciones,
 }));
 vi.mock("@/components/configuracion/configuracion-workspace", () => ({
   useConfiguracionInicio: vi.fn(),
@@ -98,7 +100,11 @@ let el: HTMLDivElement;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.gestionar = true;
-  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  mocks.terminaciones = false;
+  Object.assign(globalThis, {
+    IS_REACT_ACT_ENVIRONMENT: true,
+    PointerEvent: MouseEvent,
+  });
   mocks.cargar.mockResolvedValue(structuredClone(config));
   mocks.guardar.mockImplementation(async (cambios) => ({
     ...config,
@@ -194,4 +200,41 @@ it("permite dejar un gramaje sin formatos y no habilita formatos desactivados gl
   expect(
     mocks.guardar.mock.calls[0][0].papeles[0].formatosPorGramaje,
   ).toContainEqual({ gramaje: 150, tamanos: [] });
+});
+
+it("conserva el pouch por formato al habilitarlo y no usa null como todas las terminaciones", async () => {
+  mocks.terminaciones = true;
+  const pouch = {
+    centroCostoId: "centro-ficticio",
+    minutosPorHoja: 0.75,
+    formatos: [{ tamano: "A4", varianteId: "sobre-ficticio" }],
+  };
+  mocks.cargar.mockResolvedValue({ ...config, pouch });
+  await montar();
+  await act(async () =>
+    [...el.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find((t) => t.textContent?.includes("Ruta y terminaciones"))!
+      .click(),
+  );
+  await act(async () => control("Ofrecer Plastificado pouch").click());
+  await act(async () => boton("Guardar cambios").click());
+  expect(mocks.guardar).toHaveBeenCalledWith(
+    expect.objectContaining({ terminaciones: ["Plastificado pouch"], pouch }),
+  );
+});
+
+it("no permite habilitar pouch sin permiso de gestión", async () => {
+  mocks.terminaciones = true;
+  mocks.gestionar = false;
+  await montar();
+  await act(async () =>
+    [...el.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find((t) => t.textContent?.includes("Ruta y terminaciones"))!
+      .click(),
+  );
+  expect(
+    control("Ofrecer Plastificado pouch").getAttribute("aria-disabled"),
+  ).toBe("true");
+  await act(async () => control("Ofrecer Plastificado pouch").click());
+  expect(mocks.guardar).not.toHaveBeenCalled();
 });

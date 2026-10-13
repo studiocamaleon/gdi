@@ -72,7 +72,33 @@ class TramoMargenCentroCopiadoDto {
   margenPct!: number;
 }
 
+class FormatoPouchDto {
+  @IsString()
+  @MaxLength(40)
+  tamano!: string;
+  @IsUUID()
+  varianteId!: string;
+}
+class PouchCopiadoDto {
+  @IsOptional()
+  @IsUUID()
+  centroCostoId!: string | null;
+  @IsNumber()
+  @Min(0.01)
+  @Max(60)
+  minutosPorHoja!: number;
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => FormatoPouchDto)
+  formatos!: FormatoPouchDto[];
+}
 export class ActualizarCentroCopiadoConfigDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PouchCopiadoDto)
+  pouch?: PouchCopiadoDto;
+
   /** Versión leída por el cliente; 0 representa una configuración aún inexistente. */
   @IsOptional()
   @IsInt()
@@ -178,9 +204,9 @@ export class ActualizarCentroCopiadoConfigDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(1)
+  @ArrayMaxSize(2)
   @ArrayUnique()
-  @IsIn(['Anillado'], { each: true })
+  @IsIn(['Anillado', 'Plastificado pouch'], { each: true })
   terminaciones?: string[] | null;
 
   @IsOptional()

@@ -1301,7 +1301,8 @@ function CentroCopiadoContenido({
         0,
       )
     : 0;
-  const impresionNeto = Math.max(0, (t?.subtotal ?? 0) - anilladoNeto);
+  const pouchNeto = preview?.documentos.reduce((total, d) => total + (d.pouch && !d.pouch.error ? d.pouch.subtotal : 0), 0) ?? 0;
+  const impresionNeto = Math.max(0, (t?.subtotal ?? 0) - anilladoNeto - pouchNeto);
   // Filas incompletas: sin páginas (manuales / no-PDF sin cargar) o sin papel.
   const incompletos = docs.filter(
     (d) => !!seleccionDe(d).error || faltaConfiguracion(d),
@@ -2586,7 +2587,8 @@ function CentroCopiadoContenido({
               {t && !tieneErroresCotizacion ? (
                 <>
                   Impresión {fmt(impresionNeto)}
-                  {conTerminaciones && <> · Anillado {fmt(anilladoNeto)}</>} ·
+                  {conTerminaciones && anilladoNeto > 0 && <> · Anillado {fmt(anilladoNeto)}</>}
+                  {conTerminaciones && pouchNeto > 0 && <> · Plastificado pouch {fmt(pouchNeto)}</>} ·
                   IVA {fmt(t.iva)}
                 </>
               ) : cotizando ? (

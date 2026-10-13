@@ -39,7 +39,9 @@ export interface CentroCopiadoSegmentoMeta {
 
 /** Contrato de rehidratación; `version` es opcional para cargas históricas. */
 export interface CentroCopiadoMeta {
-  tandaImpresion?: import("../../apps/api/src/common/tandas-copiado").ReferenciaTanda | null;
+  tandaImpresion?:
+    | import("../../apps/api/src/common/tandas-copiado").ReferenciaTanda
+    | null;
   copiasPorPagina?: CopiasPaginaCad[];
   modo?: "HOJAS" | "CAD";
   cad?: SeleccionCad;
@@ -159,7 +161,10 @@ export interface GrupoCentroCopiado {
 export interface CotizarCentroCopiadoRequest {
   canalVenta?: string;
   tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
-  cargasPedido?: (Pick<CotizarCentroCopiadoRequest, "documentos" | "grupos" | "tipoCambioId"> & {
+  cargasPedido?: (Pick<
+    CotizarCentroCopiadoRequest,
+    "documentos" | "grupos" | "tipoCambioId"
+  > & {
     descuento?: { tipo: "PORCENTAJE" | "MONTO"; valor: number };
   })[];
   tipoCambioId?: string;
@@ -180,6 +185,12 @@ export interface DocumentoPreview {
   total: number;
   /** Anillado del doc suelto (cada copia = 1 libro); null si no aplica. */
   anillado: AnilladoPreview | null;
+  pouch?: {
+    subtotal: number;
+    iva: number;
+    total: number;
+    error: string | null;
+  } | null;
   error: string | null;
 }
 
@@ -310,7 +321,26 @@ export interface MaquinaOpcion {
   esColor: boolean;
 }
 
+export interface ConfigPouchCopiado {
+  centroCostoId: string | null;
+  minutosPorHoja: number;
+  formatos: { tamano: string; varianteId: string }[];
+}
+export interface VariantePouchCopiado {
+  id: string;
+  materiaPrimaId: string;
+  nombre: string;
+  anchoMm: number;
+  altoMm: number;
+  margenMm: number;
+}
+export const POUCH_COPIADO_DEFAULT: ConfigPouchCopiado = {
+  centroCostoId: null,
+  minutosPorHoja: 0.5,
+  formatos: [],
+};
 export interface CentroCopiadoConfig {
+  pouch?: ConfigPouchCopiado;
   /** Producto técnico cotizado por el motor universal. */
   productoId: string | null;
   /** Versión optimista: evita pisar cambios realizados desde otra sesión. */
@@ -346,6 +376,8 @@ export interface CentroCopiadoConfig {
   tapaContratapaMateriaPrimaId: string | null;
   /** Universo para elegir (el menú de tamaños está en CC_FORMATOS_MENU). */
   disponibles: {
+    pouches?: VariantePouchCopiado[];
+    centrosCosto?: { id: string; nombre: string }[];
     papeles: {
       materiaPrimaId: string;
       nombre: string;
@@ -374,6 +406,7 @@ export interface CentroCopiadoConfig {
 
 /** Campos a actualizar. Omitir = no tocar; enviar null = limpiar (default). */
 export interface ActualizarConfigRequest {
+  pouch?: ConfigPouchCopiado;
   version?: number;
   activo?: boolean;
   cobraSetup?: boolean;

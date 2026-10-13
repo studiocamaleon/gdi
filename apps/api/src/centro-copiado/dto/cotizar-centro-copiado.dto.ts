@@ -158,7 +158,7 @@ export class DocumentoCentroCopiadoDto {
   /** Terminaciones (pasos opcionales) de un documento suelto. */
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(1)
+  @ArrayMaxSize(2)
   @ArrayUnique()
   @IsIn(CENTRO_COPIADO_TERMINACIONES, { each: true })
   terminaciones?: string[];
@@ -191,7 +191,7 @@ export class GrupoCentroCopiadoDto {
   /** Terminaciones (pasos opcionales) del tomo entero. */
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(1)
+  @ArrayMaxSize(2)
   @ArrayUnique()
   @IsIn(CENTRO_COPIADO_TERMINACIONES, { each: true })
   terminaciones?: string[];

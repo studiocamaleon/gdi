@@ -38,6 +38,7 @@ import {
   CheckCircle2,
   Clock3,
   History,
+  Layers,
   Printer,
   FileText,
   Check,
@@ -85,8 +86,15 @@ import {
   type FormatosPorGramaje,
 } from "@/lib/centro-copiado-api";
 
+import { CentroCopiadoPouchConfig } from "./centro-copiado-pouch-config";
+import {
+  POUCH_COPIADO_DEFAULT,
+  type ConfigPouchCopiado,
+} from "@/lib/centro-copiado-api";
+
 const AUTO = "__auto__";
 type FirmaArgs = {
+  pouch: ConfigPouchCopiado;
   activo: boolean;
   cobraSetup: boolean;
   margen: string;
@@ -184,6 +192,9 @@ export function CentroCopiadoConfigView() {
   const [terminaciones, setTerminaciones] = React.useState<Set<string>>(
     new Set(),
   );
+  const [pouch, setPouch] = React.useState<ConfigPouchCopiado>(
+    POUCH_COPIADO_DEFAULT,
+  );
   const [tiposAnillo, setTiposAnillo] = React.useState<Set<string>>(new Set());
   const [maquinaColor, setMaquinaColor] = React.useState<string | null>(null);
   const [maquinaBn, setMaquinaBn] = React.useState<string | null>(null);
@@ -228,6 +239,7 @@ export function CentroCopiadoConfigView() {
         seleccionPapeles.set(p.materiaPrimaId, new Set(p.gramajes));
     }
     const formulario: FirmaArgs = {
+      pouch: config.pouch ?? POUCH_COPIADO_DEFAULT,
       activo: config.activo,
       cobraSetup: config.cobraSetup,
       margen: String(config.margenPct ?? 40),
@@ -249,9 +261,7 @@ export function CentroCopiadoConfigView() {
       tamanos: new Set(
         config.tamanos ?? config.disponibles.formatos.map((f) => f.nombre),
       ),
-      terminaciones: new Set(
-        config.terminaciones ?? config.disponibles.terminaciones,
-      ),
+      terminaciones: new Set(config.terminaciones ?? ["Anillado"]),
       tiposAnillo: new Set(
         config.tiposAnillo ??
           config.disponibles.tiposAnillo
@@ -265,6 +275,7 @@ export function CentroCopiadoConfigView() {
       tapaContratapa: config.tapaContratapaMateriaPrimaId,
     };
     setCfg(config);
+    setPouch(formulario.pouch);
     setActivo(formulario.activo);
     setCobraSetup(formulario.cobraSetup);
     setMargen(formulario.margen);
@@ -315,6 +326,7 @@ export function CentroCopiadoConfigView() {
   const firmaActual = React.useMemo(
     () =>
       firmaFormulario({
+        pouch,
         activo,
         cobraSetup,
         margen,
@@ -336,6 +348,7 @@ export function CentroCopiadoConfigView() {
         tapaContratapa,
       }),
     [
+      pouch,
       activo,
       cobraSetup,
       margen,
@@ -547,10 +560,8 @@ export function CentroCopiadoConfigView() {
             : [...tamanos],
         ...(conTerminaciones
           ? {
-              terminaciones:
-                terminaciones.size === cfg.disponibles.terminaciones.length
-                  ? null
-                  : [...terminaciones],
+              pouch,
+              terminaciones: [...terminaciones],
               tiposAnillo:
                 tiposAnillo.size ===
                 cfg.disponibles.tiposAnillo.filter((tipo) => tipo.instalado)
@@ -1128,7 +1139,8 @@ export function CentroCopiadoConfigView() {
                     <AlertDescription>
                       El motor calcula costos y precios sugeridos. Si un canal
                       usa un tarifario, el precio de venta sale de su matriz;
-                      configurá el importe mínimo y la preparación en «Reglas comerciales».
+                      configurá el importe mínimo y la preparación en «Reglas
+                      comerciales».
                     </AlertDescription>
                   </Alert>
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
@@ -1182,7 +1194,8 @@ export function CentroCopiadoConfigView() {
                 <CardTitle>Ruta de producción</CardTitle>
                 <CardDescription>
                   Esta es la ruta que ejecuta Carga rápida. La impresión es
-                  obligatoria y el anillado se activa por trabajo.
+                  obligatoria. El plastificado y el anillado se activan por
+                  trabajo.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col items-stretch gap-3 md:flex-row md:items-center">
@@ -1204,7 +1217,31 @@ export function CentroCopiadoConfigView() {
                 <Card className="flex-1">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <BookOpen /> 2. Anillado
+                      <Layers /> Plastificado pouch
+                    </CardTitle>
+                    <CardDescription>
+                      Sobre por formato y tiempo por hoja, antes del anillado.
+                    </CardDescription>
+                    <CardAction>
+                      <Badge
+                        variant={
+                          terminaciones.has("Plastificado pouch")
+                            ? "secondary"
+                            : "outline"
+                        }
+                      >
+                        {terminaciones.has("Plastificado pouch")
+                          ? "Opcional activo"
+                          : "Desactivado"}
+                      </Badge>
+                    </CardAction>
+                  </CardHeader>
+                </Card>
+                <ArrowRight className="self-center text-muted-foreground max-md:rotate-90" />
+                <Card className="flex-1">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BookOpen /> Anillado
                     </CardTitle>
                     <CardDescription>
                       Espiral plástico o Wire-O, con máquina y consumibles del
@@ -1355,6 +1392,14 @@ export function CentroCopiadoConfigView() {
                 </Card>
               </fieldset>
             </div>
+            <CentroCopiadoPouchConfig
+              activo={terminaciones.has("Plastificado pouch")}
+              onActivo={() => toggleSet("Plastificado pouch", setTerminaciones)}
+              value={pouch}
+              onChange={setPouch}
+              disponibles={cfg.disponibles}
+              disabled={!puedeGestionar || guardando || !conTerminaciones}
+            />
           </fieldset>
         </TabsContent>
 

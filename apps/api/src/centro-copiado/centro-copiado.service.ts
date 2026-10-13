@@ -1,3 +1,12 @@
+import {
+  activarPouch,
+  guardarConfigPouch,
+  leerConfigPouch,
+  variantesPouch,
+  TERMINACION_POUCH,
+  type ConfigPouchCopiado,
+  type VariantePouchCopiado,
+} from './pouch-copiado';
 import { seleccionarPapelesCortados } from './seleccion-papel-cortado';
 import { reservasPorSaldo } from '../inventario/stock-reservas';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -81,6 +90,9 @@ type Ctx = PlantillaContexto & {
   papeles: PapelTipo[];
   /** configPaso del anillado opcional (Etapa C); null = no está en la ruta. */
   anilladoConfigPasoId: string | null;
+  pouchConfigPasoId?: string | null;
+  pouchConfig?: ConfigPouchCopiado;
+  pouches?: VariantePouchCopiado[];
   /** Anillos instalados, para etiquetar el Ø elegido por capacidad y tipo. */
   anillos: Array<{
     tipoAnillo: string;
@@ -146,6 +158,12 @@ export interface DocumentoResultado {
   total: number;
   /** Anillado del doc SUELTO (cada copia = 1 libro); null si no aplica. */
   anillado: AnilladoResultado | null;
+  pouch?: {
+    subtotal: number;
+    iva: number;
+    total: number;
+    error: string | null;
+  } | null;
   error: string | null;
 }
 
@@ -319,12 +337,7 @@ function pasoImpresion<
   );
 }
 
-/**
- * Terminaciones (pasos opcionales) que ofrece el centro de copiado. Hoy sólo
- * Anillado (sin costo hasta que el taller cargue anilladora + anillos). Cuando
- * la ruta de la plantilla tenga pasos opcionales reales (plastificado, etc.),
- * esta lista saldrá de ahí y cada terminación activará su paso con costo.
- */
+/** Terminaciones ofrecidas cuando su configuración productiva está disponible. */
 const TERMINACIONES_DISPONIBLES: readonly string[] =
   CENTRO_COPIADO_TERMINACIONES;
 
@@ -434,11 +447,13 @@ export class CentroCopiadoService {
       papelDefaultId:
         obra?.materiaPrimaId ?? papeles[0]?.materiaPrimaId ?? null,
       terminaciones: (
-        (config.terminacionesJson as string[] | null) ??
-        TERMINACIONES_DISPONIBLES
+        (config.terminacionesJson as string[] | null) ?? ['Anillado']
       ).filter(
         (t) =>
-          conTerminaciones && (t !== 'Anillado' || !!ctx.anilladoConfigPasoId),
+          conTerminaciones &&
+          (t !== 'Anillado' || !!ctx.anilladoConfigPasoId) &&
+          (t !== TERMINACION_POUCH ||
+            (!!ctx.pouchConfigPasoId && !!ctx.pouchConfig?.formatos.length)),
       ),
       tiposAnillo: conTerminaciones ? tiposAnillo : [],
       tamanosOfrecidos: (config.tamanosJson as string[] | null) ?? null,
@@ -653,6 +668,7 @@ export class CentroCopiadoService {
       minimoHojasFacturables: precios.minimoHojasFacturables,
       setupMin: precios.setupMin,
       cleanupMin: precios.cleanupMin,
+      pouch: ctx.pouchConfig ?? leerConfigPouch(null),
       // Selección actual del tenant (null = todos / default / auto-resolver).
       papeles: (config.papelesJson as PapelConfig[] | null) ?? null,
       tamanos: (config.tamanosJson as string[] | null) ?? null,
@@ -681,6 +697,12 @@ export class CentroCopiadoService {
             ),
           ).map((formato) => formato.nombre),
         })),
+        pouches: await variantesPouch(this.prisma, tenantId),
+        centrosCosto: await this.prisma.centroCosto.findMany({
+          where: { tenantId, activo: true },
+          select: { id: true, nombre: true },
+          orderBy: { nombre: 'asc' },
+        }),
         terminaciones: TERMINACIONES_DISPONIBLES,
         terminacionesCatalogo: CENTRO_COPIADO_TERMINACIONES_CATALOGO,
         formatos: CENTRO_COPIADO_FORMATOS,
@@ -866,6 +888,7 @@ export class CentroCopiadoService {
     if (
       [
         dto.terminaciones,
+        dto.pouch,
         dto.tiposAnillo,
         dto.maquinaAnilladoraId,
         dto.tapaFrontalMateriaPrimaId,
@@ -971,6 +994,25 @@ export class CentroCopiadoService {
       // Margen y tiempos viven en el producto/paso porque el motor universal
       // los consume ahí, pero participan del mismo commit de configuración.
       await this.aplicarPrecioYTiempos(tx, tenantId, dto);
+      if (dto.pouch || dto.terminaciones?.includes(TERMINACION_POUCH)) {
+        const pasoPouch = await tx.productoConfigPaso.findFirst({
+          where: {
+            tenantId,
+            rutaPaso: { familiaCodigo: 'plastificado_pouch' },
+            productoRutaAlternativa: {
+              producto: { codigo: CC_PRODUCTO_CODIGO, tenantId },
+            },
+          },
+        });
+        await guardarConfigPouch(
+          tx,
+          tenantId,
+          dto.pouch ?? leerConfigPouch(pasoPouch?.paramsPasoJson),
+          (
+            (config.terminacionesJson as string[] | null) ?? ['Anillado']
+          ).includes(TERMINACION_POUCH),
+        );
+      }
       await this.auditoria?.registrar(tx, {
         tenantId,
         actorUserId,
@@ -1242,6 +1284,9 @@ export class CentroCopiadoService {
       rutaAlt.configPasos.find((c) =>
         familiaPublicaOutput(c.rutaPaso?.familiaCodigo, 'libros_anillados'),
       )?.id ?? null;
+    const pasoPouch = rutaAlt.configPasos.find(
+      (c) => c.rutaPaso?.familiaCodigo === 'plastificado_pouch',
+    );
     const color = cp.maquinasCandidatas.find((c) =>
       c.modoColorAllowedModes.includes('CMYK'),
     );
@@ -1425,6 +1470,9 @@ export class CentroCopiadoService {
       cobraSetup: config.cobraSetup,
       papeles,
       anilladoConfigPasoId,
+      pouchConfigPasoId: pasoPouch?.id ?? null,
+      pouchConfig: leerConfigPouch(pasoPouch?.paramsPasoJson),
+      pouches: pasoPouch ? await variantesPouch(this.prisma, tenantId) : [],
       anillos,
       tiposAnilloPermitidos: tiposConfigurados,
       tapas,
@@ -1461,12 +1509,14 @@ export class CentroCopiadoService {
       ? new Map(papelesCfg.map((p) => [p.materiaPrimaId, p.gramajes ?? null]))
       : null;
     const tamanosPermitidos = (config.tamanosJson as string[] | null) ?? null;
-    const terminacionesConfiguradas =
-      (config.terminacionesJson as string[] | null) ??
-      TERMINACIONES_DISPONIBLES;
+    const terminacionesConfiguradas = (config.terminacionesJson as
+      | string[]
+      | null) ?? ['Anillado'];
     const terminacionesPermitidas = new Set(
       terminacionesConfiguradas.filter(
-        (t) => t !== 'Anillado' || !!ctx.anilladoConfigPasoId,
+        (t) =>
+          (t !== 'Anillado' || !!ctx.anilladoConfigPasoId) &&
+          (t !== TERMINACION_POUCH || !!ctx.pouchConfigPasoId),
       ),
     );
     const tiposAnilloPermitidos = new Set(
@@ -1731,7 +1781,30 @@ export class CentroCopiadoService {
           pliegoDeDoc(doc),
         )
       : null;
-    const jobContext = this.foldAnillado(seg.jobContext, anil?.additions);
+    const pouch = doc.terminaciones?.includes(TERMINACION_POUCH)
+      ? activarPouch(
+          {
+            configPasoId: ctx.pouchConfigPasoId,
+            config: ctx.pouchConfig,
+            variantes: ctx.pouches,
+          },
+          doc.tamano,
+          doc.tamanoAnchoMm,
+          doc.tamanoAltoMm,
+          seg.hojas,
+        )
+      : null;
+    if (pouch?.error)
+      return {
+        ...base,
+        pliegos: 0,
+        subtotal: 0,
+        iva: 0,
+        total: 0,
+        error: pouch.error,
+      };
+    const jobPouch = this.foldAnillado(seg.jobContext, pouch?.additions);
+    const jobContext = this.foldAnillado(jobPouch, anil?.additions);
     const cotizarJob = (contexto: Record<string, unknown>) =>
       this.motor.cotizar({
         tenantId,
@@ -1744,7 +1817,7 @@ export class CentroCopiadoService {
     // final sigue siendo una sola; la diferencia se expone sólo para que Carga
     // rápida pueda explicar cuánto corresponde a hojas y cuánto a terminación.
     const [r, rSinAnillado] = anil?.additions
-      ? await Promise.all([cotizarJob(jobContext), cotizarJob(seg.jobContext)])
+      ? await Promise.all([cotizarJob(jobContext), cotizarJob(jobPouch)])
       : [await cotizarJob(jobContext), null];
     if (!r.exitoso || !r.cotizacion) {
       return {
@@ -1778,8 +1851,36 @@ export class CentroCopiadoService {
         };
       }
     }
+    let pouchPrecio: DocumentoResultado['pouch'] = null;
+    if (pouch?.additions) {
+      const imp = await cotizarJob(seg.jobContext);
+      const soloPouch = anil?.additions ? rSinAnillado : r;
+      if (
+        !imp.exitoso ||
+        !imp.cotizacion ||
+        !soloPouch?.exitoso ||
+        !soloPouch.cotizacion
+      )
+        return {
+          ...base,
+          pliegos: 0,
+          subtotal: 0,
+          iva: 0,
+          total: 0,
+          error: 'No se pudo desglosar el plastificado.',
+        };
+      const sin = this.extraerMontos(imp.cotizacion);
+      const con = this.extraerMontos(soloPouch.cotizacion);
+      pouchPrecio = {
+        subtotal: redondear(con.subtotal - sin.subtotal),
+        iva: redondear(con.iva - sin.iva),
+        total: redondear(con.total - sin.total),
+        error: null,
+      };
+    }
     return {
       ...base,
+      pouch: pouchPrecio,
       pliegos: montos.pliegos,
       subtotal: montos.subtotal,
       iva: montos.iva,
@@ -2111,6 +2212,10 @@ export class CentroCopiadoService {
       ...segJobContext,
       ...additions,
       slotMateriales: { ...baseSlots, ...addSlots },
+      opcionalesActivados: {
+        ...(segJobContext.opcionalesActivados as object),
+        ...(additions.opcionalesActivados as object),
+      },
     };
   }
 
@@ -2178,7 +2283,14 @@ export class CentroCopiadoService {
           return this.cad!.cotizar(tenantId, doc, periodo, dto.clienteId);
         return this.cotizarDocumento(
           tenantId,
-          doc as DocumentoInput,
+          {
+            ...doc,
+            terminaciones: grupo
+              ? (grupo.terminaciones ?? []).filter(
+                  (t) => t === TERMINACION_POUCH,
+                )
+              : doc.terminaciones,
+          } as DocumentoInput,
           { ...ctx, cobraSetup: preparaciones.get(doc.id) ?? ctx.cobraSetup },
           copias,
           periodo,
@@ -2536,7 +2648,34 @@ export class CentroCopiadoService {
           'La terminación Anillado no está disponible para este documento.',
       };
     }
-    const jobImpresion = this.foldAnillado(seg.jobContext, anil?.additions);
+    const pouch = terminaciones.includes(TERMINACION_POUCH)
+      ? activarPouch(
+          {
+            configPasoId: ctx.pouchConfigPasoId,
+            config: ctx.pouchConfig,
+            variantes: ctx.pouches,
+          },
+          doc.tamano,
+          doc.tamanoAnchoMm,
+          doc.tamanoAltoMm,
+          hojas,
+        )
+      : null;
+    if (pouch?.error)
+      return {
+        copias,
+        carillas,
+        hojas,
+        anilladoActivo: false,
+        nombre,
+        jobContext: null,
+        especificaciones,
+        error: pouch.error,
+      };
+    const jobImpresion = this.foldAnillado(
+      this.foldAnillado(seg.jobContext, pouch?.additions),
+      anil?.additions,
+    );
     if (anil?.meta && !anil.meta.error && anil.meta.diametroMm) {
       especificaciones['Anillo'] =
         `${labelTipoAnillo(anil.meta.tipoAnillo)} Ø${anil.meta.diametroMm} mm`;

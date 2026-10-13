@@ -10,6 +10,7 @@ export const CENTRO_COPIADO_TERMINACIONES_CATALOGO = [
     familiaCodigo: 'encuadernado_anillado',
     requiereMaquina: 'ANILLADORA',
   },
+  { codigo: 'Plastificado pouch', etiqueta: 'Plastificado pouch', familiaCodigo: 'plastificado_pouch', requiereMaquina: null },
 ] as const;
 export const CENTRO_COPIADO_TERMINACIONES =
   CENTRO_COPIADO_TERMINACIONES_CATALOGO.map(

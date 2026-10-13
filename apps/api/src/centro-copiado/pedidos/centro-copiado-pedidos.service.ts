@@ -162,34 +162,40 @@ export class CentroCopiadoPedidosService {
         pesos,
         decimales,
       );
+      const terminaciones = [
+        grupo?.anillado,
+        ...filas.flatMap((f) => [f.anillado, f.pouch]),
+      ].filter((t): t is NonNullable<typeof t> => !!t && !t.error);
+      const pesosTerminaciones = terminaciones.map((t) => String(t.subtotal));
+      for (const [campo, importe] of [
+        ['subtotal', precio.terminaciones.neto],
+        ['iva', precio.terminaciones.iva],
+        ['total', precio.terminaciones.total],
+      ] as const) {
+        const importes = repartir(importe, pesosTerminaciones, decimales);
+        terminaciones.forEach((t, n) => {
+          t[campo] = Number(importes[n]);
+        });
+      }
       filas.forEach((fila, n) => {
-        fila.subtotal = Number(netos[n]);
-        fila.iva = Number(ivas[n]);
-        fila.total = new D(netos[n]).plus(ivas[n]).toNumber();
-        if (!grupo && fila.anillado) {
-          Object.assign(fila.anillado, {
-            subtotal: Number(precio.terminaciones.neto),
-            iva: Number(precio.terminaciones.iva),
-            total: Number(precio.terminaciones.total),
-          });
+        if (!grupo) {
           fila.subtotal = Number(precio.neto);
           fila.iva = Number(precio.iva);
           fila.total = Number(precio.total);
+        } else {
+          fila.subtotal = new D(netos[n])
+            .plus(fila.pouch?.subtotal ?? 0)
+            .toNumber();
+          fila.iva = new D(ivas[n]).plus(fila.pouch?.iva ?? 0).toNumber();
+          fila.total = new D(fila.subtotal).plus(fila.iva).toNumber();
         }
       });
-      if (grupo) {
+      if (grupo)
         Object.assign(grupo, {
           subtotal: Number(precio.neto),
           iva: Number(precio.iva),
           total: Number(precio.total),
         });
-        if (grupo.anillado)
-          Object.assign(grupo.anillado, {
-            subtotal: Number(precio.terminaciones.neto),
-            iva: Number(precio.terminaciones.iva),
-            total: Number(precio.terminaciones.total),
-          });
-      }
     }
     const filas = [
       ...preview.documentos.filter((d) => !d.grupoId),
