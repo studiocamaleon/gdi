@@ -148,7 +148,7 @@ describe('documentos PDF durables (PostgreSQL de test)', () => {
   function presupuestoService() {
     return new PresupuestosService(
       prisma,
-      {} as never,
+      { exigirCopiadoEmitibleTx: jest.fn().mockResolvedValue(undefined) } as never,
       archivos,
       {} as never,
       {} as never,

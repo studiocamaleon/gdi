@@ -1,6 +1,7 @@
 "use client";
 
 import { DescargarArchivosButton } from "./descargar-archivos-button";
+import { TandasCopiadoPanel } from "../comercial/tandas-copiado-panel";
 import { TomoPdfPreview } from "../comercial/tomo-pdf-preview";
 import type { metaCentroCopiado } from "@/lib/centro-copiado-api";
 import * as React from "react";
@@ -215,7 +216,14 @@ export function ArchivosOrdenTab({
       ) : (
         <div className="arch-tab">
           <div className="flex justify-end">
-            <DescargarArchivosButton tipo="orden" id={ordenId} disabled={!data.documento.length && !data.items.some((i) => i.archivos.length)} />
+            <DescargarArchivosButton
+              tipo="orden"
+              id={ordenId}
+              disabled={
+                !data.documento.length &&
+                !data.items.some((i) => i.archivos.length)
+              }
+            />
           </div>
           <DesarrolloDocumentalOrden
             ordenId={ordenId}
@@ -255,6 +263,8 @@ export function ArchivosOrdenTab({
             onRestaurado={recargar}
             soloLectura={soloLectura}
           />
+
+          <TandasCopiadoPanel items={data.items} metas={tomos} />
 
           {data.items.map((item) => (
             <div key={item.itemId} className="arch-bloque">

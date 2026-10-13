@@ -22,6 +22,7 @@ export interface DocumentoInput {
   id: string;
   nombre?: string;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
@@ -164,6 +165,8 @@ export function construirSegmento(
 }
 
 export interface VariantePapel {
+  origenDerivadoId?: string;
+  stockLibre?: number;
   id: string;
   formatoComercial: string | null;
   anchoMm: number | null;
@@ -196,14 +199,29 @@ export function resolverVariantePapel(
   gramaje?: number | null,
 ): string | null {
   if (variantes.length === 0) return null;
-  let pool = variantes;
+  const mismaMedida = (v: VariantePapel) =>
+    Math.abs(
+      Math.min(v.anchoMm ?? 0, v.altoMm ?? 0) -
+        Math.min(pliego.anchoMm, pliego.altoMm),
+    ) < 0.01 &&
+    Math.abs(
+      Math.max(v.anchoMm ?? 0, v.altoMm ?? 0) -
+        Math.max(pliego.anchoMm, pliego.altoMm),
+    ) < 0.01;
+  let pool = variantes.filter((v) => !v.origenDerivadoId || mismaMedida(v));
   if (gramaje != null) {
-    const conGramaje = variantes.filter((v) => v.gramajeGr === gramaje);
+    const conGramaje = pool.filter((v) => v.gramajeGr === gramaje);
     if (conGramaje.length) pool = conGramaje;
   }
+  pool = [...pool].sort(
+    (a, b) => Number(!!b.origenDerivadoId) - Number(!!a.origenDerivadoId),
+  );
   const objetivo = pliego.preset.toLowerCase();
   const exacta = pool.find(
-    (v) => (v.formatoComercial ?? '').toLowerCase() === objetivo,
+    (v) =>
+      mismaMedida(v) ||
+      ((v.formatoComercial ?? '').toLowerCase() === objetivo &&
+        variantesCubre(v, pliego)),
   );
   if (exacta) return exacta.id;
 

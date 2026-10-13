@@ -202,6 +202,7 @@ export type TableroItemData = {
   caras?: 1 | 2;
   /** Item manual/histórico sin snapshot: no tiene ruta de producción. */
   sinRuta: boolean;
+  listoEnMostrador?: boolean;
   pasos: TableroPasoData[];
 };
 
@@ -517,7 +518,7 @@ export function pasoReabrible(
   item: TableroItemData,
   paso: TableroPasoData,
 ): boolean {
-  if (paso.estado !== "hecho") return false;
+  if (item.listoEnMostrador || paso.estado !== "hecho") return false;
   if (paso.nodoClave) {
     const porId = new Map(
       item.pasos.map((candidato) => [candidato.id, candidato]),
@@ -590,6 +591,7 @@ export function etiquetaPasoKanban(
 /** "45 min" / "2h 30m" / "12 h" a partir de minutos estimados. */
 export function etiquetaDuracion(min: number | null): string | null {
   if (min == null || min <= 0) return null;
+  if (min < 1) return `${min.toLocaleString("es-AR", { maximumFractionDigits: 2 })} min`;
   if (min < 60) return `${Math.round(min)} min`;
   const horas = Math.floor(min / 60);
   const resto = Math.round(min % 60);

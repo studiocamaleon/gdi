@@ -1009,10 +1009,12 @@ export class InventarioService {
     cambioStock: Awaited<
       ReturnType<TipoCambioService['resolver']>
     > | null = null,
+    opciones: { costoCeroExplicito?: boolean } = {},
   ) {
     if (!this.isSupportedSimpleMovement(payload.tipo))
       throw new BadRequestException('Tipo de movimiento no soportado.');
     const usaReferencia =
+      !(opciones.costoCeroExplicito && payload.costoUnitario === 0) &&
       (!payload.costoUnitario || payload.costoUnitario <= 0) &&
       ['ingreso', 'ajuste_entrada'].includes(payload.tipo);
 
@@ -1148,7 +1150,10 @@ export class InventarioService {
       tipo === TipoMovimientoStockMateriaPrima.INGRESO ||
       tipo === TipoMovimientoStockMateriaPrima.AJUSTE_ENTRADA
     ) {
-      if (unitCost === null || unitCost <= 0) {
+      if (
+        unitCost === null ||
+        (unitCost <= 0 && !opciones.costoCeroExplicito)
+      ) {
         const precioReferenciaVariante =
           pesoReal &&
           contextoUnidades.unidadPrecio &&

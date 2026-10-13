@@ -1,3 +1,10 @@
+import { precioPapelCortado } from '../inventario/precio-papel-cortado';
+import {
+  cantidadPapelCortado,
+  planPapelDerivado,
+} from '../inventario/papel-derivado';
+import { cargarPapelesMotorCopiado } from '../centro-copiado/papeles-motor';
+import { cargarAnilladoMotorCopiado } from '../centro-copiado/anillado-motor';
 import {
   costosPasosPrecio,
   escalarCostosPasos,
@@ -7332,6 +7339,66 @@ export class MotorUniversalService {
         cantidad - cantidadTrabajoAntesDeMerma,
       );
 
+      const hojaImpresion = nestingDispatch?.substrates.find(
+        (s) => s.kind === 'sheet',
+      );
+      const papelDerivado =
+        paso.conservaSobrantePapel &&
+        slot.slotCodigo === 'sustrato_principal' &&
+        formulaConsumo === 'por_unidad_productiva' &&
+        cantidadPrimitiva === null &&
+        cantidadPorBase === null
+          ? planPapelDerivado(
+              cantidad,
+              materialResuelto.atributosVarianteJson,
+              Number(
+                hojaImpresion?.widthMm ?? jobContext.pliego_impresion_ancho_mm,
+              ),
+              Number(
+                hojaImpresion?.heightMm ?? jobContext.pliego_impresion_alto_mm,
+              ),
+            )
+          : undefined;
+      if (
+        papelDerivado &&
+        (normalizarUnidad(materialResuelto.contextoUnidades?.unidadStock) !==
+          'HOJA' ||
+          normalizarUnidad(materialResuelto.unidadStock) !== 'HOJA')
+      ) {
+        errores.push({
+          codigo: 'papel_derivado_unidad_invalida',
+          severidad: 'ERROR',
+          mensaje:
+            'El papel para corte necesita stock y uso expresados en hojas. Revisá las unidades del material.',
+        });
+        continue;
+      }
+      if (papelDerivado) {
+        cantidad = papelDerivado.hojasNecesarias / papelDerivado.rendimiento;
+        cantidadMermaAdicional = Math.max(
+          0,
+          cantidad - cantidadTrabajoAntesDeMerma,
+        );
+      }
+      const hojasCortadas =
+        paso.conservaSobrantePapel &&
+        slot.slotCodigo === 'sustrato_principal' &&
+        formulaConsumo === 'por_unidad_productiva' &&
+        cantidadPrimitiva === null &&
+        cantidadPorBase === null
+          ? cantidadPapelCortado(
+              cantidad,
+              materialResuelto.atributosVarianteJson,
+            )
+          : undefined;
+      if (hojasCortadas !== undefined) {
+        cantidad = hojasCortadas;
+        cantidadMermaAdicional = Math.max(
+          0,
+          cantidad - cantidadTrabajoAntesDeMerma,
+        );
+      }
+
       const unidadConsumo = unidadEfectivaDeFormula(
         formulaConsumo,
         materialResuelto.unidadStock,
@@ -7390,17 +7457,18 @@ export class MotorUniversalService {
         debeEjecutarNestingRectangularCorte(paso, jobContext) &&
         (Boolean(slot.cantidadBase) ||
           !['por_unidad_productiva', 'por_m2'].includes(formulaConsumo));
-      const costeoNesting = conservarReglaExplicitaCorte
-        ? null
-        : this.calcularCosteoNestingMaterial(
-            resolverEstrategiaCosteoPaso(paso, jobContext),
-            precioReferencia,
-            jobContext,
-            nestingDispatch,
-            paso,
-            materialResuelto.unidadStock,
-            materialResuelto.contextoUnidades,
-          );
+      const costeoNesting =
+        papelDerivado || hojasCortadas !== undefined || conservarReglaExplicitaCorte
+          ? null
+          : this.calcularCosteoNestingMaterial(
+              resolverEstrategiaCosteoPaso(paso, jobContext),
+              precioReferencia,
+              jobContext,
+              nestingDispatch,
+              paso,
+              materialResuelto.unidadStock,
+              materialResuelto.contextoUnidades,
+            );
       let costoTotal: number;
       if (costeoNesting && precioUnitario > 0) {
         // El precio de catálogo está expresado en la unidad de stock. El
@@ -7488,6 +7556,7 @@ export class MotorUniversalService {
           materialResuelto.materiaPrimaTipoTecnico ?? null,
         atributosVarianteJson: materialResuelto.atributosVarianteJson ?? null,
         opcionesNestingRollo,
+        papelDerivado,
         tipoLineaCosto: 'MATERIAL',
         cantidad,
         // G-M9: la unidad efectiva depende de la fórmula del slot. Para
@@ -9053,7 +9122,7 @@ export class MotorUniversalService {
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
     // Scope obligatorio por tenant: la variante debe pertenecer al tenant.
-    const v = await this.prisma.materiaPrimaVariante.findFirst({
+    let v = await this.prisma.materiaPrimaVariante.findFirst({
       where: {
         id: variantId,
         tenantId,
@@ -9078,7 +9147,24 @@ export class MotorUniversalService {
         },
       },
     });
-    if (!v || precioMaterialEnMonedaCotizacion(v) == null) return null;
+    if (!v) return null;
+    const derivado = await precioPapelCortado(
+      this.prisma,
+      tenantId,
+      v.atributosVarianteJson as Record<string, unknown>,
+    );
+    if (derivado === null) return null;
+    if (derivado)
+      v = {
+        ...v,
+        precioReferencia: new Prisma.Decimal(derivado.precio),
+        moneda: derivado.moneda,
+        unidadPrecio: 'HOJA',
+        unidadUso: 'HOJA',
+        unidadStock: 'HOJA',
+        unidadCompra: 'HOJA',
+      };
+    if (precioMaterialEnMonedaCotizacion(v) == null) return null;
     const attrs = v.atributosVarianteJson as Record<string, unknown> | null;
     return {
       id: v.id,
@@ -11517,6 +11603,21 @@ export class MotorUniversalService {
         })),
       });
     });
+
+    await cargarPapelesMotorCopiado(
+      this.prisma,
+      tenantId,
+      producto,
+      rutaAlt.ruta,
+      pasos,
+    );
+    await cargarAnilladoMotorCopiado(
+      this.prisma,
+      tenantId,
+      producto,
+      rutaAlt.ruta,
+      pasos,
+    );
 
     const pasoByRutaPasoId = new Map(
       pasos.map((paso) => [paso.rutaPasoId, paso] as const),

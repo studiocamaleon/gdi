@@ -1,3 +1,8 @@
+import {
+  conservarSobrantesPapel,
+  idPapelCortado,
+  planesPapel,
+} from './papel-derivado-stock';
 import { validarSeleccionStockAlEmitir } from './seleccion-stock-emision';
 import { DETALLE_INICIO_SIN_STOCK } from './inicio-sin-stock';
 import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
@@ -285,6 +290,14 @@ export class ReservasMaterialService {
         : valida && !excluido && !manualVencida
           ? D(m.cantidad!)
           : (old?.consumida ?? D(0));
+      if (
+        old?.consumida.gt(0) &&
+        JSON.stringify(planesPapel(old.origenesJson)) !==
+          JSON.stringify(planesPapel(m.origenes))
+      )
+        throw new ConflictException(
+          'No se puede cambiar el plan de corte de papel que ya tiene consumo registrado.',
+        );
       if (old && cantidad.lt(old.consumida))
         throw new ConflictException(
           `La nueva necesidad de ${m.nombre} es menor que lo ya consumido. No se puede modificar ese consumo desde la cotización.`,
@@ -695,7 +708,12 @@ export class ReservasMaterialService {
           await bloquearVariantesStock(
             tx,
             tenantId,
-            necesidades.map((n) => n.varianteId),
+            necesidades.flatMap((n) => [
+              n.varianteId,
+              ...planesPapel(n.origenesJson).map((p) =>
+                idPapelCortado(tenantId, n.varianteId, p),
+              ),
+            ]),
           );
         if (
           comando.varianteId &&
@@ -713,6 +731,10 @@ export class ReservasMaterialService {
         const cambios: object[] = [];
         if (comando.accion === 'definir') {
           const n = necesidades[0];
+          if (planesPapel(n.origenesJson).length)
+            throw new BadRequestException(
+              'Modificá las hojas en Centro de copiado para actualizar su plan de corte.',
+            );
           if (
             !comando.cantidad ||
             !comando.motivo?.trim() ||
@@ -846,6 +868,17 @@ export class ReservasMaterialService {
               costoUnitario: stock.costoPromedio,
             },
           });
+          cambios.push(
+            ...(await conservarSobrantesPapel(tx, this.inventario, auth, {
+              varianteId: n.varianteId,
+              ubicacionId: comando.ubicacionId,
+              ordenId,
+              origenes: n.origenesJson,
+              consumida: n.consumida.toNumber(),
+              cantidad: comando.cantidad,
+              costoUnitario: stock.costoPromedio.toNumber(),
+            })),
+          );
           cambios.push({
             movimientoId: movimiento.movimientoId,
             consumida: comando.cantidad,

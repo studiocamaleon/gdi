@@ -1,3 +1,14 @@
+import {
+  activarPouch,
+  guardarConfigPouch,
+  leerConfigPouch,
+  variantesPouch,
+  TERMINACION_POUCH,
+  type ConfigPouchCopiado,
+  type VariantePouchCopiado,
+} from './pouch-copiado';
+import { seleccionarPapelesCortados } from './seleccion-papel-cortado';
+import { reservasPorSaldo } from '../inventario/stock-reservas';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { capacidadesCargaCopiado } from '../suscripciones/capacidades-copiado';
 import { CentroCopiadoCadService } from './centro-copiado-cad.service';
@@ -74,9 +85,14 @@ type CentroCopiadoDb = PrismaService | Prisma.TransactionClient;
 
 /** Contexto del plantilla + papeles disponibles (resueltos por request). */
 type Ctx = PlantillaContexto & {
+  materialesFijados?: Set<string>;
+  mermaPapelPct?: number;
   papeles: PapelTipo[];
   /** configPaso del anillado opcional (Etapa C); null = no está en la ruta. */
   anilladoConfigPasoId: string | null;
+  pouchConfigPasoId?: string | null;
+  pouchConfig?: ConfigPouchCopiado;
+  pouches?: VariantePouchCopiado[];
   /** Anillos instalados, para etiquetar el Ø elegido por capacidad y tipo. */
   anillos: Array<{
     tipoAnillo: string;
@@ -105,8 +121,13 @@ type Ctx = PlantillaContexto & {
   tapaContratapaMpId: string | null;
 };
 
-/** Papel ofrecido en la config: el tipo y, opcional, sus gramajes ofrecidos. */
-type PapelConfig = { materiaPrimaId: string; gramajes?: number[] };
+import {
+  errorOfertaPapel,
+  formatoOfrecido,
+  formatosProduciblesPorGramaje,
+  type PapelConfig,
+  type FormatosPorGramaje,
+} from './oferta';
 
 import {
   AgregarAOrdenCentroCopiadoDto,
@@ -137,6 +158,12 @@ export interface DocumentoResultado {
   total: number;
   /** Anillado del doc SUELTO (cada copia = 1 libro); null si no aplica. */
   anillado: AnilladoResultado | null;
+  pouch?: {
+    subtotal: number;
+    iva: number;
+    total: number;
+    error: string | null;
+  } | null;
   error: string | null;
 }
 
@@ -310,12 +337,7 @@ function pasoImpresion<
   );
 }
 
-/**
- * Terminaciones (pasos opcionales) que ofrece el centro de copiado. Hoy sólo
- * Anillado (sin costo hasta que el taller cargue anilladora + anillos). Cuando
- * la ruta de la plantilla tenga pasos opcionales reales (plastificado, etc.),
- * esta lista saldrá de ahí y cada terminación activará su paso con costo.
- */
+/** Terminaciones ofrecidas cuando su configuración productiva está disponible. */
 const TERMINACIONES_DISPONIBLES: readonly string[] =
   CENTRO_COPIADO_TERMINACIONES;
 
@@ -350,6 +372,7 @@ export class CentroCopiadoService {
       materiaPrimaId: string;
       nombre: string;
       gramajes: number[];
+      formatosPorGramaje?: FormatosPorGramaje[] | null;
       variantes: {
         formatoComercial: string | null;
         anchoMm: number | null;
@@ -389,6 +412,9 @@ export class CentroCopiadoService {
       return {
         materiaPrimaId: p.materiaPrimaId,
         nombre: p.nombre,
+        formatosPorGramaje:
+          papelesCfg?.find((c) => c.materiaPrimaId === p.materiaPrimaId)
+            ?.formatosPorGramaje ?? null,
         gramajes: usaFiltro
           ? p.gramajes.filter((g) => gramajesOk.includes(g))
           : p.gramajes,
@@ -421,11 +447,13 @@ export class CentroCopiadoService {
       papelDefaultId:
         obra?.materiaPrimaId ?? papeles[0]?.materiaPrimaId ?? null,
       terminaciones: (
-        (config.terminacionesJson as string[] | null) ??
-        TERMINACIONES_DISPONIBLES
+        (config.terminacionesJson as string[] | null) ?? ['Anillado']
       ).filter(
         (t) =>
-          conTerminaciones && (t !== 'Anillado' || !!ctx.anilladoConfigPasoId),
+          conTerminaciones &&
+          (t !== 'Anillado' || !!ctx.anilladoConfigPasoId) &&
+          (t !== TERMINACION_POUCH ||
+            (!!ctx.pouchConfigPasoId && !!ctx.pouchConfig?.formatos.length)),
       ),
       tiposAnillo: conTerminaciones ? tiposAnillo : [],
       tamanosOfrecidos: (config.tamanosJson as string[] | null) ?? null,
@@ -640,6 +668,7 @@ export class CentroCopiadoService {
       minimoHojasFacturables: precios.minimoHojasFacturables,
       setupMin: precios.setupMin,
       cleanupMin: precios.cleanupMin,
+      pouch: ctx.pouchConfig ?? leerConfigPouch(null),
       // Selección actual del tenant (null = todos / default / auto-resolver).
       papeles: (config.papelesJson as PapelConfig[] | null) ?? null,
       tamanos: (config.tamanosJson as string[] | null) ?? null,
@@ -657,6 +686,7 @@ export class CentroCopiadoService {
           materiaPrimaId: p.materiaPrimaId,
           nombre: p.nombre,
           gramajes: p.gramajes,
+          formatosPorGramaje: formatosProduciblesPorGramaje(p.variantes),
           formatosProducibles: CENTRO_COPIADO_FORMATOS.filter((formato) =>
             p.variantes.some((variante) =>
               variantesCubre(variante, {
@@ -667,6 +697,12 @@ export class CentroCopiadoService {
             ),
           ).map((formato) => formato.nombre),
         })),
+        pouches: await variantesPouch(this.prisma, tenantId),
+        centrosCosto: await this.prisma.centroCosto.findMany({
+          where: { tenantId, activo: true },
+          select: { id: true, nombre: true },
+          orderBy: { nombre: 'asc' },
+        }),
         terminaciones: TERMINACIONES_DISPONIBLES,
         terminacionesCatalogo: CENTRO_COPIADO_TERMINACIONES_CATALOGO,
         formatos: CENTRO_COPIADO_FORMATOS,
@@ -792,6 +828,9 @@ export class CentroCopiadoService {
     const papelIds = Array.from(
       new Set((dto.papeles ?? []).map((papel) => papel.materiaPrimaId)),
     );
+    if (papelIds.length !== (dto.papeles?.length ?? 0)) {
+      throw new BadRequestException('La oferta contiene papeles repetidos.');
+    }
     if (papelIds.length) {
       const cantidad = await this.prisma.materiaPrima.count({
         where: {
@@ -804,6 +843,16 @@ export class CentroCopiadoService {
         throw new BadRequestException(
           'Uno de los papeles seleccionados no pertenece al tenant o no es un sustrato de hoja.',
         );
+      }
+    }
+    if (dto.papeles?.some((p) => p.formatosPorGramaje != null)) {
+      const ctx = await this.contexto(tenantId);
+      for (const papel of dto.papeles) {
+        const disponible = ctx.papeles.find(
+          (p) => p.materiaPrimaId === papel.materiaPrimaId,
+        );
+        const error = errorOfertaPapel(papel, disponible?.variantes ?? []);
+        if (error) throw new BadRequestException(error);
       }
     }
     const tapaIds = Array.from(
@@ -839,6 +888,7 @@ export class CentroCopiadoService {
     if (
       [
         dto.terminaciones,
+        dto.pouch,
         dto.tiposAnillo,
         dto.maquinaAnilladoraId,
         dto.tapaFrontalMateriaPrimaId,
@@ -944,6 +994,25 @@ export class CentroCopiadoService {
       // Margen y tiempos viven en el producto/paso porque el motor universal
       // los consume ahí, pero participan del mismo commit de configuración.
       await this.aplicarPrecioYTiempos(tx, tenantId, dto);
+      if (dto.pouch || dto.terminaciones?.includes(TERMINACION_POUCH)) {
+        const pasoPouch = await tx.productoConfigPaso.findFirst({
+          where: {
+            tenantId,
+            rutaPaso: { familiaCodigo: 'plastificado_pouch' },
+            productoRutaAlternativa: {
+              producto: { codigo: CC_PRODUCTO_CODIGO, tenantId },
+            },
+          },
+        });
+        await guardarConfigPouch(
+          tx,
+          tenantId,
+          dto.pouch ?? leerConfigPouch(pasoPouch?.paramsPasoJson),
+          (
+            (config.terminacionesJson as string[] | null) ?? ['Anillado']
+          ).includes(TERMINACION_POUCH),
+        );
+      }
       await this.auditoria?.registrar(tx, {
         tenantId,
         actorUserId,
@@ -1189,6 +1258,10 @@ export class CentroCopiadoService {
             configPasos: {
               include: {
                 maquinasCandidatas: true,
+                slotsMateriales: {
+                  where: { slotCodigo: 'sustrato_principal' },
+                  select: { mermaAdicionalPct: true },
+                },
                 rutaPaso: { select: { familiaCodigo: true } },
               },
             },
@@ -1211,6 +1284,9 @@ export class CentroCopiadoService {
       rutaAlt.configPasos.find((c) =>
         familiaPublicaOutput(c.rutaPaso?.familiaCodigo, 'libros_anillados'),
       )?.id ?? null;
+    const pasoPouch = rutaAlt.configPasos.find(
+      (c) => c.rutaPaso?.familiaCodigo === 'plastificado_pouch',
+    );
     const color = cp.maquinasCandidatas.find((c) =>
       c.modoColorAllowedModes.includes('CMYK'),
     );
@@ -1228,18 +1304,60 @@ export class CentroCopiadoService {
       const n = typeof x === 'string' ? Number(x) : x;
       return typeof n === 'number' && Number.isFinite(n) ? n : null;
     };
+    const cortados = materias
+      .flatMap((m) => m.variantes)
+      .filter(
+        (v) =>
+          (v.atributosVarianteJson as Record<string, unknown> | null)
+            ?._papelDerivado,
+      );
+    const libres = new Map<string, number>();
+    if (cortados.length) {
+      const ids = cortados.map((v) => v.id);
+      const stocks = await this.prisma.stockMateriaPrimaVariante.findMany({
+        where: {
+          tenantId,
+          varianteId: { in: ids },
+          ubicacion: { activo: true, almacen: { activo: true } },
+        },
+      });
+      const reservas = await reservasPorSaldo(
+        this.prisma as never,
+        tenantId,
+        ids,
+      );
+      for (const s of stocks)
+        libres.set(
+          s.varianteId,
+          (libres.get(s.varianteId) ?? 0) +
+            Math.max(
+              0,
+              Number(s.cantidadDisponible) -
+                Number(reservas.get(`${s.varianteId}:${s.ubicacionId}`) ?? 0),
+            ),
+        );
+    }
     const papeles: PapelTipo[] = materias
       .map((m) => {
         const variantes = m.variantes.map((v) => {
           const a = (v.atributosVarianteJson ?? {}) as Record<string, unknown>;
           return {
             id: v.id,
+            ...((a._papelDerivado as { origenVarianteId?: string } | undefined)
+              ?.origenVarianteId
+              ? {
+                  origenDerivadoId: (
+                    a._papelDerivado as { origenVarianteId: string }
+                  ).origenVarianteId,
+                  stockLibre: libres.get(v.id) ?? 0,
+                }
+              : {}),
             formatoComercial:
               typeof a.formatoComercial === 'string'
                 ? a.formatoComercial
                 : null,
             anchoMm: numAttr(a.anchoMm),
-            altoMm: numAttr(a.altoMm),
+            altoMm: numAttr(a.largoMm ?? a.altoMm),
             gramajeGr: numAttr(a.gramajeGr ?? a.gramaje),
           };
         });
@@ -1255,8 +1373,8 @@ export class CentroCopiadoService {
       .filter((p) => p.variantes.length > 0);
     const maquinaColorId = color?.maquinaId ?? null;
     const maquinaBnId = bn?.maquinaId ?? null;
-    // Espirales instalados: sólo para ETIQUETAR el Ø elegido (el motor hace la
-    // selección real). El costo/tiempo del anillado los calcula el motor.
+    // Espirales instalados para ofrecer tipos y comprobar capacidad disponible.
+    // El material, diámetro final y costo se toman de la ejecución del motor.
     const anillos = anilladoConfigPasoId
       ? (
           await this.prisma.materiaPrimaVariante.findMany({
@@ -1264,6 +1382,7 @@ export class CentroCopiadoService {
               tenantId,
               activo: true,
               materiaPrima: {
+                activo: true,
                 familia: 'TERMINACION_EDITORIAL',
                 subfamilia: 'ANILLADO_ENCUADERNACION',
               },
@@ -1295,6 +1414,7 @@ export class CentroCopiadoService {
           await this.prisma.materiaPrima.findMany({
             where: {
               tenantId,
+              activo: true,
               familia: 'TERMINACION_EDITORIAL',
               subfamilia: 'TAPA_ENCUADERNACION',
             },
@@ -1346,11 +1466,15 @@ export class CentroCopiadoService {
       productoId: producto.id,
       rutaAlternativaId: rutaAlt.id,
       configPasoId: cp.id,
+      mermaPapelPct: Number(cp.slotsMateriales?.[0]?.mermaAdicionalPct ?? 0),
       maquinaColorId,
       maquinaBnId,
       cobraSetup: config.cobraSetup,
       papeles,
       anilladoConfigPasoId,
+      pouchConfigPasoId: pasoPouch?.id ?? null,
+      pouchConfig: leerConfigPouch(pasoPouch?.paramsPasoJson),
+      pouches: pasoPouch ? await variantesPouch(this.prisma, tenantId) : [],
       anillos,
       tiposAnilloPermitidos: tiposConfigurados,
       tapas,
@@ -1368,9 +1492,17 @@ export class CentroCopiadoService {
     tenantId: string,
     dto: CotizarCentroCopiadoDto,
     ctx: Ctx,
+    simulacion = false,
   ): Promise<void> {
+    seleccionarPapelesCortados(
+      ctx.papeles,
+      dto,
+      simulacion,
+      ctx.materialesFijados,
+      ctx.mermaPapelPct,
+    );
     const config = await this.configDe(tenantId);
-    if (!config.activo) {
+    if (!config.activo && !simulacion) {
       throw new BadRequestException('El Centro de Copiado está pausado.');
     }
 
@@ -1379,12 +1511,14 @@ export class CentroCopiadoService {
       ? new Map(papelesCfg.map((p) => [p.materiaPrimaId, p.gramajes ?? null]))
       : null;
     const tamanosPermitidos = (config.tamanosJson as string[] | null) ?? null;
-    const terminacionesConfiguradas =
-      (config.terminacionesJson as string[] | null) ??
-      TERMINACIONES_DISPONIBLES;
+    const terminacionesConfiguradas = (config.terminacionesJson as
+      | string[]
+      | null) ?? ['Anillado'];
     const terminacionesPermitidas = new Set(
       terminacionesConfiguradas.filter(
-        (t) => t !== 'Anillado' || !!ctx.anilladoConfigPasoId,
+        (t) =>
+          (t !== 'Anillado' || !!ctx.anilladoConfigPasoId) &&
+          (t !== TERMINACION_POUCH || !!ctx.pouchConfigPasoId),
       ),
     );
     const tiposAnilloPermitidos = new Set(
@@ -1445,8 +1579,23 @@ export class CentroCopiadoService {
           `El gramaje seleccionado para "${doc.nombre ?? doc.id}" no está habilitado.`,
         );
       }
+      const papelConfig = papelesCfg?.find(
+        (p) => p.materiaPrimaId === papel.materiaPrimaId,
+      );
       if (
-        tamanosPermitidos?.length &&
+        !formatoOfrecido(
+          papelConfig,
+          doc.gramaje,
+          doc.tamano,
+          papel.variantes.map((v) => v.gramajeGr),
+        )
+      ) {
+        throw new BadRequestException(
+          `El tamaño ${doc.tamano} no está ofrecido para ese papel y gramaje.`,
+        );
+      }
+      if (
+        tamanosPermitidos != null &&
         !tamanosPermitidos.includes(doc.tamano)
       ) {
         throw new BadRequestException(
@@ -1489,6 +1638,99 @@ export class CentroCopiadoService {
         );
       }
     }
+  }
+
+  /** Costeo de referencia sin persistir pedidos ni tocar la configuración.
+   * Respeta el check de preparación/limpieza, independiente del cargo comercial.
+   * Una última cara impar no consume impresión del dorso; setup se cuenta una vez
+   * por tanda sólo cuando está habilitado en la configuración del centro.
+   */
+  async simularCostoHojas(
+    tenantId: string,
+    doc: DocumentoInput,
+    opciones: {
+      clienteId?: string;
+      tipoCambioId?: string;
+      preparar?: boolean;
+    } = {},
+  ) {
+    await this.capacidades.exigirIncluida(tenantId, 'centro_copiado');
+    const ctx = await this.contexto(tenantId);
+    if (doc.modo === 'CAD' || doc.terminaciones?.length || doc.grupoId)
+      throw new BadRequestException(
+        'La referencia debe contener sólo impresión en hojas.',
+      );
+    await this.validarOperacion(
+      tenantId,
+      {
+        documentos: [
+          {
+            ...doc,
+            gramaje: doc.gramaje ?? undefined,
+            cobertura: doc.cobertura ?? undefined,
+            tipoAnillo: doc.tipoAnillo ?? undefined,
+          },
+        ],
+      },
+      ctx,
+      true,
+    );
+    if (
+      doc.gramaje == null &&
+      ctx.papeles
+        .find((p) => p.materiaPrimaId === doc.papelMateriaPrimaId)
+        ?.variantes.some((v) => v.gramajeGr != null)
+    )
+      throw new BadRequestException(
+        'Definí el gramaje de esta combinación antes de simular su costo.',
+      );
+    const papel = this.resolverPapel(
+      ctx.papeles,
+      doc.papelMateriaPrimaId,
+      pliegoDeDoc(doc),
+      doc.gramaje,
+    );
+    if (!papel.varianteId)
+      throw new BadRequestException(
+        'No hay una variante de papel compatible con esta combinación.',
+      );
+    const partes =
+      doc.faz === 2 && doc.paginas % 2 === 1
+        ? [
+            ...(doc.paginas > 1 ? [{ ...doc, paginas: doc.paginas - 1 }] : []),
+            { ...doc, paginas: 1, faz: 1 as const },
+          ]
+        : [doc];
+    const resultados: CotizarOutput[] = [];
+    for (const [i, parte] of partes.entries()) {
+      const segmento = construirSegmento(
+        parte,
+        {
+          ...ctx,
+          cobraSetup: ctx.cobraSetup && i === 0 && opciones.preparar !== false,
+        },
+        parte.copias,
+        papel.varianteId,
+      );
+      const resultado = await this.motor.cotizar({
+        tenantId,
+        tipoCambioId:
+          resultados[0]?.cotizacion?.tipoCambio?.id ?? opciones.tipoCambioId,
+        clienteId: opciones.clienteId,
+        productoId: ctx.productoId,
+        rutaAlternativaId: ctx.rutaAlternativaId,
+        jobContext: segmento.jobContext as Parameters<
+          MotorUniversalService['cotizar']
+        >[0]['jobContext'],
+      });
+      if (!resultado.exitoso || !resultado.cotizacion)
+        throw new BadRequestException(
+          resultado.errores.map((e) => e.mensaje).join(' ') ||
+            'El motor no pudo calcular el costo.',
+        );
+      resultados.push(resultado);
+    }
+    return resultados;
   }
 
   private async cotizarDocumento(
@@ -1541,7 +1783,30 @@ export class CentroCopiadoService {
           pliegoDeDoc(doc),
         )
       : null;
-    const jobContext = this.foldAnillado(seg.jobContext, anil?.additions);
+    const pouch = doc.terminaciones?.includes(TERMINACION_POUCH)
+      ? activarPouch(
+          {
+            configPasoId: ctx.pouchConfigPasoId,
+            config: ctx.pouchConfig,
+            variantes: ctx.pouches,
+          },
+          doc.tamano,
+          doc.tamanoAnchoMm,
+          doc.tamanoAltoMm,
+          seg.hojas,
+        )
+      : null;
+    if (pouch?.error)
+      return {
+        ...base,
+        pliegos: 0,
+        subtotal: 0,
+        iva: 0,
+        total: 0,
+        error: pouch.error,
+      };
+    const jobPouch = this.foldAnillado(seg.jobContext, pouch?.additions);
+    const jobContext = this.foldAnillado(jobPouch, anil?.additions);
     const cotizarJob = (contexto: Record<string, unknown>) =>
       this.motor.cotizar({
         tenantId,
@@ -1554,7 +1819,7 @@ export class CentroCopiadoService {
     // final sigue siendo una sola; la diferencia se expone sólo para que Carga
     // rápida pueda explicar cuánto corresponde a hojas y cuánto a terminación.
     const [r, rSinAnillado] = anil?.additions
-      ? await Promise.all([cotizarJob(jobContext), cotizarJob(seg.jobContext)])
+      ? await Promise.all([cotizarJob(jobContext), cotizarJob(jobPouch)])
       : [await cotizarJob(jobContext), null];
     if (!r.exitoso || !r.cotizacion) {
       return {
@@ -1569,7 +1834,12 @@ export class CentroCopiadoService {
     // Subtotal = impresión + anillado (misma cotización). El meta del anillado es
     // sólo para mostrar el Ø/aviso (el costo ya está en el desglose por paso).
     const montos = this.extraerMontos(r.cotizacion);
-    let anillado = anil?.meta ?? null;
+    let anillado = anil?.meta
+      ? {
+          ...anil.meta,
+          diametroMm: this.diametroAnilladoCotizado(r.cotizacion),
+        }
+      : null;
     if (anillado && anil?.additions) {
       if (!rSinAnillado?.exitoso || !rSinAnillado.cotizacion) {
         anillado = {
@@ -1588,8 +1858,36 @@ export class CentroCopiadoService {
         };
       }
     }
+    let pouchPrecio: DocumentoResultado['pouch'] = null;
+    if (pouch?.additions) {
+      const imp = await cotizarJob(seg.jobContext);
+      const soloPouch = anil?.additions ? rSinAnillado : r;
+      if (
+        !imp.exitoso ||
+        !imp.cotizacion ||
+        !soloPouch?.exitoso ||
+        !soloPouch.cotizacion
+      )
+        return {
+          ...base,
+          pliegos: 0,
+          subtotal: 0,
+          iva: 0,
+          total: 0,
+          error: 'No se pudo desglosar el plastificado.',
+        };
+      const sin = this.extraerMontos(imp.cotizacion);
+      const con = this.extraerMontos(soloPouch.cotizacion);
+      pouchPrecio = {
+        subtotal: redondear(con.subtotal - sin.subtotal),
+        iva: redondear(con.iva - sin.iva),
+        total: redondear(con.total - sin.total),
+        error: null,
+      };
+    }
     return {
       ...base,
+      pouch: pouchPrecio,
       pliegos: montos.pliegos,
       subtotal: montos.subtotal,
       iva: montos.iva,
@@ -1622,6 +1920,21 @@ export class CentroCopiadoService {
       iva: redondear(iva),
       total: redondear(total),
     };
+  }
+
+  /** Usa el material ejecutado: el motor puede descartar candidatos sin costo válido. */
+  private diametroAnilladoCotizado(
+    cotizacion: NonNullable<CotizarOutput['cotizacion']>,
+  ): number | null {
+    const anillo = cotizacion.pasos
+      .find((p) => p.familiaCodigo === 'encuadernado_anillado')
+      ?.materiales?.find((m) => m.slotCodigo === 'anillo');
+    const atributos = (anillo?.atributosVarianteJson ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const diametro = Number(atributos.diametro);
+    return Number.isFinite(diametro) && diametro > 0 ? diametro : null;
   }
 
   /**
@@ -1738,7 +2051,7 @@ export class CentroCopiadoService {
       iva: redondear(Math.max(0, con.iva - sin.iva)),
       total: redondear(Math.max(0, con.total - sin.total)),
       tipoAnillo: activacion.meta.tipoAnillo,
-      diametroMm: activacion.meta.diametroMm,
+      diametroMm: this.diametroAnilladoCotizado(rAnillado.cotizacion),
       error: null,
     };
   }
@@ -1753,7 +2066,7 @@ export class CentroCopiadoService {
     );
   }
 
-  /** Ø que el motor elegiría: menor capacidad que cubre, DENTRO del tipo. */
+  /** Verifica la capacidad disponible; el diámetro final se lee del motor. */
   private diametroAnilladoParaHojas(
     ctx: Ctx,
     hojasPorLibro: number,
@@ -1921,6 +2234,10 @@ export class CentroCopiadoService {
       ...segJobContext,
       ...additions,
       slotMateriales: { ...baseSlots, ...addSlots },
+      opcionalesActivados: {
+        ...(segJobContext.opcionalesActivados as object),
+        ...(additions.opcionalesActivados as object),
+      },
     };
   }
 
@@ -1988,7 +2305,14 @@ export class CentroCopiadoService {
           return this.cad!.cotizar(tenantId, doc, periodo, dto.clienteId);
         return this.cotizarDocumento(
           tenantId,
-          doc as DocumentoInput,
+          {
+            ...doc,
+            terminaciones: grupo
+              ? (grupo.terminaciones ?? []).filter(
+                  (t) => t === TERMINACION_POUCH,
+                )
+              : doc.terminaciones,
+          } as DocumentoInput,
           { ...ctx, cobraSetup: preparaciones.get(doc.id) ?? ctx.cobraSetup },
           copias,
           periodo,
@@ -2346,10 +2670,35 @@ export class CentroCopiadoService {
           'La terminación Anillado no está disponible para este documento.',
       };
     }
-    const jobImpresion = this.foldAnillado(seg.jobContext, anil?.additions);
-    if (anil?.meta && !anil.meta.error && anil.meta.diametroMm) {
-      especificaciones['Anillo'] =
-        `${labelTipoAnillo(anil.meta.tipoAnillo)} Ø${anil.meta.diametroMm} mm`;
+    const pouch = terminaciones.includes(TERMINACION_POUCH)
+      ? activarPouch(
+          {
+            configPasoId: ctx.pouchConfigPasoId,
+            config: ctx.pouchConfig,
+            variantes: ctx.pouches,
+          },
+          doc.tamano,
+          doc.tamanoAnchoMm,
+          doc.tamanoAltoMm,
+          hojas,
+        )
+      : null;
+    if (pouch?.error)
+      return {
+        copias,
+        carillas,
+        hojas,
+        anilladoActivo: false,
+        nombre,
+        jobContext: null,
+        especificaciones,
+        error: pouch.error,
+      };
+    const jobImpresion = this.foldAnillado(
+      this.foldAnillado(seg.jobContext, pouch?.additions),
+      anil?.additions,
+    );
+    if (anil?.meta && !anil.meta.error) {
       const tapasLabel = this.especificacionTapas(anil.tapas);
       if (tapasLabel) especificaciones['Tapas'] = tapasLabel;
     }
@@ -2487,15 +2836,30 @@ export class CentroCopiadoService {
     tenantId: string,
     dto: AgregarAOrdenCentroCopiadoDto,
     periodo: string | null = null,
+    jobOriginal?: unknown,
   ): Promise<ConstruirItemsResultado> {
     await this.capacidades.exigirTodas(tenantId, capacidadesCargaCopiado(dto));
     if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
       return this.motor.conTipoCambio(
         tenantId,
         await this.cambioParaDto(tenantId, dto),
-        () => this.construirItems(tenantId, dto, periodo),
+        () => this.construirItems(tenantId, dto, periodo, jobOriginal),
       );
     const ctx = await this.contexto(tenantId);
+    if (jobOriginal) {
+      ctx.materialesFijados = new Set<string>();
+      const visitar = (v: unknown) => {
+        if (!v || typeof v !== 'object') return;
+        for (const [k, valor] of Object.entries(v)) {
+          if (k === 'slotMateriales' && valor && typeof valor === 'object') {
+            for (const id of Object.values(valor))
+              if (typeof id === 'string') ctx.materialesFijados!.add(id);
+          }
+          if (k !== 'slotMateriales') visitar(valor);
+        }
+      };
+      visitar(jobOriginal);
+    }
     await this.validarOperacion(tenantId, dto, ctx);
     const grupoCargaId = dto.grupoCargaId ?? randomUUID();
     const gruposById = new Map((dto.grupos ?? []).map((g) => [g.id, g]));
@@ -2614,6 +2978,11 @@ export class CentroCopiadoService {
       };
     }
     const c = r.cotizacion;
+    const diametro = this.diametroAnilladoCotizado(c);
+    if (p.anilladoActivo && diametro) {
+      base.especificaciones['Anillo'] =
+        `${labelTipoAnillo(doc.tipoAnillo || this.tipoAnilladoDefault(ctx))} Ø${diametro} mm`;
+    }
     const d = c.desglosePrecio;
     const subtotal = redondear(
       d?.precioNetoTotal ?? c.precio?.precioTotal ?? 0,
@@ -2754,7 +3123,7 @@ export class CentroCopiadoService {
         if (rA.exitoso && rA.cotizacion) {
           anilladoCot = rA.cotizacion;
           anilladoBase = representante.cot;
-          anilladoDiametro = activacion.meta.diametroMm;
+          anilladoDiametro = this.diametroAnilladoCotizado(rA.cotizacion);
         } else {
           error =
             rA.errores?.[0]?.mensaje ??
@@ -3138,7 +3507,11 @@ export class CentroCopiadoService {
         const cambioId = monedaCotizacionContext.getStore()?.cambio.id;
         {
           // Bloquear incluso sin tipo de cambio: una emisión concurrente congela los items.
-          if (cambioId && existente.tipoCambioId && existente.tipoCambioId !== cambioId)
+          if (
+            cambioId &&
+            existente.tipoCambioId &&
+            existente.tipoCambioId !== cambioId
+          )
             throw new BadRequestException(
               'El tipo de cambio del tomo no coincide con la cotización.',
             );
@@ -3150,7 +3523,10 @@ export class CentroCopiadoService {
               numero: null,
               tipoCambioId: existente.tipoCambioId,
             },
-            data: { ...(cambioId ? { tipoCambioId: cambioId } : {}), updatedAt: new Date() },
+            data: {
+              ...(cambioId ? { tipoCambioId: cambioId } : {}),
+              updatedAt: new Date(),
+            },
           });
           if (lock.count !== 1)
             throw new BadRequestException(

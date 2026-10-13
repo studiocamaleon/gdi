@@ -13,6 +13,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -22,6 +23,20 @@ import {
  * al default). `@IsOptional` acepta null y undefined, así se distingue "no tocar"
  * (undefined) de "limpiar" (null) en el service.
  */
+class FormatosPorGramajeDto {
+  @ValidateIf((_obj, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  gramaje!: number | null;
+
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  tamanos!: string[];
+}
+
 class PapelConfigDto {
   @IsUUID()
   materiaPrimaId!: string;
@@ -34,6 +49,14 @@ class PapelConfigDto {
   @IsInt({ each: true })
   @Min(1, { each: true })
   gramajes?: number[];
+
+  /** Lista explícita; ausente/null mantiene los formatos generales. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => FormatosPorGramajeDto)
+  formatosPorGramaje?: FormatosPorGramajeDto[] | null;
 }
 
 class TramoMargenCentroCopiadoDto {
@@ -49,7 +72,33 @@ class TramoMargenCentroCopiadoDto {
   margenPct!: number;
 }
 
+class FormatoPouchDto {
+  @IsString()
+  @MaxLength(40)
+  tamano!: string;
+  @IsUUID()
+  varianteId!: string;
+}
+class PouchCopiadoDto {
+  @IsOptional()
+  @IsUUID()
+  centroCostoId!: string | null;
+  @IsNumber()
+  @Min(0.01)
+  @Max(60)
+  minutosPorHoja!: number;
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => FormatoPouchDto)
+  formatos!: FormatoPouchDto[];
+}
 export class ActualizarCentroCopiadoConfigDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PouchCopiadoDto)
+  pouch?: PouchCopiadoDto;
+
   /** Versión leída por el cliente; 0 representa una configuración aún inexistente. */
   @IsOptional()
   @IsInt()
@@ -155,9 +204,9 @@ export class ActualizarCentroCopiadoConfigDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(1)
+  @ArrayMaxSize(2)
   @ArrayUnique()
-  @IsIn(['Anillado'], { each: true })
+  @IsIn(['Anillado', 'Plastificado pouch'], { each: true })
   terminaciones?: string[] | null;
 
   @IsOptional()

@@ -1,5 +1,110 @@
 # Validación de staging — historial
 
+## 13/10/2026 — Anillados activos y diámetro del material cotizado
+
+Publicado sólo en staging, dentro del PR #81 y su cadena de dependencias. API y ambos workers ejecutan `a787e9ab929d8c37f2fb92759b93baf89aabd8bc`; la web conserva `967ababf56fd07a5b9638c91296b57f52652cdad` y Gotenberg `9ff0ba2ee9d9a94bc9327b6bede482f7692067cc`. Producción y merges siguen pendientes de aceptación del titular.
+
+La plantilla de Centro de copiado resuelve los candidatos de anillos y tapas desde el inventario activo en memoria, sin reparar ni guardar configuración al cotizar. No altera las recetas de catálogo ajenas. La vista previa y las especificaciones del ítem, tanto en documentos sueltos como en tomos, muestran el diámetro del material realmente elegido y costeado por el motor. Esto también contempla candidatos descartados por una equivalencia de compra incompleta.
+
+**Validación local:** regresión del material reemplazado y regresión del diámetro menor sin conversión reproducidas antes de sus arreglos. 33 pruebas aprobadas en tres suites; tipos de cinco archivos sin errores. Fixtures ficticios en la base local aislada; sin cambios en datos de desarrollo. **CI de la revisión ejecutada:** [permisos HTTP](https://github.com/studiocamaleon/gdi/actions/runs/38449587740) y [contenedores, tipos y acceso BFF](https://github.com/studiocamaleon/gdi/actions/runs/38449587849), ambos aprobados. Compilación de producción remota.
+
+**Servidor y Chrome:** cuatro cotizaciones A4 B/N simple, con espiral plástico y tapas, para 50, 100, 130 y 150 hojas. Coinciden el diámetro mostrado, la variante consumida y las especificaciones preparadas para la OT. El ensayo del servidor usa una transacción de sólo lectura y el tipo de cambio existente: comprueba costo normalizado del anillo, cantidad de anillos, costos de ambas tapas y total. Incluye un tomo de 130 hojas. El navegador muestra los cuatro resultados y «Agregar a la OT» habilitado, sin errores ni advertencias en consola. No se emitieron órdenes, pagos ni mensajes externos; no se modificaron precios ni conversiones de inventario durante esta publicación.
+
+| Componente | Digest vigente |
+| --- | --- |
+| API y ambos workers | `sha256:0bd33eb1eb66dbd37171a30eb9f513f00863827d842939f67e74d7d2b411255a` |
+| Web, sin cambio | `sha256:f09bd7cbef5f9a085cfc5ede13f522a6a9ac2450c896e809a14641d2078e5e27` |
+| Gotenberg/PDF, sin cambio | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, misma imagen | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+316 migraciones completas, ninguna nueva ni pendiente. Seis servicios saludables con los mismos tamaños; API/web responden 200 y mantienen el rechazo de acceso anónimo. Recuentos e identificadores de las tablas comprobadas coinciden antes/después; las seis máquinas de producción conservan imágenes y recursos. Constructor temporal de esta tarea retirado. Reversión de código: restaurar en API y ambos workers el digest `sha256:83589540d9c19a3ef76dbf44e42e8a12838bec19dc4acf1ee02ab0d833fd402f`; no hay migraciones que revertir. Ese retorno perdería la selección automática y las correcciones de diámetro.
+
+**Respaldo posterior:** `e1d4f181-466b-4751-80da-cef89b5cd47f`, completado `2026-10-13T19:00:39.329Z`, verificado a las `19:02:17 UTC`. Firma válida y manifiesto descifrado; incluye 316 migraciones, 24 archivos, ocho fuentes custodiadas —entre ellas la revisión ejecutada— y las cuatro imágenes exactas. No se repitió una restauración SQL completa.
+
+## 13/10/2026 — Diagnóstico y reparación de candidatos de anillado
+
+Sin despliegue ni cambios de imágenes: continúa la revisión `967ababf5` registrada abajo. La plantilla técnica conservaba un espiral retirado y no incorporaba su reemplazo activo, aunque éste tenía precio y conversión por paquete válidos. La reparación explícita de Centro de copiado incorporó el material actual y registró el evento; se comprobó que la configuración comercial persistida quedó idéntica. Las unidades de precio de las dos tapas A4 se confirmaron por unidad con el usuario.
+
+Chrome verificó cotización de 50 y 100 A4 B/N simple con espiral y botón «Agregar a la OT» habilitado. No se emitieron órdenes ni pagos. Wire-O sigue necesitando confirmar su unidad de precio; algunas medidas de espiral carecen de precio o coeficiente. No se inventaron esos datos. La etiqueta de diámetro de la versión vigente todavía puede considerar variantes de un material retirado.
+
+Corrección de código preparada en el PR #81, pendiente de la siguiente publicación del lote: candidatos de anillos y tapas resueltos desde el inventario activo en memoria, sin escrituras al cotizar y sin ampliar recetas de catálogo ajenas. El contexto de copiado excluye materiales retirados para la oferta y el diámetro. Prueba de regresión local: el reemplazo reproduce el rechazo con la selección anterior y cotiza correctamente con la corrección; 33 pruebas aprobadas, incluida conversión paquete/unidad y construcción del ítem completo. Revisión de tipos de cinco archivos sin errores. Producción no se modificó.
+
+## 13/10/2026 — Centro de copiado: papel derivado, objetivos por rango, entrega, pouch y producción finalizada
+
+Lote de #77 a #81, dependiente de #76 ya publicado. Alcance autorizado: staging. Producción y merges pendientes de aceptación. No se importan datos de local.
+
+Candidato API/workers/web: `967ababf56fd07a5b9638c91296b57f52652cdad`. Gotenberg conserva `9ff0ba2ee9d9a94bc9327b6bede482f7692067cc`.
+
+Validación local: 98 pruebas API y 102 web; tipos de archivos afectados y lint. Se verifica emisión directa/borrador, impresión+pouch, OT mixta, reportes con tiempos estimados, conservación de precios/materiales, idempotencia, y rechazo de reapertura de los pasos finalizados al emitir. Chrome: OT de prueba con cinco A4, $800/hoja, $4.000 total, fecha del día, paso Completo y 0,13 min estimados. No cobra ni entrega automáticamente.
+
+La producción marcada al emitir conserva la vista habitual. Guarda los pasos hechos y tiempos con fuente estimada; no crea ruta activa, asignaciones, gates ni cronómetros. Los reportes incluyen operaciones y utilización; eficiencia y horas cronometradas siguen utilizando mediciones.
+
+**CI y servidor:** aprobaron [permisos HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38435585632) y [contenedores completos, migraciones y login/BFF](https://github.com/studiocamaleon/gdi/actions/runs/38435585756) de la revisión ejecutable. Builds remotos con tipos; sin builds de producción en la Mac.
+
+Migración aditiva de tres columnas para la selección y firma de finalización: 316 migraciones completas. Sin seeds, resets ni importación de credenciales o datos de local. Se conservaron IDs y recuentos de empresa, usuarios, conversaciones, mensajes, envíos y archivos antes/después del ensayo remoto.
+
+Ensayo en servicios compilados de Fly y base propia de staging, con empresa y operador ficticios temporales: selección de tarifario por canal, publicación y borrador aislados, rechazo de referencias de otra empresa y cotización sin autorización por contribución negativa. Mostrador: 100/90/80 por hoja para 1/5/10; Web: 120/110/100. Son fixtures de prueba, no precios comerciales. Costo derivado ficticio de 40/A4 en opalina 650×950 (9 A4) y SRA3 325×475 (2 A4), con sobrantes enteros conservados.
+
+Impresión+pouch: dos pasos, 15 minutos estimados, 0,25 h de utilización, cero trabajos en cola, sin aristas ni cronómetros y sin duplicación al repetir. Los reportes reales incluyeron los pasos con fuente estimada. PDF compatible: 14 páginas, cinco reversos en blanco, subida/descarga firmadas con SHA-256 coincidente, CORS y Gotenberg real aprobados. Se retiraron sólo los datos/objeto del ensayo; ningún cobro o mensaje externo.
+
+| Componente | Digest vigente |
+| --- | --- |
+| API y ambos workers | `sha256:83589540d9c19a3ef76dbf44e42e8a12838bec19dc4acf1ee02ab0d833fd402f` |
+| Web | `sha256:f09bd7cbef5f9a085cfc5ede13f522a6a9ac2450c896e809a14641d2078e5e27` |
+| Gotenberg/PDF, sin cambio | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, sin cambio de imagen | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Chrome staging:** cliente QA ficticio sin contactos; cinco A4 de papel obra 75 g, B/N simple, canal Presencial, entrega 13/10/2026. Se marcó «Marcar producción finalizada» y se emitió OT-2026-0008 sin autorización por margen. Quedó Finalizada, con la tarjeta habitual de impresión Completo, 100% y 0,06 min estimados. Total persistido $381,25 con la configuración propia de staging. Sin errores ni advertencias de consola en el recorrido. No se registró cobro, factura, entrega ni contacto externo. Se conserva el cliente y la OT ficticios para revisión del titular.
+
+En Tarifarios se verificó el asistente con objetivos de contribución por rango y preparación productiva desactivada. El tarifario propio «Mostrador» permanece en borrador, sin versión vigente (156/312 precios cargados); la OT visual usó el motor. La matriz por canal se verificó con fixtures aislados en el servidor. No se alteraron ni publicaron los precios del titular.
+
+Se comprobó la sección configurable de plastificado pouch. En esta empresa está desactivado y requiere cargar sus sobres de inventario; no se inventaron materiales ni precios para habilitarlo. El ensayo remoto de impresión+pouch usa fixtures aislados y no sustituye esa configuración.
+
+**Operación:** seis máquinas iniciadas, controles saludables, mismos tamaños y regiones. API/web responden 200 y las rutas protegidas rechazan acceso anónimo. Las seis máquinas de producción conservan imágenes y recursos. Constructor temporal de esta tarea eliminado al terminar; Docker y desarrollo local intactos.
+
+**Respaldo posterior:** `465dc613-3fba-49c6-9647-6961757716c9`, completado `2026-10-13T17:45:46.145Z`, verificado `17:47:12 UTC`. Firma válida y manifiesto descifrado, 316 migraciones, 24 archivos, ocho fuentes custodiadas y las cuatro imágenes exactas. La fuente funcional `967ababf5` está incluida. Esta lectura no repitió una restauración SQL completa; la OT de navegador se emitió después de esta copia.
+
+**Reversión:** API/workers `sha256:1ce96735e32d9473443a3cf93f0f3742bc27e5609f11f1fbc9d1285c6fe0af59` y web `sha256:7090cb82616398f1893d3e40c344b6a4a67e7ceb5652d5dc43974d6a728a5f1d` en sus repositorios de staging. Conservar la migración aditiva y actualizar inventario de respaldo y salud si se revierte.
+
+**Pendiente explícito:** aceptación del titular en staging antes de promover a producción e integrar #75–#81. La cadena de PR mantiene sus bases temporales documentadas. CORS del bucket local continúa pendiente por decisión del titular. No hubo impresión física.
+
+
+## 13/10/2026 — Centro de copiado: tarifarios, contribución y tandas (#76)
+
+**Alcance autorizado:** staging para pruebas del titular. [PR #76](https://github.com/studiocamaleon/gdi/pull/76), con la corrección de hidratación de #75 incorporada preservando sus commits. TPV queda fuera del lote. Producción y merge a `main` esperan la validación de Lucas; #75/#76 permanecen abiertos por ese pendiente explícito. Los PR independientes de Dependabot no forman parte de esta publicación.
+
+El lote incorpora oferta por papel/formato, tarifarios publicados por canal y vigencia, costos y sugerencias por contribución, respeto del check de preparación, limpieza de valores y recálculo de tramos. En OT se conserva el tarifario del canal y se agrupan archivos compatibles en un PDF por tanda con una sola preparación. Staging conserva sus propios datos y configuración: no se importan precios ni clientes de local.
+
+**Revisiones:** API y ambos workers `4a6986e77484fe401dfd4586a323fa7c553614fd`; web `fa78725e984c661da5d0ed5cb543aa0dfd8cd608`; Gotenberg `9ff0ba2ee9d9a94bc9327b6bede482f7692067cc`. Las revisiones difieren sólo por el ajuste de una prueba de configuración web y del pin de Chromium, sin diferencias funcionales de API entre ellas. La evidencia de CI corresponde al candidato completo `9ff0ba2ee`.
+
+| Componente | Digest de staging |
+| --- | --- |
+| API y ambos workers | `sha256:1ce96735e32d9473443a3cf93f0f3742bc27e5609f11f1fbc9d1285c6fe0af59` |
+| Web | `sha256:7090cb82616398f1893d3e40c344b6a4a67e7ceb5652d5dc43974d6a728a5f1d` |
+| Gotenberg/PDF | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, sin cambio de imagen | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+Se aplicaron tres migraciones aditivas: `20261010120000_copiado_tarifarios`, `20261010140000_copiado_politica_borrador` y `20261011100000_copiado_pedidos_margenes`. Quedan **315 migraciones completas**, sin pendientes, seeds ni resets. El rol de aplicación conserva DML y carece de DDL y acceso al historial Prisma. Tras el ensayo se conservaron IDs y recuentos de las seis tablas contrastadas: empresa, usuarios, conversación, mensajes, envíos y archivos.
+
+**Validación:**
+
+- Local: 174 pruebas de interfaz/motor, 14 de integración PDF, dos de cabeceras en las fases desarrollo/producción y 24 de tandas, unificación, canal y contribución. Se corrigieron dos fixtures antiguos: el mock de validación previa a emisión y la resolución asíncrona de `next.config.ts`. No se debilitó ninguna aserción de negocio.
+- CI del candidato: [permisos HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38395873592), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/38395873812), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/38395873786) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/38395869609) aprobados. Consulta de alertas abiertas de CodeQL del PR: cero. Builds remotos con comprobación de tipos; no se compiló producción en Docker de la Mac.
+- Servicio compilado de staging: empresa y operador ficticios temporales, publicación y activación de tarifarios, conservación de versión publicada al editar borrador, rechazo de referencia de otra empresa y selección por canal. Mostrador aplicó precios unitarios ficticios de 100/90/80 para 1/5/10 hojas; web 120/110/100. Con costo variable 40 por hoja e IVA incluido, las contribuciones resultaron 51,60/46,22/39,50 % y 59,67/56,00/51,60 %, respectivamente. Los tiempos internos separados como estructura no dispararon la autorización. Estos valores son fixtures, no precios propuestos ni datos del tarifario comercial.
+- PDF real: dos documentos compatibles con copias e impresión dúplex generaron una tanda de 14 páginas, incluidos cinco reversos en blanco. Subida y descarga firmadas de R2 coincidieron por SHA-256; preflight CORS del origen de staging aprobado. Gotenberg convirtió HTML ficticio a PDF válido por la red privada. Se retiraron únicamente los fixtures y el objeto creados por el ensayo; no hubo envíos de mensajes ni cobros.
+- Para reconstruir Gotenberg fue necesario fijar Chromium `155.0.8059.39-1~deb13u1`, versión disponible de [Debian trixie](https://packages.debian.org/trixie/chromium); el pin anterior ya no se encontraba en el repositorio. CI y generación real de PDF aprobaron con el nuevo pin.
+
+**Interfaz y operación:** en Chrome, sesión de la empresa demo de staging: carga de General, cotización real del motor, apertura del editor de Tarifarios con «Limpiar valores» y «Reglas y contribución», y vista previa de los cinco canales. Sin errores ni advertencias de consola en el recorrido comprobado. El editor de prueba no se guardó. La empresa demo conserva preparación activada a tres minutos y canales por motor; necesita sus propios tarifarios publicados y asignados para ensayar precios comerciales. No se copió la configuración local.
+
+Las seis máquinas están iniciadas y pasan sus controles; API y web responden 200, y las rutas protegidas rechazan el acceso anónimo. Sin cambios de tamaños, redes ni credenciales de aplicación. Lectura de las seis máquinas de producción: imágenes y recursos sin cambios. El builder temporal de esta tarea fue eliminado después de completar las tres imágenes; desarrollo local y Docker permanecieron intactos.
+
+**Respaldo posterior:** `0ac84069-05eb-439e-974f-cf8c4b0ef018`, completado `2026-10-13T12:40:38.967Z` y verificado a las `12:40:45 UTC`. Firma válida y manifiesto descifrado con 315 migraciones, 24 archivos, fuentes cifradas custodiadas y las cuatro imágenes exactas del inventario. Se actualizó únicamente el copiador de staging. Esta verificación no repitió una restauración SQL completa.
+
+**Límites:** las pruebas no sustituyen la aceptación del titular ni una impresión física. La configuración CORS del bucket local de desarrollo sigue pendiente por decisión del titular. El almacenamiento de staging se probó por separado.
+
+**Reversión:** volver a las imágenes anteriores de API/workers `sha256:8d0323160ae2294449c57c7b4aa3431f26ec9839ecca774ed917bd3d5699d209`, web `sha256:922d3719b203818e1dbd101ea9320efb671790d087b588a3ab249d5b62c44ff6` y PDF `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`, en sus respectivos repositorios `registry.fly.io/grafoprint-staging-*`. Mantener las tablas aditivas; no revertir el esquema mediante borrados. Actualizar el inventario del copiador y repetir salud si se revierte.
+
+
 ## 10/10/2026 — Mantenimiento de dependencias (#70)
 
 **Revisión ejecutada:** `9efc08ffe89afa9a833cf04970e1018ad1939550`. PR incluidos: #60, #61 y #67, con sus commits conservados. El titular autorizó el lote, las pruebas, staging y producción.

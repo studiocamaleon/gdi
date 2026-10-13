@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@heroui/react";
 import { ActionButton as Button } from "@/components/design-system/action-button";
 import {
@@ -50,6 +51,7 @@ type Props = {
   getActions: (item: PropuestaItem) => {
     onRemove?: () => void;
     onVerPrecios?: () => void;
+    onListoChange?: (listo: boolean) => void;
   };
   renderDetail: (item: PropuestaItem, index: number) => React.ReactNode;
   rowRef: (id: string, node: HTMLElement | null) => void;
@@ -262,6 +264,18 @@ export function OrdenProductosTable({
                                 .filter(Boolean)
                                 .join(" · ")}
                             </span>
+                            {actions.onListoChange ? (
+                              <label className="flex min-h-9 w-fit cursor-pointer items-center gap-2 text-xs" title="Al emitir registra los pasos finalizados con sus tiempos estimados, sin tareas pendientes.">
+                                <Checkbox
+                                  aria-label={`Marcar producción finalizada: ${item.productoNombre}`}
+                                  checked={!!item.listoEnMostrador}
+                                  onCheckedChange={actions.onListoChange}
+                                />
+                                Marcar producción finalizada
+                              </label>
+                            ) : item.listoEnMostrador ? (
+                              <Chip size="sm" color="success" variant="soft">Producción finalizada</Chip>
+                            ) : null}
                             {tomo.id && (
                               <span className="text-xs text-accent-soft-foreground">
                                 Tomo anillado

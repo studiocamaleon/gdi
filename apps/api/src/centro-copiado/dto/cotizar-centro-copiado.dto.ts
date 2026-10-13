@@ -1,3 +1,4 @@
+import { DescuentoCotizarDto } from '../../motor-universal/cotizar.dto';
 import { Type } from 'class-transformer';
 import {
   ORIENTACIONES_PAGINA,
@@ -88,6 +89,12 @@ export class DocumentoCentroCopiadoDto {
   @MaxLength(255)
   archivoNombre?: string;
 
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1024 * 1024 * 1024)
+  archivoBytes?: number;
+
   @IsInt()
   @Min(1)
   paginas!: number;
@@ -151,7 +158,7 @@ export class DocumentoCentroCopiadoDto {
   /** Terminaciones (pasos opcionales) de un documento suelto. */
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(1)
+  @ArrayMaxSize(2)
   @ArrayUnique()
   @IsIn(CENTRO_COPIADO_TERMINACIONES, { each: true })
   terminaciones?: string[];
@@ -184,7 +191,7 @@ export class GrupoCentroCopiadoDto {
   /** Terminaciones (pasos opcionales) del tomo entero. */
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(1)
+  @ArrayMaxSize(2)
   @ArrayUnique()
   @IsIn(CENTRO_COPIADO_TERMINACIONES, { each: true })
   terminaciones?: string[];
@@ -195,7 +202,7 @@ export class GrupoCentroCopiadoDto {
   tipoAnillo?: string;
 }
 
-export class CotizarCentroCopiadoDto {
+export class CargaCentroCopiadoDto {
   @IsOptional()
   @IsUUID()
   tipoCambioId?: string;
@@ -217,6 +224,32 @@ export class CotizarCentroCopiadoDto {
   @ValidateNested({ each: true })
   @Type(() => GrupoCentroCopiadoDto)
   grupos?: GrupoCentroCopiadoDto[];
+}
+
+export class CargaPedidoCentroCopiadoDto extends CargaCentroCopiadoDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DescuentoCotizarDto)
+  descuento?: DescuentoCotizarDto;
+}
+
+/** Contexto comercial del pedido, sin importes suministrados por el cliente. */
+export class CotizarCentroCopiadoDto extends CargaCentroCopiadoDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  canalVenta?: string;
+
+  @IsOptional()
+  @IsIn(['FISCAL', 'SIN_COMPROBANTE'])
+  tratamientoFiscal?: 'FISCAL' | 'SIN_COMPROBANTE';
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CargaPedidoCentroCopiadoDto)
+  cargasPedido?: CargaPedidoCentroCopiadoDto[];
 }
 
 /**

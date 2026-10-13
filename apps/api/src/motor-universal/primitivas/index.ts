@@ -306,7 +306,9 @@ const pliegos_a_hojas: PrimitivaCompraSustrato = (
   if (!conversion.esDerivado || conversion.pliegosPorSustrato <= 1) {
     return cantidadConsumo;
   }
-  return Math.ceil(cantidadConsumo / conversion.pliegosPorSustrato);
+  return paso.conservaSobrantePapel
+    ? cantidadConsumo / conversion.pliegosPorSustrato
+    : Math.ceil(cantidadConsumo / conversion.pliegosPorSustrato);
 };
 
 // ─── avisos ─────────────────────────────────────────────────────────

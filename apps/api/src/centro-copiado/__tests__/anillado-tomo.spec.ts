@@ -358,6 +358,122 @@ it('el paso de anillado quedó cableado en la ruta', () => {
   expect(anilladoPasoId).toBeTruthy();
 });
 
+it('cotiza un anillo reemplazado después de inicializar sin reparar ni guardar la configuración', async () => {
+  expect(tenantId).toBeTruthy();
+  const nuevo = await prisma.materiaPrima.create({
+    data: {
+      tenantId,
+      codigo: 'TEST-ESPIRAL-REEMPLAZO',
+      nombre: 'Espiral de reemplazo ficticio',
+      tipoTecnico: 'anillado_encuadernacion',
+      familia: 'TERMINACION_EDITORIAL',
+      subfamilia: 'ANILLADO_ENCUADERNACION',
+      templateId: 'anillado_encuadernacion_v1',
+      unidadCompra: 'PACK',
+      unidadStock: 'UNIDAD',
+      unidadUso: 'UNIDAD',
+      atributosTecnicosJson: {},
+      variantes: {
+        create: {
+          tenantId,
+          sku: 'TEST-ESPIRAL-REEMPLAZO-11',
+          precioReferencia: 7500,
+          moneda: 'ARS',
+          unidadPrecio: 'PACK',
+          equivalenciasJson: [
+            { origen: 'pack', destino: 'unidad', factor: 25 },
+          ],
+          atributosVarianteJson: {
+            tipoAnillo: 'ESPIRAL_PLASTICO',
+            diametro: 11,
+            capacidadMaxHojas: 90,
+          },
+        },
+      },
+    },
+    include: { variantes: true },
+  });
+  try {
+    // El diámetro menor cubre las hojas, pero no tiene equivalencia de compra.
+    // La etiqueta debe seguir al anillo que el motor pudo costear realmente.
+    await prisma.materiaPrimaVariante.create({
+      data: {
+        tenantId,
+        materiaPrimaId: nuevo.id,
+        sku: 'TEST-ESPIRAL-REEMPLAZO-SIN-CONVERSION',
+        precioReferencia: 5000,
+        moneda: 'ARS',
+        unidadPrecio: 'PACK',
+        atributosVarianteJson: {
+          tipoAnillo: 'ESPIRAL_PLASTICO',
+          diametro: 7,
+          capacidadMaxHojas: 60,
+        },
+      },
+    });
+    await prisma.materiaPrima.update({
+      where: { id: anilloId },
+      data: { activo: false },
+    });
+    const entrada = {
+      documentos: [
+        {
+          ...doc('Reemplazo', 50),
+          grupoId: null,
+          copias: 2,
+          terminaciones: ['Anillado'],
+          tipoAnillo: 'ESPIRAL_PLASTICO',
+        },
+      ],
+    };
+    const preview = await service.cotizar(tenantId, entrada, PERIODO);
+    expect(preview.documentos[0].error).toBeNull();
+    expect(preview.documentos[0].anillado?.diametroMm).toBe(11);
+    const resultado = await service.construirItems(tenantId, entrada, PERIODO);
+    const material = resultado.items[0].cotizacion?.pasos
+      .find((p) => p.familiaCodigo === 'encuadernado_anillado')
+      ?.materiales?.find((m) => m.slotCodigo === 'anillo');
+    expect(material?.materialVarianteId).toBe(nuevo.variantes[0].id);
+    expect(material?.cantidad).toBe(2);
+    expect(material?.costoTotal).toBeCloseTo(600, 2);
+    expect(resultado.items[0].especificaciones.Anillo).toBe(
+      'Espiral plástico Ø11 mm',
+    );
+    const tomo = {
+      documentos: entrada.documentos.map((d) => ({ ...d, grupoId: 'T' })),
+      grupos: [
+        {
+          id: 'T',
+          nombre: 'Tomo ficticio',
+          juegos: 2,
+          terminaciones: ['Anillado'],
+          tipoAnillo: 'ESPIRAL_PLASTICO',
+        },
+      ],
+    };
+    const previewTomo = await service.cotizar(tenantId, tomo, PERIODO);
+    expect(previewTomo.grupos[0].error).toBeNull();
+    expect(previewTomo.grupos[0].anillado?.diametroMm).toBe(11);
+    const itemTomo = await service.construirItems(tenantId, tomo, PERIODO);
+    expect(itemTomo.items[0].error).toBeNull();
+    expect(itemTomo.items[0].especificaciones.Anillo).toBe(
+      'Espiral plástico Ø11 mm',
+    );
+    // Una cotización no escribe ni repara la plantilla técnica.
+    expect(
+      await prisma.productoConfigPasoSlotMaterialCandidato.count({
+        where: { tenantId, materiaPrimaId: nuevo.id },
+      }),
+    ).toBe(0);
+  } finally {
+    await prisma.materiaPrima.update({
+      where: { id: anilloId },
+      data: { activo: true },
+    });
+    await prisma.materiaPrima.delete({ where: { id: nuevo.id } });
+  }
+});
+
 it('el paso es OPCIONAL, T-3, cantidad = jobContext.juegos', async () => {
   if (!tenantId) return;
   const cp = await prisma.productoConfigPaso.findUniqueOrThrow({

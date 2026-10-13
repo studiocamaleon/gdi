@@ -116,6 +116,9 @@ jobs:
             src/auth/__tests__/inventario-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/costos-maquinaria-http.integration.spec.ts \
             src/centro-copiado/__tests__/permisos-http.integration.spec.ts \
+            src/centro-copiado/tarifarios/__tests__/tarifarios.integration.spec.ts \
+            src/centro-copiado/tarifarios/__tests__/politica-precios.integration.spec.ts \
+            src/centro-copiado/pedidos/__tests__/pedidos.integration.spec.ts \
             src/archivos/__tests__/permisos-http.integration.spec.ts \
             src/clientes/__tests__/solicitudes-alta.http.integration.spec.ts \
             src/eventos-sistema/eventos-sistema-lecturas.integration.spec.ts \
@@ -155,6 +158,34 @@ jobs:
             src/archivos/storage/local-confinamiento.spec.ts \
             src/archivos/storage/local.driver.spec.ts \
             src/archivos/storage/subida-inmutable.spec.ts
+      - name: Comprobar editor de tarifarios y canales
+        run: |
+          npm ci --include=dev --no-audit --no-fund
+          node node_modules/vitest/vitest.mjs run \
+            src/lib/centro-copiado-tarifarios-editor.test.ts \
+            src/lib/centro-copiado-tarifarios-cuadricula.test.ts \
+            src/lib/centro-copiado-tarifarios-sugerencias.test.ts \
+            src/components/comercial/centro-copiado-tarifarios.test.tsx \
+            src/components/comercial/centro-copiado-tarifarios-matriz.test.tsx \
+            src/components/comercial/centro-copiado-tarifarios-simulacion.test.tsx \
+            src/components/comercial/centro-copiado-config-view.test.tsx \
+            src/components/comercial/centro-copiado-pedido-precios.test.tsx \
+            src/components/comercial/propuesta-emision-navegacion.test.tsx
+      - name: Comprobar cálculos y contrato de tarifarios de Centro de copiado
+        working-directory: apps/api
+        run: |
+          node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/centro-copiado/tarifarios/__tests__/contenido-tarifario.spec.ts \
+            src/centro-copiado/tarifarios/__tests__/politica-precios.spec.ts \
+            src/centro-copiado/tarifarios/__tests__/simulacion.spec.ts \
+            src/centro-copiado/__tests__/papeles-motor.spec.ts \
+            src/centro-copiado/comercial/__tests__/control-margen.spec.ts \
+            src/centro-copiado/comercial/__tests__/calculo-hojas.spec.ts \
+            src/centro-copiado/comercial/__tests__/validaciones.spec.ts \
+            src/centro-copiado/comercial/__tests__/calculo-cad.spec.ts \
+            src/centro-copiado/comercial/__tests__/validaciones-cad.spec.ts \
+            src/centro-copiado/comercial/__tests__/composicion-pedido.spec.ts \
+            src/centro-copiado/pedidos/__tests__/calculo-pedido.spec.ts
       - name: Comprobar canal privado de producción y credenciales fiscales ficticias
         working-directory: apps/api
         run: |

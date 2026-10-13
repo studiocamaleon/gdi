@@ -662,12 +662,14 @@ async function provisionarPasoAnilladoTx(
     });
     if (existe) return;
 
+    const ultimo = await tx.rutaPaso.aggregate({ where: { tenantId, rutaId: rutaAlt.rutaId, version: rutaAlt.rutaVersion }, _max: { orden: true } });
+    const ordenAnillado = (ultimo._max.orden ?? 0) + 1;
     const rutaPaso = await tx.rutaPaso.create({
       data: {
         tenantId,
         rutaId: rutaAlt.rutaId,
         version: rutaAlt.rutaVersion,
-        orden: 1,
+        orden: ordenAnillado,
         familiaCodigo: 'encuadernado_anillado',
         icono: 'BookOpen',
         activo: true,
@@ -696,7 +698,7 @@ async function provisionarPasoAnilladoTx(
       });
       const pasos = [
         ...sinAnillado,
-        { id: rutaPaso.id, orden: 1, familia: 'encuadernado_anillado' },
+        { id: rutaPaso.id, orden: ordenAnillado, familia: 'encuadernado_anillado' },
       ];
       await tx.rutaVersion.update({
         where: { id: ver.id },
