@@ -21,9 +21,13 @@ let el: HTMLDivElement,
 function App({
   permisos = ["finanzas.ver_margenes"],
   consulta = false,
+  revisionCostos = "1",
+  preparacionHojas = false,
 }: {
   permisos?: string[];
   consulta?: boolean;
+  revisionCostos?: string;
+  preparacionHojas?: boolean;
 }) {
   const [c, setC] = useState(inicial);
   useEffect(() => {
@@ -34,6 +38,8 @@ function App({
       <SimulacionTarifario
         tarifarioId="tarifa-ficticia"
         revision={1}
+        revisionCostos={revisionCostos}
+        preparacionHojas={preparacionHojas}
         contenido={c}
         guardado={inicial}
         nombres={{ papel: "Obra de prueba" }}
@@ -282,17 +288,17 @@ it("un error parcial queda en su celda y no reemplaza el precio con una sugerenc
   await abrir();
   await click("Calcular 4 precios");
   expect(el.textContent).toContain("Error de cálculo");
-  await click("Revisar 1 precio");
-  await click("Aplicar 1 precio al borrador");
+  expect(boton("Revisar 0 precios").disabled).toBe(true);
   expect(ultimo.hojas!.filas[1].precios.map((p) => p.precioUnitario)).toEqual([
     null,
-    "1000",
+    null,
   ]);
 });
 it("la consulta puede calcular pero no aplicar, y perder permiso retira costos de la matriz", async () => {
   await abrir({ consulta: true });
   await click("Calcular 4 precios");
   expect(boton("Revisar 2 precios").disabled).toBe(true);
+  expect(boton("Limpiar valores").disabled).toBe(true);
   await act(async () => root.render(<App permisos={[]} />));
   expect(el.textContent).not.toContain("Contribución actual");
   expect(el.textContent).not.toContain("Calcular precios con el motor");
@@ -384,4 +390,90 @@ it("permite ajustar sólo el tope de muestra del tramo abierto y exige recalcula
   ).toBe("350");
   expect(document.body.textContent).toContain("Muestra: 100–350 hojas");
   expect(ultimo.hojas!.rangosGenerales).toEqual([1, 100]);
+});
+
+it("limpia sólo la vista, incluidos ceros, cancela, deshace y regenera sin precios ni costos anteriores", async () => {
+  inicial.hojas!.filas[2].precios[0].precioUnitario = "999";
+  await abrir();
+  await click("Calcular 4 precios");
+  await click("Limpiar valores");
+  await click("Cancelar");
+  expect(ultimo).toEqual(inicial);
+  await click("Limpiar valores");
+  await click("Limpiar y dejar pendientes");
+  expect(
+    ultimo
+      .hojas!.filas.slice(0, 2)
+      .flatMap((f) => f.precios)
+      .every((p) => p.precioUnitario === null),
+  ).toBe(true);
+  expect(ultimo.hojas!.filas[2]).toEqual(inicial.hojas!.filas[2]);
+  expect(ultimo.hojas!.rangosGenerales).toEqual(inicial.hojas!.rangosGenerales);
+  expect(el.textContent).not.toContain("Sugerido");
+  await click("Deshacer limpieza");
+  expect(ultimo).toEqual(inicial);
+  expect(el.textContent).not.toContain("Sugerido");
+  await click("Limpiar valores");
+  await click("Limpiar y dejar pendientes");
+  await click("Calcular 4 precios");
+  expect(simularCeldasTarifario).toHaveBeenCalledTimes(2);
+  await click("Revisar 4 precios");
+  await click("Aplicar 4 precios al borrador");
+  expect(
+    ultimo
+      .hojas!.filas.slice(0, 2)
+      .flatMap((f) => f.precios)
+      .every((p) => p.precioUnitario === "1000"),
+  ).toBe(true);
+  expect(el.textContent).not.toContain("Deshacer limpieza");
+});
+it("limpia toda la matriz cuando se elige ese alcance", async () => {
+  inicial.hojas!.filas[2].precios[0].precioUnitario = "999";
+  await abrir();
+  await click("Limpiar valores");
+  const opciones = [
+    ...document.querySelectorAll<HTMLElement>('[role="dialog"] [role="radio"]'),
+  ];
+  await act(async () =>
+    opciones.find((o) => o.textContent === "Toda la matriz")!.click(),
+  );
+  await click("Limpiar y dejar pendientes");
+  expect(
+    ultimo
+      .hojas!.filas.flatMap((f) => f.precios)
+      .every((p) => p.precioUnitario === null),
+  ).toBe(true);
+});
+it("cambiar setup o la versión de costos invalida las sugerencias aunque no cambie la matriz", async () => {
+  await abrir({ preparacionHojas: true });
+  await click("Calcular 4 precios");
+  expect(el.textContent).toContain("Sugerido");
+  await act(async () => root.render(<App preparacionHojas={false} />));
+  expect(el.textContent).not.toContain("Sugerido");
+  expect(el.textContent).toContain("productivas: desactivadas");
+  await click("Calcular 4 precios");
+  await act(async () => root.render(<App revisionCostos="2" />));
+  expect(el.textContent).not.toContain("Sugerido");
+  expect(ultimo).toEqual(inicial);
+});
+it("descarta respuestas en vuelo de una configuración anterior y bloquea limpieza mientras calcula", async () => {
+  const original = vi.mocked(simularCeldasTarifario).getMockImplementation()!;
+  let completar!: () => void;
+  const pendiente = new Promise<void>((resolve) => {
+    completar = resolve;
+  });
+  vi.mocked(simularCeldasTarifario).mockImplementation(async (...args) => {
+    await pendiente;
+    return original(...args);
+  });
+  await abrir({ preparacionHojas: true });
+  await click("Calcular 4 precios");
+  expect(boton("Limpiar valores").disabled).toBe(true);
+  await act(async () =>
+    root.render(<App preparacionHojas={false} revisionCostos="2" />),
+  );
+  await act(async () => completar());
+  expect(el.textContent).not.toContain("Sugerido");
+  expect(boton("Limpiar valores").disabled).toBe(false);
+  expect(ultimo).toEqual(inicial);
 });

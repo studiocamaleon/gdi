@@ -10,6 +10,7 @@ import type {
 import { DecimalComercial as D } from "../../apps/api/src/centro-copiado/comercial/validaciones";
 import { compararSimulacion } from "../../apps/api/src/centro-copiado/comercial/comparacion-simulacion";
 import { ajustarPrecio, claveRango } from "./centro-copiado-tarifarios-editor";
+import { claveCeldaSimulacion } from "../../apps/api/src/centro-copiado/tarifarios/simulacion-tarifario.types";
 
 export function precioCelda(c: ContenidoTarifario, celda: CeldaSimulacion) {
   const matriz = c[celda.seccion];
@@ -186,6 +187,85 @@ export function sugerirCelda(
       "Precio único: se usa la mayor sugerencia de las tres coberturas.",
     );
   return { anterior: precio, nuevo, controles, avisos: [...new Set(avisos)] };
+}
+
+/** Eleva los tramos anteriores al mayor precio posterior de la misma fila.
+ * Nunca rebaja una sugerencia por debajo de su costo/objetivo. No altera costos,
+ * precios cargados ni cruza papeles, caras, coberturas o matrices.
+ */
+export function sugerirPorVolumen(
+  contenido: ContenidoTarifario,
+  resultados: Record<string, ResultadoCeldaSimulacion>,
+  seccion: "hojas" | "cad",
+  redondeo?: string,
+  objetivo?: string,
+) {
+  type Sugerencia = ReturnType<typeof sugerirCelda> & {
+    ajustadaPorVolumen?: boolean;
+  };
+  const propuestas = new Map<
+    string,
+    { sugerencia?: Sugerencia; error?: string }
+  >();
+  const matriz = contenido[seccion];
+  matriz?.filas.forEach((fila, indice) => {
+    const claves = (fila.rangosPropios ?? matriz.rangosGenerales).map(
+      (_, tramo) => claveCeldaSimulacion({ seccion, fila: indice, tramo }),
+    );
+    if (!claves.some((k) => resultados[k])) return;
+    try {
+      const sugerencias = claves.map((k) => {
+        if (!resultados[k])
+          throw new Error(
+            "Completá el cálculo de todos los tramos de esta combinación para ordenar sus sugerencias.",
+          );
+        return sugerirCelda(contenido, resultados[k], redondeo, objetivo);
+      });
+      let mayor = new D(0);
+      for (let i = claves.length - 1; i >= 0; i--) {
+        const original = sugerencias[i];
+        mayor = D.max(mayor, original.nuevo);
+        const ajustada = mayor.gt(original.nuevo);
+        propuestas.set(claves[i], {
+          sugerencia: {
+            ...original,
+            nuevo: mayor.toFixed(),
+            ajustadaPorVolumen: ajustada,
+            controles: resultados[claves[i]].escenarios.flatMap((e) =>
+              e.estado === "CALCULADO"
+                ? [
+                    {
+                      ...compararSimulacion(
+                        contenido,
+                        seccion,
+                        e,
+                        mayor.toFixed(),
+                      ).control,
+                      cobertura: e.cobertura,
+                    },
+                  ]
+                : [],
+            ),
+            avisos: ajustada
+              ? [
+                  ...original.avisos,
+                  "Se elevó este precio para que un tramo de mayor cantidad no resulte más caro por unidad.",
+                ]
+              : original.avisos,
+          },
+        });
+      }
+    } catch (e) {
+      for (const clave of claves)
+        propuestas.set(clave, {
+          error:
+            e instanceof Error
+              ? e.message
+              : "No se pudo ordenar la sugerencia de esta combinación.",
+        });
+    }
+  });
+  return propuestas;
 }
 
 export function leerMargenObjetivo(valor: string) {

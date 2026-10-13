@@ -75,6 +75,7 @@ type Guardado = { estructura: string; resultado: ResultadoCeldaSimulacion };
 export type MotorTarifario = {
   contenido: ContenidoTarifario;
   estructura: string;
+  preparacionHojas?: boolean;
   celdas: Celda[];
   resultados: Record<string, ResultadoCeldaSimulacion>;
   desactualizadas: Set<string>;
@@ -85,6 +86,7 @@ export type MotorTarifario = {
   error: string | null;
   progreso: { hechas: number; total: number; estado: string } | null;
   simular: (celdas: CeldaSimulacion[]) => Promise<void>;
+  limpiar: (celdas: CeldaSimulacion[]) => void;
   detener: () => void;
   detalle: (celda: CeldaSimulacion) => void;
   aplicar?: (contenido: ContenidoTarifario) => void;
@@ -94,6 +96,8 @@ export function SimulacionTarifario(props: {
   tarifarioId: string | null;
   revision: number | undefined;
   versionId?: string;
+  revisionCostos?: string;
+  preparacionHojas?: boolean;
   contenido: ContenidoTarifario;
   guardado: ContenidoTarifario | null;
   nombres: Record<string, string>;
@@ -111,6 +115,8 @@ function Simulador({
   tarifarioId,
   revision,
   versionId,
+  revisionCostos,
+  preparacionHojas,
   contenido,
   guardado,
   nombres,
@@ -155,8 +161,15 @@ function Simulador({
     };
   }, []);
   const estructura = useMemo(
-    () => estructuraSimulacion(contenido),
-    [contenido],
+    () =>
+      JSON.stringify([
+        tarifarioId,
+        versionId,
+        revisionCostos,
+        preparacionHojas,
+        estructuraSimulacion(contenido),
+      ]),
+    [tarifarioId, versionId, revisionCostos, preparacionHojas, contenido],
   );
   const actual = useRef(estructura);
   useEffect(() => {
@@ -166,7 +179,15 @@ function Simulador({
     setDetalle(null);
     setInspeccion(null);
   }, [estructura]);
-  const estructuraGuardada = guardado && estructuraSimulacion(guardado);
+  const estructuraGuardada =
+    guardado &&
+    JSON.stringify([
+      tarifarioId,
+      versionId,
+      revisionCostos,
+      preparacionHojas,
+      estructuraSimulacion(guardado),
+    ]);
   const celdas = useMemo(
     () =>
       (["hojas", "cad"] as const).flatMap((seccion) => {
@@ -292,6 +313,7 @@ function Simulador({
           celdas: elegidas.slice(i, i + 5).map(referenciaDe),
         });
         if (!ejecucion.current.montado) return;
+        if (actual.current !== firma) break;
         hechas += respuesta.resultados.length;
         setResultados((prev) => ({
           ...prev,
@@ -310,7 +332,8 @@ function Simulador({
         });
       }
     } catch (e) {
-      if (ejecucion.current.montado) setError(mensajeErrorTarifa(e));
+      if (ejecucion.current.montado && actual.current === firma)
+        setError(mensajeErrorTarifa(e));
     } finally {
       ejecucion.current.activa = false;
       if (ejecucion.current.montado)
@@ -638,6 +661,7 @@ function Simulador({
   const motor: MotorTarifario = {
     contenido,
     estructura,
+    preparacionHojas,
     celdas,
     resultados: vigentes,
     desactualizadas: new Set(
@@ -652,13 +676,31 @@ function Simulador({
       !tarifarioId || estructura !== estructuraGuardada
         ? "Guardá las combinaciones del borrador para calcular sus costos."
         : disabled
-          ? "Guardá los cambios de Oferta o recargá el tarifario antes de calcular."
+          ? "Guardá los cambios de Centro de copiado o recargá el tarifario antes de calcular."
           : null,
     error,
     progreso: progreso?.estructura === estructura ? progreso : null,
     simular: (seleccionadas) => {
       const claves = new Set(seleccionadas.map(claveCeldaSimulacion));
       return simular(celdas.filter((c) => claves.has(claveCeldaSimulacion(c))));
+    },
+    limpiar: (seleccionadas) => {
+      if (disabled || !onChange || ejecucion.current.activa) return;
+      const claves = new Set(seleccionadas.map(claveCeldaSimulacion));
+      setResultados((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).filter(([k]) => !claves.has(k)),
+        ),
+      );
+      setReferencias((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).filter(([k]) => !claves.has(k)),
+        ),
+      );
+      setProgreso(null);
+      setError(null);
+      setDetalle(null);
+      setInspeccion(null);
     },
     detener: () => {
       ejecucion.current.detener = true;

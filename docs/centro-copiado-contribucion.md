@@ -19,3 +19,20 @@ Verificado en el navegador el 12/10/2026: configuración guardada con setup desa
 Pruebas cubren separación de tiempos internos y proveedores, componentes anidados, costos faltantes, setup activado/desactivado, tandas, terminaciones, mínimos, autorización y presentación de snapshots históricos. Pasaron las pruebas de API e interfaz, comprobación de tipos y lint de los archivos afectados.
 
 Rama `codex/copiado-contribucion`, dependiente de `codex/copiado-tandas` en `efc45ae66`, aún sin integrar a `main`. Sin migración de datos ni despliegue.
+
+## Recalcular y limpiar el tarifario
+
+Las simulaciones se identifican también por la versión guardada de Centro de copiado y su check de preparación. Cambiar esa configuración invalida costos y sugerencias anteriores, incluidos los resultados de una solicitud que todavía estaba en curso. Recalcular consulta nuevamente el motor; editar sólo la contribución o el redondeo reutiliza los costos vigentes.
+
+«Limpiar valores» permite elegir la vista filtrada (todas sus páginas) o toda la matriz de hojas/CAD. Deja precios pendientes (`null`, no gratuitos), incluidos ceros cargados, y retira simulaciones y referencias personalizadas de ese alcance. Conserva combinaciones, rangos, la otra matriz y versiones publicadas. «Deshacer limpieza» recupera los precios mientras no se hayan editado de nuevo; los costos se recalculan. La operación no guarda ni publica automáticamente. El flujo es limpiar, calcular, revisar, aplicar al borrador, guardar y publicar cuando corresponda.
+
+El costo unitario puede subir al necesitar otro pliego completo. Por ejemplo, con un pliego ficticio de 40 que rinde dos hojas, el papel por hoja cuesta 40 para una hoja, 20 para dos y 26,67 para tres. Esto ocurre aun sin setup y se mantiene visible en el costo real.
+
+Las sugerencias de una misma combinación se ordenan para que el precio unitario no aumente con la cantidad: cada tramo anterior se eleva al mayor precio sugerido posterior cuando hace falta. No se rebajan sugerencias debajo del objetivo; los tramos ajustados pueden tener contribución superior a la pedida y se identifican en la tabla. Se requieren simulaciones válidas de todos sus tramos; un error deja esa combinación sin propuesta, sin impedir las restantes. Rangos propios, papeles, colores y caras se procesan por separado. La contribución se comprueba para la cantidad de referencia de cada celda, no garantiza todas las cantidades interiores del tramo.
+
+Aplicar «Sólo vacíos» conserva los precios ya cargados, por lo que una fila mezclada con precios manuales puede requerir revisión. Para reemplazar una fila completa, limpiar su alcance o elegir «También cargados». Se mantiene la advertencia sobre fronteras que reducen el total del pedido.
+
+Esta corrección se desarrolla en `codex/recalculo-tarifarios`, dependiente de `codex/copiado-contribucion` en `4e025ea23`, aún sin integrar a `main`.
+
+
+Validado localmente el 13/10/2026: 61 pruebas de sugerencias, simulación y editor, tipos del flujo afectado y lint. En navegador se verificó setup desactivado, limpieza de una vista A4 en ambas caras, recuperación exacta con deshacer, regeneración y aplicación de 22 precios al borrador sin aumentos unitarios por volumen ni errores de consola. Se descartaron los cambios de prueba y se comprobó que los precios guardados quedaron intactos. Sin publicación ni despliegue.

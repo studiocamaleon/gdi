@@ -73,6 +73,7 @@ import {
   type MatrizHojas,
 } from "@/lib/centro-copiado-tarifarios-editor";
 
+import { LimpiarPreciosTarifario } from "./centro-copiado-tarifarios-limpiar";
 import { MotorEnMatriz } from "./centro-copiado-motor-matriz";
 import type { MotorTarifario } from "./centro-copiado-tarifarios-simulacion";
 
@@ -332,6 +333,14 @@ export function EditorMatriz({
             <SlidersHorizontal data-icon="inline-start" />
             Ajustar precios
           </Button>
+          <LimpiarPreciosTarifario
+            matriz={matriz}
+            indices={indices}
+            descripcionVista={descripcionVista}
+            disabled={disabled || !!motor?.ocupada}
+            onChange={onChange}
+            onLimpiarResultados={motor?.limpiar}
+          />
         </div>
         <MotorEnMatriz
           motor={motor}

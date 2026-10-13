@@ -24,6 +24,7 @@ import {
 } from "@/lib/centro-copiado-tarifarios-editor";
 import {
   sugerirCelda,
+  sugerirPorVolumen,
   ponerPrecio,
   leerMargenObjetivo,
   caidasEntreTramos,
@@ -37,7 +38,9 @@ import { DecimalComercial as D } from "../../../apps/api/src/centro-copiado/come
 import { resumirCostosRango } from "@/lib/centro-copiado-costos-rango";
 import styles from "./centro-copiado-motor-matriz.module.css";
 
-type Sugerencia = ReturnType<typeof sugerirCelda>;
+type Sugerencia = ReturnType<typeof sugerirCelda> & {
+  ajustadaPorVolumen?: boolean;
+};
 type Propuesta = { celda: CeldaSimulacion; sugerencia: Sugerencia };
 export type RenderDetalleCelda = (fila: number, tramo: number) => ReactNode;
 
@@ -93,24 +96,13 @@ export function MotorEnMatriz({
   const sugerencias = useMemo(() => {
     const mapa = new Map<string, { sugerencia?: Sugerencia; error?: string }>();
     if (!motor || !normalizado || errorOpciones || !abierto) return mapa;
-    for (const c of motor.celdas.filter((c) => c.seccion === seccion)) {
-      const clave = claveCeldaSimulacion(c);
-      const r = motor.resultados[clave];
-      if (!r) continue;
-      try {
-        mapa.set(clave, {
-          sugerencia: sugerirCelda(
-            normalizado,
-            r,
-            redondeo.trim() || undefined,
-            margen,
-          ),
-        });
-      } catch (e) {
-        mapa.set(clave, { error: mensajeErrorTarifa(e) });
-      }
-    }
-    return mapa;
+    return sugerirPorVolumen(
+      normalizado,
+      motor.resultados,
+      seccion,
+      redondeo.trim() || undefined,
+      margen,
+    );
   }, [motor, normalizado, errorOpciones, abierto, seccion, redondeo, margen]);
   if (!motor) return children();
   const totalMatriz = motor.celdas.filter((c) => c.seccion === seccion).length;
@@ -304,6 +296,9 @@ export function MotorEnMatriz({
               Contribución{" "}
               {peorMargen(sugerida.sugerencia.controles)?.porcentaje ?? "—"}%
             </small>
+            {sugerida.sugerencia.ajustadaPorVolumen && (
+              <small>Ajustado por volumen</small>
+            )}
             {sugerida.sugerencia.controles.some(
               (c) => c.estado !== "CUMPLE",
             ) && (
@@ -365,6 +360,12 @@ export function MotorEnMatriz({
                 conservan hasta que apliques la propuesta.
               </p>
             </div>
+            {seccion === "hojas" && motor.preparacionHojas != null && (
+              <p className={styles.help}>
+                Preparación y limpieza productivas:{" "}
+                {motor.preparacionHojas ? "activadas" : "desactivadas"}.
+              </p>
+            )}
             <FieldGroup className={styles.fields}>
               <TextoTarifa
                 etiqueta="Contribución objetivo (%)"
@@ -516,7 +517,10 @@ export function MotorEnMatriz({
                 : "más IVA"}
               . Preparación aparte descontada una vez; terminaciones aparte. El
               mínimo no reduce el precio sugerido. Con precio único se toma la
-              cobertura más exigente.
+              cobertura más exigente. Se elevan los tramos anteriores cuando
+              hace falta para que el precio unitario no aumente por volumen; su
+              contribución puede superar el objetivo. Los costos reales
+              conservan los saltos por consumo de pliegos completos.
             </p>
           </div>
         )}

@@ -587,6 +587,11 @@ export function CentroCopiadoTarifarios({
                 tarifarioId={base?.id ?? null}
                 revision={base?.revision}
                 versionId={version?.id}
+                revisionCostos={JSON.stringify([
+                  cfg.version,
+                  cfg.actualizadoEl,
+                ])}
+                preparacionHojas={cfg.cobraSetup}
                 contenido={contenido}
                 guardado={version?.contenido ?? base?.contenido ?? null}
                 nombres={nombres}

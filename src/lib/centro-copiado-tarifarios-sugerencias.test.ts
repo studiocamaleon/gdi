@@ -6,6 +6,7 @@ import {
 import { configTarifarios } from "./__fixtures__/tarifarios";
 import {
   sugerirCelda,
+  sugerirPorVolumen,
   caidasEntreTramos,
   canalesDelTarifario,
 } from "./centro-copiado-tarifarios-sugerencias";
@@ -273,4 +274,100 @@ it("corrige el efecto del redondeo fiscal en referencias pequeñas", () => {
     }
   const p = sugerirCelda(c, r, undefined, "37.5");
   expect(p.controles.every((c) => Number(c.porcentaje) >= 37.5)).toBe(true);
+});
+
+it("ordena por volumen sin bajar precios bajo el objetivo ni modificar los costos reales", () => {
+  const { c, r } = ejemplo();
+  c.composicion.iva = "MAS_IVA";
+  c.hojas!.rangosGenerales = [1, 2, 3, 4, 5, 10];
+  c.hojas!.filas[0].precios = c.hojas!.rangosGenerales.map((n) => ({
+    desdeCantidad: n,
+    precioUnitario: null,
+  }));
+  const resultados: Record<string, ResultadoCeldaSimulacion> = {};
+  c.hojas!.rangosGenerales.forEach((n, tramo) => {
+    const total = 39 * Math.ceil(n / 2) + 6 * n;
+    resultados[`hojas:0:${tramo}`] = {
+      ...r,
+      celda: { seccion: "hojas", fila: 0, tramo },
+      escenarios: r.escenarios.map((e) => {
+        if (e.estado !== "CALCULADO") throw Error("fixture");
+        return {
+          ...e,
+          costoTotal: String(total),
+          costoUnitario: String(total / n),
+          cantidadReferencia: String(n),
+          cantidadFacturable: String(n),
+          grupos: [
+            {
+              fila: 0,
+              desdeCantidad: String(n),
+              cantidadFacturable: String(n),
+            },
+          ],
+        };
+      }),
+    };
+  });
+  const originales = structuredClone(resultados);
+  const propuestas = sugerirPorVolumen(c, resultados, "hojas", "1", "40");
+  const precios = c.hojas!.rangosGenerales.map((_, i) =>
+    Number(propuestas.get(`hojas:0:${i}`)!.sugerencia!.nuevo),
+  );
+  expect(precios).toEqual([75, 54, 54, 49, 49, 43]);
+  expect(propuestas.get("hojas:0:1")!.sugerencia!.ajustadaPorVolumen).toBe(
+    true,
+  );
+  expect(
+    [...propuestas.values()].every((p) =>
+      p.sugerencia!.controles.every((c) => Number(c.porcentaje) >= 40),
+    ),
+  ).toBe(true);
+  expect(resultados).toEqual(originales);
+  expect(
+    c.hojas!.filas[0].precios.every((p) => p.precioUnitario === null),
+  ).toBe(true);
+  delete resultados["hojas:0:2"];
+  const incompletas = sugerirPorVolumen(
+    c,
+    resultados,
+    "hojas",
+    undefined,
+    "40",
+  );
+  expect(
+    [...incompletas.values()].every((p) => !p.sugerencia && !!p.error),
+  ).toBe(true);
+});
+it("ordena cada combinación con sus rangos propios sin cruzar filas", () => {
+  const { c, r } = ejemplo();
+  c.composicion.iva = "MAS_IVA";
+  c.hojas!.rangosGenerales = [1];
+  const fila = structuredClone(c.hojas!.filas[0]);
+  c.hojas!.filas.push({ ...fila, rangosPropios: [10] });
+  const resultados: Record<string, ResultadoCeldaSimulacion> = {};
+  for (const [fila, n, costo] of [
+    [0, 1, 30],
+    [1, 10, 600],
+  ]) {
+    resultados[`hojas:${fila}:0`] = {
+      ...r,
+      celda: { seccion: "hojas", fila, tramo: 0 },
+      escenarios: r.escenarios.map((e) => {
+        if (e.estado !== "CALCULADO") throw Error("fixture");
+        return {
+          ...e,
+          costoTotal: String(costo),
+          cantidadReferencia: String(n),
+          cantidadFacturable: String(n),
+          grupos: [
+            { fila, desdeCantidad: String(n), cantidadFacturable: String(n) },
+          ],
+        };
+      }),
+    };
+  }
+  const propuestas = sugerirPorVolumen(c, resultados, "hojas", undefined, "40");
+  expect(propuestas.get("hojas:0:0")!.sugerencia!.nuevo).toBe("50");
+  expect(propuestas.get("hojas:1:0")!.sugerencia!.nuevo).toBe("100");
 });
