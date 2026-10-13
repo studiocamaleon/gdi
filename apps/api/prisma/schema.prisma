@@ -896,6 +896,10 @@ model Tenant {
   centroCopiadoConfig                              CentroCopiadoConfig?
   centroCopiadoEventos                             CentroCopiadoEvento[]
   centroCopiadoOperaciones                         CentroCopiadoOperacion[]
+  centroCopiadoTarifarios                          CentroCopiadoTarifario[]
+  centroCopiadoTarifarioVersiones                  CentroCopiadoTarifarioVersion[]
+  centroCopiadoPoliticaBorrador                     CentroCopiadoPoliticaBorrador?
+  centroCopiadoCalculos                            CentroCopiadoPedidoCalculo[]
   destinosImpresion                                ImpresionDestino[]
   bandejasImpresion                                ImpresionBandeja[]
   perfilesImpresion                                ImpresionPerfil[]
@@ -1028,6 +1032,86 @@ model CentroCopiadoEvento {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
+}
+
+/// Identidad del tarifario y su borrador editable. No asigna políticas a canales.
+model CentroCopiadoTarifario {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  nombre       String   @db.VarChar(120)
+  revision     Int      @default(1)
+  ultimoNumero Int      @default(0)
+  contenido    Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant    Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versiones CentroCopiadoTarifarioVersion[]
+
+  @@unique([id, tenantId])
+  @@index([tenantId, createdAt])
+}
+
+/// Snapshot inmutable; la vigencia sólo selecciona versiones dentro del tarifario.
+/// Activar su uso en la operación requiere una política general/canal explícita.
+model CentroCopiadoTarifarioVersion {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  tarifarioId      String   @db.Uuid
+  numero           Int
+  revisionBorrador Int
+  nombre           String   @db.VarChar(120)
+  contenido        Json
+  tipoVigencia     String   @db.VarChar(20)
+  vigenteDesde     DateTime @db.Timestamptz(3)
+  publicadoPorId   String   @db.Uuid
+  publicadoEl      DateTime @default(now())
+
+  tenant    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tarifario CentroCopiadoTarifario @relation(fields: [tarifarioId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([tarifarioId, revisionBorrador])
+  @@unique([tarifarioId, numero])
+  @@unique([tarifarioId, vigenteDesde])
+  @@index([tenantId, tarifarioId, vigenteDesde])
+}
+
+/// Configuración comercial en preparación: guardarla no activa matrices en pedidos.
+model CentroCopiadoPoliticaBorrador {
+  activaRevision   Int?
+  activaContenido  Json?
+  activadaPorId    String? @db.Uuid
+  activadaEl       DateTime?
+  tenantId         String   @id @db.Uuid
+  revision         Int      @default(1)
+  contenido        Json
+  actualizadoPorId String   @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// Cálculo comercial del pedido; sólo el servidor genera precios y su huella.
+/// Una autorización identifica este cálculo exacto y nunca modifica sus importes.
+model CentroCopiadoPedidoCalculo {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  cotizacionId     String   @db.Uuid
+  clienteId        String?  @db.Uuid
+  canalVenta       String
+  tratamientoFiscal String
+  referenciaJson   Json
+  resultadoJson    Json
+  huella           String   @db.VarChar(64)
+  autorizadoPorId  String?  @db.Uuid
+  autorizadoNombre String?
+  autorizacionMotivo String? @db.VarChar(1000)
+  autorizadoEl     DateTime?
+  creadoPorId      String   @db.Uuid
+  createdAt        DateTime @default(now())
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, cotizacionId])
 }
 
 /// Resultado de mutaciones reintentables del módulo. La clave es aportada por
@@ -4168,6 +4252,11 @@ model OrdenTrabajo {
 }
 
 model OrdenTrabajoItem {
+  /// Producción finalizada al emitir. Sólo Centro de copiado; registra pasos hechos sin ruta activa.
+  listoEnMostrador Boolean @default(false)
+  /// Se firma al emitir, no al guardar el borrador.
+  listoEnMostradorEl DateTime?
+  listoEnMostradorPorNombre String?
   /// Elección de operadores en el borrador, ligada a la cotización congelada.
   personalPrevistoJson Json?
   /// Agrupador comercial: sus lotes ejecutan el trabajo, nunca la ruta del total.

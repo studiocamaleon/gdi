@@ -53,6 +53,9 @@ export function planDocumento(job: unknown): PlanDocumento | null {
   const copias = Number(meta.esTomo ? meta.juegos : meta.copias);
   const faz = segmentos[0]?.faz === 2 ? 2 : 1;
   let motivo: string | null = null;
+  if (Number(objeto(meta.tandaImpresion).documentos) > 1)
+    motivo =
+      'Forma parte de una tanda. Imprimí una copia del PDF unificado desde Archivos de la OT.';
   if (
     !segmentos.length ||
     segmentos.some(

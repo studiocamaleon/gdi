@@ -1,4 +1,10 @@
 import {
+  leerPapelDerivado,
+  clavePapel,
+  pliegosPapel,
+  type PapelDerivado,
+} from '../inventario/papel-derivado';
+import {
   materialUnitConversion,
   normalizeMaterialUnit,
   type MaterialUnitContext,
@@ -46,6 +52,7 @@ export type ItemMaterialesSnapshot = {
 };
 
 export type OrigenNecesidadMaterial = {
+  papelDerivado?: PapelDerivado;
   itemId: string;
   producto: string;
   documento?: string;
@@ -310,6 +317,7 @@ export function proyectarMaterialesOrden(
             texto(material.materialDisplayName) ||
             texto(material.materiaPrimaNombre) ||
             'Material sin nombre';
+          const papelDerivado = leerPapelDerivado(material.papelDerivado);
           let cantidad = numero(material.cantidad);
           let unidad = texto(material.unidad)
             ? normalizeMaterialUnit(texto(material.unidad))
@@ -319,7 +327,13 @@ export function proyectarMaterialesOrden(
           const asignacion = registro(material.asignacionNestingCompuesto);
           const porcentaje =
             numero(registro(material.mermaAdicional)?.porcentaje) ?? 0;
-          if (asignacion) {
+          if (material.papelDerivado && !papelDerivado) {
+            cantidad = null;
+            observacion = 'El plan de corte del papel requiere revisión.';
+          } else if (papelDerivado) {
+            cantidad = pliegosPapel(papelDerivado);
+            unidad = 'hoja';
+          } else if (asignacion) {
             compartido = true;
             const loteId = texto(asignacion.loteId);
             const key = loteKey(item, loteId);
@@ -434,6 +448,7 @@ export function proyectarMaterialesOrden(
             origenes: [],
           };
           fila.origenes.push({
+            ...(papelDerivado ? { papelDerivado } : {}),
             itemId: item.origenItemId ?? item.id,
             producto: item.nombre,
             ...(documento ? { documento } : {}),
@@ -456,6 +471,24 @@ export function proyectarMaterialesOrden(
     }
   }
   for (const fila of necesidades.values()) {
+    // Los documentos compatibles de una misma OT comparten los pliegos de
+    // compra, también si sus caras/impresión pertenecen a tandas diferentes.
+    const grupos = new Map<string, OrigenNecesidadMaterial>();
+    for (const o of fila.origenes) {
+      if (!o.papelDerivado || o.observacion || o.unidadStock !== 'hoja')
+        continue;
+      const key = clavePapel(o.papelDerivado);
+      const primero = grupos.get(key);
+      if (!primero) grupos.set(key, o);
+      else {
+        primero.papelDerivado!.hojasNecesarias +=
+          o.papelDerivado.hojasNecesarias;
+        primero.cantidadStock = pliegosPapel(primero.papelDerivado!);
+        o.cantidadStock = 0;
+        delete o.papelDerivado;
+      }
+    }
+
     const unidad = fila.origenes[0].unidadStock;
     const completa =
       unidad &&

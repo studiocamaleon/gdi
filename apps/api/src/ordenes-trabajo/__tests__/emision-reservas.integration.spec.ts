@@ -1,3 +1,6 @@
+import { ReporteProduccionService } from '../../reportes/produccion.service';
+import { FacturacionOrdenesService } from '../../administracion/facturacion-ordenes.service';
+import { itemActivoTablero, itemTerminadoTablero } from '../tablero-consultas';
 import { PresupuestosService } from '../../presupuestos/presupuestos.service';
 import { DisponibilidadCotizacion } from '../../motor-universal/disponibilidad-materiales';
 import { inicioSinStock } from '../../inventario/inicio-sin-stock';
@@ -89,7 +92,7 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     { emitir: jest.fn() } as never,
     {} as never,
     {} as never,
-    {} as never,
+    new FacturacionOrdenesService(db),
     { asegurarParaItem: jest.fn() } as never,
     new FidelizacionService(db, capacidades),
     new DesarrolloDocumentalService(
@@ -280,6 +283,172 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     await db.productoCategoriaComercial.delete({ where: { id: categoriaId } });
   });
   afterAll(() => db.$disconnect());
+
+  async function prepararCopiadoListo() {
+    const snapshot = await db.cotizacionItem.findUniqueOrThrow({
+      where: { id: payload.items[0].cotizacionItemId },
+    });
+    await db.producto.update({
+      where: { id: snapshot.productoId },
+      data: { codigo: 'SYS-IMPRESION-DOC' },
+    });
+    const planta = await db.planta.create({ data: { tenantId: auth.tenantId, codigo: 'QA', nombre: 'Planta ficticia' } });
+    const centro = await db.centroCosto.create({ data: { tenantId: auth.tenantId, plantaId: planta.id, codigo: 'QA', nombre: 'Copiado ficticio', tipoCentro: 'PRODUCTIVO' } });
+    const traza = snapshot.trazabilidadJson as { pasos: Array<Record<string, unknown>> };
+    const actualizado = await db.cotizacionItem.update({
+      where: { id: snapshot.id },
+      data: {
+        trazabilidadJson: { ...traza, pasos: [...traza.pasos.map(p => ({ ...p, tiempo: { totalMin: 12, centroCostoId: centro.id, centroCostoNombre: centro.nombre } })), { activado: true, rutaPasoId: 'pouch', familiaCodigo: 'plastificado_pouch', tiempo: { totalMin: 3, centroCostoId: centro.id, centroCostoNombre: centro.nombre } }] },
+        snapshotJson: {
+          producto: { codigo: 'SYS-IMPRESION-DOC', nombre: 'Copias ficticias' },
+        },
+      },
+    });
+    payload.items[0].listoEnMostrador = true;
+    return actualizado;
+  }
+
+  it.each(['directa', 'borrador'])(
+    'producción finalizada: emisión %s registra pasos y tiempos sin cola y conserva precios y materiales',
+    async (via) => {
+      await prepararCopiadoListo();
+      const creada = await ordenes.create(auth, {
+        ...payload,
+        estado: via === 'directa' ? 'pendiente' : 'borrador',
+      });
+      if (via === 'borrador') {
+        const i = await db.ordenTrabajoItem.findFirstOrThrow({
+          where: { ordenId: creada.id },
+        });
+        expect(i.listoEnMostrador).toBe(true);
+        expect(i.listoEnMostradorEl).toBeNull();
+        await ordenes.cambiarEstado(auth, creada.id, { estado: 'pendiente' });
+      }
+      const ot = await db.ordenTrabajo.findUniqueOrThrow({
+        where: { id: creada.id },
+        include: { items: true, pasos: true },
+      });
+      expect(ot.estado).toBe('finalizada');
+      expect(ot.progresoPct).toBe(100);
+      expect(ot.fechaFinalizada).not.toBeNull();
+      expect(ot.fechaEntregada).toBeNull();
+      expect(Number(ot.cobradoTotal)).toBe(0);
+      expect(Number(ot.total)).toBe(100);
+      expect(ot.items[0].cotizacionItemId).toBe(
+        payload.items[0].cotizacionItemId,
+      );
+      expect(ot.items[0].listoEnMostradorEl).not.toBeNull();
+      expect(ot.items[0].listoEnMostradorPorNombre).toBeTruthy();
+      expect(ot.pasos).toHaveLength(2);
+      expect(ot.pasos[0]).toMatchObject({ estado: 'hecho', tiempoFuente: 'estimado', completadoPorId: auth.userId, asignacionPersonalJson: null, asignacionManualJson: null });
+      expect(Number(ot.pasos[0].duracionEstimadaMin)).toBe(12);
+      expect(Number(ot.pasos[0].tiempoRealMin)).toBe(12);
+      expect(ot.pasos[0].completadoEl).not.toBeNull();
+      expect(ot.items[0].grafoProduccionSnapshotJson).toBeNull();
+      expect(await db.ordenTrabajoPasoDependencia.count({ where: { ordenId: ot.id } })).toBe(0);
+      expect(await db.ordenTrabajoPasoGate.count({ where: { ordenId: ot.id } })).toBe(0);
+      expect(await db.ordenTrabajoPasoTramo.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+      // La lectura habitual muestra pasos hechos, sin crear una ruta operativa ni duplicarlos.
+      const tablero = await ordenes.pasosDeOrden(auth, ot.id);
+      expect(tablero.items[0]).toMatchObject({
+        listoEnMostrador: true,
+        sinRuta: false,
+        pasos: [expect.objectContaining({ estado: 'hecho', tiempoRealMin: 12, tiempoFuente: 'estimado' }), expect.objectContaining({ estado: 'hecho', tiempoRealMin: 3, tiempoFuente: 'estimado' })],
+      });
+      expect(
+        await db.ordenTrabajoItemPaso.count({ where: { ordenId: ot.id } }),
+      ).toBe(2);
+      expect(
+        await db.ordenTrabajoItem.count({
+          where: { ordenId: ot.id, ...itemActivoTablero },
+        }),
+      ).toBe(0);
+      expect(
+        await db.ordenTrabajoItem.count({
+          where: { ordenId: ot.id, ...itemTerminadoTablero },
+        }),
+      ).toBe(1);
+      // Los reportes reales incluyen el trabajo y la utilización, sin fingir mediciones.
+      const hoy = new Date();
+      const inicio = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate()));
+      const reporte = await new ReporteProduccionService(db).produccion(auth.tenantId, { desde: inicio, hasta: inicio, zona: 'UTC' });
+      expect(reporte.throughput.reduce((total, dia) => total + dia.cantidad, 0)).toBe(2);
+      expect(reporte.registroTiempos.fuentes).toEqual([{ fuente: 'estimado', pasos: 2, pct: 100 }]);
+      expect(reporte.utilizacion).toEqual([expect.objectContaining({ centro: 'Copiado ficticio', horasReales: 0.25 })]);
+      expect(reporte.kpis.trabajosEnCola).toBe(0);
+      expect(reporte.eficiencia.porFamilia).toEqual([]);
+      expect(reporte.registroTiempos.operadores).toEqual([]);
+      const necesidad = await db.necesidadMaterialOt.findFirstOrThrow({
+        where: { ordenId: ot.id },
+      });
+      expect(Number(necesidad.cantidad)).toBe(15);
+      expect(Number(necesidad.consumida)).toBe(0); // Flujo de consumo explícito, igual al resto de OTs.
+      expect(
+        await db.movimientoStockMateriaPrima.count({
+          where: { tenantId: auth.tenantId },
+        }),
+      ).toBe(1);
+      await ordenes.create(auth, payload); // Reintento idempotente.
+      expect(
+        await db.ordenTrabajoEvento.count({
+          where: { ordenId: ot.id, tipo: 'productos_listos' },
+        }),
+      ).toBe(1);
+    },
+  );
+
+  it('la OT mixta deja pendiente sólo la producción sin marcar', async () => {
+    const snapshot = await prepararCopiadoListo();
+    const { id: _id, createdAt: _created, ...copia } = snapshot;
+    void _id;
+    void _created;
+    const otro = await db.cotizacionItem.create({
+      data: {
+        ...copia,
+        snapshotJson: { producto: { codigo: 'SYS-IMPRESION-DOC' } },
+      } as never,
+    });
+    payload.items.push({
+      ...payload.items[0],
+      cotizacionItemId: otro.id,
+      listoEnMostrador: false,
+    });
+    const ot = await ordenes.create(auth, payload);
+    expect(ot.estado).toBe('pendiente');
+    const items = await db.ordenTrabajoItem.findMany({
+      where: { ordenId: ot.id },
+      include: { pasos: true },
+      orderBy: { ordenIndice: 'asc' },
+    });
+    expect(items[0].pasos).toHaveLength(2);
+    expect(items[0].pasos[0].estado).toBe('hecho');
+    expect(items[1].pasos[0].estado).toBe('pendiente');
+    expect(items[0].listoEnMostradorEl).not.toBeNull();
+    expect(items[1].pasos).toHaveLength(2);
+    expect(items[1].listoEnMostradorEl).toBeNull();
+    expect(Number(ot.total)).toBe(200);
+    await expect((ordenes as any).aplicarAccionPaso(db, auth, ot.id, items[0].id, items[0].pasos[0].id, { accion: 'reabrir' })).rejects.toThrow('no tiene una ruta activa');
+    await expect(
+      ordenes.editarItem(auth, ot.id, items[1].id, {
+        ...payload.items[1],
+        listoEnMostrador: true,
+      }),
+    ).rejects.toThrow('antes de emitir');
+    await expect(ordenes.quitarItem(auth, ot.id, items[0].id)).rejects.toThrow(
+      'producción finalizada',
+    );
+  });
+
+  it('rechaza listo para un producto común aunque el cliente falsifique el código', async () => {
+    payload.items[0].listoEnMostrador = true;
+    payload.items[0].codigo = 'SYS-IMPRESION-DOC';
+    await expect(ordenes.create(auth, payload)).rejects.toThrow(
+      'Sólo los ítems de Centro de copiado',
+    );
+    expect(
+      await db.ordenTrabajo.count({ where: { tenantId: auth.tenantId } }),
+    ).toBe(0);
+  });
 
   it.each(['directa', 'borrador'])(
     'modo de inicio emite por vía %s sin stock ficticio ni demanda de compra',

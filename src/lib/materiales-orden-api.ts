@@ -1,6 +1,7 @@
 import { apiRequest } from "./api";
 
 export type OrigenNecesidadMaterial = {
+  papelDerivado?: import("../../apps/api/src/inventario/papel-derivado").PapelDerivado;
   itemId: string;
   producto: string;
   documento?: string;

@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { CentroCopiadoPedidosService } from './pedidos/centro-copiado-pedidos.service';
 import { CentroCopiadoService } from './centro-copiado.service';
 import {
   AgregarAOrdenCentroCopiadoDto,
@@ -25,7 +26,7 @@ interface RequestWithAuth extends Request {
 }
 
 @OcultaMargenes()
-@Permiso("comercial.copiado.ver")
+@Permiso('comercial.copiado.ver')
 @Controller('centro-copiado')
 export class CentroCopiadoController {
   constructor(
@@ -33,6 +34,7 @@ export class CentroCopiadoController {
     private readonly capacidades: CapacidadesEmpresaService,
     private readonly saludCentroCopiado: CentroCopiadoSaludService,
     private readonly auditoriaCentroCopiado: CentroCopiadoAuditoriaService,
+    private readonly precios: CentroCopiadoPedidosService,
   ) {}
 
   private async tenantHabilitado(req: RequestWithAuth): Promise<string> {
@@ -59,6 +61,13 @@ export class CentroCopiadoController {
     return this.centroCopiado.opcionesCad(await this.tenantHabilitado(req));
   }
 
+  /** Catálogo productivo para el editor; requiere acceso a configuración, no a ventas. */
+  @Get('config/opciones-cad')
+  @Permiso('configuracion.copiado.ver')
+  async opcionesCadConfiguracion(@Req() req: RequestWithAuth) {
+    return this.centroCopiado.opcionesCad(await this.tenantHabilitado(req));
+  }
+
   @Get('opciones')
   async opciones(@Req() req: RequestWithAuth) {
     const tenantId = await this.tenantHabilitado(req);
@@ -77,7 +86,7 @@ export class CentroCopiadoController {
     @Req() req: RequestWithAuth,
   ) {
     const tenantId = await this.tenantHabilitado(req);
-    return this.centroCopiado.cotizar(tenantId, dto);
+    return this.precios.cotizarCarga(tenantId, dto);
   }
 
   /**
@@ -93,7 +102,7 @@ export class CentroCopiadoController {
     @Req() req: RequestWithAuth,
   ) {
     const tenantId = await this.tenantHabilitado(req);
-    return this.centroCopiado.construirItems(tenantId, dto);
+    return this.precios.construirCarga(tenantId, dto);
   }
 
   /**
@@ -104,7 +113,7 @@ export class CentroCopiadoController {
    * renglones de tomo. Recibe los documentos del tomo + su grupo + cotizacionId.
    */
   @Post('guardar-tomo')
-  @Permiso("comercial.copiado.gestionar")
+  @Permiso('comercial.copiado.gestionar')
   async guardarTomo(
     @Body() dto: AgregarAOrdenCentroCopiadoDto,
     @Req() req: RequestWithAuth,
@@ -121,7 +130,7 @@ export class CentroCopiadoController {
    * la OrdenTrabajo: eso sigue el flujo normal.
    */
   @Post('agregar-a-orden')
-  @Permiso("comercial.copiado.gestionar")
+  @Permiso('comercial.copiado.gestionar')
   async agregarAOrden(
     @Body() dto: AgregarAOrdenCentroCopiadoDto,
     @Req() req: RequestWithAuth,
@@ -135,7 +144,7 @@ export class CentroCopiadoController {
    * (papeles/terminaciones a elegir). Para la página de Configuración.
    */
   @Get('config')
-  @Permiso("configuracion.copiado.ver")
+  @Permiso('configuracion.copiado.ver')
   async getConfig(@Req() req: RequestWithAuth) {
     const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.getConfig(tenantId);
@@ -143,7 +152,7 @@ export class CentroCopiadoController {
 
   /** Diagnóstico operativo: nunca repara ni provisiona durante la lectura. */
   @Get('salud')
-  @Permiso("configuracion.copiado.ver")
+  @Permiso('configuracion.copiado.ver')
   async salud(@Req() req: RequestWithAuth) {
     const tenantId = await this.tenantHabilitado(req);
     return this.saludCentroCopiado.obtener(tenantId);
@@ -151,7 +160,7 @@ export class CentroCopiadoController {
 
   /** PUT /centro-copiado/config — actualiza la curación del módulo. */
   @Put('config')
-  @Permiso("configuracion.copiado.gestionar")
+  @Permiso('configuracion.copiado.gestionar')
   async actualizarConfig(
     @Body() dto: ActualizarCentroCopiadoConfigDto,
     @Req() req: RequestWithAuth,
@@ -162,7 +171,7 @@ export class CentroCopiadoController {
 
   /** POST explícito: crea/repara la plantilla; ningún GET escribe datos. */
   @Post('inicializar')
-  @Permiso("configuracion.copiado.gestionar")
+  @Permiso('configuracion.copiado.gestionar')
   async inicializar(@Req() req: RequestWithAuth) {
     const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.inicializar(tenantId, req.auth?.userId);
@@ -170,7 +179,7 @@ export class CentroCopiadoController {
 
   /** Reparación explícita e idempotente de la infraestructura del módulo. */
   @Post('reparar')
-  @Permiso("configuracion.copiado.gestionar")
+  @Permiso('configuracion.copiado.gestionar')
   async reparar(@Req() req: RequestWithAuth) {
     const tenantId = await this.tenantHabilitado(req);
     await this.centroCopiado.reparar(tenantId, req.auth?.userId);
@@ -178,7 +187,7 @@ export class CentroCopiadoController {
   }
 
   @Get('historial')
-  @Permiso("configuracion.copiado.ver")
+  @Permiso('configuracion.copiado.ver')
   async historial(@Req() req: RequestWithAuth) {
     const tenantId = await this.tenantHabilitado(req);
     return this.auditoriaCentroCopiado.listar(tenantId);

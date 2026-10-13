@@ -100,6 +100,26 @@ describe("Materiales de la OT", () => {
     expect(container.textContent).not.toContain("no requiere materiales");
   });
 
+  it("distingue los pliegos retirados de las A4 costeadas y del sobrante", async () => {
+    const data = response();
+    Object.assign(data.necesidades[0], {
+      nombre: "Opalina de prueba", cantidad: 2, unidad: "hoja",
+    });
+    Object.assign(data.necesidades[0].origenes[0], {
+      cantidadCalculada: 10 / 9, unidadCalculada: "hoja",
+      cantidadStock: 2, unidadStock: "hoja",
+      papelDerivado: {
+        version: 1, anchoOrigenMm: 650, altoOrigenMm: 950,
+        anchoMm: 210, altoMm: 297, rendimiento: 9, hojasNecesarias: 10,
+      },
+    });
+    vi.mocked(getMaterialesOrden).mockResolvedValue(data);
+    await act(async () => root.render(<MaterialesOrdenTab ordenId="ot-1" />));
+    expect(container.textContent).toContain("2 pliego(s) de 650 × 950 mm");
+    expect(container.textContent).toContain("10 para esta OT y 8 de sobrante");
+    expect(container.textContent).toContain("El sobrante ingresa a stock al registrar el consumo");
+  });
+
   it("mantiene visibles las advertencias de una OT manual sin inventar consumos", async () => {
     const data = response();
     data.necesidades = [];

@@ -129,6 +129,7 @@ export class CentroCopiadoCadService {
     grupoCargaId: string,
     periodo: string | null,
     clienteId?: string,
+    simulacion = false,
   ): Promise<ItemConstruido> {
     await this.capacidades.exigirTodas(tenantId, [
       'centro_copiado',
@@ -192,6 +193,10 @@ export class CentroCopiadoCadService {
       const jobContext = {
         cantidad,
         caras: 1 as const,
+        cobertura: doc.cobertura ?? 'alta',
+        ...(simulacion
+          ? { omitirSetupCleanup: false }
+          : {}),
         modoColor: p.color === 'BN' ? 'BN' : 'CMYK',
         piezas: seleccionadas.map((pagina) => ({
           cantidad: copiasPorPagina.get(pagina.pagina) ?? doc.copias,
@@ -223,6 +228,7 @@ export class CentroCopiadoCadService {
             ? { copiasPorPagina: doc.copiasPorPagina }
             : {}),
           color: doc.color,
+          cobertura: doc.cobertura ?? 'alta',
           faz: 1,
           tamano: 'CAD',
           tamanoAnchoMm: seleccionadas[0].anchoMm,

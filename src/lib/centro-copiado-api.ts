@@ -21,6 +21,7 @@ export type FazDoc = 1 | 2;
 export interface CentroCopiadoSegmentoMeta {
   nombre?: string | null;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
@@ -38,6 +39,9 @@ export interface CentroCopiadoSegmentoMeta {
 
 /** Contrato de rehidratación; `version` es opcional para cargas históricas. */
 export interface CentroCopiadoMeta {
+  tandaImpresion?:
+    | import("../../apps/api/src/common/tandas-copiado").ReferenciaTanda
+    | null;
   copiasPorPagina?: CopiasPaginaCad[];
   modo?: "HOJAS" | "CAD";
   cad?: SeleccionCad;
@@ -55,6 +59,7 @@ export interface CentroCopiadoMeta {
   tipoAnillo?: string | null;
   nombre?: string | null;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas?: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
@@ -116,6 +121,7 @@ export interface DocumentoCentroCopiado {
   id: string;
   nombre?: string;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
@@ -153,6 +159,14 @@ export interface GrupoCentroCopiado {
 }
 
 export interface CotizarCentroCopiadoRequest {
+  canalVenta?: string;
+  tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
+  cargasPedido?: (Pick<
+    CotizarCentroCopiadoRequest,
+    "documentos" | "grupos" | "tipoCambioId"
+  > & {
+    descuento?: { tipo: "PORCENTAJE" | "MONTO"; valor: number };
+  })[];
   tipoCambioId?: string;
   /** Cliente actual; el motor usa su precio especial si existe y está activo. */
   clienteId?: string | null;
@@ -171,6 +185,12 @@ export interface DocumentoPreview {
   total: number;
   /** Anillado del doc suelto (cada copia = 1 libro); null si no aplica. */
   anillado: AnilladoPreview | null;
+  pouch?: {
+    subtotal: number;
+    iva: number;
+    total: number;
+    error: string | null;
+  } | null;
   error: string | null;
 }
 
@@ -200,6 +220,7 @@ export interface GrupoPreview {
 }
 
 export interface CotizarCentroCopiadoResponse {
+  tarifario?: { nombre: string; numero: number };
   documentos: DocumentoPreview[];
   grupos: GrupoPreview[];
   totales: {
@@ -250,6 +271,7 @@ export interface PapelOpcion {
   nombre: string;
   gramajes: number[];
   variantes: VariantePapelOpcion[];
+  formatosPorGramaje?: FormatosPorGramaje[] | null;
 }
 
 export interface OpcionesCentroCopiado {
@@ -285,6 +307,12 @@ export async function estadoCentroCopiado(): Promise<{
 export interface PapelConfigItem {
   materiaPrimaId: string;
   gramajes?: number[];
+  formatosPorGramaje?: FormatosPorGramaje[] | null;
+}
+
+export interface FormatosPorGramaje {
+  gramaje: number | null;
+  tamanos: string[];
 }
 
 export interface MaquinaOpcion {
@@ -293,7 +321,26 @@ export interface MaquinaOpcion {
   esColor: boolean;
 }
 
+export interface ConfigPouchCopiado {
+  centroCostoId: string | null;
+  minutosPorHoja: number;
+  formatos: { tamano: string; varianteId: string }[];
+}
+export interface VariantePouchCopiado {
+  id: string;
+  materiaPrimaId: string;
+  nombre: string;
+  anchoMm: number;
+  altoMm: number;
+  margenMm: number;
+}
+export const POUCH_COPIADO_DEFAULT: ConfigPouchCopiado = {
+  centroCostoId: null,
+  minutosPorHoja: 0.5,
+  formatos: [],
+};
 export interface CentroCopiadoConfig {
+  pouch?: ConfigPouchCopiado;
   /** Producto técnico cotizado por el motor universal. */
   productoId: string | null;
   /** Versión optimista: evita pisar cambios realizados desde otra sesión. */
@@ -329,11 +376,14 @@ export interface CentroCopiadoConfig {
   tapaContratapaMateriaPrimaId: string | null;
   /** Universo para elegir (el menú de tamaños está en CC_FORMATOS_MENU). */
   disponibles: {
+    pouches?: VariantePouchCopiado[];
+    centrosCosto?: { id: string; nombre: string }[];
     papeles: {
       materiaPrimaId: string;
       nombre: string;
       gramajes: number[];
       formatosProducibles: string[];
+      formatosPorGramaje?: FormatosPorGramaje[];
     }[];
     terminaciones: string[];
     terminacionesCatalogo: {
@@ -356,6 +406,7 @@ export interface CentroCopiadoConfig {
 
 /** Campos a actualizar. Omitir = no tocar; enviar null = limpiar (default). */
 export interface ActualizarConfigRequest {
+  pouch?: ConfigPouchCopiado;
   version?: number;
   activo?: boolean;
   cobraSetup?: boolean;
@@ -505,13 +556,24 @@ export function tamanosProducibles(
   let variantes = papel.variantes;
   if (gramaje != null) {
     const conGramaje = variantes.filter((v) => v.gramajeGr === gramaje);
-    if (conGramaje.length) variantes = conGramaje;
+    variantes = conGramaje;
   }
+  const gramajes = [...new Set(variantes.map((v) => v.gramajeGr))];
+  const efectivo = gramaje ?? (gramajes.length === 1 ? gramajes[0] : undefined);
+  const formatosPapel =
+    papel.formatosPorGramaje == null
+      ? null
+      : (papel.formatosPorGramaje.find((r) => r.gramaje === efectivo)
+          ?.tamanos ?? []);
   const menu =
-    ofrecidos && ofrecidos.length
+    ofrecidos != null
       ? CC_FORMATOS_MENU.filter((f) => ofrecidos.includes(f.nombre))
       : CC_FORMATOS_MENU;
-  return menu.filter((f) => variantes.some((v) => varianteCubre(v, f)));
+  return menu.filter(
+    (f) =>
+      (formatosPapel == null || formatosPapel.includes(f.nombre)) &&
+      variantes.some((v) => varianteCubre(v, f)),
+  );
 }
 
 export async function cotizarCentroCopiado(

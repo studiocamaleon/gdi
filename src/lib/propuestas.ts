@@ -26,6 +26,9 @@ export type PasoProduccionPropuesta = {
 };
 
 export type PropuestaItem = {
+  listoEnMostrador?: boolean;
+  listoEnMostradorEl?: string | null;
+  listoEnMostradorPorNombre?: string | null;
   asignacionesPersonal?: import("../../apps/api/src/ordenes-trabajo/personal-previsto.contrato").EleccionPersonal[];
   id: string;
   cotizacionItemId?: string;

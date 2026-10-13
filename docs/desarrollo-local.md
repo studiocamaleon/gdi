@@ -1,5 +1,13 @@
 # Desarrollo local
 
+## Papel derivado de Centro de copiado — 13/10/2026
+
+La web, API y workers locales ejecutan `codex/copiado-papel-derivado` desde el checkout principal. Se mantienen Node 24, Turbopack, los límites de memoria del arranque habitual y las tareas programadas desactivadas. Esta rama depende del PR #76; no se publicó en staging ni producción.
+
+Se comprobaron 1, 5 y 10 A4 derivados de opalina de 650 × 950 mm y de SRA3 de 325 × 475 mm. Las pruebas de inventario usan empresas ficticias en `gdi_saas_test`: retiro de pliegos completos, ingreso y reutilización de hojas sobrantes, consumos parciales y concurrentes, reintentos y reversión ante cambios de medidas. La simulación de Tarifarios y el cálculo comercial de la OT coinciden con setup desactivado. La comprobación de tipos de los 14 archivos de API afectados pasó; la revisión global agotó el límite local de memoria y queda para CI. También pasaron las pruebas y lint de la interfaz afectada. No se compilaron contenedores en esta Mac.
+
+Los costos y precios se revisan sin reemplazar las matrices publicadas. El detalle de materiales informa los pliegos necesarios, las hojas usadas y el sobrante que ingresará al registrar el consumo. Ver [el comportamiento y sus límites](centro-copiado-contribucion.md#papel-comprado-en-otro-formato).
+
 ## Impresión rígida y corte — comprobación local del 01/10/2026
 
 La comprobación local descrita abajo se publicó posteriormente junto con el arreglo de primer ingreso en `b378ae41e`, desde `codex/acceso-clave-provisoria` y el PR #13. Staging y producción quedaron verificados; consultar los [resultados del despliegue](../deploy/produccion/VALIDACION.md). La compilación completa con tipos pasó en remoto. El worktree local conserva su rama y configuración de desarrollo.
@@ -19,7 +27,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 ## Servicios
 
-- Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
+- Aplicación: `http://localhost:3000` (Next en modo desarrollo con Turbopack).
 - API: `http://127.0.0.1:3001/api`.
 - PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 295 migraciones aplicadas al 27/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
@@ -36,8 +44,13 @@ Usar Node 24. Las dependencias ya están instaladas. Ejecutar cada proceso en un
 Web, desde la raíz:
 
 ```sh
-NODE_OPTIONS=--max-old-space-size=2048 API_URL=http://127.0.0.1:3001/api NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api npm run dev:webpack -- --hostname 127.0.0.1
+NODE_OPTIONS=--max-old-space-size=2048 API_URL=http://127.0.0.1:3001/api NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api npm run dev -- --hostname 127.0.0.1
 ```
+
+La web usa Turbopack y libera la memoria de su caché después de guardarla en
+el disco. Mantener el límite de Node en 2 GB: Webpack compilando la ficha de OT
+puede agotarlo y dejar el puerto 3000 sin servicio. `dev:webpack` queda disponible
+para diagnósticos puntuales, no como arranque habitual de esta Mac.
 
 Los siguientes comandos se ejecutan desde `apps/api`:
 
@@ -147,3 +160,45 @@ solicitud sin respuesta. Una pestaña anterior debe actualizarse antes de inicia
 un lote. Ni este cambio ni las pruebas locales verifican por sí solos la
 estabilidad de Redis en producción: ese incidente requiere correlacionar
 latencias, recursos y errores del entorno remoto.
+
+## Centro de copiado — entorno preparado el 10/10/2026
+
+La aplicación, API y workers de cálculos/entregas y PDF están ejecutándose desde
+el checkout principal, en `codex/centro-copiado-tarifarios`, revisión `55ecd2faa`.
+No se cambiaron ramas de otros worktrees ni se reinició Docker.
+
+- Web: `http://localhost:3000`; configuración en
+  `http://localhost:3000/configuracion/centro-copiado`.
+- API: `http://127.0.0.1:3001/api`, comprobada con `status: ok` y base disponible.
+- Se aplicaron las cuatro migraciones pendientes mediante `migrate deploy`:
+  `20261008210000_facturacion_lotes_durables`, `20261010120000_copiado_tarifarios`,
+  `20261010140000_copiado_politica_borrador` y
+  `20261011100000_copiado_pedidos_margenes`. La base local suma 315 migraciones.
+- Sin seeds, resets ni borrados. Los conteos de empresas, usuarios, productos,
+  cotizaciones y órdenes se mantuvieron iguales antes y después de migrar.
+  Prisma regenerado y permisos SELECT/INSERT/UPDATE/DELETE de `grafo_app`
+  comprobados sobre las seis tablas nuevas.
+- Se usaron exclusivamente las conexiones locales existentes. Cron y Meta
+  permanecen desactivados; correo transaccional y telemetría externa están
+  deshabilitados en estos procesos. Las acciones manuales de integraciones
+  conservan su configuración anterior: esta prueba no envió mensajes, cobró
+  ni facturó. Los archivos mantienen el almacenamiento de desarrollo existente.
+- Node 24, web con Webpack en modo desarrollo, API y workers con recarga de
+  código fuente. Concurrencia de cotización/geometría/PDF limitada a uno; no
+  se compiló una imagen de producción ni se modificó memoria de Docker.
+- Los procesos quedaron independientes de la terminal de arranque. Sus PID y
+  logs privados están en `.tmp/local-copiado/` (ignorada por Git). La carpeta
+  contiene el lanzador utilizado; no volver a ejecutarlo si el servicio ya está
+  activo. Los comandos del apartado «Arranque de desarrollo» siguen vigentes.
+
+La pantalla de ingreso respondió HTTP 200 y el endpoint de tarifarios HTTP 401
+sin sesión, como corresponde. API y ambos workers iniciaron sin errores. El
+navegador de comprobación no tenía sesión local: no se alteraron usuarios ni
+contraseñas para ingresar. La verificación funcional autenticada se realiza con
+el usuario local habitual.
+
+Recorrido inicial: Configuración → Centro de copiado → Tarifarios; crear y
+cargar la matriz, definir el margen y publicar. Luego asignar el tarifario en
+Canales y activar la asignación. En un pedido borrador, cargar los trabajos y
+usar «Actualizar precios de copiado» antes de emitir. No se activó ninguna
+política ni se cargaron precios de prueba en las empresas existentes.

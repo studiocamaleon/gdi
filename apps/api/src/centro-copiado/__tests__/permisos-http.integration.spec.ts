@@ -1,3 +1,4 @@
+import { CentroCopiadoPedidosService } from '../pedidos/centro-copiado-pedidos.service';
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
@@ -28,6 +29,7 @@ describe('Centro de Copiado: consultar no permite guardar cotizaciones', () => {
   const tokens: Record<string, string> = {};
   const roles: Record<string, string> = {};
   const servicio = {
+    opcionesCad: jest.fn(() => Promise.resolve({ perfiles: [] })),
     cotizar: jest.fn(() => Promise.resolve({ total: 100 })),
     construirItems: jest.fn(() => Promise.resolve({ items: [] })),
     guardarTomo: jest.fn(() => Promise.resolve({ guardado: true })),
@@ -79,6 +81,7 @@ describe('Centro de Copiado: consultar no permite guardar cotizaciones', () => {
     }
     for (const [actor, rolBase, permisos] of [
       ['lector', 'OPERADOR', ['comercial.ver']],
+      ['configurador', 'OPERADOR', ['configuracion.copiado.ver']],
       ['administrador-limitado', 'ADMINISTRADOR', ['comercial.ver']],
       ['autorizado', 'OPERADOR', ['comercial.ver', 'comercial.gestionar']],
     ] as const) {
@@ -125,6 +128,13 @@ describe('Centro de Copiado: consultar no permite guardar cotizaciones', () => {
       controllers: [CentroCopiadoController],
       providers: [
         { provide: CentroCopiadoService, useValue: servicio },
+        {
+          provide: CentroCopiadoPedidosService,
+          useValue: {
+            cotizarCarga: servicio.cotizar,
+            construirCarga: servicio.construirItems,
+          },
+        },
         { provide: CapacidadesEmpresaService, useValue: capacidades },
         { provide: CentroCopiadoSaludService, useValue: {} },
         { provide: CentroCopiadoAuditoriaService, useValue: {} },
@@ -150,6 +160,35 @@ describe('Centro de Copiado: consultar no permite guardar cotizaciones', () => {
   });
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('permite el catálogo CAD del editor con permiso de configuración y la empresa de sesión', async () => {
+    await request(app.getHttpServer())
+      .get('/centro-copiado/config/opciones-cad')
+      .auth(tokens.configurador, { type: 'bearer' })
+      .set('x-tenant-id', tenants[1])
+      .expect(200, { perfiles: [] });
+    expect(servicio.opcionesCad).toHaveBeenCalledWith(tenants[0]);
+    expect(capacidades.exigirIncluida).toHaveBeenCalledWith(
+      tenants[0],
+      'centro_copiado',
+    );
+  });
+
+  it('el permiso comercial no permite leer el catálogo de configuración', async () => {
+    await request(app.getHttpServer())
+      .get('/centro-copiado/config/opciones-cad')
+      .auth(tokens.lector, { type: 'bearer' })
+      .expect(403);
+    expect(servicio.opcionesCad).not.toHaveBeenCalled();
+  });
+
+  it('el acceso al editor no concede acceso al catálogo de ventas', async () => {
+    await request(app.getHttpServer())
+      .get('/centro-copiado/opciones-cad')
+      .auth(tokens.configurador, { type: 'bearer' })
+      .expect(403);
+    expect(servicio.opcionesCad).not.toHaveBeenCalled();
+  });
 
   afterAll(async () => {
     if (jwtSecretAnterior === undefined) delete process.env.JWT_SECRET;

@@ -561,6 +561,8 @@ export interface CotizacionResultado {
       nombre: string;
       porcentaje: number;
       orden: number;
+      baseCalculo?: 'NETO' | 'BRUTO_COBRADO';
+      traslado?: 'POR_FUERA' | 'POR_DENTRO';
       desglosarCliente?: boolean;
     }>;
     /** Lista de comisiones aplicadas. */
@@ -570,6 +572,7 @@ export interface CotizacionResultado {
       nombre: string;
       porcentaje: number;
       orden: number;
+      baseCalculo?: 'NETO' | 'BRUTO_COBRADO';
     }>;
     /** Si el cliente tenía precio especial activo, snapshot del override. */
     precioEspecialCliente: {
@@ -900,6 +903,8 @@ export interface OperacionInternaCosteada {
 
 /** El bastidor a fabricar, autosuficiente para dibujarlo en 3D. */
 export interface EstructuraBastidorEjecutada {
+  /** Geometría por medida; la compra de barras corresponde al conjunto. */
+  variantes?: Array<EstructuraBastidorEjecutada & { cantidad: number }>;
   /** simple = marco plano (frontlight) · doble = cajón (backlight). */
   tipoBastidor: 'simple' | 'doble';
   anchoM: number;
@@ -1169,10 +1174,17 @@ export interface NestingCostingPreview {
 }
 
 export interface MaterialEjecutado {
+  papelDerivado?: import('../inventario/papel-derivado').PapelDerivado;
   seleccionStock?: {
     politica: string;
     estado: 'disponible' | 'requiere_reposicion' | 'sin_verificar_inicio';
-    alternativas: Array<{ id: string; libre: number; necesario: number | null; unidad: string | null; alcanza: boolean }>;
+    alternativas: Array<{
+      id: string;
+      libre: number;
+      necesario: number | null;
+      unidad: string | null;
+      alcanza: boolean;
+    }>;
   };
   /** Unidades y conversiones vigentes al cotizar; abastecimiento no relee el catálogo. */
   contextoUnidadesSnapshot?: MaterialUnitContext;
@@ -1369,6 +1381,8 @@ export interface DefaultsFamiliaPaso {
 }
 
 export interface PasoCargado {
+  /** Sólo la plantilla de Centro de copiado verificada en el servidor. */
+  conservaSobrantePapel?: boolean;
   rutaPasoId: string;
   rutaPasoOrden: number;
   familiaCodigo: string;

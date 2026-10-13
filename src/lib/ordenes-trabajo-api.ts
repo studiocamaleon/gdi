@@ -17,6 +17,7 @@ import type {
  */
 
 export type CrearOrdenTrabajoItemPayload = {
+  listoEnMostrador?: boolean;
   asignacionesPersonal?: import("../../apps/api/src/ordenes-trabajo/personal-previsto.contrato").EleccionPersonal[];
   fechaEntrega?: string;
   cotizacionItemId?: string;

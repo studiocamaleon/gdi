@@ -113,9 +113,9 @@ export const PERMISOS_TRANSVERSALES = [
    */
   {
     clave: 'comercial.aprobar_descuento',
-    label: 'Aprobar presupuestos bajo el margen mínimo',
+    label: 'Autorizar presupuestos y pedidos bajo el margen mínimo',
     descripcion:
-      'Autorizar un presupuesto cuyo margen quedó por debajo del piso configurado. Cotizar no alcanza.',
+      'Autorizar presupuestos y pedidos de copiado debajo del piso configurado. Cotizar no alcanza; la excepción de copiado requiere motivo y acceso a márgenes.',
   },
   {
     clave: 'crm.configurar_fidelizacion',

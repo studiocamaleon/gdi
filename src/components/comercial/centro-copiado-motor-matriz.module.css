@@ -1,0 +1,197 @@
+.assistant {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+  overflow: hidden;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--surface-secondary);
+}
+.visibility {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted-text);
+  cursor: pointer;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+}
+.intro {
+  display: grid;
+  gap: 6px;
+}
+.intro p,
+.review p {
+  font-size: 12px;
+  color: var(--muted-text);
+  line-height: 1.6;
+}
+.eyebrow {
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.1em;
+  color: var(--muted-text);
+}
+.fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, 2fr);
+  gap: 20px;
+  align-items: start;
+}
+.objectives {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 16px;
+}
+.scope {
+  display: grid;
+  gap: 10px;
+}
+.scope > span {
+  font-size: 13px;
+  font-weight: 500;
+}
+.scope small,
+.help {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted-text);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+}
+.progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font: 11px/1.5 var(--brand-mono);
+  color: var(--muted-text);
+}
+.progress progress {
+  width: 160px;
+  height: 5px;
+  accent-color: var(--accent);
+}
+.application {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+.review {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--surface-secondary);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.cellInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  white-space: normal;
+  text-align: left;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.cellCost,
+.cellMargin {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 5px;
+}
+.cellInfo strong {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.cellCost {
+  color: var(--muted-text);
+}
+.costRange {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+}
+.costRange small,
+.referenceNote {
+  font-size: 9px;
+  color: var(--muted-text);
+  line-height: 1.5;
+}
+.cellMargin[data-state="CALCULADO"] {
+  color: var(--success);
+}
+.cellMargin[data-state="NEGATIVO"],
+.cellWarning {
+  color: var(--warning);
+}
+.cellMargin[data-state="NO_VERIFICABLE"] {
+  color: var(--muted-text);
+}
+.cellSuggestion {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 6px;
+  border-top: 1px dashed var(--border);
+  padding-top: 7px;
+}
+.cellSuggestion small {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.cellInfo[data-review] .cellSuggestion {
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: 5px;
+  padding: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+.cellInfo > button {
+  align-self: flex-start;
+  min-height: 24px;
+  height: auto;
+  font-size: 10px;
+  padding: 3px 6px;
+}
+@media (max-width: 1000px) {
+  .fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .scope {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 540px) {
+  .panel {
+    padding: 16px;
+  }
+  .fields {
+    grid-template-columns: 1fr;
+  }
+  .toolbar {
+    align-items: flex-start;
+  }
+}

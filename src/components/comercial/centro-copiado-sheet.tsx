@@ -1,4 +1,6 @@
 "use client";
+
+import { cargasParaPreviewCopiado } from "@/lib/centro-copiado-contexto-pedido";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import type { SeleccionCad } from "../../../apps/api/src/common/seleccion-cad";
 
@@ -96,6 +98,7 @@ type DocRow = TamanoFila & {
   id: string;
   nombre: string;
   archivoNombre?: string;
+  archivoBytes?: number;
   paginas: number;
   rangoPaginas: string;
   orientacionesPaginas?: OrientacionPagina[];
@@ -142,6 +145,9 @@ interface Props {
   onAgregar: (items: PropuestaItem[]) => void | boolean;
   /** Cliente de la propuesta; habilita su precio especial en el motor. */
   clienteId?: string | null;
+  canalVenta?: string;
+  tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
+  itemsPedido?: PropuestaItem[];
   /** Edición: la CARGA completa (todos los renglones que entraron juntos). */
   editItems?: PropuestaItem[] | null;
   persistedItemIds?: ReadonlySet<string>;
@@ -329,9 +335,16 @@ function CentroCopiadoContenido({
   onOpenChange,
   onAgregar,
   clienteId,
+  canalVenta,
+  tratamientoFiscal,
+  itemsPedido,
   editItems,
   persistedItemIds,
 }: Props) {
+  const cargasPedido = React.useMemo(
+    () => cargasParaPreviewCopiado(itemsPedido ?? [], editItems ?? []),
+    [itemsPedido, editItems],
+  );
   const conCopiado = useCapacidad("centro_copiado");
   const conCad = useCapacidad("cotizacion_cad");
   const conTerminaciones = useCapacidad("terminaciones_copiado");
@@ -575,6 +588,7 @@ function CentroCopiadoContenido({
             id: nextId(),
             nombre: seg.nombre ?? "Documento",
             archivoNombre: seg.archivoNombre,
+            archivoBytes: seg.archivoBytes,
             paginas: Number(seg.paginasOriginales ?? seg.paginas) || 1,
             rangoPaginas: seg.rangoPaginas ?? "",
             orientacionesPaginas: seg.orientacionesPaginas,
@@ -611,6 +625,7 @@ function CentroCopiadoContenido({
           id: nextId(),
           nombre: meta.nombre ?? it.varianteNombre ?? "Documento",
           archivoNombre: meta.archivoNombre,
+          archivoBytes: meta.archivoBytes,
           paginas: Number(meta.paginasOriginales ?? meta.paginas) || 1,
           rangoPaginas: meta.rangoPaginas ?? "",
           orientacionesPaginas: meta.orientacionesPaginas,
@@ -680,6 +695,10 @@ function CentroCopiadoContenido({
     setPreviewError(null);
     setCotizando(false);
     if (!open) return;
+    if (canalVenta === "") {
+      setPreviewError("Elegí el canal de venta en la orden antes de cotizar.");
+      return;
+    }
     if (errorPlan) {
       setPreviewError(errorPlan);
       return;
@@ -701,10 +720,14 @@ function CentroCopiadoContenido({
     const handle = setTimeout(() => {
       void cotizarCentroCopiado({
         clienteId: clienteId || undefined,
+        canalVenta,
+        tratamientoFiscal,
+        cargasPedido,
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
           archivoNombre: d.file?.name ?? d.archivoNombre,
+          archivoBytes: d.file?.size ?? d.archivoBytes,
           ...paginasParaCotizar(d),
           copias: d.copias,
           tamano: d.tamano,
@@ -744,7 +767,7 @@ function CentroCopiadoContenido({
         });
     }, 350);
     return () => clearTimeout(handle);
-  }, [open, docs, grupos, clienteId, cotizarCentroCopiado, errorPlan]);
+  }, [open, docs, grupos, clienteId, canalVenta, tratamientoFiscal, cargasPedido, cotizarCentroCopiado, errorPlan]);
 
   const agregarDocs = React.useCallback(
     (
@@ -1133,10 +1156,14 @@ function CentroCopiadoContenido({
     try {
       const r = await construirItemsCentroCopiado({
         clienteId: clienteId || undefined,
+        canalVenta,
+        tratamientoFiscal,
+        cargasPedido,
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
           archivoNombre: d.file?.name ?? d.archivoNombre,
+          archivoBytes: d.file?.size ?? d.archivoBytes,
           ...paginasParaCotizar(d),
           copias: d.copias,
           tamano: d.tamano,
@@ -1231,6 +1258,9 @@ function CentroCopiadoContenido({
     grupos,
     errorPlan,
     clienteId,
+    canalVenta,
+    tratamientoFiscal,
+    cargasPedido,
     onAgregar,
     onOpenChange,
     construirItemsCentroCopiado,
@@ -1271,7 +1301,8 @@ function CentroCopiadoContenido({
         0,
       )
     : 0;
-  const impresionNeto = Math.max(0, (t?.subtotal ?? 0) - anilladoNeto);
+  const pouchNeto = preview?.documentos.reduce((total, d) => total + (d.pouch && !d.pouch.error ? d.pouch.subtotal : 0), 0) ?? 0;
+  const impresionNeto = Math.max(0, (t?.subtotal ?? 0) - anilladoNeto - pouchNeto);
   // Filas incompletas: sin páginas (manuales / no-PDF sin cargar) o sin papel.
   const incompletos = docs.filter(
     (d) => !!seleccionDe(d).error || faltaConfiguracion(d),
@@ -2539,7 +2570,7 @@ function CentroCopiadoContenido({
           </div>
           <div className={s.totalBox}>
             <div className={s.totalFinal}>
-              <span>Total de la carga c/IVA</span>
+              <span>Total c/IVA</span>
               <strong aria-live="polite">
                 {cotizando
                   ? "…"
@@ -2556,7 +2587,8 @@ function CentroCopiadoContenido({
               {t && !tieneErroresCotizacion ? (
                 <>
                   Impresión {fmt(impresionNeto)}
-                  {conTerminaciones && <> · Anillado {fmt(anilladoNeto)}</>} ·
+                  {conTerminaciones && anilladoNeto > 0 && <> · Anillado {fmt(anilladoNeto)}</>}
+                  {conTerminaciones && pouchNeto > 0 && <> · Plastificado pouch {fmt(pouchNeto)}</>} ·
                   IVA {fmt(t.iva)}
                 </>
               ) : cotizando ? (
@@ -2564,6 +2596,11 @@ function CentroCopiadoContenido({
               ) : (
                 ""
               )}
+            </div>
+            <div className={s.totalNetoSub}>
+              {preview?.tarifario
+                ? `Tarifario ${preview.tarifario.nombre} · versión ${preview.tarifario.numero}. Incluye el volumen de las otras cargas del pedido.`
+                : "Precio calculado según el canal seleccionado en la orden."}
             </div>
           </div>
           <ActionButton

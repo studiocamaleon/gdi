@@ -59,3 +59,11 @@ it("rechaza la descarga incompleta y respeta cancelación", async () => {
   control.abort();
   await expect(generarPdfTomo([segmento], control.signal)).rejects.toThrow();
 });
+
+it("un original reemplazado necesita recotización antes de unificar la tanda", async () => {
+  listar.mockResolvedValue([{ id: "propio", nombre: "Original.pdf", bytes: 700 }]);
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  await expect(generarPdfTomo([{...segmento,archivoBytes:500}])).rejects.toThrow("cambió");
+  expect(fetcher).not.toHaveBeenCalled();
+});

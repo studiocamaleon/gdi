@@ -3,7 +3,49 @@ import {
   cantidadLibrosCentroCopiado,
   itemConstruidoAPropuestaItem,
   type ItemConstruido,
+  tamanosProducibles,
+  type PapelOpcion,
 } from "./centro-copiado-api";
+
+describe("formatos ofrecidos por papel y gramaje", () => {
+  const papel: PapelOpcion = {
+    materiaPrimaId: "papel-ficticio",
+    nombre: "Obra",
+    gramajes: [80, 150],
+    variantes: [80, 150].map((gramajeGr) => ({
+      formatoComercial: "A3",
+      anchoMm: 297,
+      altoMm: 420,
+      gramajeGr,
+    })),
+    formatosPorGramaje: [
+      { gramaje: 80, tamanos: ["A4", "A3"] },
+      { gramaje: 150, tamanos: ["A4"] },
+    ],
+  };
+  it("cruza formato comercial, gramaje y selección general", () => {
+    expect(tamanosProducibles(papel, 150).map((f) => f.nombre)).toEqual(["A4"]);
+    expect(tamanosProducibles(papel, 80, ["A3"]).map((f) => f.nombre)).toEqual([
+      "A3",
+    ]);
+    expect(tamanosProducibles(papel, 150, ["A3"])).toEqual([]);
+  });
+  it("no ofrece tamaños con listas vacías, gramaje inexistente o selección ambigua", () => {
+    expect(tamanosProducibles(papel, 80, [])).toEqual([]);
+    expect(
+      tamanosProducibles({ ...papel, formatosPorGramaje: [] }, 80),
+    ).toEqual([]);
+    expect(tamanosProducibles(papel, 300)).toEqual([]);
+    expect(tamanosProducibles(papel, null)).toEqual([]);
+  });
+  it("mantiene el catálogo producible cuando no hay configuración nueva", () => {
+    expect(
+      tamanosProducibles({ ...papel, formatosPorGramaje: null }, 150).map(
+        (f) => f.nombre,
+      ),
+    ).toEqual(expect.arrayContaining(["A4", "A3"]));
+  });
+});
 
 it("conserva el producto CAD, la ruta y la selección al agregarlo a una OT", () => {
   const jobContext = {

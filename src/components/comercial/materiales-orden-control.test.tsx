@@ -171,6 +171,30 @@ describe("Operaciones de materiales en la OT", () => {
     expect(button("Reservar disponible").disabled).toBe(true);
     expect(button("Definir cantidad")).toBeTruthy();
   });
+
+  it("anticipa las hojas recuperadas al consumir y evita ajustar el plan a mano", async () => {
+    const data = fixture();
+    data.necesidades[0].origenes = [{
+      itemId: "i1", producto: "Copiado de prueba", pasoId: "p1", paso: "Impresión",
+      tipo: "material", loteCompartido: false, cantidadCalculada: 10 / 9,
+      unidadCalculada: "hoja", cantidadStock: 2, unidadStock: "hoja", observacion: null,
+      papelDerivado: {
+        version: 1, anchoOrigenMm: 650, altoOrigenMm: 950,
+        anchoMm: 210, altoMm: 297, rendimiento: 9, hojasNecesarias: 10,
+      },
+    }];
+    Object.assign(data.control!.materiales[0], {
+      cantidad: 2, reservada: 2, pendiente: 0, faltante: 0,
+      reservas: [{ ubicacionId: "u1", nombre: "Depósito de prueba", cantidad: 2 }],
+    });
+    await act(async () => root.render(<MaterialesOrdenControl data={data} onChanged={() => {}} />));
+    expect(button("Ajustar")).toBeUndefined();
+    await act(async () => button("Consumir").click());
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+      "Se guardarán 8 hojas de 210 × 297 mm en la misma ubicación",
+    );
+    expect(operarMateriales).not.toHaveBeenCalled();
+  });
   it("liberar requiere una acción explícita y muestra que conserva consumos", async () => {
     const data = fixture();
     Object.assign(data.control!.materiales[0], {

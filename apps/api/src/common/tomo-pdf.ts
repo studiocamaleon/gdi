@@ -10,6 +10,8 @@ export type FuenteTomoPdf = {
   paginasOriginales?: number;
   rangoPaginas?: string;
   faz: 1 | 2;
+  /** Sólo tandas: incluye las copias en el archivo final. Tomos: un juego. */
+  copias?: number;
   cargar: () => Promise<Uint8Array>;
 };
 
@@ -46,12 +48,15 @@ export async function unificarTomoPdf(fuentes: FuenteTomoPdf[]) {
       (f) =>
         !Number.isSafeInteger(f.paginas) ||
         f.paginas < 1 ||
+        !Number.isSafeInteger(f.copias ?? 1) ||
+        (f.copias ?? 1) < 1 ||
         ![1, 2].includes(f.faz),
     )
   )
     throw new Error('Revisá las páginas y las caras de los documentos.');
   const totalPrevisto = fuentes.reduce(
-    (n, f) => n + f.paginas + (f.faz === 2 ? f.paginas % 2 : 0),
+    (n, f) =>
+      n + (f.paginas + (f.faz === 2 ? f.paginas % 2 : 0)) * (f.copias ?? 1),
     0,
   );
   if (totalPrevisto > MAX_PAGINAS_TOMO)
@@ -96,12 +101,14 @@ export async function unificarTomoPdf(fuentes: FuenteTomoPdf[]) {
     const indices = seleccion.intervalos.flatMap(([desde, hasta]) =>
       Array.from({ length: hasta - desde + 1 }, (_, i) => desde - 1 + i),
     );
-    blancos += await agregarPaginasTomo(
-      unido,
-      original,
-      indices,
-      fuente.faz === 2,
-    );
+    for (let copia = 0; copia < (fuente.copias ?? 1); copia++) {
+      blancos += await agregarPaginasTomo(
+        unido,
+        original,
+        indices,
+        fuente.faz === 2,
+      );
+    }
   }
   return { bytes: await unido.save(), paginas: unido.getPageCount(), blancos };
 }

@@ -1325,6 +1325,9 @@ export class PresupuestosService {
       );
     }
     await this.prisma.$transaction(async (tx) => {
+      if (!opts.reenvio) await this.ordenes.exigirCopiadoEmitibleTx(tx, auth, {
+        canalVenta: emision.canalVenta, clienteId: c.clienteId, items: emision.items,
+      });
       await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, {
         puntosEstimados: c.fidelizacionPuntosEstimados,
         canjePuntos: c.fidelizacionCanjePuntos,

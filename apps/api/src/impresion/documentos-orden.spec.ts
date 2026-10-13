@@ -29,6 +29,16 @@ const meta = {
 const job = (value: object = meta) => ({ _centroCopiado: value });
 
 describe('plan de impresión cotizado', () => {
+  it('deriva una tanda compartida al PDF unificado y no permite envíos individuales', () => {
+    expect(
+      planDocumento(job({ ...meta, tandaImpresion: { documentos: 2 } }))
+        ?.motivo,
+    ).toContain('PDF unificado desde Archivos');
+    expect(
+      planDocumento(job({ ...meta, tandaImpresion: { documentos: 1 } }))
+        ?.motivo,
+    ).toBeNull();
+  });
   it('no convierte un CAD incompleto en un envío A4', () => {
     expect(planDocumento(job({ ...meta, modo: 'CAD' }))?.motivo).toBe(
       'Faltan las medidas o el perfil CAD cotizado. Volvé a cotizar el plano.',

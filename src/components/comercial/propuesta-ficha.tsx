@@ -1,4 +1,13 @@
 "use client";
+import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
+import {
+  claveRevisionCopiado,
+  ponerPrecioCopiado,
+  revisarPedidoCopiado,
+  estadoPedidoCopiado,
+  type RevisionCopiado,
+} from "@/lib/centro-copiado-pedidos-api";
+
 import {
   useImpresionDirecta,
   useColasImpresion,
@@ -119,7 +128,6 @@ import {
   PackageCheckIcon,
   PackageIcon,
   PlusIcon,
-  QrCodeIcon,
   LinkIcon,
   SaveIcon,
   TriangleAlertIcon,
@@ -303,6 +311,7 @@ import {
   resumenOjales,
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
+import { TandasCopiadoPanel } from "./tandas-copiado-panel";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { ProduccionEntregas } from "./produccion-entregas";
@@ -4157,8 +4166,8 @@ export function OrdenProductoDetalle({
                           type="date"
                           value={item.fechaEntrega ?? fechaEstimada}
                           onClick={() => fechaInputRef.current?.showPicker?.()}
-                          onChange={(event) =>
-                            onChangeFechaEntrega?.(event.target.value)
+                          onInput={(event) =>
+                            onChangeFechaEntrega?.(event.currentTarget.value)
                           }
                           aria-label={`Entrega prevista de ${item.productoNombre}`}
                         />
@@ -4355,10 +4364,12 @@ const DESCUENTO_MARGEN_ALERTA_PCT = 15;
  * de OT asignado por el backend (`numero != null`).
  */
 function EmitOverlay({
+  listosEnMostrador = false,
   numero,
   onDone,
 }: {
   numero: string | null;
+  listosEnMostrador?: boolean;
   onDone: () => void;
 }) {
   const [phase, setPhase] = React.useState(0);
@@ -4366,7 +4377,7 @@ function EmitOverlay({
   const STEPS = [
     "Guardando cotización",
     "Asignando número de OT",
-    "Notificando al taller",
+    listosEnMostrador ? "Registrando producción finalizada" : "Notificando al taller",
   ];
 
   React.useEffect(() => {
@@ -4481,7 +4492,7 @@ function EmitOverlay({
               <div className="emit-title">¡Orden emitida!</div>
               <div className="emit-nro">{numero}</div>
               <div className="emit-note">
-                Enviada al taller · visible en Producción → Órdenes
+                {listosEnMostrador ? "Producción finalizada" : "Enviada al taller · visible en Producción → Órdenes"}
               </div>
             </div>
           )}
@@ -4534,6 +4545,7 @@ function itemToOrdenItemPayload(
     cotizacionItemId,
     ...(item.asignacionesPersonal !== undefined ? { asignacionesPersonal: item.asignacionesPersonal } : {}),
     fechaEntrega: item.fechaEntrega || undefined,
+    listoEnMostrador: item.listoEnMostrador ?? false,
     ...(planEntrega ? { planEntrega } : {}),
     descuentoTipo: item.descuentoInput?.tipo ?? null,
     descuentoValor: item.descuentoInput?.valor ?? null,
@@ -4765,7 +4777,10 @@ function rehidratarOrdenItem(
       (resumen?.ejecucion
         ?.minimoComercialAplicado as CotizacionPropuestaSnapshot["minimoComercialAplicado"]) ??
       null,
-    costos: resumen?.ejecucion?.costos ?? costosHistoricos,
+    costos: (snap?.resumen as { copiadoComercial?: unknown } | undefined)?.copiadoComercial &&
+      metaCentroCopiado(jobContext)?.tandaImpresion?.version !== 1
+      ? costosHistoricos
+      : resumen?.ejecucion?.costos ?? costosHistoricos,
     pasos: trazabilidad?.pasos ?? [],
     // La cotización persiste el árbol completo de componentes dentro de la
     // trazabilidad. Rehidratar sólo los pasos del producto raíz conservaba el
@@ -4819,6 +4834,9 @@ function rehidratarOrdenItem(
     // sólo para órdenes previas al campo.
     id: producto.id ?? `ot-item-${index}`,
     cotizacionItemId: producto.cotizacionItemId ?? undefined,
+    listoEnMostrador: producto.listoEnMostrador,
+    listoEnMostradorEl: producto.listoEnMostradorEl,
+    listoEnMostradorPorNombre: producto.listoEnMostradorPorNombre,
     asignacionesPersonal: producto.asignacionesPersonal,
     fechaEntrega: producto.fechaEntrega ?? undefined,
     distribucionEntregas: producto.distribucionEntregas,
@@ -5085,7 +5103,7 @@ function PropuestaFichaContenido({
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
     orden ? orden.productos.map(rehidratarOrdenItem) : presupuestoBase?.productos.map((producto, index) => ({ ...rehidratarOrdenItem(producto, index), cotizacionItemId: undefined })) ?? [],
   );
-  const documentosCentroCopiado = items.filter(item => metaCentroCopiado(item.jobContext)).length;
+  const documentosCentroCopiado = items.filter(item => !item.listoEnMostrador && metaCentroCopiado(item.jobContext)).length;
 
   const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(() => presupuestoBase?.cargos ?? cargosDeOrden(orden));
   const [fidelizacionCanjePuntos, setFidelizacionCanjePuntos] =
@@ -5349,7 +5367,7 @@ function PropuestaFichaContenido({
   /** ETA por item de la ficha, simulada contra las colas reales de HOY. */
   const demoraPorItem = React.useMemo(() => {
     if (!conDemoraSistema || !colasTaller || items.length === 0) return null;
-    const nuevos = items.map((item) =>
+    const nuevos = items.filter(item => !item.listoEnMostrador).map((item) =>
       condicionarPorMateriales(
         itemHipoteticoDesdeCotizacion(item.id, item.cotizacion, item.asignacionesPersonal),
         previsionMateriales.data,
@@ -5565,6 +5583,10 @@ function PropuestaFichaContenido({
   const [editadosIds, setEditadosIds] = React.useState<Set<string>>(
     () => new Set(),
   );
+  // Fecha y marca de producción finalizada conservan la cotización ya acordada.
+  const [datosItemEditadosIds, setDatosItemEditadosIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
 
   // Tras guardar, router.refresh() trae la orden nueva y resincronizamos
   // rehidratando. Nunca durante la edición (pisaría el staging) ni al salir
@@ -5592,7 +5614,8 @@ function PropuestaFichaContenido({
     const idsActuales = new Set(items.map((item) => item.id));
     const agregados = items.filter((item) => !persistedItemIds.has(item.id));
     const editados = items.filter(
-      (item) => persistedItemIds.has(item.id) && editadosIds.has(item.id),
+      (item) => persistedItemIds.has(item.id) &&
+        (editadosIds.has(item.id) || datosItemEditadosIds.has(item.id)),
     );
     const quitados = orden.productos.filter(
       (producto) => producto.id && !idsActuales.has(producto.id),
@@ -5603,7 +5626,7 @@ function PropuestaFichaContenido({
       quitados,
       total: agregados.length + editados.length + quitados.length,
     };
-  }, [orden, editandoOrden, items, persistedItemIds, editadosIds]);
+  }, [orden, editandoOrden, items, persistedItemIds, editadosIds, datosItemEditadosIds]);
 
   const polyfanPendientesDeGuardar = React.useMemo(
     () =>
@@ -5929,6 +5952,87 @@ function PropuestaFichaContenido({
    * Prepara snapshots nuevos para las altas y ediciones sin sobrescribir los
    * históricos. El guardado en lote aplica después toda la proyección.
    */
+  const [revisionCopiado, setRevisionCopiado] =
+    React.useState<RevisionCopiado | null>(null);
+  const [revisionCopiadoClave, setRevisionCopiadoClave] = React.useState<
+    string | null
+  >(null);
+  const [revisandoCopiado, setRevisandoCopiado] = React.useState(false);
+  const revisionCopiadoEnCurso = React.useRef(false);
+  const [solicitudRevisionCopiado, solicitarRevisionCopiado] = React.useReducer(
+    (n: number) => n + 1,
+    0,
+  );
+  const revisionAutomaticaProcesada = React.useRef(`0:${canalVenta}`);
+  const [errorRevisionCopiado, setErrorRevisionCopiado] = React.useState<string | null>(
+    null,
+  );
+  const revisionCopiadoCache = React.useRef<{
+    clave: string;
+    cotizacionId?: string;
+    planes: Record<string, VinculoPlanEntrega>;
+  } | null>(null);
+  const claveCopiado = claveRevisionCopiado(
+    items,
+    canalVenta,
+    clienteId,
+    sinComprobante,
+  );
+  const claveCopiadoRef = React.useRef(claveCopiado);
+  claveCopiadoRef.current = claveCopiado;
+  const copiadoRevisado = revisionCopiadoClave === claveCopiado;
+  React.useEffect(() => {
+    if (
+      revisionCopiado ||
+      !canalVenta ||
+      !items.some((i) => metaCentroCopiado(i.jobContext)) ||
+      items.some((i) => !i.cotizacionItemId)
+    )
+      return;
+    let vigente = true;
+    const inicio = claveCopiado;
+    void estadoPedidoCopiado({
+      items: items.map((i) => i.cotizacionItemId!),
+      canalVenta,
+      clienteId: clienteId || undefined,
+      tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
+    })
+      .then((estado) => {
+        if (!vigente || !estado || claveCopiadoRef.current !== inicio) return;
+        setRevisionCopiado(estado.revision);
+        if (
+          estado.vigente &&
+          estado.revision.modalidad === "TARIFARIO" &&
+          items.every((i) => {
+            const precio =
+              estado.revision.modalidad === "TARIFARIO"
+                ? estado.revision.items.find((p) => p.id === i.cotizacionItemId)
+                : null;
+            return (
+              !!precio &&
+              precio.subtotal === i.subtotal &&
+              precio.total === i.total
+            );
+          })
+        )
+          setRevisionCopiadoClave(inicio);
+      })
+      .catch(() => {
+        /* La revisión explícita informa el error y la emisión revalida. */
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [
+    claveCopiado,
+    revisionCopiado,
+    items,
+    canalVenta,
+    clienteId,
+    sinComprobante,
+  ]);
+
+
   const prepararItemOrden = React.useCallback(
     async (item: PropuestaItem) => {
       if (!orden) throw new Error("No se cargó la orden de trabajo.");
@@ -5936,6 +6040,9 @@ function PropuestaFichaContenido({
         throw new Error(
           `"${item.productoNombre}" no tiene datos de cotización para persistir.`,
         );
+      }
+      if (revisionCopiadoCache.current?.clave === claveCopiadoRef.current && item.cotizacionItemId) {
+        return { item, cotizacionItemId: item.cotizacionItemId, payload: itemToOrdenItemPayload(item, item.cotizacionItemId) };
       }
       const meta = metaCentroCopiado(item.jobContext);
       if (meta?.esTomo) {
@@ -5988,6 +6095,7 @@ function PropuestaFichaContenido({
     setItems((current) =>
       current.filter((candidate) => candidate.id !== item.id),
     );
+    if (metaCentroCopiado(item.jobContext)) solicitarRevisionCopiado();
     setEditadosIds((prev) => {
       if (!prev.has(item.id)) return prev;
       const next = new Set(prev);
@@ -6019,6 +6127,7 @@ function PropuestaFichaContenido({
         .find(Boolean) ?? null,
     );
     setEditadosIds(new Set());
+    setDatosItemEditadosIds(new Set());
     setEditandoOrden(false);
   }, [orden, togglingFiscal, cancelando, cambioDocumento, precioOrdenPendiente]);
 
@@ -6029,6 +6138,10 @@ function PropuestaFichaContenido({
    */
   const guardarEdicion = React.useCallback(
     async (opciones?: { destino?: string }) => {
+      if (revisionCopiadoEnCurso.current) {
+        toast.info("Esperá a que termine la actualización de precios de copiado.");
+        return;
+      }
       if (!permisoEdicionRef.current || !orden) return;
       if (
         camposEditablesOrden(orden.estado).has("canalVenta") &&
@@ -6049,7 +6162,12 @@ function PropuestaFichaContenido({
           : cambioDocumento?.cambio;
         const preparados = [];
         for (const item of tocados) {
-          preparados.push(await prepararItemOrden(item));
+          if (persistedItemIds.has(item.id) && !editadosIds.has(item.id) && item.cotizacionItemId) {
+            preparados.push({ item, cotizacionItemId: item.cotizacionItemId,
+              payload: itemToOrdenItemPayload(item, item.cotizacionItemId) });
+          } else {
+            preparados.push(await prepararItemOrden(item));
+          }
         }
         const porItemId = new Map(
           preparados.map((preparado) => [preparado.item.id, preparado]),
@@ -6122,6 +6240,7 @@ function PropuestaFichaContenido({
           } registrado${cambiosSinGuardar === 1 ? "" : "s"} en el historial.`,
         );
         setEditadosIds(new Set());
+        setDatosItemEditadosIds(new Set());
         setEditandoOrden(false);
         setNavPendiente(null);
         if (destino) {
@@ -6137,6 +6256,7 @@ function PropuestaFichaContenido({
             " La orden no se modificó; se recargó la versión vigente.",
         );
         setEditadosIds(new Set());
+        setDatosItemEditadosIds(new Set());
         setEditandoOrden(false);
         setNavPendiente(null);
         router.refresh();
@@ -6155,6 +6275,8 @@ function PropuestaFichaContenido({
       cambiosFields,
       items,
       prepararItemOrden,
+      persistedItemIds,
+      editadosIds,
       publicarArtes,
       subirArchivosCentroCopiado,
       mapaArchivosCC,
@@ -6182,7 +6304,7 @@ function PropuestaFichaContenido({
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
         return;
       const anchor = (event.target as HTMLElement).closest?.("a[href]");
-      if (!anchor) return;
+      if (!anchor || anchor.hasAttribute("download")) return;
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#")) return;
       event.preventDefault();
@@ -6204,6 +6326,10 @@ function PropuestaFichaContenido({
    */
   const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const emitirBorrador = React.useCallback(async (imprimir = false) => {
+    if (revisionCopiadoEnCurso.current) {
+      toast.info("Esperá a que termine la actualización de precios de copiado.");
+      return;
+    }
     if (!conOrdenes) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -6235,9 +6361,9 @@ function PropuestaFichaContenido({
     }
     setEmitiendoBorrador(true);
     try {
-      await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
+      const emitida = await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
       if (imprimir) impresionDocumentos.abrir(orden.id, true);
-      toast.success(`${orden.numero} emitida al taller.`);
+      toast.success(emitida.estado === "finalizada" ? `${emitida.numero} emitida y finalizada: producción finalizada.` : `${emitida.numero} emitida al taller.`);
       setMostrarRecienEmitida(true);
       setEditandoOrden(false);
       router.refresh();
@@ -6263,6 +6389,7 @@ function PropuestaFichaContenido({
     // El staging vive en estado local: navegar lo descarta solo. Reseteamos
     // igual para que el guard no reintercepte durante la transición.
     setEditadosIds(new Set());
+    setDatosItemEditadosIds(new Set());
     setEditandoOrden(false);
     router.push(destino);
   }, [navPendiente, router]);
@@ -6347,99 +6474,275 @@ function PropuestaFichaContenido({
    * su cotizacionItemId. Compartido por Emitir OT y Guardar borrador.
    */
 
-  const persistirSnapshotsItems = React.useCallback(async () => {
-    let cotizacionId: string | undefined;
-    const itemsConSnapshot: Array<{
-      item: PropuestaItem;
-      cotizacionItemId?: string;
-      planEntrega?: VinculoPlanEntrega;
-    }> = [];
-    for (const item of items) {
-      const previa =
-        !orden && ordenTipo === "orden"
-          ? await entregasPrevias.paraGuardar(item)
-          : null;
-      if (previa) {
-        itemsConSnapshot.push({ item, ...previa });
-        continue;
+  const persistirSnapshotsItems = React.useCallback(
+    async (actualizarCopiado = false) => {
+      if (
+        !actualizarCopiado &&
+        revisionCopiadoCache.current?.clave === claveCopiadoRef.current
+      ) {
+        return {
+          cotizacionId: revisionCopiadoCache.current.cotizacionId,
+          itemsConSnapshot: items.map((item) => ({
+            item,
+            cotizacionItemId: item.cotizacionItemId,
+            planEntrega: revisionCopiadoCache.current?.planes[item.id],
+          })),
+        };
       }
-      if (item.cotizacionItemId && ordenTipo !== "presupuesto") {
-        itemsConSnapshot.push({
-          item,
-          cotizacionItemId: item.cotizacionItemId,
-        });
-        continue;
-      }
-      // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
-      // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
-      const metaTomo = metaCentroCopiado(item.jobContext);
-      if (metaTomo?.esTomo) {
-        const huellaTomo = `${item.id}:${item.cotizacion?.tipoCambio?.id ?? ""}:${JSON.stringify(metaTomo)}`;
-        const idempotencyKey =
-          tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
-        tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
-        const resp = await guardarTomoCentroCopiado({
-          ...solicitudTomo(metaTomo, clienteId),
-          cotizacionId,
-          clienteId: clienteId || null,
-          idempotencyKey,
-        });
-        if (resp.error || !resp.cotizacionItemId) {
+      let cotizacionId: string | undefined;
+      const itemsConSnapshot: Array<{
+        item: PropuestaItem;
+        cotizacionItemId?: string;
+        planEntrega?: VinculoPlanEntrega;
+      }> = [];
+      for (const item of items) {
+        const previa =
+          !orden && ordenTipo === "orden"
+            ? await entregasPrevias.paraGuardar(item)
+            : null;
+        if (previa) {
+          itemsConSnapshot.push({ item, ...previa });
+          continue;
+        }
+        if (
+          item.cotizacionItemId &&
+          ordenTipo !== "presupuesto" &&
+          !(actualizarCopiado && metaCentroCopiado(item.jobContext))
+        ) {
+          itemsConSnapshot.push({
+            item,
+            cotizacionItemId: item.cotizacionItemId,
+          });
+          continue;
+        }
+        // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
+        // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
+        const metaTomo = metaCentroCopiado(item.jobContext);
+        if (metaTomo?.esTomo) {
+          const huellaTomo = `${item.id}:${item.cotizacion?.tipoCambio?.id ?? ""}:${JSON.stringify(metaTomo)}`;
+          const idempotencyKey =
+            tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
+          tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
+          const resp = await guardarTomoCentroCopiado({
+            ...solicitudTomo(metaTomo, clienteId),
+            cotizacionId,
+            clienteId: clienteId || null,
+            idempotencyKey,
+          });
+          if (resp.error || !resp.cotizacionItemId) {
+            throw new Error(
+              resp.error ??
+                `No se pudo guardar el tomo ${item.productoNombre}.`,
+            );
+          }
+          cotizacionId = resp.cotizacionId ?? cotizacionId;
+          itemsConSnapshot.push({
+            item: actualizarCopiado
+              ? ponerPrecioCopiado(
+                  item,
+                  { subtotal: resp.subtotal, iva: resp.iva, total: resp.total },
+                  resp.cotizacionItemId,
+                )
+              : item,
+            cotizacionItemId: resp.cotizacionItemId,
+          });
+          continue;
+        }
+        if (!item.motorCodigo || !item.jobContext) {
           throw new Error(
-            resp.error ?? `No se pudo guardar el tomo ${item.productoNombre}.`,
+            `"${item.productoNombre}" no tiene una cotización persistible. Volvé a configurarlo antes de guardar la orden.`,
           );
         }
-        cotizacionId = resp.cotizacionId ?? cotizacionId;
-        itemsConSnapshot.push({
-          item,
-          cotizacionItemId: resp.cotizacionItemId,
+        const response = await cotizarYGuardar({
+          ordenTrabajoId: orden?.id,
+          contextoMateriales: solicitudPrevisionMateriales(
+            items.filter((i) => i.id !== item.id),
+          ).materiales,
+          productoId: item.motorCodigo,
+          rutaAlternativaId: item.rutaAlternativaId ?? null,
+          jobContext: item.jobContext as never,
+          clienteId: clienteId || null,
+          periodo: getCurrentPeriodo(),
+          descuento: descuentoParaMotor(item.descuentoInput),
+          cotizacionId,
         });
-        continue;
+        if (!response.result.exitoso) {
+          throw new Error(
+            response.result.errores?.[0]?.mensaje ??
+              `No se pudo guardar la cotización de ${item.productoNombre}.`,
+          );
+        }
+        cotizacionId = response.cotizacionId ?? cotizacionId;
+        const recotizada = response.result.cotizacion;
+        const desglose = recotizada?.desglosePrecio;
+        itemsConSnapshot.push({
+          item:
+            actualizarCopiado &&
+            metaCentroCopiado(item.jobContext) &&
+            response.cotizacionItemId &&
+            recotizada &&
+            desglose
+              ? ponerPrecioCopiado(
+                  { ...item, cotizacion: recotizada },
+                  {
+                    subtotal: desglose.precioNetoTotal,
+                    iva: desglose.precioBrutoTotal - desglose.precioNetoTotal,
+                    total: desglose.precioBrutoTotal,
+                  },
+                  response.cotizacionItemId,
+                )
+              : item,
+          cotizacionItemId: response.cotizacionItemId,
+        });
       }
-      if (!item.motorCodigo || !item.jobContext) {
+      // Cada ítem conserva su cotización de origen. Las preparadas antes del
+      // guardado pueden pertenecer a distintos snapshots comerciales.
+      return {
+        itemsConSnapshot,
+        cotizacionId: itemsConSnapshot.some((i) => i.planEntrega)
+          ? undefined
+          : cotizacionId,
+      };
+    },
+    [
+      items,
+      clienteId,
+      orden,
+      ordenTipo,
+      entregasPrevias,
+      cotizarYGuardar,
+      guardarTomoCentroCopiado,
+    ],
+  );
+
+  const revisarCopiadoEnPedido = React.useCallback(async () => {
+    if (
+      revisionCopiadoEnCurso.current ||
+      !permisoProductosRef.current ||
+      !validarCanalVenta()
+    ) return;
+    const claveInicio = claveCopiadoRef.current;
+    revisionCopiadoEnCurso.current = true;
+    setRevisandoCopiado(true);
+    setErrorRevisionCopiado(null);
+    setRevisionCopiadoClave(null);
+    revisionCopiadoCache.current = null;
+    try {
+      const preparados = await persistirSnapshotsItems(true);
+      const ids = preparados.itemsConSnapshot.map((p) => p.cotizacionItemId);
+      if (ids.some((id) => !id))
         throw new Error(
-          `"${item.productoNombre}" no tiene una cotización persistible. Volvé a configurarlo antes de guardar la orden.`,
+          "Falta guardar un trabajo antes de revisar sus precios.",
         );
-      }
-      const response = await cotizarYGuardar({
-        ordenTrabajoId: orden?.id,
-        contextoMateriales: solicitudPrevisionMateriales(items.filter((i) => i.id !== item.id)).materiales,
-        productoId: item.motorCodigo,
-        rutaAlternativaId: item.rutaAlternativaId ?? null,
-        jobContext: item.jobContext as never,
-        clienteId: clienteId || null,
-        periodo: getCurrentPeriodo(),
-        descuento: descuentoParaMotor(item.descuentoInput),
-        cotizacionId,
+      const resultado = await revisarPedidoCopiado({
+        items: ids as string[],
+        descuentos: preparados.itemsConSnapshot.flatMap((p) =>
+          metaCentroCopiado(p.item.jobContext) &&
+          p.cotizacionItemId &&
+          p.item.descuentoInput
+            ? [
+                {
+                  cotizacionItemId: p.cotizacionItemId,
+                  tipo: p.item.descuentoInput.tipo,
+                  valor: p.item.descuentoInput.valor,
+                },
+              ]
+            : [],
+        ),
+        canalVenta,
+        clienteId: clienteId || undefined,
+        tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
       });
-      if (!response.result.exitoso) {
+      if (
+        claveCopiadoRef.current !== claveInicio ||
+        !permisoProductosRef.current
+      )
         throw new Error(
-          response.result.errores?.[0]?.mensaje ??
-            `No se pudo guardar la cotización de ${item.productoNombre}.`,
+          "El pedido cambió durante la revisión. Actualizá los precios nuevamente.",
         );
+      setRevisionCopiado(resultado);
+      if (resultado.modalidad === "TARIFARIO" && !resultado.id) {
+        revisionCopiadoCache.current = null;
+        setRevisionCopiadoClave(claveInicio);
+        toast.warning(
+          "Faltan precios en el tarifario para esta carga. Revisá el aviso de Centro de copiado antes de emitir.",
+        );
+        return;
       }
-      cotizacionId = response.cotizacionId ?? cotizacionId;
-      itemsConSnapshot.push({
-        item,
-        cotizacionItemId: response.cotizacionItemId,
+      const nuevos = preparados.itemsConSnapshot.map((p) => {
+        const precio =
+          resultado.items?.find((i) => i.anteriorId === p.cotizacionItemId);
+        return precio
+          ? ponerPrecioCopiado(p.item, precio, precio.id)
+          : { ...p.item, cotizacionItemId: p.cotizacionItemId };
       });
+      revisionCopiadoCache.current = {
+        clave: claveRevisionCopiado(
+          nuevos,
+          canalVenta,
+          clienteId,
+          sinComprobante,
+        ),
+        cotizacionId:
+          resultado.modalidad === "TARIFARIO"
+            ? (resultado.cotizacionId ?? undefined)
+            : preparados.cotizacionId,
+        planes: Object.fromEntries(
+          preparados.itemsConSnapshot.flatMap((p) =>
+            p.planEntrega ? [[p.item.id, p.planEntrega]] : [],
+          ),
+        ),
+      };
+      setRevisionCopiadoClave(revisionCopiadoCache.current.clave);
+      setItems(nuevos);
+      if (orden)
+        setEditadosIds(
+          (prev) => new Set([...prev, ...nuevos.map((i) => i.id)]),
+        );
+      toast.success("Precios de copiado actualizados para todo el pedido.");
+    } catch (e) {
+      const mensaje = e instanceof Error
+        ? e.message
+        : "No se pudieron actualizar los precios de copiado.";
+      setErrorRevisionCopiado(mensaje);
+      toast.error(mensaje);
+    } finally {
+      revisionCopiadoEnCurso.current = false;
+      setRevisandoCopiado(false);
     }
-    // Cada ítem conserva su cotización de origen. Las preparadas antes del
-    // guardado pueden pertenecer a distintos snapshots comerciales.
-    return {
-      itemsConSnapshot,
-      cotizacionId: itemsConSnapshot.some((i) => i.planEntrega)
-        ? undefined
-        : cotizacionId,
-    };
   }, [
-    items,
+    validarCanalVenta,
+    persistirSnapshotsItems,
+    canalVenta,
     clienteId,
+    sinComprobante,
     orden,
-    ordenTipo,
-    entregasPrevias,
-    cotizarYGuardar,
-    guardarTomoCentroCopiado,
+  ]);
+  React.useEffect(() => {
+    const solicitud = `${solicitudRevisionCopiado}:${canalVenta}`;
+    if (!puedeModificarProductos || (orden && orden.estado !== "borrador")) {
+      revisionAutomaticaProcesada.current = solicitud;
+      return;
+    }
+    if (
+      solicitud === revisionAutomaticaProcesada.current ||
+      revisandoCopiado ||
+      revisionCopiadoEnCurso.current ||
+      !canalVenta
+    ) return;
+    revisionAutomaticaProcesada.current = solicitud;
+    if (items.some((i) => metaCentroCopiado(i.jobContext)))
+      void revisarCopiadoEnPedido();
+    // Una carga o cambio de canal dispara una sola revisión. Si cambia durante
+    // el cálculo, la siguiente solicitud espera; los errores no se reintentan solos.
+  }, [
+    solicitudRevisionCopiado,
+    revisandoCopiado,
+    canalVenta,
+    puedeModificarProductos,
+    orden,
+    items,
+    revisarCopiadoEnPedido,
   ]);
 
   /**
@@ -6456,6 +6759,10 @@ function PropuestaFichaContenido({
   const emisionPresupuestoEnCursoRef = React.useRef(false);
   const [canalPresupuestoAbierto, setCanalPresupuestoAbierto] = React.useState(false);
   const emitirPresupuestoCb = React.useCallback(async (canal: CanalPresupuesto = "whatsapp") => {
+    if (revisionCopiadoEnCurso.current) {
+      toast.info("Esperá a que termine la actualización de precios de copiado.");
+      return;
+    }
     if (emisionPresupuestoEnCursoRef.current) return;
     if (presupuestoGuardadoRef.current?.revision === revisionPropuesta) {
       router.replace(presupuestoGuardadoRef.current.destino);
@@ -6549,6 +6856,10 @@ function PropuestaFichaContenido({
   ]);
 
   const emitirOrden = React.useCallback(async (imprimir = false) => {
+    if (revisionCopiadoEnCurso.current) {
+      toast.info("Esperá a que termine la actualización de precios de copiado.");
+      return;
+    }
     if (!conOrdenes || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -6707,6 +7018,10 @@ function PropuestaFichaContenido({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
+    if (revisionCopiadoEnCurso.current) {
+      toast.info("Esperá a que termine la actualización de precios de copiado.");
+      return;
+    }
     if (!(ordenTipo === "presupuesto" ? conPresupuestos : conOrdenes) || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -7617,6 +7932,13 @@ function PropuestaFichaContenido({
                       }}
                     />
                   )}
+                {items.some(i => metaCentroCopiado(i.jobContext)) && (!orden || orden.estado === "borrador") && <CentroCopiadoPedidoPrecios
+                  revision={revisionCopiado} vigente={copiadoRevisado} ocupado={revisandoCopiado}
+                  moneda={moneda} sinComprobante={sinComprobante}
+                  error={errorRevisionCopiado} faltaCanal={!canalVenta}
+                  editable={puedeModificarProductos && !guardandoEdicion && !emitiendo && !emitiendoPresupuesto}
+                  onRevisar={() => void revisarCopiadoEnPedido()}
+                />}
                 <OrdenFinancialActions
                   empty={items.length === 0}
                   emitiendo={emitiendo || emitiendoPresupuesto}
@@ -8078,9 +8400,9 @@ function PropuestaFichaContenido({
                                 if (ordenTipo !== "orden" || !items.length)
                                   fechaEstimadaInputRef.current?.showPicker?.();
                               }}
-                              onChange={(event) => {
+                              onInput={(event) => {
                                 otFechaTocadaRef.current = true;
-                                setFechaEstimada(event.target.value);
+                                setFechaEstimada(event.currentTarget.value);
                               }}
                               aria-label="Entrega prevista"
                             />
@@ -8224,16 +8546,20 @@ function PropuestaFichaContenido({
                   else rowRefs.current.delete(id);
                 }}
                 getActions={(item) => ({
-                  onRemove: modoOrden
+                  onListoChange: ordenTipo === "orden" && esCentroCopiado(item) && puedeModificarProductos && (!orden || orden.estado === "borrador")
+                    ? (listoEnMostrador) => {
+                        if (itemsEnEdicion && persistedItemIds.has(item.id))
+                          setDatosItemEditadosIds(prev => new Set([...prev, item.id]));
+                        setItems(current => current.map(i => i.id === item.id
+                          ? { ...i, listoEnMostrador, ...(listoEnMostrador ? { asignacionesPersonal: [] } : {}) }
+                          : i));
+                      }
+                    : undefined,
+                  onRemove: item.listoEnMostradorEl ? undefined : modoOrden
                     ? itemsEnEdicion
                       ? () => quitarItemDeOrden(item)
                       : undefined
-                    : () =>
-                        setItems((current) =>
-                          current.filter(
-                            (candidate) => candidate.id !== item.id,
-                          ),
-                        ),
+                    : () => quitarItemDeOrden(item),
                   onVerPrecios: esCentroCopiado(item)
                     ? () => setPreciosOpen(true)
                     : undefined,
@@ -8248,7 +8574,7 @@ function PropuestaFichaContenido({
                     margenEtaDias={margenEtaDias}
                     noLaborables={colasTaller?.noLaborables}
                     onEdit={
-                      modoOrden
+                      item.listoEnMostradorEl ? undefined : modoOrden
                         ? itemsEnEdicion && item.jobContext && item.motorCodigo
                           ? () => abrirEdicion(item)
                           : undefined
@@ -8269,7 +8595,7 @@ function PropuestaFichaContenido({
                     onChangeFechaEntrega={(fechaEntrega) => {
                       itemFechaTocadaRef.current.add(item.id);
                       if (itemsEnEdicion && persistedItemIds.has(item.id))
-                        setEditadosIds((prev) => new Set([...prev, item.id]));
+                        setDatosItemEditadosIds((prev) => new Set([...prev, item.id]));
                       setItems((current) =>
                         current.map((candidate) =>
                           candidate.id === item.id
@@ -8283,7 +8609,7 @@ function PropuestaFichaContenido({
                     }}
                     fechaEstimada={fechaEstimada}
                     readOnly={modoOrden}
-                    editarFecha={itemsEnEdicion}
+                    editarFecha={itemsEnEdicion && editandoOrden}
                     prepararCorte={modoOrden && puedeEditarOrden && puedeVerProduccion && persistedItemIds.has(item.id)}
                     onDistribucionGuardada={
                       orden ? () => {
@@ -8295,7 +8621,7 @@ function PropuestaFichaContenido({
                       } : undefined
                     }
                     planificarEntregas={
-                      !!orden &&
+                      !item.listoEnMostrador && !!orden &&
                       puedeEditarOrden && cambiosSinGuardar === 0 &&
                       (orden.estado === "borrador" ||
                         orden.estado === "pendiente") &&
@@ -8334,7 +8660,7 @@ function PropuestaFichaContenido({
             {tab === "produccion" ? (
               (!orden || orden.estado === "borrador") && ordenTipo === "orden" && puedeAsignarPersonal && conAsignacionPersonal ? (
                 <OrdenPersonalPrevisto
-                  productos={items.map(item => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId: item.cotizacionItemId, asignacionesPersonal: item.asignacionesPersonal }))}
+                  productos={items.filter(item => !item.listoEnMostrador).map(item => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId: item.cotizacionItemId, asignacionesPersonal: item.asignacionesPersonal }))}
                   disabled={!puedeEditarOrden}
                   preparar={async () => {
                     const originales = itemsRef.current;
@@ -8344,7 +8670,7 @@ function PropuestaFichaContenido({
                     if (itemsConSnapshot.some(i => i.planEntrega || i.item.distribucionEntregas)) throw new Error("Los operadores de productos divididos en lotes se asignan desde Producción después de emitir.");
                     const ids = new Map(itemsConSnapshot.map(i => [i.item.id, i.cotizacionItemId]));
                     setItems(actual => actual.map(item => ({ ...item, cotizacionItemId: ids.get(item.id) ?? item.cotizacionItemId })));
-                    return itemsConSnapshot.map(({ item, cotizacionItemId }) => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId,
+                    return itemsConSnapshot.filter(({ item }) => !item.listoEnMostrador).map(({ item, cotizacionItemId }) => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId,
                       ordenItemId: orden?.productos.some(p => p.id === item.id) ? item.id : undefined, asignacionesPersonal: item.asignacionesPersonal }));
                   }}
                   onChange={elecciones => {
@@ -8458,10 +8784,21 @@ function PropuestaFichaContenido({
                 // Todavía es una propuesta sin persistir: los items son
                 // borradores locales sin fila en la base, así que no hay dónde
                 // colgar un archivo. Ver docs/archivos-r2-diseno.md §4.
-                <EmptyTab
-                  title="Archivos"
-                  description="Guardá la propuesta o emitila como orden para poder adjuntar el arte y las referencias del cliente."
-                />
+                <>
+                  <TandasCopiadoPanel
+                    items={items.map((i) => ({
+                      itemId: i.id,
+                      archivosPendientes: i.archivosPendientes,
+                    }))}
+                    metas={Object.fromEntries(
+                      items.map((i) => [i.id, metaCentroCopiado(i.jobContext)]),
+                    )}
+                  />
+                  <EmptyTab
+                    title="Archivos"
+                    description="Guardá la propuesta o emitila como orden para conservar los originales y adjuntar otras referencias del cliente."
+                  />
+                </>
               )
             ) : null}
             {tab === "costos" && verMargenes ? (
@@ -8567,7 +8904,7 @@ function PropuestaFichaContenido({
         </HeroTabs>
 
         {emitiendo ? (
-          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
+          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} listosEnMostrador={items.length > 0 && items.every(item => item.listoEnMostrador)} />
         ) : null}
 
         {/* Montado SIEMPRE y controlado por `open`, igual que los demás
@@ -8719,6 +9056,9 @@ function PropuestaFichaContenido({
         />
         <CentroCopiadoSheet
           open={copiadoOpen && puedeModificarProductos}
+          canalVenta={canalVenta}
+          tratamientoFiscal={sinComprobante ? "SIN_COMPROBANTE" : "FISCAL"}
+          itemsPedido={items}
           clienteId={clienteId || null}
           editItems={copiadoEditItems}
           persistedItemIds={persistedItemIds}
@@ -8746,8 +9086,10 @@ function PropuestaFichaContenido({
                 : current;
               return [...base, ...nuevosConHerencia];
             });
+            if (!orden || orden.estado === "borrador") solicitarRevisionCopiado();
             // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
             // demasiado). Se los diferencia por la referencia (varianteNombre).
+            setTab("productos");
             setCopiadoOpen(false);
             setCopiadoEditItems(null);
             focusOrdenProductoDetalle(nuevosConHerencia[0].id);

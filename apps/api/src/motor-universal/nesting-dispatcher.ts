@@ -849,8 +849,10 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
     runLaminadoRollo(paso, jobContext, materialResuelto, config),
 
   /** Plastificado pouch sobre formato finito. */
-  pouch: (_paso, jobContext, materialResuelto, config) =>
-    runPlastificadoPouch(jobContext, materialResuelto, config),
+  pouch: (paso, jobContext, materialResuelto, config) => {
+    const contexto = buildJobContextPiezas(paso, jobContext);
+    return contexto ? runPlastificadoPouch(contexto, materialResuelto, config) : null;
+  },
 
   /** Montaje sobre otro sustrato. Reusa los algoritmos existentes, pero
    *  permite que las piezas vengan de la medida comercial o de outputs

@@ -79,6 +79,10 @@ export class RevisarPersonalOrdenDto {
 
 export class CrearOrdenTrabajoItemDto {
   @IsOptional()
+  @IsBoolean()
+  listoEnMostrador?: boolean;
+
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
