@@ -55,3 +55,15 @@ Validación local del 13/10/2026: pruebas de 1, 5 y 10 A4, proyección conjunta 
 También se comprobó en Chrome el detalle de Tarifarios con ambos papeles y las tres cantidades: costo unitario estable y contribución del 40% al probar los sugeridos redondeados a centavos. Se descartaron las ediciones temporales. La selección de sobrantes sólo considera ubicaciones y almacenes activos, descuenta reservas e incluye la merma del papel en hojas enteras. Las pruebas de interfaz verifican la explicación del corte y el sobrante antes de confirmar el consumo.
 
 Rama `codex/copiado-papel-derivado`, basada en `origin/main` y dependiente de `codex/copiado-staging` (PR #76). Sin migraciones ni despliegue a staging o producción.
+
+## Objetivo de contribución por rango
+
+En «Calcular precios con el motor» cada rango general tiene su propio porcentaje objetivo, compartido por todos los papeles, formatos, colores, coberturas y caras de la matriz. Hojas y CAD conservan configuraciones independientes. Filtrar la vista limita el cálculo y la aplicación, pero no el alcance de los objetivos.
+
+Los objetivos se guardan con el borrador y se congelan en cada versión. Los tarifarios anteriores muestran el 30% que usaba el asistente hasta editarlo; abrirlos no modifica su contenido. Se admiten porcentajes desde cero y menores que 100%, con hasta cuatro decimales y coma decimal en la interfaz. Cambiar objetivos reutiliza costos calculados, invalida una revisión pendiente y no reemplaza los precios actuales hasta revisar y aplicar. El mínimo que controla la autorización de la OT permanece separado: un objetivo inferior puede seguir requiriendo autorización.
+
+Al agregar límites generales, cada nuevo tramo hereda el objetivo del intervalo anterior al que pertenecía; los eliminados se retiran. Las filas con rangos propios toman el mayor objetivo de los intervalos generales que abarcan. Se mantiene la corrección por volumen, que puede elevar la contribución de los rangos anteriores, y el cálculo se verifica a la cantidad de referencia de cada celda.
+
+Ejemplo ficticio sin cargas ni IVA: costo variable de $60 por hoja y objetivos de 50%, 40% y 20% para rangos desde 1, 5 y 10 hojas producen $120, $100 y $75 por hoja. La prueba comprueba tanto esos importes como los porcentajes resultantes.
+
+Validado localmente el 13/10/2026: 91 pruebas de interfaz y cálculo, 60 de contrato y persistencia en base aislada, lint de interfaz y tipos del flujo afectado. El chequeo global de tipos y el lint con tipos de toda la API superaron los límites locales de memoria; la compilación completa queda en CI remoto. Chrome comprobó guardado, reapertura, cálculo, revisión y aplicación en un borrador de prueba sin versión publicada ni canal asignado, sin errores de consola. Se corrigió también el alcance de estilos de los diálogos de copiado para que selectores y campos mantengan su apariencia al abrirse en un portal.

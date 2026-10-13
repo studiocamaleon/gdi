@@ -11,6 +11,7 @@ import {
   canalesDelTarifario,
 } from "./centro-copiado-tarifarios-sugerencias";
 import type { ResultadoCeldaSimulacion } from "../../apps/api/src/centro-copiado/tarifarios/simulacion-tarifario.types";
+import { objetivoDeTramo } from "./centro-copiado-objetivos-contribucion";
 function ejemplo() {
   const c = contenidoInicial("ARS");
   c.margen = { minimoPorcentaje: "20", anteInsuficiente: "AUTORIZACION" };
@@ -339,6 +340,62 @@ it("ordena por volumen sin bajar precios bajo el objetivo ni modificar los costo
     [...incompletas.values()].every((p) => !p.sugerencia && !!p.error),
   ).toBe(true);
 });
+it("aplica objetivos distintos a 1, 5 y 10 hojas y eleva los anteriores si un objetivo posterior exige más precio", () => {
+  const { c, r } = ejemplo();
+  c.composicion.iva = "MAS_IVA";
+  c.hojas!.rangosGenerales = [1, 5, 10];
+  c.hojas!.objetivosContribucion = ["50", "40", "20"];
+  c.hojas!.filas[0].precios = [1, 5, 10].map((desdeCantidad) => ({
+    desdeCantidad,
+    precioUnitario: null,
+  }));
+  const resultados: Record<string, ResultadoCeldaSimulacion> = {};
+  [1, 5, 10].forEach((n, tramo) => {
+    resultados[`hojas:0:${tramo}`] = {
+      celda: { seccion: "hojas", fila: 0, tramo },
+      escenarios: r.escenarios.map((e) => {
+        if (e.estado !== "CALCULADO") throw new Error("fixture");
+        return {
+          ...e,
+          costoTotal: String(60 * n),
+          costoUnitario: "60",
+          cantidadReferencia: String(n),
+          cantidadFacturable: String(n),
+          grupos: [
+            {
+              fila: 0,
+              desdeCantidad: String(n),
+              cantidadFacturable: String(n),
+            },
+          ],
+        };
+      }),
+    };
+  });
+  const generar = () =>
+    sugerirPorVolumen(c, resultados, "hojas", undefined, (fila, tramo) =>
+      objetivoDeTramo(c.hojas!, fila, tramo),
+    );
+  expect(
+    [0, 1, 2].map(
+      (tramo) => generar().get(`hojas:0:${tramo}`)!.sugerencia!.nuevo,
+    ),
+  ).toEqual(["120", "100", "75"]);
+  expect(
+    [0, 1, 2].map(
+      (tramo) =>
+        generar().get(`hojas:0:${tramo}`)!.sugerencia!.controles[0].porcentaje,
+    ),
+  ).toEqual(["50.00", "40.00", "20.00"]);
+  c.hojas!.objetivosContribucion[2] = "60";
+  expect(
+    [0, 1, 2].map(
+      (tramo) => generar().get(`hojas:0:${tramo}`)!.sugerencia!.nuevo,
+    ),
+  ).toEqual(["150", "150", "150"]);
+  expect(generar().get("hojas:0:0")!.sugerencia!.ajustadaPorVolumen).toBe(true);
+});
+
 it("ordena cada combinación con sus rangos propios sin cruzar filas", () => {
   const { c, r } = ejemplo();
   c.composicion.iva = "MAS_IVA";

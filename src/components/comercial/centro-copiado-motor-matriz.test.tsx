@@ -240,11 +240,14 @@ it("calcula en la matriz, revisa sin escribir y completa sólo vacíos preservan
 it("margen, redondeo y edición manual actualizan la tabla sin consultar nuevamente el motor", async () => {
   await abrir();
   await click("Calcular 4 precios");
-  await escribir(campo("Contribución objetivo (%)"), "40");
+  await escribir(campo("1–99 hojas (%)"), "40");
   await escribir(campo("Redondear hacia arriba a"), "100");
   await click("Revisar 2 precios");
   await click("Aplicar 2 precios al borrador");
   expect(ultimo.hojas!.filas[1].precios[0].precioUnitario).toBe("1200");
+  expect(ultimo.hojas!.filas[1].precios[1].precioUnitario).toBe("1000");
+  expect(ultimo.hojas!.objetivosContribucion).toEqual(["40", "30"]);
+  expect(ultimo.margen).toEqual(inicial.margen);
   const precio = el.querySelector<HTMLInputElement>(
     'input[aria-label*="Doble faz"][aria-label*="desde 1,"]',
   )!;
@@ -299,10 +302,40 @@ it("la consulta puede calcular pero no aplicar, y perder permiso retira costos d
   await click("Calcular 4 precios");
   expect(boton("Revisar 2 precios").disabled).toBe(true);
   expect(boton("Limpiar valores").disabled).toBe(true);
+  expect(campo("1–99 hojas (%)").disabled).toBe(true);
   await act(async () => root.render(<App permisos={[]} />));
   expect(el.textContent).not.toContain("Contribución actual");
   expect(el.textContent).not.toContain("Calcular precios con el motor");
   expect(ultimo).toEqual(inicial);
+});
+it("recupera objetivos guardados, los comparte entre colores y descarta propuestas cuando cambian", async () => {
+  inicial.hojas!.objetivosContribucion = ["50", "30"];
+  await abrir();
+  expect(campo("1–99 hojas (%)").value).toBe("50");
+  await opcion("Toda la matriz");
+  await click("Calcular 6 precios");
+  await opcion("También cargados");
+  await click("Revisar 6 precios");
+  await escribir(campo("1–99 hojas (%)"), "40");
+  expect(boton("Aplicar 6 precios al borrador").disabled).toBe(true);
+  await escribir(campo("100+ hojas (%)"), "100");
+  expect(el.textContent).toContain("menor que 100%");
+  expect(boton("Recalcular 6 precios").disabled).toBe(true);
+  await escribir(campo("100+ hojas (%)"), "30");
+  await click("Revisar 6 precios");
+  await click("Aplicar 6 precios al borrador");
+  expect(
+    ultimo.hojas!.filas.map((f) => f.precios.map((p) => p.precioUnitario)),
+  ).toEqual([
+    ["1166.66666667", "1000"],
+    ["1166.66666667", "1000"],
+    ["1166.66666667", "1000"],
+  ]);
+  expect(simularCeldasTarifario).toHaveBeenCalledTimes(2);
+  await click("Editar rangos generales");
+  await escribir(campo("Inicios de los tramos"), "1; 50; 100");
+  await click("Aplicar rangos");
+  expect(ultimo.hojas!.objetivosContribucion).toEqual(["40", "40", "30"]);
 });
 it("un cambio estructural invalida resultados y bloquea otra simulación hasta guardar", async () => {
   await abrir();

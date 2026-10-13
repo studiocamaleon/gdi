@@ -21,6 +21,18 @@ const baseCombinacion = {
 };
 const rangosHojas = z.array(entero).min(1).max(100);
 const rangosCad = z.array(decimal).min(1).max(100);
+// Un porcentaje por inicio de rango general, en el mismo orden. Opcional en versiones anteriores.
+const objetivosContribucion = z
+  .array(z.string().regex(/^\d{1,2}(\.\d{1,4})?$/))
+  .min(1)
+  .max(100)
+  .optional();
+const objetivosCompletos = (m: {
+  rangosGenerales: unknown[];
+  objetivosContribucion?: string[];
+}) =>
+  !m.objetivosContribucion ||
+  m.objetivosContribucion.length === m.rangosGenerales.length;
 
 /** Contrato persistido, independiente de los IDs y permisos de la solicitud.
  * Las reglas semánticas siguen siendo las mismas que usa el cálculo comercial.
@@ -40,6 +52,7 @@ const contenidoSchema = z
           })
           .strict(),
         rangosGenerales: rangosHojas,
+        objetivosContribucion,
         filas: z
           .array(
             z
@@ -68,6 +81,10 @@ const contenidoSchema = z
           .max(5000),
       })
       .strict()
+      .refine(objetivosCompletos, {
+        message: 'Completá un objetivo por rango general.',
+        path: ['objetivosContribucion'],
+      })
       .nullable(),
     cad: z
       .object({
@@ -88,6 +105,7 @@ const contenidoSchema = z
           })
           .strict(),
         rangosGenerales: rangosCad,
+        objetivosContribucion,
         filas: z
           .array(
             z
@@ -115,6 +133,10 @@ const contenidoSchema = z
           .max(5000),
       })
       .strict()
+      .refine(objetivosCompletos, {
+        message: 'Completá un objetivo por rango general.',
+        path: ['objetivosContribucion'],
+      })
       .nullable(),
     // Opcional para conservar las versiones previas; ausencia nunca equivale a piso cero.
     margen: z

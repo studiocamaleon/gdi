@@ -198,7 +198,7 @@ export function sugerirPorVolumen(
   resultados: Record<string, ResultadoCeldaSimulacion>,
   seccion: "hojas" | "cad",
   redondeo?: string,
-  objetivo?: string,
+  objetivo?: string | ((fila: number, tramo: number) => string),
 ) {
   type Sugerencia = ReturnType<typeof sugerirCelda> & {
     ajustadaPorVolumen?: boolean;
@@ -214,12 +214,17 @@ export function sugerirPorVolumen(
     );
     if (!claves.some((k) => resultados[k])) return;
     try {
-      const sugerencias = claves.map((k) => {
+      const sugerencias = claves.map((k, tramo) => {
         if (!resultados[k])
           throw new Error(
             "Completá el cálculo de todos los tramos de esta combinación para ordenar sus sugerencias.",
           );
-        return sugerirCelda(contenido, resultados[k], redondeo, objetivo);
+        return sugerirCelda(
+          contenido,
+          resultados[k],
+          redondeo,
+          typeof objetivo === "function" ? objetivo(indice, tramo) : objetivo,
+        );
       });
       let mayor = new D(0);
       for (let i = claves.length - 1; i >= 0; i--) {

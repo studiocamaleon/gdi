@@ -46,12 +46,14 @@
 }
 .fields {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) minmax(
-      260px,
-      1.6fr
-    );
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, 2fr);
   gap: 20px;
   align-items: start;
+}
+.objectives {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 16px;
 }
 .scope {
   display: grid;

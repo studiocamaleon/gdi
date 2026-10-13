@@ -26,6 +26,7 @@ import {
   type ContenidoTarifario,
 } from "@/lib/centro-copiado-tarifarios-api";
 import { normalizarContenido } from "@/lib/centro-copiado-tarifarios-editor";
+import { objetivoDeTramo } from "@/lib/centro-copiado-objetivos-contribucion";
 import {
   sugerirCelda,
   ponerPrecio,
@@ -100,6 +101,13 @@ export function SugerenciasTarifario({
             nuevo,
             f.resultado,
             redondeo.trim() || undefined,
+            nuevo[f.celda.seccion]?.objetivosContribucion
+              ? objetivoDeTramo(
+                  nuevo[f.celda.seccion]!,
+                  f.celda.fila,
+                  f.celda.tramo,
+                )
+              : undefined,
           );
           ponerPrecio(nuevo, f.celda, sugerencia.nuevo);
           return { etiqueta: f.etiqueta, celda: f.celda, sugerencia };

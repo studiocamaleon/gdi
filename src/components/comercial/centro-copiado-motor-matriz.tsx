@@ -9,7 +9,7 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { FieldGroup } from "@/components/ui/field";
+import { FieldGroup, FieldSet, FieldLegend } from "@/components/ui/field";
 import { SegmentedControl } from "@/components/design-system/choice-controls";
 import { Button, EstadoCopiado, AvisoCopiado } from "./centro-copiado-ui";
 import {
@@ -26,7 +26,6 @@ import {
   sugerirCelda,
   sugerirPorVolumen,
   ponerPrecio,
-  leerMargenObjetivo,
   caidasEntreTramos,
 } from "@/lib/centro-copiado-tarifarios-sugerencias";
 import {
@@ -36,6 +35,11 @@ import {
 import { compararSimulacion } from "../../../apps/api/src/centro-copiado/comercial/comparacion-simulacion";
 import { DecimalComercial as D } from "../../../apps/api/src/centro-copiado/comercial/validaciones";
 import { resumirCostosRango } from "@/lib/centro-copiado-costos-rango";
+import {
+  objetivosDeMatriz,
+  objetivoDeTramo,
+  normalizarObjetivoContribucion,
+} from "@/lib/centro-copiado-objetivos-contribucion";
 import styles from "./centro-copiado-motor-matriz.module.css";
 
 type Sugerencia = ReturnType<typeof sugerirCelda> & {
@@ -62,7 +66,6 @@ export function MotorEnMatriz({
 }) {
   const [abierto, setAbierto] = useState(false);
   const [mostrar, setMostrar] = useState(false);
-  const [margen, setMargen] = useState("30");
   const [redondeo, setRedondeo] = useState("");
   const [alcance, setAlcance] = useState("VISTA");
   const [destino, setDestino] = useState("VACIOS");
@@ -73,6 +76,7 @@ export function MotorEnMatriz({
   } | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
   const contenido = motor?.contenido;
+  const matriz = contenido?.[seccion];
   const normalizado = useMemo(() => {
     try {
       return contenido ? normalizarContenido(contenido) : null;
@@ -88,7 +92,8 @@ export function MotorEnMatriz({
     ) ?? [];
   let errorOpciones: string | null = null;
   try {
-    leerMargenObjetivo(margen);
+    if (matriz)
+      objetivosDeMatriz(matriz).forEach(normalizarObjetivoContribucion);
     if (redondeo.trim()) ajustarPrecio("1", "IMPORTE", "0", redondeo);
   } catch (e) {
     errorOpciones = mensajeErrorTarifa(e);
@@ -101,9 +106,9 @@ export function MotorEnMatriz({
       motor.resultados,
       seccion,
       redondeo.trim() || undefined,
-      margen,
+      (fila, tramo) => objetivoDeTramo(normalizado[seccion]!, fila, tramo),
     );
-  }, [motor, normalizado, errorOpciones, abierto, seccion, redondeo, margen]);
+  }, [motor, normalizado, errorOpciones, abierto, seccion, redondeo]);
   if (!motor) return children();
   const totalMatriz = motor.celdas.filter((c) => c.seccion === seccion).length;
   const descripcionAlcance =
@@ -130,13 +135,20 @@ export function MotorEnMatriz({
   const firma = JSON.stringify({
     contenido,
     resultados: motor.resultados,
-    margen,
     redondeo,
     destino,
     claves: celdas.map(claveCeldaSimulacion),
   });
   const revisionVigente = revision?.firma === firma;
   const editables = !disabled && motor.puedeAplicar;
+  const cambiarObjetivo = (indice: number, valor: string) => {
+    if (!editables || !motor.aplicar || !matriz) return;
+    const nuevo = structuredClone(motor.contenido);
+    const objetivos = [...objetivosDeMatriz(matriz)];
+    objetivos[indice] = valor;
+    nuevo[seccion]!.objetivosContribucion = objetivos;
+    motor.aplicar(nuevo);
+  };
   const revisar = () => {
     if (!normalizado || !editables || !propuestas.length) return;
     const nuevo = structuredClone(normalizado);
@@ -366,14 +378,57 @@ export function MotorEnMatriz({
                 {motor.preparacionHojas ? "activadas" : "desactivadas"}.
               </p>
             )}
+            {matriz && (
+              <FieldSet>
+                <FieldLegend variant="label">
+                  Contribución objetivo por rango
+                </FieldLegend>
+                <p className={styles.help}>
+                  Porcentaje sobre venta neta, después de costos variables y
+                  cargas. Cada objetivo se comparte entre todos los papeles,
+                  formatos, colores y caras de esta matriz, aunque filtres la
+                  vista. Se conserva al guardar el borrador.
+                </p>
+                <FieldGroup className={styles.objectives}>
+                  {matriz.rangosGenerales.map((desde, i) => {
+                    const siguiente = matriz.rangosGenerales[i + 1];
+                    const unidad =
+                      seccion === "cad"
+                        ? "ML"
+                        : matriz.reglas.unidad === "HOJA"
+                          ? "hojas"
+                          : "carillas";
+                    const rango =
+                      siguiente == null
+                        ? `${desde}+`
+                        : seccion === "cad"
+                          ? `${desde} a < ${siguiente}`
+                          : `${desde}–${Number(siguiente) - 1}`;
+                    return (
+                      <TextoTarifa
+                        key={String(desde)}
+                        etiqueta={`${rango} ${unidad} (%)`}
+                        valor={objetivosDeMatriz(matriz)[i]}
+                        onChange={(valor) => cambiarObjetivo(i, valor)}
+                        disabled={!editables}
+                        inputMode="decimal"
+                      />
+                    );
+                  })}
+                </FieldGroup>
+                {matriz.filas.some((f) => f.rangosPropios) && (
+                  <p className={styles.help}>
+                    Las combinaciones con rangos propios usan el mayor objetivo
+                    de los rangos generales que abarcan.
+                  </p>
+                )}
+                <p className={styles.help}>
+                  El mínimo de contribución que controla la OT se configura por
+                  separado.
+                </p>
+              </FieldSet>
+            )}
             <FieldGroup className={styles.fields}>
-              <TextoTarifa
-                etiqueta="Contribución objetivo (%)"
-                valor={margen}
-                onChange={setMargen}
-                inputMode="decimal"
-                ayuda="Sobre venta neta, después de costos variables y cargas. Cubre estructura y atención."
-              />
               <TextoTarifa
                 etiqueta="Redondear hacia arriba a"
                 valor={redondeo}
@@ -519,9 +574,9 @@ export function MotorEnMatriz({
               mínimo no reduce el precio sugerido. Con precio único se toma la
               cobertura más exigente. Se elevan los tramos anteriores cuando
               hace falta para que el precio unitario no aumente por volumen; su
-              contribución puede superar el objetivo. El papel se costea por
-              las hojas utilizadas; los sobrantes aprovechables se conservan
-              en inventario al registrar el consumo.
+              contribución puede superar el objetivo. El papel se costea por las
+              hojas utilizadas; los sobrantes aprovechables se conservan en
+              inventario al registrar el consumo.
             </p>
           </div>
         )}

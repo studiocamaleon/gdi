@@ -282,6 +282,32 @@ describe('Tarifarios: persistencia, vigencia y aislamiento', () => {
     expect((await servicio.obtener(tenants[0], b.id)).revision).toBe(4);
   });
 
+  it('guarda y reabre objetivos por rango sin cambiar precios, versiones ni mínimo de la OT', async () => {
+    const b = await crear();
+    const anterior = await publicar(b.id, 1);
+    const c = contenido();
+    c.hojas!.objetivosContribucion = ['45', '35'];
+    c.cad!.objetivosContribucion = ['60', '50'];
+    await request(app.getHttpServer())
+      .put(`/centro-copiado/tarifarios/${b.id}`)
+      .auth(tokens.gestor, { type: 'bearer' })
+      .send({ revision: 2, nombre: 'Objetivos ficticios', contenido: c })
+      .expect(200);
+    expect(
+      validarContenidoTarifario(
+        (await servicio.obtener(tenants[0], b.id)).contenido,
+      ),
+    ).toEqual(c);
+    expect(
+      validarContenidoTarifario((await publicar(b.id, 3)).contenido),
+    ).toEqual(c);
+    expect(
+      validarContenidoTarifario(
+        (await servicio.version(tenants[0], b.id, anterior.id)).contenido,
+      ),
+    ).toEqual(contenido());
+  });
+
   it('una pestaña vieja no sobrescribe ni publica cambios que no revisó', async () => {
     const b = await crear();
     await servicio.editar(tenants[0], b.id, users[0], {

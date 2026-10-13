@@ -2,6 +2,7 @@ import type { ContenidoTarifario } from "./centro-copiado-tarifarios-api";
 import type { CentroCopiadoConfig } from "./centro-copiado-api";
 import type { PerfilCadCopiado } from "./centro-copiado-cad";
 import { esFechaCalendario, instanteDe, partesEnZona } from "./zona";
+import { normalizarObjetivoContribucion } from "./centro-copiado-objetivos-contribucion";
 
 export type MatrizHojas = NonNullable<ContenidoTarifario["hojas"]>;
 export type MatrizCad = NonNullable<ContenidoTarifario["cad"]>;
@@ -265,11 +266,24 @@ export function normalizarContenido(
       throw new Error("Completá el margen mínimo del tarifario.");
     c.margen.minimoPorcentaje = minimo;
   }
-  for (const matriz of [c.hojas, c.cad])
-    if (matriz)
+  for (const matriz of [c.hojas, c.cad]) {
+    if (matriz) {
+      if (matriz.objetivosContribucion) {
+        if (
+          matriz.objetivosContribucion.length !== matriz.rangosGenerales.length
+        )
+          throw new Error(
+            "Completá un objetivo de contribución por rango general.",
+          );
+        matriz.objetivosContribucion = matriz.objetivosContribucion.map(
+          normalizarObjetivoContribucion,
+        );
+      }
       for (const fila of matriz.filas)
         for (const precio of fila.precios)
           precio.precioUnitario = decimalEditor(precio.precioUnitario ?? "");
+    }
+  }
   for (const cargo of [c.composicion.preparacion, c.composicion.minimo])
     if ("importe" in cargo) {
       const importe = decimalEditor(cargo.importe, 12);

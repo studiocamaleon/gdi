@@ -3,6 +3,27 @@ import { validarContenidoTarifario } from '../contenido-tarifario';
 import { contenidoEjemplo } from './fixtures';
 
 describe('Contrato persistido de tarifarios', () => {
+  it('conserva un objetivo por rango en cada matriz', () => {
+    const c = contenidoEjemplo();
+    c.hojas!.objetivosContribucion = ['45.1234', '0'];
+    c.cad!.objetivosContribucion = ['60', '99.9999'];
+    expect(validarContenidoTarifario(c)).toEqual(c);
+  });
+  it.each([
+    ['30'],
+    ['30', '20', '10'],
+    ['30', '100'],
+    ['-1', '30'],
+    ['30.12345', '20'],
+    ['30,5', '20'],
+    ['', '20'],
+  ])('rechaza objetivos incompletos o inválidos %#', (...objetivos) => {
+    for (const seccion of ['hojas', 'cad'] as const) {
+      const c = contenidoEjemplo();
+      c[seccion]!.objetivosContribucion = objetivos;
+      expect(() => validarContenidoTarifario(c)).toThrow(BadRequestException);
+    }
+  });
   it('conserva precios exactos, pendientes y reglas sin inyectar valores por defecto', () => {
     const c = contenidoEjemplo();
     expect(validarContenidoTarifario(c)).toEqual(c);

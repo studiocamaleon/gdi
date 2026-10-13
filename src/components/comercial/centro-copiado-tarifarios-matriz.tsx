@@ -76,6 +76,7 @@ import {
 import { LimpiarPreciosTarifario } from "./centro-copiado-tarifarios-limpiar";
 import { MotorEnMatriz } from "./centro-copiado-motor-matriz";
 import type { MotorTarifario } from "./centro-copiado-tarifarios-simulacion";
+import { reubicarObjetivos } from "@/lib/centro-copiado-objetivos-contribucion";
 
 type Matriz = MatrizHojas | MatrizCad;
 export function EditorMatriz({
@@ -222,8 +223,10 @@ export function EditorMatriz({
       );
       const aplicar = () => {
         cambiar((m) => {
-          if (rangos.fila === null)
+          if (rangos.fila === null) {
+            m.objetivosContribucion = reubicarObjetivos(m, nuevos);
             m.rangosGenerales = nuevos as typeof m.rangosGenerales;
+          }
           const filas =
             rangos.fila === null
               ? m.filas.filter((f) => !f.rangosPropios)
