@@ -4167,8 +4167,8 @@ export function OrdenProductoDetalle({
                           type="date"
                           value={item.fechaEntrega ?? fechaEstimada}
                           onClick={() => fechaInputRef.current?.showPicker?.()}
-                          onChange={(event) =>
-                            onChangeFechaEntrega?.(event.target.value)
+                          onInput={(event) =>
+                            onChangeFechaEntrega?.(event.currentTarget.value)
                           }
                           aria-label={`Entrega prevista de ${item.productoNombre}`}
                         />
@@ -5578,6 +5578,10 @@ function PropuestaFichaContenido({
   const [editadosIds, setEditadosIds] = React.useState<Set<string>>(
     () => new Set(),
   );
+  // Una fecha cambia la planificación, no la cotización ya acordada.
+  const [fechasEditadasIds, setFechasEditadasIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
 
   // Tras guardar, router.refresh() trae la orden nueva y resincronizamos
   // rehidratando. Nunca durante la edición (pisaría el staging) ni al salir
@@ -5605,7 +5609,8 @@ function PropuestaFichaContenido({
     const idsActuales = new Set(items.map((item) => item.id));
     const agregados = items.filter((item) => !persistedItemIds.has(item.id));
     const editados = items.filter(
-      (item) => persistedItemIds.has(item.id) && editadosIds.has(item.id),
+      (item) => persistedItemIds.has(item.id) &&
+        (editadosIds.has(item.id) || fechasEditadasIds.has(item.id)),
     );
     const quitados = orden.productos.filter(
       (producto) => producto.id && !idsActuales.has(producto.id),
@@ -5616,7 +5621,7 @@ function PropuestaFichaContenido({
       quitados,
       total: agregados.length + editados.length + quitados.length,
     };
-  }, [orden, editandoOrden, items, persistedItemIds, editadosIds]);
+  }, [orden, editandoOrden, items, persistedItemIds, editadosIds, fechasEditadasIds]);
 
   const polyfanPendientesDeGuardar = React.useMemo(
     () =>
@@ -6117,6 +6122,7 @@ function PropuestaFichaContenido({
         .find(Boolean) ?? null,
     );
     setEditadosIds(new Set());
+    setFechasEditadasIds(new Set());
     setEditandoOrden(false);
   }, [orden, togglingFiscal, cancelando, cambioDocumento, precioOrdenPendiente]);
 
@@ -6151,7 +6157,12 @@ function PropuestaFichaContenido({
           : cambioDocumento?.cambio;
         const preparados = [];
         for (const item of tocados) {
-          preparados.push(await prepararItemOrden(item));
+          if (persistedItemIds.has(item.id) && !editadosIds.has(item.id) && item.cotizacionItemId) {
+            preparados.push({ item, cotizacionItemId: item.cotizacionItemId,
+              payload: itemToOrdenItemPayload(item, item.cotizacionItemId) });
+          } else {
+            preparados.push(await prepararItemOrden(item));
+          }
         }
         const porItemId = new Map(
           preparados.map((preparado) => [preparado.item.id, preparado]),
@@ -6224,6 +6235,7 @@ function PropuestaFichaContenido({
           } registrado${cambiosSinGuardar === 1 ? "" : "s"} en el historial.`,
         );
         setEditadosIds(new Set());
+        setFechasEditadasIds(new Set());
         setEditandoOrden(false);
         setNavPendiente(null);
         if (destino) {
@@ -6239,6 +6251,7 @@ function PropuestaFichaContenido({
             " La orden no se modificó; se recargó la versión vigente.",
         );
         setEditadosIds(new Set());
+        setFechasEditadasIds(new Set());
         setEditandoOrden(false);
         setNavPendiente(null);
         router.refresh();
@@ -6257,6 +6270,8 @@ function PropuestaFichaContenido({
       cambiosFields,
       items,
       prepararItemOrden,
+      persistedItemIds,
+      editadosIds,
       publicarArtes,
       subirArchivosCentroCopiado,
       mapaArchivosCC,
@@ -6369,6 +6384,7 @@ function PropuestaFichaContenido({
     // El staging vive en estado local: navegar lo descarta solo. Reseteamos
     // igual para que el guard no reintercepte durante la transición.
     setEditadosIds(new Set());
+    setFechasEditadasIds(new Set());
     setEditandoOrden(false);
     router.push(destino);
   }, [navPendiente, router]);
@@ -8379,9 +8395,9 @@ function PropuestaFichaContenido({
                                 if (ordenTipo !== "orden" || !items.length)
                                   fechaEstimadaInputRef.current?.showPicker?.();
                               }}
-                              onChange={(event) => {
+                              onInput={(event) => {
                                 otFechaTocadaRef.current = true;
-                                setFechaEstimada(event.target.value);
+                                setFechaEstimada(event.currentTarget.value);
                               }}
                               aria-label="Entrega prevista"
                             />
@@ -8565,7 +8581,7 @@ function PropuestaFichaContenido({
                     onChangeFechaEntrega={(fechaEntrega) => {
                       itemFechaTocadaRef.current.add(item.id);
                       if (itemsEnEdicion && persistedItemIds.has(item.id))
-                        setEditadosIds((prev) => new Set([...prev, item.id]));
+                        setFechasEditadasIds((prev) => new Set([...prev, item.id]));
                       setItems((current) =>
                         current.map((candidate) =>
                           candidate.id === item.id
@@ -8579,7 +8595,7 @@ function PropuestaFichaContenido({
                     }}
                     fechaEstimada={fechaEstimada}
                     readOnly={modoOrden}
-                    editarFecha={itemsEnEdicion}
+                    editarFecha={itemsEnEdicion && editandoOrden}
                     prepararCorte={modoOrden && puedeEditarOrden && puedeVerProduccion && persistedItemIds.has(item.id)}
                     onDistribucionGuardada={
                       orden ? () => {

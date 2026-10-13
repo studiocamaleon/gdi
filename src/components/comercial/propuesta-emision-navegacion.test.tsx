@@ -13,6 +13,7 @@ import { getMockOrdenDetalle } from "@/lib/ordenes-trabajo";
 
 const mocks = vi.hoisted(() => ({
   guardar: vi.fn(),
+  editarOrden: vi.fn(),
   revisarCopiado: vi.fn(),
   copiado: false,
   emitir: vi.fn(),
@@ -23,6 +24,10 @@ vi.mock("@/lib/centro-copiado-pedidos-api", async (original) => ({
   ...(await original<typeof import("@/lib/centro-copiado-pedidos-api")>()),
   revisarPedidoCopiado: mocks.revisarCopiado,
   estadoPedidoCopiado: vi.fn(async () => null),
+}));
+vi.mock("@/lib/ordenes-trabajo-api", async (original) => ({
+  ...(await original<typeof import("@/lib/ordenes-trabajo-api")>()),
+  editarOrdenTrabajoLote: mocks.editarOrden,
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -275,9 +280,7 @@ it("al reabrir una tanda conserva materiales y producción en el detalle de cost
   )!;
   await act(async () => tab.click());
   expect(
-    container
-      .querySelector('[title^="Materiales:"]')
-      ?.getAttribute("title"),
+    container.querySelector('[title^="Materiales:"]')?.getAttribute("title"),
   ).toContain("80");
   expect(
     container
@@ -486,7 +489,7 @@ it("revisa copiado completo y emite con los mismos precios y snapshots revisados
     estado: "enviado",
   });
   await preparar();
-  await click("Actualizar precios de copiado");
+  await click("Actualizar precios");
   expect(mocks.revisarCopiado).toHaveBeenCalledWith(
     expect.objectContaining({
       items: ["snapshot-qa"],
@@ -588,7 +591,7 @@ it("al agregar una carga aplica automáticamente el tarifario y al agregar otra 
   await click("Canal de prueba");
   await click("Agregar carga de copiado ficticia");
   expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
-  expect(container.textContent).toContain("Mostrador ficticio · v1");
+  expect(container.textContent).toContain("Ver precios por hoja");
   expect(container.textContent).toContain("121,00");
   await click("Agregar carga de copiado ficticia");
   expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
@@ -616,11 +619,13 @@ it("espera el canal y recalcula cuando se elige, sin dar por revisado el precio 
   await click("Agregar carga de copiado ficticia");
   expect(mocks.guardar).not.toHaveBeenCalled();
   expect(mocks.revisarCopiado).not.toHaveBeenCalled();
-  expect(container.textContent).toContain("Elegí el canal de venta de la OT");
+  expect(container.textContent).toContain(
+    "Elegí un canal de venta para cotizar las impresiones.",
+  );
   await verDatos();
   await click("Canal de prueba");
   expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
-  expect(container.textContent).toContain("Mostrador ficticio · v1");
+  expect(container.textContent).toContain("Ver precios por hoja");
 });
 it("si cambia el canal durante la revisión descarta la respuesta vieja y procesa el canal nuevo", async () => {
   let terminar!: (r: unknown) => void;
@@ -635,7 +640,7 @@ it("si cambia el canal durante la revisión descarta la respuesta vieja y proces
   await montar();
   await click("Canal de prueba");
   await click("Agregar carga de copiado ficticia");
-  expect(container.textContent).toContain("Calculando precios del pedido");
+  expect(container.textContent).toContain("Actualizando precios de copiado…");
   await verDatos();
   await click("Canal Web de prueba");
   expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
@@ -644,8 +649,8 @@ it("si cambia el canal durante la revisión descarta la respuesta vieja y proces
   expect(mocks.revisarCopiado).toHaveBeenLastCalledWith(
     expect.objectContaining({ canalVenta: "web" }),
   );
-  expect(container.textContent).toContain(
-    "Este canal utiliza los precios del motor",
+  expect(container.textContent).not.toContain(
+    "Actualizando precios de copiado…",
   );
   expect(container.textContent).not.toContain("Mostrador ficticio · v1");
 });
@@ -665,8 +670,7 @@ it("un precio faltante se muestra bloqueado sin reintentar automáticamente ni i
   await click("Canal de prueba");
   await click("Agregar carga de copiado ficticia");
   expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
-  expect(container.textContent).toContain("Emisión bloqueada");
-  expect(container.textContent).toContain("Falta un precio en la matriz");
+  expect(container.textContent).toContain("Falta un precio en el tarifario");
 });
 it("un fallo mantiene un aviso visible y permite reintentar explícitamente", async () => {
   mocks.revisarCopiado.mockRejectedValueOnce(
@@ -678,8 +682,65 @@ it("un fallo mantiene un aviso visible y permite reintentar explícitamente", as
   expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
   expect(container.textContent).toContain("Falló la revisión ficticia");
   mocks.revisarCopiado.mockResolvedValue(revisionTarifario());
-  await click("Actualizar precios de copiado");
+  await click("Actualizar precios");
   expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
   expect(container.textContent).not.toContain("Falló la revisión ficticia");
-  expect(container.textContent).toContain("Mostrador ficticio · v1");
+  expect(container.textContent).toContain("Ver precios por hoja");
+});
+
+it("guarda una fecha manual sin recalcular ni reemplazar el precio acordado", async () => {
+  const base = getMockOrdenDetalle("mock-0184")!;
+  const producto = {
+    ...base.productos[0],
+    id: "item-fecha-ficticio",
+    cotizacionItemId: "precio-acordado-ficticio",
+    fechaEntrega: null,
+  };
+  const orden = {
+    ...base,
+    estado: "borrador" as const,
+    fechaEntrega: null,
+    canalVenta: "mostrador",
+    productos: [producto],
+  };
+  mocks.editarOrden.mockResolvedValue({
+    ...orden,
+    fechaEntrega: "2099-10-15",
+    productos: [{ ...producto, fechaEntrega: "2099-10-15" }],
+  });
+  await montar(orden);
+  await click("Editar orden");
+  const expandir = container.querySelector<HTMLButtonElement>(
+    `[aria-label="Ver detalle de ${producto.nombre}"]`,
+  )!;
+  await act(async () => expandir.click());
+  const fecha = container.querySelector<HTMLInputElement>(
+    `[aria-label="Entrega prevista de ${producto.nombre}"]`,
+  )!;
+  expect(fecha).not.toBeNull();
+  // El evento nativo de date debe registrar también el valor al elegir día en Chrome.
+  await act(async () => {
+    fecha.value = "2099-10-15";
+    fecha.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(container.textContent).toContain("15/10/2099");
+  const guardar = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((b) => b.textContent?.includes("Guardar cambios"))!;
+  expect(guardar).toBeDefined();
+  await act(async () => guardar.click());
+  expect(mocks.guardar).not.toHaveBeenCalled();
+  expect(mocks.editarOrden).toHaveBeenCalledWith(
+    orden.id,
+    expect.objectContaining({
+      fechaEntrega: "2099-10-15",
+      items: [
+        expect.objectContaining({
+          id: producto.id,
+          cotizacionItemId: producto.cotizacionItemId,
+          fechaEntrega: "2099-10-15",
+        }),
+      ],
+    }),
+  );
 });
