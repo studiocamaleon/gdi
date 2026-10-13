@@ -122,7 +122,10 @@ export function solicitudDesdeSnapshot(
   return dto;
 }
 
-/** Metadata editable no puede abaratar un trabajo productivo distinto. */
+/** Metadata editable no puede abaratar un trabajo productivo distinto.
+ * omitirSetupCleanup no identifica el archivo: se reconstruye desde la
+ * configuración actual del centro al recotizar, sin confiar en el flag guardado.
+ */
 export function exigirMismoTrabajo(
   original: Pick<CotizacionItem, 'productoId' | 'cantidad' | 'jobContextJson'>,
   generado: {
@@ -146,7 +149,6 @@ export function exigirMismoTrabajo(
             'hojasPorLibro',
             'tipoAnillo',
             'opcionalesActivados',
-            'omitirSetupCleanup',
           ].includes(k) ||
           k.startsWith('maquinaSeleccionada_') ||
           k.startsWith('pliego'),

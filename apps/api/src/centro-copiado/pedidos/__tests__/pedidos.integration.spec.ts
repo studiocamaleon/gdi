@@ -45,6 +45,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
   let app: INestApplication<Server>,
     seguro = false;
   let costo = 90;
+  let cobraSetup = true;
   const desglose = () => ({
     precioNetoTotal: 150,
     precioBrutoTotal: 181.5,
@@ -71,6 +72,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
             jobContext: {
               cantidad: Math.ceil(d.paginas / d.faz) * d.copias,
               caras: d.faz,
+              omitirSetupCleanup: !cobraSetup,
               ...(d.archivoBytes
                 ? { maquinaSeleccionada_demo: 'laser-ficticia' }
                 : {}),
@@ -89,7 +91,9 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     simularCostoHojas: jest.fn(
       (_tenant: string, _doc: unknown, opciones?: { preparar?: boolean }) => {
         const tiempo =
-          opciones?.preparar === false ? 0 : Math.max(0, costo - 10);
+          !cobraSetup || opciones?.preparar === false
+            ? 0
+            : Math.max(0, costo - 10);
         return Promise.resolve([
           {
             exitoso: true,
@@ -156,6 +160,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
         jobContextJson: {
           cantidad: 1,
           caras: 2,
+          omitirSetupCleanup: !cobraSetup,
           _centroCopiado: {
             esTomo: false,
             paginas: 2,
@@ -436,26 +441,41 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
   });
   beforeEach(() => {
     costo = 90;
+    cobraSetup = true;
   });
   it('sin activación conserva el motor; guardar política no la activa', async () => {
     const i = await fuente();
     expect((await revisar([i.id])).body).toEqual({ modalidad: 'MOTOR' });
     await emitir([i.id]);
   });
-  it('en motor comparte preparación, conserva precios y rechaza emitir una tanda incompleta', async () => {
-    const a = await fuentePdf(),
-      b = await fuentePdf();
-    const r = await revisar([a.id, b.id], 'responsable');
-    expect(r.status).toBe(201);
-    expect(r.body.modalidad).toBe('MOTOR');
-    expect(r.body.items[0]).toMatchObject({ finanzas: { cargas: [] } });
-    expect(r.body.items.map((i) => i.total)).toEqual([181.5, 181.5]);
-    expect(
-      r.body.items.reduce((s, i) => s + (i.finanzas?.costoTotal ?? NaN), 0),
-    ).toBe(100);
-    await emitir(r.body.items.map((i: { id: string }) => i.id));
-    await expect(emitir([r.body.items[0].id])).rejects.toThrow('tanda');
-  });
+  it.each([true, false])(
+    'en motor respeta setup=%s, conserva precios y rechaza emitir una tanda incompleta',
+    async (actual) => {
+      cobraSetup = !actual;
+      const a = await fuentePdf(),
+        b = await fuentePdf();
+      cobraSetup = actual;
+      const r = await revisar([a.id, b.id], 'responsable');
+      expect(r.status).toBe(201);
+      expect(r.body.modalidad).toBe('MOTOR');
+      expect(r.body.items[0]).toMatchObject({ finanzas: { cargas: [] } });
+      expect(r.body.items.map((i) => i.total)).toEqual([181.5, 181.5]);
+      expect(
+        r.body.items.reduce((s, i) => s + (i.finanzas?.costoTotal ?? NaN), 0),
+      ).toBe(actual ? 100 : 20);
+      const guardados = await db.cotizacionItem.findMany({
+        where: { id: { in: r.body.items.map((i) => i.id) } },
+      });
+      expect(guardados).toHaveLength(2);
+      for (const guardado of guardados) {
+        expect(guardado.jobContextJson).toMatchObject({
+          omitirSetupCleanup: !actual,
+        });
+      }
+      await emitir(r.body.items.map((i: { id: string }) => i.id));
+      await expect(emitir([r.body.items[0].id])).rejects.toThrow('tanda');
+    },
+  );
   it('un lector no recalcula y una sesión no puede leer trabajos de otra empresa', async () => {
     const a = await fuente(),
       b = await fuente(tenants[1]);
@@ -520,6 +540,45 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       }),
     ).toBeGreaterThan(0);
   });
+  it.each([false, true])(
+    'recotiza una carga existente con setup=%s según la configuración actual, no el flag guardado',
+    async (actual) => {
+      await activar();
+      cobraSetup = !actual;
+      const original = await fuentePdf();
+      cobraSetup = actual;
+      const r = await revisar([original.id], 'responsable');
+      expect(r.status).toBe(201);
+      expect(r.body.calculado.control).toMatchObject({
+        estado: actual ? 'REQUIERE_AUTORIZACION' : 'CUMPLE',
+        porcentaje: actual ? '10.00' : '90.00',
+      });
+      const guardado = await db.cotizacionItem.findUniqueOrThrow({
+        where: { id: r.body.items[0].id },
+      });
+      expect(Number(guardado.costoTotal)).toBe(actual ? 90 : 10);
+      expect(Number(guardado.precioTotal)).toBe(121);
+      expect(guardado.jobContextJson).toMatchObject({
+        omitirSetupCleanup: !actual,
+      });
+      expect(
+        (guardado.snapshotJson as { ejecucion: { costos: { total: number } } })
+          .ejecucion.costos.total,
+      ).toBe(actual ? 90 : 10);
+      expect(
+        (
+          guardado.trazabilidadJson as {
+            pasos: { tiempo: { setupMin: number } }[];
+          }
+        ).pasos[0].tiempo.setupMin,
+      ).toBe(actual ? 3 : 0);
+      const reabierto = await revisar([guardado.id], 'responsable');
+      expect(reabierto.status).toBe(201);
+      expect(reabierto.body.calculado.control).toEqual(
+        r.body.calculado.control,
+      );
+    },
+  );
   it('dos PDF de cargas distintas usan una preparación: precio, margen, detalle y reapertura concuerdan', async () => {
     await activar();
     const a = await fuentePdf(),

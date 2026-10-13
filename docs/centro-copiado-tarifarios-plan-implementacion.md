@@ -581,10 +581,11 @@ a la empresa, referencias ajenas y solicitudes de más de cinco celdas.
 - Cada celda representa un pedido independiente. La referencia inicial es el
   comienzo del tramo y puede cambiarse dentro de él. Hojas físicas y carillas
   usan el adaptador del Centro de copiado y el motor; una última hoja impar
-  genera sólo su cara impresa. La preparación productiva se cuenta una vez,
-  aunque `cobraSetup` esté desactivado en la cotización anterior o el tarifario
-  incluya comercialmente la preparación. Se puede simular con el centro pausado;
-  se conservan las restricciones de oferta y producibilidad.
+  genera sólo su cara impresa. La preparación productiva se cuenta una vez
+  cuando está activo «Costear preparación y limpieza» en la configuración del
+  centro (comportamiento unificado el 12/10/2026). Que el tarifario incluya
+  comercialmente la preparación no cambia ese check. Se puede simular con el
+  centro pausado; se conservan las restricciones de oferta y producibilidad.
 - CAD se calcula por ML de papel consumido, con orientación, márgenes y copias
   del planificador existente. Se muestra la geometría, rollo y máquina de
   referencia. Se puede elegir una receta compatible y medidas personalizadas;
@@ -1019,3 +1020,18 @@ Después se pueden volver a simular los costos de la matriz actualizada.
 - Se aplicaron las tres migraciones existentes de tarifarios exclusivamente a
   `gdi_saas_test`, que estaba atrasada. Sin reset ni seed. La empresa local sólo se
   consultó: no se cambiaron asignaciones, precios, OTs ni versiones publicadas.
+
+### 12 de octubre de 2026 — setup coherente entre sugerencias y margen
+
+- La simulación de hojas respeta «Costear preparación y limpieza» del centro.
+  Desactivado, omite ambos tiempos; activado, los imputa una vez por tanda, sin
+  repetirlos en la última cara impar. No necesita otro check en Tarifarios.
+- La recotización reconstruye ese flag desde la configuración actual y lo guarda
+  en el nuevo snapshot. Cambiarlo ya no se interpreta como una modificación del
+  archivo; siguen validadas sus cantidades y características productivas.
+- Los precios vigentes no se reemplazan al cambiar el check. Las sugerencias
+  requieren recalcularse y las OTs existentes, actualizar sus precios de copiado.
+- Verificación local: 71 pruebas en cinco suites, TypeScript acotado y ESLint.
+  Se recalcularon sugerencias A4 y una OT de prueba con el check activado y
+  desactivado, incluida su reapertura. Se restauró la configuración original;
+  sin publicar tarifas ni desplegar staging o producción.

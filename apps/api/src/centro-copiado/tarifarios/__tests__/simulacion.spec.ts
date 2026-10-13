@@ -377,111 +377,125 @@ it('carillas dobles con última simple usa cantidad par; no atribuye otra celda 
   });
 });
 
-it('adaptador de referencia: última impar y preparación productiva una vez aun con centro pausado y setup comercial incluido', async () => {
-  const contenido = contenidoEjemplo();
-  const c = contenido.hojas!.filas[0].combinacion;
-  const motor = {
-    cotizar: jest.fn(() =>
-      Promise.resolve({
-        exitoso: true,
-        cotizacion: { costos: { total: 1 } },
-        errores: [],
-      }),
-    ),
-  };
-  const capacidades = { exigirIncluida: jest.fn() };
-  const servicio = new CentroCopiadoService(
-    {
-      centroCopiadoConfig: {
-        findUnique: () =>
-          Promise.resolve({
-            activo: false,
-            papelesJson: null,
-            tamanosJson: null,
-            terminacionesJson: [],
-          }),
-      },
-    } as never,
-    motor as never,
-    undefined,
-    undefined,
-    undefined,
-    capacidades as never,
-  );
-  const contexto = {
-    productoId: 'producto',
-    rutaAlternativaId: 'ruta',
-    configPasoId: 'paso',
-    maquinaBnId: 'maquina',
-    maquinaColorId: null,
-    cobraSetup: false,
-    papeles: [
+it.each([
+  { cobraSetup: false, preparar: undefined, omitirSetupCleanup: true },
+  { cobraSetup: false, preparar: true, omitirSetupCleanup: true },
+  { cobraSetup: false, preparar: false, omitirSetupCleanup: true },
+  { cobraSetup: true, preparar: undefined, omitirSetupCleanup: false },
+  { cobraSetup: true, preparar: true, omitirSetupCleanup: false },
+  { cobraSetup: true, preparar: false, omitirSetupCleanup: true },
+])(
+  'referencia de Tarifarios y OT: cobraSetup=$cobraSetup, preparar=$preparar; última impar sin repetir preparación',
+  async ({ cobraSetup, preparar, omitirSetupCleanup }) => {
+    const contenido = contenidoEjemplo();
+    const c = contenido.hojas!.filas[0].combinacion;
+    const motor = {
+      cotizar: jest.fn(() =>
+        Promise.resolve({
+          exitoso: true,
+          cotizacion: { costos: { total: 1 } },
+          errores: [],
+        }),
+      ),
+    };
+    const capacidades = { exigirIncluida: jest.fn() };
+    const servicio = new CentroCopiadoService(
       {
-        materiaPrimaId: c.papelMateriaPrimaId,
-        nombre: 'Obra ficticia',
-        gramajes: [80],
-        variantes: [
-          {
-            id: 'variante',
-            gramajeGr: 80,
-            anchoMm: 210,
-            altoMm: 297,
-            formatoComercial: 'A4',
-          },
-        ],
-      },
-    ],
-    anillos: [],
-    tiposAnilloPermitidos: [],
-  };
-  jest
-    .spyOn(
-      servicio as unknown as { contexto: () => Promise<unknown> },
-      'contexto',
-    )
-    .mockResolvedValue(contexto);
-  await servicio.simularCostoHojas('empresa', {
-    ...c,
-    cobertura: 'alta',
-    id: 'referencia',
-    paginas: 3,
-    copias: 2,
-    tamanoAnchoMm: 210,
-    tamanoAltoMm: 297,
-  });
-  expect(motor.cotizar).toHaveBeenNthCalledWith(
-    1,
-    objeto({
-      jobContext: objeto({
-        cantidad: 2,
-        caras: 2,
-        omitirSetupCleanup: false,
+        centroCopiadoConfig: {
+          findUnique: () =>
+            Promise.resolve({
+              activo: false,
+              papelesJson: null,
+              tamanosJson: null,
+              terminacionesJson: [],
+            }),
+        },
+      } as never,
+      motor as never,
+      undefined,
+      undefined,
+      undefined,
+      capacidades as never,
+    );
+    const contexto = {
+      productoId: 'producto',
+      rutaAlternativaId: 'ruta',
+      configPasoId: 'paso',
+      maquinaBnId: 'maquina',
+      maquinaColorId: null,
+      cobraSetup,
+      papeles: [
+        {
+          materiaPrimaId: c.papelMateriaPrimaId,
+          nombre: 'Obra ficticia',
+          gramajes: [80],
+          variantes: [
+            {
+              id: 'variante',
+              gramajeGr: 80,
+              anchoMm: 210,
+              altoMm: 297,
+              formatoComercial: 'A4',
+            },
+          ],
+        },
+      ],
+      anillos: [],
+      tiposAnilloPermitidos: [],
+    };
+    jest
+      .spyOn(
+        servicio as unknown as { contexto: () => Promise<unknown> },
+        'contexto',
+      )
+      .mockResolvedValue(contexto);
+    await servicio.simularCostoHojas(
+      'empresa',
+      {
+        ...c,
         cobertura: 'alta',
+        id: 'referencia',
+        paginas: 3,
+        copias: 2,
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+      },
+      { preparar },
+    );
+    expect(motor.cotizar).toHaveBeenNthCalledWith(
+      1,
+      objeto({
+        jobContext: objeto({
+          cantidad: 2,
+          caras: 2,
+          omitirSetupCleanup,
+          cobertura: 'alta',
+        }),
       }),
-    }),
-  );
-  expect(motor.cotizar).toHaveBeenNthCalledWith(
-    2,
-    objeto({
-      jobContext: objeto({
-        cantidad: 2,
-        caras: 1,
-        omitirSetupCleanup: true,
+    );
+    expect(motor.cotizar).toHaveBeenNthCalledWith(
+      2,
+      objeto({
+        jobContext: objeto({
+          cantidad: 2,
+          caras: 1,
+          omitirSetupCleanup: true,
+        }),
       }),
-    }),
-  );
-  await expect(
-    servicio.simularCostoHojas('empresa', {
-      ...c,
-      gramaje: null,
-      id: 'sin-gramaje',
-      paginas: 1,
-      copias: 1,
-      tamanoAnchoMm: 210,
-      tamanoAltoMm: 297,
-    }),
-  ).rejects.toThrow('gramaje');
-});
+    );
+    await expect(
+      servicio.simularCostoHojas('empresa', {
+        ...c,
+        gramaje: null,
+        id: 'sin-gramaje',
+        paginas: 1,
+        copias: 1,
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+      }),
+    ).rejects.toThrow('gramaje');
+  },
+);
 
 it('el adaptador CAD lleva la cobertura al motor y conserva la geometría del plano', async () => {
   const e = entorno();

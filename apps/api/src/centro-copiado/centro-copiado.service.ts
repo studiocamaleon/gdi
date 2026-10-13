@@ -1531,10 +1531,19 @@ export class CentroCopiadoService {
   }
 
   /** Costeo de referencia sin persistir pedidos ni tocar la configuración.
-   * La preparación productiva se incluye aunque comercialmente esté incluida.
-   * Una última cara impar no consume impresión del dorso; setup se cuenta una vez.
+   * Respeta el check de preparación/limpieza, independiente del cargo comercial.
+   * Una última cara impar no consume impresión del dorso; setup se cuenta una vez
+   * por tanda sólo cuando está habilitado en la configuración del centro.
    */
-  async simularCostoHojas(tenantId: string, doc: DocumentoInput, opciones: { clienteId?: string; tipoCambioId?: string; preparar?: boolean } = {}) {
+  async simularCostoHojas(
+    tenantId: string,
+    doc: DocumentoInput,
+    opciones: {
+      clienteId?: string;
+      tipoCambioId?: string;
+      preparar?: boolean;
+    } = {},
+  ) {
     await this.capacidades.exigirIncluida(tenantId, 'centro_copiado');
     const ctx = await this.contexto(tenantId);
     if (doc.modo === 'CAD' || doc.terminaciones?.length || doc.grupoId)
@@ -1586,13 +1595,17 @@ export class CentroCopiadoService {
     for (const [i, parte] of partes.entries()) {
       const segmento = construirSegmento(
         parte,
-        { ...ctx, cobraSetup: i === 0 && opciones.preparar !== false },
+        {
+          ...ctx,
+          cobraSetup: ctx.cobraSetup && i === 0 && opciones.preparar !== false,
+        },
         parte.copias,
         papel.varianteId,
       );
       const resultado = await this.motor.cotizar({
         tenantId,
-        tipoCambioId: resultados[0]?.cotizacion?.tipoCambio?.id ?? opciones.tipoCambioId,
+        tipoCambioId:
+          resultados[0]?.cotizacion?.tipoCambio?.id ?? opciones.tipoCambioId,
         clienteId: opciones.clienteId,
         productoId: ctx.productoId,
         rutaAlternativaId: ctx.rutaAlternativaId,
@@ -3257,7 +3270,11 @@ export class CentroCopiadoService {
         const cambioId = monedaCotizacionContext.getStore()?.cambio.id;
         {
           // Bloquear incluso sin tipo de cambio: una emisión concurrente congela los items.
-          if (cambioId && existente.tipoCambioId && existente.tipoCambioId !== cambioId)
+          if (
+            cambioId &&
+            existente.tipoCambioId &&
+            existente.tipoCambioId !== cambioId
+          )
             throw new BadRequestException(
               'El tipo de cambio del tomo no coincide con la cotización.',
             );
@@ -3269,7 +3286,10 @@ export class CentroCopiadoService {
               numero: null,
               tipoCambioId: existente.tipoCambioId,
             },
-            data: { ...(cambioId ? { tipoCambioId: cambioId } : {}), updatedAt: new Date() },
+            data: {
+              ...(cambioId ? { tipoCambioId: cambioId } : {}),
+              updatedAt: new Date(),
+            },
           });
           if (lock.count !== 1)
             throw new BadRequestException(

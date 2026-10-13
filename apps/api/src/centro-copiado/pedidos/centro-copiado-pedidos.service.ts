@@ -358,6 +358,7 @@ export class CentroCopiadoPedidosService {
         comisiones: unknown;
         acuerdo: unknown;
         configuracion: unknown;
+        omitirSetupCleanup: unknown;
       }
     >();
     const solicitudes = new Map(
@@ -437,6 +438,7 @@ export class CentroCopiadoPedidosService {
           comisiones: d.comisiones,
           acuerdo: d.precioEspecialCliente,
           configuracion: d.precioConfig,
+          omitirSetupCleanup: completo.jobContext.omitirSetupCleanup,
         });
         const documentos: LineaPedidoCopiado['documentos'] = [];
         let costo: InstanceType<typeof D> | null = new D(0);
@@ -755,6 +757,9 @@ export class CentroCopiadoPedidosService {
               jobContextJson: esCopiado(original)
                 ? json({
                     ...objeto(datos.jobContextJson),
+                    ...(typeof motor?.omitirSetupCleanup === 'boolean'
+                      ? { omitirSetupCleanup: motor.omitirSetupCleanup }
+                      : {}),
                     _centroCopiado: {
                       ...objeto(objeto(datos.jobContextJson)._centroCopiado),
                       tandaImpresion: tanda ?? null,
@@ -897,12 +902,13 @@ export class CentroCopiadoPedidosService {
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const decimales =
       regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
-    const { ejecuciones, tandasPorItem, lineas } = await this.prepararLineas(
-      auth.tenantId,
-      dto.clienteId,
-      copiados,
-      decimales,
-    );
+    const { ejecuciones, tandasPorItem, lineas, referenciasMotor } =
+      await this.prepararLineas(
+        auth.tenantId,
+        dto.clienteId,
+        copiados,
+        decimales,
+      );
     if (!tandasPorItem.size) return { modalidad: 'MOTOR' as const };
     return this.prisma.$transaction(
       async (tx) => {
@@ -924,6 +930,9 @@ export class CentroCopiadoPedidosService {
         for (const original of copiados) {
           const ejecucion = ejecuciones.get(original.id),
             tanda = tandasPorItem.get(original.id);
+          const omitirSetupCleanup = referenciasMotor.get(
+            original.id,
+          )?.omitirSetupCleanup;
           if (!ejecucion || !tanda) continue;
           const { id, createdAt, updatedAt, ...datos } = original;
           void createdAt;
@@ -935,6 +944,9 @@ export class CentroCopiadoPedidosService {
               costoUnitario: String(ejecucion.costos.unitario),
               jobContextJson: json({
                 ...objeto(datos.jobContextJson),
+                ...(typeof omitirSetupCleanup === 'boolean'
+                  ? { omitirSetupCleanup }
+                  : {}),
                 _centroCopiado: {
                   ...objeto(objeto(datos.jobContextJson)._centroCopiado),
                   tandaImpresion: tanda,
