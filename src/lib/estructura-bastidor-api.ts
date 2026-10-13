@@ -6,6 +6,7 @@ import { ApiError, apiRequest } from "@/lib/api";
  * visor 3D del tab de Producción. Espejo de `EstructuraBastidorEjecutada`.
  */
 export type EstructuraBastidor = {
+  variantes?: Array<EstructuraBastidor & { cantidad: number }>;
   /** simple = marco plano (frontlight) · doble = cajón (backlight). */
   tipoBastidor: "simple" | "doble";
   anchoM: number;
