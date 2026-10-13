@@ -423,7 +423,7 @@ function Simulador({
       CUMPLE: "Cumple el mínimo",
       REQUIERE_AUTORIZACION: "Requiere autorización",
       BLOQUEADO: "Bloqueado",
-      NO_VERIFICABLE: "Margen sin verificar",
+      NO_VERIFICABLE: "Contribución sin verificar",
     }[estado];
     return (
       <div
@@ -476,6 +476,16 @@ function Simulador({
             <dd>{dinero(escenario.costoTotal)}</dd>
           </div>
           <div>
+            <dt>Costo variable productivo</dt>
+            <dd>
+              {dinero(escenario.costoVariableTotal ?? escenario.costoTotal)}
+            </dd>
+          </div>
+          <div>
+            <dt>Estructura imputada (tiempo interno)</dt>
+            <dd>{dinero(escenario.costoEstructuraTotal ?? "0")}</dd>
+          </div>
+          <div>
             <dt>Cargas comerciales</dt>
             <dd>
               {control?.cargasTotal != null
@@ -484,7 +494,7 @@ function Simulador({
             </dd>
           </div>
           <div>
-            <dt>Margen final</dt>
+            <dt>Margen de contribución</dt>
             <dd>
               {control?.utilidad != null
                 ? `${dinero(control.utilidad)}${control.porcentaje != null ? ` · ${control.porcentaje}%` : " · sin porcentaje"}`
@@ -492,6 +502,11 @@ function Simulador({
             </dd>
           </div>
         </dl>
+        <p className="text-xs text-muted-foreground">
+          Venta sin IVA menos materiales, terceros, cargos, impuestos internos y
+          comisiones. La contribución queda disponible para cubrir estructura y
+          atención; no es ganancia final.
+        </p>
         <p className="text-xs text-muted-foreground">
           {escenario.comercial?.motivo ??
             control?.motivo ??
@@ -663,21 +678,22 @@ function Simulador({
       ) : (
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle>Costos, sugerencias y márgenes</CardTitle>
+            <CardTitle>Costos, sugerencias y contribución</CardTitle>
             <CardDescription>
               Usá «Simular matriz» para generar los costos de todas las celdas,
               incluso las que todavía no tienen precio de venta. Compará los
               precios con pedidos de referencia. Incluye papel, impresión y
-              preparación productiva; las terminaciones se cotizan aparte.
+              preparación productiva cuando está habilitada; las terminaciones
+              se cotizan aparte.
             </CardDescription>
           </CardHeader>
           <CardContent className="min-w-0 flex flex-col gap-4">
             <p className="text-sm text-muted-foreground">
               Cada celda representa un pedido con una cantidad dentro del tramo.
-              El margen final descuenta costos productivos, comisiones e
-              impuestos internos de la venta sin IVA. Estos resultados
-              corresponden a la fecha de simulación; cada pedido real necesitará
-              su propio control antes de emitirse.
+              La contribución descuenta costos variables, comisiones e impuestos
+              internos de la venta sin IVA. Estos resultados corresponden a la
+              fecha de simulación; cada pedido real necesitará su propio control
+              antes de emitirse.
             </p>
             {estructura !== estructuraGuardada && (
               <Alert>
@@ -712,10 +728,10 @@ function Simulador({
               </div>
             </dl>
             <p className="text-sm text-muted-foreground">
-              Márgenes: {resumen.cumplen} cumplen el mínimo ·{" "}
+              Contribución: {resumen.cumplen} cumplen el mínimo ·{" "}
               {resumen.insuficientes} insuficientes · {resumen.pendientes} sin
               verificar. Los costos se calculan aunque falten precios de venta;
-              el margen necesita esos precios.
+              la contribución necesita esos precios.
               {[contenido.hojas, contenido.cad].some(
                 (s) => s?.reglas.cobertura === "UNICA",
               ) && (
@@ -805,7 +821,7 @@ function Simulador({
                       : "Recorrido finalizado"}
                 : {progreso.hechas} de {progreso.total} celdas procesadas.{" "}
                 {resumen.errores > 0
-                  ? `${resumen.errores} escenarios con error; sus márgenes siguen sin verificar.`
+                  ? `${resumen.errores} escenarios con error; su contribución sigue sin verificar.`
                   : "Revisá la cobertura y la fecha de cada resultado."}
               </p>
             )}
@@ -925,7 +941,7 @@ function Simulador({
                                 <div key={e.cobertura}>
                                   {e.estado === "ERROR" ? (
                                     <p className="text-destructive">
-                                      {e.cobertura}: {e.motivo} Margen sin
+                                      {e.cobertura}: {e.motivo} Contribución sin
                                       verificar.
                                     </p>
                                   ) : (
@@ -990,7 +1006,7 @@ function Simulador({
       )}
       {inspeccion && (
         <FormSheet
-          title="Costo y margen del precio actual"
+          title="Costo y contribución del precio actual"
           description={`${inspeccion.etiqueta} · desde ${inspeccion.desde}`}
           onClose={() => setInspeccion(null)}
           footer={
@@ -1079,7 +1095,7 @@ function Simulador({
                 );
               })()}
             <p className="text-xs text-muted-foreground">
-              El margen es orientativo para este pedido de referencia. No
+              La contribución es orientativa para este pedido de referencia. No
               publica precios ni autoriza ventas; el pedido real se controla al
               emitir.
             </p>

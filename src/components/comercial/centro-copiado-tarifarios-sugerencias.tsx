@@ -250,7 +250,7 @@ export function SugerenciasTarifario({
                 <TableHead>Combinación / tramo</TableHead>
                 <TableHead>Actual</TableHead>
                 <TableHead>Sugerido</TableHead>
-                <TableHead>Margen resultante</TableHead>
+                <TableHead>Contribución resultante</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -335,9 +335,9 @@ export function SugerenciasTarifario({
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            El margen es el del pedido de referencia. Aplicar una propuesta no
-            autoriza pedidos con margen insuficiente. Los costos deben volver a
-            comprobarse al cotizar el pedido real.
+            La contribución es la del pedido de referencia. Aplicar una
+            propuesta no autoriza pedidos con contribución insuficiente. Los
+            costos deben volver a comprobarse al cotizar el pedido real.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRevision(null)}>

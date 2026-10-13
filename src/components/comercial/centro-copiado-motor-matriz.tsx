@@ -268,7 +268,7 @@ export function MotorEnMatriz({
           className={styles.cellMargin}
           data-state={margenActual?.estado ?? "NO_VERIFICABLE"}
         >
-          <span>Margen actual</span>
+          <span>Contribución actual</span>
           <strong>
             {margenActual?.porcentaje == null
               ? "Sin verificar"
@@ -277,7 +277,7 @@ export function MotorEnMatriz({
         </div>
         {referencia && (
           <small className={styles.referenceNote}>
-            Margen y sugerencia a {referencia}{" "}
+            Contribución y sugerencia a {referencia}{" "}
             {Number(referencia) === 1
               ? seccion === "cad"
                 ? "ML consumido"
@@ -288,7 +288,7 @@ export function MotorEnMatriz({
         {margenActual && margenActual.estado !== "CUMPLE" && (
           <span className={styles.cellWarning}>
             {margenActual.negativo
-              ? "Deja pérdida"
+              ? "Contribución negativa"
               : margenActual.estado === "BLOQUEADO"
                 ? "Bajo mínimo · bloqueo"
                 : margenActual.estado === "REQUIERE_AUTORIZACION"
@@ -301,7 +301,7 @@ export function MotorEnMatriz({
             <span>{revisada ? "Por aplicar" : "Sugerido"}</span>
             <strong>{dinero(sugerida.sugerencia.nuevo)}</strong>
             <small>
-              Margen{" "}
+              Contribución{" "}
               {peorMargen(sugerida.sugerencia.controles)?.porcentaje ?? "—"}%
             </small>
             {sugerida.sugerencia.controles.some(
@@ -322,7 +322,7 @@ export function MotorEnMatriz({
           variant="ghost"
           size="sm"
           onClick={() => motor.detalle(celda)}
-          aria-label={`Ver costo y margen de ${motor.celdas.find((c) => claveCeldaSimulacion(c) === clave)?.etiqueta}, desde ${motor.celdas.find((c) => claveCeldaSimulacion(c) === clave)?.desde}`}
+          aria-label={`Ver costo y contribución de ${motor.celdas.find((c) => claveCeldaSimulacion(c) === clave)?.etiqueta}, desde ${motor.celdas.find((c) => claveCeldaSimulacion(c) === clave)?.desde}`}
         >
           <Info /> Detalle
         </Button>
@@ -349,11 +349,11 @@ export function MotorEnMatriz({
           </Button>
           <label className={styles.visibility}>
             <Switch
-              aria-label="Mostrar costos y márgenes"
+              aria-label="Mostrar costos y contribución"
               checked={mostrar}
               onCheckedChange={setMostrar}
             />{" "}
-            Mostrar costos y márgenes
+            Mostrar costos y contribución
           </label>
         </div>
         {abierto && (
@@ -361,17 +361,17 @@ export function MotorEnMatriz({
             <div className={styles.intro}>
               <span className={styles.eyebrow}>ASISTENTE DE PRECIOS</span>
               <p>
-                Calculá costos y probá tu margen. Los precios actuales se
+                Calculá costos y probá la contribución. Los precios actuales se
                 conservan hasta que apliques la propuesta.
               </p>
             </div>
             <FieldGroup className={styles.fields}>
               <TextoTarifa
-                etiqueta="Margen objetivo (%)"
+                etiqueta="Contribución objetivo (%)"
                 valor={margen}
                 onChange={setMargen}
                 inputMode="decimal"
-                ayuda="Sobre venta neta, después de costos y cargas."
+                ayuda="Sobre venta neta, después de costos variables y cargas. Cubre estructura y atención."
               />
               <TextoTarifa
                 etiqueta="Redondear hacia arriba a"
@@ -419,7 +419,7 @@ export function MotorEnMatriz({
                 </Button>
               )}
               <span className={styles.help}>
-                Cambiar margen o redondeo reutiliza los costos calculados.
+                Cambiar contribución o redondeo reutiliza los costos calculados.
               </span>
             </div>
             {motor.progreso && (
@@ -528,10 +528,11 @@ export function MotorEnMatriz({
           usando la cobertura más exigente si el precio es único. Promedio:
           media de esos dos costos, sin ponderar cantidades. En CAD se compara
           por ML consumido. El tramo abierto usa una muestra con tope editable
-          en Detalle. El margen usa preparación, mínimo y cargas comerciales.
-          Resultados temporales; recalculá si cambian tus costos. Aplicar sólo
-          edita el borrador: después guardá y publicá para actualizar los
-          canales que comparten este tarifario.
+          en Detalle. La contribución descuenta materiales, terceros, cargos y
+          cargas comerciales; el tiempo interno queda para cubrir con ese
+          resultado. Resultados temporales; recalculá si cambian tus costos.
+          Aplicar sólo edita el borrador: después guardá y publicá para
+          actualizar los canales que comparten este tarifario.
         </p>
       )}
     </>

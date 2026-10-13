@@ -53,6 +53,22 @@ it("precio único toma la mayor sugerencia, editable y con IVA una sola vez", ()
   c.composicion.iva = "MAS_IVA";
   expect(sugerirCelda(c, r).nuevo).toBe("200");
 });
+it("el objetivo usa costo variable y conserva el costo productivo completo como referencia", () => {
+  const { c, r } = ejemplo();
+  for (const e of r.escenarios) {
+    if (e.estado !== "CALCULADO") continue;
+    e.costoVariableTotal = "3000";
+    e.costoEstructuraTotal = "3000";
+  }
+  const propuesta = sugerirCelda(c, r, undefined, "40");
+  expect(propuesta.nuevo).toBe("60.5");
+  expect(
+    propuesta.controles.every(
+      (c) => c.metrica === "CONTRIBUCION" && c.porcentaje === "40.00",
+    ),
+  ).toBe(true);
+  expect(r.escenarios[0]).toMatchObject({ costoTotal: "6000" });
+});
 it("resta preparación una vez y no usa el mínimo para vaciar el precio unitario", () => {
   const { c, r } = ejemplo();
   c.composicion.preparacion = { modalidad: "FIJA_PEDIDO", importe: "1210" };
@@ -216,7 +232,9 @@ it("usa la mayor cobertura y omite objetivos imposibles, inválidos y errores pa
     r.escenarios[2].costoTotal = "14000";
   expect(sugerirCelda(c, r, undefined, "30").nuevo).toBe("200");
   expect(() => sugerirCelda(c, r, undefined, "100")).toThrow("menor que 100");
-  expect(() => sugerirCelda(c, r, undefined, "-1")).toThrow("margen objetivo");
+  expect(() => sugerirCelda(c, r, undefined, "-1")).toThrow(
+    "contribución objetivo",
+  );
   if (r.escenarios[0].estado === "CALCULADO")
     r.escenarios[0].comercial!.cargas = [
       {

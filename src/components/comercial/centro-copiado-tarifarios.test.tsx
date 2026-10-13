@@ -683,7 +683,7 @@ it("la navegación GRAFO conserva la edición al pasar entre matriz y reglas", a
   await abrir();
   const campoPrecio = precio(1);
   await escribir(campoPrecio, "123.45");
-  await click("Reglas y márgenes");
+  await click("Reglas y contribución");
   expect(campoPrecio.isConnected).toBe(true);
   expect(campoPrecio.closest("[data-inert]")).not.toBeNull();
   await click("Matrices");

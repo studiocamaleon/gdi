@@ -185,13 +185,13 @@ export function ReglasTarifario({
           </FieldGroup>
         </FieldSet>
         <FieldSet className={styles.ruleSection}>
-          <FieldLegend>Protección del margen</FieldLegend>
+          <FieldLegend>Protección de la contribución</FieldLegend>
           <FieldDescription>
             Definí cuándo un pedido requiere autorización o debe bloquearse.
           </FieldDescription>
           <FieldGroup className="grid gap-4 md:grid-cols-2">
             <TextoTarifa
-              etiqueta="Margen mínimo (%)"
+              etiqueta="Contribución mínima (%)"
               inputMode="decimal"
               disabled={disabled}
               valor={c.margen?.minimoPorcentaje ?? ""}
@@ -207,7 +207,7 @@ export function ReglasTarifario({
               }
             />
             <Elegir
-              etiqueta="Si el margen es insuficiente"
+              etiqueta="Si la contribución es insuficiente"
               disabled={disabled}
               valor={c.margen?.anteInsuficiente ?? "AUTORIZACION"}
               opciones={[

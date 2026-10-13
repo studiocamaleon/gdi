@@ -12,7 +12,7 @@ Cada tanda admite hasta 100 MB de originales y 5.000 páginas de salida, contand
 
 Se simula una preparación en el primer miembro de cada tanda y ninguna en los siguientes. Los materiales y el tiempo de impresión de todos los originales se mantienen. La preparación se imputa al primer miembro; por eso los márgenes por producto pueden diferir del margen conjunto de la tanda.
 
-El snapshot conserva tanto el total como los buckets y los pasos recalculados. La OT reabierta y su detalle de tiempos usan ese mismo resultado. Con tarifario se mantienen los precios del canal y se verifica el margen sobre el costo conjunto. En canales de motor se conserva el precio previamente cotizado y se actualiza el costo productivo compartido.
+El snapshot conserva tanto el total como los buckets y los pasos recalculados. La OT reabierta y su detalle de tiempos usan ese mismo resultado. Con tarifario se mantienen los precios del canal. Las nuevas revisiones verifican la contribución sobre los costos variables conjuntos, según [Contribución de Centro de copiado](centro-copiado-contribucion.md). En canales de motor se conserva el precio previamente cotizado y se actualiza el costo productivo compartido.
 
 El objetivo de margen se compara a la precisión monetaria cuando los importes ya están redondeados a moneda: no se requiere una autorización por una fracción de centavo del objetivo. Se conserva la evaluación exacta si el costo trae más precisión; una diferencia de una unidad monetaria mínima o una pérdida real continúa requiriendo el control configurado.
 

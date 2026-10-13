@@ -84,7 +84,7 @@ export function AvisoPreparacion() {
         <span>01</span>Combinaciones y precios
       </li>
       <li>
-        <span>02</span>Costos y márgenes
+        <span>02</span>Costos y contribución
       </li>
       <li>
         <span>03</span>Publicar versión

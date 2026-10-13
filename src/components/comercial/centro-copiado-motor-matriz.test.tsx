@@ -234,7 +234,7 @@ it("calcula en la matriz, revisa sin escribir y completa sólo vacíos preservan
 it("margen, redondeo y edición manual actualizan la tabla sin consultar nuevamente el motor", async () => {
   await abrir();
   await click("Calcular 4 precios");
-  await escribir(campo("Margen objetivo (%)"), "40");
+  await escribir(campo("Contribución objetivo (%)"), "40");
   await escribir(campo("Redondear hacia arriba a"), "100");
   await click("Revisar 2 precios");
   await click("Aplicar 2 precios al borrador");
@@ -294,7 +294,7 @@ it("la consulta puede calcular pero no aplicar, y perder permiso retira costos d
   await click("Calcular 4 precios");
   expect(boton("Revisar 2 precios").disabled).toBe(true);
   await act(async () => root.render(<App permisos={[]} />));
-  expect(el.textContent).not.toContain("Margen actual");
+  expect(el.textContent).not.toContain("Contribución actual");
   expect(el.textContent).not.toContain("Calcular precios con el motor");
   expect(ultimo).toEqual(inicial);
 });
@@ -316,13 +316,13 @@ it("el detalle permite ajustar la referencia y recalcular sólo esa celda", asyn
     act(async () =>
       el
         .querySelector<HTMLButtonElement>(
-          'button[aria-label^="Ver costo y margen"]',
+          'button[aria-label^="Ver costo y contribución"]',
         )!
         .click(),
     );
   await abrirDetalle();
   expect(document.body.textContent).toContain(
-    "Costo y margen del precio actual",
+    "Costo y contribución del precio actual",
   );
   await click("Ajustar referencia");
   await escribir(campo("Cantidad de referencia"), "20");
@@ -367,7 +367,7 @@ it("permite ajustar sólo el tope de muestra del tramo abierto y exige recalcula
     act(async () =>
       el
         .querySelector<HTMLButtonElement>(
-          'button[aria-label^="Ver costo y margen"][aria-label$="desde 100"]',
+          'button[aria-label^="Ver costo y contribución"][aria-label$="desde 100"]',
         )!
         .click(),
     );

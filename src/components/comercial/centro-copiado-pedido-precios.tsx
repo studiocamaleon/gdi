@@ -62,6 +62,8 @@ export function CentroCopiadoPedidoPrecios({
   const campoId = useId();
   const r = revision?.modalidad === "TARIFARIO" ? revision : null;
   const c = r?.calculado;
+  const esContribucion = c?.control.metrica === "CONTRIBUCION";
+  const nombreMargen = esContribucion ? "contribución" : "margen";
   const estados = c
     ? [c.control.estado, ...c.terminaciones.map((t) => t.control.estado)]
     : [];
@@ -83,14 +85,14 @@ export function CentroCopiadoPedidoPrecios({
             : estados.includes("NO_VERIFICABLE")
               ? "Hay costos sin verificar. Revisá la configuración antes de emitir."
               : estados.includes("BLOQUEADO")
-                ? "El tarifario exige alcanzar el margen mínimo. Ajustá los precios antes de emitir."
+                ? `El tarifario exige alcanzar ${esContribucion ? "la contribución mínima" : "el margen mínimo"}. Ajustá los precios antes de emitir.`
                 : necesita && !r?.autorizado
                   ? "Se necesita una autorización con motivo antes de emitir."
                   : r?.autorizado
                     ? `Autorizado por ${r.autorizado.nombre}: ${r.autorizado.motivo}`
                     : revision?.modalidad === "MOTOR"
                       ? "Este canal utiliza los precios del motor."
-                      : "Los precios y el margen están revisados.";
+                      : `Los precios y ${esContribucion ? "la contribución" : "el margen"} están revisados.`;
   async function autorizar() {
     if (!r?.id || !r.huella || !vigente || autorizando) return;
     setAutorizando(true);
@@ -99,7 +101,11 @@ export function CentroCopiadoPedidoPrecios({
       onAutorizado(nueva);
       setAbierto(false);
       setMotivo("");
-      toast.success("Margen autorizado para este cálculo.");
+      toast.success(
+        esContribucion
+          ? "Contribución autorizada para este cálculo."
+          : "Margen autorizado para este cálculo.",
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo autorizar.");
     } finally {
@@ -156,10 +162,19 @@ export function CentroCopiadoPedidoPrecios({
             ))}
             {puedeVerMargen && c.control.porcentaje != null && (
               <Badge variant="outline">
-                Margen de impresión: {c.control.porcentaje}%
+                {esContribucion
+                  ? "Contribución de impresión"
+                  : "Margen de impresión"}
+                : {c.control.porcentaje}%
               </Badge>
             )}
           </div>
+        )}
+        {esContribucion && puedeVerMargen && (
+          <p className="text-xs text-muted-foreground">
+            Venta sin IVA menos costos variables y cargas comerciales.
+            Disponible para cubrir estructura y atención.
+          </p>
         )}
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
@@ -178,7 +193,7 @@ export function CentroCopiadoPedidoPrecios({
           puedeAutorizar &&
           puedeVerMargen && (
             <Button disabled={ocupado} onClick={() => setAbierto(true)}>
-              Autorizar margen
+              Autorizar {nombreMargen}
             </Button>
           )}
       </CardFooter>
@@ -190,7 +205,7 @@ export function CentroCopiadoPedidoPrecios({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Autorizar margen de copiado</DialogTitle>
+            <DialogTitle>Autorizar {nombreMargen} de copiado</DialogTitle>
             <DialogDescription>
               La autorización corresponde a estos archivos, cantidades, canal y
               precios. Cualquier cambio requiere una nueva revisión.

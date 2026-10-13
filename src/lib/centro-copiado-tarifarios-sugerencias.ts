@@ -139,7 +139,9 @@ export function sugerirCelda(
         if (!composicion.total || control.cargasTotal == null)
           throw new Error(control.motivo);
         const neto = new D(composicion.total.neto);
-        const utilidad = neto.minus(e.costoTotal).minus(control.cargasTotal);
+        const utilidad = neto
+          .minus(e.costoVariableTotal ?? e.costoTotal)
+          .minus(control.cargasTotal);
         if (neto.gt(0) && utilidad.gte(neto.times(objetivo))) continue;
         const factor = new D(1).plus(new D(e.ivaPorcentaje).div(100));
         const pasoNeto = D.max(
@@ -157,7 +159,7 @@ export function sugerirCelda(
       if (aumento.isZero()) break;
       if (intento === 11)
         throw new Error(
-          "No se pudo alcanzar el margen objetivo en todas las coberturas.",
+          "No se pudo alcanzar la contribución objetivo en todas las coberturas.",
         );
       nuevo = new D(nuevo)
         .plus(aumento)
@@ -189,7 +191,7 @@ export function sugerirCelda(
 export function leerMargenObjetivo(valor: string) {
   const limpio = valor.trim().replace(",", ".");
   if (!/^\d+(\.\d+)?$/.test(limpio) || new D(limpio).gte(100))
-    throw new Error("Usá un margen objetivo desde 0 y menor que 100%.");
+    throw new Error("Usá una contribución objetivo desde 0 y menor que 100%.");
   return new D(limpio);
 }
 
@@ -212,13 +214,13 @@ function denominadorMargen(
   const denominador = new D(1).minus(margen).minus(tasa);
   if (!denominador.gt(0))
     throw new Error(
-      "El margen objetivo y las cargas comerciales no permiten calcular un precio.",
+      "La contribución objetivo y las cargas comerciales no permiten calcular un precio.",
     );
   return denominador;
 }
 
 function ventaParaMargen(e: EscenarioSimulado, objetivo: string) {
-  return new D(e.costoTotal).div(
+  return new D(e.costoVariableTotal ?? e.costoTotal).div(
     denominadorMargen(e, leerMargenObjetivo(objetivo).div(100)),
   );
 }

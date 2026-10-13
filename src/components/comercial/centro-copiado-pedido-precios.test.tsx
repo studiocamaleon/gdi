@@ -31,7 +31,7 @@ function revision(estado = "REQUIERE_AUTORIZACION"): RevisionCopiado {
       ],
       terminaciones: [],
     },
-  } as RevisionCopiado;
+  } as unknown as RevisionCopiado;
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -94,6 +94,15 @@ it("costos privados: sin permiso no muestra porcentaje ni autorización", async 
   await mostrar(revision(), true, ["comercial.copiado.gestionar"]);
   expect(el.textContent).not.toContain("8.00");
   expect(boton("Autorizar margen")).toBeUndefined();
+});
+it("identifica contribución en cálculos nuevos sin renombrar el margen de snapshots históricos", async () => {
+  const r = revision();
+  if (r.modalidad !== "TARIFARIO") throw new Error("fixture");
+  r.calculado.control.metrica = "CONTRIBUCION";
+  await mostrar(r);
+  expect(el.textContent).toContain("Contribución de impresión: 8.00%");
+  expect(el.textContent).toContain("cubrir estructura y atención");
+  expect(boton("Autorizar contribución")).toBeDefined();
 });
 it.each(["BLOQUEADO", "NO_VERIFICABLE"])(
   "no ofrece excepción para %s",
