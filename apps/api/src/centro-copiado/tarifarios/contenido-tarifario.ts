@@ -138,7 +138,7 @@ const contenidoSchema = z
         path: ['objetivosContribucion'],
       })
       .nullable(),
-    // Opcional para conservar las versiones previas; ausencia nunca equivale a piso cero.
+    // Sólo lectura de datos históricos: esta política ya no interviene en cálculos ni emisión.
     margen: z
       .object({
         minimoPorcentaje: z.string().regex(/^\d{1,2}(\.\d{1,4})?$/),

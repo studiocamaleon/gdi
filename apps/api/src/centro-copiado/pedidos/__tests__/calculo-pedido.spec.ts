@@ -94,14 +94,14 @@ it('no permite que ganancias de terminaciones oculten pérdida de impresión', (
   l.costoImpresion = '110';
   l.terminacionesNeto = '1000';
   const r = calcularPedidoCopiado(input([l]));
-  expect(r.control.estado).toBe('REQUIERE_AUTORIZACION');
+  expect(r.control.estado).toBe('CALCULADO');
   expect(r.control.porcentaje).toBe('-10.00');
 });
-it('bloqueo estricto y costos faltantes', () => {
+it('ignora políticas antiguas de bloqueo y distingue costos faltantes', () => {
   const i = input();
   i.lineas[0].costoImpresion = '110';
   i.contenido.margen!.anteInsuficiente = 'BLOQUEO';
-  expect(calcularPedidoCopiado(i).control.estado).toBe('BLOQUEADO');
+  expect(calcularPedidoCopiado(i).control.estado).toBe('CALCULADO');
   i.lineas[0].costoImpresion = null;
   expect(calcularPedidoCopiado(i).control.estado).toBe('NO_VERIFICABLE');
 });
@@ -197,12 +197,12 @@ it('evalúa contribución de impresión y terminaciones sin descontar tiempo int
   expect(r.costoImpresion).toBe('110.00');
   expect(r.control).toMatchObject({
     metrica: 'CONTRIBUCION',
-    estado: 'CUMPLE',
+    estado: 'CALCULADO',
     porcentaje: '80.00',
   });
   expect(r.terminaciones[0].control).toMatchObject({
     metrica: 'CONTRIBUCION',
-    estado: 'CUMPLE',
+    estado: 'CALCULADO',
     porcentaje: '60.00',
   });
   l.costoVariableImpresion = null;

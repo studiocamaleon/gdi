@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { Body, Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -7,16 +7,13 @@ import {
   IsArray,
   IsIn,
   IsOptional,
-  IsString,
   IsUUID,
-  Length,
   IsNumber,
   Min,
   Max,
   ValidateNested,
-  Matches,
 } from 'class-validator';
-import { Permiso, RequiereVista } from '../../auth/permiso.decorator';
+import { Permiso } from '../../auth/permiso.decorator';
 import { CurrentSession } from '../../auth/current-auth.decorator';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { ORDEN_CANALES_VENTA } from '../../ordenes-trabajo/canales-venta';
@@ -46,10 +43,6 @@ export class RevisarPedidoDto {
   @IsUUID('4', { each: true })
   items!: string[];
 }
-export class AutorizarMargenCopiadoDto {
-  @IsString() @Length(10, 1000) motivo!: string;
-  @IsString() @Matches(/^[a-f0-9]{64}$/) huella!: string;
-}
 @Controller('centro-copiado/pedidos')
 @Permiso('comercial.copiado.ver')
 export class CentroCopiadoPedidosController {
@@ -76,16 +69,5 @@ export class CentroCopiadoPedidosController {
   ) {
     await this.capacidades.exigirIncluida(auth.tenantId, 'centro_copiado');
     return this.pedidos.estado(auth, dto);
-  }
-  @Post(':id/autorizar-margen')
-  @Permiso('comercial.aprobar_descuento')
-  @RequiereVista('comercial.copiado.ver')
-  async autorizar(
-    @CurrentSession() auth: CurrentAuth,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: AutorizarMargenCopiadoDto,
-  ) {
-    await this.capacidades.exigirIncluida(auth.tenantId, 'centro_copiado');
-    return this.pedidos.autorizar(auth, id, dto.motivo, dto.huella);
   }
 }

@@ -1128,8 +1128,7 @@ export function CentroCopiadoConfigView() {
                     <AlertDescription>
                       El motor calcula costos y precios sugeridos. Si un canal
                       usa un tarifario, el precio de venta sale de su matriz;
-                      configurá sus mínimos y preparación en «Reglas y
-                      contribución».
+                      configurá el importe mínimo y la preparación en «Reglas comerciales».
                     </AlertDescription>
                   </Alert>
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">

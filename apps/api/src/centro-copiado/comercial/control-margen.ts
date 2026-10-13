@@ -1,9 +1,5 @@
 import { DecimalComercial as D } from './validaciones';
 
-export type PoliticaMargen = {
-  minimoPorcentaje: string;
-  anteInsuficiente: 'AUTORIZACION' | 'BLOQUEO';
-};
 export type CargaMargen = {
   clave: string;
   nombre: string;
@@ -11,22 +7,17 @@ export type CargaMargen = {
   base: 'NETO' | 'BRUTO_COBRADO';
   porcentaje: string;
 };
-export type EstadoMargen =
-  | 'CUMPLE'
-  | 'REQUIERE_AUTORIZACION'
-  | 'BLOQUEADO'
-  | 'NO_VERIFICABLE';
+export type EstadoMargen = 'CALCULADO' | 'NO_VERIFICABLE';
 
 /** Ventas ya ajustadas por acuerdos, descuentos, precio manual y mínimo.
  * El caller separa terminaciones y elige el costo: completo para margen histórico
  * o variable para contribución. Aquí se agregan únicamente cargas porcentuales
  * sobre la venta, sin duplicar cargos productivos.
- * No confundir este diagnóstico con una autorización de emisión.
+ * El resultado es informativo: nunca exige un mínimo ni autoriza una emisión.
  */
 export function evaluarMargen(input: {
   ventas: { neto: string; total: string; cargas: CargaMargen[] | null }[];
   costoProduccion: string | null;
-  politica?: PoliticaMargen;
   decimales: number;
   metrica?: 'CONTRIBUCION';
 }) {
@@ -100,51 +91,17 @@ export function evaluarMargen(input: {
     const cargosTotal = cargas.reduce((s, c) => s.plus(c.importe), new D(0));
     const utilidad = neto.minus(costo).minus(cargosTotal);
     const porcentaje = neto.gt(0) ? utilidad.div(neto).times(100) : null;
-    const p = input.politica;
-    let estado: EstadoMargen = 'NO_VERIFICABLE';
-    let motivo = input.metrica
-      ? 'Configurá la contribución mínima del tarifario.'
-      : 'Configurá el margen mínimo del tarifario.';
-    if (p) {
-      const minimo = importe(p.minimoPorcentaje);
-      if (
-        minimo.gte(100) ||
-        !['AUTORIZACION', 'BLOQUEO'].includes(p.anteInsuficiente)
-      )
-        return vacio(
-          input.metrica
-            ? 'La política de contribución no es válida.'
-            : 'La política de margen no es válida.',
-        );
-      // El objetivo se compara en moneda, con la misma precisión que venta,
-      // costos y cargos. No exigir una fracción de centavo que no puede cobrarse.
-      const objetivo = neto.times(minimo).div(100);
-      const monedaExacta = utilidad.decimalPlaces() <= input.decimales;
-      const cumple =
-        neto.gt(0) &&
-        utilidad.gte(0) &&
-        utilidad.gte(
-          monedaExacta ? objetivo.toDecimalPlaces(input.decimales) : objetivo,
-        );
-      estado = cumple
-        ? 'CUMPLE'
-        : p.anteInsuficiente === 'BLOQUEO'
-          ? 'BLOQUEADO'
-          : 'REQUIERE_AUTORIZACION';
-      motivo = cumple
-        ? input.metrica
-          ? 'Alcanza la contribución mínima.'
-          : 'Alcanza el margen mínimo.'
-        : porcentaje == null
-          ? 'Sin venta neta positiva no hay porcentaje verificable.'
-          : utilidad.lt(0)
-            ? input.metrica
-              ? 'La venta no cubre los costos variables.'
-              : 'La venta deja pérdida.'
-            : input.metrica
-              ? 'La contribución queda por debajo del mínimo.'
-              : 'El margen queda por debajo del mínimo.';
-    }
+    const estado: EstadoMargen = 'CALCULADO';
+    const motivo =
+      porcentaje == null
+        ? 'Sin venta neta positiva no hay porcentaje verificable.'
+        : utilidad.lt(0)
+          ? input.metrica
+            ? 'La venta no cubre los costos variables.'
+            : 'La venta deja pérdida.'
+          : input.metrica
+            ? 'Contribución calculada.'
+            : 'Margen calculado.';
     return {
       ...(input.metrica ? { metrica: input.metrica } : {}),
       estado,

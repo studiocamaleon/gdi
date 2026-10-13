@@ -184,54 +184,6 @@ export function ReglasTarifario({
             )}
           </FieldGroup>
         </FieldSet>
-        <FieldSet className={styles.ruleSection}>
-          <FieldLegend>Protección de la contribución</FieldLegend>
-          <FieldDescription>
-            Definí cuándo un pedido requiere autorización o debe bloquearse.
-          </FieldDescription>
-          <FieldGroup className="grid gap-4 md:grid-cols-2">
-            <TextoTarifa
-              etiqueta="Contribución mínima (%)"
-              inputMode="decimal"
-              disabled={disabled}
-              valor={c.margen?.minimoPorcentaje ?? ""}
-              placeholder="Definí el piso de este tarifario"
-              onChange={(v) =>
-                cambiar((x) => {
-                  x.margen = {
-                    minimoPorcentaje: v,
-                    anteInsuficiente:
-                      x.margen?.anteInsuficiente ?? "AUTORIZACION",
-                  };
-                })
-              }
-            />
-            <Elegir
-              etiqueta="Si la contribución es insuficiente"
-              disabled={disabled}
-              valor={c.margen?.anteInsuficiente ?? "AUTORIZACION"}
-              opciones={[
-                {
-                  value: "AUTORIZACION",
-                  label: "Requerir autorización con motivo",
-                },
-                {
-                  value: "BLOQUEO",
-                  label: "Bloquear hasta alcanzar el mínimo",
-                },
-              ]}
-              onChange={(v) =>
-                cambiar((x) => {
-                  x.margen = {
-                    minimoPorcentaje: x.margen?.minimoPorcentaje ?? "",
-                    anteInsuficiente: v,
-                  };
-                })
-              }
-              ayuda="Sobre venta sin IVA, después de costos, comisiones e impuestos internos. Las terminaciones se evalúan aparte. Se conserva como política para los pedidos por matriz."
-            />
-          </FieldGroup>
-        </FieldSet>
         {c.hojas && (
           <FieldSet className={styles.ruleSection}>
             <FieldLegend>Impresión en hojas</FieldLegend>

@@ -7913,10 +7913,10 @@ function PropuestaFichaContenido({
                   )}
                 {items.some(i => metaCentroCopiado(i.jobContext)) && (!orden || orden.estado === "borrador") && <CentroCopiadoPedidoPrecios
                   revision={revisionCopiado} vigente={copiadoRevisado} ocupado={revisandoCopiado}
+                  moneda={moneda} sinComprobante={sinComprobante}
                   error={errorRevisionCopiado} faltaCanal={!canalVenta}
                   editable={puedeModificarProductos && !guardandoEdicion && !emitiendo && !emitiendoPresupuesto}
                   onRevisar={() => void revisarCopiadoEnPedido()}
-                  onAutorizado={r => { if (claveCopiadoRef.current === claveCopiado) setRevisionCopiado(r); }}
                 />}
                 <OrdenFinancialActions
                   empty={items.length === 0}

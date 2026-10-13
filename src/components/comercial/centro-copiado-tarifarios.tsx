@@ -570,7 +570,7 @@ export function CentroCopiadoTarifarios({
                 { id: "matrices", label: "Matrices", icon: <Grid3X3 /> },
                 {
                   id: "reglas",
-                  label: "Reglas y contribución",
+                  label: "Reglas comerciales",
                   icon: <Settings2 />,
                 },
                 ...(base

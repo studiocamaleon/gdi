@@ -62,9 +62,7 @@ type Revision = {
   caidas: ReturnType<typeof caidasEntreTramos>;
 };
 const estados = {
-  CUMPLE: "Cumple el mínimo",
-  REQUIERE_AUTORIZACION: "Requiere autorización",
-  BLOQUEADO: "Bloqueado",
+  CALCULADO: "Contribución calculada",
   NO_VERIFICABLE: "Sin verificar",
 };
 export function SugerenciasTarifario({
@@ -296,7 +294,7 @@ export function SugerenciasTarifario({
                           >
                             <Badge
                               variant={
-                                c.estado === "CUMPLE"
+                                c.estado === "CALCULADO"
                                   ? "secondary"
                                   : "destructive"
                               }

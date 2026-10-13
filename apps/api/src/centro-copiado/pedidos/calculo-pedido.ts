@@ -304,7 +304,6 @@ export function calcularPedidoCopiado(input: {
             )
             .toFixed(dec),
     metrica: 'CONTRIBUCION',
-    politica: c.margen,
     decimales: dec,
   });
   const terminaciones = lineas.flatMap((l, i) =>
@@ -328,10 +327,6 @@ export function calcularPedidoCopiado(input: {
                   ? null
                   : (l.costoVariableTerminaciones ?? l.costoTerminaciones),
               metrica: 'CONTRIBUCION',
-              politica: {
-                minimoPorcentaje: '0',
-                anteInsuficiente: c.margen?.anteInsuficiente ?? 'AUTORIZACION',
-              },
               decimales: dec,
             }),
           },

@@ -140,11 +140,10 @@
   color: var(--muted-text);
   line-height: 1.5;
 }
-.cellMargin[data-state="CUMPLE"] {
+.cellMargin[data-state="CALCULADO"] {
   color: var(--success);
 }
-.cellMargin[data-state="BLOQUEADO"],
-.cellMargin[data-state="REQUIERE_AUTORIZACION"],
+.cellMargin[data-state="NEGATIVO"],
 .cellWarning {
   color: var(--warning);
 }

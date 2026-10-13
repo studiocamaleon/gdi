@@ -25,7 +25,7 @@ import type { AgregarAOrdenCentroCopiadoDto } from '../../dto/cotizar-centro-cop
 
 /** Base real, auth/guards reales, cálculo comercial real. El costeador de máquina
  * devuelve un costo ficticio determinista; no se usa catálogo ni archivos reales. */
-describe('Pedidos de copiado: activación, precios y autorización', () => {
+describe('Pedidos de copiado: activación, precios y emisión', () => {
   const db = new PrismaService();
   const auditoria = new CentroCopiadoAuditoriaService(db);
   const politica = new CentroCopiadoPoliticaService(db, auditoria);
@@ -201,14 +201,17 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     });
   }
   async function activar(
-    anteInsuficiente: 'AUTORIZACION' | 'BLOQUEO' = 'AUTORIZACION',
+    anteInsuficiente: 'AUTORIZACION' | 'BLOQUEO' | null = 'AUTORIZACION',
     pendiente = false,
+    precio = '121',
   ) {
     const contenido = contenidoEjemplo(papel);
     contenido.cad = null;
-    contenido.margen = { minimoPorcentaje: '25', anteInsuficiente };
+    if (anteInsuficiente)
+      contenido.margen = { minimoPorcentaje: '25', anteInsuficiente };
+    else delete contenido.margen;
     contenido.hojas!.filas[0].precios = [
-      { desdeCantidad: 1, precioUnitario: pendiente ? null : '121' },
+      { desdeCantidad: 1, precioUnitario: pendiente ? null : precio },
       { desdeCantidad: 100, precioUnitario: '96.8' },
     ];
     const b = await tarifas.crear(tenants[0], usuarios[0], {
@@ -484,23 +487,29 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     expect((await revisar([a.id], 'lector')).status).toBe(403);
     expect((await revisar([b.id])).status).toBe(404);
   });
-  it('activa precios; no filtra costos y ni el supervisor emite sin autorización expresa', async () => {
+  it('emite el tarifario con baja contribución sin firma ni permiso de costos, y retira el endpoint de autorización', async () => {
     materiales = 90;
     await activar();
     const fuenteOriginal = await fuente();
     const r = await revisar([fuenteOriginal.id]);
     expect(r.status).toBe(201);
     expect(r.body.calculado.control).toEqual({
-      estado: 'REQUIERE_AUTORIZACION',
+      estado: 'CALCULADO',
       metrica: 'CONTRIBUCION',
     });
     expect(JSON.stringify(r.body)).not.toMatch(
-      /costoImpresion|cargasTotal|lineas/,
+      /costoImpresion|cargasTotal|lineas|autorizado/,
     );
     expect(r.body.items[0].subtotal).toBe(100);
-    await expect(
-      emitir(r.body.items.map((i: { id: string }) => i.id)),
-    ).rejects.toThrow('autorización explícita');
+    expect(r.body.resumenPrecios).toEqual([
+      expect.objectContaining({
+        unidadPrecio: 'HOJA',
+        desde: '1',
+        hasta: '99',
+        precioFinal: '121.00000000',
+      }),
+    ]);
+    await emitir(r.body.items.map((i) => i.id));
     expect(
       Number(
         (
@@ -510,31 +519,16 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
         ).precioNetoTotal,
       ),
     ).toBe(150);
-    expect(
-      (
-        await request(app.getHttpServer())
-          .post(`${ruta}/${r.body.id}/autorizar-margen`)
-          .auth(tokens.vendedor, { type: 'bearer' })
-          .send({ huella: r.body.huella, motivo: 'Acuerdo comercial ficticio' })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await request(app.getHttpServer())
-          .post(`${ruta}/${r.body.id}/autorizar-margen`)
-          .auth(tokens['solo-firma'], { type: 'bearer' })
-          .send({ huella: r.body.huella, motivo: 'Acuerdo comercial ficticio' })
-      ).status,
-    ).toBe(403);
-    await request(app.getHttpServer())
-      .post(`${ruta}/${r.body.id}/autorizar-margen`)
-      .auth(tokens.responsable, { type: 'bearer' })
-      .send({ huella: r.body.huella, motivo: 'Acuerdo comercial ficticio' })
-      .expect(201);
-    await emitir(r.body.items.map((i: { id: string }) => i.id));
+    for (const actor of ['vendedor', 'solo-firma', 'responsable']) {
+      await request(app.getHttpServer())
+        .post(`${ruta}/${r.body.id}/autorizar-margen`)
+        .auth(tokens[actor], { type: 'bearer' })
+        .send({ huella: r.body.huella, motivo: 'Acuerdo comercial ficticio' })
+        .expect(404);
+    }
     await expect(
       emitir(
-        r.body.items.map((i: { id: string }) => i.id),
+        r.body.items.map((i) => i.id),
         { canalVenta: 'web' },
       ),
     ).rejects.toThrow('canal');
@@ -542,8 +536,65 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       await db.centroCopiadoEvento.count({
         where: { tenantId: tenants[0], tipo: 'PEDIDO_MARGEN_AUTORIZADO' },
       }),
-    ).toBeGreaterThan(0);
+    ).toBe(0);
   });
+  it('activa un tarifario nuevo sin política de margen y permite emitir sus precios', async () => {
+    materiales = 110;
+    await activar(null);
+    const r = await revisar([(await fuente()).id], 'responsable');
+    expect(r.status).toBe(201);
+    expect(r.body.items[0].total).toBe(121);
+    expect(r.body.calculado.control.negativo).toBe(true);
+    await emitir(r.body.items.map((i) => i.id));
+  });
+  it.each(['AUTORIZACION', 'BLOQUEO'] as const)(
+    'una política histórica %s no impide emitir con pérdida ni precio cero',
+    async (politicaAnterior) => {
+      materiales = 110;
+      for (const precio of ['121', '0']) {
+        await activar(politicaAnterior, false, precio);
+        const r = await revisar([(await fuente()).id], 'responsable');
+        expect(r.status).toBe(201);
+        expect(r.body.items[0].total).toBe(Number(precio));
+        expect(r.body.calculado.control).toMatchObject({
+          estado: 'CALCULADO',
+          negativo: true,
+        });
+        await emitir(r.body.items.map((i) => i.id));
+      }
+    },
+  );
+  it.each(['REQUIERE_AUTORIZACION', 'BLOQUEADO', 'NO_VERIFICABLE'])(
+    'un cálculo histórico %s sigue emitible con los precios ya revisados',
+    async (estado) => {
+      await activar();
+      const r = await revisar([(await fuente()).id]);
+      const calculo = await db.centroCopiadoPedidoCalculo.findUniqueOrThrow({
+        where: { id: r.body.id },
+      });
+      const anterior = calculo.resultadoJson as Record<string, object>;
+      await db.centroCopiadoPedidoCalculo.update({
+        where: { id: calculo.id },
+        data: {
+          resultadoJson: {
+            ...anterior,
+            control: { estado },
+            terminaciones: [{ id: 'acabado-ficticio', control: { estado } }],
+          },
+        },
+      });
+      await emitir(r.body.items.map((i) => i.id));
+      await db.centroCopiadoPedidoCalculo.update({
+        where: { id: calculo.id },
+        data: {
+          resultadoJson: { ...anterior, estado: 'PRECIO_PENDIENTE' },
+        },
+      });
+      await expect(emitir(r.body.items.map((i) => i.id))).rejects.toThrow(
+        'Faltan precios',
+      );
+    },
+  );
   it.each([false, true])(
     'recotiza una carga existente con setup=%s según la configuración actual, no el flag guardado',
     async (actual) => {
@@ -554,7 +605,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       const r = await revisar([original.id], 'responsable');
       expect(r.status).toBe(201);
       expect(r.body.calculado.control).toMatchObject({
-        estado: 'CUMPLE',
+        estado: 'CALCULADO',
         porcentaje: '90.00',
         metrica: 'CONTRIBUCION',
       });
@@ -591,7 +642,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     const r = await revisar([a.id, b.id], 'responsable');
     expect(r.status).toBe(201);
     expect(r.body.calculado.control).toMatchObject({
-      estado: 'CUMPLE',
+      estado: 'CALCULADO',
       porcentaje: '90.00',
     });
     expect(r.body.items.map((i) => i.total)).toEqual([121, 121]);
@@ -632,7 +683,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     );
     const individual = await revisar([guardados[0].id], 'responsable');
     expect(individual.body.items[0].finanzas?.costoTotal).toBe(90);
-    expect(individual.body.calculado.control.estado).toBe('CUMPLE');
+    expect(individual.body.calculado.control.estado).toBe('CALCULADO');
   });
   it('recupera la revisión sin filtrar costos y registra descuentos explícitos antes del mínimo', async () => {
     await activar();
@@ -676,7 +727,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       .post(`${ruta}/${revision.id}/autorizar-margen`)
       .auth(tokens.responsable, { type: 'bearer' })
       .send({ huella: '0'.repeat(64), motivo: 'Una referencia falsificada' })
-      .expect(409);
+      .expect(404);
     const cambiada = await request(app.getHttpServer())
       .post(`${ruta}/estado`)
       .auth(tokens.vendedor, { type: 'bearer' })
@@ -684,19 +735,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       .expect(201);
     expect(cambiada.body).toMatchObject({ vigente: false });
   });
-  it('no admite autorizar bloqueo estricto ni precio pendiente', async () => {
-    materiales = 90;
-    await activar('BLOQUEO');
-    const r = await revisar([(await fuente()).id], 'responsable');
-    expect(r.body.calculado.control.estado).toBe('BLOQUEADO');
-    await expect(
-      emitir(r.body.items.map((i: { id: string }) => i.id)),
-    ).rejects.toThrow('bloquea');
-    await request(app.getHttpServer())
-      .post(`${ruta}/${r.body.id}/autorizar-margen`)
-      .auth(tokens.responsable, { type: 'bearer' })
-      .send({ huella: r.body.huella, motivo: 'Excepción que no corresponde' })
-      .expect(400);
+  it('un precio ausente queda pendiente y nunca usa un respaldo del motor', async () => {
     await activar('AUTORIZACION', true);
     const p = await revisar([(await fuente()).id]);
     expect(p.body.calculado.estado).toBe('PRECIO_PENDIENTE');
@@ -740,15 +779,14 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       emitir(r.body.items.map((i: { id: string }) => i.id)),
     ).rejects.toThrow('versión');
   });
-  it('costo desconocido bloquea; el administrador no puede inventar una autorización', async () => {
+  it('un costo desconocido es informativo y no impide emitir un precio del tarifario', async () => {
     await activar();
     costeador.simularCostoHojas.mockRejectedValueOnce(
       new Error('Sin tarifa productiva'),
     );
     const r = await revisar([(await fuente()).id]);
     expect(r.body.calculado.control.estado).toBe('NO_VERIFICABLE');
-    await expect(
-      emitir(r.body.items.map((i: { id: string }) => i.id)),
-    ).rejects.toThrow('costos verificables');
+    expect(r.body.items[0].total).toBe(121);
+    await emitir(r.body.items.map((i) => i.id));
   });
 });

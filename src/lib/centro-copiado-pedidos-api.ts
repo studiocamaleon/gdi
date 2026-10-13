@@ -1,4 +1,5 @@
 import type { ReferenciaTanda } from "../../apps/api/src/common/tandas-copiado";
+import type { ResumenPrecioCopiado } from "../../apps/api/src/centro-copiado/pedidos/resumen-precios-pedido";
 import { apiRequest } from "./api";
 import type { PropuestaItem } from "./propuestas";
 import type { ResultadoPedidoCopiado } from "../../apps/api/src/centro-copiado/pedidos/calculo-pedido";
@@ -22,7 +23,7 @@ export type RevisionCopiado =
       cotizacionId: string | null;
       nombre: string;
       numero: number;
-      autorizado?: { nombre: string; motivo: string; fecha: string } | null;
+      resumenPrecios?: ResumenPrecioCopiado[];
       calculado: Omit<ResultadoPedidoCopiado, "control" | "terminaciones"> & {
         control: Pick<ResultadoPedidoCopiado["control"], "estado"> &
           Partial<ResultadoPedidoCopiado["control"]>;
@@ -59,15 +60,6 @@ export const revisarPedidoCopiado = (datos: {
     method: "POST",
     body: JSON.stringify(datos),
   });
-export const autorizarMargenCopiado = (
-  id: string,
-  huella: string,
-  motivo: string,
-) =>
-  apiRequest<RevisionCopiado>(
-    `/centro-copiado/pedidos/${id}/autorizar-margen`,
-    { method: "POST", body: JSON.stringify({ huella, motivo }) },
-  );
 export function claveRevisionCopiado(
   items: PropuestaItem[],
   canal: string,

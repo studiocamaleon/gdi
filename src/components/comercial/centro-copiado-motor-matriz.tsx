@@ -270,7 +270,11 @@ export function MotorEnMatriz({
         )}
         <div
           className={styles.cellMargin}
-          data-state={margenActual?.estado ?? "NO_VERIFICABLE"}
+          data-state={
+            margenActual?.negativo
+              ? "NEGATIVO"
+              : (margenActual?.estado ?? "NO_VERIFICABLE")
+          }
         >
           <span>Contribución actual</span>
           <strong>
@@ -289,16 +293,8 @@ export function MotorEnMatriz({
               : unidad}
           </small>
         )}
-        {margenActual && margenActual.estado !== "CUMPLE" && (
-          <span className={styles.cellWarning}>
-            {margenActual.negativo
-              ? "Contribución negativa"
-              : margenActual.estado === "BLOQUEADO"
-                ? "Bajo mínimo · bloqueo"
-                : margenActual.estado === "REQUIERE_AUTORIZACION"
-                  ? "Requiere autorización"
-                  : "Sin verificar"}
-          </span>
+        {margenActual?.negativo && (
+          <span className={styles.cellWarning}>Contribución negativa</span>
         )}
         {abierto && sugerida?.sugerencia && (
           <div className={styles.cellSuggestion}>
@@ -310,13 +306,6 @@ export function MotorEnMatriz({
             </small>
             {sugerida.sugerencia.ajustadaPorVolumen && (
               <small>Ajustado por volumen</small>
-            )}
-            {sugerida.sugerencia.controles.some(
-              (c) => c.estado !== "CUMPLE",
-            ) && (
-              <small className={styles.cellWarning}>
-                Revisar mínimo del tarifario
-              </small>
             )}
           </div>
         )}
@@ -423,8 +412,8 @@ export function MotorEnMatriz({
                   </p>
                 )}
                 <p className={styles.help}>
-                  El mínimo de contribución que controla la OT se configura por
-                  separado.
+                  La contribución es informativa: la OT usa los precios del
+                  tarifario sin autorización por margen.
                 </p>
               </FieldSet>
             )}

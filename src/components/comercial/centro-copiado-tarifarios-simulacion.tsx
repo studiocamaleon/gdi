@@ -443,9 +443,7 @@ function Simulador({
     const control = comparacion?.control;
     const estado = control?.estado ?? "NO_VERIFICABLE";
     const etiqueta = {
-      CUMPLE: "Cumple el mínimo",
-      REQUIERE_AUTORIZACION: "Requiere autorización",
-      BLOQUEADO: "Bloqueado",
+      CALCULADO: "Contribución calculada",
       NO_VERIFICABLE: "Contribución sin verificar",
     }[estado];
     return (
@@ -457,7 +455,7 @@ function Simulador({
           <EstadoCopiado>{escenario.cobertura}</EstadoCopiado>
           <EstadoCopiado
             tono={
-              estado === "CUMPLE"
+              estado === "CALCULADO"
                 ? "success"
                 : estado === "NO_VERIFICABLE"
                   ? "neutral"
@@ -617,8 +615,7 @@ function Simulador({
       calculados: 0,
       errores: 0,
       costosPendientes: 0,
-      cumplen: 0,
-      insuficientes: 0,
+      contribuciones: 0,
       pendientes: 0,
     };
     for (const c of celdas) {
@@ -642,9 +639,8 @@ function Simulador({
             e.estado === "CALCULADO" && normalizado
               ? compararSimulacion(normalizado, c.seccion, e).control.estado
               : "NO_VERIFICABLE";
-          if (estado === "CUMPLE") resumen.cumplen++;
-          else if (estado === "NO_VERIFICABLE") resumen.pendientes++;
-          else resumen.insuficientes++;
+          if (estado === "CALCULADO") resumen.contribuciones++;
+          else resumen.pendientes++;
         } catch {
           resumen.pendientes++;
         }
@@ -770,10 +766,9 @@ function Simulador({
               </div>
             </dl>
             <p className="text-sm text-muted-foreground">
-              Contribución: {resumen.cumplen} cumplen el mínimo ·{" "}
-              {resumen.insuficientes} insuficientes · {resumen.pendientes} sin
-              verificar. Los costos se calculan aunque falten precios de venta;
-              la contribución necesita esos precios.
+              Contribución: {resumen.contribuciones} calculadas ·{" "}
+              {resumen.pendientes} sin verificar. Los costos se calculan aunque
+              falten precios de venta; la contribución necesita esos precios.
               {[contenido.hojas, contenido.cad].some(
                 (s) => s?.reglas.cobertura === "UNICA",
               ) && (
@@ -1041,7 +1036,7 @@ function Simulador({
               Resultados temporales: se pierden al salir de este tarifario.
               Editar precios actualiza la comparación, sin modificar el costo ni
               su fecha. Volvé a simular cuando cambien tus costos. Una
-              simulación no publica precios ni autoriza ventas con pérdida.
+              simulación no publica precios. La contribución es informativa.
             </p>
           </CardContent>
         </Card>
@@ -1138,8 +1133,7 @@ function Simulador({
               })()}
             <p className="text-xs text-muted-foreground">
               La contribución es orientativa para este pedido de referencia. No
-              publica precios ni autoriza ventas; el pedido real se controla al
-              emitir.
+              publica precios; el precio del pedido real se verifica al emitir.
             </p>
           </div>
         </FormSheet>

@@ -78,13 +78,6 @@ export class CentroCopiadoPoliticaService {
           throw new BadRequestException(
             `El canal ${canal} necesita un tarifario vigente en la moneda de la empresa.`,
           );
-        if (
-          seleccion.estado === 'TARIFARIO' &&
-          !seleccion.version.contenido.margen
-        )
-          throw new BadRequestException(
-            `Configurá el margen mínimo y publicá el tarifario de ${canal} antes de activar.`,
-          );
       }
       const cambio = await tx.centroCopiadoPoliticaBorrador.updateMany({
         where: { tenantId, revision },

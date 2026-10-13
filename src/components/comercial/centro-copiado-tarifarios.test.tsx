@@ -683,7 +683,7 @@ it("la navegación GRAFO conserva la edición al pasar entre matriz y reglas", a
   await abrir();
   const campoPrecio = precio(1);
   await escribir(campoPrecio, "123.45");
-  await click("Reglas y contribución");
+  await click("Reglas comerciales");
   expect(campoPrecio.isConnected).toBe(true);
   expect(campoPrecio.closest("[data-inert]")).not.toBeNull();
   await click("Matrices");
@@ -705,4 +705,16 @@ it("la navegación GRAFO conserva la edición al pasar entre matriz y reglas", a
       }),
     }),
   );
+});
+
+it("retira la protección por contribución de las reglas, incluso con una política histórica", async () => {
+  const b = borrador();
+  b.contenido.margen = { minimoPorcentaje: "50", anteInsuficiente: "BLOQUEO" };
+  vi.mocked(api.obtenerTarifario).mockResolvedValue(b);
+  await renderEditor();
+  await elegir("Tarifario a editar", b.nombre);
+  await click("Reglas comerciales");
+  expect(el.textContent).not.toContain("Protección de la contribución");
+  expect(el.textContent).not.toContain("Contribución mínima");
+  expect(el.textContent).not.toContain("Requerir autorización");
 });

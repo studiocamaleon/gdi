@@ -297,7 +297,7 @@ it("muestra los costos por hoja y cuenta las tres coberturas aunque el precio y 
   expect(metrica("Costos pendientes")).toBe("0");
   expect(metrica("Errores de cálculo")).toBe("0");
   expect(el.textContent).toContain(
-    "0 cumplen el mínimo · 0 insuficientes · 18 sin verificar",
+    "0 calculadas · 18 sin verificar",
   );
   const costos = [...el.querySelectorAll("dt")].filter(
     (dt) => dt.textContent === "Costo por hoja",

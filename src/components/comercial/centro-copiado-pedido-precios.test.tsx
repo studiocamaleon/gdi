@@ -4,16 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
-import {
-  autorizarMargenCopiado,
-  type RevisionCopiado,
-} from "@/lib/centro-copiado-pedidos-api";
-vi.mock("@/lib/centro-copiado-pedidos-api", () => ({
-  autorizarMargenCopiado: vi.fn(),
-}));
+import type { RevisionCopiado } from "@/lib/centro-copiado-pedidos-api";
 let root: Root, el: HTMLDivElement;
-const revisar = vi.fn(),
-  autorizado = vi.fn();
+const revisar = vi.fn();
 function revision(estado = "REQUIERE_AUTORIZACION"): RevisionCopiado {
   return {
     modalidad: "TARIFARIO",
@@ -23,6 +16,20 @@ function revision(estado = "REQUIERE_AUTORIZACION"): RevisionCopiado {
     nombre: "Mostrador ficticio",
     numero: 2,
     items: [],
+    resumenPrecios: [
+      {
+        papel: "Obra · 80 g",
+        detalle: "A4 · B/N · Doble faz",
+        unidadPrecio: "HOJA",
+        unidadRango: "HOJA",
+        desde: "100",
+        hasta: null,
+        hastaExclusivo: false,
+        cantidad: "100",
+        totalImpresion: "12100",
+        precioFinal: "121",
+      },
+    ],
     calculado: {
       estado: "CALCULADO",
       control: { estado, porcentaje: "8.00" },
@@ -72,7 +79,6 @@ async function mostrar(
           ocupado={false}
           editable
           onRevisar={revisar}
-          onAutorizado={autorizado}
         />
       </PermisosProvider>,
     ),
@@ -82,59 +88,69 @@ const boton = (texto: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (b) => b.textContent?.trim() === texto,
   );
-it("muestra canal/versión y ofrece revisar y autorizar explícitamente", async () => {
+it("muestra sólo papel, rango y precio final por hoja, sin el panel de autorización", async () => {
   await mostrar();
-  expect(el.textContent).toContain("Mostrador ficticio · v2");
-  expect(el.textContent).toContain("Margen de impresión: 8.00%");
-  await act(async () => boton("Actualizar precios de copiado")!.click());
-  expect(revisar).toHaveBeenCalledOnce();
-  expect(autorizarMargenCopiado).not.toHaveBeenCalled();
+  expect(el.textContent).toContain("Obra · 80 g");
+  expect(el.textContent).toContain("A4 · B/N · Doble faz");
+  expect(el.textContent).toContain("100+");
+  expect(el.textContent).toContain("121,00");
+  expect(el.textContent).toContain("por hoja");
+  expect(el.textContent).not.toMatch(
+    /Mostrador|Contribución|Margen|listos para emitir|Precios revisados/,
+  );
+  expect(el.querySelector("button")).toBeNull();
 });
-it("costos privados: sin permiso no muestra porcentaje ni autorización", async () => {
+it("el vendedor puede ver precios finales sin permiso de costos", async () => {
   await mostrar(revision(), true, ["comercial.copiado.gestionar"]);
+  expect(el.textContent).toContain("121,00");
   expect(el.textContent).not.toContain("8.00");
-  expect(boton("Autorizar margen")).toBeUndefined();
 });
-it("identifica contribución en cálculos nuevos sin renombrar el margen de snapshots históricos", async () => {
-  const r = revision();
-  if (r.modalidad !== "TARIFARIO") throw new Error("fixture");
-  r.calculado.control.metrica = "CONTRIBUCION";
-  await mostrar(r);
-  expect(el.textContent).toContain("Contribución de impresión: 8.00%");
-  expect(el.textContent).toContain("cubrir estructura y atención");
-  expect(boton("Autorizar contribución")).toBeDefined();
-});
-it.each(["BLOQUEADO", "NO_VERIFICABLE"])(
-  "no ofrece excepción para %s",
+it.each(["REQUIERE_AUTORIZACION", "BLOQUEADO", "NO_VERIFICABLE"])(
+  "una revisión histórica %s no bloquea ni expone autorizaciones",
   async (estado) => {
     await mostrar(revision(estado));
-    expect(el.textContent).toContain("Emisión bloqueada");
-    expect(boton("Autorizar margen")).toBeUndefined();
+    expect(el.querySelector("table")).not.toBeNull();
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    expect(el.textContent).not.toMatch(/autorizar|bloqueada|contribución/i);
   },
 );
-it("un cambio de pedido deja la autorización pendiente de una nueva revisión", async () => {
+it("un cambio de pedido oculta la tabla anterior y permite actualizar", async () => {
   await mostrar(revision(), false);
-  expect(el.textContent).toContain("Pendiente de revisión");
-  expect(boton("Autorizar margen")).toBeUndefined();
+  expect(el.querySelector("table")).toBeNull();
+  expect(el.textContent).toContain("Actualizá los precios");
+  await act(async () => boton("Actualizar precios")!.click());
+  expect(revisar).toHaveBeenCalledOnce();
 });
-it("requiere motivo y envía la huella exacta, no emite la venta", async () => {
-  await mostrar();
-  await act(async () => boton("Autorizar margen")!.click());
-  expect(boton("Confirmar autorización")!.disabled).toBe(true);
-  const textarea = document.querySelector("textarea")!;
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value",
-    )!.set!.call(textarea, "Convenio comercial de prueba");
-    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+it("un precio ausente sigue pendiente aunque se retire el control de contribución", async () => {
+  const r = revision();
+  if (r.modalidad !== "TARIFARIO") throw new Error("fixture");
+  r.calculado.estado = "PRECIO_PENDIENTE";
+  await mostrar(r);
+  expect(el.textContent).toContain("Falta un precio en el tarifario");
+  expect(el.querySelector("table")).toBeNull();
+});
+it("distingue rangos por carilla y CAD del precio final por hoja o metro", async () => {
+  const r = revision();
+  if (r.modalidad !== "TARIFARIO") throw new Error("fixture");
+  r.resumenPrecios![0].unidadRango = "CARILLA";
+  r.resumenPrecios![0].hasta = "499";
+  r.resumenPrecios!.push({
+    ...r.resumenPrecios![0],
+    papel: "Obra CAD",
+    unidadPrecio: "ML",
+    unidadRango: "ML",
+    desde: "0",
+    hasta: "10",
+    hastaExclusivo: true,
+    precioFinal: "0",
   });
-  vi.mocked(autorizarMargenCopiado).mockResolvedValue(revision());
-  await act(async () => boton("Confirmar autorización")!.click());
-  expect(autorizarMargenCopiado).toHaveBeenCalledWith(
-    "calculo-demo",
-    "a".repeat(64),
-    "Convenio comercial de prueba",
-  );
-  expect(autorizado).toHaveBeenCalledOnce();
+  await mostrar(r);
+  expect(el.textContent).toContain("100–499carillas");
+  expect(el.textContent).toContain("0–<10metros");
+  expect(el.textContent).toContain("por metro");
+  expect(el.textContent).toContain("0,00");
+});
+it("un canal de motor revisado no agrega un bloque sin información", async () => {
+  await mostrar({ modalidad: "MOTOR" });
+  expect(el.textContent).toBe("");
 });

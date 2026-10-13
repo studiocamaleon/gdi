@@ -16,7 +16,6 @@ const calcular = (
   evaluarMargen({
     ventas: [{ neto, total, cargas }],
     costoProduccion: costo,
-    politica,
     decimales: 2,
   });
 const carga = (
@@ -27,9 +26,9 @@ const carga = (
 ): CargaMargen => ({ clave, nombre: 'Cargo ficticio', porcentaje, base, tipo });
 
 it.each([
-  ['8000', '20.00', 'CUMPLE'],
-  ['9200', '8.00', 'REQUIERE_AUTORIZACION'],
-  ['10500', '-5.00', 'REQUIERE_AUTORIZACION'],
+  ['8000', '20.00', 'CALCULADO'],
+  ['9200', '8.00', 'CALCULADO'],
+  ['10500', '-5.00', 'CALCULADO'],
 ])(
   'evalúa costo %s con margen sobre venta neta',
   (costo, porcentaje, estado) => {
@@ -48,32 +47,30 @@ it('descuenta cargas sobre sus bases y no resta IVA como costo', () => {
     cargasTotal: '1648.60',
     utilidad: '351.40',
     porcentaje: '3.51',
-    estado: 'REQUIERE_AUTORIZACION',
+    estado: 'CALCULADO',
   });
 });
-it('evalúa con precisión completa aunque el porcentaje visible redondee al piso', () => {
+it('conserva el cálculo aunque el porcentaje visible redondee', () => {
   expect(calcular('8000.001')).toMatchObject({
     porcentaje: '20.00',
-    estado: 'REQUIERE_AUTORIZACION',
+    estado: 'CALCULADO',
   });
 });
-it('bloqueo estricto no se convierte en autorización y no modifica el precio', () => {
+it('una pérdida es informativa y no modifica el precio', () => {
   expect(
     evaluarMargen({
       ventas: [{ neto: '100', total: '121', cargas: [] }],
       costoProduccion: '110',
-      politica: { ...politica, anteInsuficiente: 'BLOQUEO' },
       decimales: 2,
     }),
-  ).toMatchObject({ estado: 'BLOQUEADO', negativo: true, utilidad: '-10.00' });
+  ).toMatchObject({ estado: 'CALCULADO', negativo: true, utilidad: '-10.00' });
 });
-it('no confunde costos/cargas faltantes con cero; no inventa un umbral anterior', () => {
+it('distingue costos/cargas faltantes y calcula sin exigir un umbral', () => {
   expect(calcular('0', null).estado).toBe('NO_VERIFICABLE');
   expect(
     evaluarMargen({
       ventas: [{ neto: '100', total: '121', cargas: [] }],
       costoProduccion: null,
-      politica,
       decimales: 2,
     }).utilidad,
   ).toBeNull();
@@ -83,13 +80,13 @@ it('no confunde costos/cargas faltantes con cero; no inventa un umbral anterior'
       costoProduccion: '80',
       decimales: 2,
     }),
-  ).toMatchObject({ estado: 'NO_VERIFICABLE', porcentaje: '20.00' });
+  ).toMatchObject({ estado: 'CALCULADO', porcentaje: '20.00' });
 });
-it('precio cero no divide por cero ni aprueba una pérdida', () => {
+it('precio cero informa pérdida sin dividir por cero', () => {
   expect(calcular('60', [], '0', '0')).toMatchObject({
     utilidad: '-60.00',
     porcentaje: null,
-    estado: 'REQUIERE_AUTORIZACION',
+    estado: 'CALCULADO',
   });
 });
 it('acumula cargos antes de redondear y rechaza cargos duplicados', () => {
@@ -100,16 +97,15 @@ it('acumula cargos antes de redondear y rechaza cargos duplicados', () => {
     cargas: cargos,
   }));
   expect(
-    evaluarMargen({ ventas, costoProduccion: '1', politica, decimales: 2 })
-      .cargasTotal,
+    evaluarMargen({ ventas, costoProduccion: '1', decimales: 2 }).cargasTotal,
   ).toBe('0.50');
   expect(calcular('1', [...cargos, ...cargos]).estado).toBe('NO_VERIFICABLE');
 });
 it('usa las ventas ya ajustadas y evalúa terminaciones en una cuenta independiente', () => {
   const impresion = calcular('80', [], '90', '108.90');
   const terminaciones = calcular('10', [], '1000', '1210');
-  expect(impresion.estado).toBe('REQUIERE_AUTORIZACION');
-  expect(terminaciones.estado).toBe('CUMPLE');
+  expect(impresion.estado).toBe('CALCULADO');
+  expect(terminaciones.estado).toBe('CALCULADO');
 });
 it.each(['-1', '100', 'NaN', '1.00001', ''])(
   'rechaza margen de tarifario inválido %s',
@@ -185,28 +181,23 @@ it('rehúsa sugerir si falta desglose, base, IVA coherente o cambian las tasas e
   ).toBeNull();
 });
 
-it('el redondeo monetario del objetivo no pide autorización por fracciones de centavo', () => {
+it('el redondeo no genera decisiones de autorización', () => {
   const entrada = {
     ventas: [{ neto: '100.01', total: '100.01', cargas: [] }],
     costoProduccion: '60.01',
-    politica: {
-      minimoPorcentaje: '40',
-      anteInsuficiente: 'AUTORIZACION' as const,
-    },
     decimales: 2,
   };
   expect(evaluarMargen(entrada)).toMatchObject({
-    estado: 'CUMPLE',
+    estado: 'CALCULADO',
     porcentaje: '40.00',
   });
   expect(evaluarMargen({ ...entrada, costoProduccion: '60.02' }).estado).toBe(
-    'REQUIERE_AUTORIZACION',
+    'CALCULADO',
   );
   expect(
     evaluarMargen({
       ...entrada,
       costoProduccion: '100.02',
-      politica: { ...entrada.politica, minimoPorcentaje: '0' },
     }).estado,
-  ).toBe('REQUIERE_AUTORIZACION');
+  ).toBe('CALCULADO');
 });

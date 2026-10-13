@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import {
   Prisma,
   type CotizacionItem,
@@ -156,24 +152,11 @@ export class CentroCopiadoEmisionService {
         'Falta una revisión válida de precios de copiado.',
       );
     const r = await this.verificar(tx, auth.tenantId, c, items, contexto);
-    const controles = [r.control, ...r.terminaciones.map((t) => t.control)];
-    if (
-      r.estado === 'PRECIO_PENDIENTE' ||
-      controles.some((c) => c.estado === 'NO_VERIFICABLE')
-    )
+    // Los costos y la contribución son informativos, también en revisiones históricas.
+    // La emisión conserva la verificación del precio y de su versión, nunca un piso de margen.
+    if (r.estado === 'PRECIO_PENDIENTE')
       throw new ConflictException(
-        'Faltan precios o costos verificables de copiado. Revisalos antes de emitir.',
-      );
-    if (controles.some((c) => c.estado === 'BLOQUEADO'))
-      throw new ConflictException(
-        'El margen de copiado está debajo del mínimo y el tarifario bloquea la emisión. Ajustá el precio.',
-      );
-    if (
-      controles.some((c) => c.estado === 'REQUIERE_AUTORIZACION') &&
-      !c.autorizadoEl
-    )
-      throw new ForbiddenException(
-        'El margen de copiado requiere una autorización explícita con motivo antes de emitir.',
+        'Faltan precios de copiado. Completá el tarifario antes de emitir.',
       );
   }
 }

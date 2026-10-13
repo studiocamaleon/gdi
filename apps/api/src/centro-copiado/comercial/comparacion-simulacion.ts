@@ -67,7 +67,6 @@ export function compararSimulacion(
       : [],
     costoProduccion: escenario.costoVariableTotal ?? escenario.costoTotal,
     metrica: 'CONTRIBUCION',
-    politica: contenido.margen,
     decimales: escenario.decimalesPrecio,
   });
   return {

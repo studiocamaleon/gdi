@@ -7,10 +7,11 @@ import type { CotizacionResultado } from '../../motor-universal/tipos';
 import { validarMonedaDocumento } from '../../cotizaciones/validar-moneda-documento';
 import { resolverIvaCopiado } from '../tarifarios/iva-copiado';
 import { CentroCopiadoEmisionService } from './centro-copiado-emision.service';
+import { resumirPreciosCopiado } from './resumen-precios-pedido';
+import { validarContenidoTarifario } from '../tarifarios/contenido-tarifario';
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -907,7 +908,7 @@ export class CentroCopiadoPedidosService {
             estado: calculado.control.estado,
           },
         });
-        return this.respuesta(auth, guardado, clones);
+        return this.respuesta(auth, guardado, clones, tx);
       },
       { timeout: 15000 },
     );
@@ -1050,12 +1051,48 @@ export class CentroCopiadoPedidosService {
       },
     };
   }
-  private respuesta(
+  private async respuesta(
     auth: CurrentAuth,
     c: CentroCopiadoPedidoCalculo,
     items: CotizacionItem[],
+    db: Prisma.TransactionClient = this.prisma,
   ) {
     const r = c.resultadoJson as unknown as ResultadoGuardado;
+    const referencia = objeto(c.referenciaJson);
+    const [version, papeles] = await Promise.all([
+      db.centroCopiadoTarifarioVersion.findFirst({
+        where: { id: String(referencia.versionId), tenantId: auth.tenantId },
+        select: { contenido: true },
+      }),
+      db.materiaPrima.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          id: {
+            in: [
+              ...new Set(
+                r.lineas.flatMap((l) =>
+                  l.documentos.map((d) => d.papelMateriaPrimaId),
+                ),
+              ),
+            ],
+          },
+        },
+        select: { id: true, nombre: true },
+      }),
+    ]);
+    const resumenPrecios = version
+      ? resumirPreciosCopiado({
+          tenantId: auth.tenantId,
+          contenido: validarContenidoTarifario(version.contenido),
+          lineas: r.lineas,
+          precios: r.precios,
+          nombresPapeles: Object.fromEntries(
+            papeles.map((p) => [p.id, p.nombre]),
+          ),
+          sinComprobante: c.tratamientoFiscal === 'SIN_COMPROBANTE',
+          decimales: r.decimales,
+        })
+      : [];
     // No devolver las líneas internas (costos, comisiones, documentos) al navegador.
     const { lineas: _l, ...calculado } = r;
     void _l;
@@ -1066,13 +1103,7 @@ export class CentroCopiadoPedidosService {
       cotizacionId: c.cotizacionId,
       nombre: r.nombre,
       numero: r.numero,
-      autorizado: c.autorizadoEl
-        ? {
-            nombre: c.autorizadoNombre,
-            motivo: c.autorizacionMotivo,
-            fecha: c.autorizadoEl,
-          }
-        : null,
+      resumenPrecios,
       calculado,
       items: r.origenes.map((o) => {
         const i = items.find((i) => i.id === o.id)!;
@@ -1146,92 +1177,7 @@ export class CentroCopiadoPedidosService {
       const todos = await tx.cotizacionItem.findMany({
         where: { tenantId: auth.tenantId, cotizacionId: c.cotizacionId },
       });
-      return { revision: this.respuesta(auth, c, todos), vigente };
-    });
-  }
-
-  async autorizar(
-    auth: CurrentAuth,
-    id: string,
-    motivo: string,
-    firmaEsperada: string,
-  ) {
-    if (
-      !auth.permisos?.has('comercial.aprobar_descuento') ||
-      !auth.permisos?.has('finanzas.ver_margenes')
-    )
-      throw new ForbiddenException(
-        'Necesitás permiso para autorizar márgenes y consultar costos. El permiso de cotizar no alcanza.',
-      );
-    if (motivo.trim().length < 10 || motivo.trim().length > 1000)
-      throw new BadRequestException(
-        'Explicá el motivo de la autorización (entre 10 y 1.000 caracteres).',
-      );
-    return this.prisma.$transaction(async (tx) => {
-      await this.politica.bloquear(tx, auth.tenantId);
-      const c = await tx.centroCopiadoPedidoCalculo.findFirst({
-        where: { id, tenantId: auth.tenantId },
-      });
-      if (!c) throw new NotFoundException('No se encontró el cálculo.');
-      const r = c.resultadoJson as unknown as ResultadoGuardado;
-      const items = await tx.cotizacionItem.findMany({
-        where: { tenantId: auth.tenantId, cotizacionId: c.cotizacionId },
-      });
-      if (c.huella !== firmaEsperada)
-        throw new ConflictException(
-          'El cálculo cambió. Revisalo antes de autorizar.',
-        );
-      await this.emision.verificar(
-        tx,
-        auth.tenantId,
-        c,
-        items.filter(esCopiado),
-        {
-          canalVenta: c.canalVenta,
-          clienteId: c.clienteId,
-          tratamientoFiscal: c.tratamientoFiscal,
-          items: items.map((i) => ({
-            cotizacionItemId: i.id,
-            subtotal: i.precioNetoTotal!,
-            total: i.precioTotal!,
-          })),
-        },
-      );
-      const controles = [r.control, ...r.terminaciones.map((t) => t.control)];
-      if (
-        controles.some(
-          (c) => c.estado === 'BLOQUEADO' || c.estado === 'NO_VERIFICABLE',
-        ) ||
-        !controles.some((c) => c.estado === 'REQUIERE_AUTORIZACION')
-      )
-        throw new BadRequestException(
-          'Este cálculo no admite una autorización de excepción. Revisá precios y costos.',
-        );
-      const actor = await tx.user.findUnique({
-        where: { id: auth.userId },
-        select: { nombreCompleto: true },
-      });
-      const actualizado = await tx.centroCopiadoPedidoCalculo.update({
-        where: { id: c.id },
-        data: {
-          autorizadoPorId: auth.userId,
-          autorizadoNombre:
-            auth.impersonacion?.actorNombre ??
-            actor?.nombreCompleto ??
-            'Responsable autorizado',
-          autorizacionMotivo: motivo.trim(),
-          autorizadoEl: new Date(),
-        },
-      });
-      await this.auditoria.registrar(tx, {
-        tenantId: auth.tenantId,
-        actorUserId: auth.userId,
-        tipo: 'PEDIDO_MARGEN_AUTORIZADO',
-        descripcion:
-          'Excepción de margen autorizada para un cálculo exacto de copiado.',
-        datos: { calculoId: c.id, huella: c.huella, motivo: motivo.trim() },
-      });
-      return this.respuesta(auth, actualizado, items);
+      return { revision: await this.respuesta(auth, c, todos, tx), vigente };
     });
   }
 }
