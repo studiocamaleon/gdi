@@ -77,7 +77,7 @@ export class DocumentosOrdenService {
         estado: true,
         updatedAt: true,
         items: {
-          where: { parentItemId: null },
+          where: { parentItemId: null, listoEnMostrador: false },
           orderBy: { ordenIndice: 'asc' },
           select: {
             id: true,

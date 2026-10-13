@@ -147,6 +147,7 @@ function avisoDeSalida() {
   return event.defaultPrevented;
 }
 beforeEach(() => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
   vi.clearAllMocks();
   mocks.confirmar = null;
   mocks.copiado = false;
@@ -743,4 +744,23 @@ it("guarda una fecha manual sin recalcular ni reemplazar el precio acordado", as
       ],
     }),
   );
+});
+
+
+it("marca listo en el borrador conservando el snapshot y el precio", async () => {
+  const base = getMockOrdenDetalle("mock-0184")!;
+  const producto = { ...base.productos[0], id: "item-listo-ficticio", codigo: "SYS-IMPRESION-DOC", cotizacionItemId: "precio-acordado-ficticio" };
+  const orden = { ...base, estado: "borrador" as const, canalVenta: "mostrador", productos: [producto] };
+  mocks.editarOrden.mockResolvedValue({ ...orden, productos: [{ ...producto, listoEnMostrador: true }] });
+  await montar(orden);
+  await click("Editar orden");
+  const listo = container.querySelector<HTMLButtonElement>(`[aria-label="Marcar producción finalizada: ${producto.nombre}"]`)!;
+  expect(listo).not.toBeNull();
+  await act(async () => listo.click());
+  expect(listo.getAttribute("aria-checked")).toBe("true");
+  const guardar = [...container.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.includes("Guardar cambios"))!;
+  expect(guardar).toBeDefined();
+  await act(async () => guardar.click());
+  expect(mocks.guardar).not.toHaveBeenCalled();
+  expect(mocks.editarOrden).toHaveBeenCalledWith(orden.id, expect.objectContaining({ items: [expect.objectContaining({ id: producto.id, cotizacionItemId: producto.cotizacionItemId, listoEnMostrador: true, total: producto.total })] }));
 });

@@ -1,3 +1,4 @@
+import { validarCopiadoListo, exigirMarcaAntesDeEmision } from './copiado-listo';
 import { CentroCopiadoEmisionService } from '../centro-copiado/pedidos/centro-copiado-emision.service';
 import type { ContextoEmisionCopiado } from '../centro-copiado/pedidos/centro-copiado-pedidos.service';
 import { idsClientesPorNombre } from '../clientes/busqueda-clientes';
@@ -213,6 +214,7 @@ type CotizacionItemFinanciero = {
   cotizacionId: string;
   cantidad: unknown;
   snapshotJson: unknown;
+  jobContextJson?: unknown;
   precioNetoTotal: unknown;
   impuestosPorFueraTotal: unknown;
   precioTotal: unknown;
@@ -1161,9 +1163,9 @@ export class OrdenesTrabajoService {
       try {
         const item = await this.prisma.ordenTrabajoItem.findFirst({
           where: { id: itemId, tenantId: auth.tenantId },
-          select: { contieneLotesEntrega: true },
+          select: { contieneLotesEntrega: true, listoEnMostrador: true },
         });
-        if (!item?.contieneLotesEntrega)
+        if (item && !item.contieneLotesEntrega && !item.listoEnMostrador)
           await this.preparacionesRecorrido.asegurarParaItem(auth, itemId);
       } catch (error) {
         this.logger.warn({
@@ -1784,6 +1786,7 @@ export class OrdenesTrabajoService {
           cotizacionId: true,
           cantidad: true,
           snapshotJson: true,
+          jobContextJson: true,
           precioNetoTotal: true,
           impuestosPorFueraTotal: true,
           precioTotal: true,
@@ -2145,6 +2148,7 @@ export class OrdenesTrabajoService {
             items: {
               create: items.map((item, indice) => ({
                 tenantId: auth.tenantId,
+                listoEnMostrador: item.listoEnMostrador ?? false,
                 cotizacionItemId: item.cotizacionItemId ?? null,
                 recetaRevisionId:
                   (item as ItemAutorizado).recetaRevisionId ?? null,
@@ -2342,6 +2346,7 @@ export class OrdenesTrabajoService {
             { alEmitir: true, auth },
           );
         }
+        if (emitida) await this.registrarCopiadoFinalizadoTx(tx, auth, orden.id, usuarioNombre);
         if (opciones.conversionPresupuesto) {
           const todos = opciones.conversionPresupuesto.itemIds;
           const convertidos = await tx.ordenTrabajoItem.findMany({
@@ -2434,6 +2439,7 @@ export class OrdenesTrabajoService {
           cotizacionId: true,
           cantidad: true,
           snapshotJson: true,
+          jobContextJson: true,
           precioNetoTotal: true,
           impuestosPorFueraTotal: true,
           precioTotal: true,
@@ -2527,6 +2533,7 @@ export class OrdenesTrabajoService {
     }
 
     const estado = orden.estado as OrdenTrabajoEstado;
+    if (payload.items) exigirMarcaAntesDeEmision(estado, payload.items, orden.items);
     if (payload.cargos !== undefined && estado === 'cancelada')
       throw new ConflictException('No se pueden modificar cargos de una orden cancelada.');
 
@@ -2651,6 +2658,7 @@ export class OrdenesTrabajoService {
           cotizacionId: true,
           cantidad: true,
           snapshotJson: true,
+          jobContextJson: true,
           precioNetoTotal: true,
           impuestosPorFueraTotal: true,
           precioTotal: true,
@@ -3875,6 +3883,7 @@ export class OrdenesTrabajoService {
       !Array.isArray(raiz.receta)
         ? (raiz.receta as Record<string, unknown>)
         : {};
+    validarCopiadoListo(item, producto, snapshot.jobContextJson);
     return {
       ...item,
       codigo: String(producto.codigo ?? item.codigo),
@@ -4218,6 +4227,7 @@ export class OrdenesTrabajoService {
   private buildItemData(item: CrearOrdenTrabajoItemDto | ItemAutorizado) {
     const autorizado = item as ItemAutorizado;
     return {
+      ...(item.listoEnMostrador !== undefined ? { listoEnMostrador: item.listoEnMostrador } : {}),
       cotizacionItemId: item.cotizacionItemId ?? null,
       recetaRevisionId: autorizado.recetaRevisionId ?? null,
       recetaVersion: autorizado.recetaVersion ?? null,
@@ -4265,6 +4275,7 @@ export class OrdenesTrabajoService {
         cotizacionId: true,
         cantidad: true,
         snapshotJson: true,
+        jobContextJson: true,
         precioNetoTotal: true,
         impuestosPorFueraTotal: true,
         precioTotal: true,
@@ -4308,6 +4319,7 @@ export class OrdenesTrabajoService {
       auth,
       ordenId,
     );
+    exigirMarcaAntesDeEmision(orden.estado, [payload], []);
     const [snapshot, regional] = await Promise.all([
       this.validarSnapshotDisponible(auth, orden.id, payload.cotizacionItemId),
       regionalDelTenant(this.prisma, auth.tenantId),
@@ -4445,6 +4457,7 @@ export class OrdenesTrabajoService {
     if (!existente) {
       throw new NotFoundException('No se encontró el producto en la orden.');
     }
+    exigirMarcaAntesDeEmision(orden.estado, [{ ...payload, id: itemId }], [existente]);
     const [snapshot, regional] = await Promise.all([
       this.validarSnapshotDisponible(
         auth,
@@ -4635,6 +4648,7 @@ export class OrdenesTrabajoService {
     if (!existente) {
       throw new NotFoundException('No se encontró el producto en la orden.');
     }
+    exigirMarcaAntesDeEmision(orden.estado, [], [existente]);
     if (orden._count.items <= 1) {
       throw new BadRequestException(
         'La orden no puede quedar sin productos. Agregá otro antes de quitar este, o anulá la orden.',
@@ -4896,6 +4910,7 @@ export class OrdenesTrabajoService {
           { alEmitir: true, auth },
         );
       }
+      if (desde === 'borrador') await this.registrarCopiadoFinalizadoTx(tx, auth, orden.id, firmaActor(auth, actor?.nombreCompleto ?? auth.email));
       if (hacia === 'produccion')
         await this.desarrolloDocumental.exigirGatesCumplidos(orden.id, undefined, undefined, tx);
       await tx.ordenTrabajoEvento.create({
@@ -5168,6 +5183,77 @@ export class OrdenesTrabajoService {
     await this.descartarPromesasEta(auth.tenantId, orden.id);
 
     return this.findOne(auth, orden.id);
+  }
+
+  /** Registra operaciones ya terminadas, sin crear cola, gates ni asignaciones. */
+  private async registrarCopiadoFinalizadoTx(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    ordenId: string,
+    usuarioNombre: string,
+  ) {
+    const listos = await tx.ordenTrabajoItem.findMany({
+      where: { tenantId: auth.tenantId, ordenId, listoEnMostrador: true },
+      select: {
+        id: true, listoEnMostradorEl: true, listoEnMostradorPorNombre: true,
+        trazabilidadSnapshotJson: true,
+        cotizacionItem: { select: { trazabilidadJson: true } },
+      },
+    });
+    if (!listos.length) return;
+    const ahora = new Date();
+    for (const item of listos) {
+      const filas = this.pasosDesdeTrazabilidad(
+        auth.tenantId, ordenId, item.id,
+        item.trazabilidadSnapshotJson ?? item.cotizacionItem?.trazabilidadJson,
+      );
+      if (!filas.length)
+        throw new ConflictException('El ítem no tiene pasos calculados. Volvé a cotizar antes de marcar la producción finalizada.');
+      const completadoEl = item.listoEnMostradorEl ?? ahora;
+      await tx.ordenTrabajoItemPaso.createMany({
+        data: filas.map(fila => ({
+          ...fila,
+          estado: 'hecho',
+          iniciadoEl: completadoEl,
+          completadoEl,
+          completadoPorId: auth.userId,
+          completadoPorNombre: item.listoEnMostradorPorNombre ?? usuarioNombre,
+          tiempoRealMin: fila.duracionEstimadaMin,
+          tiempoFuente: fila.duracionEstimadaMin != null ? 'estimado' : 'invalido',
+          // Son registros históricos; no abren compras ni tareas de producción.
+          estadoCompra: fila.tipoEjecucion === 'tercerizado' ? 'recibido' : null,
+        })),
+        skipDuplicates: true,
+      });
+    }
+    const nuevos = listos.filter(i => !i.listoEnMostradorEl);
+    if (!nuevos.length) return;
+    await tx.ordenTrabajoItem.updateMany({
+      where: { tenantId: auth.tenantId, ordenId, id: { in: nuevos.map(i => i.id) } },
+      data: { listoEnMostradorEl: ahora, listoEnMostradorPorNombre: usuarioNombre },
+    });
+    await tx.ordenTrabajoEvento.create({ data: {
+      tenantId: auth.tenantId, ordenId, tipo: 'productos_listos',
+      descripcion: `${nuevos.length} ítem(s) con producción finalizada al emitir; tiempos estimados`,
+      usuarioId: auth.userId, usuarioNombre,
+      datosJson: { itemIds: nuevos.map(i => i.id), tiempoFuente: 'estimado' },
+    } });
+    const pendientes = await tx.ordenTrabajoItem.count({
+      where: { tenantId: auth.tenantId, ordenId, parentItemId: null, listoEnMostrador: false },
+    });
+    if (!pendientes) {
+      await tx.ordenTrabajo.update({
+        where: { id: ordenId, tenantId: auth.tenantId },
+        data: { estado: 'finalizada', progresoPct: 100 },
+      });
+      await this.marcarPrimeraFinalizacion(tx, auth.tenantId, ordenId);
+      await tx.ordenTrabajoEvento.create({ data: {
+        tenantId: auth.tenantId, ordenId, tipo: 'estado',
+        descripcion: 'OT finalizada: todos los ítems tenían la producción finalizada al emitir',
+        usuarioId: auth.userId, usuarioNombre,
+        datosJson: { antes: 'pendiente', despues: 'finalizada' },
+      } });
+    }
   }
 
   /**
@@ -5772,6 +5858,7 @@ export class OrdenesTrabajoService {
       where: {
         tenantId,
         id: { in: items.map((i) => i.id) },
+        listoEnMostrador: false,
         orden: {
           produccionControlada: true,
           estado: { notIn: ['borrador', 'cancelada'] },
@@ -6811,6 +6898,7 @@ export class OrdenesTrabajoService {
         tenantId: auth.tenantId,
         cotizacionItemId: { not: null },
         contieneLotesEntrega: false,
+        listoEnMostrador: false,
         pasos: { none: {} },
         orden: { estado: { in: ESTADOS_TABLERO }, produccionControlada: true },
       },
@@ -7252,6 +7340,7 @@ export class OrdenesTrabajoService {
         ordenId,
         cotizacionItemId: { not: null },
         contieneLotesEntrega: false,
+        listoEnMostrador: false,
         pasos: { none: {} },
       },
       select: { id: true, ordenId: true, cotizacionItemId: true },
@@ -7764,6 +7853,7 @@ export class OrdenesTrabajoService {
               nombre: true,
               ordenIndice: true,
               contieneLotesEntrega: true,
+              listoEnMostrador: true,
             },
           },
           tramos: {
@@ -7782,6 +7872,8 @@ export class OrdenesTrabajoService {
     if (!paso) {
       throw new NotFoundException('No se encontró el paso de producción.');
     }
+    if (paso.item.listoEnMostrador)
+      throw new ConflictException('La producción de este ítem se registró finalizada al emitir y no tiene una ruta activa.');
     if (
       interno?.accionEnCola &&
       (paso.maquinaId !== interno.accionEnCola.maquinaId ||
@@ -8830,6 +8922,8 @@ export class OrdenesTrabajoService {
       cantidad: Prisma.Decimal;
       cantidadUnidad: string;
       specsJson: Prisma.JsonValue;
+      listoEnMostrador?: boolean;
+      listoEnMostradorEl?: Date | null;
       jobContextSnapshotJson?: Prisma.JsonValue;
       cotizacionItemId: string | null;
       /** Producto vivo (vía la cotización): su nombre ACTUAL, para no mostrar
@@ -8961,6 +9055,7 @@ export class OrdenesTrabajoService {
       // gráfico. Se proyecta sólo el brief, no todo el jobContext comercial.
       briefDiseno: jobContext?.briefDiseno ?? null,
       caras: jobContext?.caras === 2 ? 2 : 1,
+      listoEnMostrador: Boolean(item.listoEnMostradorEl),
       sinRuta: pasosVisibles.length === 0,
       pasos: pasosVisibles.map((paso) => ({
         id: paso.id,
@@ -9255,6 +9350,9 @@ export class OrdenesTrabajoService {
           return {
             id: item.id,
             cotizacionItemId: item.cotizacionItemId,
+            listoEnMostrador: item.listoEnMostrador,
+            listoEnMostradorEl: item.listoEnMostradorEl?.toISOString() ?? null,
+            listoEnMostradorPorNombre: item.listoEnMostradorPorNombre,
             asignacionesPersonal: eleccionesDePersonal(item.personalPrevistoJson),
             // Descuento comercial persistido (F1): para rehidratar la ficha con el
             // mismo descuento que aplicó el vendedor. Ver descuentos-diseno.md §10.
@@ -9385,6 +9483,7 @@ export class OrdenesTrabajoService {
           select: {
             id: true,
             parentItemId: true,
+            listoEnMostradorEl: true,
             nombre: true,
             specsJson: true,
             archivos: {
@@ -9419,10 +9518,7 @@ export class OrdenesTrabajoService {
     }
 
     const productos = productosComercialesConTrabajo(orden.items);
-    const progreso = calcularProgreso(
-      productos.flatMap((i) => i.pasos),
-      orden.estado,
-    );
+    const progreso = progresoDeOrden({ ...orden, pasos: productos.flatMap(i => i.pasos) });
     const items = productos.map((item) => {
       const avance = calcularProgreso(item.pasos, orden.estado);
       const actual = item.pasos.find((p) => p.estado !== 'hecho');

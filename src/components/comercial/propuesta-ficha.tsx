@@ -128,7 +128,6 @@ import {
   PackageCheckIcon,
   PackageIcon,
   PlusIcon,
-  QrCodeIcon,
   LinkIcon,
   SaveIcon,
   TriangleAlertIcon,
@@ -4365,10 +4364,12 @@ const DESCUENTO_MARGEN_ALERTA_PCT = 15;
  * de OT asignado por el backend (`numero != null`).
  */
 function EmitOverlay({
+  listosEnMostrador = false,
   numero,
   onDone,
 }: {
   numero: string | null;
+  listosEnMostrador?: boolean;
   onDone: () => void;
 }) {
   const [phase, setPhase] = React.useState(0);
@@ -4376,7 +4377,7 @@ function EmitOverlay({
   const STEPS = [
     "Guardando cotización",
     "Asignando número de OT",
-    "Notificando al taller",
+    listosEnMostrador ? "Registrando producción finalizada" : "Notificando al taller",
   ];
 
   React.useEffect(() => {
@@ -4491,7 +4492,7 @@ function EmitOverlay({
               <div className="emit-title">¡Orden emitida!</div>
               <div className="emit-nro">{numero}</div>
               <div className="emit-note">
-                Enviada al taller · visible en Producción → Órdenes
+                {listosEnMostrador ? "Producción finalizada" : "Enviada al taller · visible en Producción → Órdenes"}
               </div>
             </div>
           )}
@@ -4544,6 +4545,7 @@ function itemToOrdenItemPayload(
     cotizacionItemId,
     ...(item.asignacionesPersonal !== undefined ? { asignacionesPersonal: item.asignacionesPersonal } : {}),
     fechaEntrega: item.fechaEntrega || undefined,
+    listoEnMostrador: item.listoEnMostrador ?? false,
     ...(planEntrega ? { planEntrega } : {}),
     descuentoTipo: item.descuentoInput?.tipo ?? null,
     descuentoValor: item.descuentoInput?.valor ?? null,
@@ -4832,6 +4834,9 @@ function rehidratarOrdenItem(
     // sólo para órdenes previas al campo.
     id: producto.id ?? `ot-item-${index}`,
     cotizacionItemId: producto.cotizacionItemId ?? undefined,
+    listoEnMostrador: producto.listoEnMostrador,
+    listoEnMostradorEl: producto.listoEnMostradorEl,
+    listoEnMostradorPorNombre: producto.listoEnMostradorPorNombre,
     asignacionesPersonal: producto.asignacionesPersonal,
     fechaEntrega: producto.fechaEntrega ?? undefined,
     distribucionEntregas: producto.distribucionEntregas,
@@ -5098,7 +5103,7 @@ function PropuestaFichaContenido({
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
     orden ? orden.productos.map(rehidratarOrdenItem) : presupuestoBase?.productos.map((producto, index) => ({ ...rehidratarOrdenItem(producto, index), cotizacionItemId: undefined })) ?? [],
   );
-  const documentosCentroCopiado = items.filter(item => metaCentroCopiado(item.jobContext)).length;
+  const documentosCentroCopiado = items.filter(item => !item.listoEnMostrador && metaCentroCopiado(item.jobContext)).length;
 
   const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(() => presupuestoBase?.cargos ?? cargosDeOrden(orden));
   const [fidelizacionCanjePuntos, setFidelizacionCanjePuntos] =
@@ -5362,7 +5367,7 @@ function PropuestaFichaContenido({
   /** ETA por item de la ficha, simulada contra las colas reales de HOY. */
   const demoraPorItem = React.useMemo(() => {
     if (!conDemoraSistema || !colasTaller || items.length === 0) return null;
-    const nuevos = items.map((item) =>
+    const nuevos = items.filter(item => !item.listoEnMostrador).map((item) =>
       condicionarPorMateriales(
         itemHipoteticoDesdeCotizacion(item.id, item.cotizacion, item.asignacionesPersonal),
         previsionMateriales.data,
@@ -5578,8 +5583,8 @@ function PropuestaFichaContenido({
   const [editadosIds, setEditadosIds] = React.useState<Set<string>>(
     () => new Set(),
   );
-  // Una fecha cambia la planificación, no la cotización ya acordada.
-  const [fechasEditadasIds, setFechasEditadasIds] = React.useState<Set<string>>(
+  // Fecha y marca de producción finalizada conservan la cotización ya acordada.
+  const [datosItemEditadosIds, setDatosItemEditadosIds] = React.useState<Set<string>>(
     () => new Set(),
   );
 
@@ -5610,7 +5615,7 @@ function PropuestaFichaContenido({
     const agregados = items.filter((item) => !persistedItemIds.has(item.id));
     const editados = items.filter(
       (item) => persistedItemIds.has(item.id) &&
-        (editadosIds.has(item.id) || fechasEditadasIds.has(item.id)),
+        (editadosIds.has(item.id) || datosItemEditadosIds.has(item.id)),
     );
     const quitados = orden.productos.filter(
       (producto) => producto.id && !idsActuales.has(producto.id),
@@ -5621,7 +5626,7 @@ function PropuestaFichaContenido({
       quitados,
       total: agregados.length + editados.length + quitados.length,
     };
-  }, [orden, editandoOrden, items, persistedItemIds, editadosIds, fechasEditadasIds]);
+  }, [orden, editandoOrden, items, persistedItemIds, editadosIds, datosItemEditadosIds]);
 
   const polyfanPendientesDeGuardar = React.useMemo(
     () =>
@@ -6122,7 +6127,7 @@ function PropuestaFichaContenido({
         .find(Boolean) ?? null,
     );
     setEditadosIds(new Set());
-    setFechasEditadasIds(new Set());
+    setDatosItemEditadosIds(new Set());
     setEditandoOrden(false);
   }, [orden, togglingFiscal, cancelando, cambioDocumento, precioOrdenPendiente]);
 
@@ -6235,7 +6240,7 @@ function PropuestaFichaContenido({
           } registrado${cambiosSinGuardar === 1 ? "" : "s"} en el historial.`,
         );
         setEditadosIds(new Set());
-        setFechasEditadasIds(new Set());
+        setDatosItemEditadosIds(new Set());
         setEditandoOrden(false);
         setNavPendiente(null);
         if (destino) {
@@ -6251,7 +6256,7 @@ function PropuestaFichaContenido({
             " La orden no se modificó; se recargó la versión vigente.",
         );
         setEditadosIds(new Set());
-        setFechasEditadasIds(new Set());
+        setDatosItemEditadosIds(new Set());
         setEditandoOrden(false);
         setNavPendiente(null);
         router.refresh();
@@ -6356,9 +6361,9 @@ function PropuestaFichaContenido({
     }
     setEmitiendoBorrador(true);
     try {
-      await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
+      const emitida = await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
       if (imprimir) impresionDocumentos.abrir(orden.id, true);
-      toast.success(`${orden.numero} emitida al taller.`);
+      toast.success(emitida.estado === "finalizada" ? `${emitida.numero} emitida y finalizada: producción finalizada.` : `${emitida.numero} emitida al taller.`);
       setMostrarRecienEmitida(true);
       setEditandoOrden(false);
       router.refresh();
@@ -6384,7 +6389,7 @@ function PropuestaFichaContenido({
     // El staging vive en estado local: navegar lo descarta solo. Reseteamos
     // igual para que el guard no reintercepte durante la transición.
     setEditadosIds(new Set());
-    setFechasEditadasIds(new Set());
+    setDatosItemEditadosIds(new Set());
     setEditandoOrden(false);
     router.push(destino);
   }, [navPendiente, router]);
@@ -8541,7 +8546,16 @@ function PropuestaFichaContenido({
                   else rowRefs.current.delete(id);
                 }}
                 getActions={(item) => ({
-                  onRemove: modoOrden
+                  onListoChange: ordenTipo === "orden" && esCentroCopiado(item) && puedeModificarProductos && (!orden || orden.estado === "borrador")
+                    ? (listoEnMostrador) => {
+                        if (itemsEnEdicion && persistedItemIds.has(item.id))
+                          setDatosItemEditadosIds(prev => new Set([...prev, item.id]));
+                        setItems(current => current.map(i => i.id === item.id
+                          ? { ...i, listoEnMostrador, ...(listoEnMostrador ? { asignacionesPersonal: [] } : {}) }
+                          : i));
+                      }
+                    : undefined,
+                  onRemove: item.listoEnMostradorEl ? undefined : modoOrden
                     ? itemsEnEdicion
                       ? () => quitarItemDeOrden(item)
                       : undefined
@@ -8560,7 +8574,7 @@ function PropuestaFichaContenido({
                     margenEtaDias={margenEtaDias}
                     noLaborables={colasTaller?.noLaborables}
                     onEdit={
-                      modoOrden
+                      item.listoEnMostradorEl ? undefined : modoOrden
                         ? itemsEnEdicion && item.jobContext && item.motorCodigo
                           ? () => abrirEdicion(item)
                           : undefined
@@ -8581,7 +8595,7 @@ function PropuestaFichaContenido({
                     onChangeFechaEntrega={(fechaEntrega) => {
                       itemFechaTocadaRef.current.add(item.id);
                       if (itemsEnEdicion && persistedItemIds.has(item.id))
-                        setFechasEditadasIds((prev) => new Set([...prev, item.id]));
+                        setDatosItemEditadosIds((prev) => new Set([...prev, item.id]));
                       setItems((current) =>
                         current.map((candidate) =>
                           candidate.id === item.id
@@ -8607,7 +8621,7 @@ function PropuestaFichaContenido({
                       } : undefined
                     }
                     planificarEntregas={
-                      !!orden &&
+                      !item.listoEnMostrador && !!orden &&
                       puedeEditarOrden && cambiosSinGuardar === 0 &&
                       (orden.estado === "borrador" ||
                         orden.estado === "pendiente") &&
@@ -8646,7 +8660,7 @@ function PropuestaFichaContenido({
             {tab === "produccion" ? (
               (!orden || orden.estado === "borrador") && ordenTipo === "orden" && puedeAsignarPersonal && conAsignacionPersonal ? (
                 <OrdenPersonalPrevisto
-                  productos={items.map(item => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId: item.cotizacionItemId, asignacionesPersonal: item.asignacionesPersonal }))}
+                  productos={items.filter(item => !item.listoEnMostrador).map(item => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId: item.cotizacionItemId, asignacionesPersonal: item.asignacionesPersonal }))}
                   disabled={!puedeEditarOrden}
                   preparar={async () => {
                     const originales = itemsRef.current;
@@ -8656,7 +8670,7 @@ function PropuestaFichaContenido({
                     if (itemsConSnapshot.some(i => i.planEntrega || i.item.distribucionEntregas)) throw new Error("Los operadores de productos divididos en lotes se asignan desde Producción después de emitir.");
                     const ids = new Map(itemsConSnapshot.map(i => [i.item.id, i.cotizacionItemId]));
                     setItems(actual => actual.map(item => ({ ...item, cotizacionItemId: ids.get(item.id) ?? item.cotizacionItemId })));
-                    return itemsConSnapshot.map(({ item, cotizacionItemId }) => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId,
+                    return itemsConSnapshot.filter(({ item }) => !item.listoEnMostrador).map(({ item, cotizacionItemId }) => ({ id: item.id, nombre: item.productoNombre, cotizacionItemId,
                       ordenItemId: orden?.productos.some(p => p.id === item.id) ? item.id : undefined, asignacionesPersonal: item.asignacionesPersonal }));
                   }}
                   onChange={elecciones => {
@@ -8890,7 +8904,7 @@ function PropuestaFichaContenido({
         </HeroTabs>
 
         {emitiendo ? (
-          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
+          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} listosEnMostrador={items.length > 0 && items.every(item => item.listoEnMostrador)} />
         ) : null}
 
         {/* Montado SIEMPRE y controlado por `open`, igual que los demás

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { revisionCeldasEnVivo, celdasQueCambian } from "./tablero-lista-en-vivo";
 import type { Estacion } from "./estaciones";
 import { buildItemView } from "./produccion-item-view";
-import type { TableroItemData, TableroPasoData } from "./tablero-produccion";
+import { etiquetaDuracion, pasoReabrible, type TableroItemData, type TableroPasoData } from "./tablero-produccion";
 import {
   agruparTrabajos,
   accionAsignacionManual,
@@ -891,4 +891,18 @@ describe("actualizaciones visibles de la Lista", () => {
     const cambios = celdasQueCambian(new Map([["igual", base], ["cambia", base], ["sale", base]]), new Map([["igual", base], ["cambia", distinto], ["nueva", base]]));
     expect([...cambios].map(([id, celdas]) => [id, [...celdas]])).toEqual([["cambia", ["personal"]]]);
   });
+});
+
+
+it("un ítem finalizado al emitir usa los pasos habituales, sin permitir reabrirlo", () => {
+  const terminado = paso({ estado: "hecho", tiempoFuente: "estimado", tiempoRealMin: 15 });
+  const vista = trabajo({ listoEnMostrador: true, sinRuta: false }, [terminado]);
+  expect(pasoReabrible(vista.data, terminado)).toBe(false);
+  expect(vista.state).toBe("done");
+  expect(vista.finished).toBe(true);
+  expect(vista.progressPct).toBe(100);
+});
+
+it("conserva los minutos estimados de una impresión breve", () => {
+  expect(etiquetaDuracion(0.13)).toBe("0,13 min");
 });

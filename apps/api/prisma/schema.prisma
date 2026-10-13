@@ -4252,6 +4252,11 @@ model OrdenTrabajo {
 }
 
 model OrdenTrabajoItem {
+  /// Producción finalizada al emitir. Sólo Centro de copiado; registra pasos hechos sin ruta activa.
+  listoEnMostrador Boolean @default(false)
+  /// Se firma al emitir, no al guardar el borrador.
+  listoEnMostradorEl DateTime?
+  listoEnMostradorPorNombre String?
   /// Elección de operadores en el borrador, ligada a la cotización congelada.
   personalPrevistoJson Json?
   /// Agrupador comercial: sus lotes ejecutan el trabajo, nunca la ruta del total.
