@@ -394,6 +394,23 @@ it('cotiza un anillo reemplazado después de inicializar sin reparar ni guardar 
     include: { variantes: true },
   });
   try {
+    // El diámetro menor cubre las hojas, pero no tiene equivalencia de compra.
+    // La etiqueta debe seguir al anillo que el motor pudo costear realmente.
+    await prisma.materiaPrimaVariante.create({
+      data: {
+        tenantId,
+        materiaPrimaId: nuevo.id,
+        sku: 'TEST-ESPIRAL-REEMPLAZO-SIN-CONVERSION',
+        precioReferencia: 5000,
+        moneda: 'ARS',
+        unidadPrecio: 'PACK',
+        atributosVarianteJson: {
+          tipoAnillo: 'ESPIRAL_PLASTICO',
+          diametro: 7,
+          capacidadMaxHojas: 60,
+        },
+      },
+    });
     await prisma.materiaPrima.update({
       where: { id: anilloId },
       data: { activo: false },
@@ -419,6 +436,29 @@ it('cotiza un anillo reemplazado después de inicializar sin reparar ni guardar 
     expect(material?.materialVarianteId).toBe(nuevo.variantes[0].id);
     expect(material?.cantidad).toBe(2);
     expect(material?.costoTotal).toBeCloseTo(600, 2);
+    expect(resultado.items[0].especificaciones.Anillo).toBe(
+      'Espiral plástico Ø11 mm',
+    );
+    const tomo = {
+      documentos: entrada.documentos.map((d) => ({ ...d, grupoId: 'T' })),
+      grupos: [
+        {
+          id: 'T',
+          nombre: 'Tomo ficticio',
+          juegos: 2,
+          terminaciones: ['Anillado'],
+          tipoAnillo: 'ESPIRAL_PLASTICO',
+        },
+      ],
+    };
+    const previewTomo = await service.cotizar(tenantId, tomo, PERIODO);
+    expect(previewTomo.grupos[0].error).toBeNull();
+    expect(previewTomo.grupos[0].anillado?.diametroMm).toBe(11);
+    const itemTomo = await service.construirItems(tenantId, tomo, PERIODO);
+    expect(itemTomo.items[0].error).toBeNull();
+    expect(itemTomo.items[0].especificaciones.Anillo).toBe(
+      'Espiral plástico Ø11 mm',
+    );
     // Una cotización no escribe ni repara la plantilla técnica.
     expect(
       await prisma.productoConfigPasoSlotMaterialCandidato.count({

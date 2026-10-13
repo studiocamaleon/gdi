@@ -1373,8 +1373,8 @@ export class CentroCopiadoService {
       .filter((p) => p.variantes.length > 0);
     const maquinaColorId = color?.maquinaId ?? null;
     const maquinaBnId = bn?.maquinaId ?? null;
-    // Espirales instalados: sólo para ETIQUETAR el Ø elegido (el motor hace la
-    // selección real). El costo/tiempo del anillado los calcula el motor.
+    // Espirales instalados para ofrecer tipos y comprobar capacidad disponible.
+    // El material, diámetro final y costo se toman de la ejecución del motor.
     const anillos = anilladoConfigPasoId
       ? (
           await this.prisma.materiaPrimaVariante.findMany({
@@ -1834,7 +1834,12 @@ export class CentroCopiadoService {
     // Subtotal = impresión + anillado (misma cotización). El meta del anillado es
     // sólo para mostrar el Ø/aviso (el costo ya está en el desglose por paso).
     const montos = this.extraerMontos(r.cotizacion);
-    let anillado = anil?.meta ?? null;
+    let anillado = anil?.meta
+      ? {
+          ...anil.meta,
+          diametroMm: this.diametroAnilladoCotizado(r.cotizacion),
+        }
+      : null;
     if (anillado && anil?.additions) {
       if (!rSinAnillado?.exitoso || !rSinAnillado.cotizacion) {
         anillado = {
@@ -1915,6 +1920,21 @@ export class CentroCopiadoService {
       iva: redondear(iva),
       total: redondear(total),
     };
+  }
+
+  /** Usa el material ejecutado: el motor puede descartar candidatos sin costo válido. */
+  private diametroAnilladoCotizado(
+    cotizacion: NonNullable<CotizarOutput['cotizacion']>,
+  ): number | null {
+    const anillo = cotizacion.pasos
+      .find((p) => p.familiaCodigo === 'encuadernado_anillado')
+      ?.materiales?.find((m) => m.slotCodigo === 'anillo');
+    const atributos = (anillo?.atributosVarianteJson ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const diametro = Number(atributos.diametro);
+    return Number.isFinite(diametro) && diametro > 0 ? diametro : null;
   }
 
   /**
@@ -2031,7 +2051,7 @@ export class CentroCopiadoService {
       iva: redondear(Math.max(0, con.iva - sin.iva)),
       total: redondear(Math.max(0, con.total - sin.total)),
       tipoAnillo: activacion.meta.tipoAnillo,
-      diametroMm: activacion.meta.diametroMm,
+      diametroMm: this.diametroAnilladoCotizado(rAnillado.cotizacion),
       error: null,
     };
   }
@@ -2046,7 +2066,7 @@ export class CentroCopiadoService {
     );
   }
 
-  /** Ø que el motor elegiría: menor capacidad que cubre, DENTRO del tipo. */
+  /** Verifica la capacidad disponible; el diámetro final se lee del motor. */
   private diametroAnilladoParaHojas(
     ctx: Ctx,
     hojasPorLibro: number,
@@ -2678,9 +2698,7 @@ export class CentroCopiadoService {
       this.foldAnillado(seg.jobContext, pouch?.additions),
       anil?.additions,
     );
-    if (anil?.meta && !anil.meta.error && anil.meta.diametroMm) {
-      especificaciones['Anillo'] =
-        `${labelTipoAnillo(anil.meta.tipoAnillo)} Ø${anil.meta.diametroMm} mm`;
+    if (anil?.meta && !anil.meta.error) {
       const tapasLabel = this.especificacionTapas(anil.tapas);
       if (tapasLabel) especificaciones['Tapas'] = tapasLabel;
     }
@@ -2960,6 +2978,11 @@ export class CentroCopiadoService {
       };
     }
     const c = r.cotizacion;
+    const diametro = this.diametroAnilladoCotizado(c);
+    if (p.anilladoActivo && diametro) {
+      base.especificaciones['Anillo'] =
+        `${labelTipoAnillo(doc.tipoAnillo || this.tipoAnilladoDefault(ctx))} Ø${diametro} mm`;
+    }
     const d = c.desglosePrecio;
     const subtotal = redondear(
       d?.precioNetoTotal ?? c.precio?.precioTotal ?? 0,
@@ -3100,7 +3123,7 @@ export class CentroCopiadoService {
         if (rA.exitoso && rA.cotizacion) {
           anilladoCot = rA.cotizacion;
           anilladoBase = representante.cot;
-          anilladoDiametro = activacion.meta.diametroMm;
+          anilladoDiametro = this.diametroAnilladoCotizado(rA.cotizacion);
         } else {
           error =
             rA.errores?.[0]?.mensaje ??
