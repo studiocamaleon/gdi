@@ -1,5 +1,26 @@
 # Validación de staging — historial
 
+## 13/10/2026 — Anillados activos y diámetro del material cotizado
+
+Publicado sólo en staging, dentro del PR #81 y su cadena de dependencias. API y ambos workers ejecutan `a787e9ab929d8c37f2fb92759b93baf89aabd8bc`; la web conserva `967ababf56fd07a5b9638c91296b57f52652cdad` y Gotenberg `9ff0ba2ee9d9a94bc9327b6bede482f7692067cc`. Producción y merges siguen pendientes de aceptación del titular.
+
+La plantilla de Centro de copiado resuelve los candidatos de anillos y tapas desde el inventario activo en memoria, sin reparar ni guardar configuración al cotizar. No altera las recetas de catálogo ajenas. La vista previa y las especificaciones del ítem, tanto en documentos sueltos como en tomos, muestran el diámetro del material realmente elegido y costeado por el motor. Esto también contempla candidatos descartados por una equivalencia de compra incompleta.
+
+**Validación local:** regresión del material reemplazado y regresión del diámetro menor sin conversión reproducidas antes de sus arreglos. 33 pruebas aprobadas en tres suites; tipos de cinco archivos sin errores. Fixtures ficticios en la base local aislada; sin cambios en datos de desarrollo. **CI de la revisión ejecutada:** [permisos HTTP](https://github.com/studiocamaleon/gdi/actions/runs/38449587740) y [contenedores, tipos y acceso BFF](https://github.com/studiocamaleon/gdi/actions/runs/38449587849), ambos aprobados. Compilación de producción remota.
+
+**Servidor y Chrome:** cuatro cotizaciones A4 B/N simple, con espiral plástico y tapas, para 50, 100, 130 y 150 hojas. Coinciden el diámetro mostrado, la variante consumida y las especificaciones preparadas para la OT. El ensayo del servidor usa una transacción de sólo lectura y el tipo de cambio existente: comprueba costo normalizado del anillo, cantidad de anillos, costos de ambas tapas y total. Incluye un tomo de 130 hojas. El navegador muestra los cuatro resultados y «Agregar a la OT» habilitado, sin errores ni advertencias en consola. No se emitieron órdenes, pagos ni mensajes externos; no se modificaron precios ni conversiones de inventario durante esta publicación.
+
+| Componente | Digest vigente |
+| --- | --- |
+| API y ambos workers | `sha256:0bd33eb1eb66dbd37171a30eb9f513f00863827d842939f67e74d7d2b411255a` |
+| Web, sin cambio | `sha256:f09bd7cbef5f9a085cfc5ede13f522a6a9ac2450c896e809a14641d2078e5e27` |
+| Gotenberg/PDF, sin cambio | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, misma imagen | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+316 migraciones completas, ninguna nueva ni pendiente. Seis servicios saludables con los mismos tamaños; API/web responden 200 y mantienen el rechazo de acceso anónimo. Recuentos e identificadores de las tablas comprobadas coinciden antes/después; las seis máquinas de producción conservan imágenes y recursos. Constructor temporal de esta tarea retirado. Reversión de código: restaurar en API y ambos workers el digest `sha256:83589540d9c19a3ef76dbf44e42e8a12838bec19dc4acf1ee02ab0d833fd402f`; no hay migraciones que revertir. Ese retorno perdería la selección automática y las correcciones de diámetro.
+
+**Respaldo posterior:** `e1d4f181-466b-4751-80da-cef89b5cd47f`, completado `2026-10-13T19:00:39.329Z`, verificado a las `19:02:17 UTC`. Firma válida y manifiesto descifrado; incluye 316 migraciones, 24 archivos, ocho fuentes custodiadas —entre ellas la revisión ejecutada— y las cuatro imágenes exactas. No se repitió una restauración SQL completa.
+
 ## 13/10/2026 — Diagnóstico y reparación de candidatos de anillado
 
 Sin despliegue ni cambios de imágenes: continúa la revisión `967ababf5` registrada abajo. La plantilla técnica conservaba un espiral retirado y no incorporaba su reemplazo activo, aunque éste tenía precio y conversión por paquete válidos. La reparación explícita de Centro de copiado incorporó el material actual y registró el evento; se comprobó que la configuración comercial persistida quedó idéntica. Las unidades de precio de las dos tapas A4 se confirmaron por unidad con el usuario.
