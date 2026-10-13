@@ -10,6 +10,14 @@
  */
 
 import * as React from "react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import {
   getEstructuraBastidor,
@@ -65,10 +73,10 @@ export function BastidorVisor({
    */
   estructuraLocal?: EstructuraBastidor | null;
 }) {
-  const [estructura, setEstructura] = React.useState<EstructuraBastidor | null>(
-    estructuraLocal ?? null,
-  );
+  const [estructuraTrabajo, setEstructura] =
+    React.useState<EstructuraBastidor | null>(estructuraLocal ?? null);
   const [cargando, setCargando] = React.useState(!estructuraLocal);
+  const [indiceMedida, setIndiceMedida] = React.useState(0);
 
   React.useEffect(() => {
     // Con estructura local no hay nada que buscar (y el fetch fallaría: el
@@ -90,8 +98,16 @@ export function BastidorVisor({
   }, [itemId, estructuraLocal]);
 
   // Sin estructura (no es bastidor, o el snapshot es viejo): no se muestra nada.
-  if (!cargando && !estructura) return null;
+  if (!cargando && !estructuraTrabajo) return null;
 
+  const variantes = estructuraTrabajo?.variantes ?? [];
+  const indice = indiceMedida < variantes.length ? indiceMedida : 0;
+  const estructura = variantes[indice] ?? estructuraTrabajo;
+  const barras = estructuraTrabajo?.barras;
+  const opcionesMedida = variantes.map((e, index) => ({
+    value: String(index),
+    label: `${e.cantidad} × ${(e.anchoM * 100).toLocaleString("es-AR")} × ${(e.altoM * 100).toLocaleString("es-AR")} cm`,
+  }));
   const vista = estructura ? vistaDeEstructura(estructura) : null;
   const despiece = estructura ? agruparDespiece(estructura.despieceMm) : [];
   const esDoble = estructura?.tipoBastidor === "doble";
@@ -110,6 +126,29 @@ export function BastidorVisor({
         ) : null}
       </div>
 
+      {variantes.length > 1 ? (
+        <Select
+          items={opcionesMedida}
+          value={String(indice)}
+          onValueChange={(value) =>
+            value !== null && setIndiceMedida(Number(value))
+          }
+        >
+          <SelectTrigger aria-label="Medida del bastidor" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {opcionesMedida.map((opcion) => (
+                <SelectItem key={opcion.value} value={opcion.value}>
+                  {opcion.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      ) : null}
+
       <div className={s.grid}>
         <div className={s.canvas}>
           {vista ? (
@@ -127,6 +166,7 @@ export function BastidorVisor({
           <div className={s.despTtl}>
             Despiece
             {estructura ? ` · ${estructura.despieceMm.length} piezas` : ""}
+            {variantes.length > 1 ? " por bastidor" : ""}
           </div>
           <ul className={s.despList}>
             {despiece.map((d) => (
@@ -136,11 +176,21 @@ export function BastidorVisor({
               </li>
             ))}
           </ul>
-          {estructura?.barras ? (
+          {barras ? (
             <div className={s.meta}>
-              Para todo el trabajo:<br />
-              {estructura.barras.cantidad} barras de {estructura.barras.largoM} m · {estructura.barras.metrosComerciales.toLocaleString("es-AR")} m comerciales<br />
-              {estructura.barras.metrosUtiles.toLocaleString("es-AR", { maximumFractionDigits: 3 })} m de piezas · {estructura.barras.sobranteM.toLocaleString("es-AR", { maximumFractionDigits: 3 })} m de sobrantes, descontados los cortes
+              Para todo el trabajo:
+              <br />
+              {barras.cantidad} barras de {barras.largoM} m ·{" "}
+              {barras.metrosComerciales.toLocaleString("es-AR")} m comerciales
+              <br />
+              {barras.metrosUtiles.toLocaleString("es-AR", {
+                maximumFractionDigits: 3,
+              })}{" "}
+              m de piezas ·{" "}
+              {barras.sobranteM.toLocaleString("es-AR", {
+                maximumFractionDigits: 3,
+              })}{" "}
+              m de sobrantes, descontados los cortes
             </div>
           ) : null}
           {estructura ? (

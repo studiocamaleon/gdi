@@ -82,6 +82,8 @@ jobs:
             src/usuarios/__tests__/crear-usuario.spec.ts \
             src/usuarios/__tests__/password.spec.ts \
             src/motor-universal/__tests__/impresion-corte-area-compartida.spec.ts \
+            src/motor-universal/__tests__/cuadros-varias-medidas.spec.ts \
+            src/motor-universal/__tests__/cuadros-costos.spec.ts \
             src/motor-universal/__tests__/nesting-compuesto-shadow.spec.ts \
             src/auth/__tests__/modulos-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
