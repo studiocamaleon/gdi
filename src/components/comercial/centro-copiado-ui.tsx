@@ -3,6 +3,10 @@
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { Input as BrandInput, Alert as BrandAlert, Chip } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { DialogContent as PrimitiveDialogContent } from "@/components/ui/dialog";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { cn } from "@/lib/utils";
@@ -166,8 +170,14 @@ export function DialogContent({
   className,
   ...props
 }: ComponentProps<typeof PrimitiveDialogContent>) {
+  const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   return (
-    <PrimitiveDialogContent {...props} className={cn(s.dialog, className)} />
+    <PrimitiveDialogContent
+      {...scope}
+      {...props}
+      className={cn(themeClass, s.dialog, className)}
+    />
   );
 }
 
