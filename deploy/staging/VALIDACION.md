@@ -1,5 +1,41 @@
 # Validación de staging — historial
 
+## 13/10/2026 — Centro de copiado: tarifarios, contribución y tandas (#76)
+
+**Alcance autorizado:** staging para pruebas del titular. [PR #76](https://github.com/studiocamaleon/gdi/pull/76), con la corrección de hidratación de #75 incorporada preservando sus commits. TPV queda fuera del lote. Producción y merge a `main` esperan la validación de Lucas; #75/#76 permanecen abiertos por ese pendiente explícito. Los PR independientes de Dependabot no forman parte de esta publicación.
+
+El lote incorpora oferta por papel/formato, tarifarios publicados por canal y vigencia, costos y sugerencias por contribución, respeto del check de preparación, limpieza de valores y recálculo de tramos. En OT se conserva el tarifario del canal y se agrupan archivos compatibles en un PDF por tanda con una sola preparación. Staging conserva sus propios datos y configuración: no se importan precios ni clientes de local.
+
+**Revisiones:** API y ambos workers `4a6986e77484fe401dfd4586a323fa7c553614fd`; web `fa78725e984c661da5d0ed5cb543aa0dfd8cd608`; Gotenberg `9ff0ba2ee9d9a94bc9327b6bede482f7692067cc`. Las revisiones difieren sólo por el ajuste de una prueba de configuración web y del pin de Chromium, sin diferencias funcionales de API entre ellas. La evidencia de CI corresponde al candidato completo `9ff0ba2ee`.
+
+| Componente | Digest de staging |
+| --- | --- |
+| API y ambos workers | `sha256:1ce96735e32d9473443a3cf93f0f3742bc27e5609f11f1fbc9d1285c6fe0af59` |
+| Web | `sha256:7090cb82616398f1893d3e40c344b6a4a67e7ceb5652d5dc43974d6a728a5f1d` |
+| Gotenberg/PDF | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, sin cambio de imagen | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+Se aplicaron tres migraciones aditivas: `20261010120000_copiado_tarifarios`, `20261010140000_copiado_politica_borrador` y `20261011100000_copiado_pedidos_margenes`. Quedan **315 migraciones completas**, sin pendientes, seeds ni resets. El rol de aplicación conserva DML y carece de DDL y acceso al historial Prisma. Tras el ensayo se conservaron IDs y recuentos de las seis tablas contrastadas: empresa, usuarios, conversación, mensajes, envíos y archivos.
+
+**Validación:**
+
+- Local: 174 pruebas de interfaz/motor, 14 de integración PDF, dos de cabeceras en las fases desarrollo/producción y 24 de tandas, unificación, canal y contribución. Se corrigieron dos fixtures antiguos: el mock de validación previa a emisión y la resolución asíncrona de `next.config.ts`. No se debilitó ninguna aserción de negocio.
+- CI del candidato: [permisos HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38395873592), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/38395873812), [dependencias](https://github.com/studiocamaleon/gdi/actions/runs/38395873786) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/38395869609) aprobados. Consulta de alertas abiertas de CodeQL del PR: cero. Builds remotos con comprobación de tipos; no se compiló producción en Docker de la Mac.
+- Servicio compilado de staging: empresa y operador ficticios temporales, publicación y activación de tarifarios, conservación de versión publicada al editar borrador, rechazo de referencia de otra empresa y selección por canal. Mostrador aplicó precios unitarios ficticios de 100/90/80 para 1/5/10 hojas; web 120/110/100. Con costo variable 40 por hoja e IVA incluido, las contribuciones resultaron 51,60/46,22/39,50 % y 59,67/56,00/51,60 %, respectivamente. Los tiempos internos separados como estructura no dispararon la autorización. Estos valores son fixtures, no precios propuestos ni datos del tarifario comercial.
+- PDF real: dos documentos compatibles con copias e impresión dúplex generaron una tanda de 14 páginas, incluidos cinco reversos en blanco. Subida y descarga firmadas de R2 coincidieron por SHA-256; preflight CORS del origen de staging aprobado. Gotenberg convirtió HTML ficticio a PDF válido por la red privada. Se retiraron únicamente los fixtures y el objeto creados por el ensayo; no hubo envíos de mensajes ni cobros.
+- Para reconstruir Gotenberg fue necesario fijar Chromium `155.0.8059.39-1~deb13u1`, versión disponible de [Debian trixie](https://packages.debian.org/trixie/chromium); el pin anterior ya no se encontraba en el repositorio. CI y generación real de PDF aprobaron con el nuevo pin.
+
+**Interfaz y operación:** en Chrome, sesión de la empresa demo de staging: carga de General, cotización real del motor, apertura del editor de Tarifarios con «Limpiar valores» y «Reglas y contribución», y vista previa de los cinco canales. Sin errores ni advertencias de consola en el recorrido comprobado. El editor de prueba no se guardó. La empresa demo conserva preparación activada a tres minutos y canales por motor; necesita sus propios tarifarios publicados y asignados para ensayar precios comerciales. No se copió la configuración local.
+
+Las seis máquinas están iniciadas y pasan sus controles; API y web responden 200, y las rutas protegidas rechazan el acceso anónimo. Sin cambios de tamaños, redes ni credenciales de aplicación. Lectura de las seis máquinas de producción: imágenes y recursos sin cambios. El builder temporal de esta tarea fue eliminado después de completar las tres imágenes; desarrollo local y Docker permanecieron intactos.
+
+**Respaldo posterior:** `0ac84069-05eb-439e-974f-cf8c4b0ef018`, completado `2026-10-13T12:40:38.967Z` y verificado a las `12:40:45 UTC`. Firma válida y manifiesto descifrado con 315 migraciones, 24 archivos, fuentes cifradas custodiadas y las cuatro imágenes exactas del inventario. Se actualizó únicamente el copiador de staging. Esta verificación no repitió una restauración SQL completa.
+
+**Límites:** las pruebas no sustituyen la aceptación del titular ni una impresión física. La configuración CORS del bucket local de desarrollo sigue pendiente por decisión del titular. El almacenamiento de staging se probó por separado.
+
+**Reversión:** volver a las imágenes anteriores de API/workers `sha256:8d0323160ae2294449c57c7b4aa3431f26ec9839ecca774ed917bd3d5699d209`, web `sha256:922d3719b203818e1dbd101ea9320efb671790d087b588a3ab249d5b62c44ff6` y PDF `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d`, en sus respectivos repositorios `registry.fly.io/grafoprint-staging-*`. Mantener las tablas aditivas; no revertir el esquema mediante borrados. Actualizar el inventario del copiador y repetir salud si se revierte.
+
+
 ## 10/10/2026 — Mantenimiento de dependencias (#70)
 
 **Revisión ejecutada:** `9efc08ffe89afa9a833cf04970e1018ad1939550`. PR incluidos: #60, #61 y #67, con sus commits conservados. El titular autorizó el lote, las pruebas, staging y producción.

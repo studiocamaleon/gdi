@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-10, 07:13 UTC.** Web, API y ambos workers ejecutan `9efc08ffe` ([PR #70](https://github.com/studiocamaleon/gdi/pull/70)). Mantenimiento de dependencias #60, #61 y #67; respaldo actualizado, mismos digests verificados entre staging y producción, seis máquinas con los mismos recursos y 312 migraciones. CI, comprobaciones funcionales y copia posterior verificados. Ver [VALIDACION.md](./VALIDACION.md).
+> **Estado vigente: 2026-10-13, 12:40 UTC.** Centro de copiado del [PR #76](https://github.com/studiocamaleon/gdi/pull/76) publicado para pruebas: API/workers `4a6986e77`, web `fa78725e9` y PDF `9ff0ba2ee`. Tarifarios por canal, contribución, preparación configurable y PDF por tanda; 315 migraciones, seis máquinas con los mismos recursos. CI del candidato, recorrido en Chrome, precios/PDF reales y manifiesto del respaldo posterior verificados. Staging conserva sus datos propios. Producción y merge pendientes de la aceptación del titular; TPV fuera del lote. Ver [VALIDACION.md](./VALIDACION.md).
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
