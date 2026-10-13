@@ -900,6 +900,8 @@ export interface OperacionInternaCosteada {
 
 /** El bastidor a fabricar, autosuficiente para dibujarlo en 3D. */
 export interface EstructuraBastidorEjecutada {
+  /** Geometría por medida; la compra de barras corresponde al conjunto. */
+  variantes?: Array<EstructuraBastidorEjecutada & { cantidad: number }>;
   /** simple = marco plano (frontlight) · doble = cajón (backlight). */
   tipoBastidor: 'simple' | 'doble';
   anchoM: number;

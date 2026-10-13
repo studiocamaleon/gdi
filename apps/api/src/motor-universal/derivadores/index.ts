@@ -49,7 +49,7 @@ function unidadesDelTrabajo(jobContext: Parameters<Derivador>[0]): number {
  * para comprar barras enteras), los puntos de soldadura y los m² de
  * cenefa/pintura/fondo que los pasos siguientes heredan como drivers.
  */
-const bastidor_rectangular: Derivador = (jobContext, params, materialPrincipal) => {
+const bastidorIndividual: Derivador = (jobContext, params, materialPrincipal) => {
   const parametros = parsearParamsEstructuraBastidor(params);
   // El lado del caño sale de la variante elegida en `perfil_estructural`
   // (seccion "20×20 mm"): las barras interiores se cortan descontándolo.
@@ -136,6 +136,89 @@ const bastidor_rectangular: Derivador = (jobContext, params, materialPrincipal) 
         refuerzosH: resultado.refuerzosH,
         despieceMm: resultado.despieceMm,
         puntosSoldadura: resultado.puntosSoldadura,
+      },
+    },
+  };
+};
+
+const bastidor_rectangular: Derivador = (
+  jobContext,
+  params,
+  materialPrincipal,
+) => {
+  const piezas = jobContext.piezasVisibles?.length
+    ? jobContext.piezasVisibles
+    : jobContext.piezas;
+  if (!piezas || piezas.length <= 1)
+    return bastidorIndividual(jobContext, params, materialPrincipal);
+
+  const resultados: ResultadoDerivador[] = [];
+  for (const pieza of piezas) {
+    if (!Number.isSafeInteger(pieza.cantidad) || pieza.cantidad <= 0)
+      return {
+        magnitudes: {},
+        diagnostico: {
+          codigo: 'bastidor_cantidad_invalida',
+          mensaje:
+            'Cada medida de bastidor necesita una cantidad entera mayor que cero.',
+          sugerencia: 'Revisá las cantidades de los cuadros.',
+        },
+      };
+    const resultado = bastidorIndividual(
+      {
+        ...jobContext,
+        cantidad: pieza.cantidad,
+        piezas: [pieza],
+        piezasVisibles: [pieza],
+        medidaCustomMm: pieza,
+        medidaVisibleMm: pieza,
+      },
+      params,
+      materialPrincipal,
+    );
+    if (!resultado || resultado.diagnostico) return resultado;
+    resultados.push(resultado);
+  }
+  const magnitudes: Record<string, number> = {};
+  for (const resultado of resultados)
+    for (const [clave, valor] of Object.entries(resultado.magnitudes))
+      magnitudes[clave] = (magnitudes[clave] ?? 0) + valor;
+  const despieceTotalMm = resultados.flatMap(
+    (r) => r.despieces!.perfil_estructural,
+  );
+  const largoBarraM = Number(
+    String(materialPrincipal?.largoBarra ?? 0).replace(',', '.'),
+  );
+  const barras =
+    largoBarraM > 0
+      ? calcularBarrasNecesarias(despieceTotalMm, largoBarraM * 1000)
+      : null;
+  const variantes = resultados.map((r, index) => ({
+    ...(r.traza!.estructura as Record<string, unknown>),
+    cantidad: piezas[index].cantidad,
+    // La compra se calcula para el conjunto, aprovechando todos los retazos.
+    barras: undefined,
+  }));
+  return {
+    magnitudes,
+    despieces: { perfil_estructural: despieceTotalMm },
+    traza: {
+      unidades: piezas.reduce((n, p) => n + p.cantidad, 0),
+      porMedida: resultados.map((r) => r.traza),
+      estructura: {
+        ...variantes[0],
+        variantes,
+        ...(barras
+          ? {
+              barras: {
+                cantidad: barras.barras,
+                largoM: largoBarraM,
+                metrosUtiles: magnitudes.mlTotal,
+                metrosComerciales: barras.barras * largoBarraM,
+                sobranteM: barras.sobranteMm / 1000,
+              },
+            }
+          : {}),
       },
     },
   };

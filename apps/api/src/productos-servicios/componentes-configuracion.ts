@@ -755,6 +755,44 @@ function completarGeometria(jobContext: Record<string, unknown>): void {
     ((2 * (anchoMm + altoMm)) / 1_000) * cantidad;
 }
 
+function valorBinding(
+  binding: BindingParametroComponente,
+  padre: Record<string, unknown>,
+  outputs: Record<string, Record<string, unknown>>,
+  overrides: Record<string, unknown>,
+): unknown {
+  if (binding.origen === 'DEFAULT_HIJO' || binding.origen === 'FIJO')
+    return binding.valor;
+  if (binding.origen === 'PADRE' || binding.origen === 'FORMULA') {
+    if (binding.regla) return resolverRegla(binding.regla, padre, outputs);
+    if (binding.origen === 'PADRE')
+      return binding.padreClave
+        ? leerRuta(padre, binding.padreClave)
+        : undefined;
+    return binding.expresion
+      ? evaluarFormula(binding.expresion, padre)
+      : undefined;
+  }
+  const value = leerRuta(overrides, binding.clave);
+  return value === undefined ? binding.valor : value;
+}
+
+function heredaMedidaPadre(binding: BindingParametroComponente): boolean {
+  if (!['PADRE', 'FORMULA'].includes(binding.origen)) return false;
+  if (binding.regla?.fuente?.tipo === 'COMPONENTE') return false;
+  const campo =
+    binding.regla?.fuente?.campo ??
+    binding.regla?.campoPadre ??
+    binding.padreClave;
+  return campo != null
+    ? /^(padre\.)?(medidaCustomMm\.(anchoMm|altoMm)|medidas\.(ancho|alto))$/.test(
+        campo,
+      )
+    : /padre\.(medidaCustomMm\.(anchoMm|altoMm)|medidas\.(ancho|alto))\b/.test(
+        binding.expresion ?? '',
+      );
+}
+
 export function resolverJobContextComponente(args: {
   configuracion: unknown;
   contextoPadre: Record<string, unknown>;
@@ -794,8 +832,58 @@ export function resolverJobContextComponente(args: {
     piezas = editadas;
   }
   const outputsComponentes = args.outputsComponentes ?? {};
+  const clavesMedida = ['medidaCustomMm.anchoMm', 'medidaCustomMm.altoMm'];
+  // Las fórmulas de ancho/alto describen cada pieza, no una caja máxima.
+  // Se mantiene una sola colección para compartir nesting y preparación.
+  const heredaPiezas =
+    !piezas?.length &&
+    Array.isArray(args.contextoPadre.piezas) &&
+    args.contextoPadre.piezas.length > 1 &&
+    config.bindings.some(
+      (b) => clavesMedida.includes(b.clave) && heredaMedidaPadre(b),
+    );
+  const piezasPadre = heredaPiezas
+    ? (args.contextoPadre.piezas as Array<Record<string, unknown>>)
+    : [];
+  const medidasHeredadas = piezasPadre.map((pieza) => {
+    const resuelta: Record<string, unknown> = {};
+    const padre = { ...args.contextoPadre, medidaCustomMm: pieza };
+    for (const binding of config.bindings.filter((b) =>
+      clavesMedida.includes(b.clave),
+    ))
+      escribirRuta(
+        resuelta,
+        binding.clave,
+        valorBinding(binding, padre, outputsComponentes, overrides),
+      );
+    const medida = resuelta.medidaCustomMm as
+      | Record<string, unknown>
+      | undefined;
+    const anchoMm = Number(medida?.anchoMm);
+    const altoMm = Number(medida?.altoMm);
+    if (
+      !Number.isFinite(anchoMm) ||
+      anchoMm <= 0 ||
+      !Number.isFinite(altoMm) ||
+      altoMm <= 0
+    )
+      throw new BadRequestException(
+        `Revisá las medidas calculadas del componente "${args.codigoComponente}".`,
+      );
+    // La identidad acompaña a la pieza; su geometría, perímetro y panelizado
+    // anteriores no pertenecen al rectángulo recién calculado del componente.
+    return {
+      ...(pieza.id ? { id: pieza.id } : {}),
+      ...(pieza.nombre ? { nombre: pieza.nombre } : {}),
+      ...(pieza.sourcePieceId ? { sourcePieceId: pieza.sourcePieceId } : {}),
+      cantidad: Number(pieza.cantidad),
+      anchoMm,
+      altoMm,
+    };
+  });
   const faltantes: Array<{ clave: string; etiqueta: string }> = [];
   for (const binding of config.bindings) {
+    if (heredaPiezas && clavesMedida.includes(binding.clave)) continue;
     if (
       config.piezas?.length &&
       [
@@ -835,25 +923,12 @@ export function resolverJobContextComponente(args: {
         continue;
       }
     }
-    let value: unknown;
-    if (binding.origen === 'DEFAULT_HIJO' || binding.origen === 'FIJO') {
-      value = binding.valor;
-    } else if (binding.origen === 'PADRE') {
-      value = binding.regla
-        ? resolverRegla(binding.regla, args.contextoPadre, outputsComponentes)
-        : binding.padreClave
-          ? leerRuta(args.contextoPadre, binding.padreClave)
-          : undefined;
-    } else if (binding.origen === 'FORMULA') {
-      value = binding.regla
-        ? resolverRegla(binding.regla, args.contextoPadre, outputsComponentes)
-        : binding.expresion
-          ? evaluarFormula(binding.expresion, args.contextoPadre)
-          : undefined;
-    } else {
-      value = leerRuta(overrides, binding.clave);
-      if (value === undefined) value = binding.valor;
-    }
+    const value = valorBinding(
+      binding,
+      args.contextoPadre,
+      outputsComponentes,
+      overrides,
+    );
     if (value === undefined || value === null || value === '') {
       if (binding.requerido !== false)
         faltantes.push({
@@ -951,6 +1026,35 @@ export function resolverJobContextComponente(args: {
         altoMm: Math.max(...medidas.map((p) => p.altoMm)),
       };
     }
+  } else if (heredaPiezas) {
+    const cantidadPadre = Number(args.contextoPadre.cantidad);
+    resultado.cantidad ??= cantidadPadre * args.cantidadLegacy;
+    const factor = Number(resultado.cantidad) / cantidadPadre;
+    const resueltas = medidasHeredadas.map((p) => ({
+      ...p,
+      cantidad: Number(p.cantidad) * factor,
+    }));
+    if (
+      !Number.isFinite(factor) ||
+      factor <= 0 ||
+      resueltas.some(
+        (p) => !Number.isSafeInteger(p.cantidad) || p.cantidad <= 0,
+      )
+    )
+      throw new BadRequestException(
+        `La cantidad de "${args.codigoComponente}" debe corresponder a piezas enteras de cada medida.`,
+      );
+    resultado.piezas = resueltas;
+    resultado.piezaAnchoMaxMm = Math.max(...resueltas.map((p) => p.anchoMm));
+    resultado.piezaAltoMaxMm = Math.max(...resueltas.map((p) => p.altoMm));
+    resultado.piezaAreaTotalM2 = resueltas.reduce(
+      (n, p) => n + (p.anchoMm * p.altoMm * p.cantidad) / 1_000_000,
+      0,
+    );
+    resultado.piezaPerimetroTotalM = resueltas.reduce(
+      (n, p) => n + (2 * (p.anchoMm + p.altoMm) * p.cantidad) / 1000,
+      0,
+    );
   } else completarGeometria(resultado);
   const faltantesReales = faltantes.filter(
     (item) => leerRuta(resultado, item.clave) == null,
