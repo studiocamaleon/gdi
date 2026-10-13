@@ -395,9 +395,9 @@ export class CobrosService {
       }
     }
 
-    let cobroId: string;
+    let resultado: { id: string; nuevo: boolean };
     try {
-      cobroId = await ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      resultado = await ejecutarTransaccionFondos(this.prisma, async (tx) => {
         if (payload.cuentaDestinoId)
           await exigirCuentaOperable(tx, auth, payload.cuentaDestinoId);
         else await exigirTesoreriaCompleta(tx, auth);
@@ -411,47 +411,70 @@ export class CobrosService {
             'tesoreria',
           ]);
         }
-        if (!(await this.capacidades.incluida(auth.tenantId, 'cobros', tx))) {
+        const conCobros = await this.capacidades.incluida(
+          auth.tenantId,
+          'cobros',
+          tx,
+        );
+        if (!conCobros) {
           await this.capacidades.exigir(auth.tenantId, 'identidad', tx);
           if (!orden)
             await this.capacidades.exigir(auth.tenantId, 'cobros', tx);
-          const [pendiente] = await tx.$queryRaw<
-            Array<{
-              total: Prisma.Decimal;
-              cobradoTotal: Prisma.Decimal;
-              estado: string;
-              cobrosHabilitadosEmision: boolean;
-            }>
-          >`
-            SELECT "total", "cobradoTotal", "estado", "cobrosHabilitadosEmision" FROM "OrdenTrabajo"
-            WHERE "id" = ${orden!.id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE
-          `;
-          if (payload.idempotencyKey) {
-            const yaRegistrado = await tx.cobro.findUnique({
-              where: {
-                tenantId_idempotencyKey: {
-                  tenantId: auth.tenantId,
-                  idempotencyKey: payload.idempotencyKey,
-                },
+        }
+
+        // El saldo se decide bajo bloqueo de la OT, también con Cobros activo.
+        // Serializable + reintento impide que dos cajas gasten el mismo saldo.
+        const pendiente = orden
+          ? (
+              await tx.$queryRaw<
+                Array<{
+                  total: Prisma.Decimal | null;
+                  estado: string;
+                  cobrosHabilitadosEmision: boolean;
+                }>
+              >`
+              SELECT "total", "estado", "cobrosHabilitadosEmision" FROM "OrdenTrabajo"
+              WHERE "id" = ${orden.id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE
+            `
+            )[0]
+          : null;
+        if (payload.idempotencyKey) {
+          const yaRegistrado = await tx.cobro.findUnique({
+            where: {
+              tenantId_idempotencyKey: {
+                tenantId: auth.tenantId,
+                idempotencyKey: payload.idempotencyKey,
               },
-              select: { id: true },
-            });
-            if (yaRegistrado) return yaRegistrado.id;
-          }
-          const saldo = pendiente
-            ? Math.max(
-                0,
-                Number(pendiente.total) - Number(pendiente.cobradoTotal),
-              )
-            : 0;
-          if (
-            !pendiente?.cobrosHabilitadosEmision ||
-            ['borrador', 'cancelada'].includes(pendiente.estado) ||
-            saldo <= 0 ||
-            payload.montoBruto > saldo + 0.001
-          )
+            },
+            select: { id: true },
+          });
+          // Un reintento exitoso sigue siendo válido aunque haya saldado la OT.
+          if (yaRegistrado) return { id: yaRegistrado.id, nuevo: false };
+        }
+        if (orden) {
+          if (!pendiente)
+            throw new NotFoundException('No se encontró la orden.');
+          if (['borrador', 'cancelada'].includes(pendiente.estado))
+            throw new BadRequestException(
+              'No se pueden registrar cobros sobre una orden borrador o cancelada.',
+            );
+          if (!conCobros && !pendiente.cobrosHabilitadosEmision)
             throw new BadRequestException(
               'Sin la función de cobros sólo se puede cancelar el saldo pendiente de una orden emitida previamente.',
+            );
+          const cobrado = await this.facturacionOrdenes.recalcularCobrado(
+            tx,
+            auth.tenantId,
+            orden.id,
+          );
+          const saldo = redondearDinero(Number(pendiente.total ?? 0) - cobrado);
+          if (saldo <= 0)
+            throw new BadRequestException(
+              'La orden ya está saldada. No se pueden agregar más cobros.',
+            );
+          if (redondearDinero(payload.montoBruto) > saldo)
+            throw new BadRequestException(
+              `El cobro supera el saldo pendiente de ${formatearMoneda(saldo, moneda)}. Actualizá la orden y revisá los pagos registrados.`,
             );
         }
 
@@ -658,7 +681,7 @@ export class CobrosService {
         // enseguida y sin link no hay nada que mostrarle al cliente.
         await this.recibos.emitirEnlace(tx, auth.tenantId, cobro.id);
 
-        return cobro.id;
+        return { id: cobro.id, nuevo: true };
       });
     } catch (error) {
       if (
@@ -691,10 +714,12 @@ export class CobrosService {
 
     // Post-commit y sin `await`: ni el PDF ni Wati pueden voltear un cobro ya
     // registrado. El PDF se puede rehacer desde el endpoint si falla.
-    this.recibos.materializarPdfEnSegundoPlano(cobroId);
-    void this.avisos.avisar(cobroId);
+    if (resultado.nuevo) {
+      this.recibos.materializarPdfEnSegundoPlano(resultado.id);
+      void this.avisos.avisar(resultado.id);
+    }
 
-    return this.findOne(auth, cobroId);
+    return this.findOne(auth, resultado.id);
   }
 
   /** Confirmación de liquidación: una transacción, importes reales y fecha local. */
