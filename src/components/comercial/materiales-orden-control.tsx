@@ -1,4 +1,6 @@
 "use client";
+
+import { sobrantesDelConsumo } from "../../../apps/api/src/inventario/papel-derivado";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { useRef, useState } from "react";
 import Link from "next/link";
@@ -43,6 +45,17 @@ export function MaterialesOrdenControl({
   // Un fallo de red puede ocurrir después del commit: el reintento conserva su clave.
   const pendiente = useRef<{ contenido: string; clave: string } | null>(null);
   const control = data.control!;
+  const planes = dialog
+    ? (
+        data.necesidades.find(
+          (n) => n.varianteId === dialog.material.varianteId,
+        )?.origenes ?? []
+      ).flatMap((o) => (o.papelDerivado ? [o.papelDerivado] : []))
+    : [];
+  const sobrantes =
+    dialog && dialog.accion === "consumir" && Number(cantidad) > 0
+      ? sobrantesDelConsumo(planes, dialog.material.consumida, Number(cantidad))
+      : [];
   const automatica = control.modoReserva === "AL_EMITIR";
   const activa = ["pendiente", "produccion"].includes(control.estadoOrden);
   const operable =
@@ -268,15 +281,21 @@ export function MaterialesOrdenControl({
                   {operable && (
                     <td>
                       <div className={styles.rowActions}>
-                        {m.unidad && activa && conReservas && conExistencias && (
-                          <ActionButton
-                            variant="outline"
-                            isDisabled={busy}
-                            onPress={() => abrir("definir", m)}
-                          >
-                            {m.revisar ? "Definir cantidad" : "Ajustar"}
-                          </ActionButton>
-                        )}
+                        {m.unidad &&
+                          activa &&
+                          conReservas &&
+                          conExistencias &&
+                          !data.necesidades
+                            .find((n) => n.varianteId === m.varianteId)
+                            ?.origenes.some((o) => o.papelDerivado) && (
+                            <ActionButton
+                              variant="outline"
+                              isDisabled={busy}
+                              onPress={() => abrir("definir", m)}
+                            >
+                              {m.revisar ? "Definir cantidad" : "Ajustar"}
+                            </ActionButton>
+                          )}
                         {m.reservada > 0 && (
                           <>
                             <ActionButton
@@ -372,6 +391,18 @@ export function MaterialesOrdenControl({
                         label: `${r.nombre} · ${r.cantidad} reservados`,
                       }))}
                     />
+                  )}
+                  {dialog.accion === "consumir" && planes.length > 0 && (
+                    <p>
+                      Registrá pliegos enteros retirados para el corte.
+                      {sobrantes.map(({ plan, hojas }, i) => (
+                        <span key={i}>
+                          {" "}
+                          Se guardarán {hojas} hojas de {plan.anchoMm} ×{" "}
+                          {plan.altoMm} mm en la misma ubicación.
+                        </span>
+                      ))}
+                    </p>
                   )}
                   <label>
                     Cantidad · {stockUnitLabel(dialog.material.unidad ?? "")}

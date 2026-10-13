@@ -1,9 +1,11 @@
 "use client";
 
-import { AlertCircle, Boxes, RefreshCw } from "lucide-react";
 import {
-  type NecesidadMaterialOrden,
-} from "@/lib/materiales-orden-api";
+  pliegosPapel,
+  sobrantePapel,
+} from "../../../apps/api/src/inventario/papel-derivado";
+import { AlertCircle, Boxes, RefreshCw } from "lucide-react";
+import { type NecesidadMaterialOrden } from "@/lib/materiales-orden-api";
 import { useMaterialesOrden } from "@/hooks/use-materiales-orden";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
@@ -192,6 +194,21 @@ export function MaterialesOrdenTab({
                                     ? " · Lote completo, contado una vez"
                                     : ""}
                                 </span>
+                                {o.papelDerivado && (
+                                  <span>
+                                    Corte compartido:{" "}
+                                    {pliegosPapel(o.papelDerivado)} pliego(s) de{" "}
+                                    {o.papelDerivado.anchoOrigenMm} ×{" "}
+                                    {o.papelDerivado.altoOrigenMm} mm.{" "}
+                                    {o.papelDerivado.rendimiento} hojas de{" "}
+                                    {o.papelDerivado.anchoMm} ×{" "}
+                                    {o.papelDerivado.altoMm} mm por pliego;{" "}
+                                    {o.papelDerivado.hojasNecesarias} para esta
+                                    OT y {sobrantePapel(o.papelDerivado)} de
+                                    sobrante. El sobrante ingresa a stock al
+                                    registrar el consumo.
+                                  </span>
+                                )}
                                 {o.observacion && (
                                   <p className={styles.warning}>
                                     {o.observacion}

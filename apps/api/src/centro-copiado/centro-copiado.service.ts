@@ -1,3 +1,5 @@
+import { seleccionarPapelesCortados } from './seleccion-papel-cortado';
+import { reservasPorSaldo } from '../inventario/stock-reservas';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { capacidadesCargaCopiado } from '../suscripciones/capacidades-copiado';
 import { CentroCopiadoCadService } from './centro-copiado-cad.service';
@@ -74,6 +76,7 @@ type CentroCopiadoDb = PrismaService | Prisma.TransactionClient;
 
 /** Contexto del plantilla + papeles disponibles (resueltos por request). */
 type Ctx = PlantillaContexto & {
+  materialesFijados?: Set<string>;
   papeles: PapelTipo[];
   /** configPaso del anillado opcional (Etapa C); null = no está en la ruta. */
   anilladoConfigPasoId: string | null;
@@ -1251,18 +1254,56 @@ export class CentroCopiadoService {
       const n = typeof x === 'string' ? Number(x) : x;
       return typeof n === 'number' && Number.isFinite(n) ? n : null;
     };
+    const cortados = materias
+      .flatMap((m) => m.variantes)
+      .filter(
+        (v) =>
+          (v.atributosVarianteJson as Record<string, unknown> | null)
+            ?._papelDerivado,
+      );
+    const libres = new Map<string, number>();
+    if (cortados.length) {
+      const ids = cortados.map((v) => v.id);
+      const stocks = await this.prisma.stockMateriaPrimaVariante.findMany({
+        where: { tenantId, varianteId: { in: ids } },
+      });
+      const reservas = await reservasPorSaldo(
+        this.prisma as never,
+        tenantId,
+        ids,
+      );
+      for (const s of stocks)
+        libres.set(
+          s.varianteId,
+          (libres.get(s.varianteId) ?? 0) +
+            Math.max(
+              0,
+              Number(s.cantidadDisponible) -
+                Number(reservas.get(`${s.varianteId}:${s.ubicacionId}`) ?? 0),
+            ),
+        );
+    }
     const papeles: PapelTipo[] = materias
       .map((m) => {
         const variantes = m.variantes.map((v) => {
           const a = (v.atributosVarianteJson ?? {}) as Record<string, unknown>;
           return {
             id: v.id,
+            ...((a._papelDerivado as { origenVarianteId?: string } | undefined)
+              ?.origenVarianteId
+              ? {
+                  origenDerivadoId: (
+                    a._papelDerivado as { origenVarianteId: string }
+                  ).origenVarianteId,
+                  stockLibre: libres.get(v.id) ?? 0,
+                }
+              : {}),
             formatoComercial:
               typeof a.formatoComercial === 'string'
                 ? a.formatoComercial
                 : null,
             anchoMm: numAttr(a.anchoMm),
-            altoMm: numAttr(a.altoMm),
+            altoMm: numAttr(a.largoMm ?? a.altoMm),
             gramajeGr: numAttr(a.gramajeGr ?? a.gramaje),
           };
         });
@@ -1393,6 +1434,7 @@ export class CentroCopiadoService {
     ctx: Ctx,
     simulacion = false,
   ): Promise<void> {
+    seleccionarPapelesCortados(ctx.papeles, dto, simulacion, ctx.materialesFijados);
     const config = await this.configDe(tenantId);
     if (!config.activo && !simulacion) {
       throw new BadRequestException('El Centro de Copiado está pausado.');
@@ -2619,15 +2661,30 @@ export class CentroCopiadoService {
     tenantId: string,
     dto: AgregarAOrdenCentroCopiadoDto,
     periodo: string | null = null,
+    jobOriginal?: unknown,
   ): Promise<ConstruirItemsResultado> {
     await this.capacidades.exigirTodas(tenantId, capacidadesCargaCopiado(dto));
     if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
       return this.motor.conTipoCambio(
         tenantId,
         await this.cambioParaDto(tenantId, dto),
-        () => this.construirItems(tenantId, dto, periodo),
+        () => this.construirItems(tenantId, dto, periodo, jobOriginal),
       );
     const ctx = await this.contexto(tenantId);
+    if (jobOriginal) {
+      ctx.materialesFijados = new Set<string>();
+      const visitar = (v: unknown) => {
+        if (!v || typeof v !== 'object') return;
+        for (const [k, valor] of Object.entries(v)) {
+          if (k === 'slotMateriales' && valor && typeof valor === 'object') {
+            for (const id of Object.values(valor))
+              if (typeof id === 'string') ctx.materialesFijados!.add(id);
+          }
+          if (k !== 'slotMateriales') visitar(valor);
+        }
+      };
+      visitar(jobOriginal);
+    }
     await this.validarOperacion(tenantId, dto, ctx);
     const grupoCargaId = dto.grupoCargaId ?? randomUUID();
     const gruposById = new Map((dto.grupos ?? []).map((g) => [g.id, g]));

@@ -26,6 +26,10 @@ export async function cargarPapelesMotorCopiado(
     ruta.sistemaCodigo !== CC_SISTEMA_CODIGO
   )
     return;
+  for (const paso of pasos) {
+    if (paso.familiaCodigo === 'impresion_por_hoja')
+      paso.conservaSobrantePapel = true;
+  }
   const slots = pasos
     .filter((p) => p.familiaCodigo === 'impresion_por_hoja')
     .flatMap((p) => p.slots)

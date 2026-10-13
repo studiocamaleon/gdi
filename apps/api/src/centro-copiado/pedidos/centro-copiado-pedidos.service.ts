@@ -402,7 +402,12 @@ export class CentroCopiadoPedidosService {
       const solicitud = solicitudes.get(item.id)!;
       const construir = async () => {
         const completo = (
-          await this.copiado.construirItems(tenantId, solicitud)
+          await this.copiado.construirItems(
+            tenantId,
+            solicitud,
+            null,
+            item.jobContextJson,
+          )
         ).items[0];
         if (!completo || completo.error || !completo.cotizacion)
           throw new BadRequestException(
@@ -417,6 +422,8 @@ export class CentroCopiadoPedidosService {
               await this.copiado.construirItems(
                 tenantId,
                 sinTerminaciones(solicitud),
+                null,
+                item.jobContextJson,
               )
             ).items[0]
           : completo;
