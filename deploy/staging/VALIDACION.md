@@ -1,5 +1,13 @@
 # Validación de staging — historial
 
+## 13/10/2026 — Diagnóstico y reparación de candidatos de anillado
+
+Sin despliegue ni cambios de imágenes: continúa la revisión `967ababf5` registrada abajo. La plantilla técnica conservaba un espiral retirado y no incorporaba su reemplazo activo, aunque éste tenía precio y conversión por paquete válidos. La reparación explícita de Centro de copiado incorporó el material actual y registró el evento; se comprobó que la configuración comercial persistida quedó idéntica. Las unidades de precio de las dos tapas A4 se confirmaron por unidad con el usuario.
+
+Chrome verificó cotización de 50 y 100 A4 B/N simple con espiral y botón «Agregar a la OT» habilitado. No se emitieron órdenes ni pagos. Wire-O sigue necesitando confirmar su unidad de precio; algunas medidas de espiral carecen de precio o coeficiente. No se inventaron esos datos. La etiqueta de diámetro de la versión vigente todavía puede considerar variantes de un material retirado.
+
+Corrección de código preparada en el PR #81, pendiente de la siguiente publicación del lote: candidatos de anillos y tapas resueltos desde el inventario activo en memoria, sin escrituras al cotizar y sin ampliar recetas de catálogo ajenas. El contexto de copiado excluye materiales retirados para la oferta y el diámetro. Prueba de regresión local: el reemplazo reproduce el rechazo con la selección anterior y cotiza correctamente con la corrección; 33 pruebas aprobadas, incluida conversión paquete/unidad y construcción del ítem completo. Revisión de tipos de cinco archivos sin errores. Producción no se modificó.
+
 ## 13/10/2026 — Centro de copiado: papel derivado, objetivos por rango, entrega, pouch y producción finalizada
 
 Lote de #77 a #81, dependiente de #76 ya publicado. Alcance autorizado: staging. Producción y merges pendientes de aceptación. No se importan datos de local.

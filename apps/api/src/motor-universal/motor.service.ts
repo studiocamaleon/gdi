@@ -4,6 +4,7 @@ import {
   planPapelDerivado,
 } from '../inventario/papel-derivado';
 import { cargarPapelesMotorCopiado } from '../centro-copiado/papeles-motor';
+import { cargarAnilladoMotorCopiado } from '../centro-copiado/anillado-motor';
 import {
   costosPasosPrecio,
   escalarCostosPasos,
@@ -11604,6 +11605,13 @@ export class MotorUniversalService {
     });
 
     await cargarPapelesMotorCopiado(
+      this.prisma,
+      tenantId,
+      producto,
+      rutaAlt.ruta,
+      pasos,
+    );
+    await cargarAnilladoMotorCopiado(
       this.prisma,
       tenantId,
       producto,

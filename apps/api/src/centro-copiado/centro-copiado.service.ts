@@ -1382,6 +1382,7 @@ export class CentroCopiadoService {
               tenantId,
               activo: true,
               materiaPrima: {
+                activo: true,
                 familia: 'TERMINACION_EDITORIAL',
                 subfamilia: 'ANILLADO_ENCUADERNACION',
               },
@@ -1413,6 +1414,7 @@ export class CentroCopiadoService {
           await this.prisma.materiaPrima.findMany({
             where: {
               tenantId,
+              activo: true,
               familia: 'TERMINACION_EDITORIAL',
               subfamilia: 'TAPA_ENCUADERNACION',
             },
