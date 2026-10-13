@@ -15,7 +15,9 @@ Los archivos protegidos o inválidos se rechazan con un mensaje. Word y Excel de
 
 ## Preparación y precios
 
-Con `cobraSetup` activo, los documentos consecutivos del mismo tomo que comparten máquina, papel, gramaje, tamaño, color y caras pagan una preparación. Los juegos no multiplican ese cargo. Cambiar esa configuración inicia otra preparación. Los documentos sueltos y otros tomos mantienen sus propias preparaciones. Con `cobraSetup` desactivado, no se cobra ninguna.
+Con `cobraSetup` activo, los documentos consecutivos del mismo tomo que comparten máquina, papel, gramaje, tamaño, color y caras pagan una preparación. Los juegos no multiplican ese cargo. Cambiar esa configuración inicia otra preparación. Otros tomos mantienen sus propias preparaciones. Con `cobraSetup` desactivado, no se cobra ese cargo comercial; el costo productivo se sigue registrando.
+
+Los PDF sueltos compatibles ahora se reúnen automáticamente por OT y comparten una preparación productiva según el [plan de tandas](tandas-copiado.md). Los documentos no elegibles conservan su preparación individual.
 
 La regla se aplica tanto a la cotización previa como al compuesto que se guarda y al resumen de precios del Centro de copiado. No modifica retrospectivamente cotizaciones históricas; se aplica al cotizar de nuevo. El anillado conserva su cálculo separado por juego.
 

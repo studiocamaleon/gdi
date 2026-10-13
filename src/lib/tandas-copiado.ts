@@ -5,7 +5,7 @@ import type { SegmentoTomoPdf } from "./tomo-pdf";
  * miembros de dos revisiones ni mostrar como lista una tanda incompleta.
  */
 export function tandasDeOrden(
-  items: { itemId: string }[],
+  items: { itemId: string; archivosPendientes?: File[] }[],
   metas: Record<string, CentroCopiadoMeta | null>,
 ) {
   const grupos = new Map<
@@ -23,6 +23,7 @@ export function tandasDeOrden(
     grupos.get(tanda.id)!.segmentos.push({
       nombre: meta.nombre || meta.archivoNombre || "Documento",
       archivoNombre: meta.archivoNombre,
+      file: item.archivosPendientes?.find((f) => f.name === meta.archivoNombre),
       archivoBytes: meta.archivoBytes,
       paginas: meta.paginas!,
       paginasOriginales: meta.paginasOriginales,

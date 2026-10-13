@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react";
+import { act, type ReactNode, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
@@ -9,6 +9,7 @@ import type { PropuestaItem } from "@/lib/propuestas";
 import { productoDiseno } from "./__fixtures__/orden-diseno";
 import type { CanalPresupuesto } from "./presupuesto-correo-dialog";
 import { PropuestaFicha } from "./propuesta-ficha";
+import { getMockOrdenDetalle } from "@/lib/ordenes-trabajo";
 
 const mocks = vi.hoisted(() => ({
   guardar: vi.fn(),
@@ -193,7 +194,7 @@ async function verDatos() {
   expect(tab).toBeDefined();
   await act(async () => tab.click());
 }
-async function montar() {
+async function montar(orden?: ComponentProps<typeof PropuestaFicha>["orden"]) {
   await act(async () =>
     root.render(
       <CapacidadesProvider
@@ -201,13 +202,90 @@ async function montar() {
           funciones: { cotizacion: true, ordenes: true, presupuestos: true },
         }}
       >
-        <PermisosProvider permisos={["comercial.gestionar"]}>
-          <PropuestaFicha />
+        <PermisosProvider
+          permisos={["comercial.gestionar", "finanzas.ver_margenes"]}
+        >
+          <PropuestaFicha orden={orden} />
         </PermisosProvider>
       </CapacidadesProvider>,
     ),
   );
 }
+
+it("al reabrir una tanda conserva materiales y producción en el detalle de costos", async () => {
+  const base = getMockOrdenDetalle("mock-0184")!;
+  await montar({
+    ...base,
+    cargos: [],
+    cargosDirectos: 0,
+    productos: [
+      {
+        ...base.productos[0],
+        id: "item-ficticio",
+        cantidad: 1,
+        subtotal: 200,
+        impuestos: 42,
+        total: 242,
+        snapshot: {
+          productoId: "producto-ficticio",
+          rutaAlternativaId: null,
+          costoTotal: 120,
+          costoUnitario: 120,
+          precioTotal: 242,
+          precioUnitario: 242,
+          jobContext: {
+            _centroCopiado: {
+              paginas: 1,
+              copias: 1,
+              faz: 1,
+              tandaImpresion: {
+                version: 1,
+                id: "tanda-ficticia",
+                documentos: 1,
+                paginas: 1,
+                prepara: true,
+              },
+            },
+          },
+          resumen: {
+            copiadoComercial: { calculoId: "calculo-ficticio" },
+            ejecucion: {
+              costos: {
+                total: 120,
+                unitario: 120,
+                materialesTotal: 80,
+                tiempoTotal: 40,
+                cargosDirectosTotal: 0,
+              },
+            },
+          },
+          trazabilidad: { pasos: [] },
+          precioSnapshots: {
+            precioConfig: null,
+            impuestos: [],
+            comisiones: [],
+            precioEspecialCliente: null,
+          },
+        },
+      },
+    ],
+  });
+  const tab = container.querySelector<HTMLElement>(
+    '[role="tab"][aria-label="Costos"]',
+  )!;
+  await act(async () => tab.click());
+  expect(
+    container
+      .querySelector('[title^="Materiales:"]')
+      ?.getAttribute("title"),
+  ).toContain("80");
+  expect(
+    container
+      .querySelector('[title^="Centro de costo:"]')
+      ?.getAttribute("title"),
+  ).toContain("40");
+  expect(container.querySelector('[title^="Sin desglosar:"]')).toBeNull();
+});
 async function preparar() {
   await montar();
   await click("Presupuesto");
@@ -231,6 +309,31 @@ async function preparar() {
   await click("Emitir presupuesto");
   expect(mocks.confirmar).not.toBeNull();
 }
+
+it("permite descargar el PDF sin salir ni perder la protección de cambios", async () => {
+  await montar();
+  await click("Agregar producto ficticio");
+  expect(avisoDeSalida()).toBe(true);
+  const enlace = document.createElement("a");
+  enlace.href = "blob:http://localhost/tanda-ficticia";
+  enlace.download = "Tanda.pdf";
+  container.append(enlace);
+  let descargaPermitida = false;
+  enlace.addEventListener("click", (event) => {
+    descargaPermitida = !event.defaultPrevented;
+    // JSDOM no descarga: detener únicamente la acción nativa de la prueba.
+    event.preventDefault();
+  });
+  await act(async () => enlace.click());
+  expect(descargaPermitida).toBe(true);
+  expect(document.body.textContent).not.toContain("Descartar y salir");
+  expect(avisoDeSalida()).toBe(true);
+
+  enlace.removeAttribute("download");
+  enlace.href = "/produccion/ordenes";
+  await act(async () => enlace.click());
+  expect(document.body.textContent).toContain("Descartar y salir");
+});
 
 it.each(["whatsapp", "correo", "ambos"] as const)(
   "espera la persistencia y abre el detalle sin aviso nativo (%s)",

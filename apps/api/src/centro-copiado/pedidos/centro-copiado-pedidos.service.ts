@@ -573,6 +573,10 @@ export class CentroCopiadoPedidosService {
         );
       else await construir();
     }
+    if (tandas.size !== tandasPorItem.size)
+      throw new BadRequestException(
+        'No se pudo verificar el costo de toda la tanda. Revisá los originales y volvé a cotizar.',
+      );
     return { lineas, referenciasMotor, ejecuciones, tandasPorItem };
   }
 
@@ -626,7 +630,7 @@ export class CentroCopiadoPedidosService {
     validarMonedaDocumento(originales);
     const copiados = originales
       .filter(esCopiado)
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .sort((a, b) => dto.items.indexOf(a.id) - dto.items.indexOf(b.id));
     if (!copiados.length) return { modalidad: 'MOTOR' as const };
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const decimales =
@@ -748,13 +752,15 @@ export class CentroCopiadoPedidosService {
                       costo?.div(cantidad).toFixed(decimales) ?? null,
                   }
                 : {}),
-              jobContextJson: esCopiado(original) ? json({
-                ...objeto(datos.jobContextJson),
-                _centroCopiado: {
-                  ...objeto(objeto(datos.jobContextJson)._centroCopiado),
-                  tandaImpresion: tanda ?? null,
-                },
-              }) : json(datos.jobContextJson),
+              jobContextJson: esCopiado(original)
+                ? json({
+                    ...objeto(datos.jobContextJson),
+                    _centroCopiado: {
+                      ...objeto(objeto(datos.jobContextJson)._centroCopiado),
+                      tandaImpresion: tanda ?? null,
+                    },
+                  })
+                : json(datos.jobContextJson),
               snapshotJson: precio
                 ? json({
                     ...objeto(original.snapshotJson),
@@ -880,7 +886,7 @@ export class CentroCopiadoPedidosService {
   ) {
     const copiados = originales
       .filter(esCopiado)
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .sort((a, b) => dto.items.indexOf(a.id) - dto.items.indexOf(b.id));
     if (
       !copiados.some(
         (i) => objeto(objeto(i.jobContextJson)._centroCopiado).archivoBytes,
@@ -891,7 +897,7 @@ export class CentroCopiadoPedidosService {
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const decimales =
       regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
-    const { ejecuciones, tandasPorItem } = await this.prepararLineas(
+    const { ejecuciones, tandasPorItem, lineas } = await this.prepararLineas(
       auth.tenantId,
       dto.clienteId,
       copiados,
@@ -927,7 +933,7 @@ export class CentroCopiadoPedidosService {
               ...datos,
               costoTotal: String(ejecucion.costos.total),
               costoUnitario: String(ejecucion.costos.unitario),
-              jobContextJson: esCopiado(original) ? json({
+              jobContextJson: json({
                 ...objeto(datos.jobContextJson),
                 _centroCopiado: {
                   ...objeto(objeto(datos.jobContextJson)._centroCopiado),
@@ -968,7 +974,7 @@ export class CentroCopiadoPedidosService {
                   finanzas: {
                     costoTotal: Number(copia.costoTotal),
                     ejecucion,
-                    cargas: null,
+                    cargas: lineas.find((l) => l.id === id)?.cargas ?? null,
                   },
                 }
               : {}),

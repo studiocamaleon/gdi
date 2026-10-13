@@ -232,10 +232,17 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     return {
       status: r.status,
       body: r.body as {
+        modalidad: 'TARIFARIO' | 'MOTOR';
         id: string;
         huella: string;
         calculado: { estado: string; control: { estado: string } };
-        items: { id: string; subtotal: number }[];
+        items: {
+          id: string;
+          subtotal: number;
+          total: number;
+          finanzas?: { costoTotal: number };
+          tandaImpresion?: { id: string; prepara: boolean };
+        }[];
       },
     };
   };
@@ -441,15 +448,10 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     const r = await revisar([a.id, b.id], 'responsable');
     expect(r.status).toBe(201);
     expect(r.body.modalidad).toBe('MOTOR');
-    expect(r.body.items.map((i: { total: number }) => i.total)).toEqual([
-      181.5, 181.5,
-    ]);
+    expect(r.body.items[0]).toMatchObject({ finanzas: { cargas: [] } });
+    expect(r.body.items.map((i) => i.total)).toEqual([181.5, 181.5]);
     expect(
-      r.body.items.reduce(
-        (s: number, i: { finanzas: { costoTotal: number } }) =>
-          s + i.finanzas.costoTotal,
-        0,
-      ),
+      r.body.items.reduce((s, i) => s + (i.finanzas?.costoTotal ?? NaN), 0),
     ).toBe(100);
     await emitir(r.body.items.map((i: { id: string }) => i.id));
     await expect(emitir([r.body.items[0].id])).rejects.toThrow('tanda');
@@ -528,22 +530,11 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       estado: 'CUMPLE',
       porcentaje: '50.00',
     });
-    expect(r.body.items.map((i: { total: number }) => i.total)).toEqual([
-      121, 121,
-    ]);
-    expect(
-      new Set(
-        r.body.items.map(
-          (i: { tandaImpresion: { id: string } }) => i.tandaImpresion.id,
-        ),
-      ).size,
-    ).toBe(1);
-    expect(
-      r.body.items.filter(
-        (i: { tandaImpresion: { prepara: boolean } }) =>
-          i.tandaImpresion.prepara,
-      ),
-    ).toHaveLength(1);
+    expect(r.body.items.map((i) => i.total)).toEqual([121, 121]);
+    expect(new Set(r.body.items.map((i) => i.tandaImpresion?.id)).size).toBe(1);
+    expect(r.body.items.filter((i) => i.tandaImpresion?.prepara)).toHaveLength(
+      1,
+    );
     const guardados = await db.cotizacionItem.findMany({
       where: { id: { in: r.body.items.map((i: { id: string }) => i.id) } },
     });
@@ -576,7 +567,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       'cálculo de copiado cambió',
     );
     const individual = await revisar([guardados[0].id], 'responsable');
-    expect(individual.body.items[0].finanzas.costoTotal).toBe(90);
+    expect(individual.body.items[0].finanzas?.costoTotal).toBe(90);
     expect(individual.body.calculado.control.estado).toBe(
       'REQUIERE_AUTORIZACION',
     );

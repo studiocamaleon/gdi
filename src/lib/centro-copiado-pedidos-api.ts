@@ -125,13 +125,15 @@ export function ponerPrecioCopiado(
   return {
     ...item,
     cotizacionItemId,
-    jobContext: item.jobContext?._centroCopiado ? {
-      ...item.jobContext,
-      _centroCopiado: {
-        ...(item.jobContext?._centroCopiado as Record<string, unknown>),
-        tandaImpresion: p.tandaImpresion ?? null,
-      },
-    } : item.jobContext,
+    jobContext: item.jobContext?._centroCopiado
+      ? {
+          ...item.jobContext,
+          _centroCopiado: {
+            ...(item.jobContext._centroCopiado as Record<string, unknown>),
+            tandaImpresion: p.tandaImpresion ?? null,
+          },
+        }
+      : item.jobContext,
     subtotal: p.subtotal,
     impuestoMonto: p.iva,
     total: p.total,

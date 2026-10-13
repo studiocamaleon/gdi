@@ -89,7 +89,10 @@ export class DocumentoCentroCopiadoDto {
   @MaxLength(255)
   archivoNombre?: string;
 
-  @IsOptional() @IsInt() @Min(1) @Max(1024 * 1024 * 1024)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1024 * 1024 * 1024)
   archivoBytes?: number;
 
   @IsInt()

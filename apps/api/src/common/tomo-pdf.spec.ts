@@ -18,7 +18,7 @@ async function fuente(
     nombre,
     paginas: cantidad,
     faz: 2,
-    cargar: async () => bytes,
+    cargar: () => Promise.resolve(bytes),
     ...cambios,
   };
 }
@@ -70,7 +70,9 @@ it('rechaza rangos desactualizados, originales cambiados, PDF corruptos y caras 
   ).rejects.toThrow('cambiaron');
   await expect(
     unificarTomoPdf([
-      await fuente('A', 2, { cargar: async () => new Uint8Array([1, 2]) }),
+      await fuente('A', 2, {
+        cargar: () => Promise.resolve(new Uint8Array([1, 2])),
+      }),
     ]),
   ).rejects.toThrow('PDF válido');
   await expect(

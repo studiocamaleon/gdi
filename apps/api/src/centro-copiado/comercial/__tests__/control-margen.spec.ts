@@ -187,10 +187,26 @@ it('rehúsa sugerir si falta desglose, base, IVA coherente o cambian las tasas e
 
 it('el redondeo monetario del objetivo no pide autorización por fracciones de centavo', () => {
   const entrada = {
-    ventas: [{neto: '100.01', total:'100.01', cargas:[]}],
-    costoProduccion: '60.01', politica: {minimoPorcentaje:'40', anteInsuficiente:'AUTORIZACION' as const}, decimales:2,
+    ventas: [{ neto: '100.01', total: '100.01', cargas: [] }],
+    costoProduccion: '60.01',
+    politica: {
+      minimoPorcentaje: '40',
+      anteInsuficiente: 'AUTORIZACION' as const,
+    },
+    decimales: 2,
   };
-  expect(evaluarMargen(entrada)).toMatchObject({estado:'CUMPLE', porcentaje:'40.00'});
-  expect(evaluarMargen({...entrada, costoProduccion:'60.02'}).estado).toBe('REQUIERE_AUTORIZACION');
-  expect(evaluarMargen({...entrada, costoProduccion:'100.02', politica:{...entrada.politica, minimoPorcentaje:'0'}}).estado).toBe('REQUIERE_AUTORIZACION');
+  expect(evaluarMargen(entrada)).toMatchObject({
+    estado: 'CUMPLE',
+    porcentaje: '40.00',
+  });
+  expect(evaluarMargen({ ...entrada, costoProduccion: '60.02' }).estado).toBe(
+    'REQUIERE_AUTORIZACION',
+  );
+  expect(
+    evaluarMargen({
+      ...entrada,
+      costoProduccion: '100.02',
+      politica: { ...entrada.politica, minimoPorcentaje: '0' },
+    }).estado,
+  ).toBe('REQUIERE_AUTORIZACION');
 });

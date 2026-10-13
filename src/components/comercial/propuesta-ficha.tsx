@@ -312,6 +312,7 @@ import {
   resumenOjales,
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
+import { TandasCopiadoPanel } from "./tandas-copiado-panel";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { ProduccionEntregas } from "./produccion-entregas";
@@ -4774,7 +4775,8 @@ function rehidratarOrdenItem(
       (resumen?.ejecucion
         ?.minimoComercialAplicado as CotizacionPropuestaSnapshot["minimoComercialAplicado"]) ??
       null,
-    costos: (snap?.resumen as { copiadoComercial?: unknown } | undefined)?.copiadoComercial
+    costos: (snap?.resumen as { copiadoComercial?: unknown } | undefined)?.copiadoComercial &&
+      metaCentroCopiado(jobContext)?.tandaImpresion?.version !== 1
       ? costosHistoricos
       : resumen?.ejecucion?.costos ?? costosHistoricos,
     pasos: trazabilidad?.pasos ?? [],
@@ -6282,7 +6284,7 @@ function PropuestaFichaContenido({
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
         return;
       const anchor = (event.target as HTMLElement).closest?.("a[href]");
-      if (!anchor) return;
+      if (!anchor || anchor.hasAttribute("download")) return;
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#")) return;
       event.preventDefault();
@@ -8752,10 +8754,21 @@ function PropuestaFichaContenido({
                 // Todavía es una propuesta sin persistir: los items son
                 // borradores locales sin fila en la base, así que no hay dónde
                 // colgar un archivo. Ver docs/archivos-r2-diseno.md §4.
-                <EmptyTab
-                  title="Archivos"
-                  description="Guardá la propuesta o emitila como orden para poder adjuntar el arte y las referencias del cliente."
-                />
+                <>
+                  <TandasCopiadoPanel
+                    items={items.map((i) => ({
+                      itemId: i.id,
+                      archivosPendientes: i.archivosPendientes,
+                    }))}
+                    metas={Object.fromEntries(
+                      items.map((i) => [i.id, metaCentroCopiado(i.jobContext)]),
+                    )}
+                  />
+                  <EmptyTab
+                    title="Archivos"
+                    description="Guardá la propuesta o emitila como orden para conservar los originales y adjuntar otras referencias del cliente."
+                  />
+                </>
               )
             ) : null}
             {tab === "costos" && verMargenes ? (
