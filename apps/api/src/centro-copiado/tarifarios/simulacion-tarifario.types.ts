@@ -34,6 +34,9 @@ export type EscenarioSimulado = {
     motivo: string | null;
   };
   costoTotal: string;
+  /** Ausente en respuestas anteriores a la separación de contribución. */
+  costoVariableTotal?: string;
+  costoEstructuraTotal?: string;
   costoUnitario: string;
   cantidadReferencia: string;
   cantidadFacturable: string;

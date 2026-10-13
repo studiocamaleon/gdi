@@ -145,7 +145,14 @@ it('acumula CAD por papel consumido y redondea una vez antes de repartir las lí
   a.documentos = [documentoCad('plano-a')];
   b.documentos = [documentoCad('plano-b')];
   const i = input([a, b]);
-  i.contenido.cad!.filas = [filaCad()];
+  const fila = filaCad();
+  i.contenido.cad!.filas = [
+    {
+      ...fila,
+      precios: [...fila.precios],
+      rangosPropios: fila.rangosPropios ? [...fila.rangosPropios] : null,
+    },
+  ];
   i.contenido.cad!.rangosGenerales = ['0', '4'];
   i.contenido.cad!.reglas.redondeo = {
     modalidad: 'HACIA_ARRIBA',
@@ -177,4 +184,33 @@ it('las coberturas diferenciadas conservan tramos separados al reunir cargas', (
     ['50', '1'],
   ]);
   expect(r.composicion.total?.total).toBe('12100.00');
+});
+
+it('evalúa contribución de impresión y terminaciones sin descontar tiempo interno', () => {
+  const l = linea('a');
+  l.costoImpresion = '110';
+  l.costoVariableImpresion = '20';
+  l.terminacionesNeto = '100';
+  l.costoTerminaciones = '120';
+  l.costoVariableTerminaciones = '40';
+  const r = calcularPedidoCopiado(input([l]));
+  expect(r.costoImpresion).toBe('110.00');
+  expect(r.control).toMatchObject({
+    metrica: 'CONTRIBUCION',
+    estado: 'CUMPLE',
+    porcentaje: '80.00',
+  });
+  expect(r.terminaciones[0].control).toMatchObject({
+    metrica: 'CONTRIBUCION',
+    estado: 'CUMPLE',
+    porcentaje: '60.00',
+  });
+  l.costoVariableImpresion = null;
+  expect(calcularPedidoCopiado(input([l])).control.estado).toBe(
+    'NO_VERIFICABLE',
+  );
+  l.costoVariableTerminaciones = null;
+  expect(
+    calcularPedidoCopiado(input([l])).terminaciones[0].control.estado,
+  ).toBe('NO_VERIFICABLE');
 });

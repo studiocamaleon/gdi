@@ -1,4 +1,5 @@
 import { referenciasRangoSimulacion } from './referencias-rango-simulacion';
+import { separarCostoContribucion } from '../comercial/costo-variable';
 import { resolverIvaCopiado } from './iva-copiado';
 import {
   BadRequestException,
@@ -458,6 +459,10 @@ export class CentroCopiadoSimulacionService {
       (n, c) => n.plus(c.costos.total),
       new DecimalComercial(0),
     );
+    const costoVariable = cotizaciones.reduce(
+      (n, c) => n.plus(separarCostoContribucion(c).variable),
+      new DecimalComercial(0),
+    );
     if (costo.eq(0))
       avisos.push(
         'El motor devolvió costo cero. Revisá las tarifas e insumos antes de fijar el precio.',
@@ -481,6 +486,8 @@ export class CentroCopiadoSimulacionService {
       cobertura,
       calculadoEl: new Date().toISOString(),
       costoTotal: costo.toFixed(),
+      costoVariableTotal: costoVariable.toFixed(),
+      costoEstructuraTotal: costo.minus(costoVariable).toFixed(),
       costoUnitario: costo.div(cantidad).toFixed(8),
       cantidadReferencia: cantidad,
       cantidadFacturable: facturable,

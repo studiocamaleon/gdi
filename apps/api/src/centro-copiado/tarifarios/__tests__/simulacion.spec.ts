@@ -17,7 +17,7 @@ function entorno() {
     productoId: 'producto-ficticio',
     rutaAlternativaId: 'ruta-ficticia',
     periodoTarifario: '2026-10',
-    costos: { total: 60 },
+    costos: { total: 60, tiempoTotal: 0, tiempoExtraTotal: 0 },
     precio: { precioTotal: 99999 },
     desglosePrecio: {
       precioNetoTotal: 100,
@@ -118,6 +118,7 @@ function entorno() {
     service,
     ejecutar,
     agregarCad,
+    costo,
   };
 }
 
@@ -140,6 +141,24 @@ it('costea las tres coberturas aun sin precio; usa el costo del motor y no su pr
     ivaPorcentaje: '21',
   });
   expect(compararSimulacion(e.contenido, 'hojas', s).utilidad).toBeNull();
+});
+
+it('el tarifario muestra contribución sobre costo variable conservando el costo productivo completo', async () => {
+  const e = entorno();
+  e.costo.costos.tiempoTotal = 20;
+  const r = await e.ejecutar();
+  const s = r.resultados[0].escenarios[0] as EscenarioSimulado;
+  expect(s).toMatchObject({
+    costoTotal: '60',
+    costoVariableTotal: '40',
+    costoEstructuraTotal: '20',
+  });
+  const comparacion = compararSimulacion(e.contenido, 'hojas', s, '121');
+  expect(comparacion.control).toMatchObject({
+    metrica: 'CONTRIBUCION',
+    porcentaje: '60.00',
+    utilidad: '60.00',
+  });
 });
 
 it('usa la cobertura y los rangos propios de la combinación', async () => {

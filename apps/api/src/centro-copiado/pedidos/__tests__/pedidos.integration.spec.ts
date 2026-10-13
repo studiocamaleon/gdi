@@ -46,6 +46,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     seguro = false;
   let costo = 90;
   let cobraSetup = true;
+  let materiales = 10;
   const desglose = () => ({
     precioNetoTotal: 150,
     precioBrutoTotal: 181.5,
@@ -99,16 +100,16 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
             exitoso: true,
             cotizacion: {
               costos: {
-                total: tiempo + 10,
-                unitario: tiempo + 10,
-                materialesTotal: 10,
+                total: tiempo + materiales,
+                unitario: tiempo + materiales,
+                materialesTotal: materiales,
                 tiempoTotal: tiempo,
               },
               pasos: [
                 {
                   rutaPasoOrden: 0,
                   familiaCodigo: 'impresion_laser',
-                  costoTotal: tiempo + 10,
+                  costoTotal: tiempo + materiales,
                   tiempo: {
                     setupMin: tiempo ? 3 : 0,
                     totalMin: tiempo ? 4 : 1,
@@ -442,6 +443,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
   beforeEach(() => {
     costo = 90;
     cobraSetup = true;
+    materiales = 10;
   });
   it('sin activación conserva el motor; guardar política no la activa', async () => {
     const i = await fuente();
@@ -483,12 +485,14 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     expect((await revisar([b.id])).status).toBe(404);
   });
   it('activa precios; no filtra costos y ni el supervisor emite sin autorización expresa', async () => {
+    materiales = 90;
     await activar();
     const fuenteOriginal = await fuente();
     const r = await revisar([fuenteOriginal.id]);
     expect(r.status).toBe(201);
     expect(r.body.calculado.control).toEqual({
       estado: 'REQUIERE_AUTORIZACION',
+      metrica: 'CONTRIBUCION',
     });
     expect(JSON.stringify(r.body)).not.toMatch(
       /costoImpresion|cargasTotal|lineas/,
@@ -550,8 +554,9 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
       const r = await revisar([original.id], 'responsable');
       expect(r.status).toBe(201);
       expect(r.body.calculado.control).toMatchObject({
-        estado: actual ? 'REQUIERE_AUTORIZACION' : 'CUMPLE',
-        porcentaje: actual ? '10.00' : '90.00',
+        estado: 'CUMPLE',
+        porcentaje: '90.00',
+        metrica: 'CONTRIBUCION',
       });
       const guardado = await db.cotizacionItem.findUniqueOrThrow({
         where: { id: r.body.items[0].id },
@@ -587,7 +592,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     expect(r.status).toBe(201);
     expect(r.body.calculado.control).toMatchObject({
       estado: 'CUMPLE',
-      porcentaje: '50.00',
+      porcentaje: '90.00',
     });
     expect(r.body.items.map((i) => i.total)).toEqual([121, 121]);
     expect(new Set(r.body.items.map((i) => i.tandaImpresion?.id)).size).toBe(1);
@@ -627,9 +632,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     );
     const individual = await revisar([guardados[0].id], 'responsable');
     expect(individual.body.items[0].finanzas?.costoTotal).toBe(90);
-    expect(individual.body.calculado.control.estado).toBe(
-      'REQUIERE_AUTORIZACION',
-    );
+    expect(individual.body.calculado.control.estado).toBe('CUMPLE');
   });
   it('recupera la revisión sin filtrar costos y registra descuentos explícitos antes del mínimo', async () => {
     await activar();
@@ -682,6 +685,7 @@ describe('Pedidos de copiado: activación, precios y autorización', () => {
     expect(cambiada.body).toMatchObject({ vigente: false });
   });
   it('no admite autorizar bloqueo estricto ni precio pendiente', async () => {
+    materiales = 90;
     await activar('BLOQUEO');
     const r = await revisar([(await fuente()).id], 'responsable');
     expect(r.body.calculado.control.estado).toBe('BLOQUEADO');

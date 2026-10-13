@@ -35,6 +35,7 @@ import { CentroCopiadoAuditoriaService } from '../centro-copiado-auditoria.servi
 import { mismaReferenciaPolitica } from '../tarifarios/politica-precios';
 import { referenciaComercialMotor } from '../tarifarios/referencia-comercial-motor';
 import { DecimalComercial as D } from '../comercial/validaciones';
+import { separarCostoContribucion } from '../comercial/costo-variable';
 import {
   calcularPedidoCopiado,
   repartir,
@@ -442,6 +443,7 @@ export class CentroCopiadoPedidosService {
         });
         const documentos: LineaPedidoCopiado['documentos'] = [];
         let costo: InstanceType<typeof D> | null = new D(0);
+        let costoVariable: InstanceType<typeof D> | null = new D(0);
         let anterior = '';
         const impresiones: CotizacionResultado[] = [];
         for (const doc of solicitud.documentos) {
@@ -476,6 +478,14 @@ export class CentroCopiadoPedidosService {
               costo === null || simulacion.error || !simulacion.cotizacion
                 ? null
                 : costo.plus(simulacion.cotizacion.costos.total);
+            costoVariable =
+              costoVariable === null ||
+              simulacion.error ||
+              !simulacion.cotizacion
+                ? null
+                : costoVariable.plus(
+                    separarCostoContribucion(simulacion.cotizacion).variable,
+                  );
           } else {
             documentos.push({ ...sinGrupo, modo: 'HOJAS' });
             const clave = canonico([
@@ -503,9 +513,16 @@ export class CentroCopiadoPedidosService {
                   costo === null
                     ? null
                     : costo.plus(parte.cotizacion!.costos.total);
+                costoVariable =
+                  costoVariable === null
+                    ? null
+                    : costoVariable.plus(
+                        separarCostoContribucion(parte.cotizacion!).variable,
+                      );
               }
             } catch {
               costo = null;
+              costoVariable = null;
             }
             anterior = clave;
           }
@@ -514,11 +531,15 @@ export class CentroCopiadoPedidosService {
         const costoTerminaciones = new D(
           completo.cotizacion.costos.total,
         ).minus(base.cotizacion.costos.total);
+        const costoVariableTerminaciones = separarCostoContribucion(
+          completo.cotizacion,
+        ).variable.minus(separarCostoContribucion(base.cotizacion).variable);
         const terminacionesNeto = new D(completo.subtotal).minus(base.subtotal);
         if (
           !costoTerminaciones.isFinite() ||
           !terminacionesNeto.isFinite() ||
           costoTerminaciones.lt(0) ||
+          costoVariableTerminaciones.lt(0) ||
           terminacionesNeto.lt(0)
         )
           throw new BadRequestException(
@@ -547,7 +568,10 @@ export class CentroCopiadoPedidosService {
           documentos,
           ivaPorcentaje: iva,
           costoImpresion: costo?.toFixed(decimales) ?? null,
+          costoVariableImpresion: costoVariable?.toFixed(decimales) ?? null,
           costoTerminaciones: costoTerminaciones.toFixed(decimales),
+          costoVariableTerminaciones:
+            costoVariableTerminaciones.toFixed(decimales),
           terminacionesNeto: terminacionesNeto.toFixed(decimales),
           acuerdoImpresionNeto: d.precioEspecialCliente
             ? String(base.subtotal)
@@ -1008,7 +1032,10 @@ export class CentroCopiadoPedidosService {
         grupos: c.grupos,
         composicion: c.composicion,
         precios: c.precios,
-        control: { estado: c.control.estado },
+        control: {
+          estado: c.control.estado,
+          ...(c.control.metrica ? { metrica: c.control.metrica } : {}),
+        },
         terminaciones: c.terminaciones.map((t) => ({
           id: t.id,
           control: { estado: t.control.estado },

@@ -13,7 +13,9 @@ export interface LineaPedidoCopiado {
   documentos: (DocumentoCalculoHojas | DocumentoCalculoCad)[];
   ivaPorcentaje: string;
   costoImpresion: string | null;
+  costoVariableImpresion?: string | null;
   costoTerminaciones: string | null;
+  costoVariableTerminaciones?: string | null;
   terminacionesNeto: string;
   acuerdoImpresionNeto: string | null;
   cargas: CargaMargen[] | null;
@@ -289,7 +291,19 @@ export function calcularPedidoCopiado(input: {
           ]
         : [],
     ),
-    costoProduccion: composicion.estado === 'PRECIO_PENDIENTE' ? null : costo,
+    costoProduccion:
+      composicion.estado === 'PRECIO_PENDIENTE' ||
+      lineas.some(
+        (l) => l.costoVariableImpresion === null || l.costoImpresion === null,
+      )
+        ? null
+        : lineas
+            .reduce(
+              (s, l) => s.plus(l.costoVariableImpresion ?? l.costoImpresion!),
+              new D(0),
+            )
+            .toFixed(dec),
+    metrica: 'CONTRIBUCION',
     politica: c.margen,
     decimales: dec,
   });
@@ -309,7 +323,11 @@ export function calcularPedidoCopiado(input: {
                   cargas: l.cargas,
                 },
               ],
-              costoProduccion: l.costoTerminaciones,
+              costoProduccion:
+                l.costoVariableTerminaciones === null
+                  ? null
+                  : (l.costoVariableTerminaciones ?? l.costoTerminaciones),
+              metrica: 'CONTRIBUCION',
               politica: {
                 minimoPorcentaje: '0',
                 anteInsuficiente: c.margen?.anteInsuficiente ?? 'AUTORIZACION',
