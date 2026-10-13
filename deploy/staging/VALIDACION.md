@@ -1,5 +1,45 @@
 # Validación de staging — historial
 
+## 13/10/2026 — Centro de copiado: papel derivado, objetivos por rango, entrega, pouch y producción finalizada
+
+Lote de #77 a #81, dependiente de #76 ya publicado. Alcance autorizado: staging. Producción y merges pendientes de aceptación. No se importan datos de local.
+
+Candidato API/workers/web: `967ababf56fd07a5b9638c91296b57f52652cdad`. Gotenberg conserva `9ff0ba2ee9d9a94bc9327b6bede482f7692067cc`.
+
+Validación local: 98 pruebas API y 102 web; tipos de archivos afectados y lint. Se verifica emisión directa/borrador, impresión+pouch, OT mixta, reportes con tiempos estimados, conservación de precios/materiales, idempotencia, y rechazo de reapertura de los pasos finalizados al emitir. Chrome: OT de prueba con cinco A4, $800/hoja, $4.000 total, fecha del día, paso Completo y 0,13 min estimados. No cobra ni entrega automáticamente.
+
+La producción marcada al emitir conserva la vista habitual. Guarda los pasos hechos y tiempos con fuente estimada; no crea ruta activa, asignaciones, gates ni cronómetros. Los reportes incluyen operaciones y utilización; eficiencia y horas cronometradas siguen utilizando mediciones.
+
+**CI y servidor:** aprobaron [permisos HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38435585632) y [contenedores completos, migraciones y login/BFF](https://github.com/studiocamaleon/gdi/actions/runs/38435585756) de la revisión ejecutable. Builds remotos con tipos; sin builds de producción en la Mac.
+
+Migración aditiva de tres columnas para la selección y firma de finalización: 316 migraciones completas. Sin seeds, resets ni importación de credenciales o datos de local. Se conservaron IDs y recuentos de empresa, usuarios, conversaciones, mensajes, envíos y archivos antes/después del ensayo remoto.
+
+Ensayo en servicios compilados de Fly y base propia de staging, con empresa y operador ficticios temporales: selección de tarifario por canal, publicación y borrador aislados, rechazo de referencias de otra empresa y cotización sin autorización por contribución negativa. Mostrador: 100/90/80 por hoja para 1/5/10; Web: 120/110/100. Son fixtures de prueba, no precios comerciales. Costo derivado ficticio de 40/A4 en opalina 650×950 (9 A4) y SRA3 325×475 (2 A4), con sobrantes enteros conservados.
+
+Impresión+pouch: dos pasos, 15 minutos estimados, 0,25 h de utilización, cero trabajos en cola, sin aristas ni cronómetros y sin duplicación al repetir. Los reportes reales incluyeron los pasos con fuente estimada. PDF compatible: 14 páginas, cinco reversos en blanco, subida/descarga firmadas con SHA-256 coincidente, CORS y Gotenberg real aprobados. Se retiraron sólo los datos/objeto del ensayo; ningún cobro o mensaje externo.
+
+| Componente | Digest vigente |
+| --- | --- |
+| API y ambos workers | `sha256:83589540d9c19a3ef76dbf44e42e8a12838bec19dc4acf1ee02ab0d833fd402f` |
+| Web | `sha256:f09bd7cbef5f9a085cfc5ede13f522a6a9ac2450c896e809a14641d2078e5e27` |
+| Gotenberg/PDF, sin cambio | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, sin cambio de imagen | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Chrome staging:** cliente QA ficticio sin contactos; cinco A4 de papel obra 75 g, B/N simple, canal Presencial, entrega 13/10/2026. Se marcó «Marcar producción finalizada» y se emitió OT-2026-0008 sin autorización por margen. Quedó Finalizada, con la tarjeta habitual de impresión Completo, 100% y 0,06 min estimados. Total persistido $381,25 con la configuración propia de staging. Sin errores ni advertencias de consola en el recorrido. No se registró cobro, factura, entrega ni contacto externo. Se conserva el cliente y la OT ficticios para revisión del titular.
+
+En Tarifarios se verificó el asistente con objetivos de contribución por rango y preparación productiva desactivada. El tarifario propio «Mostrador» permanece en borrador, sin versión vigente (156/312 precios cargados); la OT visual usó el motor. La matriz por canal se verificó con fixtures aislados en el servidor. No se alteraron ni publicaron los precios del titular.
+
+Se comprobó la sección configurable de plastificado pouch. En esta empresa está desactivado y requiere cargar sus sobres de inventario; no se inventaron materiales ni precios para habilitarlo. El ensayo remoto de impresión+pouch usa fixtures aislados y no sustituye esa configuración.
+
+**Operación:** seis máquinas iniciadas, controles saludables, mismos tamaños y regiones. API/web responden 200 y las rutas protegidas rechazan acceso anónimo. Las seis máquinas de producción conservan imágenes y recursos. Constructor temporal de esta tarea eliminado al terminar; Docker y desarrollo local intactos.
+
+**Respaldo posterior:** `465dc613-3fba-49c6-9647-6961757716c9`, completado `2026-10-13T17:45:46.145Z`, verificado `17:47:12 UTC`. Firma válida y manifiesto descifrado, 316 migraciones, 24 archivos, ocho fuentes custodiadas y las cuatro imágenes exactas. La fuente funcional `967ababf5` está incluida. Esta lectura no repitió una restauración SQL completa; la OT de navegador se emitió después de esta copia.
+
+**Reversión:** API/workers `sha256:1ce96735e32d9473443a3cf93f0f3742bc27e5609f11f1fbc9d1285c6fe0af59` y web `sha256:7090cb82616398f1893d3e40c344b6a4a67e7ceb5652d5dc43974d6a728a5f1d` en sus repositorios de staging. Conservar la migración aditiva y actualizar inventario de respaldo y salud si se revierte.
+
+**Pendiente explícito:** aceptación del titular en staging antes de promover a producción e integrar #75–#81. La cadena de PR mantiene sus bases temporales documentadas. CORS del bucket local continúa pendiente por decisión del titular. No hubo impresión física.
+
+
 ## 13/10/2026 — Centro de copiado: tarifarios, contribución y tandas (#76)
 
 **Alcance autorizado:** staging para pruebas del titular. [PR #76](https://github.com/studiocamaleon/gdi/pull/76), con la corrección de hidratación de #75 incorporada preservando sus commits. TPV queda fuera del lote. Producción y merge a `main` esperan la validación de Lucas; #75/#76 permanecen abiertos por ese pendiente explícito. Los PR independientes de Dependabot no forman parte de esta publicación.
