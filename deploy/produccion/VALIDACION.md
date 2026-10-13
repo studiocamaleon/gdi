@@ -1,5 +1,30 @@
 # Validación de producción
 
+## 13/10/2026 — Centro de copiado, hidratación y Canvas publicados
+
+Publicado con autorización del titular tras comprobar staging. API, web y ambos workers ejecutan `69698c3eb83162c0d6a0cf06281630346c1c74b0`, candidato conjunto del [PR #83](https://github.com/studiocamaleon/gdi/pull/83), que conserva los commits de #75–#82. El registro documental posterior no cambia el código ejecutado. Las seis propuestas automáticas de dependencias #63, #64 y #71–#74 quedan para otro lote por decisión explícita; también continúan pendientes TPV y CORS del bucket local.
+
+**Alcance:** tarifarios y selección por canal, objetivos de contribución por rango, preparación configurable y eliminación de autorización por margen; costo de hoja derivada y sobrantes de inventario; PDFs por tanda compatible; fecha de entrega, pouch y selección automática de anillos/tapas activos con diámetro correcto; producción finalizada al emitir con pasos y tiempos estimados en los reportes habituales. Incluye la hidratación del dashboard y la cotización de Canvas con varias medidas, bastidores por tamaño, despiece conjunto y selector de medida del visor.
+
+**Validación previa:** 87 pruebas API y 30 web sobre el candidato integrado, además de las regresiones de cada PR. [CI HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38457490474), [contenedores/tipos/migraciones/login](https://github.com/studiocamaleon/gdi/actions/runs/38457490781), dependencias, CodeQL y Vercel aprobados. [Staging](../staging/VALIDACION.md) reprodujo el error de la segunda medida y confirmó dos/tres tamaños tras la publicación. Las imágenes se promovieron sin recompilar; se verificó igualdad de digest entre ambos registros.
+
+| Componente | Digest de producción |
+| --- | --- |
+| API y ambos workers | `sha256:ffb98489bfcf1210ebeb332e7c27a8e7ae8332bf709affe1f4ff6bdde56212dc` |
+| Web | `sha256:189719be961310724ad43b76543e6231917ed77f5d981bbd9fed5af2c30ddfb2` |
+| Gotenberg/PDF, fuente `9ff0ba2ee` | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, misma imagen | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Base y operación:** cuatro migraciones aditivas, de 312 a 316 completas, con checksums previos intactos y rol de ejecución verificado sin DDL. Recuentos e identificadores de las seis tablas comprobadas coinciden antes/después. Sin seeds, resets ni importación de datos o credenciales entre entornos. Se mantienen seis máquinas, regiones y tamaños, incluida la API con una CPU performance y 2 GB. Salud HTTPS 200 y rechazo anónimo 403/401. Revisión ejecutada comprobada en API, web y ambos workers. Constructor remoto temporal retirado; desarrollo local intacto.
+
+**Chrome de producción:** el producto real Cuadros canvas cotizó una, dos y tres medidas (30 × 40, 50 × 60 y 70 × 90 cm, una unidad de cada una). La primera conserva el precio anterior; las siguientes calculan el conjunto, mantienen el margen configurado y habilitan «Agregar a la OT». Centro de copiado también cotizó cinco A4 de papel obra 75 g, B/N simple, canal Presencial, con importe por hoja y total. No hubo errores ni advertencias de consola en ambos recorridos. No se emitieron órdenes, pagos, facturas ni envíos de prueba en producción; no se alteraron precios ni configuración comercial. Las pruebas de emisión completa, pouch, anillados y pasos finalizados del mismo lote están registradas en staging.
+
+**Dependencias operativas:** control fiscal del worker aprobado y consulta de sólo lectura a ARCA coincidente con un comprobante existente, sin emisión. El worker PDF generó en memoria un PDF real de una página con contenido ficticio, 8.651 bytes; no se almacenó un archivo comercial.
+
+**Respaldo:** antes de migrar se verificó firma y descifrado de la copia `5c1fffd8-e550-4279-883a-3c34036efcf4`. Fuentes del candidato y del generador PDF custodiadas cifradas; inventario del copiador actualizado a las imágenes exactas. Copia posterior `7b9523df-ad38-4c2a-8442-486eba7d01e4`, completada `2026-10-13T20:13:55.333Z`, comprobada a las `20:14:47 UTC`: firma válida, manifiesto descifrado, 316 migraciones, 176 archivos y nueve fuentes. Esta verificación no repitió una restauración SQL completa.
+
+**Reversión:** restaurar API/workers `sha256:8d0323160ae2294449c57c7b4aa3431f26ec9839ecca774ed917bd3d5699d209`, web `sha256:922d3719b203818e1dbd101ea9320efb671790d087b588a3ab249d5b62c44ff6` y PDF `sha256:a86ea4b8aae6a9e4c45b5594840e216ce66847d232a8aab649694470ed4f547d` en sus registros de producción. Conservar las migraciones aditivas y los datos nuevos; el retorno de código deja de exponer las funciones de este lote. Actualizar inventario del copiador y repetir salud si se revierte. No restaurar la base sobre la única copia activa.
+
 ## 10/10/2026 — Mantenimiento de dependencias (#70)
 
 **Revisión ejecutada:** `9efc08ffe89afa9a833cf04970e1018ad1939550`. PR incluidos: #60, #61 y #67, con sus commits conservados. El titular autorizó el lote, las pruebas, staging y producción.

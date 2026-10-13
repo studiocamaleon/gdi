@@ -1,5 +1,26 @@
 # Validación de staging — historial
 
+## 13/10/2026 — Publicación conjunta de Centro de copiado, hidratación y Canvas
+
+Candidato `69698c3eb83162c0d6a0cf06281630346c1c74b0`, integrado en el [PR #83](https://github.com/studiocamaleon/gdi/pull/83). Conserva íntegros los commits de #75–#82. El titular autorizó promover el lote funcional después de comprobar staging; dejó las seis propuestas automáticas de dependencias para otro lote. TPV y CORS local siguen pendientes explícitos.
+
+**CI del candidato:** [permisos HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38457490474), [contenedores, tipos, migraciones y login/BFF](https://github.com/studiocamaleon/gdi/actions/runs/38457490781), dependencias, CodeQL sin alertas nuevas en el diff y Vercel aprobados. La rama aislada #82 usaba el pin anterior de Chromium, ya retirado de Debian; el conjunto incorpora el pin disponible que había sido verificado en Centro de copiado. No se desactivó ningún control. Regresiones locales del conjunto: 87 pruebas API en ocho suites y 30 de interfaz en cinco archivos, además de las pruebas específicas registradas en los PR originales. Compilación de producción remota.
+
+**Chrome:** el catálogo de staging no tenía el compuesto Canvas. Se preparó un producto QA, una copia de su tela y un listón ficticio con precio confirmado, sin modificar productos ni precios existentes ni copiar datos de producción. Primero se reprodujo el error de la segunda medida. Tras publicar API y web se cotizaron 30 × 40 y 50 × 60 cm, y luego se agregó 70 × 90 cm, una unidad de cada medida. Totales QA con impuestos: $93.678 y $154.014, respectivamente; margen configurado del 40 % y «Agregar a la OT» habilitado. Estos valores son datos de ensayo, no precios comerciales. El recorrido final no registró errores ni advertencias de consola. No se guardaron órdenes, pagos, facturas ni envíos. Al terminar se desactivaron únicamente los dos productos, la ruta y el material/variante QA; se conservaron sus registros.
+
+| Componente | Digest verificado |
+| --- | --- |
+| API y ambos workers | `sha256:ffb98489bfcf1210ebeb332e7c27a8e7ae8332bf709affe1f4ff6bdde56212dc` |
+| Web | `sha256:189719be961310724ad43b76543e6231917ed77f5d981bbd9fed5af2c30ddfb2` |
+| Gotenberg/PDF, imagen existente de `9ff0ba2ee` | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+API, web y ambos workers informan la revisión `69698c3eb`. Seis máquinas saludables, mismos recursos; HTTP 200 de salud y rechazos 403/401 para acceso anónimo a rutas protegidas. Las 316 migraciones estaban completas y sus checksums coinciden; no se aplicaron migraciones nuevas en staging. Se conservaron recuentos e identificadores de las seis tablas comprobadas.
+
+**Copia posterior:** `a628b3f4-de88-46db-8a40-e75d672abbec`, completada a las `20:07:00.716 UTC` y verificada a las `20:07:14 UTC`. Firma válida, manifiesto descifrado, 316 migraciones, 24 archivos, ocho fuentes custodiadas y cuatro imágenes exactas. La desactivación final del QA fue posterior al inicio de esta copia. No se repitió una restauración SQL completa.
+
+**Reversión de código:** API/workers `sha256:0bd33eb1eb66dbd37171a30eb9f513f00863827d842939f67e74d7d2b411255a` y web `sha256:f09bd7cbef5f9a085cfc5ede13f522a6a9ac2450c896e809a14641d2078e5e27`; PDF/copiador sin cambio. Conservar el esquema aditivo. La promoción y su cierre se registran en [producción](../produccion/VALIDACION.md).
+
 ## 13/10/2026 — Anillados activos y diámetro del material cotizado
 
 Publicado sólo en staging, dentro del PR #81 y su cadena de dependencias. API y ambos workers ejecutan `a787e9ab929d8c37f2fb92759b93baf89aabd8bc`; la web conserva `967ababf56fd07a5b9638c91296b57f52652cdad` y Gotenberg `9ff0ba2ee9d9a94bc9327b6bede482f7692067cc`. Producción y merges siguen pendientes de aceptación del titular.
