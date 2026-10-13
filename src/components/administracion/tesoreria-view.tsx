@@ -588,6 +588,11 @@ export function TesoreriaView({
   const [recarga, setRecarga] = React.useState(0);
   const [modal, setModal] = React.useState<Modal>(null);
   const [ocupado, setOcupado] = React.useState(false);
+  const conciliandoRef = React.useRef(new Set<string>());
+  const [conciliando, setConciliando] = React.useState(new Set<string>());
+  const versionConciliacion = React.useRef(0);
+  const [versionConfirmada, setVersionConfirmada] = React.useState(0);
+  const confirmados = React.useRef(new Map<string, number>());
   const [filtros, setFiltros] = React.useState<Filtros>({
     q: "",
     origenTipo: "todos",
@@ -596,6 +601,10 @@ export function TesoreriaView({
     hasta: "",
   });
   const busqueda = React.useDeferredValue(filtros.q);
+  // Conciliar no cambia saldos ni KPIs. Sólo un filtro de estado necesita
+  // reconsultar filas y paginación; no hace falta refrescar todo el layout.
+  const recargaConciliacion =
+    filtros.estadoConciliacion === "todos" ? 0 : versionConfirmada;
   const seleccion =
     initialCuentas.find((cuenta) => cuenta.id === seleccionId) ?? null;
   const cuentaMovimientos =
@@ -614,6 +623,7 @@ export function TesoreriaView({
       return;
     }
     let cancelado = false;
+    const versionConsulta = versionConciliacion.current;
     setCargando(true);
     setError(null);
     void getMovimientosCuenta(seleccionId, {
@@ -631,7 +641,15 @@ export function TesoreriaView({
     })
       .then((data) => {
         if (!cancelado) {
-          setMovimientos(data);
+          // Una lectura iniciada antes del PATCH no debe deshacer su resultado.
+          setMovimientos({
+            ...data,
+            items: data.items.map((movimiento) =>
+              (confirmados.current.get(movimiento.id) ?? 0) > versionConsulta
+                ? { ...movimiento, estadoConciliacion: "conciliado" }
+                : movimiento,
+            ),
+          });
           setCuentaMovimientosId(seleccionId);
         }
       })
@@ -659,6 +677,7 @@ export function TesoreriaView({
     filtros.desde,
     filtros.hasta,
     recarga,
+    recargaConciliacion,
   ]);
 
   React.useEffect(
@@ -686,6 +705,43 @@ export function TesoreriaView({
       );
     } finally {
       setOcupado(false);
+    }
+  };
+
+  const conciliar = async (cuentaId: string, movimiento: MovimientoFondos) => {
+    if (
+      !puedeGestionar ||
+      movimiento.estadoConciliacion === "conciliado" ||
+      conciliandoRef.current.has(movimiento.id)
+    ) {
+      return;
+    }
+    conciliandoRef.current.add(movimiento.id);
+    setConciliando(new Set(conciliandoRef.current));
+    try {
+      await conciliarMovimientoFondos(cuentaId, movimiento.id, {
+        estado: "conciliado",
+      });
+      confirmados.current.set(movimiento.id, ++versionConciliacion.current);
+      setVersionConfirmada(versionConciliacion.current);
+      setMovimientos((actual) => ({
+        ...actual,
+        items: actual.items.map((fila) =>
+          fila.id === movimiento.id
+            ? { ...fila, estadoConciliacion: "conciliado" }
+            : fila,
+        ),
+      }));
+      toast.success("Movimiento conciliado.");
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo conciliar el movimiento.",
+      );
+    } finally {
+      conciliandoRef.current.delete(movimiento.id);
+      setConciliando(new Set(conciliandoRef.current));
     }
   };
 
@@ -1248,26 +1304,25 @@ export function TesoreriaView({
                                     )}
                                     disabled={
                                       movimiento.estadoConciliacion ===
-                                      "conciliado"
+                                        "conciliado" ||
+                                      conciliando.has(movimiento.id)
                                     }
+                                    aria-busy={conciliando.has(movimiento.id)}
                                     onClick={() =>
-                                      void ejecutar(
-                                        () =>
-                                          conciliarMovimientoFondos(
-                                            seleccion.id,
-                                            movimiento.id,
-                                            { estado: "conciliado" },
-                                          ),
-                                        "Movimiento conciliado.",
+                                      void conciliar(
+                                        cuentaMovimientos!.id,
+                                        movimiento,
                                       )
                                     }
                                   >
                                     <CheckCircle2Icon />
                                     <span className="sr-only">
-                                      {movimiento.estadoConciliacion ===
-                                      "conciliado"
-                                        ? "Movimiento conciliado"
-                                        : "Marcar conciliado"}
+                                      {conciliando.has(movimiento.id)
+                                        ? "Conciliando movimiento"
+                                        : movimiento.estadoConciliacion ===
+                                            "conciliado"
+                                          ? "Movimiento conciliado"
+                                          : "Marcar conciliado"}
                                     </span>
                                   </Button>
                                 </TableCell>
