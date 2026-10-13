@@ -52,4 +52,6 @@ Las nuevas cargas priorizan hojas ya cortadas cuando su stock libre alcanza para
 
 Validación local del 13/10/2026: pruebas de 1, 5 y 10 A4, proyección conjunta de documentos, consumos parciales, reutilización, dos consumos concurrentes, reintentos idempotentes, valoración cero y reversión por cambio de medidas. Las simulaciones locales con setup desactivado verifican el mismo costo variable y control de contribución en Tarifarios y en el cálculo comercial de la OT. Los precios existentes siguen sin cambiar hasta aplicar y publicar sugerencias.
 
+También se comprobó en Chrome el detalle de Tarifarios con ambos papeles y las tres cantidades: costo unitario estable y contribución del 40% al probar los sugeridos redondeados a centavos. Se descartaron las ediciones temporales. La selección de sobrantes sólo considera ubicaciones y almacenes activos, descuenta reservas e incluye la merma del papel en hojas enteras. Las pruebas de interfaz verifican la explicación del corte y el sobrante antes de confirmar el consumo.
+
 Rama `codex/copiado-papel-derivado`, basada en `origin/main` y dependiente de `codex/copiado-staging` (PR #76). Sin migraciones ni despliegue a staging o producción.

@@ -13,6 +13,13 @@ export interface PapelDerivado {
 }
 
 export const enteroPapel = (n: number) => Math.ceil(Math.round(n * 1e8) / 1e8);
+export function cantidadPapelCortado(
+  cantidad: number,
+  attrs: Record<string, unknown> | null | undefined,
+): number | undefined {
+  const meta = attrs?._papelDerivado as { version?: number } | undefined;
+  return meta?.version === 1 ? enteroPapel(cantidad) : undefined;
+}
 export const pliegosPapel = (p: PapelDerivado) =>
   enteroPapel(p.hojasNecesarias / p.rendimiento);
 export const sobrantePapel = (p: PapelDerivado) =>

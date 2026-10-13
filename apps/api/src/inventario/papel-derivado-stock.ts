@@ -64,19 +64,18 @@ export async function conservarSobrantesPapel(
     entrada.consumida,
     entrada.cantidad,
   );
-  const cambios: object[] = [];
-  for (const { plan, hojas } of retornos) {
-    const origen = await tx.materiaPrimaVariante.findFirstOrThrow({
-      where: { tenantId: auth.tenantId, id: entrada.varianteId },
-      include: { materiaPrima: true },
-    });
-    if (
-      normalizeMaterialUnit(materialPriceContext(origen).unidadStock) !== 'hoja'
-    )
-      throw new ConflictException(
-        'El papel cambió su unidad de stock. Revisá el plan de corte.',
-      );
-    const dims = origen.atributosVarianteJson as Prisma.JsonObject;
+  const origen = await tx.materiaPrimaVariante.findFirstOrThrow({
+    where: { tenantId: auth.tenantId, id: entrada.varianteId },
+    include: { materiaPrima: true },
+  });
+  if (
+    normalizeMaterialUnit(materialPriceContext(origen).unidadStock) !== 'hoja'
+  )
+    throw new ConflictException(
+      'El papel cambió su unidad de stock. Revisá el plan de corte.',
+    );
+  const dims = origen.atributosVarianteJson as Prisma.JsonObject;
+  for (const plan of planes) {
     if (
       Number(dims.anchoMm) !== plan.anchoOrigenMm ||
       Number(dims.largoMm ?? dims.altoMm) !== plan.altoOrigenMm
@@ -84,6 +83,9 @@ export async function conservarSobrantesPapel(
       throw new ConflictException(
         'El papel cambió de medidas. Revisá el plan de corte.',
       );
+  }
+  const cambios: object[] = [];
+  for (const { plan, hojas } of retornos) {
     const precio = materialPriceInStockUnit(
       materialPriceContext(origen),
       Number(origen.precioReferencia),

@@ -4,6 +4,7 @@ import {
   type VariantePapel,
   type DocumentoInput,
 } from './adaptador';
+import { enteroPapel } from '../inventario/papel-derivado';
 
 export function seleccionarPapelesCortados(
   papeles: Array<{ materiaPrimaId: string; variantes: VariantePapel[] }>,
@@ -13,6 +14,7 @@ export function seleccionarPapelesCortados(
   },
   simulacion: boolean,
   materialesFijados?: Set<string>,
+  mermaPapelPct = 0,
 ) {
   // Un remanente sólo se ofrece si alcanza para todos los documentos del
   // pedido de ese papel/tamaño, descontando reservas de otras órdenes.
@@ -41,11 +43,14 @@ export function seleccionarPapelesCortados(
         .reduce(
           (s, d) =>
             s +
-            calcularHojas(
-              d.paginas,
-              dto.grupos?.find((g) => g.id === d.grupoId)?.juegos ?? d.copias,
-              d.faz,
-            ).hojas,
+            enteroPapel(
+              calcularHojas(
+                d.paginas,
+                dto.grupos?.find((g) => g.id === d.grupoId)?.juegos ?? d.copias,
+                d.faz,
+              ).hojas *
+                (1 + Math.max(0, mermaPapelPct) / 100),
+            ),
           0,
         );
       return hojas > 0 && (v.stockLibre ?? 0) >= hojas;

@@ -77,6 +77,7 @@ type CentroCopiadoDb = PrismaService | Prisma.TransactionClient;
 /** Contexto del plantilla + papeles disponibles (resueltos por request). */
 type Ctx = PlantillaContexto & {
   materialesFijados?: Set<string>;
+  mermaPapelPct?: number;
   papeles: PapelTipo[];
   /** configPaso del anillado opcional (Etapa C); null = no está en la ruta. */
   anilladoConfigPasoId: string | null;
@@ -1215,6 +1216,10 @@ export class CentroCopiadoService {
             configPasos: {
               include: {
                 maquinasCandidatas: true,
+                slotsMateriales: {
+                  where: { slotCodigo: 'sustrato_principal' },
+                  select: { mermaAdicionalPct: true },
+                },
                 rutaPaso: { select: { familiaCodigo: true } },
               },
             },
@@ -1265,7 +1270,11 @@ export class CentroCopiadoService {
     if (cortados.length) {
       const ids = cortados.map((v) => v.id);
       const stocks = await this.prisma.stockMateriaPrimaVariante.findMany({
-        where: { tenantId, varianteId: { in: ids } },
+        where: {
+          tenantId,
+          varianteId: { in: ids },
+          ubicacion: { activo: true, almacen: { activo: true } },
+        },
       });
       const reservas = await reservasPorSaldo(
         this.prisma as never,
@@ -1410,6 +1419,7 @@ export class CentroCopiadoService {
       productoId: producto.id,
       rutaAlternativaId: rutaAlt.id,
       configPasoId: cp.id,
+      mermaPapelPct: Number(cp.slotsMateriales?.[0]?.mermaAdicionalPct ?? 0),
       maquinaColorId,
       maquinaBnId,
       cobraSetup: config.cobraSetup,
@@ -1434,7 +1444,13 @@ export class CentroCopiadoService {
     ctx: Ctx,
     simulacion = false,
   ): Promise<void> {
-    seleccionarPapelesCortados(ctx.papeles, dto, simulacion, ctx.materialesFijados);
+    seleccionarPapelesCortados(
+      ctx.papeles,
+      dto,
+      simulacion,
+      ctx.materialesFijados,
+      ctx.mermaPapelPct,
+    );
     const config = await this.configDe(tenantId);
     if (!config.activo && !simulacion) {
       throw new BadRequestException('El Centro de Copiado está pausado.');

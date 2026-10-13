@@ -1,5 +1,8 @@
 import { precioPapelCortado } from '../inventario/precio-papel-cortado';
-import { planPapelDerivado } from '../inventario/papel-derivado';
+import {
+  cantidadPapelCortado,
+  planPapelDerivado,
+} from '../inventario/papel-derivado';
 import { cargarPapelesMotorCopiado } from '../centro-copiado/papeles-motor';
 import {
   costosPasosPrecio,
@@ -7376,6 +7379,24 @@ export class MotorUniversalService {
           cantidad - cantidadTrabajoAntesDeMerma,
         );
       }
+      const hojasCortadas =
+        paso.conservaSobrantePapel &&
+        slot.slotCodigo === 'sustrato_principal' &&
+        formulaConsumo === 'por_unidad_productiva' &&
+        cantidadPrimitiva === null &&
+        cantidadPorBase === null
+          ? cantidadPapelCortado(
+              cantidad,
+              materialResuelto.atributosVarianteJson,
+            )
+          : undefined;
+      if (hojasCortadas !== undefined) {
+        cantidad = hojasCortadas;
+        cantidadMermaAdicional = Math.max(
+          0,
+          cantidad - cantidadTrabajoAntesDeMerma,
+        );
+      }
 
       const unidadConsumo = unidadEfectivaDeFormula(
         formulaConsumo,
@@ -7436,7 +7457,7 @@ export class MotorUniversalService {
         (Boolean(slot.cantidadBase) ||
           !['por_unidad_productiva', 'por_m2'].includes(formulaConsumo));
       const costeoNesting =
-        papelDerivado || conservarReglaExplicitaCorte
+        papelDerivado || hojasCortadas !== undefined || conservarReglaExplicitaCorte
           ? null
           : this.calcularCosteoNestingMaterial(
               resolverEstrategiaCosteoPaso(paso, jobContext),

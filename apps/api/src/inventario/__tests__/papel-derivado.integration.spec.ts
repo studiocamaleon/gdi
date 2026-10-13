@@ -406,21 +406,24 @@ describe('Papel derivado: consumo y sobrantes (DB de test)', () => {
       ),
     ).toBe(0);
   });
-  it('si cambiaron las medidas del papel revierte consumo, reservas y sobrantes juntos', async () => {
-    const { o, hijo } = await preparar(1);
-    await prisma.materiaPrimaVariante.update({
-      where: { id: varianteId },
-      data: { atributosVarianteJson: { anchoMm: 660, altoMm: 950 } },
-    });
-    await expect(
-      cmd(o.id, { accion: 'consumir', varianteId, ubicacionId, cantidad: 1 }),
-    ).rejects.toMatchObject({ status: 409 });
-    expect((await fila(o.id)).reservada).toBe(1);
-    expect((await fila(o.id)).consumida).toBe(0);
-    expect(
-      await prisma.materiaPrimaVariante.count({
-        where: { tenantId, id: hijo },
-      }),
-    ).toBe(0);
-  });
+  it.each([1, 9])(
+    'si cambiaron las medidas revierte consumo y reservas, con o sin sobrantes (%s A4)',
+    async (hojas) => {
+      const { o, hijo } = await preparar(hojas);
+      await prisma.materiaPrimaVariante.update({
+        where: { id: varianteId },
+        data: { atributosVarianteJson: { anchoMm: 660, altoMm: 950 } },
+      });
+      await expect(
+        cmd(o.id, { accion: 'consumir', varianteId, ubicacionId, cantidad: 1 }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect((await fila(o.id)).reservada).toBe(1);
+      expect((await fila(o.id)).consumida).toBe(0);
+      expect(
+        await prisma.materiaPrimaVariante.count({
+          where: { tenantId, id: hijo },
+        }),
+      ).toBe(0);
+    },
+  );
 });

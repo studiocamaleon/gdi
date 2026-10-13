@@ -55,6 +55,20 @@ it('no promete las mismas ocho A4 a dos documentos de cinco hojas', () => {
   );
   expect(elegido(p)).toBe('pliego');
 });
+it('incluye la merma en hojas enteras antes de ofrecer el remanente', () => {
+  const p = papeles();
+  seleccionarPapelesCortados(p, { documentos: [doc(8)] }, false, undefined, 2);
+  expect(elegido(p)).toBe('pliego');
+  const suficiente = papeles();
+  seleccionarPapelesCortados(
+    suficiente,
+    { documentos: [doc(7)] },
+    false,
+    undefined,
+    2,
+  );
+  expect(elegido(suficiente)).toBe('cortada');
+});
 it('considera juegos del tomo, doble faz y reservas ya descontadas', () => {
   const p = papeles();
   seleccionarPapelesCortados(

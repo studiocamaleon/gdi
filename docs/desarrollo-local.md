@@ -1,5 +1,13 @@
 # Desarrollo local
 
+## Papel derivado de Centro de copiado — 13/10/2026
+
+La web, API y workers locales ejecutan `codex/copiado-papel-derivado` desde el checkout principal. Se mantienen Node 24, Turbopack, los límites de memoria del arranque habitual y las tareas programadas desactivadas. Esta rama depende del PR #76; no se publicó en staging ni producción.
+
+Se comprobaron 1, 5 y 10 A4 derivados de opalina de 650 × 950 mm y de SRA3 de 325 × 475 mm. Las pruebas de inventario usan empresas ficticias en `gdi_saas_test`: retiro de pliegos completos, ingreso y reutilización de hojas sobrantes, consumos parciales y concurrentes, reintentos y reversión ante cambios de medidas. La simulación de Tarifarios y el cálculo comercial de la OT coinciden con setup desactivado. La comprobación de tipos de los 14 archivos de API afectados pasó; la revisión global agotó el límite local de memoria y queda para CI. También pasaron las pruebas y lint de la interfaz afectada. No se compilaron contenedores en esta Mac.
+
+Los costos y precios se revisan sin reemplazar las matrices publicadas. El detalle de materiales informa los pliegos necesarios, las hojas usadas y el sobrante que ingresará al registrar el consumo. Ver [el comportamiento y sus límites](centro-copiado-contribucion.md#papel-comprado-en-otro-formato).
+
 ## Impresión rígida y corte — comprobación local del 01/10/2026
 
 La comprobación local descrita abajo se publicó posteriormente junto con el arreglo de primer ingreso en `b378ae41e`, desde `codex/acceso-clave-provisoria` y el PR #13. Staging y producción quedaron verificados; consultar los [resultados del despliegue](../deploy/produccion/VALIDACION.md). La compilación completa con tipos pasó en remoto. El worktree local conserva su rama y configuración de desarrollo.
@@ -19,7 +27,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 ## Servicios
 
-- Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
+- Aplicación: `http://localhost:3000` (Next en modo desarrollo con Turbopack).
 - API: `http://127.0.0.1:3001/api`.
 - PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 295 migraciones aplicadas al 27/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.

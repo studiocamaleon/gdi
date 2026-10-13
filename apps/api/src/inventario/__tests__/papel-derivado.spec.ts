@@ -4,6 +4,7 @@ import {
   pliegosPapel,
   sobrantePapel,
   sobrantesDelConsumo,
+  cantidadPapelCortado,
 } from '../papel-derivado';
 import { REGISTRO_COMPRA_SUSTRATO } from '../../motor-universal/primitivas';
 import { proyectarMaterialesOrden } from '../../ordenes-trabajo/materiales-orden.proyeccion';
@@ -70,6 +71,12 @@ describe('Costo y soportes de papel derivado', () => {
     expect(p.hojasNecesarias).toBe(6);
     expect(leerPapelDerivado({ ...p, rendimiento: 10 })).toBeUndefined();
     expect(leerPapelDerivado({ ...p, hojasNecesarias: 5.2 })).toBeUndefined();
+  });
+  it('al reutilizar papel cortado costea y consume hojas enteras, incluida la merma', () => {
+    const attrs = { _papelDerivado: { version: 1 } };
+    expect(cantidadPapelCortado(5 * 1.02, attrs)).toBe(6);
+    expect(cantidadPapelCortado(5, attrs)).toBe(5);
+    expect(cantidadPapelCortado(5.1, {})).toBeUndefined();
   });
   it('en un consumo parcial devuelve el sobrante una única vez al completar el plan', () => {
     const p = planPapelDerivado(

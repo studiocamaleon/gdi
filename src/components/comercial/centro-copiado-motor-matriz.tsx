@@ -519,8 +519,9 @@ export function MotorEnMatriz({
               mínimo no reduce el precio sugerido. Con precio único se toma la
               cobertura más exigente. Se elevan los tramos anteriores cuando
               hace falta para que el precio unitario no aumente por volumen; su
-              contribución puede superar el objetivo. Los costos reales
-              conservan los saltos por consumo de pliegos completos.
+              contribución puede superar el objetivo. El papel se costea por
+              las hojas utilizadas; los sobrantes aprovechables se conservan
+              en inventario al registrar el consumo.
             </p>
           </div>
         )}
