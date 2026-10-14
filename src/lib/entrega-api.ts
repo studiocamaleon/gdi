@@ -50,6 +50,7 @@ export function escanearOrden(codigo: string) {
 }
 
 export type EntregarPayload = {
+  exigirPagoCompleto?: boolean;
   confirmarPreparacionManual?: boolean;
   itemIds: string[];
   retiraTercero?: { nombre: string; dni: string };

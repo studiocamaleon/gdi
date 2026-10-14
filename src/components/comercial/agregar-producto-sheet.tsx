@@ -3845,6 +3845,9 @@ export function buildJobContext(
       1,
       Math.ceil(config.cotizacionVectorialManual.placas),
     );
+    // La estimación completa es un trabajo; las placas son su única cantidad
+    // productiva. No arrastrar la cantidad oculta de otra modalidad.
+    ctx.cantidad = 1;
     const metrosCortePorPlacaVectorial = Math.max(
       0.1,
       config.cotizacionVectorialManual.metrosCortePorPlaca,
@@ -7542,7 +7545,8 @@ function ApConfigStep({
         Number((qty + direccion * pasoCantidad).toFixed(6)),
       ),
     );
-  const renderCantidadCard = () => (
+  const renderCantidadCard = () => editorVectorialHabilitado &&
+    modoCotizacionVectorialVisible === "placas" ? null : (
     <div className={seC.card}>
       <div className={seC.gh}>
         {cuentaProductosVectoriales ? "Cantidad de productos" : "Cantidad"}

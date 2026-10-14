@@ -55,17 +55,19 @@ export function debeEjecutarNestingRectangularCorte(
   jobContext: JobContext,
 ): boolean {
   const familia = resolverFamilia(paso.familiaCodigo);
-  if (
-    familia?.nestingConfig?.estrategia !== 'irregular_placa' ||
-    !familia.paramsPasoSchema?.some(
-      (p) => p.campo === 'permitirIngresoPorMedidas',
-    )
-  )
-    return false;
+  if (familia?.nestingConfig?.estrategia !== 'irregular_placa') return false;
+  // La política comercial del producto también habilita rectángulos para
+  // hilo caliente. El schema antiguo de la receta sólo rige el fallback.
   if (jobContext.modoCotizacionVectorial) {
     return jobContext.modoCotizacionVectorial === 'medidas';
   }
-  return !debeEjecutarNestingVectorial(paso, jobContext);
+  return (
+    Boolean(
+      familia.paramsPasoSchema?.some(
+        (p) => p.campo === 'permitirIngresoPorMedidas',
+      ),
+    ) && !debeEjecutarNestingVectorial(paso, jobContext)
+  );
 }
 
 export function resolverEstrategiaCosteoPaso(

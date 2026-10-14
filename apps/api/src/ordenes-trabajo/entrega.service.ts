@@ -251,6 +251,51 @@ export class EntregaService {
     const ids = aEntregar.map((i) => i.id);
 
     await this.prisma.$transaction(async (tx) => {
+      if (dto.exigirPagoCompleto) {
+        // Bloquea la orden durante el cierre y usa pagos activos, no el
+        // importe mostrado por el navegador ni un total cacheado.
+        const [actual] = await tx.$queryRaw<
+          Array<{ total: unknown; estado: string }>
+        >`
+          SELECT "total", "estado" FROM "OrdenTrabajo"
+          WHERE "id" = ${orden.id}::uuid AND "tenantId" = ${auth.tenantId}::uuid
+          FOR UPDATE
+        `;
+        if (!actual || actual.estado !== 'finalizada') {
+          throw new BadRequestException(
+            'La orden debe estar finalizada antes de emitir y entregar.',
+          );
+        }
+        const [aplicados, directos] = await Promise.all([
+          tx.cobroOrden.aggregate({
+            where: {
+              tenantId: auth.tenantId,
+              ordenId: orden.id,
+              cobro: { anuladoEl: null },
+            },
+            _sum: { monto: true },
+          }),
+          tx.cobro.aggregate({
+            where: {
+              tenantId: auth.tenantId,
+              ordenId: orden.id,
+              anuladoEl: null,
+              aplicacionesOrden: { none: { ordenId: orden.id } },
+            },
+            _sum: { montoBruto: true },
+          }),
+        ]);
+        const pagado = Math.round(
+          (Number(aplicados._sum.monto ?? 0) +
+            Number(directos._sum.montoBruto ?? 0)) *
+            100,
+        );
+        if (pagado <= 0 || pagado < Math.round(Number(actual.total) * 100)) {
+          throw new BadRequestException(
+            'Para emitir y entregar, la orden debe tener registrado el pago del 100% del total.',
+          );
+        }
+      }
       await tx.ordenTrabajoItem.updateMany({
         where: { id: { in: ids }, tenantId: auth.tenantId },
         data: {
