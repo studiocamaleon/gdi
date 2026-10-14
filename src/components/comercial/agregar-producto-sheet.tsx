@@ -1257,8 +1257,7 @@ function isConfigPasoVisibleForContext(
   if (!isExecutableConfigPaso(config)) return false;
   const modo = config.modoActivacion ?? "OBLIGATORIO";
   if (modo === "OPCIONAL")
-    return Boolean((ruleContext.opcionalesActivados as Record<string, boolean> | undefined)?.[config.id]
-      ?? motorConfig.opcionalesActivados[config.id]);
+    return Boolean(motorConfig.opcionalesActivados[config.id]);
   if (modo === "CONDICIONAL") {
     return evaluarJsonLogicBoolean(
       config.condicionActivacionJson,
@@ -2206,8 +2205,12 @@ function getTiempoFijoDeclaradoMin(
 function getCantidadesManualesComercial(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean,
+  opcionales?: Record<string, boolean>,
 ) {
-  return (ruta?.configPasos ?? []).filter(isExecutableConfigPaso).filter(includeConfig).flatMap(paso => {
+  const efectivos = opcionales && opcionalesActivadosEfectivos(ruta?.configPasos ?? [], opcionales);
+  return (ruta?.configPasos ?? []).filter(isExecutableConfigPaso).filter(paso =>
+    efectivos && paso.modoActivacion === "OPCIONAL" ? Boolean(efectivos[paso.id]) : includeConfig(paso)
+  ).flatMap(paso => {
     const config = leerCantidadManual(paso.paramsPasoJson);
     return config && paso.modoTiempo === "T-2" && !paso.tercerizado
       ? [{ ...config, configPasoId: paso.id, modoActivacion: paso.modoActivacion }] : [];
@@ -3757,7 +3760,6 @@ export function buildJobContext(
     rutaSel?.configPasos ?? [],
     config.opcionalesActivados,
   );
-  ctx.opcionalesActivados = opcionalesEfectivos;
   const runtimeParams = buildConfigPasoRuntime(
     rutaSel?.configPasos ?? [],
     config.paramsComercial ?? {},
@@ -5627,8 +5629,8 @@ function ApConfigStep({
     [slotsComercialElige],
   );
   const cantidadesManualesComercial = React.useMemo(
-    () => getCantidadesManualesComercial(rutaSel, includeVisibleConfig),
-    [rutaSel, includeVisibleConfig],
+    () => getCantidadesManualesComercial(rutaSel, includeVisibleConfig, motorConfig.opcionalesActivados),
+    [rutaSel, includeVisibleConfig, motorConfig.opcionalesActivados],
   );
   const cantidadesManualesPorPaso = React.useMemo(
     () => new Map(cantidadesManualesComercial.map(item => [item.configPasoId, item])),
@@ -9819,7 +9821,7 @@ export function AgregarProductoSheet({
       slotsParaReglas,
     );
     for (const item of getCantidadesManualesComercial(rutaSel,
-      paso => isConfigPasoVisibleForContext(paso, motorConfig, ruleContext))) {
+      paso => isConfigPasoVisibleForContext(paso, motorConfig, ruleContext), motorConfig.opcionalesActivados)) {
       const error = errorValorCantidadManual(item, motorConfig.cantidadManualPorPaso[item.configPasoId]);
       if (error) return error;
     }

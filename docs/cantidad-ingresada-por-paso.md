@@ -27,3 +27,5 @@ Caso controlado: ploteo de 12 m², vinilo $2.000/m², tinta $100/m², tarifa de 
 Se mantiene el redondeo existente del motor a minutos enteros para el tiempo estimado y su costo. En dificultad alta a 4 m²/h, el desploteo usa 75 minutos y cuesta $7.500, sin modificar el consumo del ploteo.
 
 Las pruebas incluyen campos vacíos e inválidos, decimales, opcionales, arrastre, condiciones, dificultad, restauración del ítem y una OT emitida con servicios reales contra PostgreSQL local de pruebas. La fixture completa se revierte al terminar.
+
+También se verificaron en Chrome los componentes reales del editor y del campo comercial, conectados al motor mediante un entorno local de prueba: nombre/unidad, requerido vacío, paso desactivado y dificultad. No hubo errores de consola. La emisión de la OT se verificó por integración con PostgreSQL; no se emitieron órdenes reales en staging o producción.

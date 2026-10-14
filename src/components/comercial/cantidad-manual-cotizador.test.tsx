@@ -228,3 +228,23 @@ it("sólo exige el campo activo, recotiza al cambiarlo y lo conserva al agregar"
   await avanzarCalculo();
   expect(input()?.value).toBe("5");
 });
+
+it("muestra y exige una cantidad arrastrada sin guardar el arrastre como elección del usuario", async () => {
+  const p = producto();
+  const ruta = p.rutasAlternativas[0];
+  ruta.configPasos.push({ ...ruta.configPasos[0], id: "instalacion", nombreVisible: "Instalación",
+    rutaPasoId: "paso-instalacion", rutaPaso: { ...ruta.configPasos[0].rutaPaso, id: "paso-instalacion", orden: 2 },
+    paramsPasoJson: {}, requiereRutaPasoIds: ["paso"] });
+  api.producto.mockResolvedValue(p);
+  api.cotizar.mockResolvedValue({ exitoso: true, cotizacion: calculo, errores: [] });
+  await act(async () => root.render(<AgregarProductoSheet open onOpenChange={vi.fn()} productos={[p]} fechaEntregaDefault="2099-12-01" onAddItem={vi.fn()} />));
+  await act(async () => el.querySelector<HTMLButtonElement>('button[role="option"]')!.click());
+  await avanzarCalculo();
+  await act(async () => boton("Instalación").click());
+  await avanzarCalculo();
+  expect(el.querySelector('input[placeholder="Ingresá la cantidad total del paso"]')).not.toBeNull();
+  expect(boton("Guardar y agregar otro").disabled).toBe(true);
+  const ctx = buildJobContext(p, { ...DEFAULT_MOTOR_CONFIG, opcionalesActivados: { instalacion: true }, cantidadManualPorPaso: { desploteo: 5 } }, 1, []);
+  expect(ctx.opcionalesActivados).toEqual({ instalacion: true });
+  expect(ctx.cantidadManual_desploteo).toBe(5);
+});
