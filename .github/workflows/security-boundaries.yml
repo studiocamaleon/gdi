@@ -194,11 +194,13 @@ jobs:
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
             src/motor-universal/__tests__/estado-pasos.spec.ts \
             src/motor-universal/__tests__/exclusion-pasos-cotizacion.spec.ts \
+            src/motor-universal/__tests__/cantidad-manual-paso.spec.ts \
+            src/motor-universal/__tests__/cantidad-manual-ot.integration.spec.ts \
             src/motor-universal/__tests__/arrastre-opcionales.spec.ts \
             src/motor-universal/__tests__/precio-fijo-opcionales.spec.ts \
             src/productos-servicios/__tests__/config-pasos-integridad.spec.ts
       - name: Comprobar editor de condiciones de pasos
-        run: node node_modules/vitest/vitest.mjs run src/lib/rule-builder.test.ts src/lib/editor-paso/schema.test.ts --maxWorkers=1
+        run: node node_modules/vitest/vitest.mjs run src/lib/rule-builder.test.ts src/lib/editor-paso/schema.test.ts src/lib/estado-pasos-cotizador.test.ts src/lib/cantidad-manual-paso.test.ts src/components/comercial/cantidad-manual-cotizador.test.tsx --maxWorkers=1
       - name: Comprobar cálculos y contrato de tarifarios de Centro de copiado
         working-directory: apps/api
         run: |

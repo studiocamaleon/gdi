@@ -3,7 +3,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ProductoDetalle } from "@/lib/productos-servicios";
-import type { CotizarResponse } from "@/lib/productos-servicios-api";
 import {
   AgregarProductoSheet,
   buildJobContext,
@@ -248,4 +247,30 @@ it("muestra y exige una cantidad arrastrada sin guardar el arrastre como elecci�
   const ctx = buildJobContext(p, { ...DEFAULT_MOTOR_CONFIG, opcionalesActivados: { instalacion: true }, cantidadManualPorPaso: { desploteo: 5 } }, 1, []);
   expect(ctx.opcionalesActivados).toEqual({ instalacion: true });
   expect(ctx.cantidadManual_desploteo).toBe(5);
+});
+
+it("muestra la cantidad condicional y deja de exigirla cuando otro paso la excluye", async () => {
+  const p = producto("CONDICIONAL");
+  const ruta = p.rutasAlternativas[0];
+  const paso = ruta.configPasos[0];
+  paso.condicionActivacionJson = { "==": [{ var: "pasoActivo_paso-diseno" }, 0] };
+  ruta.configPasos.push({ ...paso, id: "diseno", nombreVisible: "Diseño",
+    rutaPasoId: "paso-diseno", rutaPaso: { ...paso.rutaPaso, id: "paso-diseno", orden: 2 },
+    modoActivacion: "OPCIONAL", condicionActivacionJson: null, paramsPasoJson: {} });
+  api.producto.mockResolvedValue(p);
+  api.cotizar.mockResolvedValue({ exitoso: true, cotizacion: calculo, errores: [] });
+  await act(async () => root.render(<AgregarProductoSheet open onOpenChange={vi.fn()} productos={[p]} fechaEntregaDefault="2099-12-01" onAddItem={vi.fn()} />));
+  await act(async () => el.querySelector<HTMLButtonElement>('button[role="option"]')!.click());
+  await avanzarCalculo();
+  const input = () => el.querySelector('input[placeholder="Ingresá la cantidad total del paso"]');
+  expect(input()).not.toBeNull();
+  expect(boton("Guardar y agregar otro").disabled).toBe(true);
+  await act(async () => boton("Diseño").click());
+  await avanzarCalculo();
+  expect(input()).toBeNull();
+  expect(boton("Guardar y agregar otro").disabled).toBe(false);
+  await act(async () => boton("Diseño").click());
+  await avanzarCalculo();
+  expect(input()).not.toBeNull();
+  expect(boton("Guardar y agregar otro").disabled).toBe(true);
 });

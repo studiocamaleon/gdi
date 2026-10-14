@@ -100,6 +100,28 @@ describe('Cantidad propia por paso: 12 m² de ploteo y 5 m² de desploteo', () =
 });
 
 describe('activación y compatibilidad de la cantidad ingresada', () => {
+  it('no exige ni costea cantidad propia cuando otro paso lo excluye', async () => {
+    const f = fixtureCantidadManual();
+    const diseno = { ...f.desploteo, configPasoId: 'diseno', rutaPasoId: 'diseno',
+      rutaPasoOrden: 3, nombreVisible: 'Diseño', modoTiempo: 'T-1',
+      paramsPasoJson: {}, condicionActivacionJson: null };
+    f.producto.pasos.push(diseno);
+    f.desploteo.modoActivacion = 'CONDICIONAL';
+    f.desploteo.condicionActivacionJson = { '==': [{ var: 'pasoActivo_diseno' }, 0] };
+    const input = { tenantId: 'empresa-ficticia', productoId: 'producto', periodo: '2026-10',
+      jobContext: { ...f.contexto, cantidadManual_desploteo: null, opcionalesActivados: { diseno: true } } };
+    const excluido = await motorCantidadManual().cotizar(input, { productoPrecargado: f.producto });
+    expect(excluido.errores).toEqual([]);
+    expect(excluido.cotizacion!.pasos[1]).toMatchObject({ activado: false, costoTotal: 0 });
+    const requerido = await motorCantidadManual().cotizar({ ...input,
+      jobContext: { ...input.jobContext, opcionalesActivados: {} } }, { productoPrecargado: f.producto });
+    expect(requerido.errores.some(e => e.codigo === 'cantidad_manual_invalida')).toBe(true);
+    const completo = await motorCantidadManual().cotizar({ ...input,
+      jobContext: { ...input.jobContext, opcionalesActivados: {}, cantidadManual_desploteo: 5 } }, { productoPrecargado: f.producto });
+    expect(completo.errores).toEqual([]);
+    expect(completo.cotizacion!.pasos[1].tiempo).toMatchObject({ totalMin: 38, costo: 3800 });
+    expect(completo.cotizacion!.pasos[0].materiales![0].cantidad).toBe(12);
+  });
   it('exige la cantidad en opcionales arrastrados y sólo en condicionales que corren', async () => {
     const f = fixtureCantidadManual();
     f.ploteo.requiereRutaPasoIds = ['desploteo'];

@@ -1,5 +1,6 @@
 "use client";
 import { CantidadManualPasoField } from "./cantidad-manual-paso-field";
+import { completarEstadosPasosContexto } from "@/lib/estado-pasos-cotizador";
 import { cantidadManualKey, leerCantidadManual, errorValorCantidadManual, restaurarCantidadesManuales, usaCantidadManual } from "@/lib/cantidad-manual-paso";
 import { useMotorConTipoCambio } from "./tipo-cambio-documento";
 
@@ -4025,6 +4026,9 @@ export function buildJobContext(
     if (principal?.length) aplicarColeccionVectorial(ctx, principal);
   }
 
+  completarEstadosPasosContexto(
+    (rutaSel?.configPasos ?? []).filter(isExecutableConfigPaso), ctx, opcionalesEfectivos,
+  );
   return ctx;
 }
 

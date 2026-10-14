@@ -21,3 +21,5 @@ Las suites `estado-pasos.spec.ts`, `exclusion-pasos-cotizacion.spec.ts` y `confi
 El editor real se comprobó en un arnés local de navegador: selección con mouse y teclado, guardado/reapertura y consola sin errores. Este arnés sólo persiste la regla de prueba en el navegador; la integración con costos y operaciones se comprueba en las suites del motor y de la OT.
 
 La compilación completa se verifica en CI remoto por el límite de memoria del entorno local. No hay despliegue implícito al abrir el PR.
+
+Al combinar esta condición con una cantidad ingresada al cotizar, el cotizador muestra y exige el campo sólo mientras su paso esté activo. La vista previa resuelve el estado de los pasos opcionales, incluidos los activados por dependencia. Esos estados derivados no se envían ni se guardan en el pedido: el motor los vuelve a resolver. La regresión conjunta comprueba el campo visible y obligatorio al inicio, su desaparición al activar el paso que lo excluye y su regreso al desactivarlo, además de los costos del motor.
