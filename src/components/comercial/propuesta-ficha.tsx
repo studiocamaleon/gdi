@@ -330,7 +330,11 @@ import {
 } from "@/lib/nesting-compra-pliego";
 import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
 import costC from "./propuesta-ficha-costos.module.css";
-import { netoListaDeItem, type DescuentoInput } from "@/lib/descuentos-orden";
+import {
+  avisoMargenDescuento,
+  netoListaDeItem,
+  type DescuentoInput,
+} from "@/lib/descuentos-orden";
 import { CargoOrdenDialog } from "./cargo-orden-dialog";
 import { OrdenCargosList } from "./orden-cargos-list";
 import {
@@ -4352,13 +4356,6 @@ function descuentoParaMotor(
 }
 
 /**
- * Margen efectivo por debajo del cual se avisa al aplicar un descuento. Es sólo
- * un aviso blando; el gate duro con aprobación por umbral es F2
- * (`aprobacionDescuentoMaxPct`). Ver docs/descuentos-diseno.md §10.
- */
-const DESCUENTO_MARGEN_ALERTA_PCT = 15;
-
-/**
  * Overlay de emisión (diseño Grafo V2 · ordenes.jsx): pasos animados mientras
  * corre la emisión real; el check final aparece recién cuando llega el número
  * de OT asignado por el backend (`numero != null`).
@@ -7411,19 +7408,13 @@ function PropuestaFichaContenido({
           toast.success("Descuento aplicado.");
         }
 
-        // Aviso blando de margen bajo (el gate duro es la aprobación interna).
+        // Aviso informativo de catálogo, separado de la política de descuentos.
         if (descuentoInput != null && actualizados.size > 0) {
-          const margenes = [...actualizados.values()]
-            .filter((item) => descuentoMontoDeItem(item) > 0)
-            .map(
-              (item) => item.cotizacion.desglosePrecio?.margenEfectivoPct ?? 0,
-            );
-          const minMargen = margenes.length ? Math.min(...margenes) : null;
-          if (minMargen != null && minMargen < DESCUENTO_MARGEN_ALERTA_PCT) {
-            toast.warning(
-              `El margen queda en ${minMargen.toLocaleString("es-AR", { maximumFractionDigits: 1 })}% en el producto más ajustado. Revisá antes de emitir.`,
-            );
-          }
+          const avisoMargen = avisoMargenDescuento(
+            [...actualizados.values()],
+            verMargenes,
+          );
+          if (avisoMargen) toast.warning(avisoMargen);
           // F3: si el % supera el umbral del tenant, avisar YA que el
           // presupuesto va a pedir aprobación interna (mejor enterarse acá
           // que con el presupuesto trabado en pendiente_aprobacion).
@@ -7448,7 +7439,7 @@ function PropuestaFichaContenido({
         setDescuentoAplicando(false);
       }
     },
-    [recotizarItemConDescuento, umbralDescuentoAprobacion],
+    [recotizarItemConDescuento, umbralDescuentoAprobacion, verMargenes],
   );
 
   /** Materializa exactamente el plan por línea calculado por el backend. */
