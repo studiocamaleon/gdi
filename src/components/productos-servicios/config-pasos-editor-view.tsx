@@ -1,6 +1,6 @@
 "use client";
 import { CantidadManualConfigFields } from "./cantidad-manual-config";
-import { errorConfigCantidadManual, FUENTE_CANTIDAD_MANUAL } from "@/lib/cantidad-manual-paso";
+import { errorConfigCantidadManual, FUENTE_CANTIDAD_MANUAL, leerCantidadManual } from "@/lib/cantidad-manual-paso";
 import { Badge, Button, HumanSelect, Input, Switch, LabelConTooltip, SelectBuscable, NativeButton, NativeInput, useNodosVisual } from "./nodos-ui";
 
 import nodeStyles from "./nodos-editor.module.css";
@@ -5507,10 +5507,12 @@ export function ConfigPasosEditorView({
                     const productivityUnitSuffix = getT2ProductivityUnitSuffix(
                       productivityUnit,
                       productivityQuantitySource,
+                      leerCantidadManual(paramsPaso)?.unidad,
                     );
                     const batchUnitSuffix = getT2BatchUnitSuffix(
                       productivityUnit,
                       productivityQuantitySource,
+                      leerCantidadManual(paramsPaso)?.unidad,
                     );
                     const soportaPasoManual =
                       familia?.relacionMaquinaSoportada.includes("M-0") ??
