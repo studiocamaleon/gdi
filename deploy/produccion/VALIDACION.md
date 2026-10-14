@@ -1,5 +1,34 @@
 # Validación de producción
 
+## 14/10/2026 — OT, cobros, conciliación y entregas por producto
+
+El titular confirmó que el lote funcionaba en staging y autorizó publicarlo completo en producción. [PR integrador #91](https://github.com/studiocamaleon/gdi/pull/91), conservando los commits de #84–#90. Dependencias automáticas #63, #64 y #71–#74, TPV y CORS local continúan fuera de este lote.
+
+**Revisión ejecutada:** `23fd03eec37cd5b224e371d6deb226781d43ea0b` en API, ambos workers y web. El candidato de CI `66928db5cfaa2a0f2c471703e122c175b8cc5590` difiere sólo por la configuración de Redis de una prueba y el registro de staging; se comprobó que no difiere código funcional. Las imágenes se copiaron al registro de producción y se compararon por digest, sin recompilar.
+
+**Alcance:** presentación de las tandas de copiado; eliminación del aviso falso de margen al descontar; cobros con control transaccional del saldo e idempotencia, sin aceptar importes superiores ni duplicar reintentos; conciliación consecutiva sin recargar el layout; Polyfan rectangular y cantidad por placas; conservación de fecha y revisión automática del tarifario al elegir cliente; «Emitir y entregar» hoy para copiado finalizado, condicionado al pago completo; columna **Creada** con fecha de emisión y exportación; exclusión opcional de días hábiles de margen por producto en Comercial. La publicación no corrige ni elimina cobros históricos.
+
+**Validación previa:** 119 pruebas web y 109 API del conjunto en local; 17 de planificación repetidas con Redis aislado. [CI HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38612377287), [contenedores, tipos, migraciones y login/BFF](https://github.com/studiocamaleon/gdi/actions/runs/38612377304), CodeQL y Vercel aprobados sobre el candidato final de staging. Cero alertas abiertas de CodeQL para el PR. Protección de main activa, `http` obligatorio, sin bypass ni conversaciones pendientes. El registro documental de producción vuelve a pasar CI antes del merge.
+
+| Componente | Digest de producción |
+| --- | --- |
+| API y ambos workers | `sha256:9661dd139d87f3a86b36ce4db0bea1692b9b2f9dedd99e37ed2545600136a4c7` |
+| Web | `sha256:8b0f99cd99f120f2d98857900034f07c9161d03ec25542e16e6c43bc22e49957` |
+| PDF/Gotenberg, conservado | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Operación:** 316 migraciones completas, sin nuevas ni pendientes y con checksums intactos. Recuentos e identificadores de las seis tablas contrastadas coinciden antes/después. Seis máquinas iniciadas y saludables, mismos tamaños y regiones; API con una CPU performance y 2 GB. Salud HTTPS 200 y rechazos anónimos 403/401. Revisión ejecutada y Sentry comprobados en los cuatro servicios actualizados. El primer muestreo de salud coincidió con el reinicio previsto del copiador al actualizar su inventario; el control posterior pasó completo. Sin seeds, resets, migraciones de datos entre entornos ni compilaciones locales; desarrollo local intacto.
+
+**Chrome de producción:** Creada aparece antes de Entrega y muestra la fecha de emisión. Una OT existente y saldada muestra cobrado 100 %, pendiente cero y «No hay saldo pendiente de cobro», sin formulario para registrar otro. Cinco A4 de papel obra 75 g, B/N simple, canal Presencial: $1.000 con impuestos según Mostrador versión 2; el total se conserva al elegir después el cliente genérico y completar la revisión automática. Al marcar producción finalizada aparece «Emitir y entregar», fecha de hoy y bloqueo hasta cargar el 100 % del pago. La opción «Excluir días hábiles de margen» está disponible en Producto → Comercial; se inspeccionó sin cambiar la configuración. No hubo errores ni advertencias de consola en el recorrido. La ficha de prueba se descartó sin guardarla.
+
+**Límites del recorrido:** no se emitieron OT, cobros, facturas ni mensajes de prueba en producción ni se cambiaron precios o productos reales. Las carreras de cobros, conciliación consecutiva, Polyfan, entrega completa y persistencia del margen por producto cuentan con las pruebas automáticas y de staging registradas; no se generaron movimientos reales para repetirlas en producción.
+
+**Dependencias operativas:** configuración fiscal de API y worker coincidente y modo automático conservado. No se repitió una consulta a ARCA ni una emisión fiscal. Desde el worker PDF se generó en memoria un documento ficticio de una página y 8.651 bytes, sin guardarlo como archivo comercial.
+
+**Respaldo:** comprobante previo `35a8146f-ec91-4c20-846d-5683aa1c87ee`, completado `2026-10-14T20:02:20.191Z`, firmado y descifrado. Fuentes de la revisión ejecutada y de su corrección de test custodiadas cifradas con retención de 31 días; inventario actualizado a las imágenes exactas. Copia posterior `5559b02b-eb86-4af0-904c-bb7ad8bb10a5`, completada `2026-10-14T20:16:16.365Z`, comprobante y manifiesto verificados a las `20:17:10 UTC`: firma válida, manifiesto descifrado, 316 migraciones, 235 archivos y nueve fuentes. No se repitió una restauración SQL completa.
+
+**Integración y reversión:** el cierre del PR #91 registra el SHA de merge a main y el estado de #84–#90, cuyos commits se conservaron. El registro documental y el merge no cambian las imágenes ejecutadas. Para volver al código anterior: API/workers `sha256:ffb98489bfcf1210ebeb332e7c27a8e7ae8332bf709affe1f4ff6bdde56212dc`, web `sha256:189719be961310724ad43b76543e6231917ed77f5d981bbd9fed5af2c30ddfb2`, en sus registros de producción; PDF y copiador conservan imagen. No hay cambio de esquema que revertir. Revertir código retiraría también las protecciones de cobros de este lote; conservar datos, actualizar inventario y repetir salud.
+
 ## 13/10/2026 — Centro de copiado, hidratación y Canvas publicados
 
 Publicado con autorización del titular tras comprobar staging. API, web y ambos workers ejecutan `69698c3eb83162c0d6a0cf06281630346c1c74b0`, candidato conjunto del [PR #83](https://github.com/studiocamaleon/gdi/pull/83), que conserva los commits de #75–#82. El registro documental posterior no cambia el código ejecutado. Las seis propuestas automáticas de dependencias #63, #64 y #71–#74 quedan para otro lote por decisión explícita; también continúan pendientes TPV y CORS del bucket local.

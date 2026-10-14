@@ -2,7 +2,7 @@
 
 ## 14/10/2026 — OT, cobros, conciliación y margen de entrega por producto
 
-Publicado sólo en staging mediante el [PR #91](https://github.com/studiocamaleon/gdi/pull/91), que conserva los commits de #84–#90. Incluye presentación de tandas, aviso de descuento de copiado, control de cobros duplicados y superiores al saldo, conciliación consecutiva, Polyfan rectangular y por placas, fechas y precios de copiado al elegir cliente, emisión y entrega inmediata con pago completo, columna **Creada** y exclusión de días hábiles de margen por producto. Producción y merge a `main` esperan las pruebas y autorización del titular. Dependencias automáticas y TPV fuera del lote.
+Publicado inicialmente en staging mediante el [PR #91](https://github.com/studiocamaleon/gdi/pull/91), que conserva los commits de #84–#90. Incluye presentación de tandas, aviso de descuento de copiado, control de cobros duplicados y superiores al saldo, conciliación consecutiva, Polyfan rectangular y por placas, fechas y precios de copiado al elegir cliente, emisión y entrega inmediata con pago completo, columna **Creada** y exclusión de días hábiles de margen por producto. El titular aprobó las pruebas y autorizó la promoción del mismo lote el 14/10/2026; ver [el registro de producción](../produccion/VALIDACION.md). Dependencias automáticas y TPV fuera del lote.
 
 **Revisión ejecutada:** API, ambos workers y web `23fd03eec37cd5b224e371d6deb226781d43ea0b`. **CI aprobado:** `02455f9f8c39db14d5be8bec0b0e4e15bcfda2aa`, cuya única diferencia con las fuentes de esas imágenes es la conexión de Redis de una prueba de integración. Se comprobó ese diff: ningún archivo funcional difiere. La prueba tenía fijo el puerto local; ahora respeta el Redis aislado de CI. No se omitió ningún control. La ejecución anterior fue cancelada y reemplazada por la aprobada.
 
@@ -29,7 +29,7 @@ Validación: 119 pruebas web y 109 de API del conjunto en local, con datos ficti
 
 **Reversión de código:** API/workers `sha256:ffb98489bfcf1210ebeb332e7c27a8e7ae8332bf709affe1f4ff6bdde56212dc`; web `sha256:189719be961310724ad43b76543e6231917ed77f5d981bbd9fed5af2c30ddfb2`. No hay migración que revertir. Actualizar el inventario del copiador si se vuelve a esas imágenes.
 
-**Pendiente explícito:** aceptación de Lucas en staging antes de producción, integración a `main` y cierre de los PR absorbidos. #84–#91 permanecen abiertos por ese motivo; las seis propuestas de dependencias siguen en otro lote.
+**Promoción autorizada:** Lucas aceptó staging y el lote se publicó en producción el 14/10/2026 con los mismos digests. El cierre de #91 registra la integración a `main` y de los PR #84–#90; las seis propuestas de dependencias siguen en otro lote.
 
 ## 13/10/2026 — Publicación conjunta de Centro de copiado, hidratación y Canvas
 
