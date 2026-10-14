@@ -46,6 +46,29 @@ export function rulePasoDeFieldKey(
   );
 }
 
+/** Referencia estable al paso de la ruta, no al registro de configuración. */
+export function estadoPasoRuleFields(
+  pasos: RuleOption[],
+  pasoActualId?: string,
+): RuleFieldDefinition[] {
+  const otros = pasos.filter((paso) => paso.value !== pasoActualId);
+  if (!otros.length) return [];
+  return [
+    {
+      key: "pasoActivo_",
+      label: "Estado de otro paso",
+      kind: "select",
+      valueKind: "number",
+      operators: ["="],
+      options: [
+        { value: "0", label: "Inactivo" },
+        { value: "1", label: "Activo" },
+      ],
+      pasos: otros,
+    },
+  ];
+}
+
 export interface RuleConditionUI {
   id: string;
   fieldKey: string;

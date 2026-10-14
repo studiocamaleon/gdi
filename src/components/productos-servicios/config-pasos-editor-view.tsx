@@ -158,6 +158,7 @@ import {
 } from "@/lib/labels-humanos";
 import {
   getRuleFields,
+  estadoPasoRuleFields,
   jsonLogicToRuleGroup,
   type RuleFieldDefinition,
   type RuleOperator,
@@ -3062,6 +3063,19 @@ export function ConfigPasosEditorView({
     ];
   }, [familiasMap, rutaAlternativa.configPasos, rutaAlternativa.ruta.pasos]);
 
+  const activationRuleFields = (pasoId?: string) => [
+    ...technologyRuleFields,
+    ...(!configuracionBase
+      ? estadoPasoRuleFields(
+          rutaAlternativa.ruta.pasos.map((paso) => ({
+            value: paso.id,
+            label: `Paso ${paso.orden} · ${configs[paso.id]?.nombreVisible?.trim() || paso.nombreVisible || familiasMap.get(paso.familiaCodigo)?.nombre || paso.familiaCodigo}`,
+          })),
+          pasoId,
+        )
+      : []),
+  ];
+
   // Estado: por cada paso de la ruta, su configuración (existente o nueva)
   const [configs, setConfigs] = React.useState<ConfigState>(() => {
     const initial: ConfigState = {};
@@ -4284,7 +4298,7 @@ export function ConfigPasosEditorView({
       const camposRegla = getRuleFields({
         includeMeasureFields:
           producto.modoMedidas === "LIBRE" || producto.modoMedidas === "MIXTA",
-        extraFields: technologyRuleFields,
+        extraFields: activationRuleFields(rutaPasoId),
       });
       const parsedRule = jsonLogicToRuleGroup(
         condicionActivacionJson,
@@ -4764,7 +4778,7 @@ export function ConfigPasosEditorView({
   const reglaPropsEsquema = {
     includeMeasureFields:
       producto.modoMedidas === "LIBRE" || producto.modoMedidas === "MIXTA",
-    extraFields: technologyRuleFields,
+    extraFields: activationRuleFields(),
   };
   const materialesApiEsquema: MaterialesApiAsistente = {
     updateSlot,
@@ -5957,7 +5971,7 @@ export function ConfigPasosEditorView({
                                             producto.modoMedidas === "LIBRE" ||
                                             producto.modoMedidas === "MIXTA"
                                           }
-                                          extraFields={technologyRuleFields}
+                                          extraFields={activationRuleFields(paso.id)}
                                           onChange={(value) =>
                                             updateConfig(paso.id, {
                                               condicionActivacionJson: value,
@@ -13599,6 +13613,7 @@ function SeccionesEsquemaPaso({
                 }
                 includeMeasureFields={reglaProps.includeMeasureFields}
                 extraFields={reglaProps.extraFields}
+                pasoActualId={pasoActual.id}
                 onChange={(value) =>
                   onPatch(pasoActual.id, {
                     condicionActivacionJson: value,

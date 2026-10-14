@@ -25,6 +25,7 @@ interface RuleBuilderProps {
   value: Record<string, unknown> | null | undefined;
   includeMeasureFields?: boolean;
   extraFields?: RuleFieldDefinition[];
+  pasoActualId?: string;
   onChange: (value: Record<string, unknown> | null) => void;
 }
 
@@ -60,11 +61,27 @@ export function RuleBuilder({
   value,
   includeMeasureFields,
   extraFields,
+  pasoActualId,
   onChange,
 }: RuleBuilderProps) {
   const fields = React.useMemo(
-    () => getRuleFields({ includeMeasureFields, extraFields }),
-    [extraFields, includeMeasureFields],
+    () =>
+      getRuleFields({
+        includeMeasureFields,
+        extraFields: extraFields
+          ?.map((field) =>
+            field.key === "pasoActivo_"
+              ? {
+                  ...field,
+                  pasos: field.pasos?.filter(
+                    (paso) => paso.value !== pasoActualId,
+                  ),
+                }
+              : field,
+          )
+          .filter((field) => !field.pasos || field.pasos.length > 0),
+      }),
+    [extraFields, includeMeasureFields, pasoActualId],
   );
   const parsed = React.useMemo(
     () => jsonLogicToRuleGroup(value, fields),

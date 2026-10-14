@@ -22,6 +22,7 @@ import type { FamiliaListItem } from "../productos-servicios";
 import type { PendientePasoTipo } from "../pendientes-paso";
 import {
   getRuleFields,
+  estadoPasoRuleFields,
   jsonLogicToRuleGroup,
   summarizeRuleGroup,
 } from "../rule-builder";
@@ -947,15 +948,18 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     resumen: (ctx) => {
       const json = ctx.cfg.condicionActivacionJson;
       if (!json) return "Sin regla todavía";
-      const parsed = jsonLogicToRuleGroup(
-        json,
-        getRuleFields({ includeMeasureFields: true }),
-      );
+      const fields = getRuleFields({
+        includeMeasureFields: true,
+        extraFields: estadoPasoRuleFields(
+          ctx.otrosPasos.map((paso) => ({
+            value: paso.id,
+            label: paso.nombre,
+          })),
+        ),
+      });
+      const parsed = jsonLogicToRuleGroup(json, fields);
       return parsed.supported
-        ? summarizeRuleGroup(
-            parsed.group,
-            getRuleFields({ includeMeasureFields: true }),
-          )
+        ? summarizeRuleGroup(parsed.group, fields)
         : "Regla avanzada (abrila para verla)";
     },
     origenValor: (ctx) =>
@@ -2146,17 +2150,41 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     grupo: "criterio",
     etiqueta: "Disponibilidad de materiales",
     pregunta: "¿Qué alternativas puede elegir el sistema?",
-    ayuda: "Compara el consumo completo, incluida la merma, con el stock libre después de reservas. Cotizar no reserva materiales. Requiere existencias registradas.",
+    ayuda:
+      "Compara el consumo completo, incluida la merma, con el stock libre después de reservas. Cotizar no reserva materiales. Requiere existencias registradas.",
     visible: (ctx) => ctx.slot?.payload.modoSeleccion === "MOTOR_ELIGE_AUTO",
-    resumen: (ctx) => (({ TODAS: "Considerar todas", PREFERIR_DISPONIBLES: "Priorizar stock disponible", SOLO_DISPONIBLES: "Sólo stock disponible" } as Record<string, string>)[ctx.slot?.payload.politicaStock ?? "TODAS"] ?? "Considerar todas"),
-    origenValor: (ctx) => ctx.slot?.payload.politicaStock ? "config" : "default-paso",
+    resumen: (ctx) =>
+      (
+        ({
+          TODAS: "Considerar todas",
+          PREFERIR_DISPONIBLES: "Priorizar stock disponible",
+          SOLO_DISPONIBLES: "Sólo stock disponible",
+        }) as Record<string, string>
+      )[ctx.slot?.payload.politicaStock ?? "TODAS"] ?? "Considerar todas",
+    origenValor: (ctx) =>
+      ctx.slot?.payload.politicaStock ? "config" : "default-paso",
     control: {
       tipo: "pills",
       presentacion: "tarjetas",
       opciones: () => [
-        { value: "TODAS", label: "Considerar todas", descripcion: "Elige por el criterio configurado. Los faltantes se abastecen después." },
-        { value: "PREFERIR_DISPONIBLES", label: "Priorizar stock disponible", descripcion: "Usa alternativas que alcanzan. Si ninguna alcanza, cotiza con reposición y avisa." },
-        { value: "SOLO_DISPONIBLES", label: "Sólo stock disponible", descripcion: "Si ninguna alcanza, pide elegir un material o revisar la configuración." },
+        {
+          value: "TODAS",
+          label: "Considerar todas",
+          descripcion:
+            "Elige por el criterio configurado. Los faltantes se abastecen después.",
+        },
+        {
+          value: "PREFERIR_DISPONIBLES",
+          label: "Priorizar stock disponible",
+          descripcion:
+            "Usa alternativas que alcanzan. Si ninguna alcanza, cotiza con reposición y avisa.",
+        },
+        {
+          value: "SOLO_DISPONIBLES",
+          label: "Sólo stock disponible",
+          descripcion:
+            "Si ninguna alcanza, pide elegir un material o revisar la configuración.",
+        },
       ],
       valor: (ctx) => ctx.slot?.payload.politicaStock ?? "TODAS",
       aplicar: (_ctx, v) => ({ tipo: "slot", patch: { politicaStock: v } }),
@@ -2534,7 +2562,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       // es LO más importante del acomodo — nombrarla, no "Acomodo estándar".
       const imposicion = (
         nesting as
-          { imposicion?: { esquema?: unknown; hojas?: unknown } } | undefined
+          | { imposicion?: { esquema?: unknown; hojas?: unknown } }
+          | undefined
       )?.imposicion;
       if (imposicion?.esquema === "caballete") {
         const hojas =
@@ -2702,7 +2731,7 @@ const GRUPOS_ACTIVACION: GrupoEje[] = [
     id: "regla",
     titulo: "La condición",
     ayuda:
-      "El paso corre sólo cuando esto se cumple. Podés combinar medidas del ítem, opciones elegidas y tecnología.",
+      "El paso corre sólo cuando esto se cumple. Podés combinar medidas del ítem, opciones elegidas, tecnología y el estado de otro paso. Por ejemplo: Preprensa se ejecuta si Diseño gráfico está inactivo.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
     encabezado: "arriba",
