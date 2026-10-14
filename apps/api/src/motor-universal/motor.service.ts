@@ -1,4 +1,5 @@
 import { ESTADOS_ACTIVACION, resolverEstadosActivacion, type ContextoEstados } from './estado-pasos';
+import { cantidadManualKey, leerCantidadManual, usaCantidadManual, errorConfigCantidadManual, errorValorCantidadManual } from './cantidad-manual-paso';
 import { precioPapelCortado } from '../inventario/precio-papel-cortado';
 import {
   cantidadPapelCortado,
@@ -4672,6 +4673,20 @@ export class MotorUniversalService {
       };
     }
 
+    const cantidadManualConfig = paso.modoTiempo === 'T-2' && !paso.tercerizado
+      ? leerCantidadManual(paso.paramsPasoJson) : null;
+    if (cantidadManualConfig) {
+      const error = errorConfigCantidadManual(paso.paramsPasoJson)
+        ?? errorValorCantidadManual(cantidadManualConfig, jobContext[cantidadManualKey(paso.configPasoId)]);
+      if (error) {
+        errores.push({ codigo: 'cantidad_manual_invalida', severidad: 'ERROR', mensaje: error,
+          rutaPasoId: paso.rutaPasoId, rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          contexto: { configPasoId: paso.configPasoId, jobContextKey: cantidadManualKey(paso.configPasoId) } });
+        return this.pasoAbortado(paso);
+      }
+    }
+
     const errorHerencia = this.validarHerenciaExplicita(paso, jobContext);
     if (errorHerencia) {
       errores.push(errorHerencia);
@@ -5359,6 +5374,10 @@ export class MotorUniversalService {
       nombreVisible: this.resolverNombreVisiblePaso(paso, jobContext),
       configPasoId: paso.configPasoId,
       activado: true,
+      cantidadManual: cantidadManualConfig ? {
+        etiqueta: cantidadManualConfig.etiqueta.trim(), unidad: cantidadManualConfig.unidad.trim(),
+        valor: jobContext[cantidadManualKey(paso.configPasoId)] as number,
+      } : undefined,
       tiempo,
       materiales,
       cargosDirectosPaso,
@@ -5720,7 +5739,8 @@ export class MotorUniversalService {
     // (los multiplicadores no aplican) y reemplaza al tiempoFijo del paso para
     // no contar doble; setup/cleanup se suman igual porque preparar la máquina
     // no depende del trabajo puntual.
-    const tiempoManualMin = this.resolverTiempoManualMin(
+    const cantidadIngresada = modoTiempo === 'T-2' && usaCantidadManual(paso.paramsPasoJson);
+    const tiempoManualMin = cantidadIngresada ? null : this.resolverTiempoManualMin(
       paso,
       jobContext,
       errores,
@@ -5788,9 +5808,16 @@ export class MotorUniversalService {
           ? params.timeCalculationMode
           : 'productivity';
 
-      if (Number.isFinite(horasOverride) && horasOverride > 0) {
+      if (cantidadIngresada && (modoCalculoT2 === 'batch_time'
+        ? !(Number(params.batchSize) > 0 && Number(params.batchTimeMin) > 0)
+        : !(productividadPropia > 0))) {
+        errores.push({ codigo: 'cantidad_manual_sin_ritmo', severidad: 'ERROR',
+          mensaje: 'Configurá un ritmo mayor que cero para calcular el tiempo con la cantidad ingresada.',
+          rutaPasoId: paso.rutaPasoId, familiaCodigo: paso.familiaCodigo });
+      }
+      if (!cantidadIngresada && Number.isFinite(horasOverride) && horasOverride > 0) {
         runMin = horasOverride * 60;
-      } else if (Number.isFinite(horasParams) && horasParams > 0) {
+      } else if (!cantidadIngresada && Number.isFinite(horasParams) && horasParams > 0) {
         runMin = horasParams * 60;
       } else if (modoCalculoT2 === 'batch_time') {
         const minutosPorBloque = Number(params.batchTimeMin ?? 0);
@@ -9808,7 +9835,11 @@ export class MotorUniversalService {
     } | null = null,
   ): number {
     const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-    const sourceConfigurado =
+    if (paso.modoTiempo === 'T-2' && usaCantidadManual(params)) {
+      // Se valida después de resolver la activación. Nunca hereda la medida del ítem.
+      return jobContext[cantidadManualKey(paso.configPasoId)] as number;
+    }
+    const sourceConfigurado = usaCantidadManual(params) ? 'cantidad' :
       typeof params.productivityQuantitySource === 'string'
         ? params.productivityQuantitySource
         : '';

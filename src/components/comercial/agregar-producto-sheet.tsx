@@ -1,4 +1,6 @@
 "use client";
+import { CantidadManualPasoField } from "./cantidad-manual-paso-field";
+import { cantidadManualKey, leerCantidadManual, errorValorCantidadManual, restaurarCantidadesManuales, usaCantidadManual } from "@/lib/cantidad-manual-paso";
 import { useMotorConTipoCambio } from "./tipo-cambio-documento";
 
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
@@ -365,6 +367,8 @@ type MotorConfigState = {
    * sugerido del paso; null = el comercial vació el input (sin valor).
    */
   tiempoManualPorPaso: Record<string, number | null>;
+  /** Cantidad total propia del paso, sin heredar la cantidad del producto. */
+  cantidadManualPorPaso: Record<string, number | null>;
   /** Diseño del sello (texto/tipografía) del configurador; null si no aplica. */
   disenoSello: DisenoSello | null;
   disenoVectorialFuente: {
@@ -655,6 +659,7 @@ export const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   medidaPredefinidaId: "",
   caras: 1,
   carasPorPaso: {},
+  cantidadManualPorPaso: {},
   tiempoManualPorPaso: {},
   disenoSello: null,
   disenoVectorialFuente: null,
@@ -2072,7 +2077,7 @@ type NivelComercial = {
 function tienePasoTiempoManual(config: ConfigPasoDetalle): boolean {
   const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
   const tiempoManual = params.tiempoManual as Record<string, unknown> | null;
-  return Boolean(tiempoManual && tiempoManual.habilitado === true);
+  return !(config.modoTiempo === "T-2" && usaCantidadManual(params)) && Boolean(tiempoManual && tiempoManual.habilitado === true);
 }
 
 function getNivelesComercial(
@@ -2197,6 +2202,21 @@ function getTiempoFijoDeclaradoMin(
   return Number.isFinite(horas) && horas > 0 ? horas * 60 : null;
 }
 
+function getCantidadesManualesComercial(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+  opcionales?: Record<string, boolean>,
+) {
+  const efectivos = opcionales && opcionalesActivadosEfectivos(ruta?.configPasos ?? [], opcionales);
+  return (ruta?.configPasos ?? []).filter(isExecutableConfigPaso).filter(paso =>
+    efectivos && paso.modoActivacion === "OPCIONAL" ? Boolean(efectivos[paso.id]) : includeConfig(paso)
+  ).flatMap(paso => {
+    const config = leerCantidadManual(paso.paramsPasoJson);
+    return config && paso.modoTiempo === "T-2" && !paso.tercerizado
+      ? [{ ...config, configPasoId: paso.id, modoActivacion: paso.modoActivacion }] : [];
+  });
+}
+
 function getTiemposManualesComercial(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
@@ -2212,6 +2232,7 @@ function getTiemposManualesComercial(
       .filter(includeConfig)
       .map((config) => {
         const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+        if (config.modoTiempo === "T-2" && usaCantidadManual(params)) return null;
         const tiempoManual = params.tiempoManual as
           Record<string, unknown> | undefined;
         if (
@@ -3924,6 +3945,11 @@ export function buildJobContext(
     ctx[nivelPasoKey(item.configPasoId)] = elegido.codigo;
   }
 
+  for (const item of getCantidadesManualesComercial(rutaSel, () => true)) {
+    const valor = config.cantidadManualPorPaso[item.configPasoId];
+    if (valor != null) ctx[cantidadManualKey(item.configPasoId)] = valor;
+  }
+
   // Tiempo estimado por el comercial (docs/tiempo-manual-por-paso-diseno.md):
   // minutos por paso. Sin valor efectivo no se manda la clave y el motor
   // calcula el paso como siempre.
@@ -4624,6 +4650,13 @@ function buildItem(
       orden: 95,
     });
   }
+  for (const paso of cotizacion.pasos) {
+    if (!paso.activado || !paso.cantidadManual) continue;
+    const key = `cantidad_paso_${paso.configPasoId ?? paso.rutaPasoOrden}`;
+    const dato = paso.cantidadManual;
+    especificaciones[key] = `${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 6 }).format(dato.valor)} ${dato.unidad}`;
+    atributosSchema.push({ key, label: dato.etiqueta, tipo: "text", visible: true, orden: 96 });
+  }
   for (const key of ENRICHED_SPEC_ORDER) {
     if (!hasUsefulSpecValue(especificaciones[key])) continue;
     if (atributosSchema.some((attr) => attr.key === key)) continue;
@@ -4921,6 +4954,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     rutaAlternativaId: item.rutaAlternativaId ?? "",
     medidaPredefinidaId,
     caras: Number(ctx.caras) === 2 ? 2 : 1,
+    cantidadManualPorPaso: restaurarCantidadesManuales(ctx),
     tiempoManualPorPaso,
     disenoSello:
       ctx.disenoSello && typeof ctx.disenoSello === "object"
@@ -5594,6 +5628,21 @@ function ApConfigStep({
     () => getSlotsOpcionalesPorPaso(slotsComercialElige),
     [slotsComercialElige],
   );
+  const cantidadesManualesComercial = React.useMemo(
+    () => getCantidadesManualesComercial(rutaSel, includeVisibleConfig, motorConfig.opcionalesActivados),
+    [rutaSel, includeVisibleConfig, motorConfig.opcionalesActivados],
+  );
+  const cantidadesManualesPorPaso = React.useMemo(
+    () => new Map(cantidadesManualesComercial.map(item => [item.configPasoId, item])),
+    [cantidadesManualesComercial],
+  );
+  const renderCantidadManual = (item: typeof cantidadesManualesComercial[number]) => (
+    <CantidadManualPasoField key={`cantidad-${item.configPasoId}`} config={item}
+      value={motorConfig.cantidadManualPorPaso[item.configPasoId]}
+      onChange={value => setMotorConfig(prev => ({ ...prev,
+        cantidadManualPorPaso: { ...prev.cantidadManualPorPaso, [item.configPasoId]: value },
+      }))} />
+  );
   // Pasos con tiempo estimado por el comercial (visibles según ruta/opcionales).
   const tiemposManualesComercial = React.useMemo(
     () =>
@@ -5725,6 +5774,7 @@ function ApConfigStep({
         .map((opcional) => ({
           opcional,
           slots: slotsMaterialesOpcionalesPorPaso.get(opcional.code) ?? [],
+          cantidadManual: opcional.configPasoId ? cantidadesManualesPorPaso.get(opcional.configPasoId) ?? null : null,
           tiempoManual: opcional.configPasoId
             ? (tiemposManualesPorConfigPaso.get(opcional.configPasoId) ?? null)
             : null,
@@ -5749,6 +5799,7 @@ function ApConfigStep({
                 ? Boolean(opcionalesEfectivosSheet[item.opcional.configPasoId])
                 : false)) &&
             (item.slots.length > 0 ||
+              item.cantidadManual !== null ||
               item.tiempoManual !== null ||
               item.paramsComercial !== null ||
               item.nivel !== null ||
@@ -5766,6 +5817,7 @@ function ApConfigStep({
       product.real,
       slotsMaterialesOpcionalesPorPaso,
       tiemposManualesPorConfigPaso,
+      cantidadesManualesPorPaso,
     ],
   );
   const pasosConTecnologias = React.useMemo(
@@ -8863,6 +8915,7 @@ function ApConfigStep({
 
             {nivelesPrincipales.map((item) => renderNivelField(item))}
 
+            {cantidadesManualesComercial.filter(item => item.modoActivacion !== "OPCIONAL").map(renderCantidadManual)}
             {tiemposManualesPrincipales.map((tiempoPaso) =>
               renderTiempoManualField(tiempoPaso),
             )}
@@ -9144,6 +9197,7 @@ function ApConfigStep({
                   opcional,
                   slots,
                   tiempoManual,
+                  cantidadManual,
                   paramsComercial,
                   nivel,
                   complejidad,
@@ -9153,8 +9207,8 @@ function ApConfigStep({
                     ? arrastradosSheet.has(opcional.configPasoId)
                     : false;
                   const tiempoPendiente = Boolean(
-                    tiempoManual &&
-                    getTiempoManualError(tiempoManual, motorConfig),
+                    (cantidadManual && errorValorCantidadManual(cantidadManual, motorConfig.cantidadManualPorPaso[cantidadManual.configPasoId])) ||
+                    (tiempoManual && getTiempoManualError(tiempoManual, motorConfig)),
                   );
                   return (
                     // UNA tarjeta por opcional: el nombre del paso VA en la barra
@@ -9222,6 +9276,7 @@ function ApConfigStep({
                             )}
                           </div>
                         ) : null}
+                        {cantidadManual ? renderCantidadManual(cantidadManual) : null}
                         {tiempoManual
                           ? renderTiempoManualField(tiempoManual, {
                               sinTarjeta: true,
@@ -9765,6 +9820,11 @@ export function AgregarProductoSheet({
       qty,
       slotsParaReglas,
     );
+    for (const item of getCantidadesManualesComercial(rutaSel,
+      paso => isConfigPasoVisibleForContext(paso, motorConfig, ruleContext), motorConfig.opcionalesActivados)) {
+      const error = errorValorCantidadManual(item, motorConfig.cantidadManualPorPaso[item.configPasoId]);
+      if (error) return error;
+    }
     return getTiempoManualBloqueo(
       rutaSel,
       (config) =>

@@ -584,6 +584,10 @@ function fuenteRitmoEfectiva(ctx: ContextoOpcion): string {
 /** Unidad nombrada para los sufijos del ritmo: la fuente derivada manda
  *  ("cortes de hierro"), después lo que el paso cuenta ("ml de perfil"). */
 function unidadRitmoNombrada(ctx: ContextoOpcion): string | null {
+  if (fuenteRitmoEfectiva(ctx) === "cantidad_manual") {
+    const config = ctx.paramsPaso.cantidadManual as { unidad?: string } | undefined;
+    return config?.unidad?.trim() || "unidades";
+  }
   return (
     etiquetaFuenteDerivada(ctx.familia, fuenteRitmoEfectiva(ctx)) ??
     unidadCantidadEfectiva(ctx)
@@ -1238,8 +1242,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // no se ofrece (feedback del usuario). Configs legacy con tiempoManual
     // en pasos T-3 siguen visibles para poder apagarlas.
     visible: (ctx) =>
-      origenTiempoEfectivo(ctx) !== "maquina" ||
-      comercialNivelEfectivo(ctx) !== "no",
+      !(esT2(ctx) && fuenteRitmoEfectiva(ctx) === "cantidad_manual") && (
+        origenTiempoEfectivo(ctx) !== "maquina" || comercialNivelEfectivo(ctx) !== "no"
+      ),
     resumen: (ctx) => {
       const nivel = comercialNivelEfectivo(ctx);
       if (nivel === "no") return "No — se calcula solo";
