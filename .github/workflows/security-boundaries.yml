@@ -173,7 +173,9 @@ jobs:
             src/components/comercial/centro-copiado-tarifarios-simulacion.test.tsx \
             src/components/comercial/centro-copiado-config-view.test.tsx \
             src/components/comercial/centro-copiado-pedido-precios.test.tsx \
-            src/components/comercial/propuesta-emision-navegacion.test.tsx
+            src/components/comercial/propuesta-emision-navegacion.test.tsx \
+            src/components/administracion/tesoreria-view.test.tsx \
+            src/components/administracion/tesoreria-conciliacion.test.tsx
       - name: Comprobar cálculos y contrato de tarifarios de Centro de copiado
         working-directory: apps/api
         run: |
