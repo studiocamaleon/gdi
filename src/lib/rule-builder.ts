@@ -297,6 +297,9 @@ export function summarizeCondition(
   const value =
     field.options?.find((option) => option.value === rawValue)?.label ?? rawValue;
   const paso = rulePasoDeFieldKey(field, condition.fieldKey);
+  if (field.key === "pasoActivo_" && paso) {
+    return `${paso.label} está ${value.toLocaleLowerCase("es-AR")}`;
+  }
   const sujeto = paso ? `${field.label} de ${paso.label}` : field.label;
   return `${sujeto} ${operator} ${value}`;
 }

@@ -178,7 +178,7 @@ export function RuleBuilder({
   const fieldOptions: HumanSelectOption[] = fields.map((item) => ({
     value: item.key,
     label: item.label,
-    description: item.key,
+    description: item.key === "pasoActivo_" ? undefined : item.key,
   }));
 
   return (

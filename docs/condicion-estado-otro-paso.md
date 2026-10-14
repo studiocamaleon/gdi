@@ -18,4 +18,6 @@ La condición puede combinarse con las existentes mediante Y/O. No modifica las 
 
 Las suites `estado-pasos.spec.ts`, `exclusion-pasos-cotizacion.spec.ts` y `config-pasos-integridad.spec.ts` usan datos ficticios, sin escribir en bases de desarrollo, staging o producción. Comprueban activación/desactivación, arrastre, costos/tiempos reales del motor, materialización de operaciones de OT, referencias, ciclos y traducción de versiones. Las pruebas del constructor visual verifican el guardado y la reapertura de las reglas.
 
+El editor real se comprobó en un arnés local de navegador: selección con mouse y teclado, guardado/reapertura y consola sin errores. Este arnés sólo persiste la regla de prueba en el navegador; la integración con costos y operaciones se comprueba en las suites del motor y de la OT.
+
 La compilación completa se verifica en CI remoto por el límite de memoria del entorno local. No hay despliegue implícito al abrir el PR.

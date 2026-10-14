@@ -97,7 +97,7 @@ describe("estado de otro paso", () => {
     if (!parsed.supported) throw new Error("La regla debe ser editable visualmente");
     expect(validateRuleGroup(parsed.group, fields).ok).toBe(true);
     expect(ruleGroupToJsonLogic(parsed.group, fields)).toEqual(rule);
-    expect(summarizeCondition(parsed.group.conditions[0], fields)).toBe("Estado de otro paso de Diseño gráfico es Inactivo");
+    expect(summarizeCondition(parsed.group.conditions[0], fields)).toBe("Diseño gráfico está inactivo");
     parsed.group.conditions[0].value = "1";
     expect(ruleGroupToJsonLogic(parsed.group, fields)).toEqual({ "==": [{ var: "pasoActivo_rp-diseno" }, 1] });
   });
