@@ -90,3 +90,73 @@ export function fechaRecomendadaEta(
     zona,
   );
 }
+
+/** La promesa de la OT es la última entrega individual, cada una con su margen. */
+export function describirEtaOrden(
+  items: Array<{ eta: SimulacionItem | null | undefined; margenDias: number }>,
+  fechaElegida: string | null,
+  opts: Omit<Opciones, "margenDias"> = {},
+) {
+  if (!items.length || items.every((i) => !i.eta)) return null;
+  const zona = opts.zona ?? ZONA_DEFAULT;
+  const sinEstimar = items.some(
+    ({ eta }) =>
+      !eta ||
+      eta.sinEstimar ||
+      !eta.finEstimado ||
+      !Number.isFinite(eta.finEstimado.getTime()),
+  );
+  const etas = items.flatMap(({ eta }) => (eta ? [eta] : []));
+  const fin = sinEstimar
+    ? null
+    : new Date(Math.max(...etas.map((e) => +e.finEstimado!)));
+  const entrega = sinEstimar
+    ? null
+    : new Date(
+        Math.max(
+          ...items.map(
+            ({ eta, margenDias }) =>
+              +sumarDiasHabiles(
+                eta!.finEstimado!,
+                margenDias,
+                opts.noLaborables,
+                zona,
+              ),
+          ),
+        ),
+      );
+  const margenMax = Math.max(...items.map((i) => i.margenDias));
+  const margenMin = Math.min(...items.map((i) => i.margenDias));
+  const resumen = describirEta(
+    {
+      finEstimado: fin,
+      sinEstimar,
+      parcial: etas.some((e) => e.parcial),
+      asumeDesbloqueo: etas.some((e) => e.asumeDesbloqueo),
+      motivoSinEstimar: [
+        ...new Set(etas.map((e) => e.motivoSinEstimar).filter(Boolean)),
+      ].join(" "),
+    },
+    fechaElegida,
+    opts,
+  )!;
+  const sugerida = entrega ? claveFechaEnZona(entrega, zona) : null;
+  const elegida = fechaElegida?.slice(0, 10);
+  return {
+    ...resumen,
+    fechaSugerida: sugerida,
+    sugeridaEtiqueta:
+      entrega && margenMax > 0 ? fechaHoraEta(entrega, opts) : null,
+    margenDias: margenMax,
+    margenEtiqueta:
+      margenMin === margenMax
+        ? `${margenMax} ${margenMax === 1 ? "día hábil" : "días hábiles"} de margen`
+        : `Según producto: ${margenMin}–${margenMax} días hábiles`,
+    nivel:
+      resumen.nivel === "tarde"
+        ? ("tarde" as const)
+        : elegida && sugerida && elegida < sugerida
+          ? ("sin-margen" as const)
+          : ("ok" as const),
+  };
+}

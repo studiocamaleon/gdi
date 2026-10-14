@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { describirEta, fechaRecomendadaEta } from "./eta-fechas";
+import { describirEta, describirEtaOrden, fechaRecomendadaEta } from "./eta-fechas";
+import { margenEntregaProducto } from "./margen-entrega-producto";
 import {
   etiquetaEta,
   sumarDiasHabiles,
@@ -20,6 +21,30 @@ const eta = (fin = "2026-09-09T19:39:00Z"): SimulacionItem => ({
 });
 
 describe("fechas de producción y entrega", () => {
+  it("excluye sólo el producto elegido y toma la última entrega individual en una OT mixta", () => {
+    const items = [
+      { eta: eta("2026-09-09T19:00:00Z"), margenDias: margenEntregaProducto(2, "normal", ["rapido"]) },
+      { eta: eta("2026-09-10T19:00:00Z"), margenDias: margenEntregaProducto(2, "rapido", ["rapido"]) },
+    ];
+    expect(describirEtaOrden(items, "2026-09-11", { zona })).toMatchObject({
+      fechaProduccion: "2026-09-10", fechaSugerida: "2026-09-11", nivel: "ok",
+      margenEtiqueta: "Según producto: 0–2 días hábiles",
+    });
+    expect(describirEtaOrden(items, "2026-09-10", { zona })?.nivel).toBe("sin-margen");
+    expect(describirEtaOrden(items, "2026-09-09", { zona })?.nivel).toBe("tarde");
+    items[1].eta = eta("2026-09-14T19:00:00Z");
+    expect(describirEtaOrden(items, null, { zona })?.fechaSugerida).toBe("2026-09-14");
+  });
+  it("permite entregar el mismo día si todos están excluidos y conserva feriados en los demás", () => {
+    const fin = eta("2027-01-01T01:30:00Z");
+    const opts = { zona, noLaborables: new Set(["2027-01-01"]) };
+    expect(describirEtaOrden([{ eta: fin, margenDias: 0 }], null, opts)).toMatchObject({
+      fechaSugerida: "2026-12-31", margenEtiqueta: "0 días hábiles de margen",
+    });
+    expect(describirEtaOrden([{ eta: fin, margenDias: 1 }], null, opts)?.fechaSugerida).toBe("2027-01-04");
+    expect(describirEtaOrden([{ eta: fin, margenDias: 0 }, { eta: undefined, margenDias: 1 }], null, opts)?.fechaSugerida).toBeNull();
+    expect(margenEntregaProducto(2, undefined, ["rapido"])).toBe(2);
+  });
   it("explica el caso 09/09: fin hoy y entrega 10/09 por un día hábil de margen", () => {
     const opts = { zona, ahora, margenDias: 1 };
     expect(describirEta(eta(), "2026-09-10", opts)).toMatchObject({

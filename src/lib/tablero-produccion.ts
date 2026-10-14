@@ -163,6 +163,7 @@ export type TableroPasoData = {
 };
 
 export type TableroItemData = {
+  productoId?: string | null;
   /** Sólo escenarios internos; no se acepta desde la API. */
   prioridadPlanificacion?: number;
   /** Id del OrdenTrabajoItem. */

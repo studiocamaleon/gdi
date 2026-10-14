@@ -51,6 +51,8 @@ export type ContextoPiloto = Omit<
 > & {
   ahora: Date;
   zona: string;
+  margenEtaDias?: number;
+  productosSinMargenEntrega?: string[];
 };
 export type EntradaPiloto = {
   cantidad: number;
