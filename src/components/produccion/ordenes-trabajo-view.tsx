@@ -225,6 +225,7 @@ function OrdenesTrabajoContent({
         "Estado",
         "Progreso",
         "Ítems",
+        "Fecha de emisión",
         "Fecha de entrega",
         "Total",
         "Vendedor",
@@ -237,6 +238,7 @@ function OrdenesTrabajoContent({
           orden.borradorDescartado ? "Borrador descartado" : ORDEN_TRABAJO_ESTADOS[orden.estado].label,
           orden.progresoPct ?? "",
           orden.itemsCount,
+          fechaNumerica(orden.fechaEmision),
           orden.fechaEntrega?.slice(0, 10) ?? "",
           orden.total,
           orden.vendedorNombre,
@@ -258,7 +260,7 @@ function OrdenesTrabajoContent({
     } finally {
       setExportando(false);
     }
-  }, [filtro, hoyClave, qInicial, urgencia]);
+  }, [fechaNumerica, filtro, hoyClave, qInicial, urgencia]);
 
   // La búsqueda espera a que dejes de tipear; el resto navega al toque.
   React.useEffect(() => {
@@ -469,13 +471,14 @@ function OrdenesTrabajoContent({
               <table className={s.table}>
                 <caption className="sr-only">
                   Órdenes de trabajo: cliente, estado, avance, productos,
-                  entrega, total y vendedor.
+                  emisión, entrega, total y vendedor.
                 </caption>
                 <colgroup>
                   <col className={s.identityCol} />
                   <col />
                   <col />
                   <col className={s.itemsCol} />
+                  <col />
                   <col />
                   <col />
                   <col />
@@ -487,6 +490,9 @@ function OrdenesTrabajoContent({
                     <th scope="col">Avance</th>
                     <th scope="col" className={s.center}>
                       Ítems
+                    </th>
+                    <th scope="col" title="Fecha de emisión de la orden">
+                      Creada
                     </th>
                     <th scope="col">Entrega</th>
                     <th scope="col" className={s.right}>
@@ -544,6 +550,17 @@ function OrdenesTrabajoContent({
                       </td>
                       <td className={s.center}>
                         <span className={s.itemCount}>{o.itemsCount}</span>
+                      </td>
+                      <td>
+                        {o.fechaEmision ? (
+                          <time className={s.delivery} dateTime={o.fechaEmision}>
+                            {fechaNumerica(o.fechaEmision)}
+                          </time>
+                        ) : (
+                          <span className={s.delivery} title="Sin fecha de emisión">
+                            —
+                          </span>
+                        )}
                       </td>
                       <td>
                         <EntregaOrden orden={o} atraso={diasDeAtraso(o)} />
