@@ -119,6 +119,8 @@ type DocRow = TamanoFila & {
   /** Archivo original subido (para persistir en R2 al guardar la orden). */
   file: File | null;
   origenItemIds?: string[];
+  fechaEntrega?: string;
+  listoEnMostrador?: boolean;
   grupoId: string | null;
 };
 
@@ -615,6 +617,8 @@ function CentroCopiadoContenido({
                 (f) => f.name === (seg.archivoNombre ?? seg.nombre),
               ) ?? null,
             origenItemIds,
+            fechaEntrega: it.fechaEntrega,
+            listoEnMostrador: it.listoEnMostrador,
             grupoId: gid,
           });
         }
@@ -672,6 +676,8 @@ function CentroCopiadoContenido({
           tipoAnillo: meta.tipoAnillo ?? "",
           file: it.archivosPendientes?.[0] ?? null,
           origenItemIds,
+          fechaEntrega: it.fechaEntrega,
+          listoEnMostrador: it.listoEnMostrador,
           grupoId: null,
         });
       }
@@ -1230,6 +1236,10 @@ function CentroCopiadoContenido({
         for (const id of transferibles) origenesAsignados.add(id);
         items.push({
           ...pi,
+          // Al reconstruir una carga no se pierde su compromiso de entrega.
+          // Si se reúnen documentos en un tomo, rige la última de sus fechas.
+          fechaEntrega: miembros.map(d => d.fechaEntrega).filter((f): f is string => Boolean(f)).sort().at(-1),
+          listoEnMostrador: miembros.length > 0 && miembros.every(d => d.listoEnMostrador),
           archivosPendientes: [...files, ...copias],
           archivosOrigenItemIds: transferibles,
         });

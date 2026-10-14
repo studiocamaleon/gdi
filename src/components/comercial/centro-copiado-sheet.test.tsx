@@ -7,6 +7,7 @@ import CentroCopiadoSheet from "./centro-copiado-sheet";
 import { itemConstruidoAPropuestaItem } from "@/lib/centro-copiado-api";
 import type { CentroCopiadoMeta } from "@/lib/centro-copiado-api";
 import type { PropuestaItem } from "@/lib/propuestas";
+import { productoDiseno } from "./__fixtures__/orden-diseno";
 
 const mocks = vi.hoisted(() => ({
   cotizar: vi.fn(),
@@ -168,7 +169,7 @@ async function montar(
           open
           onOpenChange={() => {}}
           onAgregar={onAgregar}
-          editItems={[item]}
+          editItems={contexto.editItems ?? [item]}
           persistedItemIds={persistido ? new Set([item.id]) : undefined}
         />
       </CapacidadesProvider>,
@@ -786,6 +787,21 @@ function construirSueltos() {
     })),
   }));
 }
+
+it("editar una carga conserva su fecha y la producción marcada finalizada", async () => {
+  const agregar = vi.fn<(items: PropuestaItem[]) => boolean>().mockReturnValue(false);
+  const item = {
+    ...productoDiseno("copia-ficticia", "Copias ficticias", 1, 100),
+    id: "copia-ficticia", fechaEntrega: "2099-12-20", listoEnMostrador: true,
+    jobContext: { _centroCopiado: doc },
+  };
+  construirSueltos();
+  await montar(doc, undefined, agregar, false, { editItems: [item] });
+  await rango("1-3");
+  await avanzar();
+  await act(async () => guardar()!.click());
+  expect(agregar).toHaveBeenCalledWith([expect.objectContaining({ fechaEntrega: "2099-12-20", listoEnMostrador: true })]);
+});
 
 it("al deshacer un tomo nuevo conserva juegos, rangos y los dos archivos originales por separado", async () => {
   const agregar = vi.fn<(items: PropuestaItem[]) => boolean>().mockReturnValue(false);

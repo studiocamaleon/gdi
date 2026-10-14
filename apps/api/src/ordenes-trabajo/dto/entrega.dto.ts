@@ -34,6 +34,11 @@ export class RetiraTerceroDto {
 }
 
 export class EntregarItemsDto {
+  /** Emisión y entrega inmediata: no admite saldo pendiente. */
+  @IsOptional()
+  @IsBoolean()
+  exigirPagoCompleto?: boolean;
+
   @IsOptional()
   @IsBoolean()
   confirmarPreparacionManual?: boolean;

@@ -84,6 +84,7 @@ jobs:
             src/motor-universal/__tests__/impresion-corte-area-compartida.spec.ts \
             src/motor-universal/__tests__/cuadros-varias-medidas.spec.ts \
             src/motor-universal/__tests__/cuadros-costos.spec.ts \
+            src/motor-universal/__tests__/corte-rectangular-nesting.spec.ts \
             src/motor-universal/__tests__/nesting-compuesto-shadow.spec.ts \
             src/auth/__tests__/modulos-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
@@ -104,6 +105,8 @@ jobs:
             src/archivos/__tests__/cajas-recibos.spec.ts \
             src/productos-servicios/__tests__/producto-cotizacion-publico.spec.ts \
             src/ordenes-trabajo/__tests__/emision-reservas.integration.spec.ts \
+            src/ordenes-trabajo/__tests__/entrega-pago-completo.spec.ts \
+            src/ordenes-trabajo/__tests__/entrega-pago-completo.integration.spec.ts \
             src/presupuestos/__tests__/presupuestos.service.spec.ts \
             src/presupuestos/__tests__/versiones-descarte.integration.spec.ts \
             src/ordenes-trabajo/__tests__/descartar-borrador.integration.spec.ts \
@@ -172,6 +175,8 @@ jobs:
             src/components/comercial/centro-copiado-tarifarios-simulacion.test.tsx \
             src/components/comercial/centro-copiado-config-view.test.tsx \
             src/components/comercial/centro-copiado-pedido-precios.test.tsx \
+            src/components/comercial/agregar-producto-geometria.test.tsx \
+            src/components/comercial/centro-copiado-sheet.test.tsx \
             src/components/comercial/propuesta-emision-navegacion.test.tsx
       - name: Comprobar cálculos y contrato de tarifarios de Centro de copiado
         working-directory: apps/api
