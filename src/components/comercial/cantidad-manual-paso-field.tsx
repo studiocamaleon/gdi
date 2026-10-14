@@ -1,5 +1,6 @@
 "use client";
 import { useId } from "react";
+import { Input } from "@/components/ui/input";
 import {
   errorValorCantidadManual,
   type CantidadManualConfig,
@@ -17,11 +18,11 @@ export function CantidadManualPasoField({
   const id = useId();
   const error = errorValorCantidadManual(config, value);
   return (
-    <div className="ap-spec">
-      <label htmlFor={id}>
+    <div className="grid gap-2">
+      <label htmlFor={id} className="text-sm font-medium">
         {config.etiqueta} ({config.unidad}) · Obligatorio
       </label>
-      <input
+      <Input
         id={id}
         type="number"
         inputMode="decimal"
