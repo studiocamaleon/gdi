@@ -220,6 +220,7 @@ it("sólo exige el campo activo, recotiza al cambiarlo y lo conserva al agregar"
         onOpenChange={vi.fn()}
         productos={[p]}
         editingItem={guardado}
+        fechaEntregaDefault="2099-12-01"
         onAddItem={agregar}
         onSaveItem={vi.fn()}
       />,
