@@ -127,6 +127,7 @@ export function PagosStagingTab({
       ) : showForm ? (
         <CobroFormulario
           saldo={saldo}
+          limitarAlSaldo
           metodos={metodosActivos}
           cuentas={cuentas}
           guardando={false}
@@ -148,6 +149,7 @@ export function PagosStagingTab({
               <button
                 type="button"
                 className="btn btn-primary"
+                disabled={saldo <= 0}
                 onClick={() => setShowForm(true)}
               >
                 <PlusIcon />

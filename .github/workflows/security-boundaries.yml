@@ -112,6 +112,7 @@ jobs:
             src/ordenes-trabajo/__tests__/descuento-posterior.integration.spec.ts \
             src/centro-copiado/__tests__/inicializacion-requisitos.spec.ts \
             src/administracion/__tests__/medios-pago-retenciones.integration.spec.ts \
+            src/administracion/__tests__/cobros-saldo.integration.spec.ts \
             src/auth/__tests__/comercial-relaciones-http.integration.spec.ts \
             src/auth/__tests__/registros-compras-aislamiento-http.integration.spec.ts \
             src/auth/__tests__/egresos-aislamiento-http.integration.spec.ts \

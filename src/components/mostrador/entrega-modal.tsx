@@ -36,7 +36,8 @@ import {
   getMetodosPago,
 } from "@/lib/administracion-api";
 import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
-import { formatearMoneda } from "@/lib/moneda";
+import { crearIntentoCobro } from "@/lib/intento-cobro";
+import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import s from "./entrega-modal.module.css";
 
@@ -74,6 +75,8 @@ export function EntregaModal({
   const [error, setError] = React.useState<string | null>(null);
   const [sel, setSel] = React.useState<Record<string, boolean>>({});
   const [guardando, setGuardando] = React.useState(false);
+  const enCurso = React.useRef(false);
+  const intentoCobro = React.useRef(crearIntentoCobro());
   const [preparacionConfirmada, setPreparacionConfirmada] = React.useState(false);
 
   // Cobro (sólo si hay saldo).
@@ -102,7 +105,7 @@ export function EntregaModal({
           if (item.listo && !item.entregadoEl) inicial[item.id] = true;
         }
         setSel(inicial);
-        setMonto(o.saldo > 0 ? String(Math.round(o.saldo)) : "");
+        setMonto(o.saldo > 0 ? numeroMoneda(o.saldo, moneda) : "");
       })
       .catch((e) => {
         if (vivo) {
@@ -114,7 +117,7 @@ export function EntregaModal({
     return () => {
       vivo = false;
     };
-  }, [codigo]);
+  }, [codigo, moneda]);
 
   // Catálogos del cobro: sólo si hay algo que cobrar.
   React.useEffect(() => {
@@ -154,7 +157,7 @@ export function EntregaModal({
   const todoEntregado = items.length > 0 && pendientes.length === 0;
   const saldo = orden?.saldo ?? 0;
 
-  const montoNum = Number(String(monto).replace(/\./g, "").replace(",", ".")) || 0;
+  const montoNum = parsearMonto(monto, moneda) ?? 0;
   const medio = metodos.find((m) => m.id === medioId) ?? null;
 
   const toggle = (item: ItemEntrega) => {
@@ -163,8 +166,10 @@ export function EntregaModal({
   };
 
   const confirmar = async () => {
+    if (enCurso.current) return;
     if (!orden || elegidos.length === 0 || (orden.requiereConfirmacionManual && !preparacionConfirmada)) return;
     if (tercero && (!tNombre.trim() || !tDni.trim())) return;
+    enCurso.current = true;
     setGuardando(true);
     try {
       // La cuenta destino sale del método (su default) o de la primera
@@ -179,23 +184,32 @@ export function EntregaModal({
         setGuardando(false);
         return;
       }
+      if (cobra && montoNum > saldo) {
+        toast.error(
+          `El cobro no puede superar el saldo pendiente de ${formatearMoneda(saldo, moneda)}.`,
+        );
+        return;
+      }
+      const cobro = cobra
+        ? {
+            fecha: new Date().toISOString().slice(0, 10),
+            metodoPagoId: medio!.id,
+            cuentaDestinoId: cuentaDestinoId!,
+            montoBruto: montoNum,
+            comisionPctAplicada: medio!.comisionPct,
+          }
+        : undefined;
+      const clave = cobro
+        ? intentoCobro.current.iniciar({ ordenId: orden.id, ...cobro })
+        : null;
+      if (cobro && !clave) return;
       const r = await entregarItems(orden.id, {
         ...(orden.requiereConfirmacionManual ? { confirmarPreparacionManual: preparacionConfirmada } : {}),
         itemIds: elegidos.map((i) => i.id),
         ...(tercero
           ? { retiraTercero: { nombre: tNombre.trim(), dni: tDni.trim() } }
           : {}),
-        ...(cobra
-          ? {
-              cobro: {
-                fecha: new Date().toISOString().slice(0, 10),
-                metodoPagoId: medio!.id,
-                cuentaDestinoId: cuentaDestinoId!,
-                montoBruto: montoNum,
-                comisionPctAplicada: medio!.comisionPct,
-              },
-            }
-          : {}),
+        ...(cobro ? { cobro: { ...cobro, idempotencyKey: clave! } } : {}),
       });
       toast.success(
         r.ordenCerrada
@@ -212,6 +226,8 @@ export function EntregaModal({
         e instanceof Error ? e.message : "No se pudo completar la entrega.",
       );
     } finally {
+      enCurso.current = false;
+      intentoCobro.current.liberar();
       setGuardando(false);
     }
   };
