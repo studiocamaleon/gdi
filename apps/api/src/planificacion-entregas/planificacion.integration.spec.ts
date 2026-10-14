@@ -463,7 +463,10 @@ it('dos reintentos concurrentes comparten la primera revisión', async () => {
 
 it('recorre outbox → Redis → worker → revisión persistida usando sólo IDs', async () => {
   const nombre = `grafo-f6-test-${randomUUID()}`;
-  const connection = { host: '127.0.0.1', port: 6379 };
+  const redisOriginal = process.env.REDIS_URL;
+  const url = process.env.TEST_QUEUE_REDIS_URL ?? 'redis://127.0.0.1:6379';
+  process.env.REDIS_URL = url;
+  const connection = { url };
   const queue = new Queue<TrabajoPlanEntrega>(nombre, { connection });
   const events = new QueueEvents(nombre, { connection });
   const concurrency = new TenantConcurrencyService();
@@ -504,6 +507,8 @@ it('recorre outbox → Redis → worker → revisión persistida usando sólo ID
     await queue.obliterate();
     await queue.close();
     concurrency.onApplicationShutdown();
+    if (redisOriginal === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = redisOriginal;
   }
 }, 30_000);
 
