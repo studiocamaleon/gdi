@@ -137,7 +137,29 @@ const avanzarCalculo = () =>
     await vi.advanceTimersByTimeAsync(500);
   });
 
-it.each(["cnc", "troquelado_digital", "corte_laser"])(
+it("por placas usa sólo las placas ingresadas, sin multiplicar por una cantidad anterior oculta", () => {
+  const p = producto("corte_hilo_caliente");
+  const contexto = buildJobContext(
+    p,
+    {
+      ...DEFAULT_MOTOR_CONFIG,
+      rutaAlternativaId: p.rutasAlternativas[0].id,
+      modoCotizacionVectorial: "placas",
+      cotizacionVectorialManual: {
+        placas: 3,
+        metrosCortePorPlaca: 10,
+        entradasPorPlaca: 1,
+      },
+    },
+    100,
+    [],
+  );
+  expect(contexto.cantidad).toBe(1);
+  expect(contexto.placasVectorialesManuales).toBe(3);
+  expect(contexto.piezaPerimetroTotalM).toBe(30);
+});
+
+it.each(["cnc", "troquelado_digital", "corte_laser", "corte_hilo_caliente"])(
   "%s cambia entre modalidades sin mezclar medidas, archivo ni placas",
   async (familia) => {
     const p = producto(familia);
@@ -180,6 +202,8 @@ it.each(["cnc", "troquelado_digital", "corte_laser"])(
     );
     expect(el.textContent).toContain("Placas totales del trabajo");
     expect(el.textContent).toContain("Entradas de corte por placa");
+    expect(el.querySelector('[aria-label="Cantidad"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Atajos de cantidad"]')).toBeNull();
     const manual = api.cotizar.mock.lastCall?.[0].jobContext;
     expect(manual.modoCotizacionVectorial).toBe("placas");
     expect(manual.placasVectorialesManuales).toBeGreaterThan(0);
@@ -373,7 +397,10 @@ it.each(["ruta", "extra", "nodo-propio"])(
             {
               codigo: "complejo",
               nombre: "Complejo",
-              overrides: { perfilesPorMaquina: { plotter: "complejo" }, productividadHora: 99 },
+              overrides: {
+                perfilesPorMaquina: { plotter: "complejo" },
+                productividadHora: 99,
+              },
             },
           ],
         },
@@ -388,7 +415,7 @@ it.each(["ruta", "extra", "nodo-propio"])(
           ordenInterno: 0,
           insertarDespuesDeRutaPasoId: ruta.configPasos[0].rutaPasoId,
         },
-      ] as any;
+      ] as unknown as typeof ruta.pasosExtras;
     else ruta.configPasos.push(corte);
     api.producto.mockResolvedValue(p);
     api.cotizar.mockResolvedValue({
@@ -420,16 +447,27 @@ it.each(["ruta", "extra", "nodo-propio"])(
     await avanzarCalculo();
     const complejo = [
       ...el.querySelectorAll<HTMLButtonElement>("button"),
-    ].filter((b) => b.getAttribute("aria-label") === "Nivel de troquelado: Complejo");
+    ].filter(
+      (b) => b.getAttribute("aria-label") === "Nivel de troquelado: Complejo",
+    );
     expect(complejo).toHaveLength(1);
     expect(complejo[0].textContent).toContain("4 m²/h");
-    expect(el.querySelector('[aria-label="Nivel de troquelado: Simple"]')?.textContent).toContain("8 m²/h");
+    expect(
+      el.querySelector('[aria-label="Nivel de troquelado: Simple"]')
+        ?.textContent,
+    ).toContain("8 m²/h");
     expect(complejo[0].textContent).not.toContain("99");
     expect(el.textContent).not.toContain("Complejidad del corte");
     await act(async () => complejo[0].click());
     await avanzarCalculo();
-    expect(el.querySelector('[aria-label="Nivel de troquelado: Simple"]')?.textContent).toContain("8 m²/h");
-    expect(el.querySelector('[aria-label="Nivel de troquelado: Complejo"]')?.textContent).toContain("4 m²/h");
+    expect(
+      el.querySelector('[aria-label="Nivel de troquelado: Simple"]')
+        ?.textContent,
+    ).toContain("8 m²/h");
+    expect(
+      el.querySelector('[aria-label="Nivel de troquelado: Complejo"]')
+        ?.textContent,
+    ).toContain("4 m²/h");
     expect(api.cotizar.mock.lastCall?.[0].jobContext.nivelPaso_troquelado).toBe(
       "complejo",
     );

@@ -1536,6 +1536,28 @@ function runRectangularCorte(
     ...result,
     substrates,
     aprovechamientoPct,
+    // El hilo caliente genera su recorrido desde contornos. En modalidad
+    // rectangular esos contornos son exactamente los rectángulos acomodados.
+    placements:
+      paso.familiaCodigo !== 'corte_hilo_caliente'
+        ? result.placements
+        : result.placements.map((p) => ({
+            ...p,
+            meta: {
+              ...(p.meta && typeof p.meta === 'object' ? p.meta : {}),
+              contornos: [
+                {
+                  esHueco: false,
+                  puntos: [
+                    { x: p.xMm, y: p.yMm },
+                    { x: p.xMm + p.widthMm, y: p.yMm },
+                    { x: p.xMm + p.widthMm, y: p.yMm + p.heightMm },
+                    { x: p.xMm, y: p.yMm + p.heightMm },
+                  ],
+                },
+              ],
+            },
+          })),
     metricasRaw: {
       ...result.metricasRaw,
       areaUtilMm2,
