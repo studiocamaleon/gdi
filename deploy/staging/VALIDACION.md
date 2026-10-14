@@ -1,5 +1,36 @@
 # Validación de staging — historial
 
+## 14/10/2026 — OT, cobros, conciliación y margen de entrega por producto
+
+Publicado inicialmente en staging mediante el [PR #91](https://github.com/studiocamaleon/gdi/pull/91), que conserva los commits de #84–#90. Incluye presentación de tandas, aviso de descuento de copiado, control de cobros duplicados y superiores al saldo, conciliación consecutiva, Polyfan rectangular y por placas, fechas y precios de copiado al elegir cliente, emisión y entrega inmediata con pago completo, columna **Creada** y exclusión de días hábiles de margen por producto. El titular aprobó las pruebas y autorizó la promoción del mismo lote el 14/10/2026; ver [el registro de producción](../produccion/VALIDACION.md). Dependencias automáticas y TPV fuera del lote.
+
+**Revisión ejecutada:** API, ambos workers y web `23fd03eec37cd5b224e371d6deb226781d43ea0b`. **CI aprobado:** `02455f9f8c39db14d5be8bec0b0e4e15bcfda2aa`, cuya única diferencia con las fuentes de esas imágenes es la conexión de Redis de una prueba de integración. Se comprobó ese diff: ningún archivo funcional difiere. La prueba tenía fijo el puerto local; ahora respeta el Redis aislado de CI. No se omitió ningún control. La ejecución anterior fue cancelada y reemplazada por la aprobada.
+
+Validación: 119 pruebas web y 109 de API del conjunto en local, con datos ficticios; las 17 pruebas de planificación se repitieron con Redis aislado en el puerto de CI. [Permisos HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38607454678), [contenedores, tipos, migraciones y login/BFF](https://github.com/studiocamaleon/gdi/actions/runs/38607454402), CodeQL sin alertas abiertas del PR y Vercel aprobados. Builds de producción remotos con tipos. El primer envío de la API al registro de Fly falló; su reintento reutilizó las capas y terminó correctamente.
+
+**Chrome en staging:**
+
+- La columna Creada está antes de Entrega y muestra la fecha de emisión de la OT QA existente.
+- Cinco A4 de papel obra, B/N simple, canal Presencial: total de $381 en la ficha, conservado al elegir después el cliente ficticio y al completar la revisión automática de precios. Es la configuración propia del entorno, no una referencia comercial nueva.
+- Al marcar producción finalizada aparece «Emitir y entregar», muestra hoy (14/10/2026) y bloquea la emisión hasta cargar el 100% del pago. No se emitieron órdenes ni se registraron cobros en este recorrido.
+- En el producto inactivo de ensayo se guardó la exclusión del margen, se recargó y se comprobó que seguía activada; después se guardó desactivada y se verificó nuevamente al recargar. No se publicó ese producto ni se cambiaron precios vigentes.
+- Sin errores ni advertencias de consola en estos recorridos. Los cobros concurrentes, la entrega completa, Polyfan y la conciliación consecutiva se comprobaron automáticamente; no se repitieron con movimientos reales en el navegador.
+
+| Componente | Digest publicado |
+| --- | --- |
+| API y ambos workers | `sha256:9661dd139d87f3a86b36ce4db0bea1692b9b2f9dedd99e37ed2545600136a4c7` |
+| Web | `sha256:8b0f99cd99f120f2d98857900034f07c9161d03ec25542e16e6c43bc22e49957` |
+| Gotenberg, conservado | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+316 migraciones completas, ninguna nueva ni pendiente. Se conservaron recuentos e identificadores de las seis tablas contrastadas. Seis servicios iniciados y saludables, mismos recursos; salud HTTP 200 y rutas protegidas con rechazo anónimo 403/401. Las seis máquinas de producción conservan imágenes y recursos. Constructor temporal retirado; desarrollo local y otros contenedores sin cambios.
+
+**Comprobante posterior:** copia `9d9e7e9b-b52c-4a84-ad8f-9e5375c41b25`, completada a las `18:01:46.936 UTC`, comprobante y manifiesto verificados a las `18:03:22 UTC`: firma válida, manifiesto descifrado, 316 migraciones, 24 archivos, nueve fuentes y las cuatro imágenes exactas. El ensayo final del check se realizó después de esa copia. No se repitió una restauración SQL completa.
+
+**Reversión de código:** API/workers `sha256:ffb98489bfcf1210ebeb332e7c27a8e7ae8332bf709affe1f4ff6bdde56212dc`; web `sha256:189719be961310724ad43b76543e6231917ed77f5d981bbd9fed5af2c30ddfb2`. No hay migración que revertir. Actualizar el inventario del copiador si se vuelve a esas imágenes.
+
+**Promoción autorizada:** Lucas aceptó staging y el lote se publicó en producción el 14/10/2026 con los mismos digests. El cierre de #91 registra la integración a `main` y de los PR #84–#90; las seis propuestas de dependencias siguen en otro lote.
+
 ## 13/10/2026 — Publicación conjunta de Centro de copiado, hidratación y Canvas
 
 Candidato `69698c3eb83162c0d6a0cf06281630346c1c74b0`, integrado en el [PR #83](https://github.com/studiocamaleon/gdi/pull/83). Conserva íntegros los commits de #75–#82. El titular autorizó promover el lote funcional después de comprobar staging; dejó las seis propuestas automáticas de dependencias para otro lote. TPV y CORS local siguen pendientes explícitos.

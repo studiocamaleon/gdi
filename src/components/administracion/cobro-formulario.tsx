@@ -27,6 +27,7 @@ import {
   type CuentaFondosResumen,
   type MetodoPago,
 } from "@/lib/administracion";
+import { crearIntentoCobro } from "@/lib/intento-cobro";
 import type { CrearCobroPayload } from "@/lib/administracion-api";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
@@ -92,6 +93,7 @@ function hoyIso(zonaHoraria: string) {
  */
 export function CobroFormulario({
   saldo,
+  limitarAlSaldo = false,
   metodos,
   cuentas,
   guardando,
@@ -102,15 +104,18 @@ export function CobroFormulario({
   cancelHref,
 }: {
   saldo: number;
+  limitarAlSaldo?: boolean;
   metodos: MetodoPago[];
   cuentas: CuentaFondosResumen[];
   guardando: boolean;
   submitLabel?: string;
   submitLabelCheque?: string;
-  onSubmit: (draft: CobroDraft) => void;
+  onSubmit: (draft: CobroDraft) => void | Promise<void>;
   onCancel?: () => void;
   cancelHref?: string;
 }) {
+  const intento = React.useRef(crearIntentoCobro());
+  const [enviando, setEnviando] = React.useState(false);
   const { moneda, zonaHoraria, paisCodigo } = useConfigRegional();
   const fmt = (n: number) => formatearMoneda(n, moneda);
   const conValores = useCapacidad("valores");
@@ -246,7 +251,12 @@ export function CobroFormulario({
   const delRet = (i: number) =>
     setRets((prev) => prev.filter((_, j) => j !== i));
 
-  const submit = () => {
+  const excedeSaldo =
+    limitarAlSaldo &&
+    (saldo <= 0 || redondearDinero(bruto) > redondearDinero(saldo));
+
+  const submit = async () => {
+    if (guardando || enviando || excedeSaldo) return;
     if (!metodo || !fecha || bruto <= 0 || (!esCheque && !cuentaUsadaId))
       return;
     if (disponible <= 0) {
@@ -267,14 +277,13 @@ export function CobroFormulario({
       toast.error("La fecha de pago no puede ser anterior a la emisión.");
       return;
     }
-    onSubmit({
+    const draft: CobroDraft = {
       // La imputación cobro→factura la hace el SISTEMA (FIFO sobre las facturas
       // impagas de la orden, `facturacion-ordenes.service#matchearCobro`): el
       // cobro entra siempre libre y el matching lo aplica.
       // docs/facturacion-ordenes-deuda-comercial-diseno.md §5.
       imputaciones: [],
       payload: {
-        idempotencyKey: crypto.randomUUID(),
         fecha,
         metodoPagoId: metodo.id,
         ...(esCheque ? {} : { cuentaDestinoId: cuentaUsadaId! }),
@@ -320,7 +329,18 @@ export function CobroFormulario({
       retencionesTotal: totalRet,
       disponibleReal: disponible,
       acreditacionLabel: fechaAcreditacion,
-    });
+    };
+    const clave = intento.current.iniciar(draft.payload);
+    if (!clave) return;
+    draft.payload.idempotencyKey = clave;
+    setEnviando(true);
+    try {
+      await onSubmit(draft);
+    } catch {
+      // El padre muestra el error. Reintentar conserva la misma clave.
+      intento.current.liberar();
+      setEnviando(false);
+    }
   };
 
   return (
@@ -810,6 +830,13 @@ export function CobroFormulario({
             </>
           )}
         </div>
+        {excedeSaldo ? (
+          <p role="alert">
+            {saldo <= 0
+              ? "La orden ya está saldada."
+              : `El cobro no puede superar el saldo pendiente de ${fmt(saldo)}.`}
+          </p>
+        ) : null}
         <div className="arc-sum-actions">
           <button
             type="button"
@@ -819,12 +846,14 @@ export function CobroFormulario({
               !metodo ||
               (!esCheque && !cuentaUsadaId) ||
               disponible <= 0 ||
-              guardando
+              guardando ||
+              enviando ||
+              excedeSaldo
             }
             onClick={submit}
           >
             <CheckIcon />
-            {guardando
+            {guardando || enviando
               ? "Registrando…"
               : esCheque
                 ? submitLabelCheque

@@ -118,7 +118,7 @@ export class EtaService {
   ) {
     // El motor se comparte; asignar personal no requiere contratar la ETA.
     await this.capacidades.exigirIncluida(tenantId, finalidad, db);
-    const [items, estaciones, duraciones, dias, config, regional] =
+    const [items, estaciones, duraciones, dias, config, regional, sinMargen] =
       await Promise.all([
         this.assembleItems(tenantId, db, recuperarHistoricos),
         this.produccion.findEstaciones(tenantId, db),
@@ -126,6 +126,13 @@ export class EtaService {
         this.produccion.findDiasNoLaborables(tenantId, db),
         this.produccion.getConfiguracion(tenantId, db),
         regionalDelTenant(db, tenantId),
+        db.producto.findMany({
+          where: {
+            tenantId,
+            atributosComercialesJson: { path: ['excluirMargenEntrega'], equals: true },
+          },
+          select: { id: true },
+        }),
       ]);
     const medianas = new Map(
       duraciones.map((d) => [d.familiaCodigo, d.medianaMin]),
@@ -139,6 +146,7 @@ export class EtaService {
       noLaborables,
       tiempoEntrePasosMin: config.tiempoEntrePasosMin,
       margenEtaDias: config.margenEtaDias,
+      productosSinMargenEntrega: sinMargen.map((p) => p.id),
       // El calendario de las estaciones es hora de pared del TALLER, y este
       // proceso corre en UTC: sin la zona, las franjas se corren 3 horas.
       zona: regional.zonaHoraria,
@@ -166,6 +174,7 @@ export class EtaService {
             nombre: true,
             parentItemId: true,
             loteEntregaId: true,
+            cotizacionItem: { select: { productoId: true } },
             fechaEntrega: true,
             pasos: {
               orderBy: { indice: 'asc' },
@@ -244,6 +253,7 @@ export class EtaService {
       orden.items.map((item) => ({
         id: item.id,
         nombre: item.nombre,
+        productoId: item.cotizacionItem?.productoId ?? null,
         parentItemId: item.parentItemId,
         loteEntregaId: item.loteEntregaId,
         ordenId: orden.id,

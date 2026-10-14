@@ -33,8 +33,10 @@ import { useMaterialesOrden } from "@/hooks/use-materiales-orden";
 import { condicionarPorMateriales, solicitudPrevisionMateriales } from "@/lib/prevision-materiales";
 import { PrevisionMaterialesPanel } from "./prevision-materiales-panel";
 import { getContextoPrevision } from "@/lib/eta-api";
+import { entregarItems } from "@/lib/entrega-api";
 import { itemHipoteticoDesdeCotizacion } from "@/lib/eta-cotizacion";
-import { describirEta, fechaRecomendadaEta } from "@/lib/eta-fechas";
+import { margenEntregaProducto } from "@/lib/margen-entrega-producto";
+import { describirEta, describirEtaOrden, fechaRecomendadaEta } from "@/lib/eta-fechas";
 import fechasStyles from "./propuesta-fechas.module.css";
 
 import { DesgloseOperacionesCorte } from "./desglose-operaciones-corte";
@@ -330,7 +332,11 @@ import {
 } from "@/lib/nesting-compra-pliego";
 import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
 import costC from "./propuesta-ficha-costos.module.css";
-import { netoListaDeItem, type DescuentoInput } from "@/lib/descuentos-orden";
+import {
+  avisoMargenDescuento,
+  netoListaDeItem,
+  type DescuentoInput,
+} from "@/lib/descuentos-orden";
 import { CargoOrdenDialog } from "./cargo-orden-dialog";
 import { OrdenCargosList } from "./orden-cargos-list";
 import {
@@ -3888,6 +3894,7 @@ export function OrdenProductoDetalle({
   onEditPanels,
   onChangeFechaEntrega,
   fechaEstimada,
+  entregaInmediataFecha,
   readOnly = false,
   editarFecha = false,
   prepararCorte = false,
@@ -3912,6 +3919,7 @@ export function OrdenProductoDetalle({
   onEditPanels?: (item: PropuestaItem, paso: PanelEditorPaso) => void;
   onChangeFechaEntrega?: (fechaEntrega: string) => void;
   fechaEstimada: string;
+  entregaInmediataFecha?: string;
   readOnly?: boolean;
   editarFecha?: boolean;
   /** El ítem ya existe en la OT y puede consultarse para preparar TAP/plantillas. */
@@ -4155,9 +4163,9 @@ export function OrdenProductoDetalle({
                       <span className={itemStyles.deliveryLabel}>
                         Entrega prevista
                       </span>
-                      {readOnly && !editarFecha ? (
+                      {entregaInmediataFecha || (readOnly && !editarFecha) ? (
                         <span className={itemStyles.deliveryValue}>
-                          {formatFechaOrden(item.fechaEntrega ?? fechaEstimada)}
+                          {entregaInmediataFecha ? `Hoy · ${formatFechaOrden(entregaInmediataFecha)}` : formatFechaOrden(item.fechaEntrega ?? fechaEstimada)}
                         </span>
                       ) : (
                         <Input
@@ -4352,24 +4360,19 @@ function descuentoParaMotor(
 }
 
 /**
- * Margen efectivo por debajo del cual se avisa al aplicar un descuento. Es sólo
- * un aviso blando; el gate duro con aprobación por umbral es F2
- * (`aprobacionDescuentoMaxPct`). Ver docs/descuentos-diseno.md §10.
- */
-const DESCUENTO_MARGEN_ALERTA_PCT = 15;
-
-/**
  * Overlay de emisión (diseño Grafo V2 · ordenes.jsx): pasos animados mientras
  * corre la emisión real; el check final aparece recién cuando llega el número
  * de OT asignado por el backend (`numero != null`).
  */
 function EmitOverlay({
   listosEnMostrador = false,
+  entregada = false,
   numero,
   onDone,
 }: {
   numero: string | null;
   listosEnMostrador?: boolean;
+  entregada?: boolean;
   onDone: () => void;
 }) {
   const [phase, setPhase] = React.useState(0);
@@ -4492,7 +4495,7 @@ function EmitOverlay({
               <div className="emit-title">¡Orden emitida!</div>
               <div className="emit-nro">{numero}</div>
               <div className="emit-note">
-                {listosEnMostrador ? "Producción finalizada" : "Enviada al taller · visible en Producción → Órdenes"}
+                {entregada ? "Pagada y entregada" : listosEnMostrador ? "Producción finalizada" : "Enviada al taller · visible en Producción → Órdenes"}
               </div>
             </div>
           )}
@@ -5125,6 +5128,29 @@ function PropuestaFichaContenido({
     0,
     totalPropuestaAntesCanje - fidelizacionCanjeMonto,
   );
+  const emitirYEntregar =
+    (!orden || orden.estado === "borrador") &&
+    ordenTipo === "orden" &&
+    items.length > 0 &&
+    items.every(
+      (item) =>
+        item.listoEnMostrador &&
+        (item.productoCodigo === "SYS-IMPRESION-DOC" ||
+          metaCentroCopiado(item.jobContext)),
+    );
+  const pagoCargado = cobrosStaged.reduce(
+    (total, cobro) => total + cobro.payload.montoBruto,
+    0,
+  );
+  const bloqueoEntregaInmediata = !emitirYEntregar
+    ? undefined
+    : !puedeEntregar
+      ? "Tu rol no permite registrar la entrega."
+      : pagoCargado <= 0 ||
+          Math.round(pagoCargado * 100) !==
+            Math.round((orden?.total ?? totalPropuesta) * 100)
+        ? "Cargá el pago del 100% del total en Pagos para emitir y entregar."
+        : undefined;
   const actualizarSimulacionFidelizacion = React.useCallback(
     (simulacion: { canjeMonto: number; canjePuntos: number } | null) => {
       setFidelizacionCanjeMonto(simulacion?.canjeMonto ?? 0);
@@ -5304,7 +5330,7 @@ function PropuestaFichaContenido({
   /** La OT termina con su última entrega; una fecha global vieja no la retiene. */
   const fechaEntregaOrden = React.useCallback(
     () =>
-      fechaFinalItems(
+      emitirYEntregar ? offsetDate(0, zonaHoraria) : fechaFinalItems(
         items.map(
           (item) =>
             (!orden && ordenTipo === "orden"
@@ -5315,7 +5341,7 @@ function PropuestaFichaContenido({
         ),
         fechaEstimada,
       ),
-    [items, fechaEstimada, orden, ordenTipo, entregasPrevias],
+    [items, fechaEstimada, orden, ordenTipo, entregasPrevias, emitirYEntregar, zonaHoraria],
   );
   const fechaFinalVisible =
     ordenTipo === "orden" ? fechaEntregaOrden() : fechaEstimada;
@@ -5383,29 +5409,20 @@ function PropuestaFichaContenido({
     previsionMateriales.error,
   ]);
 
-  /** ETA de la ORDEN completa = el item que termina último. */
-  const demoraOrden = React.useMemo<SimulacionItem | null>(() => {
-    if (!demoraPorItem || demoraPorItem.size === 0) return null;
-    let fin: Date | null = null;
-    let sinEstimar = false;
-    let parcial = false;
-    let asumeDesbloqueo = false;
-    const motivos = new Set<string>();
-    for (const eta of demoraPorItem.values()) {
-      if (eta.sinEstimar || eta.finEstimado === null) sinEstimar = true;
-      else if (fin === null || eta.finEstimado > fin) fin = eta.finEstimado;
-      parcial ||= eta.parcial;
-      asumeDesbloqueo ||= eta.asumeDesbloqueo;
-      if (eta.motivoSinEstimar) motivos.add(eta.motivoSinEstimar);
-    }
-    return {
-      finEstimado: sinEstimar ? null : fin,
-      motivoSinEstimar: [...motivos].join(" ") || undefined,
-      sinEstimar,
-      parcial,
-      asumeDesbloqueo,
-    };
-  }, [demoraPorItem]);
+  const margenPorProducto = React.useCallback(
+    (productoId?: string) => margenEntregaProducto(
+      margenEtaDias, productoId, colasTaller?.productosSinMargenEntrega,
+    ),
+    [margenEtaDias, colasTaller?.productosSinMargenEntrega],
+  );
+  const demoraOrden = React.useMemo(() => describirEtaOrden(
+    items.filter((item) => !item.listoEnMostrador).map((item) => ({
+      eta: demoraPorItem?.get(item.id),
+      margenDias: margenPorProducto(item.motorCodigo),
+    })),
+    fechaFinalVisible,
+    { noLaborables: colasTaller?.noLaborables, zona: colasTaller?.zona ?? zonaHoraria, ahora: colasTaller?.ahora },
+  ), [items, demoraPorItem, margenPorProducto, fechaFinalVisible, colasTaller, zonaHoraria]);
 
   // Fechas que el usuario fijó a mano (o que ya venían en la OT persistida):
   // la ETA no las vuelve a pisar. El resto sigue a la estimación del sistema.
@@ -5426,11 +5443,17 @@ function PropuestaFichaContenido({
       let cambio = false;
       const next = current.map((item) => {
         if (itemFechaTocadaRef.current.has(item.id)) return item;
-        const fecha = fechaRecomendadaEta(demoraPorItem.get(item.id), {
-          margenDias: margenEtaDias,
+        if (item.listoEnMostrador) return item;
+        const recomendada = fechaRecomendadaEta(demoraPorItem.get(item.id), {
+          margenDias: margenPorProducto(item.motorCodigo),
           noLaborables,
           zona: colasTaller?.zona ?? zonaHoraria,
         });
+        // Copiado conserva la fecha comercial cuando todavía no hay ETA
+        // completa (incluye recálculos transitorios de precios/materiales).
+        const fecha = recomendada ?? (metaCentroCopiado(item.jobContext)
+          ? item.fechaEntrega || offsetDate(0, zonaHoraria)
+          : null);
         // No conservar una sugerencia anterior si el abastecimiento dejó de ser estimable.
         if (item.fechaEntrega === (fecha ?? "")) return item;
         cambio = true;
@@ -5440,36 +5463,30 @@ function PropuestaFichaContenido({
     });
   }, [
     demoraPorItem,
-    margenEtaDias,
+    margenPorProducto,
     colasTaller?.noLaborables,
     colasTaller?.zona,
     zonaHoraria,
   ]);
 
-  // La fecha de la OT sigue a la ETA de la orden completa (el item que termina
-  // último) hasta que el usuario la fija a mano.
+  // La fecha de la OT sigue a la última entrega sugerida por producto
+  // hasta que el usuario la fija a mano.
   React.useEffect(() => {
     if (!conDemoraSistema || otFechaTocadaRef.current) return;
-    const fecha = fechaRecomendadaEta(demoraOrden, {
-      margenDias: margenEtaDias,
-      noLaborables: colasTaller?.noLaborables,
-      zona: colasTaller?.zona ?? zonaHoraria,
-    });
+    const fecha = demoraOrden?.fechaSugerida ?? null;
     if (items.length > 0)
       setFechaEstimada((prev) => (prev === (fecha ?? "") ? prev : fecha ?? ""));
   }, [
     demoraOrden,
     conDemoraSistema,
     items.length,
-    margenEtaDias,
-    colasTaller?.noLaborables,
-    colasTaller?.zona,
-    zonaHoraria,
   ]);
 
   const router = useRouter();
   const [emitiendo, setEmitiendo] = React.useState(false);
   const [emisionNumero, setEmisionNumero] = React.useState<string | null>(null);
+  const [emisionEntregada, setEmisionEntregada] = React.useState(false);
+  const emisionEnCursoRef = React.useRef(false);
   const emisionOrdenIdRef = React.useRef<string | null>(null);
   const emisionIdempotencyRef = React.useRef<string | null>(null);
   const borradorIdempotencyRef = React.useRef<string | null>(null);
@@ -5646,11 +5663,11 @@ function PropuestaFichaContenido({
     if (canalVenta !== (orden.canalVenta ?? "")) {
       payload.canalVenta = canalVenta;
     }
-    if (fechaFinalVisible && fechaFinalVisible !== (orden.fechaEntrega ?? "")) {
+    if (!emitirYEntregar && fechaFinalVisible && fechaFinalVisible !== (orden.fechaEntrega ?? "")) {
       payload.fechaEntrega = fechaFinalVisible;
     }
     return payload;
-  }, [orden, editandoOrden, clienteId, canalVenta, fechaFinalVisible]);
+  }, [orden, editandoOrden, clienteId, canalVenta, fechaFinalVisible, emitirYEntregar]);
 
   const cambiosCreacion = !orden
     ? items.length +
@@ -5963,7 +5980,9 @@ function PropuestaFichaContenido({
     (n: number) => n + 1,
     0,
   );
-  const revisionAutomaticaProcesada = React.useRef(`0:${canalVenta}`);
+  const revisionAutomaticaProcesada = React.useRef(
+    JSON.stringify([0, canalVenta, clienteId, sinComprobante]),
+  );
   const [errorRevisionCopiado, setErrorRevisionCopiado] = React.useState<string | null>(
     null,
   );
@@ -6324,57 +6343,159 @@ function PropuestaFichaContenido({
    * del borrador. Las transiciones de producción (pendiente en adelante)
    * llegan con el Tablero — no van desde acá.
    */
+  // La OT ya existe cuando se registran los cobros. Un fallo posterior se
+  // informa sobre esa misma OT y nunca vuelve a emitirla ni la entrega impaga.
+  const completarCobrosYEntrega = React.useCallback(
+    async (emitida: OrdenTrabajoDetalle) => {
+      const fallidos: string[] = [];
+      for (const draft of cobrosStaged) {
+        try {
+          await crearCobro({
+            ...draft.payload,
+            ordenId: emitida.id,
+            clienteId: clienteId || undefined,
+          });
+        } catch (error) {
+          fallidos.push(
+            `${draft.metodoNombre} ${formatCurrency(draft.payload.montoBruto, moneda)}` +
+              (error instanceof Error ? ` (${error.message})` : ""),
+          );
+        }
+      }
+      if (fallidos.length > 0) {
+        toast.error(
+          `La orden se emitió, pero quedaron cobros sin registrar: ${fallidos.join(" · ")}. Revisá Pagos en la orden.${emitirYEntregar ? " No se registró la entrega." : ""}`,
+          { duration: 10000 },
+        );
+        return false;
+      }
+      if (!emitirYEntregar) return false;
+      try {
+        await entregarItems(emitida.id, {
+          itemIds: emitida.productos
+            .map((p) => p.id)
+            .filter((id): id is string => Boolean(id)),
+          exigirPagoCompleto: true,
+        });
+        return true;
+      } catch (error) {
+        toast.error(
+          `La orden se emitió y los pagos se registraron, pero la entrega quedó pendiente: ${error instanceof Error ? error.message : "revisá la orden."}`,
+          { duration: 10000 },
+        );
+        return false;
+      }
+    },
+    [cobrosStaged, clienteId, moneda, emitirYEntregar],
+  );
+
   const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
-  const emitirBorrador = React.useCallback(async (imprimir = false) => {
-    if (revisionCopiadoEnCurso.current) {
-      toast.info("Esperá a que termine la actualización de precios de copiado.");
-      return;
-    }
-    if (!conOrdenes) {
-      toast.error("Esta operación no está incluida en el plan actual.");
-      return;
-    }
-    if (!permisoEdicionRef.current || !orden || cambiosSinGuardar > 0) return;
-    if (!canalVentaValido(orden.canalVenta ?? "", orden.canalVenta)) {
-      setEditandoOrden(true);
-      setErrorCanalVenta(true);
-      datosOrdenRef.current?.mostrarDatos();
-      toast.error(
-        "Elegí un canal de venta y guardá los cambios antes de emitir.",
-      );
-      return;
-    }
-    if (!orden.clienteId) {
-      toast.error(
-        "Asigná un cliente antes de emitir (Editar orden → Cliente).",
-      );
-      return;
-    }
-    if (
-      !orden.fechaEntrega ||
-      orden.fechaEntrega < offsetDate(0, zonaHoraria)
-    ) {
-      toast.error(
-        "Definí una fecha de entrega vigente antes de emitir (Editar orden → Fecha).",
-      );
-      return;
-    }
-    setEmitiendoBorrador(true);
-    try {
-      const emitida = await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
-      if (imprimir) impresionDocumentos.abrir(orden.id, true);
-      toast.success(emitida.estado === "finalizada" ? `${emitida.numero} emitida y finalizada: producción finalizada.` : `${emitida.numero} emitida al taller.`);
-      setMostrarRecienEmitida(true);
-      setEditandoOrden(false);
-      router.refresh();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "No se pudo emitir la orden.",
-      );
-    } finally {
-      setEmitiendoBorrador(false);
-    }
-  }, [conOrdenes, orden, router, zonaHoraria, cambiosSinGuardar, impresionDocumentos]);
+  const emitirBorrador = React.useCallback(
+    async (imprimir = false) => {
+      if (emisionEnCursoRef.current) return;
+      if (bloqueoEntregaInmediata) {
+        setTab("pagos");
+        toast.error(bloqueoEntregaInmediata);
+        return;
+      }
+      if (revisionCopiadoEnCurso.current) {
+        toast.info(
+          "Esperá a que termine la actualización de precios de copiado.",
+        );
+        return;
+      }
+      if (!conOrdenes) {
+        toast.error("Esta operación no está incluida en el plan actual.");
+        return;
+      }
+      if (!permisoEdicionRef.current || !orden || cambiosSinGuardar > 0) return;
+      if (!canalVentaValido(orden.canalVenta ?? "", orden.canalVenta)) {
+        setEditandoOrden(true);
+        setErrorCanalVenta(true);
+        datosOrdenRef.current?.mostrarDatos();
+        toast.error(
+          "Elegí un canal de venta y guardá los cambios antes de emitir.",
+        );
+        return;
+      }
+      if (!orden.clienteId) {
+        toast.error(
+          "Asigná un cliente antes de emitir (Editar orden → Cliente).",
+        );
+        return;
+      }
+      if (
+        !emitirYEntregar &&
+        (!orden.fechaEntrega || orden.fechaEntrega < offsetDate(0, zonaHoraria))
+      ) {
+        toast.error(
+          "Definí una fecha de entrega vigente antes de emitir (Editar orden → Fecha).",
+        );
+        return;
+      }
+      emisionEnCursoRef.current = true;
+      setEmitiendoBorrador(true);
+      try {
+        if (emitirYEntregar) {
+          const hoy = offsetDate(0, zonaHoraria);
+          const actualizada = await editarOrdenTrabajoLote(orden.id, {
+            expectedVersion: orden.version,
+            fechaEntrega: hoy,
+            items: items.map((item) => ({
+              ...itemToOrdenItemPayload(item, item.cotizacionItemId),
+              id: item.id,
+              fechaEntrega: hoy,
+            })),
+          });
+          setOrden(actualizada);
+        }
+        const emitida = await cambiarEstadoOrdenTrabajo(orden.id, {
+          estado: "pendiente",
+        });
+        setOrden(emitida);
+        const entregada = await completarCobrosYEntrega(emitida);
+        const actualizada = entregada
+          ? await getOrdenTrabajo(orden.id).catch(() => emitida)
+          : emitida;
+        setOrden(actualizada);
+        setItems(actualizada.productos.map(rehidratarOrdenItem));
+        setFechaEstimada(actualizada.fechaEntrega ?? "");
+        setCobrosStaged([]);
+        if (imprimir) impresionDocumentos.abrir(orden.id, true);
+        toast.success(
+          entregada
+            ? `${emitida.numero} emitida, pagada y entregada.`
+            : emitida.estado === "finalizada"
+              ? `${emitida.numero} emitida y finalizada: producción finalizada.`
+              : `${emitida.numero} emitida al taller.`,
+        );
+        setMostrarRecienEmitida(true);
+        setEditandoOrden(false);
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo emitir la orden.",
+        );
+      } finally {
+        emisionEnCursoRef.current = false;
+        setEmitiendoBorrador(false);
+      }
+    },
+    [
+      conOrdenes,
+      orden,
+      router,
+      zonaHoraria,
+      cambiosSinGuardar,
+      impresionDocumentos,
+      bloqueoEntregaInmediata,
+      completarCobrosYEntrega,
+      emitirYEntregar,
+      items,
+    ],
+  );
 
   // El aviso lleva a edición; la emisión se confirma desde la cabecera.
   const emitirDesdeAviso = React.useCallback(() => {
@@ -6656,10 +6777,10 @@ function PropuestaFichaContenido({
       if (
         claveCopiadoRef.current !== claveInicio ||
         !permisoProductosRef.current
-      )
-        throw new Error(
-          "El pedido cambió durante la revisión. Actualizá los precios nuevamente.",
-        );
+      ) {
+        if (permisoProductosRef.current) solicitarRevisionCopiado();
+        return;
+      }
       setRevisionCopiado(resultado);
       if (resultado.modalidad === "TARIFARIO" && !resultado.id) {
         revisionCopiadoCache.current = null;
@@ -6694,7 +6815,18 @@ function PropuestaFichaContenido({
         ),
       };
       setRevisionCopiadoClave(revisionCopiadoCache.current.clave);
-      setItems(nuevos);
+      // Precio y snapshot se renuevan juntos; la fecha o el estado productivo
+      // elegidos mientras respondía el servidor pertenecen a la fila actual.
+      setItems(actuales => actuales.map(actual => {
+        const nuevo = nuevos.find(i => i.id === actual.id);
+        return nuevo ? {
+          ...nuevo,
+          fechaEntrega: actual.fechaEntrega,
+          listoEnMostrador: actual.listoEnMostrador,
+          asignacionesPersonal: actual.asignacionesPersonal,
+          notaProduccion: actual.notaProduccion,
+        } : actual;
+      }));
       if (orden)
         setEditadosIds(
           (prev) => new Set([...prev, ...nuevos.map((i) => i.id)]),
@@ -6719,7 +6851,9 @@ function PropuestaFichaContenido({
     orden,
   ]);
   React.useEffect(() => {
-    const solicitud = `${solicitudRevisionCopiado}:${canalVenta}`;
+    const solicitud = JSON.stringify([
+      solicitudRevisionCopiado, canalVenta, clienteId, sinComprobante,
+    ]);
     if (!puedeModificarProductos || (orden && orden.estado !== "borrador")) {
       revisionAutomaticaProcesada.current = solicitud;
       return;
@@ -6733,12 +6867,14 @@ function PropuestaFichaContenido({
     revisionAutomaticaProcesada.current = solicitud;
     if (items.some((i) => metaCentroCopiado(i.jobContext)))
       void revisarCopiadoEnPedido();
-    // Una carga o cambio de canal dispara una sola revisión. Si cambia durante
+    // Una carga o cambio comercial dispara una revisión. Si cambia durante
     // el cálculo, la siguiente solicitud espera; los errores no se reintentan solos.
   }, [
     solicitudRevisionCopiado,
     revisandoCopiado,
     canalVenta,
+    clienteId,
+    sinComprobante,
     puedeModificarProductos,
     orden,
     items,
@@ -6856,6 +6992,12 @@ function PropuestaFichaContenido({
   ]);
 
   const emitirOrden = React.useCallback(async (imprimir = false) => {
+    if (emisionEnCursoRef.current) return;
+    if (bloqueoEntregaInmediata) {
+      setTab("pagos");
+      toast.error(bloqueoEntregaInmediata);
+      return;
+    }
     if (revisionCopiadoEnCurso.current) {
       toast.info("Esperá a que termine la actualización de precios de copiado.");
       return;
@@ -6887,7 +7029,9 @@ function PropuestaFichaContenido({
       return;
     }
     imprimirAlEmitirRef.current = imprimir;
+    emisionEnCursoRef.current = true;
     setEmitiendo(true);
+    setEmisionEntregada(false);
     setEmisionNumero(null);
     emisionOrdenIdRef.current = null;
     const idempotencyKey = emisionIdempotencyRef.current ?? crypto.randomUUID();
@@ -6907,38 +7051,13 @@ function PropuestaFichaContenido({
         cargos: cargosOrden.map(cargoToOrdenInput),
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId, planEntrega }) =>
-          itemToOrdenItemPayload(item, cotizacionItemId, planEntrega),
+          itemToOrdenItemPayload(emitirYEntregar ? { ...item, fechaEntrega } : item, cotizacionItemId, planEntrega),
         ),
       });
 
       emisionOrdenIdRef.current = orden.id;
 
-      // Cobros staged: se registran contra la orden recién emitida, en el
-      // mismo acto. Si alguno falla la orden ya existe — se avisa cuáles
-      // quedaron sin registrar (se cargan desde la pestaña Pagos de la OT).
-      if (cobrosStaged.length > 0) {
-        const fallidos: string[] = [];
-        for (const draft of cobrosStaged) {
-          try {
-            await crearCobro({
-              ...draft.payload,
-              ordenId: orden.id,
-              clienteId: clienteId || undefined,
-            });
-          } catch (error) {
-            fallidos.push(
-              `${draft.metodoNombre} ${formatCurrency(draft.payload.montoBruto, moneda)}` +
-                (error instanceof Error ? ` (${error.message})` : ""),
-            );
-          }
-        }
-        if (fallidos.length > 0) {
-          toast.error(
-            `La orden se emitió, pero ${fallidos.length} cobro${fallidos.length === 1 ? "" : "s"} no se ${fallidos.length === 1 ? "pudo" : "pudieron"} registrar: ${fallidos.join(" · ")}. Cargalos desde la pestaña Pagos de la orden.`,
-            { duration: 10000 },
-          );
-        }
-      }
+      setEmisionEntregada(await completarCobrosYEntrega(orden));
 
       // La OT ya existe: los adjuntos son tareas posteriores y un fallo no puede
       // convertir una emisión exitosa en un falso error reintentable.
@@ -6972,6 +7091,8 @@ function PropuestaFichaContenido({
           ? error.message
           : "No se pudo emitir la orden de trabajo.",
       );
+    } finally {
+      emisionEnCursoRef.current = false;
     }
   }, [
     conOrdenes,
@@ -6983,8 +7104,9 @@ function PropuestaFichaContenido({
     fidelizacionCanjePuntos,
     canalVenta,
     validarCanalVenta,
-    cobrosStaged,
-    moneda,
+    bloqueoEntregaInmediata,
+    emitirYEntregar,
+    completarCobrosYEntrega,
     persistirSnapshotsItems,
     fechaEntregaOrden,
     zonaHoraria,
@@ -7158,7 +7280,7 @@ function PropuestaFichaContenido({
     async (targetClienteId: string) => {
       const batch = ++recotizacionBatchRef.current;
       const recotizables = itemsRef.current.filter(
-        (item) => item.jobContext && item.motorCodigo,
+        (item) => item.jobContext && item.motorCodigo && !metaCentroCopiado(item.jobContext),
       );
       const omitidos = itemsRef.current.length - recotizables.length;
       if (recotizables.length === 0) return;
@@ -7411,19 +7533,13 @@ function PropuestaFichaContenido({
           toast.success("Descuento aplicado.");
         }
 
-        // Aviso blando de margen bajo (el gate duro es la aprobación interna).
+        // Aviso informativo de catálogo, separado de la política de descuentos.
         if (descuentoInput != null && actualizados.size > 0) {
-          const margenes = [...actualizados.values()]
-            .filter((item) => descuentoMontoDeItem(item) > 0)
-            .map(
-              (item) => item.cotizacion.desglosePrecio?.margenEfectivoPct ?? 0,
-            );
-          const minMargen = margenes.length ? Math.min(...margenes) : null;
-          if (minMargen != null && minMargen < DESCUENTO_MARGEN_ALERTA_PCT) {
-            toast.warning(
-              `El margen queda en ${minMargen.toLocaleString("es-AR", { maximumFractionDigits: 1 })}% en el producto más ajustado. Revisá antes de emitir.`,
-            );
-          }
+          const avisoMargen = avisoMargenDescuento(
+            [...actualizados.values()],
+            verMargenes,
+          );
+          if (avisoMargen) toast.warning(avisoMargen);
           // F3: si el % supera el umbral del tenant, avisar YA que el
           // presupuesto va a pedir aprobación interna (mejor enterarse acá
           // que con el presupuesto trabado en pendiente_aprobacion).
@@ -7448,7 +7564,7 @@ function PropuestaFichaContenido({
         setDescuentoAplicando(false);
       }
     },
-    [recotizarItemConDescuento, umbralDescuentoAprobacion],
+    [recotizarItemConDescuento, umbralDescuentoAprobacion, verMargenes],
   );
 
   /** Materializa exactamente el plan por línea calculado por el backend. */
@@ -8059,7 +8175,9 @@ function PropuestaFichaContenido({
                   {orden && <FacturarOrdenAccion ordenId={orden.id} numero={orden.numero} total={orden.total} facturado={orden.facturadoTotal} descuentoTotal={orden.descuentoTotal} habilitada={!["borrador", "cancelada"].includes(orden.estado) && !sinComprobante} bloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando} onFacturada={() => { recargarOrden(); setRefrescosComprobantes((n) => n + 1); }} />}
                   {!modoOrden && puedeEditarOrden ? (
                     <OrdenSaveActions
-                      operacionPendiente={cuponValidando || descuentoAplicando}
+                      operacionPendiente={cuponValidando || descuentoAplicando || revisandoCopiado}
+                      emitirYEntregar={emitirYEntregar}
+                      bloqueoEmision={bloqueoEntregaInmediata}
                       tipo={ordenTipo}
                       clienteSeleccionado={Boolean(clienteId)}
                       empty={items.length === 0}
@@ -8154,17 +8272,23 @@ function PropuestaFichaContenido({
                             !conOrdenes ||
                             emitiendoBorrador ||
                             cambiosSinGuardar > 0 ||
-                            !orden.clienteId
+                            !orden.clienteId ||
+                            Boolean(bloqueoEntregaInmediata)
                           }
                           title={
                             !orden.clienteId
                               ? "Asigná un cliente y guardá el borrador para emitir"
-                              : undefined
+                              : bloqueoEntregaInmediata
                           }
                         >
                           <CheckIcon />
-                          {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
+                          {emitiendoBorrador ? "Emitiendo…" : emitirYEntregar ? "Emitir y entregar" : "Emitir OT"}
                         </HeroButton>
+                      ) : null}
+                      {puedeEditarOrden && orden.estado === "borrador" && bloqueoEntregaInmediata ? (
+                        <span role="status" className="text-sm text-muted-foreground">
+                          {bloqueoEntregaInmediata}
+                        </span>
                       ) : null}
                       {puedeAbrirEntrega ? (
                         <HeroButton
@@ -8386,7 +8510,9 @@ function PropuestaFichaContenido({
                         label="Entrega prevista"
                         icon={<CalendarIcon />}
                       >
-                        {campoEditable("fechaEntrega") ? (
+                        {emitirYEntregar ? (
+                          <span>Hoy · {formatFechaOrden(offsetDate(0, zonaHoraria))}</span>
+                        ) : campoEditable("fechaEntrega") ? (
                           <div className="text-sm text-foreground">
                             <HeroInput
                               className="w-full"
@@ -8424,12 +8550,7 @@ function PropuestaFichaContenido({
                         );
                         const eta = porProducto
                           ? null
-                          : describirEta(demoraOrden, fechaFinalVisible, {
-                              margenDias: margenEtaDias,
-                              noLaborables: colasTaller?.noLaborables,
-                              zona: colasTaller?.zona ?? zonaHoraria,
-                              ahora: colasTaller?.ahora,
-                            });
+                          : demoraOrden;
                         return (
                           <>
                             <FieldCard
@@ -8469,10 +8590,7 @@ function PropuestaFichaContenido({
                               icon={<ClockIcon />}
                             >
                               <div className={fechasStyles.valorConsulta}>
-                                {margenEtaDias}{" "}
-                                {margenEtaDias === 1
-                                  ? "día hábil"
-                                  : "días hábiles"}
+                                {demoraOrden?.margenEtiqueta ?? "Según cada producto"}
                               </div>
                             </FieldCard>
                             {eta && (eta.motivo || eta.nivel !== "ok") ? (
@@ -8551,7 +8669,12 @@ function PropuestaFichaContenido({
                         if (itemsEnEdicion && persistedItemIds.has(item.id))
                           setDatosItemEditadosIds(prev => new Set([...prev, item.id]));
                         setItems(current => current.map(i => i.id === item.id
-                          ? { ...i, listoEnMostrador, ...(listoEnMostrador ? { asignacionesPersonal: [] } : {}) }
+                          ? { ...i, listoEnMostrador, ...(listoEnMostrador ? {
+                              asignacionesPersonal: [],
+                              ...(!itemFechaTocadaRef.current.has(i.id)
+                                ? { fechaEntrega: offsetDate(0, zonaHoraria) }
+                                : {}),
+                            } : {}) }
                           : i));
                       }
                     : undefined,
@@ -8571,7 +8694,7 @@ function PropuestaFichaContenido({
                     expanded={openIds.has(item.id)}
                     etaSistema={demoraPorItem?.get(item.id) ?? null}
                     ahoraEta={colasTaller?.ahora}
-                    margenEtaDias={margenEtaDias}
+                    margenEtaDias={margenPorProducto(item.motorCodigo)}
                     noLaborables={colasTaller?.noLaborables}
                     onEdit={
                       item.listoEnMostradorEl ? undefined : modoOrden
@@ -8608,6 +8731,7 @@ function PropuestaFichaContenido({
                       );
                     }}
                     fechaEstimada={fechaEstimada}
+                    entregaInmediataFecha={emitirYEntregar ? offsetDate(0, zonaHoraria) : undefined}
                     readOnly={modoOrden}
                     editarFecha={itemsEnEdicion && editandoOrden}
                     prepararCorte={modoOrden && puedeEditarOrden && puedeVerProduccion && persistedItemIds.has(item.id)}
@@ -8721,13 +8845,13 @@ function PropuestaFichaContenido({
               </>
             ) : null}
             {tab === "pagos" && mostrarPagos ? (
-              orden ? (
+              orden && orden.estado !== "borrador" ? (
                 <div className="otd-page" style={{ padding: 0 }}>
                   <PagosTab
                     pago={orden.pago}
                     total={orden.total}
                     ordenId={orden.id}
-                    puedeCobrar={puedeRegistrarCobros && orden.estado !== "borrador" && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
+                    puedeCobrar={puedeRegistrarCobros && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
                     soloLectura={!puedeEditarOrden}
                     sinComprobante={
                       orden.tratamientoFiscal === "SIN_COMPROBANTE"
@@ -8737,7 +8861,7 @@ function PropuestaFichaContenido({
               ) : (
                 <div className="otd-page" style={{ padding: 0 }}>
                   <PagosStagingTab
-                    total={totalPropuesta}
+                    total={orden?.total ?? totalPropuesta}
                     sinComprobante={sinComprobante}
                     cobros={cobrosStaged}
                     onAgregar={(draft) =>
@@ -8904,7 +9028,7 @@ function PropuestaFichaContenido({
         </HeroTabs>
 
         {emitiendo ? (
-          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} listosEnMostrador={items.length > 0 && items.every(item => item.listoEnMostrador)} />
+          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} entregada={emisionEntregada} listosEnMostrador={items.length > 0 && items.every(item => item.listoEnMostrador)} />
         ) : null}
 
         {/* Montado SIEMPRE y controlado por `open`, igual que los demás
@@ -9078,8 +9202,14 @@ function PropuestaFichaContenido({
               toast.info("Se reconstruyeron los trabajos de copiado. Elegí nuevamente sus operadores en Producción antes de emitir.");
             const nuevosConHerencia = nuevos.map((nuevo) => ({
               ...nuevo,
+              fechaEntrega: nuevo.fechaEntrega || fechaEstimada || offsetDate(0, zonaHoraria),
               archivosOrigenItemIds: nuevo.archivosOrigenItemIds?.filter((id) => persistedItemIds.has(id)),
             }));
+            if (copiadoEditItems?.length) {
+              for (const nuevo of nuevos) {
+                if (nuevo.fechaEntrega) itemFechaTocadaRef.current.add(nuevo.id);
+              }
+            }
             setItems((current) => {
               const base = cargaEditada
                 ? current.filter((i) => cargaDeItem(i) !== cargaEditada)

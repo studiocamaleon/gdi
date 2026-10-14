@@ -58,6 +58,7 @@ export type TableroPasoData = {
 
 /** Campos de un item que el motor de ETA necesita. */
 export type TableroItemData = {
+  productoId?: string | null;
   /** Sólo escenarios internos; no se acepta desde la API. */
   prioridadPlanificacion?: number;
   id: string;

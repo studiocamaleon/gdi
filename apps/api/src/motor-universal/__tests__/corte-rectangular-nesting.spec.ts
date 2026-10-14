@@ -91,6 +91,21 @@ function contexto(): JobContext {
   };
 }
 const motor = Object.create(MotorUniversalService.prototype) as any;
+motor.recorridosVectoriales = {
+  generar: jest.fn(async ({ svg }) => {
+    expect(svg).toContain('<path');
+    expect(svg).toContain('width="1200mm"');
+    return {
+      metricas: {
+        longitudTotalMm: 2500,
+        tiempoEstimadoSeg: 375,
+        cantidadConexiones: 1,
+      },
+      engine: { version: 'prueba' },
+      postprocesador: 'HOTWIRE_TAP_V1',
+    };
+  }),
+};
 async function ejecutar(p = paso(), jc = contexto()) {
   const errores: ErrorMotor[] = [];
   const resultado = await motor.ejecutarPaso(
@@ -257,13 +272,56 @@ describe('Corte rectangular: acomodo, cantidad y costo independientes', () => {
           modoCotizacionVectorial: modo,
         }),
       ).toBe(false);
+    // Las recetas antiguas de hilo siguen pidiendo geometría si no hay
+    // una modalidad rectangular elegida desde el producto.
+    const antiguo = contexto();
+    delete antiguo.modoCotizacionVectorial;
     expect(
-      debeEjecutarNestingRectangularCorte(
-        paso('corte_hilo_caliente'),
-        contexto(),
-      ),
+      debeEjecutarNestingRectangularCorte(paso('corte_hilo_caliente'), antiguo),
     ).toBe(false);
   });
+
+  it.each([
+    [1150, 90, true],
+    [90, 1150, true],
+    [1250, 700, false],
+  ])(
+    'Polyfan rectangular %s × %s sobre placa 1200 × 600: encaje %s',
+    async (anchoMm, altoMm, entra) => {
+      const p = paso('corte_hilo_caliente');
+      p.mecanismoCantidad = 'CALCULADO_POR_PASO';
+      p.maquina!.anchoUtil = 1200;
+      p.maquina!.largoUtil = 600;
+      p.maquina!.parametrosTecnicosJson = {
+        postprocesadorRecorrido: 'HOTWIRE_TAP_V1',
+      };
+      p.perfil = {
+        id: 'perfil-hilo',
+        nombre: 'Perfil ficticio',
+        tipoPerfil: 'corte',
+        productivityValue: 400,
+        productivityUnit: 'MM_MIN',
+      } as PasoCargado['perfil'];
+      const placa = structuredClone(material);
+      placa.atributosVarianteJson = { anchoMm: 1200, altoMm: 600 };
+      placa.contextoUnidades.atributos = placa.atributosVarianteJson;
+      p.slots[0].materialVariante = placa;
+      const jc: JobContext = {
+        cantidad: 1,
+        modoCotizacionVectorial: 'medidas',
+        piezas: [{ anchoMm, altoMm, cantidad: 1 }],
+      };
+      const { resultado, errores } = await ejecutar(p, jc);
+      if (entra) {
+        expect(errores.filter((e) => e.severidad === 'ERROR')).toEqual([]);
+        expect(resultado.nestingResult?.piezasAcomodadas).toBe(1);
+        expect(resultado.materiales[0].costoTotal).toBeGreaterThan(0);
+      } else {
+        expect(errores.some((e) => e.severidad === 'ERROR')).toBe(true);
+        expect(resultado.nestingResult).toBeUndefined();
+      }
+    },
+  );
 
   it('ignora geometría vectorial residual al volver a medidas', async () => {
     const jc = contexto();

@@ -84,6 +84,7 @@ export function RegistrarCobroView({
           : "No se pudo registrar el cobro.",
       );
       setGuardando(false);
+      throw error;
     }
   };
 
@@ -140,14 +141,21 @@ export function RegistrarCobroView({
           </div>}
         </div>
 
-        <CobroFormulario
-          saldo={saldo}
-          metodos={metodos}
-          cuentas={cuentas}
-          guardando={guardando}
-          onSubmit={(draft) => void submit(draft)}
-          cancelHref={volverHref}
-        />
+        {esOrden && saldo <= 0 ? (
+          <p role="status">
+            Orden totalmente saldada. No hay saldo pendiente de cobro.
+          </p>
+        ) : (
+          <CobroFormulario
+            saldo={saldo}
+            limitarAlSaldo={esOrden}
+            metodos={metodos}
+            cuentas={cuentas}
+            guardando={guardando}
+            onSubmit={submit}
+            cancelHref={volverHref}
+          />
+        )}
       </div>
     </div>
   );

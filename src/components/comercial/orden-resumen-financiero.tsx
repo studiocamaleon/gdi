@@ -159,6 +159,8 @@ export function OrdenSaveActions({
   onGuardarBorrador,
   guardandoBorrador = false,
   operacionPendiente = false,
+  emitirYEntregar = false,
+  bloqueoEmision,
 }: {
   tipo: "orden" | "presupuesto";
   empty: boolean;
@@ -169,6 +171,8 @@ export function OrdenSaveActions({
   onGuardarBorrador?: () => void;
   guardandoBorrador?: boolean;
   operacionPendiente?: boolean;
+  emitirYEntregar?: boolean;
+  bloqueoEmision?: string;
 }) {
   const conCotizacion = useCapacidad("cotizacion");
   const conOrdenes = useCapacidad("ordenes");
@@ -201,11 +205,11 @@ export function OrdenSaveActions({
           guardandoBorrador ||
           empty ||
           !clienteSeleccionado ||
-          operacionPendiente
+          operacionPendiente || Boolean(bloqueoEmision)
         }
         title={
           !autorizado ? "Tu rol no permite esta operación." : !disponible ? "Esta operación no está incluida en el plan actual." :
-          !clienteSeleccionado ? "Seleccioná un cliente para emitir" : undefined
+          !clienteSeleccionado ? "Seleccioná un cliente para emitir" : bloqueoEmision
         }
         onPress={tipo === "orden" ? onEmitir : onEmitirPresupuesto}
       >
@@ -213,9 +217,12 @@ export function OrdenSaveActions({
         {emitiendo
           ? "Emitiendo…"
           : tipo === "orden"
-            ? "Emitir OT"
+            ? emitirYEntregar ? "Emitir y entregar" : "Emitir OT"
             : "Emitir presupuesto"}
       </HeroButton>
+      {bloqueoEmision && tipo === "orden" ? (
+        <p role="status" className="text-sm text-muted-foreground">{bloqueoEmision}</p>
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type { PropuestaItem } from "@/lib/propuestas";
 import { productoDiseno } from "./__fixtures__/orden-diseno";
 import type { CanalPresupuesto } from "./presupuesto-correo-dialog";
 import { PropuestaFicha } from "./propuesta-ficha";
+import { offsetDate } from "@/lib/propuestas";
 import { getMockOrdenDetalle } from "@/lib/ordenes-trabajo";
 
 const mocks = vi.hoisted(() => ({
@@ -16,6 +17,16 @@ const mocks = vi.hoisted(() => ({
   editarOrden: vi.fn(),
   revisarCopiado: vi.fn(),
   copiado: false,
+  eta: false,
+  cotizar: vi.fn(),
+  recotizar: vi.fn(),
+  finalizado: false,
+  puedeEntregar: true,
+  crearOrden: vi.fn(),
+  cambiarEstado: vi.fn(),
+  cobrar: vi.fn(),
+  entregar: vi.fn(),
+  error: vi.fn(),
   emitir: vi.fn(),
   replace: vi.fn(),
   confirmar: null as null | ((canal: CanalPresupuesto) => void),
@@ -28,6 +39,76 @@ vi.mock("@/lib/centro-copiado-pedidos-api", async (original) => ({
 vi.mock("@/lib/ordenes-trabajo-api", async (original) => ({
   ...(await original<typeof import("@/lib/ordenes-trabajo-api")>()),
   editarOrdenTrabajoLote: mocks.editarOrden,
+  crearOrdenTrabajo: mocks.crearOrden,
+  cambiarEstadoOrdenTrabajo: mocks.cambiarEstado,
+}));
+vi.mock("@/lib/administracion-api", async (original) => ({
+  ...(await original<typeof import("@/lib/administracion-api")>()),
+  crearCobro: mocks.cobrar,
+}));
+vi.mock("@/lib/entrega-api", async (original) => ({
+  ...(await original<typeof import("@/lib/entrega-api")>()),
+  entregarItems: mocks.entregar,
+}));
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    error: mocks.error,
+  },
+}));
+vi.mock("./pagos-staging-tab", () => ({
+  PagosStagingTab: ({
+    onAgregar,
+    total,
+  }: {
+    onAgregar: (d: unknown) => void;
+    total: number;
+  }) => (
+    <>
+      <button
+        onClick={() =>
+          onAgregar({
+            payload: { montoBruto: total, idempotencyKey: "pago-ficticio" },
+            metodoNombre: "Efectivo",
+          })
+        }
+      >
+        Pago completo ficticio
+      </button>
+      <button
+        onClick={() =>
+          onAgregar({
+            payload: {
+              montoBruto: total - 0.01,
+              idempotencyKey: "pago-parcial",
+            },
+            metodoNombre: "Efectivo",
+          })
+        }
+      >
+        Pago parcial ficticio
+      </button>
+    </>
+  ),
+}));
+vi.mock("@/lib/productos-servicios-api", async (original) => ({
+  ...(await original<typeof import("@/lib/productos-servicios-api")>()),
+  recotizarCotizacionItem: mocks.recotizar,
+}));
+vi.mock("@/lib/eta-api", async (original) => ({
+  ...(await original<typeof import("@/lib/eta-api")>()),
+  getContextoPrevision: async () => ({
+    enCola: [],
+    estaciones: [],
+    medianas: new Map(),
+    noLaborables: new Set(),
+    ahora: new Date("2026-10-14T15:00:00Z"),
+    zona: "America/Argentina/Buenos_Aires",
+    tiempoEntrePasosMin: 0,
+    margenEtaDias: 0,
+  }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -53,7 +134,11 @@ vi.mock("./tipo-cambio-documento", () => ({
   TipoCambioDocumentoProvider: ({ children }: { children: ReactNode }) =>
     children,
   useTipoCambioDocumento: () => null,
-  useMotorConTipoCambio: () => ({ cotizarYGuardar: mocks.guardar }),
+  useMotorConTipoCambio: () => ({
+    cotizarYGuardar: mocks.guardar,
+    cotizar: mocks.cotizar,
+    recotizarCotizacionItem: mocks.recotizar,
+  }),
 }));
 vi.mock("./agregar-producto-sheet", () => ({
   AgregarProductoSheet: ({
@@ -106,6 +191,7 @@ vi.mock("./centro-copiado-sheet", () => ({
               15000,
             ),
             motorCodigo: "producto-qa",
+            listoEnMostrador: mocks.finalizado,
             jobContext: {
               cantidad: 100,
               _centroCopiado: {
@@ -151,6 +237,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.confirmar = null;
   mocks.copiado = false;
+  mocks.eta = false;
+  mocks.finalizado = false;
+  mocks.puedeEntregar = true;
+  mocks.cobrar.mockResolvedValue({ id: "cobro-ficticio" });
+  mocks.entregar.mockResolvedValue({ ordenCerrada: true, entregados: 1 });
+  mocks.crearOrden.mockResolvedValue({
+    ...getMockOrdenDetalle("mock-0184")!,
+    id: "orden-emitida",
+    numero: "OT-FICTICIA",
+    estado: "finalizada",
+    total: 121,
+    productos: [{ id: "item-emitido" }],
+  });
   mocks.revisarCopiado.mockResolvedValue({ modalidad: "MOTOR" });
   avisoAlNavegar = [];
   mocks.replace.mockImplementation(() => {
@@ -205,11 +304,22 @@ async function montar(orden?: ComponentProps<typeof PropuestaFicha>["orden"]) {
     root.render(
       <CapacidadesProvider
         capacidades={{
-          funciones: { cotizacion: true, ordenes: true, presupuestos: true },
+          funciones: {
+            cotizacion: true,
+            ordenes: true,
+            presupuestos: true,
+            cobros: true,
+            eta_capacidad: mocks.eta,
+          },
         }}
       >
         <PermisosProvider
-          permisos={["comercial.gestionar", "finanzas.ver_margenes"]}
+          permisos={[
+            "comercial.gestionar",
+            "finanzas.ver_margenes",
+            "administracion.cobrar",
+            ...(mocks.puedeEntregar ? ["produccion.tablero.gestionar"] : []),
+          ]}
         >
           <PropuestaFicha orden={orden} />
         </PermisosProvider>
@@ -746,21 +856,333 @@ it("guarda una fecha manual sin recalcular ni reemplazar el precio acordado", as
   );
 });
 
-
 it("marca listo en el borrador conservando el snapshot y el precio", async () => {
   const base = getMockOrdenDetalle("mock-0184")!;
-  const producto = { ...base.productos[0], id: "item-listo-ficticio", codigo: "SYS-IMPRESION-DOC", cotizacionItemId: "precio-acordado-ficticio" };
-  const orden = { ...base, estado: "borrador" as const, canalVenta: "mostrador", productos: [producto] };
-  mocks.editarOrden.mockResolvedValue({ ...orden, productos: [{ ...producto, listoEnMostrador: true }] });
+  const producto = {
+    ...base.productos[0],
+    id: "item-listo-ficticio",
+    codigo: "SYS-IMPRESION-DOC",
+    cotizacionItemId: "precio-acordado-ficticio",
+  };
+  const orden = {
+    ...base,
+    estado: "borrador" as const,
+    canalVenta: "mostrador",
+    productos: [producto],
+  };
+  mocks.editarOrden.mockResolvedValue({
+    ...orden,
+    productos: [{ ...producto, listoEnMostrador: true }],
+  });
   await montar(orden);
   await click("Editar orden");
-  const listo = container.querySelector<HTMLButtonElement>(`[aria-label="Marcar producción finalizada: ${producto.nombre}"]`)!;
+  const listo = container.querySelector<HTMLButtonElement>(
+    `[aria-label="Marcar producción finalizada: ${producto.nombre}"]`,
+  )!;
   expect(listo).not.toBeNull();
   await act(async () => listo.click());
   expect(listo.getAttribute("aria-checked")).toBe("true");
-  const guardar = [...container.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.includes("Guardar cambios"))!;
+  const guardar = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((b) => b.textContent?.includes("Guardar cambios"))!;
   expect(guardar).toBeDefined();
   await act(async () => guardar.click());
   expect(mocks.guardar).not.toHaveBeenCalled();
-  expect(mocks.editarOrden).toHaveBeenCalledWith(orden.id, expect.objectContaining({ items: [expect.objectContaining({ id: producto.id, cotizacionItemId: producto.cotizacionItemId, listoEnMostrador: true, total: producto.total })] }));
+  expect(mocks.editarOrden).toHaveBeenCalledWith(
+    orden.id,
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          id: producto.id,
+          cotizacionItemId: producto.cotizacionItemId,
+          listoEnMostrador: true,
+          total: producto.total,
+        }),
+      ],
+    }),
+  );
+});
+
+async function seleccionarCliente(id: string) {
+  await act(async () =>
+    window.dispatchEvent(
+      new CustomEvent(CLIENTE_ESCANEADO_EVENT, {
+        detail: {
+          id,
+          nombre: "Cliente ficticio",
+          razonSocial: "",
+          email: "",
+          telefonoCodigo: "",
+          telefonoNumero: "",
+        },
+      }),
+    ),
+  );
+}
+it("al elegir cliente después de copiado vuelve al tarifario automáticamente, sin motor genérico", async () => {
+  mocks.revisarCopiado.mockImplementation(async ({ items }) =>
+    revisionTarifario(items),
+  );
+  await montar();
+  await click("Canal de prueba");
+  await click("Agregar carga de copiado ficticia");
+  await seleccionarCliente("cliente-nuevo");
+  expect(mocks.cotizar).not.toHaveBeenCalled();
+  expect(mocks.recotizar).not.toHaveBeenCalled();
+  expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
+  expect(mocks.revisarCopiado).toHaveBeenLastCalledWith(
+    expect.objectContaining({ clienteId: "cliente-nuevo" }),
+  );
+  expect(container.textContent).toContain("121,00");
+});
+it("conserva la fecha elegida mientras llega la revisión de copiado", async () => {
+  let resolver!: (v: unknown) => void;
+  mocks.revisarCopiado.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        resolver = r;
+      }),
+  );
+  await montar();
+  await click("Canal de prueba");
+  await click("Agregar carga de copiado ficticia");
+  const expandir = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Ver detalle de Copias ficticias"]',
+  )!;
+  await act(async () => expandir.click());
+  const fecha = container.querySelector<HTMLInputElement>(
+    '[aria-label="Entrega prevista de Copias ficticias"]',
+  )!;
+  await act(async () => {
+    fecha.value = "2099-12-20";
+    fecha.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => resolver(revisionTarifario()));
+  expect(fecha.value).toBe("2099-12-20");
+});
+it("si cambia el cliente durante la revisión descarta el cálculo anterior y aplica el último cliente", async () => {
+  let resolver!: (v: unknown) => void;
+  mocks.revisarCopiado.mockImplementation(async ({ items }) =>
+    revisionTarifario(items),
+  );
+  mocks.revisarCopiado.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        resolver = r;
+      }),
+  );
+  await montar();
+  await click("Canal de prueba");
+  await click("Agregar carga de copiado ficticia");
+  await seleccionarCliente("cliente-nuevo");
+  await seleccionarCliente("cliente-definitivo");
+  await act(async () => resolver(revisionTarifario()));
+  expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
+  expect(mocks.revisarCopiado).toHaveBeenLastCalledWith(
+    expect.objectContaining({ clienteId: "cliente-definitivo" }),
+  );
+  expect(mocks.cotizar).not.toHaveBeenCalled();
+  expect(mocks.recotizar).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("121,00");
+});
+it("no borra la fecha de copiado cuando ETA todavía no puede estimar el trabajo", async () => {
+  mocks.eta = true;
+  mocks.revisarCopiado.mockImplementation(async ({ items }) =>
+    revisionTarifario(items),
+  );
+  await montar();
+  await click("Canal de prueba");
+  await click("Agregar carga de copiado ficticia");
+  const expandir = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Ver detalle de Copias ficticias"]',
+  )!;
+  await act(async () => expandir.click());
+  const fecha = container.querySelector<HTMLInputElement>(
+    '[aria-label="Entrega prevista de Copias ficticias"]',
+  )!;
+  expect(fecha.value).toBe("2099-01-10");
+});
+
+async function verPagos() {
+  const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+    (t) => t.getAttribute("aria-label")?.startsWith("Pagos"),
+  )!;
+  expect(tab).toBeDefined();
+  await act(async () => tab.click());
+}
+async function prepararCopiadoFinalizado() {
+  mocks.finalizado = true;
+  mocks.revisarCopiado.mockImplementation(async ({ items }) =>
+    revisionTarifario(items),
+  );
+  await montar();
+  await click("Canal de prueba");
+  await seleccionarCliente("cliente-ficticio");
+  await click("Agregar carga de copiado ficticia");
+}
+it("exige el 100% antes de emitir y entregar; un centavo pendiente también bloquea", async () => {
+  await prepararCopiadoFinalizado();
+  const boton = () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent === "Emitir y entregar",
+    )!;
+  expect(boton()).toBeDefined();
+  expect(boton().disabled).toBe(true);
+  await verPagos();
+  await click("Pago parcial ficticio");
+  expect(boton().disabled).toBe(true);
+  expect(mocks.crearOrden).not.toHaveBeenCalled();
+});
+it("emite, registra pago y entrega en ese orden; evita doble clic", async () => {
+  await prepararCopiadoFinalizado();
+  await verPagos();
+  await click("Pago completo ficticio");
+  const boton = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((b) => b.textContent === "Emitir y entregar")!;
+  expect(boton.disabled).toBe(false);
+  await act(async () => {
+    boton.click();
+    boton.click();
+  });
+  expect(mocks.crearOrden).toHaveBeenCalledOnce();
+  expect(mocks.crearOrden).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          listoEnMostrador: true,
+          total: 121,
+          fechaEntrega: offsetDate(0),
+        }),
+      ],
+    }),
+  );
+  expect(mocks.cobrar).toHaveBeenCalledOnce();
+  expect(mocks.cobrar).toHaveBeenCalledWith(
+    expect.objectContaining({
+      ordenId: "orden-emitida",
+      montoBruto: 121,
+      idempotencyKey: "pago-ficticio",
+    }),
+  );
+  expect(mocks.entregar).toHaveBeenCalledWith("orden-emitida", {
+    itemIds: ["item-emitido"],
+    exigirPagoCompleto: true,
+  });
+  expect(mocks.crearOrden.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.cobrar.mock.invocationCallOrder[0],
+  );
+  expect(mocks.cobrar.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.entregar.mock.invocationCallOrder[0],
+  );
+});
+it("si falla un pago deja la OT emitida pendiente de entrega, sin reemitir ni entregar", async () => {
+  mocks.cobrar.mockRejectedValueOnce(new Error("Cobro rechazado ficticio"));
+  await prepararCopiadoFinalizado();
+  await verPagos();
+  await click("Pago completo ficticio");
+  await click("Emitir y entregar");
+  expect(mocks.crearOrden).toHaveBeenCalledOnce();
+  expect(mocks.entregar).not.toHaveBeenCalled();
+  expect(mocks.error).toHaveBeenCalledWith(
+    expect.stringContaining("No se registró la entrega"),
+    expect.anything(),
+  );
+});
+it("conserva Emitir OT en una orden mixta aunque copiado esté terminado", async () => {
+  await prepararCopiadoFinalizado();
+  mocks.finalizado = false;
+  await click("Agregar producto ficticio");
+  expect(container.textContent).toContain("Emitir OT");
+  expect(container.textContent).not.toContain("Emitir y entregar");
+});
+it("Emitir y entregar muestra hoy sin pedir fecha y reemplaza una fecha anterior o futura", async () => {
+  await prepararCopiadoFinalizado();
+  const expandir = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Ver detalle de Copias ficticias"]',
+  )!;
+  await act(async () => expandir.click());
+  expect(
+    container.querySelector(
+      '[aria-label="Entrega prevista de Copias ficticias"]',
+    ),
+  ).toBeNull();
+  expect(container.textContent).toContain("Hoy");
+  await verDatos();
+  expect(
+    container.querySelector('input[aria-label="Entrega prevista"]'),
+  ).toBeNull();
+  await verPagos();
+  await click("Pago completo ficticio");
+  await click("Emitir y entregar");
+  expect(mocks.crearOrden).toHaveBeenCalledWith(
+    expect.objectContaining({
+      fechaEntrega: offsetDate(0),
+      items: [expect.objectContaining({ fechaEntrega: offsetDate(0) })],
+    }),
+  );
+});
+it("emite y entrega un borrador de copiado finalizado sin exigir su fecha vieja", async () => {
+  const base = getMockOrdenDetalle("mock-0184")!;
+  const producto = {
+    ...base.productos[0],
+    id: "item-borrador",
+    codigo: "SYS-IMPRESION-DOC",
+    cotizacionItemId: "snapshot-ficticio",
+    listoEnMostrador: true,
+    fechaEntrega: "2000-01-01",
+  };
+  const orden = {
+    ...base,
+    clienteId: "cliente-ficticio",
+    estado: "borrador" as const,
+    canalVenta: "mostrador",
+    fechaEntrega: "2000-01-01",
+    productos: [producto],
+  };
+  mocks.editarOrden.mockResolvedValue(orden);
+  mocks.cambiarEstado.mockResolvedValue({ ...orden, estado: "finalizada" });
+  await montar(orden);
+  await click("Editar orden");
+  await verPagos();
+  await click("Pago completo ficticio");
+  const emitir = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((b) => b.textContent?.trim() === "Emitir y entregar")!;
+  expect(emitir.disabled, `${emitir.title} ${container.textContent}`).toBe(
+    false,
+  );
+  await click("Emitir y entregar");
+  expect(mocks.editarOrden).toHaveBeenCalledWith(
+    orden.id,
+    expect.objectContaining({
+      expectedVersion: orden.version,
+      fechaEntrega: offsetDate(0),
+      items: [
+        expect.objectContaining({
+          id: "item-borrador",
+          fechaEntrega: offsetDate(0),
+        }),
+      ],
+    }),
+  );
+  expect(mocks.cambiarEstado).toHaveBeenCalledOnce();
+  expect(mocks.entregar).toHaveBeenCalledWith(orden.id, {
+    itemIds: ["item-borrador"],
+    exigirPagoCompleto: true,
+  });
+});
+it("con todo pagado, un usuario sin permiso de entrega no puede emitir y entregar", async () => {
+  mocks.puedeEntregar = false;
+  await prepararCopiadoFinalizado();
+  await verPagos();
+  await click("Pago completo ficticio");
+  const boton = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((b) => b.textContent === "Emitir y entregar")!;
+  expect(boton.disabled).toBe(true);
+  expect(container.textContent).toContain(
+    "Tu rol no permite registrar la entrega",
+  );
+  expect(mocks.crearOrden).not.toHaveBeenCalled();
 });

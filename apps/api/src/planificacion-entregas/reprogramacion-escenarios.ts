@@ -1,3 +1,4 @@
+import { margenEntregaProducto } from '../produccion/margen-entrega-producto';
 import type { AtencionPlanificada } from '../eta/motor/agenda-atencion';
 import { createHash } from 'node:crypto';
 import {
@@ -26,6 +27,7 @@ export type ImpactoEntrega = {
   finPropuesto: string;
   margenAnterior: number | null;
   margenRestante: number | null;
+  margenObjetivo?: number;
   demoraHabiles: number;
   cambiaEntrega: boolean;
 };
@@ -344,9 +346,12 @@ export async function buscarReprogramaciones(entrada: {
       const dia = claveFechaEnZona(fin, taller.zona),
         fechaActual = raiz.fechaEntrega;
       const cambiaEntrega = !!fechaActual && dia > fechaActual;
+      const margenObjetivo = margenEntregaProducto(
+        taller.margenEtaDias ?? margen, raiz.productoId, taller.productosSinMargenEntrega,
+      );
       const fechaPropuesta = cambiaEntrega
         ? claveFechaEnZona(
-            sumarDiasHabiles(fin, margen, taller.noLaborables, taller.zona),
+            sumarDiasHabiles(fin, margenObjetivo, taller.noLaborables, taller.zona),
             taller.zona,
           )
         : fechaActual;
@@ -361,6 +366,7 @@ export async function buscarReprogramaciones(entrada: {
         fechaPropuesta,
         finAnterior: finAnterior.toISOString(),
         finPropuesto: fin.toISOString(),
+        margenObjetivo,
         margenAnterior: fechaActual
           ? diasHabilesEntre(
               claveFechaEnZona(finAnterior, taller.zona),
@@ -389,7 +395,7 @@ export async function buscarReprogramaciones(entrada: {
     const nivel = entregasAfectadas.some((e) => e.cambiaEntrega)
       ? 'CAMBIA_ENTREGAS'
       : entregasAfectadas.some(
-            (e) => e.margenRestante !== null && e.margenRestante < margen,
+            (e) => e.margenRestante !== null && e.margenRestante < (e.margenObjetivo ?? margen),
           ) || entregas.some((e) => e.cumpleConMargen === false)
         ? 'MARGEN_REDUCIDO'
         : 'CON_MARGEN';

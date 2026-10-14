@@ -110,6 +110,7 @@ export async function getContextoPrevision() {
     zona: string;
     tiempoEntrePasosMin: number;
     margenEtaDias: number;
+    productosSinMargenEntrega?: string[];
   }>("/eta/contexto-prevision");
   return {
     enCola: c.items,
@@ -120,5 +121,6 @@ export async function getContextoPrevision() {
     zona: c.zona,
     tiempoEntrePasosMin: c.tiempoEntrePasosMin,
     margenEtaDias: c.margenEtaDias,
+    productosSinMargenEntrega: c.productosSinMargenEntrega ?? [],
   };
 }

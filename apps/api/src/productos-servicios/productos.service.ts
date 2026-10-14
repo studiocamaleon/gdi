@@ -74,6 +74,18 @@ export class ProductosService {
     }
   }
 
+  private validarMargenEntrega(atributos?: Record<string, unknown>) {
+    if (
+      atributos &&
+      'excluirMargenEntrega' in atributos &&
+      typeof atributos.excluirMargenEntrega !== 'boolean'
+    ) {
+      throw new BadRequestException(
+        'La exclusión del margen de entrega debe ser verdadera o falsa.',
+      );
+    }
+  }
+
   private async hidratarGeometrias(tenantId: string, atributos: unknown) {
     const fuentes = leerGeometriasComerciales(atributos).fuentes;
     const ids = fuentes.flatMap(f => f.predeterminada ? [f.predeterminada.procedencia.geometriaId] : []);
@@ -258,6 +270,7 @@ export class ProductosService {
   }
 
   async crearProducto(tenantId: string, dto: CrearProductoDto) {
+    this.validarMargenEntrega(dto.atributosComercialesJson);
     await this.capacidades.exigir(tenantId, 'productos');
     if (dto.estructuraProducto === EstructuraProductoDto.COMPUESTO)
       await this.capacidades.exigir(tenantId, 'productos_compuestos');
@@ -373,6 +386,7 @@ export class ProductosService {
     id: string,
     dto: ActualizarProductoDto,
   ) {
+    this.validarMargenEntrega(dto.atributosComercialesJson);
     await this.capacidades.exigir(tenantId, 'productos');
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
     validarMargenOpcionales(dto.precioConfigJson);

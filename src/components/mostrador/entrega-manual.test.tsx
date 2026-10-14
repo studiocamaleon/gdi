@@ -28,6 +28,37 @@ vi.mock("../administracion/cobro-formulario", () => ({
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 beforeEach(() => vi.clearAllMocks());
+it("el cobro al entregar conserva centavos y su clave al reintentar", async () => {
+  mocks.escanear.mockResolvedValue({
+    id:"orden-prueba",numero:"OT-TEST",estado:"finalizada",total:100.25,saldo:100.25,cobrado:0,puedeCobrar:true,
+    items:[{id:"item",nombre:"Plano",cantidad:1,total:100.25,listo:true,pasosHechos:1,pasosTotal:1,entregadoEl:null}],
+  });
+  mocks.metodos.mockResolvedValue([{id:"efectivo",nombre:"Efectivo",tipo:"efectivo",activo:true,comisionPct:0,cuentaDestinoId:"caja"}]);
+  mocks.cuentas.mockResolvedValue([{id:"caja",nombre:"Caja ficticia"}]);
+  mocks.entregar.mockRejectedValue(new Error("Respuesta perdida"));
+  const container=document.createElement("div"),root=createRoot(container);
+  document.body.append(container);
+  try {
+    await act(async()=>root.render(<EntregaModal codigo="OT-TEST" onClose={vi.fn()} />));
+    const select=container.querySelector("select")!;
+    await act(async()=>{ select.value="efectivo"; select.dispatchEvent(new Event("change",{bubbles:true})); });
+    const input=container.querySelector<HTMLInputElement>('input[inputmode="decimal"]')!;
+    expect(input.value).toBe("100,25");
+    const boton=()=>[...container.querySelectorAll("button")].find(b=>b.textContent?.includes("Cobrar"))!;
+    await act(async()=>{boton().click();boton().click();});
+    expect(mocks.entregar).toHaveBeenCalledTimes(1);
+    expect(mocks.entregar.mock.calls[0][1].cobro.montoBruto).toBe(100.25);
+    expect(mocks.entregar.mock.calls[0][1].cobro.idempotencyKey).toBeTruthy();
+    await act(async()=>boton().click());
+    expect(mocks.entregar.mock.calls[1][1].cobro.idempotencyKey).toBe(mocks.entregar.mock.calls[0][1].cobro.idempotencyKey);
+    await act(async()=>{
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(input,"101");
+      input.dispatchEvent(new Event("input",{bubbles:true}));
+    });
+    await act(async()=>boton().click());
+    expect(mocks.entregar).toHaveBeenCalledTimes(2);
+  } finally {await act(async()=>root.unmount());container.remove();}
+});
 it("la entrega manual exige confirmar preparación y no carga ni envía cobros excluidos", async () => {
   mocks.escanear.mockResolvedValue({
     id: "orden",
