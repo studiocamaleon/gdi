@@ -30,6 +30,7 @@ const taller = {
   ...base,
   items: [] as typeof base.items,
   margenEtaDias: 1,
+  productosSinMargenEntrega: [] as string[],
   estaciones: pasos.map((p) => ({
     ...base.estaciones[0],
     id: p.familiaCodigo,
@@ -112,6 +113,7 @@ beforeEach(async () => {
   taller.ahora = new Date('2026-09-09T08:00:00-03:00');
   taller.items = [];
   taller.margenEtaDias = 1;
+  taller.productosSinMargenEntrega = [];
   const cotizacion = await db.cotizacion.create({ data: { tenantId } });
   const c = await db.cotizacionItem.create({
     data: {
@@ -171,6 +173,23 @@ async function calculada() {
   expect(r.plan?.estado).toBe('LISTA');
   return r.plan!;
 }
+it('planifica sin margen para el producto excluido e invalida el plan al cambiar la exclusión', async () => {
+  taller.productosSinMargenEntrega = [productoId];
+  const p = await calculada();
+  expect(p.margenDiasHabiles).toBe(0);
+  for (const alternativa of p.alternativas)
+    for (const entrega of alternativa.entregas) {
+      expect(entrega.finProduccion).not.toBeNull();
+      expect(entrega.fechaSugerida).toBe(new Intl.DateTimeFormat('en-CA', {
+        timeZone: taller.zona, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date(entrega.finProduccion!)));
+    }
+  taller.productosSinMargenEntrega = [];
+  expect((await service.consultar(tenantId, itemId)).plan?.desactualizado).toBe(true);
+  const siguiente = await service.solicitar(auth, itemId, solicitud(p.version));
+  await service.calcular(tenantId, siguiente.plan!.revisionId, cotizar);
+  expect((await service.consultar(tenantId, itemId)).plan?.margenDiasHabiles).toBe(1);
+}, 30_000);
 it('persiste fecha civil y reintenta sin duplicar solicitudes', async () => {
   const dto = solicitud();
   dto.entregas[0].fechaSolicitada = '2026-09-10';

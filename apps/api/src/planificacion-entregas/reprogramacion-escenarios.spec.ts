@@ -101,6 +101,18 @@ it('informa cambios de entrega cuando la demora supera el margen', async () => {
     margenRestante: 2,
   });
 });
+it('reprogramar un producto sin margen no quita el margen de otros trabajos', async () => {
+  const { e, buscar } = caso('2026-09-09');
+  e.margenDiasHabiles = 0;
+  e.taller.margenEtaDias = 2;
+  e.taller.productosSinMargenEntrega = ['nuevo'];
+  e.taller.items[0].productoId = 'normal';
+  const conMargen = (await buscar()).alternativas[0].reprogramacion!.entregasAfectadas[0];
+  expect(conMargen).toMatchObject({ margenObjetivo: 2, fechaPropuesta: '2026-09-14' });
+  e.taller.productosSinMargenEntrega.push('normal');
+  const sinMargen = (await buscar()).alternativas[0].reprogramacion!.entregasAfectadas[0];
+  expect(sinMargen).toMatchObject({ margenObjetivo: 0, fechaPropuesta: '2026-09-10' });
+});
 it('excluir el trabajo impide aplicar las opciones que dependían de él', async () => {
   const r = await caso().buscar(['orden']);
   expect(r.alternativas).toEqual([]);

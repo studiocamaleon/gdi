@@ -71,6 +71,7 @@ export function huellaContextoPlan(
     ruteoEstaciones: 'personal-habitual-apoyo-v10',
     zona: t.zona,
     margenDiasHabiles,
+    productosSinMargenEntrega: [...(t.productosSinMargenEntrega ?? [])].sort(),
     tiempoEntrePasosMin: t.tiempoEntrePasosMin,
     items: [...t.items].sort((a, b) => a.id.localeCompare(b.id)),
     estaciones: [...t.estaciones].sort((a, b) => a.id.localeCompare(b.id)),

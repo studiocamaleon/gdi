@@ -1,4 +1,5 @@
 "use client";
+import { excluyeMargenEntrega } from "@/lib/margen-entrega-producto";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import {
@@ -61,6 +62,7 @@ import {
 
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldGroup,
   FieldLabel,
@@ -728,6 +730,7 @@ function IdentidadTab({
       geometriasComerciales: getGeometriasComerciales(
         producto.atributosComercialesJson,
       ),
+      excluirMargenEntrega: excluyeMargenEntrega(producto.atributosComercialesJson),
       activo: producto.activo,
     }),
     [producto],
@@ -775,6 +778,9 @@ function IdentidadTab({
     () => getMedidasPredefinidas(producto),
   );
   const [activo, setActivo] = React.useState(producto.activo);
+  const [excluirMargenEntrega, setExcluirMargenEntrega] = React.useState(
+    () => excluyeMargenEntrega(producto.atributosComercialesJson),
+  );
   // Producto por unidad sin medida (merchandising: taza, remera). Se persiste
   // como FIJA + medidas vacías. Ver docs/productos-comprados-merchandising-diseno.md
   const [sinMedida, setSinMedida] = React.useState<boolean>(
@@ -819,6 +825,7 @@ function IdentidadTab({
         : normalizarMedidasPorModo(modoMedidas, medidas, geometria === "3D"),
       sinMedida,
       geometriasComerciales,
+      excluirMargenEntrega,
       activo,
     }),
     [
@@ -828,6 +835,7 @@ function IdentidadTab({
       medidas,
       geometria,
       geometriasComerciales,
+      excluirMargenEntrega,
       sinMedida,
       minimoComercialCantidad,
       minimoComercialBase,
@@ -866,6 +874,7 @@ function IdentidadTab({
             "minimoComercialPolitica",
             "minimoComercialCantidad",
             "minimoComercialBase",
+            "excluirMargenEntrega",
             "medidas",
             "sinMedida",
             "geometriasComerciales",
@@ -995,10 +1004,10 @@ function IdentidadTab({
               medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
               medidaDefaultProfundidadMm: medidaDefault?.profundidadMm ?? null,
               medidasPredefinidasJson: medidasNormalizadas,
-              atributosComercialesJson: setGeometriasComerciales(
-                producto.atributosComercialesJson,
-                geometriasComerciales,
-              ),
+              atributosComercialesJson: {
+                ...setGeometriasComerciales(producto.atributosComercialesJson, geometriasComerciales),
+                excluirMargenEntrega,
+              },
             }),
       });
       setIdentidadPersistida({
@@ -1019,6 +1028,7 @@ function IdentidadTab({
         medidas: medidasNormalizadas,
         sinMedida,
         geometriasComerciales,
+        excluirMargenEntrega,
         activo,
       });
       toast.success(
@@ -1176,6 +1186,18 @@ function IdentidadTab({
 
       {seccion === "comercial" ? (
         <>
+          <Card className={[styles.section, "col-span-full"].join(" ")}>
+            <Field orientation="horizontal">
+              <FieldContent>
+                <FieldLabel htmlFor="excluir-margen-entrega">Excluir días hábiles de margen</FieldLabel>
+                <FieldDescription id="excluir-margen-entrega-ayuda">
+                  La entrega sugerida de este producto usará el fin estimado de producción, sin sumar el margen del taller. Los demás productos conservarán su margen.
+                </FieldDescription>
+              </FieldContent>
+              <Switch id="excluir-margen-entrega" aria-label="Excluir días hábiles de margen"
+                checked={excluirMargenEntrega} onCheckedChange={setExcluirMargenEntrega} />
+            </Field>
+          </Card>
           <Card className={[styles.section, "col-span-full"].join(" ")}>
             <div className={[styles.sectionHead].join(" ")}>
               <div className={[styles.sectionCopy].join(" ")}>

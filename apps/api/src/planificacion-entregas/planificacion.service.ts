@@ -1,3 +1,4 @@
+import { margenEntregaProducto } from '../produccion/margen-entrega-producto';
 import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
@@ -695,6 +696,9 @@ export class PlanificacionEntregasService {
       );
     const anterior = revision.resultadoJson as unknown as ResultadoPlanGuardado;
     const { taller, huella } = await this.contexto(auth.tenantId, origen.ids);
+    const margen = margenEntregaProducto(
+      taller.margenEtaDias, origen.input.productoId, taller.productosSinMargenEntrega,
+    );
     const entregas = revision.entregas.map((e) => ({
       id: e.clave,
       cantidad: e.cantidad,
@@ -708,7 +712,7 @@ export class PlanificacionEntregasService {
         entregas,
         operaciones: anterior.operaciones,
         taller,
-        margenDiasHabiles: taller.margenEtaDias,
+        margenDiasHabiles: margen,
         condicionesPendientes:
           anterior.resultado.alternativas[0]?.condiciones ?? [],
         prioridadSinFechas: 'PRIMERAS_ENTREGAS',
@@ -719,7 +723,7 @@ export class PlanificacionEntregasService {
       ...anterior,
       calculadaEl: taller.ahora.toISOString(),
       zona: taller.zona,
-      margenDiasHabiles: taller.margenEtaDias,
+      margenDiasHabiles: margen,
       resultado: {
         ...resultado,
         alternativas: [...resultado.alternativas, ...busqueda.alternativas],
@@ -1184,6 +1188,9 @@ export class PlanificacionEntregasService {
           'La orden cambió mientras se calculaba. Actualizá la propuesta.',
         );
       const { taller, huella } = await this.contexto(tenantId, actual.ids);
+      const margen = margenEntregaProducto(
+        taller.margenEtaDias, actual.input.productoId, taller.productosSinMargenEntrega,
+      );
       const condiciones: string[] = [];
       if (
         fuentes.some(
@@ -1202,7 +1209,7 @@ export class PlanificacionEntregasService {
         cantidad: revision.cantidad,
         entregas,
         taller,
-        margenDiasHabiles: taller.margenEtaDias,
+        margenDiasHabiles: margen,
         prioridadSinFechas: 'PRIMERAS_ENTREGAS',
         condicionesPendientes: condiciones,
         // Una operación sólo se comparte entre lotes cuando su receta lo declare.
@@ -1214,7 +1221,7 @@ export class PlanificacionEntregasService {
       const resultadoJson = serializarPlan(
         calculado,
         taller.zona,
-        taller.margenEtaDias,
+        margen,
         taller.ahora,
       );
       resultadoJson.politica = 'POR_ENTREGA';

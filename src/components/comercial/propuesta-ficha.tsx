@@ -34,7 +34,8 @@ import { condicionarPorMateriales, solicitudPrevisionMateriales } from "@/lib/pr
 import { PrevisionMaterialesPanel } from "./prevision-materiales-panel";
 import { getContextoPrevision } from "@/lib/eta-api";
 import { itemHipoteticoDesdeCotizacion } from "@/lib/eta-cotizacion";
-import { describirEta, fechaRecomendadaEta } from "@/lib/eta-fechas";
+import { margenEntregaProducto } from "@/lib/margen-entrega-producto";
+import { describirEta, describirEtaOrden, fechaRecomendadaEta } from "@/lib/eta-fechas";
 import fechasStyles from "./propuesta-fechas.module.css";
 
 import { DesgloseOperacionesCorte } from "./desglose-operaciones-corte";
@@ -5383,29 +5384,20 @@ function PropuestaFichaContenido({
     previsionMateriales.error,
   ]);
 
-  /** ETA de la ORDEN completa = el item que termina último. */
-  const demoraOrden = React.useMemo<SimulacionItem | null>(() => {
-    if (!demoraPorItem || demoraPorItem.size === 0) return null;
-    let fin: Date | null = null;
-    let sinEstimar = false;
-    let parcial = false;
-    let asumeDesbloqueo = false;
-    const motivos = new Set<string>();
-    for (const eta of demoraPorItem.values()) {
-      if (eta.sinEstimar || eta.finEstimado === null) sinEstimar = true;
-      else if (fin === null || eta.finEstimado > fin) fin = eta.finEstimado;
-      parcial ||= eta.parcial;
-      asumeDesbloqueo ||= eta.asumeDesbloqueo;
-      if (eta.motivoSinEstimar) motivos.add(eta.motivoSinEstimar);
-    }
-    return {
-      finEstimado: sinEstimar ? null : fin,
-      motivoSinEstimar: [...motivos].join(" ") || undefined,
-      sinEstimar,
-      parcial,
-      asumeDesbloqueo,
-    };
-  }, [demoraPorItem]);
+  const margenPorProducto = React.useCallback(
+    (productoId?: string) => margenEntregaProducto(
+      margenEtaDias, productoId, colasTaller?.productosSinMargenEntrega,
+    ),
+    [margenEtaDias, colasTaller?.productosSinMargenEntrega],
+  );
+  const demoraOrden = React.useMemo(() => describirEtaOrden(
+    items.filter((item) => !item.listoEnMostrador).map((item) => ({
+      eta: demoraPorItem?.get(item.id),
+      margenDias: margenPorProducto(item.motorCodigo),
+    })),
+    fechaFinalVisible,
+    { noLaborables: colasTaller?.noLaborables, zona: colasTaller?.zona ?? zonaHoraria, ahora: colasTaller?.ahora },
+  ), [items, demoraPorItem, margenPorProducto, fechaFinalVisible, colasTaller, zonaHoraria]);
 
   // Fechas que el usuario fijó a mano (o que ya venían en la OT persistida):
   // la ETA no las vuelve a pisar. El resto sigue a la estimación del sistema.
@@ -5427,7 +5419,7 @@ function PropuestaFichaContenido({
       const next = current.map((item) => {
         if (itemFechaTocadaRef.current.has(item.id)) return item;
         const fecha = fechaRecomendadaEta(demoraPorItem.get(item.id), {
-          margenDias: margenEtaDias,
+          margenDias: margenPorProducto(item.motorCodigo),
           noLaborables,
           zona: colasTaller?.zona ?? zonaHoraria,
         });
@@ -5440,31 +5432,23 @@ function PropuestaFichaContenido({
     });
   }, [
     demoraPorItem,
-    margenEtaDias,
+    margenPorProducto,
     colasTaller?.noLaborables,
     colasTaller?.zona,
     zonaHoraria,
   ]);
 
-  // La fecha de la OT sigue a la ETA de la orden completa (el item que termina
-  // último) hasta que el usuario la fija a mano.
+  // La fecha de la OT sigue a la última entrega sugerida por producto
+  // hasta que el usuario la fija a mano.
   React.useEffect(() => {
     if (!conDemoraSistema || otFechaTocadaRef.current) return;
-    const fecha = fechaRecomendadaEta(demoraOrden, {
-      margenDias: margenEtaDias,
-      noLaborables: colasTaller?.noLaborables,
-      zona: colasTaller?.zona ?? zonaHoraria,
-    });
+    const fecha = demoraOrden?.fechaSugerida ?? null;
     if (items.length > 0)
       setFechaEstimada((prev) => (prev === (fecha ?? "") ? prev : fecha ?? ""));
   }, [
     demoraOrden,
     conDemoraSistema,
     items.length,
-    margenEtaDias,
-    colasTaller?.noLaborables,
-    colasTaller?.zona,
-    zonaHoraria,
   ]);
 
   const router = useRouter();
@@ -8424,12 +8408,7 @@ function PropuestaFichaContenido({
                         );
                         const eta = porProducto
                           ? null
-                          : describirEta(demoraOrden, fechaFinalVisible, {
-                              margenDias: margenEtaDias,
-                              noLaborables: colasTaller?.noLaborables,
-                              zona: colasTaller?.zona ?? zonaHoraria,
-                              ahora: colasTaller?.ahora,
-                            });
+                          : demoraOrden;
                         return (
                           <>
                             <FieldCard
@@ -8469,10 +8448,7 @@ function PropuestaFichaContenido({
                               icon={<ClockIcon />}
                             >
                               <div className={fechasStyles.valorConsulta}>
-                                {margenEtaDias}{" "}
-                                {margenEtaDias === 1
-                                  ? "día hábil"
-                                  : "días hábiles"}
+                                {demoraOrden?.margenEtiqueta ?? "Según cada producto"}
                               </div>
                             </FieldCard>
                             {eta && (eta.motivo || eta.nivel !== "ok") ? (
@@ -8571,7 +8547,7 @@ function PropuestaFichaContenido({
                     expanded={openIds.has(item.id)}
                     etaSistema={demoraPorItem?.get(item.id) ?? null}
                     ahoraEta={colasTaller?.ahora}
-                    margenEtaDias={margenEtaDias}
+                    margenEtaDias={margenPorProducto(item.motorCodigo)}
                     noLaborables={colasTaller?.noLaborables}
                     onEdit={
                       item.listoEnMostradorEl ? undefined : modoOrden
