@@ -130,6 +130,9 @@ jobs:
             src/eventos-sistema/eventos-sistema-lecturas.integration.spec.ts \
             src/eventos-sistema/eventos-sistema.service.spec.ts \
             src/eta/asignacion-automatica.integration.spec.ts \
+            src/produccion/__tests__/margen-entrega-producto.integration.spec.ts \
+            src/planificacion-entregas/planificacion.integration.spec.ts \
+            src/planificacion-entregas/reprogramacion-escenarios.spec.ts \
             src/ordenes-trabajo/__tests__/completar-cola.integration.spec.ts \
             src/productos-servicios/precio/__tests__/precio-fijo-opcionales.spec.ts \
             src/motor-universal/__tests__/precio-fijo-opcionales.spec.ts \
@@ -180,7 +183,11 @@ jobs:
             src/components/comercial/centro-copiado-sheet.test.tsx \
             src/components/comercial/propuesta-emision-navegacion.test.tsx \
             src/components/administracion/tesoreria-view.test.tsx \
-            src/components/administracion/tesoreria-conciliacion.test.tsx
+            src/components/administracion/tesoreria-conciliacion.test.tsx \
+            src/components/administracion/cobro-saldo.test.tsx \
+            src/components/mostrador/entrega-manual.test.tsx \
+            src/lib/descuentos-orden.test.ts \
+            src/lib/eta-fechas.test.ts
       - name: Comprobar cálculos y contrato de tarifarios de Centro de copiado
         working-directory: apps/api
         run: |
