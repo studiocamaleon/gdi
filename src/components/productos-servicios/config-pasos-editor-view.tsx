@@ -1,4 +1,6 @@
 "use client";
+import { CantidadManualConfigFields } from "./cantidad-manual-config";
+import { errorConfigCantidadManual, FUENTE_CANTIDAD_MANUAL } from "@/lib/cantidad-manual-paso";
 import { Badge, Button, HumanSelect, Input, Switch, LabelConTooltip, SelectBuscable, NativeButton, NativeInput, useNodosVisual } from "./nodos-ui";
 
 import nodeStyles from "./nodos-editor.module.css";
@@ -4420,6 +4422,8 @@ export function ConfigPasosEditorView({
       const mecanismoCantidadEfectivo = cantidadRelevante
         ? (cfgActual.mecanismoCantidad ?? null)
         : null;
+      const errorCantidadManual = errorConfigCantidadManual(paramsPasoJson);
+      if (errorCantidadManual) throw new Error(errorCantidadManual);
       const paramsPasoJsonEfectivo =
         Object.keys(paramsPasoJson).length > 0 ? paramsPasoJson : null;
       if (extraGuardar) {
@@ -6629,6 +6633,10 @@ export function ConfigPasosEditorView({
                                                       familia,
                                                       productivityUnit,
                                                     ),
+                                                  ...(value === FUENTE_CANTIDAD_MANUAL ? {
+                                                    cantidadManual: paramsPaso.cantidadManual ?? { etiqueta: "Cantidad del paso", unidad: "m²" },
+                                                    horasEstimadas: null, campoHorasJobContext: null, tiempoManual: null,
+                                                  } : {}),
                                                 })
                                               }
                                               options={
@@ -6636,6 +6644,7 @@ export function ConfigPasosEditorView({
                                               }
                                               placeholder="Elegir fuente"
                                             />
+                                            <CantidadManualConfigFields params={paramsPaso} onChange={patch => updateStepParams(paso.id, patch)} />
                                           </div>
                                         )}
                                         {familia?.codigo === "pre_prensa" && (
@@ -10426,7 +10435,9 @@ function RitmoGuiado({
     opcionesMagnitud.push({ value: `q:${m.value}`, label: m.label });
   }
   const valorMagnitud =
-    fuente !== "cantidad"
+    fuente === FUENTE_CANTIDAD_MANUAL
+      ? `q:${magnitudes.find(m => m.fuente === fuente)?.value ?? "unidades_h|cantidad_manual"}`
+      : fuente !== "cantidad"
       ? `q:${unidad}|${fuente}`
       : puedeElegirMecanismo
         ? cantidadSel.valor
@@ -10435,9 +10446,14 @@ function RitmoGuiado({
     if (v.startsWith("q:")) {
       const elegida = magnitudes.find((m) => `q:${m.value}` === v);
       if (!elegida) return;
+      onPatch(pasoId, { modoTiempo: modoTiempoVariable });
       onParams(pasoId, {
         productivityUnit: elegida.unidad,
         productivityQuantitySource: elegida.fuente,
+        ...(elegida.fuente === FUENTE_CANTIDAD_MANUAL ? {
+          cantidadManual: params.cantidadManual ?? { etiqueta: "Cantidad del paso", unidad: "m²" },
+          horasEstimadas: null, campoHorasJobContext: null, tiempoManual: null,
+        } : {}),
       });
       return;
     }
@@ -10505,6 +10521,7 @@ function RitmoGuiado({
         // "Tiempo por lote" eran la MISMA oración con distinto redondeo:
         // el interruptor de abajo es la única diferencia real.
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <CantidadManualConfigFields params={params} onChange={patch => onParams(pasoId, patch)} />
           <div style={filaStyle}>
             <Input
               value={reglaN}
@@ -10521,7 +10538,8 @@ function RitmoGuiado({
               style={{ maxWidth: 92, textAlign: "right" }}
             />
             {selectorMagnitud}
-            {selectorFuenteTiempo}
+            {fuente === FUENTE_CANTIDAD_MANUAL && <span style={notaStyle}>{asRecord(params.cantidadManual).unidad as string}</span>}
+            {fuente !== FUENTE_CANTIDAD_MANUAL && selectorFuenteTiempo}
             <span style={notaStyle}>cada</span>
             <Input
               value={reglaT}
@@ -11173,6 +11191,7 @@ function TiempoComercialDetalladoEditor({
     patch: Record<string, unknown>,
   ) => void;
 }) {
+  if (cfg.modoTiempo === "T-2" && asRecord(cfg.paramsPasoJson).productivityQuantitySource === FUENTE_CANTIDAD_MANUAL) return null;
   const tiempoManualConfig = getTiempoManualConfig(cfg.paramsPasoJson);
   const tiempoManualHabilitado = tiempoManualConfig.habilitado === true;
   const tiempoManualUnidad =

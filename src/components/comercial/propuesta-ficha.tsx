@@ -3616,6 +3616,9 @@ function CostosItemView({
                                 humanizeCodigo(paso.familiaCodigo)}
                             </span>
                           </span>
+                          {paso.cantidadManual ? <span className={cn(itemCostStyles["cost-chip"])}>
+                            {paso.cantidadManual.etiqueta}: {new Intl.NumberFormat("es-AR", { maximumFractionDigits: 6 }).format(paso.cantidadManual.valor)} {paso.cantidadManual.unidad}
+                          </span> : null}
                           {paso.tiempo?.origenTiempo === "manual_comercial" ? (
                             <span
                               className={cn(itemCostStyles["cost-chip"])}

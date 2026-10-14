@@ -183,6 +183,7 @@ export const TIEMPO_MANUAL_UNIDAD_OPTIONS = [
 ];
 
 const T2_QUANTITY_SOURCE_OPTIONS = [
+  { value: "cantidad_manual", label: "Cantidad ingresada al cotizar", description: "Cantidad propia de este paso, con nombre y unidad configurables." },
   {
     value: "cantidad",
     label: "Cantidad efectiva del paso",
@@ -259,6 +260,7 @@ export function getT2ProductivityUnitSuffix(
   quantitySource: string,
   unidadCantidad?: string | null,
 ) {
+  if (quantitySource === "cantidad_manual") return `${unidadCantidad || "unidades"}/h`;
   if (unit === "ml_h" && quantitySource === "perimetro_piezas_m") {
     return "m perímetro/h";
   }
@@ -284,6 +286,7 @@ export function getT2BatchUnitSuffix(
   quantitySource: string,
   unidadCantidad?: string | null,
 ) {
+  if (quantitySource === "cantidad_manual") return unidadCantidad || "unidades";
   if (unit === "ml_h" && quantitySource === "perimetro_piezas_m") {
     return "m perímetro";
   }
@@ -394,28 +397,28 @@ export function getT2QuantitySourceOptions(
   ) {
     return [
       ...T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
-        ["cantidad_montaje", "cantidad"].includes(option.value),
+        ["cantidad_montaje", "cantidad", "cantidad_manual"].includes(option.value),
       ),
       ...derivadas,
     ];
   }
   if (unit === "m2_h") {
     return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
-      ["area_piezas_m2", "m2_instalados", "cantidad"].includes(option.value),
+      ["area_piezas_m2", "m2_instalados", "cantidad", "cantidad_manual"].includes(option.value),
     );
   }
   if (unit === "ml_h") {
     const conBorde = leerEfectoDemasia(paramsPaso) !== null;
     return T2_QUANTITY_SOURCE_OPTIONS.filter(
       (option) =>
-        ["metros_lineales", "perimetro_piezas_m", "cantidad"].includes(
+        ["metros_lineales", "perimetro_piezas_m", "cantidad", "cantidad_manual"].includes(
           option.value,
         ) || (conBorde && option.value === "perimetro_lados_efecto"),
     );
   }
   return [
     ...T2_QUANTITY_SOURCE_OPTIONS.filter(
-      (option) => option.value === "cantidad",
+      (option) => ["cantidad", "cantidad_manual"].includes(option.value),
     ),
     ...derivadas,
   ];
@@ -436,6 +439,7 @@ export function getRitmoMagnitudOptions(
   unidadCantidad?: string | null,
 ): Array<{ value: string; label: string; unidad: string; fuente: string }> {
   const NOMBRES: Record<string, string> = {
+    cantidad_manual: "Cantidad ingresada al cotizar",
     cantidad_montaje: "piezas a montar",
     area_piezas_m2: "metros cuadrados",
     m2_instalados: "m² instalados",
@@ -458,7 +462,7 @@ export function getRitmoMagnitudOptions(
     )) {
       // "Cantidad efectiva del paso" existe bajo las tres unidades y es una
       // sola idea: se ofrece una vez, contando lo que el paso cuenta.
-      if (opcion.value === "cantidad" && vistos.has("cantidad")) continue;
+      if (["cantidad", "cantidad_manual"].includes(opcion.value) && vistos.has(opcion.value)) continue;
       vistos.add(opcion.value);
       const label =
         opcion.value === "cantidad"

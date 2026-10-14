@@ -689,6 +689,8 @@ export interface OperacionIncorporacionCosteada {
 }
 
 export interface PasoEjecutado {
+  /** Cantidad total ingresada para este paso, conservada en cotización y OT. */
+  cantidadManual?: import('./cantidad-manual-paso').CantidadManualRegistrada;
   /** Opcional según la configuración efectiva, incluso si se activó por dependencia. */
   esOpcional?: boolean;
   requiereMaquina?: boolean;
