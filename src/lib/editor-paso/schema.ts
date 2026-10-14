@@ -22,6 +22,7 @@ import type { FamiliaListItem } from "../productos-servicios";
 import type { PendientePasoTipo } from "../pendientes-paso";
 import {
   getRuleFields,
+  estadoPasoRuleFields,
   jsonLogicToRuleGroup,
   summarizeRuleGroup,
 } from "../rule-builder";
@@ -947,15 +948,15 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     resumen: (ctx) => {
       const json = ctx.cfg.condicionActivacionJson;
       if (!json) return "Sin regla todavía";
-      const parsed = jsonLogicToRuleGroup(
-        json,
-        getRuleFields({ includeMeasureFields: true }),
-      );
+      const fields = getRuleFields({
+        includeMeasureFields: true,
+        extraFields: estadoPasoRuleFields(
+          ctx.otrosPasos.map((paso) => ({ value: paso.id, label: paso.nombre })),
+        ),
+      });
+      const parsed = jsonLogicToRuleGroup(json, fields);
       return parsed.supported
-        ? summarizeRuleGroup(
-            parsed.group,
-            getRuleFields({ includeMeasureFields: true }),
-          )
+        ? summarizeRuleGroup(parsed.group, fields)
         : "Regla avanzada (abrila para verla)";
     },
     origenValor: (ctx) =>
@@ -2702,7 +2703,7 @@ const GRUPOS_ACTIVACION: GrupoEje[] = [
     id: "regla",
     titulo: "La condición",
     ayuda:
-      "El paso corre sólo cuando esto se cumple. Podés combinar medidas del ítem, opciones elegidas y tecnología.",
+      "El paso corre sólo cuando esto se cumple. Podés combinar medidas del ítem, opciones elegidas, tecnología y el estado de otro paso. Por ejemplo: Preprensa se ejecuta si Diseño gráfico está inactivo.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
     encabezado: "arriba",

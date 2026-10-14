@@ -1,3 +1,4 @@
+import { ESTADOS_ACTIVACION, resolverEstadosActivacion, type ContextoEstados } from './estado-pasos';
 import { precioPapelCortado } from '../inventario/precio-papel-cortado';
 import {
   cantidadPapelCortado,
@@ -1257,6 +1258,28 @@ export class MotorUniversalService {
         sugerencia:
           'Revisar la dependencia declarada en el paso, o habilitar el paso requerido en esta ruta.',
       });
+    }
+
+    // Estado efectivo de otros pasos: después del arrastre, antes de costear.
+    // El snapshot se comparte con los contextos derivados y evita que el orden
+    // de ejecución cambie la decisión (Preprensa puede preceder a Diseño).
+    const estadosActivacion = resolverEstadosActivacion(
+      producto.pasos,
+      jobContext,
+    );
+    (jobContext as ContextoEstados)[ESTADOS_ACTIVACION] = estadosActivacion;
+    for (const [configPasoId, estado] of estadosActivacion) {
+      if (estado.error)
+        errores.push({
+          codigo: 'condicion_estado_paso_invalida',
+          severidad: 'ERROR',
+          rutaPasoId: producto.pasos.find(
+            (p) => p.configPasoId === configPasoId,
+          )?.rutaPasoId,
+          mensaje: estado.error,
+          sugerencia:
+            'Revisar las condiciones de activación de los pasos de esta ruta.',
+        });
     }
 
     // 1d. PRE-PASADA DE MEDIDAS — los pasos que declaran el EFECTO
@@ -5579,6 +5602,9 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): { activado: boolean; razon?: string; error?: string } {
+    const estadoResuelto = (jobContext as ContextoEstados)[ESTADOS_ACTIVACION]?.get(paso.configPasoId);
+    if (estadoResuelto) return estadoResuelto;
+
     const modo = paso.modoActivacion ?? 'OBLIGATORIO';
 
     if (modo === 'NO_EJECUTAR') {
