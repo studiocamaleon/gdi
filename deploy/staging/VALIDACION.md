@@ -1,5 +1,44 @@
 # Validación de staging — historial
 
+## 2026-10-15 — Fila manual en Planos CAD
+
+[PR #100](https://github.com/studiocamaleon/gdi/pull/100), dependiente de #99. Conserva los lotes #99/#97/#98 y #94/#92/#93. Autorización limitada a staging; producción y merge pendientes de aceptación. Dependencias automáticas fuera.
+
+«Fila manual» permite ingresar nombre, ancho y alto en mm, copias y perfil CAD sin adjuntar PDF. Varias medidas manuales y PDF pueden convivir en la misma carga. Las medidas incompletas o no positivas bloquean cotización y agregado. La OT conserva medidas y copias al reabrir.
+
+**Regresión detectada durante esta publicación:** el ensayo del servicio real encontró `archivoNombre: undefined` en el contexto de un plano manual; el motor lo rechazaba aunque los tests con motor simulado pasaban. Se omite la propiedad ausente. La nueva aserción usa el validador real y reprodujo tres fallos antes de corregirlos; después pasó con 1/5/10 copias.
+
+**Pruebas locales:** 159 casos en ocho suites (124 API y 35 interfaz/helpers). Tras la corrección se repitieron las cuatro suites API afectadas: 97 casos aprobados; ESLint enfocado y diff correctos. La suite manual está incluida en CI.
+
+**Revisión funcional:** `a6a27e08a856f5394bba61adb131e72f2df9df69`. [CI HTTP y regresiones](https://github.com/studiocamaleon/gdi/actions/runs/38766420687), [contenedores/tipos/migraciones/login](https://github.com/studiocamaleon/gdi/actions/runs/38766420723) y Vercel aprobados. CodeQL sin alertas abiertas del PR. Compilación remota con tipos. El primer build web dejó de avanzar durante la instalación de dependencias; se detuvo sólo ese cliente de compilación y se reintentó en el mismo constructor remoto. No se reinició Docker local ni se aumentaron recursos.
+
+**Servicio compilado de staging:** transacción PostgreSQL de sólo lectura, usando la lista QA ya existente y seleccionándola sólo en memoria. No se cambió la política de canales ni el tarifario vigente. Para 594 × 841 mm, rollo de 914 mm y lista de ensayo de $5.000/ML con IVA, sin redondeo:
+
+| Copias | Consumo | Total | Cantidad preparada para OT |
+| --- | --- | --- | --- |
+| 1 | 0,604 ML | $3.020 | 1 |
+| 5 | 3,02 ML | $15.100 | 5 |
+| 10 | 6,04 ML | $30.200 | 10 |
+
+Los tres casos igualan al PDF equivalente. Validación del contrato de entrada, vista previa, construcción de carga, reconstrucción desde el snapshot y preparación de persistencia de la cotización correctas. Tres filas juntas de 594 × 841, 300 × 600 y 420 × 594 mm también producen sus tres ítems, con 1/5/10 copias e importes de $3.020/$7.750/$21.500. Son precios ficticios de ensayo. No se guardó ni emitió una OT, ni se registraron pagos, producción o archivos nuevos.
+
+**Navegador pendiente:** la herramienta no pudo cargar su política de conexión y devolvió `ERR_BLOCKED_BY_CLIENT`. El titular confirmó que dejó staging abierto; el reintento siguió fallando antes de poder leer esa sesión. No se pudo verificar visualmente la fila ni pulsar «Agregar a la OT» en staging. Los ensayos del servidor y de componentes no sustituyen esta comprobación. PR mantenido en borrador hasta completar ese recorrido.
+
+| Componente | Revisión / digest |
+| --- | --- |
+| API / worker / worker-pdf | `a6a27e08a` · `sha256:cd47def9e7661f758655b7cf95788b479a69608a2cf0423c2d8d409a8a73c298` |
+| Web | `a6a27e08a` · `sha256:70ee70b16a4a6838a0980dfb094ebb4a61fba33e1d0a487310e8108b1be4c65d` |
+| Gotenberg, conservado | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Operación:** seis máquinas saludables con los mismos recursos; revisiones y Sentry comprobados en API, ambos workers y web. Salud HTTPS 200/200 y rechazos anónimos 403/401. Se mantienen las 316 migraciones, sin nuevas ni pendientes; las seis tablas contrastadas conservan recuentos e identificadores. Producción mantiene sus seis imágenes y tamaños originales. Constructor remoto temporal retirado.
+
+Fuentes cifradas e inventario del copiador actualizados. Comprobante posterior `52891bb6-bfbd-4598-beef-678f7c1e5f02`, completado `2026-10-15T16:33:20.503Z`: revisión final, cuatro imágenes, 316 migraciones, 24 archivos y 9 fuentes. Firma y manifiesto descifrado verificados; **no se repitió una restauración SQL**, por lo que esta comprobación no acredita por sí sola una restauración completa de la copia.
+
+**Reversión:** API y ambos workers al digest previo `sha256:c58a13fc11da70a07bf85c2d64d26e6d366a702bbfa1f8bf7f5b688df4bb5310` (`d72343615`, #99); web a `sha256:43f6d5d35a9aaf580ed91476ae9129447f72d63b50b759ac12a4cb110b233cfe` (`5a1128328`, #94). Conservar PDF/copiador y restituir su inventario previo. No hay migraciones que revertir.
+
+El registro documental se guarda después de compilar; las imágenes conservan la revisión funcional indicada. #100 espera prueba visual y aceptación; sus dependencias mantienen sus pendientes de aceptación/producción/integración. No se fusionó ni cerró ningún PR de ese lote.
+
 ## 2026-10-15 — Importación de planos y precios de tomos
 
 Lote del [PR #99](https://github.com/studiocamaleon/gdi/pull/99), con [#97](https://github.com/studiocamaleon/gdi/pull/97) y [#98](https://github.com/studiocamaleon/gdi/pull/98). Conserva #94 y sus dependencias #92/#93, que ya estaban en staging. Autorización limitada a staging; producción, aceptación y merge pendientes. Las actualizaciones de dependencias quedan fuera.
