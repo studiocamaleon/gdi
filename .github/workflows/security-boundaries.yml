@@ -216,6 +216,8 @@ jobs:
             src/centro-copiado/comercial/__tests__/control-margen.spec.ts \
             src/centro-copiado/comercial/__tests__/calculo-hojas.spec.ts \
             src/centro-copiado/comercial/__tests__/validaciones.spec.ts \
+            src/centro-copiado/__tests__/persistencia-cad.spec.ts \
+            src/centro-copiado/pedidos/__tests__/preview-canal.spec.ts \
             src/centro-copiado/comercial/__tests__/calculo-cad.spec.ts \
             src/centro-copiado/comercial/__tests__/validaciones-cad.spec.ts \
             src/centro-copiado/comercial/__tests__/composicion-pedido.spec.ts \

@@ -2915,6 +2915,18 @@ export class MotorUniversalService {
     } | null;
   }) {
     const desglosePrecio = args.cotizacion.desglosePrecio;
+    // Centro de copiado muestra planos físicos; el motor puede costear el
+    // producto por ML. Conservar ambas magnitudes evita guardar 5,96 planos
+    // para una carga de 10 copias y rechazarla después al revisar la OT.
+    const copiado = args.jobContext._centroCopiado as
+      | { modo?: unknown }
+      | undefined;
+    const esPlanoCopiado = copiado?.modo === 'CAD';
+    const cantidadItem = esPlanoCopiado
+      ? args.cotizacion.cantidadPedida
+      : args.cotizacion.cantidadComercialReal;
+    const unitarioPlano = (total: number) =>
+      new Prisma.Decimal(total).div(cantidadItem).toString();
     const precioResultado = desglosePrecio
       ? {
           precioUnitario: desglosePrecio.precioBrutoUnitario,
@@ -2936,7 +2948,7 @@ export class MotorUniversalService {
       recetaRevisionId: args.receta?.id ?? null,
       recetaVersion: args.receta?.version ?? null,
       recetaHuella: args.receta?.huella ?? null,
-      cantidad: args.cotizacion.cantidadComercialReal.toString(),
+      cantidad: cantidadItem.toString(),
       jobContextJson: args.jobContext as never,
       snapshotJson: {
         tipoCambio: args.cotizacion.tipoCambio ?? null,
@@ -2953,7 +2965,7 @@ export class MotorUniversalService {
           id: args.producto.productoId,
           codigo: args.producto.productoCodigo,
           nombre: args.producto.productoNombre,
-          unidadComercial: args.producto.unidadComercial,
+          unidadComercial: esPlanoCopiado ? 'u' : args.producto.unidadComercial,
           modoMedidas: args.producto.modoMedidas,
           minimoComercialBase: args.producto.minimoComercialBase,
         },
@@ -2997,10 +3009,14 @@ export class MotorUniversalService {
           costos: args.cotizacion.costos,
         },
       } as never,
-      costoUnitario: args.cotizacion.costos.unitario.toString(),
+      costoUnitario: esPlanoCopiado
+        ? unitarioPlano(args.cotizacion.costos.total)
+        : args.cotizacion.costos.unitario.toString(),
       costoTotal: args.cotizacion.costos.total.toString(),
       precioNetoUnitario:
-        desglosePrecio?.precioNetoUnitario?.toString() ?? null,
+        esPlanoCopiado && desglosePrecio
+          ? unitarioPlano(desglosePrecio.precioNetoTotal)
+          : desglosePrecio?.precioNetoUnitario?.toString() ?? null,
       precioNetoTotal: desglosePrecio?.precioNetoTotal?.toString() ?? null,
       impuestosPorFueraTotal: desglosePrecio
         ? Math.max(
@@ -3008,7 +3024,10 @@ export class MotorUniversalService {
             desglosePrecio.precioBrutoTotal - desglosePrecio.precioNetoTotal,
           ).toString()
         : null,
-      precioUnitario: precioResultado?.precioUnitario?.toString() ?? null,
+      precioUnitario:
+        esPlanoCopiado && precioResultado
+          ? unitarioPlano(precioResultado.precioTotal)
+          : precioResultado?.precioUnitario?.toString() ?? null,
       precioTotal: precioResultado?.precioTotal?.toString() ?? null,
       descuentoTipo: args.descuento?.tipo ?? null,
       descuentoValor:
