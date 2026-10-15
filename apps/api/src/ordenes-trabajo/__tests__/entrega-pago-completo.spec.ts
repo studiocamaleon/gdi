@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { EntregaService } from '../entrega.service';
 import type { CurrentAuth } from '../../auth/auth.types';
 
@@ -45,12 +46,15 @@ function preparar(pagado: number, directo = 0, estado = 'finalizada') {
     $transaction: jest.fn(),
   };
   db.$transaction.mockImplementation((fn) => fn(db));
+  const cobros = {
+    create: jest.fn().mockResolvedValue({ id: 'cobro-ficticio' }),
+  };
   const servicio = new EntregaService(
     db as never,
-    { create: jest.fn() } as never,
+    cobros as never,
     { reconciliarOrden: jest.fn() } as never,
   );
-  return { db, servicio };
+  return { db, servicio, cobros };
 }
 it.each([0, 40, 99.99])(
   'no entrega con pago insuficiente (%s), aunque el total cacheado indique saldada',
@@ -125,3 +129,45 @@ it('conserva el circuito habitual de entrega cuando no se pide el cierre inmedia
   expect(db.$queryRaw).not.toHaveBeenCalled();
   expect(db.ordenTrabajoItem.updateMany).toHaveBeenCalled();
 });
+
+it.each([false, true])(
+  'si vence la entrega, informa si el pago ya quedó registrado (%s)',
+  async (conPago) => {
+    const { db, servicio, cobros } = preparar(0);
+    db.$transaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Transaction expired', {
+        code: 'P2028',
+        clientVersion: 'test',
+      }),
+    );
+    const operacion = servicio.entregar(
+      {
+        ...auth,
+        permisos: new Set(['comercial.gestionar', 'administracion.cobrar']),
+      },
+      'orden-ficticia',
+      {
+        itemIds: ['item-ficticio'],
+        ...(conPago
+          ? {
+              cobro: {
+                fecha: '2026-10-01',
+                metodoPagoId: 'metodo-ficticio',
+                cuentaDestinoId: 'cuenta-ficticia',
+                montoBruto: 100,
+                comisionPctAplicada: 0,
+                idempotencyKey: 'clave-ficticia',
+              },
+            }
+          : {}),
+      },
+    );
+    await expect(operacion).rejects.toThrow(
+      conPago
+        ? 'El pago quedó registrado'
+        : 'Actualizá la orden antes de reintentar',
+    );
+    expect(cobros.create).toHaveBeenCalledTimes(conPago ? 1 : 0);
+    expect(db.ordenTrabajoItem.updateMany).not.toHaveBeenCalled();
+  },
+);

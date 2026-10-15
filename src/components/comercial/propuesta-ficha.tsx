@@ -5100,7 +5100,9 @@ function PropuestaFichaContenido({
   // permiso que rige anular comprobantes.
   const verMargenes = usePuede("finanzas.ver_margenes");
   const puedeAnular = usePuede("administracion.anular");
-  const puedeEntregar = usePuede("produccion.tablero.gestionar");
+  const permisoEntregaProduccion = usePuede("produccion.tablero.gestionar");
+  const permisoEntregaComercial = usePuede("comercial.ordenes.gestionar");
+  const puedeEntregar = permisoEntregaProduccion || permisoEntregaComercial;
   const puedeAbrirEntrega = orden?.estado === "finalizada" && puedeEntregar;
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
   const [cancelando, setCancelando] = React.useState(false);
