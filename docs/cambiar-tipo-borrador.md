@@ -15,4 +15,4 @@ La operación valida estado y versión, permisos, empresa y funciones contratada
 - Ficha de una OT guardada: conversión con edición abierta sin cambios, bloqueo con datos o pagos pendientes y recuperación de la edición ante un error.
 - Regresión de edición y detalle de presupuestos y de conversión comercial; nuevos casos incluidos en CI.
 
-Publicado en producción desde `a7d34a80b` tras CI y ensayo técnico de staging. Sin migraciones; independiente del lote de cantidad manual y exclusión de pasos, que continúa pendiente en staging. Ver [validación de producción](../deploy/produccion/VALIDACION.md).
+Publicado en producción desde `a7d34a80b`, con el desbloqueo de edición sin cambios en `15600992f` (#96), tras CI y ensayo técnico de staging. Sin migraciones; independiente del lote de cantidad manual y exclusión de pasos, que continúa pendiente en staging. Ver [validación de producción](../deploy/produccion/VALIDACION.md).
