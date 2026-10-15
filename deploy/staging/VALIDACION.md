@@ -1,5 +1,38 @@
 # Validación de staging — historial
 
+## 2026-10-15 — Importación de planos y precios de tomos
+
+Lote del [PR #99](https://github.com/studiocamaleon/gdi/pull/99), con [#97](https://github.com/studiocamaleon/gdi/pull/97) y [#98](https://github.com/studiocamaleon/gdi/pull/98). Conserva #94 y sus dependencias #92/#93, que ya estaban en staging. Autorización limitada a staging; producción, aceptación y merge pendientes. Las actualizaciones de dependencias quedan fuera.
+
+La importación CAD normaliza la precisión del consumo en ML antes del cálculo comercial, sin modificar las medidas ni la escala del PDF. Los tomos resuelven el grupo mediante el identificador del ítem compuesto y aplican la matriz del canal a todos sus documentos; anillado aparte.
+
+El primer ensayo del navegador descubrió un segundo bloqueo al pasar un plano a la OT: el motor guardaba su cantidad comercial en ML como cantidad del ítem (5,96 en lugar de 10 planos). La corrección adicional guarda la cantidad de planos y sus importes unitarios, conservando el costo total, las medidas originales y los ML productivos en el snapshot. No cambia la cotización por ML de esos productos fuera de Centro de copiado. Un plano guardado con la representación anterior debe reconstruirse desde Centro de copiado; no se reescribieron documentos históricos.
+
+**Pruebas locales:** 220 casos en siete suites. Las tres nuevas regresiones de persistencia fallaron antes y pasaron después; incluyen cantidad 1/5/10, conservación de totales y geometría, y rechazo de una cantidad diferente durante la revisión. Se añadieron a CI estas pruebas y las de vista previa de tomos. El análisis ESLint con tipos alcanzó el límite local de 1,5 GB; no se amplió memoria ni se repitió en la Mac. Compilación completa con tipos en remoto y CI.
+
+**Chrome staging, datos ficticios:** lista de precios QA independiente del borrador Mostrador. Dos PDFs de cuatro y seis páginas A4, papel obra, B/N, simple faz: 1/5/10 juegos usan 10/50/100 hojas a $150/$100/$80 por hoja con IVA. Impresión $1.500/$5.000/$8.000; el espiral plástico Ø9 mm se suma aparte. Totales con terminación visibles, redondeados a pesos: $4.276/$18.880/$35.760. La OT recibe el mismo total y muestra el rango y precio final por hoja. Wire-O no tiene material con precio en esta empresa de prueba y se rechaza con su mensaje de configuración; el ensayo usa el espiral disponible.
+
+Plano PDF ficticio con ambas dimensiones fraccionarias: 594,0036944444444 × 841,0010555555555 mm. Cotiza al 100 %, en rollo de 914 mm, con 1/5/10 copias. Precios de ensayo $5.000/ML con IVA, sin redondeo comercial: importes visibles aproximados $3.020/$15.100/$30.200. Importación comprobada mediante el selector de archivos; selector y arrastre comparten `onArchivos`. No se realizó arrastre físico ni impresión física.
+
+**Revisión funcional:** `d72343615a0403f3594da0511d262c172552c014`. [CI HTTP y regresiones](https://github.com/studiocamaleon/gdi/actions/runs/38753807601), [contenedores/tipos/migraciones/login](https://github.com/studiocamaleon/gdi/actions/runs/38753807468), CodeQL sin alertas abiertas y Vercel aprobados. El primer intento de CI de #98 falló por ECONNRESET descargando paquetes y pasó al reintentar sin cambios de código. El primer envío de la imagen final a Fly falló en una capa; el reintento reutilizó la compilación.
+
+| Componente | Revisión / digest |
+| --- | --- |
+| API / worker / worker-pdf | `d72343615` · `sha256:c58a13fc11da70a07bf85c2d64d26e6d366a702bbfa1f8bf7f5b688df4bb5310` |
+| Web, conservada | `5a1128328` · `sha256:43f6d5d35a9aaf580ed91476ae9129447f72d63b50b759ac12a4cb110b233cfe` |
+| Gotenberg, conservado | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Resultado final en la OT:** diez tomos y diez planos conservan la cantidad y los rangos del tarifario, sin alerta de revisión ni errores de consola en el recorrido final. Importes exactos persistidos: $35.759,82 de tomos y $30.200,18 de planos; total $65.960. La pantalla redondea cada fila a pesos. No se guardó ni emitió la OT ficticia, ni se registraron pagos o producción.
+
+La configuración temporal se restituyó al terminar: política general Motor, cinco canales heredados y sin asignación activa, confirmado también en Chrome. El tarifario original Mostrador permanece idéntico al previo; la lista QA queda sin asignar y rotulada «NO USAR». La restitución conserva revisión y auditoría. Evidencia y archivos ficticios fuera de Git.
+
+**Operación:** seis máquinas saludables, mismos tamaños, 316 migraciones sin nuevas. Salud HTTPS 200/200 y accesos anónimos rechazados 403/401. Revisión y Sentry activos comprobados en API, ambos workers y web. Se actualizaron las fuentes cifradas y el inventario del copiador. El comprobante posterior `10fa17d3-1b7f-4b45-9064-450bbb87dcbf`, completado `2026-10-15T15:00:58.503Z`, contiene la revisión funcional final, las cuatro imágenes, 316 migraciones, 24 archivos y nueve fuentes. Firma y manifiesto descifrado verificados; **no se repitió una restauración SQL**, por lo que esto no acredita por sí solo una restauración completa de esta copia. Ambos builders temporales fueron eliminados.
+
+El registro se añade en un commit documental posterior; las imágenes conservan la revisión funcional indicada y no se recompilan por ese registro. #99, #97 y #98 quedan pendientes de aceptación/publicación en producción e integración. #94 y sus dependencias conservan su pendiente de aceptación; las propuestas automáticas de dependencias siguen fuera del lote.
+
+**Reversión:** reinstalar en API y ambos workers `registry.fly.io/grafoprint-staging-api@sha256:481e539b61961498b31051726daef7f16bc8cf67fdec234381c273e967cedf59` (lote #94 previo), conservar web/PDF/copiador y restituir el inventario de fuentes e imágenes de ese lote. No hay migraciones que revertir. Producción conserva las seis imágenes y recursos anteriores.
+
 ## 2026-10-15, 13:21 UTC — Ensayo temporal del desbloqueo de borradores
 
 **Revisión web:** `15600992fdbfbb476793e362a53fe3b43f894ccb`, [PR #96](https://github.com/studiocamaleon/gdi/pull/96), sobre `main` después de #95. Corrige el bloqueo de «Cambiar a presupuesto» al entrar a editar una OT en borrador sin modificar datos. Los cambios sin guardar, pagos preparados y operaciones pendientes siguen bloqueando la conversión; durante la solicitud no se permite editar ni agregar pagos. Un error recupera la edición sin perder el documento. Misma autorización de publicación del cambio de tipo; #92–#94 y dependencias automáticas fuera del lote.
