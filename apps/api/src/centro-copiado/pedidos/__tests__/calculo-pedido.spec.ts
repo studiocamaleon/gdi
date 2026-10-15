@@ -186,6 +186,37 @@ it('las coberturas diferenciadas conservan tramos separados al reunir cargas', (
   expect(r.composicion.total?.total).toBe('12100.00');
 });
 
+it('cotiza el pedido con medidas PDF fraccionarias y conserva el total al repartir sus cargas', () => {
+  const lineas = [1, 5].map((copias, n) => ({
+    ...linea(`carga-${n}`),
+    documentos: [
+      documentoCad(`plano-${n}`, {
+        copias,
+        medidasPaginas: [{ anchoMm: 594, altoMm: 2383.94 * (25.4 / 72) }],
+      }),
+    ],
+  }));
+  const i = input(lineas);
+  const fila = filaCad();
+  i.contenido.cad!.filas = [{ ...fila, precios: [...fila.precios] }];
+  i.contenido.cad!.rangosGenerales = ['0', '4'];
+  const r = calcularPedidoCopiado(i);
+  expect(r.estado).toBe('CALCULADO');
+  expect(r.grupos).toEqual([
+    { unidad: 'ML', cantidad: '5.106006333336', desde: '4', precio: '4000' },
+  ]);
+  // El pedido suma los importes fiscales redondeados de cada renglón.
+  expect(r.composicion.total).toMatchObject({
+    neto: '16879.35',
+    iva: '3544.67',
+    total: '20424.02',
+  });
+  expect(r.precios.reduce((sum, p) => sum + Number(p.precio?.total), 0)).toBe(
+    20424.02,
+  );
+  expect(r.control.estado).toBe('CALCULADO');
+});
+
 it('evalúa contribución de impresión y terminaciones sin descontar tiempo interno', () => {
   const l = linea('a');
   l.costoImpresion = '110';
