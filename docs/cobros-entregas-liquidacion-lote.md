@@ -1,6 +1,6 @@
 # Cobros, entregas y acreditación por liquidación
 
-Publicado y comprobado en staging el 15/10/2026, revisión `fc6277ff7` del PR #101. Producción e integración pendientes de aceptación. Ver [registro del despliegue](../deploy/staging/VALIDACION.md).
+Publicado en producción el 15/10/2026 mediante el [PR integrador #102](https://github.com/studiocamaleon/gdi/pull/102), después de la aceptación de staging. Web `fc6277ff7`, API/ambos workers `9d2cf372a`, incluyendo la protección contra avisos duplicados. Ver [registro de producción](../deploy/produccion/VALIDACION.md) y [pruebas de staging](../deploy/staging/VALIDACION.md).
 
 ## Problemas corregidos
 
@@ -30,4 +30,6 @@ Un reintento de la misma liquidación no duplica movimientos. Si un cobro ya fue
 
 Las pruebas locales no ejecutan envíos ni cobros externos. La muestra temporal usada para comprobar la interfaz no se incluye en la aplicación publicada.
 
-En staging, Chrome comprobó el cobro y entrega de una OT ficticia de $12.000 por un vendedor y la acreditación conjunta de dos cobros de $10.000/$20.000 con una LIQ común: $29.637 netos. PostgreSQL y HTTP confirmaron saldo cero, un movimiento por cobro, rechazo del pago extra y del cambio de LIQ. Tres recibos PDF generados y sin errores de consola en los recorridos. Las cuentas ficticias quedaron desactivadas y su auditoría se conserva en una empresa separada; producción no se modificó.
+En staging, Chrome comprobó el cobro y entrega de una OT ficticia de $12.000 por un vendedor y la acreditación conjunta de dos cobros de $10.000/$20.000 con una LIQ común: $29.637 netos. PostgreSQL y HTTP confirmaron saldo cero, un movimiento por cobro, rechazo del pago extra y del cambio de LIQ. Tres recibos PDF generados y sin errores de consola en los recorridos. Las cuentas ficticias quedaron desactivadas y su auditoría se conserva en una empresa separada. Ese ensayo no modificó producción.
+
+En producción se comprobó la carga del listado y de una OT entregada/saldada: un cobro, saldo cero y bloqueo de cobro adicional. Tesorería permitió seleccionar dos cobros y revisar la fecha, referencia común de LIQ, comisiones, retenciones y neto; se canceló la revisión y se limpió la selección. Sin errores ni advertencias de consola. No se acreditaron cobros ni se entregaron órdenes reales como prueba. Los recorridos de escritura y rol vendedor se comprobaron en staging y en PostgreSQL/HTTP de tests.

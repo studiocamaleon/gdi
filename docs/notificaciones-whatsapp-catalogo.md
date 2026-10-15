@@ -8,6 +8,8 @@
 
 ## Corrección de duplicados — 15/10/2026
 
+Publicada en producción con `9d2cf372a`, [PR #102](https://github.com/studiocamaleon/gdi/pull/102). El catálogo histórico que sigue conserva su carácter de análisis; el estado de esta corrección se registra en [VALIDACION.md](../deploy/produccion/VALIDACION.md).
+
 La consulta de producción y de campañas WATI confirmó pares con el mismo
 contenido y destinatario, identificadores distintos y ambas entregas confirmadas.
 La cola tenía una sola fila; el reintento había reemplazado el token anterior.

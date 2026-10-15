@@ -1,5 +1,22 @@
 # Validación de staging — historial
 
+## 2026-10-15, 20:22 UTC — Avisos WATI sin reenvío ambiguo y lote aceptado
+
+El titular aceptó el lote #101 y autorizó publicarlo junto con la corrección de avisos duplicados. [PR integrador #102](https://github.com/studiocamaleon/gdi/pull/102), que conserva los commits de #101, #100, #99, #98, #97, #94, #93 y #92. Las propuestas automáticas de dependencias siguen fuera.
+
+API y ambos workers ejecutan `9d2cf372a96037fe7e92cd2fe637409c8e69bee7`, digest `sha256:59e1a73beb04a9a68953345628ec7e7a04c24fd20250381247ce8ffa3cd211bc`. Web y PDF conservan las imágenes comprobadas del lote anterior: revisión `fc6277ff7013053d638e26b6cd4c11dbaa8d6890`, web `sha256:08a10da0a3bc7cb0be50824a6c55b48be32906b4d6fbc0dabcb730499941e62a`, PDF `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92`. Se comprobó que sus fuentes no cambiaron. Compilación backend remota; constructor temporal retirado.
+
+**Diagnóstico y corrección:** WATI confirmó tres pares duplicados en consultas de sólo lectura. Grafo conservaba una fila por aviso y dos intentos, sin reintentos manuales. Los cuerpos HTTP originales no estaban disponibles: se corrigió el camino reproducible que consideraba un 200 ambiguo o contradictorio como rechazo seguro y volvía a enviar. Ahora preserva el identificador del destinatario y consulta la entrega; una respuesta incierta no genera otro POST. Ver [detalle técnico y límites](../../docs/notificaciones-whatsapp-catalogo.md#corrección-de-duplicados--15102026).
+
+**Pruebas:** 114 casos locales de avisos/concurrencia/permisos/extensión; nueve regresiones fallaron antes del cambio. Después de integrar el lote, 58 casos de avisos, permisos de vendedor y LIQ pasaron juntos. [CI HTTP y regresiones](https://github.com/studiocamaleon/gdi/actions/runs/38799483302), [contenedores, tipos, migraciones y login](https://github.com/studiocamaleon/gdi/actions/runs/38799483160), CodeQL sin alertas abiertas del PR y Vercel aprobados.
+
+En los servicios realmente compilados de staging se ejecutaron tres casos: respuesta contradictoria con ID, respuesta negativa sin ID y corte después de aceptar el envío. Cada caso mantuvo un solo intento, incluso al reiniciar el despachador; el seguimiento recuperó el ID y confirmó entrega. **Tres POST simulados, cero mensajes externos.** Empresa ficticia dentro de una transacción revertida; se comprobó su ausencia y la conservación de recuentos/huellas de las seis tablas de control. Las pruebas visuales de vendedor, LIQ y copiado del registro anterior siguen siendo aplicables y fueron aceptadas por el titular.
+
+Seis servicios saludables, tamaños originales, HTTPS 200 y rechazos anónimos 403/401. 316 migraciones completas y checksums intactos, ninguna nueva. Fuentes cifradas e inventario del copiador actualizados. Copia posterior `7528459d-4070-4e66-89f3-9e579846bed1`, completada `2026-10-15T20:22:07.927Z`: firma y manifiesto descifrado comprobados, revisión y cuatro imágenes exactas, 27 archivos y ocho fuentes. No se repitió restauración SQL completa.
+
+**Reversión de esta corrección:** API y ambos workers a la imagen `fc6277ff7` registrada en la entrada anterior; web, PDF y datos se conservan. Actualizar también el inventario del copiador. La promoción y el cierre del conjunto se registran en [producción](../produccion/VALIDACION.md).
+
+
 ## 2026-10-15 — Cobros y entregas del vendedor; acreditación por LIQ
 
 [PR #101](https://github.com/studiocamaleon/gdi/pull/101), dependiente de #100. La rama incorpora #100 y conserva #99/#97/#98 y #94/#92/#93. Publicación autorizada sólo en staging. Producción, aceptación e integración pendientes. Las seis propuestas automáticas de dependencias quedan fuera.
