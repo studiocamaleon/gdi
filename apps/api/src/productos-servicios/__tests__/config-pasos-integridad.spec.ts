@@ -13,7 +13,11 @@ function crearServicio(prisma: Record<string, unknown> = {}) {
     validarConfigPasoContraFamilia: jest.fn(),
   };
   return {
-    service: new ConfigPasosService(prisma as unknown as PrismaService, familias as unknown as FamiliasPasosService, capacidadesDePrueba()),
+    service: new ConfigPasosService(
+      prisma as unknown as PrismaService,
+      familias as unknown as FamiliasPasosService,
+      capacidadesDePrueba(),
+    ),
     familias,
   };
 }
@@ -78,5 +82,89 @@ describe('ConfigPasosService — integridad de reglas y herencia', () => {
         },
       } as never),
     ).rejects.toThrow('paso activo anterior de la misma ruta y versión');
+  });
+});
+
+describe('ConfigPasosService — estado de otro paso', () => {
+  const regla = (id: string) => ({ '==': [{ var: `pasoActivo_${id}` }, 0] });
+  const pasos = [
+    {
+      id: 'preprensa',
+      familiaCodigo: 'pre_prensa',
+      nombreVisible: 'Preprensa',
+    },
+    {
+      id: 'diseno',
+      familiaCodigo: 'diseno_grafico',
+      nombreVisible: 'Diseño gráfico',
+    },
+  ];
+  async function validar(configs: unknown[], dto: unknown) {
+    const tx = {
+      productoConfigPaso: { findMany: jest.fn().mockResolvedValue(configs) },
+      rutaPaso: { findMany: jest.fn().mockResolvedValue(pasos) },
+    };
+    const { service } = crearServicio();
+    await (service as any).validarEstadosDeOtrosPasos(
+      tx,
+      'empresa-ficticia',
+      {
+        id: 'alternativa-ficticia',
+        rutaId: 'ruta-ficticia',
+        rutaVersion: 2,
+      },
+      dto,
+    );
+    expect(tx.rutaPaso.findMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'empresa-ficticia',
+        rutaId: 'ruta-ficticia',
+        version: 2,
+        activo: true,
+      },
+    });
+  }
+  it('acepta Preprensa condicional con Diseño opcional', async () => {
+    await validar([{ rutaPasoId: 'diseno', modoActivacion: 'OPCIONAL' }], {
+      rutaPasoId: 'preprensa',
+      modoActivacion: 'CONDICIONAL',
+      condicionActivacionJson: regla('diseno'),
+    });
+  });
+  it('rechaza referencias ajenas al guardar', async () => {
+    await expect(
+      validar([], {
+        rutaPasoId: 'preprensa',
+        modoActivacion: 'CONDICIONAL',
+        condicionActivacionJson: regla('paso-ajeno'),
+      }),
+    ).rejects.toThrow('misma ruta y versión');
+  });
+  it('rechaza introducir un ciclo al modificar el paso referenciado', async () => {
+    await expect(
+      validar(
+        [
+          {
+            rutaPasoId: 'preprensa',
+            modoActivacion: 'CONDICIONAL',
+            condicionActivacionJson: regla('diseno'),
+          },
+        ],
+        {
+          rutaPasoId: 'diseno',
+          modoActivacion: 'CONDICIONAL',
+          condicionActivacionJson: regla('preprensa'),
+        },
+      ),
+    ).rejects.toThrow('circular');
+  });
+  it('no admite referencias de rutas en una configuración base reutilizable', async () => {
+    const { service } = crearServicio();
+    await expect(
+      service.validarConfiguracionBase('empresa-ficticia', 'pre_prensa', {
+        modoActivacion: ModoActivacionPasoDto.CONDICIONAL,
+        condicionActivacionJson: regla('diseno'),
+      } as never),
+    ).rejects.toThrow('ruta concreta');
   });
 });

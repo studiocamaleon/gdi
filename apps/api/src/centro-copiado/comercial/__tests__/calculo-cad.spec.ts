@@ -196,6 +196,74 @@ it('no cobra otro incremento por el residuo binario al sumar los márgenes', () 
   expect(r.ajusteRedondeoMl).toBe('0');
 });
 
+it.each([
+  [1, '0.851001055556', '0', '4255.00527778'],
+  [5, '4.25500527778', '4', '17020.02111112'],
+  [10, '8.51001055556', '4', '34040.04222224'],
+] as const)(
+  'cotiza %s copias de un PDF con medidas fraccionarias sin modificar su geometría',
+  (copias, consumo, desde, importe) => {
+    // La lectura de un PDF convierte puntos a mm sin redondear la página.
+    const altoMm = 2383.94 * (25.4 / 72);
+    const r = calcularComercialCad(
+      pedidoCad([
+        documentoCad('plano-ficticio', {
+          copias,
+          medidasPaginas: [{ anchoMm: 594, altoMm }],
+        }),
+      ]),
+      tarifarioCad(),
+    );
+    expect(r).toMatchObject({
+      estado: 'CALCULADO',
+      consumoMl: consumo,
+      cantidadFacturable: consumo,
+      importeImpresionMatriz: importe,
+      impresionesFisicas: copias,
+    });
+    expect(r.grupos[0].tramo.desdeCantidad).toBe(desde);
+    expect(r.grupos[0].partes[0]).toMatchObject({
+      consumoMlPorCopia: '0.851001055556',
+      plan: { original: { anchoMm: 594, altoMm }, altoMm, escala: 100 },
+    });
+  },
+);
+
+it('normaliza el largo elegido al rotar un PDF con medidas fraccionarias', () => {
+  const anchoMm = 2383.94 * (25.4 / 72);
+  const r = calcularComercialCad(
+    pedidoCad([
+      documentoCad('plano-girado', {
+        medidasPaginas: [{ anchoMm, altoMm: 594 }],
+      }),
+    ]),
+    tarifarioCad(),
+  );
+  expect(r.consumoMl).toBe('0.851001055556');
+  expect(r.grupos[0].partes[0].plan).toMatchObject({
+    original: { anchoMm, altoMm: 594 },
+    giro: 90,
+    altoMm: anchoMm,
+    escala: 100,
+  });
+});
+
+it('el residuo de una medida PDF no cobra un incremento comercial adicional', () => {
+  const r = calcularComercialCad(
+    pedidoCad([
+      documentoCad('plano-ficticio', {
+        copias: 3,
+        medidasPaginas: [{ anchoMm: 600, altoMm: 1190.0000000000002 }],
+      }),
+    ]),
+    conRedondeo('0.1'),
+  );
+  expect(r.consumoMl).toBe('3.6');
+  expect(r.cantidadFacturable).toBe('3.6');
+  expect(r.ajusteRedondeoMl).toBe('0');
+  expect(r.importeImpresionMatriz).toBe('18000');
+});
+
 it('selecciona páginas originales y reemplaza las copias por sus excepciones', () => {
   const r = calcularComercialCad(
     pedidoCad([

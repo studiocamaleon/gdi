@@ -1,3 +1,4 @@
+import { leerCantidadManual, cantidadManualKey } from '../motor-universal/cantidad-manual-paso';
 import {
   BadRequestException,
   Injectable,
@@ -369,6 +370,7 @@ export class FormularioCotizacionService {
         ...this.preguntasParams(config, base, familia?.paramsPasoSchema ?? []),
         ...this.preguntasSlots(config, base, familia),
         ...this.preguntaModoColor(config, base, familia),
+        ...this.preguntaCantidadManual(config, base),
         ...this.preguntaTiempoManual(config, base),
         ...this.preguntasTercerizado(config, base),
       );
@@ -547,11 +549,21 @@ export class FormularioCotizacionService {
     ];
   }
 
+  private preguntaCantidadManual(config: ConfigPaso, base: Record<string, unknown>): PreguntaFormulario[] {
+    const cantidad = leerCantidadManual(config.paramsPasoJson);
+    if (!cantidad || config.modoTiempo !== 'T-2' || config.tercerizado) return [];
+    return [{ tipo: 'cantidad_manual', tipoDato: 'number', ...base,
+      etiqueta: cantidad.etiqueta.trim(), unidad: cantidad.unidad.trim(), requerido: true,
+      descripcion: 'Cantidad total de este paso. Obligatoria cuando está activo.',
+      jobContextKey: cantidadManualKey(config.id) }];
+  }
+
   /** Espejo de getTiemposManualesComercial (sheet). Siempre en MINUTOS. */
   private preguntaTiempoManual(
     config: ConfigPaso,
     base: Record<string, unknown>,
   ): PreguntaFormulario[] {
+    if (config.modoTiempo === 'T-2' && leerCantidadManual(config.paramsPasoJson)) return [];
     const tiempoManual = asRecord(asRecord(config.paramsPasoJson).tiempoManual);
     if (tiempoManual.habilitado !== true) return [];
     return [

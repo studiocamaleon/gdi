@@ -44,6 +44,23 @@ describe('Consulta comercial de cobros sin acceso al módulo Cobrar', () => {
     }
     return { auth, cobros, recibos, ctrl, consultar };
   }
+  it('la acreditación en lote exige gestionar cobros, no alcanza tomar señas', () => {
+    for (const [permisos, permitido] of [
+      [['administracion.cobrar'], false],
+      [['administracion.cobrar.ver'], false],
+      [['comercial.ordenes.gestionar'], false],
+      [['administracion.cobrar.gestionar'], true],
+    ] as Array<[string[], boolean]>) {
+      const c = caso(permisos);
+      const comprobar = () => new PermisosGuard(new Reflector()).canActivate({
+        getHandler: () => c.ctrl.acreditarCobrosLote,
+        getClass: () => AdministracionController,
+        switchToHttp: () => ({ getRequest: () => ({ auth: c.auth }) }),
+      } as never);
+      if (permitido) expect(comprobar()).toBe(true);
+      else expect(comprobar).toThrow(ForbiddenException);
+    }
+  });
   it('permite al creador de órdenes consultar los pagos de una orden específica', async () => {
     const c = caso(['comercial.ordenes.gestionar']);
     await expect(c.consultar('orden-ficticia')).resolves.toEqual([]);

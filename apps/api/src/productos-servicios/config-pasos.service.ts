@@ -1,3 +1,7 @@
+import {
+  pasosReferenciadosPorEstado,
+  validarCondicionesEstadoPasos,
+} from '../motor-universal/estado-pasos';
 import { validarPerfilesNiveles } from './validar-perfiles-niveles';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
@@ -58,6 +62,11 @@ export class ConfigPasosService {
       dto.modoActivacion,
       dto.condicionActivacionJson,
     );
+    if (pasosReferenciadosPorEstado(dto.condicionActivacionJson).length) {
+      throw new BadRequestException(
+        'El estado de otro paso se configura en una ruta concreta, no en una configuración base reutilizable.',
+      );
+    }
     if (
       dto.mecanismoCantidad ===
         MecanismoCantidadPasoDto.HEREDAR_DEL_OUTPUT_CANONICO &&
@@ -151,6 +160,60 @@ export class ConfigPasosService {
         tenantId,
         dto.proveedorId,
       );
+    }
+  }
+
+  private async validarEstadosDeOtrosPasos(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    alternativa: { id: string; rutaId: string; rutaVersion: number },
+    dto: UpsertProductoConfigPasoDto,
+  ) {
+    const configs = await tx.productoConfigPaso.findMany({
+      where: {
+        tenantId,
+        productoRutaAlternativaId: alternativa.id,
+        activo: true,
+      },
+    });
+    const candidatas = configs.filter(
+      (config) => config.rutaPasoId !== dto.rutaPasoId,
+    );
+    if (
+      ![...candidatas, dto].some(
+        (config) =>
+          config.modoActivacion === 'CONDICIONAL' &&
+          pasosReferenciadosPorEstado(config.condicionActivacionJson).length,
+      )
+    )
+      return;
+    const pasos = await tx.rutaPaso.findMany({
+      where: {
+        tenantId,
+        rutaId: alternativa.rutaId,
+        version: alternativa.rutaVersion,
+        activo: true,
+      },
+    });
+    try {
+      validarCondicionesEstadoPasos(
+        pasos.map((paso) => {
+          const config =
+            paso.id === dto.rutaPasoId
+              ? dto
+              : candidatas.find((item) => item.rutaPasoId === paso.id);
+          return {
+            rutaPasoId: paso.id,
+            configPasoId: paso.id,
+            nombreVisible: config?.nombreVisible || paso.nombreVisible,
+            familiaCodigo: paso.familiaCodigo,
+            modoActivacion: config?.modoActivacion ?? 'OBLIGATORIO',
+            condicionActivacionJson: config?.condicionActivacionJson,
+          };
+        }),
+      );
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
     }
   }
 
@@ -313,6 +376,7 @@ export class ConfigPasosService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      await this.validarEstadosDeOtrosPasos(tx, tenantId, rutaAlt, dto);
       const existente = await tx.productoConfigPaso.findFirst({
         where: {
           tenantId,

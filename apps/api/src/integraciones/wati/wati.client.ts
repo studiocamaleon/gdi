@@ -159,41 +159,41 @@ export class WatiClient {
         },
       );
 
-      // Wati responde 200 con `result: false` cuando rechaza el envío: la
-      // plantilla no existe, el número no tiene WhatsApp, falta un parámetro.
-      // Sin este chequeo un envío fallido pasa por exitoso.
-      const receptor = json?.receivers?.find((r) => r.waId === envio.telefono);
-      if (
-        json?.result === false ||
-        receptor?.isValidWhatsAppNumber === false ||
-        receptor?.errors?.length
-      ) {
-        return {
-          ok: false,
-          incierto: false,
-          motivo:
-            typeof json.info === 'string' && json.info.trim()
-              ? json.info.trim()
-              : typeof json.error === 'string' && json.error.trim()
-                ? json.error.trim()
-                : 'Wati rechazó el envío o el destinatario.',
-        };
-      }
+      // Un localMessageId del destinatario demuestra que Wati creó el
+      // mensaje, aunque los indicadores de validación sean contradictorios.
+      // Conservarlo antes de interpretar errores permite seguir su entrega.
+      const receptores = Array.isArray(json?.receivers) ? json.receivers : [];
+      const coincidentes = receptores.filter(
+        (r) => r?.waId?.replace(/^\+/, '') === envio.telefono.replace(/^\+/, ''),
+      );
+      const receptor = coincidentes.length === 1 ? coincidentes[0] : undefined;
       const msg = (json?.message ?? {}) as Record<string, unknown>;
       const id =
-        typeof receptor?.localMessageId === 'string'
-          ? receptor.localMessageId
-          : typeof msg.id === 'string'
-            ? msg.id
+        typeof receptor?.localMessageId === 'string' && receptor.localMessageId.trim()
+          ? receptor.localMessageId.trim()
+          : !receptores.length && typeof msg.id === 'string' && msg.id.trim()
+            ? msg.id.trim()
             : null;
-      if (json?.result !== true && !id)
+      if (id) return { ok: true, id };
+
+      // HTTP 200 + result:false/errores no prueba que NO haya salido.
+      // Reencolarlo automáticamente duplicaba mensajes entregados por Wati.
+      // Sin una confirmación coherente se consulta la campaña del intento;
+      // ni un timeout ni una respuesta contradictoria autorizan otro POST.
+      if (
+        json?.result !== true ||
+        receptor?.isValidWhatsAppNumber === false ||
+        receptor?.errors?.length ||
+        (receptores.length > 0 && !receptor)
+      ) {
         return {
           ok: false,
           incierto: true,
           motivo:
-            'Wati no confirmó si aceptó el mensaje. Revisá el envío antes de reintentarlo.',
+            'Wati no confirmó de forma consistente el resultado. Se consultará el envío sin repetirlo.',
         };
-      return { ok: true, id };
+      }
+      return { ok: true, id: null };
     } catch (error) {
       return {
         ok: false,

@@ -149,3 +149,13 @@ SQL completa.
 La rama parte de `d96309d52` y depende del PR #13. Mantener declarada esa
 relación, ajustar la base cuando se integre y no mezclar estos cambios con la
 migración de datos del catálogo.
+
+## Ajuste de cobro y entrega (15/10/2026, pendiente de publicación)
+
+Gestionar órdenes comerciales permite confirmar su entrega; ver órdenes permite
+escanear y consultar. Revertir una entrega conserva el permiso de gestión de
+Producción. Registrar un pago durante la entrega requiere además permiso de
+cobro y una cuenta operable compatible. La acreditación múltiple conserva los
+permisos y el alcance completo exigidos por la acreditación individual.
+
+Detalle y pruebas: [cobros, entregas y liquidación en lote](cobros-entregas-liquidacion-lote.md).

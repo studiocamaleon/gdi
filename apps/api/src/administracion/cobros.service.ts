@@ -15,7 +15,10 @@ import {
   validarRetenciones,
 } from './retenciones-validacion';
 import { claveFechaEnZona } from '../common/zona';
-import type { AcreditarCobroDto } from './dto/cobro.dto';
+import type {
+  AcreditarCobroDto,
+  AcreditarCobrosLoteDto,
+} from './dto/cobro.dto';
 import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -40,6 +43,7 @@ import {
   fechaNegocio,
   registrarMovimientoFondos,
   resolverActorFondos,
+  type ActorFondos,
 } from './fondos-ledger';
 import {
   bancoValorNormalizado,
@@ -747,127 +751,224 @@ export class CobrosService {
     await ejecutarTransaccionFondos(this.prisma, async (tx) => {
       await bloquearCupoUsuarios(tx, auth.tenantId);
       await this.capacidades.exigir(auth.tenantId, 'identidad', tx);
-      const locked = await tx.$queryRaw<
-        Array<{ id: string }>
-      >`SELECT id FROM "Cobro" WHERE id = ${id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
-      if (!locked.length)
-        throw new NotFoundException('No se encontró el cobro.');
-      const cobro = await tx.cobro.findFirstOrThrow({
-        where: { id, tenantId: auth.tenantId },
-        include: { metodoPago: true, orden: true, retenciones: true },
-      });
-      if (cobro.anuladoEl)
-        throw new BadRequestException('El cobro está anulado.');
-      if (cobro.estadoAcreditacion === 'acreditado') return;
-      const tipoOriginal =
-        (cobro.configMetodoSnapshot as { tipo?: string } | null)?.tipo ??
-        cobro.metodoPago.tipo;
-      if (tipoOriginal === 'cheque_echeq')
-        throw new BadRequestException(
-          'Los cheques se acreditan desde la cartera de valores.',
-        );
-      if (!cobro.cuentaDestinoId)
-        throw new BadRequestException('El cobro no tiene cuenta destino.');
-      if (payload.fecha < claveFechaEnZona(cobro.fecha, regional.zonaHoraria))
-        throw new BadRequestException(
-          'La acreditación no puede ser anterior al cobro.',
-        );
-      const retencionesTotal = redondearDinero(
-        payload.retenciones.reduce((s, r) => s + r.monto, 0),
-      );
-      const netoAcreditado = redondearDinero(
-        Number(cobro.montoBruto) -
-          payload.comisionMonto -
-          payload.comisionIvaMonto,
-      );
-      const disponibleReal = redondearDinero(netoAcreditado - retencionesTotal);
-      if (disponibleReal <= 0)
-        throw new BadRequestException(
-          'Los descuentos no pueden consumir todo el cobro.',
-        );
-      const fecha = fechaNegocio(payload.fecha, regional.zonaHoraria);
-      await tx.cobro.update({
-        where: { id },
-        data: {
-          estadoAcreditacion: 'acreditado',
-          fechaAcreditacionReal: fecha,
-          referenciaAcreditacion: payload.referencia.trim(),
-          comisionMonto: payload.comisionMonto,
-          comisionIvaMonto: payload.comisionIvaMonto,
-          netoAcreditado,
-          retencionesTotal,
-          disponibleReal,
-          // Los cobros anteriores al cambio también conservan su previsión original.
-          liquidacionEstimada:
-            cobro.liquidacionEstimada ??
-            ({
-              comisionMonto: Number(cobro.comisionMonto),
-              comisionIvaMonto: Number(cobro.comisionIvaMonto),
-              retencionesTotal: Number(cobro.retencionesTotal),
-              disponibleReal: Number(cobro.disponibleReal),
-              retenciones: cobro.retenciones.map((r) => ({
-                regimen: r.regimen,
-                jurisdiccion: r.jurisdiccion,
-                base: Number(r.base),
-                alicuota: Number(r.alicuota),
-                monto: Number(r.monto),
-                agente: r.agente,
-              })),
-            } as Prisma.InputJsonValue),
-        },
-      });
-      await tx.retencionPercepcion.deleteMany({
-        where: { tenantId: auth.tenantId, cobroId: id },
-      });
-      for (const r of payload.retenciones)
-        await tx.retencionPercepcion.create({
-          data: {
-            tenantId: auth.tenantId,
-            cobroId: id,
-            direccion: 'sufrida',
-            estado: 'confirmada',
-            agente: r.agente ?? 'no_informado',
-            reglaId: r.reglaId ?? null,
-            regimen: r.regimen,
-            jurisdiccion: r.jurisdiccion ?? null,
-            base: r.base,
-            alicuota: r.alicuota,
-            monto: r.monto,
-            nroComprobante: r.nroComprobante ?? payload.referencia.trim(),
-            periodoFiscal:
-              r.agente === 'cliente'
-                ? claveFechaEnZona(cobro.fecha, regional.zonaHoraria).slice(
-                    0,
-                    7,
-                  )
-                : payload.fecha.slice(0, 7),
-          },
-        });
-      await registrarMovimientoFondos(tx, {
-        tenantId: auth.tenantId,
-        cuentaId: cobro.cuentaDestinoId,
-        fecha,
-        tipo: 'entrada',
-        monto: disponibleReal,
-        concepto: cobro.orden
-          ? `Acreditación cobro ${cobro.orden.numero}`
-          : 'Acreditación de cobro',
-        origenTipo: 'cobro',
+      await exigirTesoreriaCompleta(tx, auth);
+      await this.acreditarEnTransaccion(
+        tx,
+        auth,
+        id,
+        payload,
+        regional.zonaHoraria,
         actor,
-        cobroId: id,
-        ordenId: cobro.ordenId,
-        operacionId: randomUUID(),
-        referencia: payload.referencia.trim(),
-        estadoConciliacion: 'conciliado',
-      });
-      const aplicaciones = await tx.cobroOrden.findMany({
-        where: { cobroId: id, tenantId: auth.tenantId },
-        select: { ordenId: true },
-      });
-      for (const a of aplicaciones)
-        await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, a.ordenId);
+      );
     });
     return this.findOne(auth, id);
+  }
+
+  private async acreditarEnTransaccion(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    id: string,
+    payload: AcreditarCobroDto,
+    zonaHoraria: string,
+    actor: ActorFondos,
+  ) {
+    const locked = await tx.$queryRaw<
+      Array<{ id: string }>
+    >`SELECT id FROM "Cobro" WHERE id = ${id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+    if (!locked.length) throw new NotFoundException('No se encontró el cobro.');
+    const cobro = await tx.cobro.findFirstOrThrow({
+      where: { id, tenantId: auth.tenantId },
+      include: { metodoPago: true, orden: true, retenciones: true },
+    });
+    if (cobro.anuladoEl)
+      throw new BadRequestException('El cobro está anulado.');
+    if (cobro.estadoAcreditacion === 'acreditado') return;
+    const tipoOriginal =
+      (cobro.configMetodoSnapshot as { tipo?: string } | null)?.tipo ??
+      cobro.metodoPago.tipo;
+    if (tipoOriginal === 'cheque_echeq')
+      throw new BadRequestException(
+        'Los cheques se acreditan desde la cartera de valores.',
+      );
+    if (!cobro.cuentaDestinoId)
+      throw new BadRequestException('El cobro no tiene cuenta destino.');
+    if (payload.fecha < claveFechaEnZona(cobro.fecha, zonaHoraria))
+      throw new BadRequestException(
+        'La acreditación no puede ser anterior al cobro.',
+      );
+    const retencionesTotal = redondearDinero(
+      payload.retenciones.reduce((s, r) => s + r.monto, 0),
+    );
+    const netoAcreditado = redondearDinero(
+      Number(cobro.montoBruto) -
+        payload.comisionMonto -
+        payload.comisionIvaMonto,
+    );
+    const disponibleReal = redondearDinero(netoAcreditado - retencionesTotal);
+    if (disponibleReal <= 0)
+      throw new BadRequestException(
+        'Los descuentos no pueden consumir todo el cobro.',
+      );
+    const fecha = fechaNegocio(payload.fecha, zonaHoraria);
+    await tx.cobro.update({
+      where: { id },
+      data: {
+        estadoAcreditacion: 'acreditado',
+        fechaAcreditacionReal: fecha,
+        referenciaAcreditacion: payload.referencia.trim(),
+        comisionMonto: payload.comisionMonto,
+        comisionIvaMonto: payload.comisionIvaMonto,
+        netoAcreditado,
+        retencionesTotal,
+        disponibleReal,
+        // Los cobros anteriores al cambio también conservan su previsión original.
+        liquidacionEstimada:
+          cobro.liquidacionEstimada ??
+          ({
+            comisionMonto: Number(cobro.comisionMonto),
+            comisionIvaMonto: Number(cobro.comisionIvaMonto),
+            retencionesTotal: Number(cobro.retencionesTotal),
+            disponibleReal: Number(cobro.disponibleReal),
+            retenciones: cobro.retenciones.map((r) => ({
+              regimen: r.regimen,
+              jurisdiccion: r.jurisdiccion,
+              base: Number(r.base),
+              alicuota: Number(r.alicuota),
+              monto: Number(r.monto),
+              agente: r.agente,
+            })),
+          } as Prisma.InputJsonValue),
+      },
+    });
+    await tx.retencionPercepcion.deleteMany({
+      where: { tenantId: auth.tenantId, cobroId: id },
+    });
+    for (const r of payload.retenciones)
+      await tx.retencionPercepcion.create({
+        data: {
+          tenantId: auth.tenantId,
+          cobroId: id,
+          direccion: 'sufrida',
+          estado: 'confirmada',
+          agente: r.agente ?? 'no_informado',
+          reglaId: r.reglaId ?? null,
+          regimen: r.regimen,
+          jurisdiccion: r.jurisdiccion ?? null,
+          base: r.base,
+          alicuota: r.alicuota,
+          monto: r.monto,
+          nroComprobante: r.nroComprobante ?? payload.referencia.trim(),
+          periodoFiscal:
+            r.agente === 'cliente'
+              ? claveFechaEnZona(cobro.fecha, zonaHoraria).slice(0, 7)
+              : payload.fecha.slice(0, 7),
+        },
+      });
+    await registrarMovimientoFondos(tx, {
+      tenantId: auth.tenantId,
+      cuentaId: cobro.cuentaDestinoId,
+      fecha,
+      tipo: 'entrada',
+      monto: disponibleReal,
+      concepto: cobro.orden
+        ? `Acreditación cobro ${cobro.orden.numero}`
+        : 'Acreditación de cobro',
+      origenTipo: 'cobro',
+      actor,
+      cobroId: id,
+      ordenId: cobro.ordenId,
+      operacionId: randomUUID(),
+      referencia: payload.referencia.trim(),
+      estadoConciliacion: 'conciliado',
+    });
+    const aplicaciones = await tx.cobroOrden.findMany({
+      where: { cobroId: id, tenantId: auth.tenantId },
+      select: { ordenId: true },
+    });
+    for (const a of aplicaciones)
+      await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, a.ordenId);
+  }
+
+  async acreditarLote(auth: CurrentAuth, payload: AcreditarCobrosLoteDto) {
+    await exigirTesoreriaCompleta(this.prisma, auth);
+    await this.capacidades.exigir(auth.tenantId, 'identidad');
+    const ids = payload.cobros.map((c) => c.id).sort();
+    if (!ids.length || ids.length > 50 || new Set(ids).size !== ids.length)
+      throw new BadRequestException(
+        'Seleccioná entre 1 y 50 cobros diferentes.',
+      );
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const hoy = claveFechaEnZona(new Date(), regional.zonaHoraria);
+    const primero = payload.cobros[0];
+    for (const c of payload.cobros) {
+      validarFechaLiquidacion(c.fecha);
+      validarRetenciones(c.retenciones);
+      if (
+        c.fecha > hoy ||
+        c.fecha !== primero.fecha ||
+        !c.referencia.trim() ||
+        c.referencia.trim() !== primero.referencia.trim()
+      )
+        throw new BadRequestException(
+          'El lote debe compartir una fecha no futura y una referencia de liquidación.',
+        );
+      if (
+        [c.comisionMonto, c.comisionIvaMonto].some(
+          (n) => !Number.isFinite(n) || n < 0 || n > 999999999999.99,
+        )
+      )
+        throw new BadRequestException('Revisá los importes de comisión e IVA.');
+    }
+    const actor = await resolverActorFondos(this.prisma, auth);
+    await ejecutarTransaccionFondos(
+      this.prisma,
+      async (tx) => {
+        await bloquearCupoUsuarios(tx, auth.tenantId);
+        await exigirTesoreriaCompleta(tx, auth);
+        await this.capacidades.exigir(auth.tenantId, 'identidad', tx);
+        // Orden estable de bloqueos. Si uno falla, se revierte el lote completo.
+        const actuales = await tx.$queryRaw<
+          Array<{
+            id: string;
+            estadoAcreditacion: string;
+            referenciaAcreditacion: string | null;
+            fechaAcreditacionReal: Date | null;
+          }>
+        >`
+        SELECT id, "estadoAcreditacion", "referenciaAcreditacion", "fechaAcreditacionReal"
+        FROM "Cobro" WHERE "tenantId" = ${auth.tenantId}::uuid AND id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})
+        ORDER BY id FOR UPDATE
+      `;
+        if (actuales.length !== ids.length)
+          throw new NotFoundException(
+            'Alguno de los cobros no está disponible. Actualizá la lista.',
+          );
+        for (const actual of actuales) {
+          if (
+            actual.estadoAcreditacion === 'acreditado' &&
+            (actual.referenciaAcreditacion !== primero.referencia.trim() ||
+              !actual.fechaAcreditacionReal ||
+              claveFechaEnZona(
+                actual.fechaAcreditacionReal,
+                regional.zonaHoraria,
+              ) !== primero.fecha)
+          )
+            throw new ConflictException(
+              'Un cobro ya pertenece a otra liquidación. Actualizá la lista. No se acreditó este lote.',
+            );
+          await this.acreditarEnTransaccion(
+            tx,
+            auth,
+            actual.id,
+            payload.cobros.find((c) => c.id === actual.id)!,
+            regional.zonaHoraria,
+            actor,
+          );
+        }
+      },
+      { timeout: 60000 },
+    );
+    return { ids, acreditados: ids.length };
   }
 
   /** Los cobros electrónicos que todavía no acreditaron, con su fecha. */

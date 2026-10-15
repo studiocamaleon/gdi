@@ -15,6 +15,7 @@ export default async function AcreditacionesPage() {
   ]);
   return (
     <AcreditacionesView
+      accesoRestringido={tesoreria.accesoRestringido ?? false}
       initialFilas={filas}
       initialValores={valores}
       cuentas={tesoreria.cuentas.filter((cuenta) => cuenta.activo)}

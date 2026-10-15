@@ -1,14 +1,10 @@
 import { planPaginaCad } from '../../common/cad-geometria';
 import {
   cantidadImpresionesCad,
-  errorCopiasPorPagina,
   mapaCopiasCad,
 } from '../../common/copias-paginas-cad';
-import {
-  errorMedidasDocumento,
-  medidasSeleccionadas,
-} from '../../common/medidas-documento';
-import { errorPaginasDocumento } from '../../common/rangos-paginas';
+import { medidasSeleccionadas } from '../../common/medidas-documento';
+import { errorDocumentoCad } from '../documento-cad';
 import { CENTRO_COPIADO_COBERTURAS } from '../centro-copiado.domain';
 import type {
   CalculoComercialCad,
@@ -45,17 +41,8 @@ function partesDocumento(
     'CAD se cotiza en simple faz, sin tomos ni terminaciones.',
   );
   enteroPositivo(doc.copias, 'Copias CAD');
-  const error =
-    errorPaginasDocumento(doc) ||
-    errorMedidasDocumento(doc) ||
-    errorCopiasPorPagina(doc);
+  const error = errorDocumentoCad(doc);
   exigir(!error, error ?? 'Revisá las páginas del documento CAD.');
-  exigir(
-    !!doc.medidasPaginas?.length &&
-      !!doc.paginasOriginales &&
-      !!doc.archivoNombre?.toLowerCase().endsWith('.pdf'),
-    'CAD requiere las medidas de todas las páginas de su PDF original.',
-  );
   exigir(
     doc.copias <= 10000 &&
       doc.paginas <= 5000 &&
@@ -100,7 +87,15 @@ function partesDocumento(
       const largo = new DecimalComercial(plan.altoMm).plus(
         new DecimalComercial(doc.rolloProduccion.margenMm).times(2),
       );
-      const porCopia = cantidadMl(largo.div(1000).toFixed());
+      // Puntos PDF → mm puede dejar más decimales que los 12 admitidos en ML.
+      // Normalizar sólo el consumo técnico conserva la geometría y escala del
+      // PDF; el redondeo comercial se aplica después, una vez por grupo.
+      const porCopia = cantidadMl(
+        largo
+          .div(1000)
+          .toDecimalPlaces(12, DecimalComercial.ROUND_HALF_UP)
+          .toFixed(),
+      );
       const consumo = cantidadMl(porCopia.times(copiasEfectivas).toFixed());
       return {
         referencia: {

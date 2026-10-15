@@ -503,3 +503,20 @@ describe('formulario de cotización', () => {
     expect(form.personalizaciones[0].modoMedida).toBe('CLIENTE');
   });
 });
+
+describe('cantidad por paso en el contrato del cotizador', () => {
+  it('expone nombre, unidad y la clave propia obligatoria sin ofrecer tiempo manual', async () => {
+    const p = productoFixture();
+    const paso = p.rutasAlternativas[0].configPasos[0];
+    Object.assign(paso, { modoTiempo: 'T-2', paramsPasoJson: {
+      productivityQuantitySource: 'cantidad_manual', cantidadManual: { etiqueta: 'Superficie a desplotear', unidad: 'm²' },
+      tiempoManual: { habilitado: true },
+    } });
+    const form = await servicio(p).obtener('t1', 'prod-1');
+    expect(form.preguntas).toEqual(expect.arrayContaining([expect.objectContaining({
+      tipo: 'cantidad_manual', etiqueta: 'Superficie a desplotear', unidad: 'm²', requerido: true,
+      jobContextKey: `cantidadManual_${paso.id}`,
+    })]));
+    expect(form.preguntas.some(p => p.tipo === 'tiempo_manual' && p.configPasoId === paso.id)).toBe(false);
+  });
+});

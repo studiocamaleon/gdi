@@ -3617,6 +3617,9 @@ function CostosItemView({
                                 humanizeCodigo(paso.familiaCodigo)}
                             </span>
                           </span>
+                          {paso.cantidadManual ? <span className={cn(itemCostStyles["cost-chip"])}>
+                            {paso.cantidadManual.etiqueta}: {new Intl.NumberFormat("es-AR", { maximumFractionDigits: 6 }).format(paso.cantidadManual.valor)} {paso.cantidadManual.unidad}
+                          </span> : null}
                           {paso.tiempo?.origenTiempo === "manual_comercial" ? (
                             <span
                               className={cn(itemCostStyles["cost-chip"])}
@@ -5100,7 +5103,9 @@ function PropuestaFichaContenido({
   // permiso que rige anular comprobantes.
   const verMargenes = usePuede("finanzas.ver_margenes");
   const puedeAnular = usePuede("administracion.anular");
-  const puedeEntregar = usePuede("produccion.tablero.gestionar");
+  const permisoEntregaProduccion = usePuede("produccion.tablero.gestionar");
+  const permisoEntregaComercial = usePuede("comercial.ordenes.gestionar");
+  const puedeEntregar = permisoEntregaProduccion || permisoEntregaComercial;
   const puedeAbrirEntrega = orden?.estado === "finalizada" && puedeEntregar;
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
   const [cancelando, setCancelando] = React.useState(false);

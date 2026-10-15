@@ -1,7 +1,12 @@
 "use client";
 import { normalizarBusqueda } from "@/lib/busqueda-texto";
+import { CobrosAcreditacionLoteDialog } from "./cobros-acreditacion-lote-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CobroAcreditacionDialog } from "./cobro-acreditacion-dialog";
-import type { AcreditarCobroPayload } from "@/lib/administracion-api";
+import type {
+  AcreditarCobroPayload,
+  AcreditarCobrosLotePayload,
+} from "@/lib/administracion-api";
 
 import * as React from "react";
 import Link from "next/link";
@@ -71,6 +76,7 @@ import type {
 } from "@/lib/administracion";
 import {
   acreditarCobro,
+  acreditarCobrosLote,
   acreditarValor,
   depositarValor,
   rechazarValor,
@@ -360,9 +366,11 @@ function ValorOperacionDialog({
 
 export function AcreditacionesView({
   initialFilas,
+  accesoRestringido = false,
   initialValores,
   cuentas,
 }: {
+  accesoRestringido?: boolean;
   initialFilas: CobroPendienteAcreditacion[];
   initialValores: ValorTesoreria[];
   cuentas: CuentaFondos[];
@@ -370,7 +378,8 @@ export function AcreditacionesView({
   const router = useRouter();
   const scope = useLegacyDesignScope();
   const designScope = useDesignScope();
-  const permisoGestionar = usePuede("administracion.cobrar.gestionar");
+  const permisoGestionar =
+    usePuede("administracion.cobrar.gestionar") && !accesoRestringido;
   const permisoAnular = usePuede("administracion.anular");
   const conValores = useCapacidad("valores");
   const conTesoreria = useCapacidad("tesoreria");
@@ -390,6 +399,12 @@ export function AcreditacionesView({
   const [busqueda, setBusqueda] = React.useState("");
   const [estado, setEstado] = React.useState(conValores ? "activos" : "todos");
   const [ocupadoId, setOcupadoId] = React.useState<string | null>(null);
+  const [seleccionados, setSeleccionados] = React.useState<string[]>([]);
+  const [lote, setLote] = React.useState<CobroPendienteAcreditacion[] | null>(
+    null,
+  );
+  const bloqueoCobro = React.useRef(false);
+  const elegidos = filas.filter((c) => seleccionados.includes(c.id));
   const [liquidacion, setLiquidacion] =
     React.useState<CobroPendienteAcreditacion | null>(null);
   const [operacion, setOperacion] = React.useState<OperacionValor>(null);
@@ -405,6 +420,8 @@ export function AcreditacionesView({
     fila: CobroPendienteAcreditacion,
     payload: AcreditarCobroPayload,
   ) => {
+    if (bloqueoCobro.current) return;
+    bloqueoCobro.current = true;
     setOcupadoId(fila.id);
     try {
       await acreditarCobro(fila.id, payload);
@@ -417,6 +434,36 @@ export function AcreditacionesView({
         reason instanceof Error ? reason.message : "No se pudo acreditar.",
       );
     } finally {
+      bloqueoCobro.current = false;
+      setOcupadoId(null);
+    }
+  };
+
+  const acreditarSeleccionados = async (
+    payload: AcreditarCobrosLotePayload,
+  ) => {
+    if (bloqueoCobro.current) return;
+    bloqueoCobro.current = true;
+    setOcupadoId("lote");
+    try {
+      const resultado = await acreditarCobrosLote(payload);
+      setFilas((actuales) =>
+        actuales.filter((c) => !resultado.ids.includes(c.id)),
+      );
+      setSeleccionados((actuales) =>
+        actuales.filter((id) => !resultado.ids.includes(id)),
+      );
+      setLote(null);
+      toast.success(`${resultado.acreditados} cobros acreditados.`);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo acreditar el lote. Podés reintentar sin duplicar ingresos.",
+      );
+    } finally {
+      bloqueoCobro.current = false;
       setOcupadoId(null);
     }
   };
@@ -563,8 +610,9 @@ export function AcreditacionesView({
   const valoresFiltrados = valores.filter((valor) => {
     const coincide =
       !q ||
-      normalizarBusqueda(`${valor.numero} ${valor.banco} ${valor.clienteNombre ?? ""} ${valor.proveedorNombre ?? ""}`)
-        .includes(q);
+      normalizarBusqueda(
+        `${valor.numero} ${valor.banco} ${valor.clienteNombre ?? ""} ${valor.proveedorNombre ?? ""}`,
+      ).includes(q);
     const estadoCoincide =
       estado === "todos" ||
       (estado === "activos"
@@ -594,6 +642,15 @@ export function AcreditacionesView({
       {...scope}
       className={[scope.className, styles.pagina].filter(Boolean).join(" ")}
     >
+      {lote && puedeAcreditarCobros && (
+        <CobrosAcreditacionLoteDialog
+          cobros={lote}
+          hoy={hoy}
+          ocupado={ocupadoId === "lote"}
+          onClose={() => setLote(null)}
+          onConfirmar={(payload) => void acreditarSeleccionados(payload)}
+        />
+      )}
       {liquidacion && puedeAcreditarCobros ? (
         <CobroAcreditacionDialog
           cobro={liquidacion}
@@ -692,6 +749,26 @@ export function AcreditacionesView({
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {puedeAcreditarCobros && filas.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <span>{elegidos.length} seleccionados · hasta 50 por lote</span>
+              <Button
+                disabled={!elegidos.length || !!ocupadoId}
+                onClick={() => setLote(elegidos)}
+              >
+                Acreditar seleccionados
+              </Button>
+              {elegidos.length > 0 && (
+                <Button
+                  variant="ghost"
+                  disabled={!!ocupadoId}
+                  onClick={() => setSeleccionados([])}
+                >
+                  Limpiar selección
+                </Button>
+              )}
+            </div>
+          )}
           {filas.length ? (
             <Table
               className={styles.tabla}
@@ -699,6 +776,27 @@ export function AcreditacionesView({
             >
               <TableHeader>
                 <TableRow>
+                  {puedeAcreditarCobros && (
+                    <TableHead>
+                      <Checkbox
+                        aria-label="Seleccionar hasta 50 cobros"
+                        disabled={!!ocupadoId}
+                        checked={
+                          elegidos.length > 0 &&
+                          elegidos.length === Math.min(filas.length, 50)
+                        }
+                        indeterminate={
+                          elegidos.length > 0 &&
+                          elegidos.length < Math.min(filas.length, 50)
+                        }
+                        onCheckedChange={(checked) =>
+                          setSeleccionados(
+                            checked ? filas.slice(0, 50).map((c) => c.id) : [],
+                          )
+                        }
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>Fecha estimada</TableHead>
                   <TableHead>Cliente / operación</TableHead>
                   <TableHead>Cuenta</TableHead>
@@ -712,6 +810,29 @@ export function AcreditacionesView({
               <TableBody>
                 {filas.map((fila) => (
                   <TableRow key={fila.id}>
+                    {puedeAcreditarCobros && (
+                      <TableCell>
+                        <Checkbox
+                          aria-label={`Seleccionar cobro ${fila.ordenNumero ?? fila.clienteNombre ?? fila.metodoNombre}`}
+                          checked={seleccionados.includes(fila.id)}
+                          disabled={
+                            !!ocupadoId ||
+                            (!seleccionados.includes(fila.id) &&
+                              elegidos.length >= 50)
+                          }
+                          onCheckedChange={(checked) =>
+                            setSeleccionados((prev) =>
+                              checked
+                                ? [
+                                    ...prev.filter((id) => id !== fila.id),
+                                    fila.id,
+                                  ]
+                                : prev.filter((id) => id !== fila.id),
+                            )
+                          }
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       {fechaNumerica(
                         fila.fechaAcreditacionEstimada ?? fila.fecha,
@@ -739,6 +860,7 @@ export function AcreditacionesView({
                       <TableCell className="text-right">
                         <Button
                           size="sm"
+                          disabled={!!ocupadoId}
                           loading={ocupadoId === fila.id}
                           loadingText="Acreditando…"
                           onClick={() => setLiquidacion(fila)}

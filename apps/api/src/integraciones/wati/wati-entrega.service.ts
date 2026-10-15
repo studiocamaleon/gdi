@@ -23,9 +23,22 @@ export class WatiEntregaService {
           tenantId,
           canal: 'WATI',
           reservaToken: { not: null },
-          estado: { in: [ESTADOS.aceptada, ESTADOS.enviada] },
-          estadoEntrega: { in: ['aceptado', 'enviado'] },
-          estadoEntregaEl: { gte: desde },
+          OR: [
+            {
+              estado: { in: [ESTADOS.aceptada, ESTADOS.enviada] },
+              estadoEntrega: { in: ['aceptado', 'enviado'] },
+              estadoEntregaEl: { gte: desde },
+            },
+            {
+              estado: ESTADOS.incierta,
+              // Incluye intentos anteriores que no guardaban estadoEntregaEl.
+              OR: [
+                { estadoEntregaEl: { gte: desde } },
+                { reservadaEl: { gte: desde } },
+                { createdAt: { gte: desde } },
+              ],
+            },
+          ],
         },
         orderBy: { watiConsultaEl: { sort: 'asc', nulls: 'first' } },
         take: 25,
@@ -81,7 +94,14 @@ export class WatiEntregaService {
           )[receptor.status.toLowerCase()];
           if (!estado) continue;
           // Una confirmación de salida no puede convertirse luego en reenvío.
-          if (estado === 'fallido' && f.estadoEntrega !== 'aceptado') continue;
+          if (
+            estado === 'fallido' &&
+            (f.enviadaEl ||
+              ![null, 'aceptado', 'sin_confirmar'].includes(f.estadoEntrega))
+          ) continue;
+          // Un fallo sólo libera el reintento cuando está asociado a un
+          // mensaje concreto de esta campaña y de este destinatario.
+          if (!receptor.local_message_id?.trim()) continue;
           const fallo = estado === 'fallido';
           const codigo = /^\d{1,10}$/.test(receptor.failed_code ?? '')
             ? ` Código ${receptor.failed_code}.`
@@ -99,6 +119,7 @@ export class WatiEntregaService {
               estado: fallo ? ESTADOS.fallida : ESTADOS.enviada,
               estadoEntrega: estado,
               estadoEntregaEl: ahora,
+              watiMensajeId: f.watiMensajeId ?? receptor.local_message_id,
               enviadaEl: fallo ? null : (f.enviadaEl ?? ahora),
               motivo: fallo
                 ? `Wati confirmó que el mensaje falló.${codigo} Podés reintentar desde el historial.`
