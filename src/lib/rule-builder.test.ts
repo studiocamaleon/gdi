@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createEmptyCondition,
+  estadoPasoRuleFields,
   findRuleField,
   jsonLogicToRuleGroup,
   ruleGroupToJsonLogic,
@@ -81,5 +82,23 @@ describe("campos de regla por paso", () => {
     expect(summarizeCondition(parsed.group.conditions[0], CAMPOS)).toBe(
       "Quién hace el paso de Paso 2 · Estructura es La hace un proveedor",
     );
+  });
+});
+
+describe("estado de otro paso", () => {
+  it("permite elegir activo/inactivo, excluye al propio paso y conserva la regla guardada", () => {
+    const fields = estadoPasoRuleFields([
+      { value: "rp-preprensa", label: "Preprensa" },
+      { value: "rp-diseno", label: "Diseño gráfico" },
+    ], "rp-preprensa");
+    expect(fields[0].pasos).toEqual([{ value: "rp-diseno", label: "Diseño gráfico" }]);
+    const rule = { "==": [{ var: "pasoActivo_rp-diseno" }, 0] };
+    const parsed = jsonLogicToRuleGroup(rule, fields);
+    if (!parsed.supported) throw new Error("La regla debe ser editable visualmente");
+    expect(validateRuleGroup(parsed.group, fields).ok).toBe(true);
+    expect(ruleGroupToJsonLogic(parsed.group, fields)).toEqual(rule);
+    expect(summarizeCondition(parsed.group.conditions[0], fields)).toBe("Diseño gráfico está inactivo");
+    parsed.group.conditions[0].value = "1";
+    expect(ruleGroupToJsonLogic(parsed.group, fields)).toEqual({ "==": [{ var: "pasoActivo_rp-diseno" }, 1] });
   });
 });

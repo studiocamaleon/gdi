@@ -1977,6 +1977,7 @@ export interface OperacionInternaCosteadaInput {
   rutaPasoId?: string;
   rutaPasoOrden?: number;
   razonNoActivado?: string;
+  cantidadManual?: import("./cantidad-manual-paso").CantidadManualRegistrada;
   activadoPorDependencia?: { requeridoPorNombre: string } | null;
   centroCostoId?: string | null;
   centroCostoNombre?: string | null;
@@ -2376,6 +2377,8 @@ export interface CotizarResponse {
       /** Outputs canónicos publicados por el paso (imposicion_calculada,
        *  pliegos_impresos…). El sheet lee de acá "entran N por plancha". */
       outputsCanonicos?: Record<string, unknown>;
+      /** Cantidad total ingresada para este paso, conservada en la OT. */
+      cantidadManual?: import("./cantidad-manual-paso").CantidadManualRegistrada;
       /** El paso se encendió porque otro lo exige (ojales arrastra refuerzo). */
       activadoPorDependencia?: { requeridoPorNombre: string } | null;
       /**
