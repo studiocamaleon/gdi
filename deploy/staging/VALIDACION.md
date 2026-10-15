@@ -1,5 +1,55 @@
 # Validación de staging — historial
 
+## 2026-10-15, 02:24 UTC — Ensayo temporal y promoción del cambio de borradores
+
+**Revisiones ejecutadas:** web `a7d34a80beefba6b80e7312b81a64b703a424bea`; API y ambos workers `4c73bcb767497225a671412e64b9791971d071ba`, con código backend idéntico al candidato final ([PR #95](https://github.com/studiocamaleon/gdi/pull/95)). Permite cambiar OT en borrador ↔ presupuesto sin emitir, conservando importes, costos, snapshots, descuentos, fechas, adjuntos, reservas y planificación. Valida empresa, permisos, funciones contratadas y versión; reintentos idempotentes. No incluye cantidad manual ni exclusión de pasos (#92–#94), todavía pendientes de aceptación de staging, ni propuestas automáticas de dependencias.
+
+**Validación:** 28 pruebas API en cuatro suites y 54 web en cuatro suites en local. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/38668020257), [contenedores/tipos/login](https://github.com/studiocamaleon/gdi/actions/runs/38668020104) y CodeQL aprobados para la revisión funcional, sin alertas abiertas del PR. Compilaciones remotas con tipos; marketing/Grafo3D sin cambios. El registro final vuelve a pasar CI antes del merge.
+
+**Regresión de cabecera:** el primer ensayo de navegador detectó que la acción de OT dependía del modo edición, que a la vez la deshabilitaba. Se corrigió la condición de visibilidad y se agregó a CI una prueba sobre la ficha real que falló antes y pasó después, junto con los otros 15 casos del modo consulta. La web inicial no se promovió a producción.
+
+**Staging:** el servicio compilado pasó OT → presupuesto → OT, conservación de precios, costos y fecha, reintento, rechazo sin permisos y de versión vencida. Empresa y documentos ficticios dentro de una transacción revertida; se comprobó su ausencia al terminar. Chrome probó el recorrido real con un borrador QA de cinco A4, sin cliente, total exacto $381,25, conservado en ambos sentidos. Sin emisión ni producción; el borrador final quedó cancelado y los documentos de origen archivados con trazabilidad. No se enviaron presupuestos, pagos, facturas ni mensajes. Evidencias privadas fuera de Git.
+
+| Servicio | Digest comprobado en staging y promovido sin recompilar |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:3ac7aec47283a7dbb612949a60876c117bc7a1566f6c8d26d6745bcfa2aa7b3b` |
+| Web | `sha256:44e890368ab40ed832b3b280d5946d2ceee70b5c07386fc8185bd3fc342b69dc` |
+
+316 migraciones completas, ninguna nueva ni pendiente, checksums intactos. Seis máquinas saludables con los mismos recursos; API de producción conserva CPU performance / 2 GB. Salud HTTPS 200 y rechazos anónimos 403/401. Revisión y Sentry comprobados en los cuatro procesos actualizados. Gotenberg y copiador conservan sus imágenes. Desarrollo local y otros proyectos intactos.
+
+Al terminar se restituyó el lote #94 (`5a1128328`) con exactamente las imágenes y recursos anteriores, junto con el inventario de respaldo. La comprobación final de salud pasó. El comprobante posterior a la restitución `8f0c51af-0aa6-47fd-8e38-d02fcc980172`, completado `2026-10-15T02:23:11.960Z`, conserva `5a1128328`, 316 migraciones y 24 archivos; firma y manifiesto descifrado verificados, sin repetir restauración SQL. No se retiró su configuración ni se modificaron productos del titular. La revisión #95 está en producción; el lote de cantidad manual y exclusión permanece en staging esperando aceptación. Ver [registro de producción](../produccion/VALIDACION.md).
+
+## 14/10/2026 — Cantidad propia al cotizar y exclusión por estado de otro paso
+
+Publicado sólo en staging mediante el [PR #94](https://github.com/studiocamaleon/gdi/pull/94), que conserva los commits de [#92](https://github.com/studiocamaleon/gdi/pull/92) y [#93](https://github.com/studiocamaleon/gdi/pull/93). Cantidad por paso con nombre/unidad configurables, obligatoria y positiva cuando el paso está activo; condición de estado de otro paso para excluir, por ejemplo, pre-prensa al activar diseño. Producción y merge pendientes de la aceptación del titular. Dependencias automáticas fuera del lote.
+
+**Revisión ejecutada y aprobada por CI:** `5a1128328ba95c2cd08acc3773b19e2afd575627` en API, ambos workers y web. [Permisos HTTP y cálculos](https://github.com/studiocamaleon/gdi/actions/runs/38655054778), [contenedores, tipos, migraciones y login/BFF](https://github.com/studiocamaleon/gdi/actions/runs/38655054746), CodeQL sin alertas abiertas del PR y Vercel aprobados. Compilaciones de producción remotas, con chequeo de tipos.
+
+La validación conjunta encontró y corrigió una interacción de interfaz: la cantidad propia de un paso condicionado por otro debe aparecer y exigirse solamente cuando ese paso está activo. El cotizador resuelve los estados para mostrar los campos; esos estados derivados no se envían ni persisten como datos confiables. El servidor vuelve a resolverlos. La regresión se reprodujo antes del arreglo y luego pasó.
+
+**Local:** 54 pruebas web en cinco archivos, 38 pruebas API en cuatro suites y una integración de OT con PostgreSQL aislado; fixtures ficticios y rollback de la integración. Lint y diff comprobados. CI incluye las regresiones de cantidad, OT, exclusión e interacción entre ambas.
+
+**Servicio compilado de staging:** ensayo con catálogos y tarifas ficticios en memoria, sin escribir base. Ploteo de 12 m²: material $24.000, tinta $1.200 y trabajo $6.000/60 min; desploteo de 5 m² a 8 m²/h: 37,5 min, redondeados a 38 min, costo $3.800. Total $35.000 y 98 min. Dificultad alta: 75 min de desploteo, conservando los 12 m² de material. Cantidad ausente rechazada sólo si el paso está activo. Al activar diseño, pre-prensa cuesta cero y no se materializa como operación de OT; desploteo conserva 38 min. La combinación de cantidad propia y exclusión también pasó. Estos importes son datos del ensayo, no precios de venta propuestos.
+
+**Chrome en staging:** se preparó un producto QA separado, con su ruta y versión completa, sin cambiar el catálogo vigente. En el editor se guardó el nombre «Superficie a desplotear (QA)», unidad m² y ritmo 8 m²/h; pre-prensa muestra «Estado de otro paso → Diseño gráfico → Es → Inactivo». La cantidad vacía bloquea el paso activo. Se cotizaron 12 m² de producto y 5 m² de desploteo, primero sin diseño y luego con diseño. Totales de ensayo con los impuestos y tarifas de staging: $198.224 y $234.932 respectivamente. La preparación de OT muestra tres operaciones —ploteo, desploteo y diseño— y 128 minutos en Costos; pre-prensa está excluida. Los 5 m² figuran en las especificaciones y se conservan al reabrir la edición. Sin errores ni advertencias de consola en el recorrido final.
+
+No se guardaron ni emitieron órdenes, pagos, facturas ni mensajes. Se desactivaron sólo el producto y la ruta QA, conservando sus registros y revisiones. El ensayo del servidor comprueba materiales con una fixture de impresión; el producto del navegador usa pasos de trabajo sin materiales para comprobar la interfaz y la exclusión. No hubo impresión física.
+
+| Componente | Digest publicado |
+| --- | --- |
+| API y ambos workers | `sha256:481e539b61961498b31051726daef7f16bc8cf67fdec234381c273e967cedf59` |
+| Web | `sha256:43f6d5d35a9aaf580ed91476ae9129447f72d63b50b759ac12a4cb110b233cfe` |
+| Gotenberg, conservado | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+316 migraciones completas, ninguna nueva ni pendiente. Recuentos e identificadores de las seis tablas contrastadas conservados. Seis servicios saludables con los mismos recursos; salud HTTP 200 y rechazo anónimo 403/401. Versiones de API, web y ambos workers comprobadas por proceso. Las seis máquinas de producción conservan imágenes y recursos. El primer envío web al registro de Fly falló en una capa; el reintento reutilizó la compilación y terminó correctamente. Constructor temporal retirado; desarrollo local y otros proyectos sin cambios.
+
+**Copia posterior:** copia `9e7a6398-8d37-4515-8283-e235c0d6b46f`, completada `2026-10-15T00:22:07.588Z` y verificada `2026-10-15T00:23:11.187Z` (UTC; 14/10 en Argentina). Firma válida, manifiesto descifrado, 316 migraciones, 24 archivos, nueve fuentes —incluida la revisión ejecutada— y las cuatro imágenes exactas. El producto QA ya estaba desactivado al iniciar esta copia. No se repitió una restauración SQL completa.
+
+**Reversión:** API/workers `sha256:9661dd139d87f3a86b36ce4db0bea1692b9b2f9dedd99e37ed2545600136a4c7`; web `sha256:8b0f99cd99f120f2d98857900034f07c9161d03ec25542e16e6c43bc22e49957`. No hay migraciones que revertir. Antes de volver al código anterior, retirar de los productos las cantidades y condiciones nuevas, que esa versión no interpreta, y actualizar el inventario del copiador.
+
+**Pendiente explícito:** aceptación de Lucas en staging antes de promover las imágenes verificadas a producción, integrar #94 en `main` y cerrar #92/#93 como absorbidos. Los tres PR permanecen abiertos por ese pendiente. Las seis propuestas de dependencias siguen fuera de este lote.
+
 ## 14/10/2026 — OT, cobros, conciliación y margen de entrega por producto
 
 Publicado inicialmente en staging mediante el [PR #91](https://github.com/studiocamaleon/gdi/pull/91), que conserva los commits de #84–#90. Incluye presentación de tandas, aviso de descuento de copiado, control de cobros duplicados y superiores al saldo, conciliación consecutiva, Polyfan rectangular y por placas, fechas y precios de copiado al elegir cliente, emisión y entrega inmediata con pago completo, columna **Creada** y exclusión de días hábiles de margen por producto. El titular aprobó las pruebas y autorizó la promoción del mismo lote el 14/10/2026; ver [el registro de producción](../produccion/VALIDACION.md). Dependencias automáticas y TPV fuera del lote.

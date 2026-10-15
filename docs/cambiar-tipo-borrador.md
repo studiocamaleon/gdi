@@ -14,4 +14,4 @@ La operación valida estado y versión, permisos, empresa y funciones contratada
 - Pruebas de interacción de la acción: ambos sentidos, bloqueo durante la solicitud y la edición pendiente, error sin navegación ni pérdida del documento, permisos.
 - Regresión de edición y detalle de presupuestos y de conversión comercial; nuevos casos incluidos en CI.
 
-Sin migraciones ni cambios en staging o producción. La mejora parte de `main` y es independiente del lote de cantidad manual y exclusión de pasos.
+Publicado en producción desde `a7d34a80b` tras CI y ensayo técnico de staging. Sin migraciones; independiente del lote de cantidad manual y exclusión de pasos, que continúa pendiente en staging. Ver [validación de producción](../deploy/produccion/VALIDACION.md).
