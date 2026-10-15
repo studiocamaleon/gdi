@@ -22,7 +22,11 @@
 
 Los tres casos igualan al PDF equivalente. Validación del contrato de entrada, vista previa, construcción de carga, reconstrucción desde el snapshot y preparación de persistencia de la cotización correctas. Tres filas juntas de 594 × 841, 300 × 600 y 420 × 594 mm también producen sus tres ítems, con 1/5/10 copias e importes de $3.020/$7.750/$21.500. Son precios ficticios de ensayo. No se guardó ni emitió una OT, ni se registraron pagos, producción o archivos nuevos.
 
-**Navegador pendiente:** la herramienta no pudo cargar su política de conexión y devolvió `ERR_BLOCKED_BY_CLIENT`. El titular confirmó que dejó staging abierto; el reintento siguió fallando antes de poder leer esa sesión. No se pudo verificar visualmente la fila ni pulsar «Agregar a la OT» en staging. Los ensayos del servidor y de componentes no sustituyen esta comprobación. PR mantenido en borrador hasta completar ese recorrido.
+**Navegador completado — 15/10, 17:21 UTC:** el bloqueo inicial de la herramienta (`ERR_BLOCKED_BY_CLIENT`) dejó de presentarse al retomar Chrome. En la empresa demo, se abrió una OT nueva con canal Presencial y se creó «QA plano manual A1» sin archivo, 594 × 841 mm, B/N, rollo de 914 mm. Se verificó en la interfaz la lista QA: $5.000/ML desde 0 hasta menos de 10 ML, IVA incluido, sin cargo adicional de preparación, mínimo ni redondeo. Se asignó temporalmente esa lista al canal Mostrador; los otros canales conservaron el motor.
+
+La fila mostró $3.020/$15.100/$30.200 para 1/5/10 copias, con el nombre y versión del tarifario visibles. Al pulsar «Agregar a la OT» con diez copias, la tabla mostró **cantidad 10, unitario $3.020 y total $30.200**. El resumen identificó el tramo 0–<10 metros y $5.000 por metro; las especificaciones conservaron origen «Carga manual», una página, diez copias, A1 y escala 100 %. Sin errores ni advertencias de consola durante el recorrido. Capturas de antes/después conservadas fuera de Git.
+
+Se restituyó exactamente la selección comercial previa: política general Motor, cinco canales heredados y asignación en preparación; comprobado en PostgreSQL y nuevamente en Chrome. No se modificaron valores ni versiones de ningún tarifario. La restitución usa bloqueo de concurrencia, verifica que la política siga siendo la del ensayo, incrementa revisión y deja auditoría. La interfaz no ofrece desactivar una asignación ya activada, por lo que ese retorno se hizo mediante la operación técnica acotada a staging. La OT de prueba queda sólo en la pantalla de creación; **no se guardó ni emitió**, ni se registraron pagos o producción. No hubo nuevos despliegues.
 
 | Componente | Revisión / digest |
 | --- | --- |
@@ -37,7 +41,7 @@ Fuentes cifradas e inventario del copiador actualizados. Comprobante posterior `
 
 **Reversión:** API y ambos workers al digest previo `sha256:c58a13fc11da70a07bf85c2d64d26e6d366a702bbfa1f8bf7f5b688df4bb5310` (`d72343615`, #99); web a `sha256:43f6d5d35a9aaf580ed91476ae9129447f72d63b50b759ac12a4cb110b233cfe` (`5a1128328`, #94). Conservar PDF/copiador y restituir su inventario previo. No hay migraciones que revertir.
 
-El registro documental se guarda después de compilar; las imágenes conservan la revisión funcional indicada. #100 espera prueba visual y aceptación; sus dependencias mantienen sus pendientes de aceptación/producción/integración. No se fusionó ni cerró ningún PR de ese lote.
+El registro documental se guarda después de compilar; las imágenes conservan la revisión funcional indicada. #100 tiene la prueba visual completada y espera aceptación; sus dependencias mantienen sus pendientes de aceptación/producción/integración. No se fusionó ni cerró ningún PR de ese lote.
 
 ## 2026-10-15 — Importación de planos y precios de tomos
 
