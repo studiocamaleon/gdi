@@ -106,6 +106,8 @@ jobs:
             src/productos-servicios/__tests__/producto-cotizacion-publico.spec.ts \
             src/ordenes-trabajo/__tests__/emision-reservas.integration.spec.ts \
             src/ordenes-trabajo/__tests__/entrega-pago-completo.spec.ts \
+            src/ordenes-trabajo/__tests__/entrega-permisos.spec.ts \
+            src/administracion/__tests__/cobros-permisos-orden.spec.ts \
             src/ordenes-trabajo/__tests__/entrega-pago-completo.integration.spec.ts \
             src/presupuestos/__tests__/presupuestos.service.spec.ts \
             src/presupuestos/__tests__/cambiar-tipo-borrador.integration.spec.ts \
@@ -174,6 +176,7 @@ jobs:
           npm ci --include=dev --no-audit --no-fund
           node node_modules/vitest/vitest.mjs run \
             src/components/comercial/cambiar-tipo-borrador.test.tsx \
+            src/components/administracion/acreditaciones-lote.test.tsx \
             src/components/comercial/orden-modo-lectura.test.tsx \
             src/lib/centro-copiado-tarifarios-editor.test.ts \
             src/lib/centro-copiado-tarifarios-cuadricula.test.ts \

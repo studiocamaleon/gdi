@@ -35,6 +35,7 @@ import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import {
   AcreditarCobroDto,
+  AcreditarCobrosLoteDto,
   AnularCobroDto,
   CrearCobroDto,
 } from './dto/cobro.dto';
@@ -676,6 +677,12 @@ export class AdministracionController {
     ) {
       throw new ForbiddenException('No tenés acceso a este recibo.');
     }
+  }
+
+  @Permiso("administracion.cobrar.gestionar")
+  @Post('cobros/acreditar-lote')
+  acreditarCobrosLote(@CurrentSession() auth: CurrentAuth, @Body() payload: AcreditarCobrosLoteDto) {
+    return this.cobrosService.acreditarLote(auth, payload);
   }
 
   @Permiso("administracion.cobrar.gestionar")

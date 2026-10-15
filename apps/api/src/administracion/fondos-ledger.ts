@@ -31,11 +31,13 @@ export type ActorFondos = {
 export async function ejecutarTransaccionFondos<T>(
   prisma: PrismaService,
   trabajo: (tx: Prisma.TransactionClient) => Promise<T>,
+  opciones?: { timeout: number },
 ): Promise<T> {
   for (let intento = 1; intento <= 3; intento += 1) {
     try {
       return await prisma.$transaction(trabajo, {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        ...opciones,
       });
     } catch (error) {
       const reintentable =
