@@ -2,7 +2,6 @@ import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.
 import {
   cantidadImpresionesCad,
   mapaCopiasCad,
-  errorCopiasPorPagina,
 } from '../common/copias-paginas-cad';
 import {
   BadRequestException,
@@ -15,15 +14,12 @@ import { CatalogoCadService } from './catalogo-cad.service';
 import type { SeleccionCad } from '../common/seleccion-cad';
 import { planPaginaCad } from '../common/cad-geometria';
 import {
-  errorMedidasDocumento,
   medidasSeleccionadas,
   resumenMedidas,
 } from '../common/medidas-documento';
-import {
-  errorPaginasDocumento,
-  metadataRangoPaginas,
-} from '../common/rangos-paginas';
+import { metadataRangoPaginas } from '../common/rangos-paginas';
 import type { DocumentoInput } from './adaptador';
+import { errorDocumentoCad } from './documento-cad';
 import type {
   ItemConstruido,
   DocumentoResultado,
@@ -93,19 +89,8 @@ export class CentroCopiadoCadService {
   }
 
   validar(doc: DocumentoInput) {
-    const error =
-      errorPaginasDocumento(doc) ||
-      errorMedidasDocumento(doc) ||
-      errorCopiasPorPagina(doc);
+    const error = errorDocumentoCad(doc);
     if (error) throw new BadRequestException(error);
-    if (
-      !doc.archivoNombre?.toLowerCase().endsWith('.pdf') ||
-      !doc.medidasPaginas?.length ||
-      !doc.paginasOriginales
-    )
-      throw new BadRequestException(
-        'Para Planos CAD, adjuntá un PDF con sus medidas por página.',
-      );
     if (!doc.cad) throw new BadRequestException('Elegí una configuración CAD.');
     if (doc.faz !== 1 || doc.grupoId || doc.terminaciones?.length)
       throw new BadRequestException(
@@ -194,9 +179,7 @@ export class CentroCopiadoCadService {
         cantidad,
         caras: 1 as const,
         cobertura: doc.cobertura ?? 'alta',
-        ...(simulacion
-          ? { omitirSetupCleanup: false }
-          : {}),
+        ...(simulacion ? { omitirSetupCleanup: false } : {}),
         modoColor: p.color === 'BN' ? 'BN' : 'CMYK',
         piezas: seleccionadas.map((pagina) => ({
           cantidad: copiasPorPagina.get(pagina.pagina) ?? doc.copias,
@@ -275,7 +258,9 @@ export class CentroCopiadoCadService {
         productoId: opcion.productoId,
         jobContext,
         especificaciones: {
-          Archivo: base.nombre,
+          ...(doc.archivoNombre
+            ? { Archivo: base.nombre }
+            : { Plano: base.nombre, Origen: 'Carga manual' }),
           Tamaño: tamano,
           Escala: '100%',
           Color: p.color === 'BN' ? 'Blanco y negro' : 'Color',

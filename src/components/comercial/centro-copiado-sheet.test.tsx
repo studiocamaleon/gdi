@@ -521,7 +521,7 @@ it("muestra la falta de perfil en la pestaña CAD y bloquea agregar incluso al v
 
 const boton = (texto: string) =>
   Array.from(el.querySelectorAll<HTMLButtonElement>("button")).find(
-    (b) => b.textContent === texto,
+    (b) => b.textContent?.trim() === texto,
   )!;
 async function cambiarCopiasPagina(pagina: number, valor: number) {
   const input = el.querySelector<HTMLInputElement>(
@@ -968,4 +968,106 @@ it("sin canal seleccionado pide elegirlo y no presenta el precio del motor", asy
   expect(mocks.cotizar).not.toHaveBeenCalled();
   expect(el.textContent).toContain("Elegí el canal de venta");
   expect(Array.from(el.querySelectorAll("button")).find(b => b.textContent === "Corregí los errores")?.disabled).toBe(true);
+});
+
+async function campoManual(etiqueta: string, valor: string) {
+  const input = el.querySelector<HTMLInputElement>(`input[aria-label="${etiqueta}"]`);
+  expect(input).not.toBeNull();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, valor);
+    input!.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+it("agrega un plano manual, exige medidas y conserva sus copias al construir la OT", async () => {
+  await montarCarga();
+  await pestaña("Planos CAD");
+  expect(boton("Fila manual")).toBeDefined();
+  await act(async () => boton("Fila manual").click());
+  expect(el.textContent).toContain("1 plano");
+  expect(el.textContent).toContain("Carga manual · sin archivo");
+  expect(el.textContent).not.toContain("Crear tomo");
+  await avanzar();
+  expect(mocks.cotizar).not.toHaveBeenCalled();
+  await campoManual("Ancho de Plano 1 (mm)", "594.5");
+  await avanzar();
+  expect(mocks.cotizar).not.toHaveBeenCalled();
+  await campoManual("Alto de Plano 1 (mm)", "841");
+  await campoManual("Copias de Plano 1", "5");
+  await avanzar();
+  const esperado = expect.objectContaining({
+    modo: "CAD", paginas: 1, copias: 5, faz: 1,
+    medidasPaginas: [{ anchoMm: 594.5, altoMm: 841 }],
+    tamanoAnchoMm: 594.5, tamanoAltoMm: 841,
+    cad: { cotizacion: { id: perfilCarga.id, revision: perfilCarga.revision } },
+    papelMateriaPrimaId: "rollo",
+  });
+  const entrada = mocks.cotizar.mock.lastCall![0].documentos[0];
+  expect(entrada).toEqual(esperado);
+  expect(entrada.archivoNombre).toBeUndefined();
+  expect(entrada.paginasOriginales).toBeUndefined();
+  expect(mocks.leerPdf).not.toHaveBeenCalled();
+  const agregar = Array.from(el.querySelectorAll<HTMLButtonElement>("button")).find(b => b.textContent?.includes("Agregar a la OT"));
+  expect(agregar?.disabled).toBe(false);
+  await act(async () => agregar!.click());
+  expect(mocks.construir.mock.lastCall![0].documentos).toEqual([esperado]);
+});
+
+it("cotiza varias medidas manuales juntas y conserva las dimensiones del PDF importado", async () => {
+  await montarCarga();
+  await pestaña("Planos CAD");
+  await cargarPdfs([[a1]]);
+  await act(async () => boton("Fila manual").click());
+  await campoManual("Ancho de Plano 2 (mm)", "300");
+  await campoManual("Alto de Plano 2 (mm)", "600");
+  await act(async () => boton("Fila manual").click());
+  await campoManual("Ancho de Plano 3 (mm)", "500");
+  await campoManual("Alto de Plano 3 (mm)", "1000");
+  await campoManual("Copias de Plano 3", "10");
+  await avanzar();
+  expect(el.querySelectorAll('input[aria-label^="Ancho de"]')).toHaveLength(2);
+  expect(mocks.cotizar.mock.lastCall![0].documentos).toEqual([
+    expect.objectContaining({ archivoNombre: "archivo-1.pdf", medidasPaginas: [a1], copias: 1 }),
+    expect.objectContaining({ medidasPaginas: [{ anchoMm: 300, altoMm: 600 }], copias: 1 }),
+    expect.objectContaining({ medidasPaginas: [{ anchoMm: 500, altoMm: 1000 }], copias: 10 }),
+  ]);
+});
+
+it("quita el precio y bloquea la construcción al borrar o invalidar una medida manual", async () => {
+  await montarCarga();
+  await pestaña("Planos CAD");
+  await act(async () => boton("Fila manual").click());
+  await campoManual("Ancho de Plano 1 (mm)", "594");
+  await campoManual("Alto de Plano 1 (mm)", "841");
+  await avanzar();
+  expect(mocks.cotizar).toHaveBeenCalledTimes(1);
+  for (const valor of ["", "0", "-10"]) {
+    await campoManual("Ancho de Plano 1 (mm)", valor);
+    await avanzar();
+    expect(mocks.cotizar).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('[aria-label="Ancho de Plano 1 (mm)"]')?.getAttribute("aria-invalid")).toBe("true");
+    expect(el.textContent).not.toContain("$121");
+    const agregar = Array.from(el.querySelectorAll<HTMLButtonElement>("button")).find(b => b.textContent?.includes("Agregar a la OT"));
+    expect(agregar?.disabled ?? true).toBe(true);
+  }
+});
+
+it("reabre y modifica un plano manual conservando cantidad, perfil y dimensiones", async () => {
+  mocks.opcionesCad.mockResolvedValue({ perfiles: [perfilCarga] });
+  await montar({
+    nombre: "Plano manual", modo: "CAD", paginas: 1, copias: 5,
+    tamano: "CAD", tamanoAnchoMm: 594, tamanoAltoMm: 841,
+    papelMateriaPrimaId: "rollo", color: "BN", faz: 1, terminaciones: [],
+    medidasPaginas: [a1],
+    cad: { cotizacion: { id: perfilCarga.id, revision: perfilCarga.revision } },
+  });
+  expect(el.querySelector<HTMLInputElement>('[aria-label="Ancho de Plano manual (mm)"]')?.value).toBe("594");
+  expect(el.querySelector<HTMLInputElement>('[aria-label="Copias de Plano manual"]')?.value).toBe("5");
+  await campoManual("Alto de Plano manual (mm)", "900");
+  await avanzar();
+  await act(async () => guardar()!.click());
+  expect(mocks.construir.mock.lastCall![0].documentos[0]).toMatchObject({
+    modo: "CAD", paginas: 1, copias: 5, medidasPaginas: [{ anchoMm: 594, altoMm: 900 }],
+    cad: { cotizacion: { id: perfilCarga.id, revision: perfilCarga.revision } },
+  });
 });

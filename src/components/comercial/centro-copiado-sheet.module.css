@@ -280,6 +280,9 @@
 .colSize {
   width: 72px;
 }
+.colSizeCad {
+  width: 200px;
+}
 .colColor {
   width: 72px;
 }
