@@ -8259,7 +8259,7 @@ function PropuestaFichaContenido({
                           {orden.estado === "borrador" ? "Descartar borrador" : "Cancelar orden"}
                         </HeroButton>
                       ) : null}
-                      {puedeEditarOrden && orden.estado === "borrador" && <CambiarTipoBorrador
+                      {permisoOrdenes && orden.estado === "borrador" && <CambiarTipoBorrador
                         id={orden.id} tipo="orden" version={orden.version}
                         disabled={editandoOrden || cambiosSinGuardar > 0 || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
                       />}

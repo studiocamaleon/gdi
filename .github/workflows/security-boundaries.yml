@@ -174,6 +174,7 @@ jobs:
           npm ci --include=dev --no-audit --no-fund
           node node_modules/vitest/vitest.mjs run \
             src/components/comercial/cambiar-tipo-borrador.test.tsx \
+            src/components/comercial/orden-modo-lectura.test.tsx \
             src/lib/centro-copiado-tarifarios-editor.test.ts \
             src/lib/centro-copiado-tarifarios-cuadricula.test.ts \
             src/lib/centro-copiado-tarifarios-sugerencias.test.ts \
