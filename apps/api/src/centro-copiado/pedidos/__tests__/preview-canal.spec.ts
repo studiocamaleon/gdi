@@ -66,16 +66,22 @@ function escenario() {
         const miembros = grupo
           ? dto.documentos.filter((m) => m.grupoId === grupo.id)
           : [d];
-        const cantidad = miembros.reduce(
+        const hojas = miembros.reduce(
           (s, m) =>
             s + Math.ceil(m.paginas / m.faz) * (grupo?.juegos ?? m.copias),
           0,
         );
-        const subtotal = cantidad * 300;
+        const cantidad = grupo?.juegos ?? hojas;
+        const anillado = grupo?.terminaciones?.includes('Anillado')
+          ? grupo.juegos * 50
+          : 0;
+        const subtotal = hojas * 300 + anillado;
         return [
           {
             documentoId: id,
-            grupoTomoId: grupo?.id ?? null,
+            // construirTomo entrega un único ítem cuyo documentoId es el grupo.
+            // grupoTomoId queda vacío porque no se agrupa otra vez en la OT.
+            grupoTomoId: null,
             productoId,
             cantidad,
             jobContext: {
@@ -86,7 +92,7 @@ function escenario() {
                     esTomo: true,
                     juegos: grupo.juegos,
                     segmentos: miembros,
-                    terminaciones: [],
+                    terminaciones: grupo.terminaciones ?? [],
                   }
                 : { ...d, esTomo: false, terminaciones: [] },
             },
@@ -94,7 +100,7 @@ function escenario() {
             total: subtotal * 1.21,
             impuestoMonto: subtotal * 0.21,
             cotizacion: {
-              costos: { total: cantidad * 20 },
+              costos: { total: hojas * 20 + anillado / 5 },
               desglosePrecio: {
                 precioNetoTotal: subtotal,
                 precioBrutoTotal: subtotal * 1.21,
@@ -145,7 +151,14 @@ function escenario() {
         subtotal: 600,
         iva: 126,
         total: 726,
-        anillado: null,
+        anillado: g.terminaciones?.includes('Anillado')
+          ? {
+              subtotal: g.juegos * 50,
+              iva: g.juegos * 10.5,
+              total: g.juegos * 60.5,
+              error: null,
+            }
+          : null,
         error: null,
       })),
       totales: {
@@ -244,4 +257,134 @@ it('los segmentos de un tomo conservan el total exacto del tarifario', async () 
   expect(preview.grupos[0].total).toBe(201);
   expect(preview.documentos.reduce((sum, d) => sum + d.total, 0)).toBe(201);
   expect(preview.totales.total).toBe(201);
+});
+
+function cargaTomo(juegos = 1): CotizarCentroCopiadoDto {
+  return {
+    canalVenta: 'mostrador',
+    documentos: [
+      { ...documento, id: 'primero', copias: 99, grupoId: 'tomo' },
+      { ...documento, id: 'segundo', copias: 99, grupoId: 'tomo' },
+    ],
+    grupos: [{ id: 'tomo', juegos }],
+  };
+}
+
+it.each([
+  [1, 201],
+  [5, 1005],
+  [50, 8000],
+])(
+  'el tomo de %s juegos muestra el mismo total que se agrega a la OT',
+  async (juegos, total) => {
+    const { service, prisma } = escenario();
+    const dto = cargaTomo(juegos);
+    const preview = await service.cotizarCarga(tenantId, dto);
+    const carga = await service.construirCarga(tenantId, dto);
+    expect(preview.totales.total).toBe(total);
+    expect(preview.grupos[0].total).toBe(total);
+    expect(preview.documentos.reduce((sum, d) => sum + d.total, 0)).toBe(total);
+    expect(carga.items).toHaveLength(1);
+    expect(carga.items[0]).toMatchObject({
+      documentoId: 'tomo',
+      grupoTomoId: null,
+      cantidad: juegos,
+      subtotal: preview.grupos[0].subtotal,
+      impuestoMonto: preview.grupos[0].iva,
+      total,
+      error: null,
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+
+    const sueltos = await service.cotizarCarga(tenantId, {
+      ...dto,
+      grupos: [],
+      documentos: dto.documentos.map((d) => ({
+        ...d,
+        grupoId: undefined,
+        copias: juegos,
+      })),
+    });
+    expect(sueltos.totales.total).toBe(total);
+  },
+);
+
+it('reparte el tramo compartido entre dos tomos y un documento suelto sin duplicar importes', async () => {
+  const { service } = escenario();
+  const tomo = cargaTomo(20);
+  const dto = {
+    ...tomo,
+    grupos: [...tomo.grupos!, { id: 'otro-tomo', juegos: 20 }],
+    documentos: [
+      ...tomo.documentos,
+      ...tomo.documentos.map((d) => ({
+        ...d,
+        id: `otro-${d.id}`,
+        grupoId: 'otro-tomo',
+      })),
+      { ...documento, id: 'suelto', copias: 20 },
+    ],
+  };
+  const preview = await service.cotizarCarga(tenantId, dto);
+  expect(preview.grupos.map((g) => g.total)).toEqual([3200, 3200]);
+  expect(preview.documentos.find((d) => d.id === 'suelto')?.total).toBe(1600);
+  expect(preview.totales.total).toBe(8000);
+  expect(
+    (await service.construirCarga(tenantId, dto)).items.map((i) => i.total),
+  ).toEqual([3200, 3200, 1600]);
+});
+
+it('el tomo toma el tramo de las otras cargas del pedido', async () => {
+  const { service } = escenario();
+  const dto = {
+    ...cargaTomo(),
+    cargasPedido: [{ documentos: [{ ...documento, copias: 98 }] }],
+  };
+  const preview = await service.cotizarCarga(tenantId, dto);
+  expect(preview.grupos[0].total).toBe(160);
+  expect(preview.totales.total).toBe(160);
+  expect((await service.construirCarga(tenantId, dto)).items[0].total).toBe(
+    160,
+  );
+});
+
+it('un tomo mixto usa el precio de cada combinación y agrega el anillado una vez por juego', async () => {
+  const { service, contenido } = escenario();
+  contenido.hojas!.filas.push({
+    ...contenido.hojas!.filas[0],
+    combinacion: { ...contenido.hojas!.filas[0].combinacion, color: 'COLOR' },
+    precios: [{ desdeCantidad: 1, precioUnitario: '242' }],
+  });
+  const dto = cargaTomo(2);
+  dto.documentos[1].color = 'COLOR';
+  dto.documentos[1].paginas = 4;
+  dto.grupos![0].terminaciones = ['Anillado'];
+  const preview = await service.cotizarCarga(tenantId, dto);
+  const grupo = preview.grupos[0];
+  expect(grupo.anillado).toMatchObject({ subtotal: 100, iva: 21, total: 121 });
+  expect(preview.documentos.map((d) => d.total)).toEqual([201, 968]);
+  expect(grupo.total).toBe(1290);
+  expect(preview.totales.total).toBe(1290);
+  expect((await service.construirCarga(tenantId, dto)).items[0]).toMatchObject({
+    cantidad: 2,
+    subtotal: grupo.subtotal,
+    impuestoMonto: grupo.iva,
+    total: grupo.total,
+  });
+});
+
+it('si falta un precio del tomo, muestra el pendiente y no el valor del motor', async () => {
+  const { service } = escenario();
+  const dto = cargaTomo();
+  dto.documentos[1].color = 'COLOR';
+  const preview = await service.cotizarCarga(tenantId, dto);
+  expect(preview.grupos[0]).toMatchObject({ total: 0, subtotal: 0, iva: 0 });
+  expect(preview.grupos[0].error).toContain('no tiene precio');
+  expect(
+    preview.documentos.every((d) => d.error?.includes('no tiene precio')),
+  ).toBe(true);
+  expect(preview.totales.total).toBe(0);
+  expect(
+    (await service.construirCarga(tenantId, dto)).items[0].error,
+  ).toContain('no tiene precio');
 });

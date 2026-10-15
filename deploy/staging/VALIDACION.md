@@ -1,5 +1,81 @@
 # Validación de staging — historial
 
+## 2026-10-15 — Fila manual en Planos CAD
+
+[PR #100](https://github.com/studiocamaleon/gdi/pull/100), dependiente de #99. Conserva los lotes #99/#97/#98 y #94/#92/#93. Autorización limitada a staging; producción y merge pendientes de aceptación. Dependencias automáticas fuera.
+
+«Fila manual» permite ingresar nombre, ancho y alto en mm, copias y perfil CAD sin adjuntar PDF. Varias medidas manuales y PDF pueden convivir en la misma carga. Las medidas incompletas o no positivas bloquean cotización y agregado. La OT conserva medidas y copias al reabrir.
+
+**Regresión detectada durante esta publicación:** el ensayo del servicio real encontró `archivoNombre: undefined` en el contexto de un plano manual; el motor lo rechazaba aunque los tests con motor simulado pasaban. Se omite la propiedad ausente. La nueva aserción usa el validador real y reprodujo tres fallos antes de corregirlos; después pasó con 1/5/10 copias.
+
+**Pruebas locales:** 159 casos en ocho suites (124 API y 35 interfaz/helpers). Tras la corrección se repitieron las cuatro suites API afectadas: 97 casos aprobados; ESLint enfocado y diff correctos. La suite manual está incluida en CI.
+
+**Revisión funcional:** `a6a27e08a856f5394bba61adb131e72f2df9df69`. [CI HTTP y regresiones](https://github.com/studiocamaleon/gdi/actions/runs/38766420687), [contenedores/tipos/migraciones/login](https://github.com/studiocamaleon/gdi/actions/runs/38766420723) y Vercel aprobados. CodeQL sin alertas abiertas del PR. Compilación remota con tipos. El primer build web dejó de avanzar durante la instalación de dependencias; se detuvo sólo ese cliente de compilación y se reintentó en el mismo constructor remoto. No se reinició Docker local ni se aumentaron recursos.
+
+**Servicio compilado de staging:** transacción PostgreSQL de sólo lectura, usando la lista QA ya existente y seleccionándola sólo en memoria. No se cambió la política de canales ni el tarifario vigente. Para 594 × 841 mm, rollo de 914 mm y lista de ensayo de $5.000/ML con IVA, sin redondeo:
+
+| Copias | Consumo | Total | Cantidad preparada para OT |
+| --- | --- | --- | --- |
+| 1 | 0,604 ML | $3.020 | 1 |
+| 5 | 3,02 ML | $15.100 | 5 |
+| 10 | 6,04 ML | $30.200 | 10 |
+
+Los tres casos igualan al PDF equivalente. Validación del contrato de entrada, vista previa, construcción de carga, reconstrucción desde el snapshot y preparación de persistencia de la cotización correctas. Tres filas juntas de 594 × 841, 300 × 600 y 420 × 594 mm también producen sus tres ítems, con 1/5/10 copias e importes de $3.020/$7.750/$21.500. Son precios ficticios de ensayo. No se guardó ni emitió una OT, ni se registraron pagos, producción o archivos nuevos.
+
+**Navegador completado — 15/10, 17:21 UTC:** el bloqueo inicial de la herramienta (`ERR_BLOCKED_BY_CLIENT`) dejó de presentarse al retomar Chrome. En la empresa demo, se abrió una OT nueva con canal Presencial y se creó «QA plano manual A1» sin archivo, 594 × 841 mm, B/N, rollo de 914 mm. Se verificó en la interfaz la lista QA: $5.000/ML desde 0 hasta menos de 10 ML, IVA incluido, sin cargo adicional de preparación, mínimo ni redondeo. Se asignó temporalmente esa lista al canal Mostrador; los otros canales conservaron el motor.
+
+La fila mostró $3.020/$15.100/$30.200 para 1/5/10 copias, con el nombre y versión del tarifario visibles. Al pulsar «Agregar a la OT» con diez copias, la tabla mostró **cantidad 10, unitario $3.020 y total $30.200**. El resumen identificó el tramo 0–<10 metros y $5.000 por metro; las especificaciones conservaron origen «Carga manual», una página, diez copias, A1 y escala 100 %. Sin errores ni advertencias de consola durante el recorrido. Capturas de antes/después conservadas fuera de Git.
+
+Se restituyó exactamente la selección comercial previa: política general Motor, cinco canales heredados y asignación en preparación; comprobado en PostgreSQL y nuevamente en Chrome. No se modificaron valores ni versiones de ningún tarifario. La restitución usa bloqueo de concurrencia, verifica que la política siga siendo la del ensayo, incrementa revisión y deja auditoría. La interfaz no ofrece desactivar una asignación ya activada, por lo que ese retorno se hizo mediante la operación técnica acotada a staging. La OT de prueba queda sólo en la pantalla de creación; **no se guardó ni emitió**, ni se registraron pagos o producción. No hubo nuevos despliegues.
+
+| Componente | Revisión / digest |
+| --- | --- |
+| API / worker / worker-pdf | `a6a27e08a` · `sha256:cd47def9e7661f758655b7cf95788b479a69608a2cf0423c2d8d409a8a73c298` |
+| Web | `a6a27e08a` · `sha256:70ee70b16a4a6838a0980dfb094ebb4a61fba33e1d0a487310e8108b1be4c65d` |
+| Gotenberg, conservado | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Operación:** seis máquinas saludables con los mismos recursos; revisiones y Sentry comprobados en API, ambos workers y web. Salud HTTPS 200/200 y rechazos anónimos 403/401. Se mantienen las 316 migraciones, sin nuevas ni pendientes; las seis tablas contrastadas conservan recuentos e identificadores. Producción mantiene sus seis imágenes y tamaños originales. Constructor remoto temporal retirado.
+
+Fuentes cifradas e inventario del copiador actualizados. Comprobante posterior `52891bb6-bfbd-4598-beef-678f7c1e5f02`, completado `2026-10-15T16:33:20.503Z`: revisión final, cuatro imágenes, 316 migraciones, 24 archivos y 9 fuentes. Firma y manifiesto descifrado verificados; **no se repitió una restauración SQL**, por lo que esta comprobación no acredita por sí sola una restauración completa de la copia.
+
+**Reversión:** API y ambos workers al digest previo `sha256:c58a13fc11da70a07bf85c2d64d26e6d366a702bbfa1f8bf7f5b688df4bb5310` (`d72343615`, #99); web a `sha256:43f6d5d35a9aaf580ed91476ae9129447f72d63b50b759ac12a4cb110b233cfe` (`5a1128328`, #94). Conservar PDF/copiador y restituir su inventario previo. No hay migraciones que revertir.
+
+El registro documental se guarda después de compilar; las imágenes conservan la revisión funcional indicada. #100 tiene la prueba visual completada y espera aceptación; sus dependencias mantienen sus pendientes de aceptación/producción/integración. No se fusionó ni cerró ningún PR de ese lote.
+
+## 2026-10-15 — Importación de planos y precios de tomos
+
+Lote del [PR #99](https://github.com/studiocamaleon/gdi/pull/99), con [#97](https://github.com/studiocamaleon/gdi/pull/97) y [#98](https://github.com/studiocamaleon/gdi/pull/98). Conserva #94 y sus dependencias #92/#93, que ya estaban en staging. Autorización limitada a staging; producción, aceptación y merge pendientes. Las actualizaciones de dependencias quedan fuera.
+
+La importación CAD normaliza la precisión del consumo en ML antes del cálculo comercial, sin modificar las medidas ni la escala del PDF. Los tomos resuelven el grupo mediante el identificador del ítem compuesto y aplican la matriz del canal a todos sus documentos; anillado aparte.
+
+El primer ensayo del navegador descubrió un segundo bloqueo al pasar un plano a la OT: el motor guardaba su cantidad comercial en ML como cantidad del ítem (5,96 en lugar de 10 planos). La corrección adicional guarda la cantidad de planos y sus importes unitarios, conservando el costo total, las medidas originales y los ML productivos en el snapshot. No cambia la cotización por ML de esos productos fuera de Centro de copiado. Un plano guardado con la representación anterior debe reconstruirse desde Centro de copiado; no se reescribieron documentos históricos.
+
+**Pruebas locales:** 220 casos en siete suites. Las tres nuevas regresiones de persistencia fallaron antes y pasaron después; incluyen cantidad 1/5/10, conservación de totales y geometría, y rechazo de una cantidad diferente durante la revisión. Se añadieron a CI estas pruebas y las de vista previa de tomos. El análisis ESLint con tipos alcanzó el límite local de 1,5 GB; no se amplió memoria ni se repitió en la Mac. Compilación completa con tipos en remoto y CI.
+
+**Chrome staging, datos ficticios:** lista de precios QA independiente del borrador Mostrador. Dos PDFs de cuatro y seis páginas A4, papel obra, B/N, simple faz: 1/5/10 juegos usan 10/50/100 hojas a $150/$100/$80 por hoja con IVA. Impresión $1.500/$5.000/$8.000; el espiral plástico Ø9 mm se suma aparte. Totales con terminación visibles, redondeados a pesos: $4.276/$18.880/$35.760. La OT recibe el mismo total y muestra el rango y precio final por hoja. Wire-O no tiene material con precio en esta empresa de prueba y se rechaza con su mensaje de configuración; el ensayo usa el espiral disponible.
+
+Plano PDF ficticio con ambas dimensiones fraccionarias: 594,0036944444444 × 841,0010555555555 mm. Cotiza al 100 %, en rollo de 914 mm, con 1/5/10 copias. Precios de ensayo $5.000/ML con IVA, sin redondeo comercial: importes visibles aproximados $3.020/$15.100/$30.200. Importación comprobada mediante el selector de archivos; selector y arrastre comparten `onArchivos`. No se realizó arrastre físico ni impresión física.
+
+**Revisión funcional:** `d72343615a0403f3594da0511d262c172552c014`. [CI HTTP y regresiones](https://github.com/studiocamaleon/gdi/actions/runs/38753807601), [contenedores/tipos/migraciones/login](https://github.com/studiocamaleon/gdi/actions/runs/38753807468), CodeQL sin alertas abiertas y Vercel aprobados. El primer intento de CI de #98 falló por ECONNRESET descargando paquetes y pasó al reintentar sin cambios de código. El primer envío de la imagen final a Fly falló en una capa; el reintento reutilizó la compilación.
+
+| Componente | Revisión / digest |
+| --- | --- |
+| API / worker / worker-pdf | `d72343615` · `sha256:c58a13fc11da70a07bf85c2d64d26e6d366a702bbfa1f8bf7f5b688df4bb5310` |
+| Web, conservada | `5a1128328` · `sha256:43f6d5d35a9aaf580ed91476ae9129447f72d63b50b759ac12a4cb110b233cfe` |
+| Gotenberg, conservado | `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Resultado final en la OT:** diez tomos y diez planos conservan la cantidad y los rangos del tarifario, sin alerta de revisión ni errores de consola en el recorrido final. Importes exactos persistidos: $35.759,82 de tomos y $30.200,18 de planos; total $65.960. La pantalla redondea cada fila a pesos. No se guardó ni emitió la OT ficticia, ni se registraron pagos o producción.
+
+La configuración temporal se restituyó al terminar: política general Motor, cinco canales heredados y sin asignación activa, confirmado también en Chrome. El tarifario original Mostrador permanece idéntico al previo; la lista QA queda sin asignar y rotulada «NO USAR». La restitución conserva revisión y auditoría. Evidencia y archivos ficticios fuera de Git.
+
+**Operación:** seis máquinas saludables, mismos tamaños, 316 migraciones sin nuevas. Salud HTTPS 200/200 y accesos anónimos rechazados 403/401. Revisión y Sentry activos comprobados en API, ambos workers y web. Se actualizaron las fuentes cifradas y el inventario del copiador. El comprobante posterior `10fa17d3-1b7f-4b45-9064-450bbb87dcbf`, completado `2026-10-15T15:00:58.503Z`, contiene la revisión funcional final, las cuatro imágenes, 316 migraciones, 24 archivos y nueve fuentes. Firma y manifiesto descifrado verificados; **no se repitió una restauración SQL**, por lo que esto no acredita por sí solo una restauración completa de esta copia. Ambos builders temporales fueron eliminados.
+
+El registro se añade en un commit documental posterior; las imágenes conservan la revisión funcional indicada y no se recompilan por ese registro. #99, #97 y #98 quedan pendientes de aceptación/publicación en producción e integración. #94 y sus dependencias conservan su pendiente de aceptación; las propuestas automáticas de dependencias siguen fuera del lote.
+
+**Reversión:** reinstalar en API y ambos workers `registry.fly.io/grafoprint-staging-api@sha256:481e539b61961498b31051726daef7f16bc8cf67fdec234381c273e967cedf59` (lote #94 previo), conservar web/PDF/copiador y restituir el inventario de fuentes e imágenes de ese lote. No hay migraciones que revertir. Producción conserva las seis imágenes y recursos anteriores.
+
 ## 2026-10-15, 13:21 UTC — Ensayo temporal del desbloqueo de borradores
 
 **Revisión web:** `15600992fdbfbb476793e362a53fe3b43f894ccb`, [PR #96](https://github.com/studiocamaleon/gdi/pull/96), sobre `main` después de #95. Corrige el bloqueo de «Cambiar a presupuesto» al entrar a editar una OT en borrador sin modificar datos. Los cambios sin guardar, pagos preparados y operaciones pendientes siguen bloqueando la conversión; durante la solicitud no se permite editar ni agregar pagos. Un error recupera la edición sin perder el documento. Misma autorización de publicación del cambio de tipo; #92–#94 y dependencias automáticas fuera del lote.

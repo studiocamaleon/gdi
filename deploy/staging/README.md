@@ -2,11 +2,13 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 14/10/2026 (Argentina).** API, web y ambos workers ejecutan `5a1128328` del [PR #94](https://github.com/studiocamaleon/gdi/pull/94): cantidad propia por paso al cotizar y exclusión según el estado de otro paso, reunidas desde #92/#93. CI aprobado sobre la revisión ejecutada; editor, cotizador y preparación de OT comprobados en Chrome. Seis servicios saludables, mismos recursos y 316 migraciones sin nuevas. **Sólo staging:** espera aceptación del titular antes de promover e integrar el lote. Dependencias automáticas fuera. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 15/10/2026 (Argentina).** API, ambos workers y web ejecutan `a6a27e08a` del [PR #100](https://github.com/studiocamaleon/gdi/pull/100): fila manual en Planos CAD, con medidas y copias sin PDF. Conserva #99/#97/#98 (importación de planos y precios de tomos) y #94/#92/#93. CI aprobado sobre la revisión funcional; pruebas de componentes y del servicio real comprueban el tarifario, 1/5/10 copias y la preparación de ítems de OT. **Prueba visual completada el 15/10, 17:21 UTC:** Chrome verificó filas manuales con 1/5/10 copias y el precio de la lista QA; diez planos pasaron a la OT conservando cantidad 10 y total $30.200. La política temporal se restituyó; sin guardar ni emitir la orden. Seis servicios saludables, mismos recursos y 316 migraciones sin nuevas. **Sólo staging:** aceptación, producción y merge pendientes para este lote y sus dependencias. Dependencias automáticas fuera. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 13:21 UTC:** terminó el ensayo temporal del #96 y staging volvió nuevamente al lote #94, con sus imágenes e inventario originales y copia posterior verificada. La corrección de borradores se publicó en producción.
+
+> **2026-10-15, 15:03 UTC:** el lote #99 está comprobado sobre #94. El ensayo usa una lista QA independiente y al terminar se restituye la política original de canales. Producción permanece intacta. Copia posterior de la revisión final con firma y manifiesto verificados; sin repetir restauración SQL.
 
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
