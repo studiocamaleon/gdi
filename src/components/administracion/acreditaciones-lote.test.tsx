@@ -56,7 +56,7 @@ vi.mock("@heroui/react", async (original) => ({
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 let container: HTMLDivElement, root: Root;
-const filas = [1, 2, 3].map((n) => ({
+const filas = [1, 2, 3].map((n): CobroPendienteAcreditacion => ({
   id: `cobro-${n}`,
   fecha: "2026-09-01",
   fechaAcreditacionEstimada: null,
@@ -64,6 +64,7 @@ const filas = [1, 2, 3].map((n) => ({
   metodoTipo: "tarjeta_debito",
   cuentaDestinoNombre: "Banco ficticio",
   clienteNombre: `Cliente ${n}`,
+  ordenId: `orden-${n}`,
   ordenNumero: `OT-${n}`,
   montoBruto: 100,
   comisionMonto: n,
@@ -75,7 +76,7 @@ const filas = [1, 2, 3].map((n) => ({
   esCheque: false,
   valorEstado: null,
   valorNumero: null,
-})) as CobroPendienteAcreditacion[];
+}));
 function button(text: string) {
   return [...container.querySelectorAll<HTMLButtonElement>("button")].find(
     (b) => b.textContent === text,
@@ -102,6 +103,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
 async function render(restringido = false) {
   await act(async () =>
