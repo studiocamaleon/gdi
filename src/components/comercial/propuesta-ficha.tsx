@@ -4964,11 +4964,12 @@ function PropuestaFichaContenido({
   const conCobros = useCapacidad("cobros");
   const modoOrden = Boolean(orden);
   const [editandoOrden, setEditandoOrden] = React.useState(false);
+  const [cambiandoTipoBorrador, setCambiandoTipoBorrador] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
   const [precioOrdenPendiente, setPrecioOrdenPendiente] = React.useState(false);
   // Puerta de edición de los datos de la ficha. La entrega es una operación
   // independiente, con sus propios permisos y validación de estado.
-  const puedeEditarOrden = orden ? permisoOrdenes && editandoOrden && !guardandoEdicion && !precioOrdenPendiente && orden.estado !== "cancelada" : permisoOrdenes || permisoPresupuestos;
+  const puedeEditarOrden = orden ? permisoOrdenes && editandoOrden && !guardandoEdicion && !precioOrdenPendiente && !cambiandoTipoBorrador && orden.estado !== "cancelada" : permisoOrdenes || permisoPresupuestos;
   const permisoEdicionRef = React.useRef(puedeEditarOrden);
   React.useLayoutEffect(() => {
     permisoEdicionRef.current = puedeEditarOrden;
@@ -5495,6 +5496,7 @@ function PropuestaFichaContenido({
   const cambioRemotoPendiente = React.useRef(false);
   const bloqueaCambioRemoto =
     editandoOrden ||
+    cambiandoTipoBorrador ||
     guardandoEdicion ||
     panelSaving ||
     emitiendo ||
@@ -8041,7 +8043,7 @@ function PropuestaFichaContenido({
                       }
                       editando={editandoOrden}
                       onPendienteChange={setPrecioOrdenPendiente}
-                      bloqueado={guardandoEdicion ||
+                      bloqueado={guardandoEdicion || cambiandoTipoBorrador ||
                         cambiosSinGuardar > 0 || togglingFiscal || cancelando}
                       onActualizada={(actualizada) => {
                         setOrden(actualizada);
@@ -8206,7 +8208,7 @@ function PropuestaFichaContenido({
                             variant="tertiary"
                             size="sm"
                             onPress={cancelarEdicion}
-                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
+                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador || cambiandoTipoBorrador}
                           >
                             Cancelar
                           </HeroButton>
@@ -8215,7 +8217,7 @@ function PropuestaFichaContenido({
                             variant="primary"
                             size="sm"
                             onPress={() => void guardarEdicion()}
-                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
+                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador || cambiandoTipoBorrador}
                           >
                             <CheckIcon />
                             {guardandoEdicion
@@ -8231,7 +8233,7 @@ function PropuestaFichaContenido({
                           variant="primary"
                           size="sm"
                           onPress={() => setEditandoOrden(true)}
-                          isDisabled={orden.estado === "borrador" && !conOrdenes}
+                          isDisabled={cambiandoTipoBorrador || (orden.estado === "borrador" && !conOrdenes)}
                           title={orden.estado === "borrador" && !conOrdenes ? "La edición de borradores no está incluida en el plan actual." : undefined}
                         >
                           <Edit3Icon />
@@ -8261,7 +8263,9 @@ function PropuestaFichaContenido({
                       ) : null}
                       {permisoOrdenes && orden.estado === "borrador" && <CambiarTipoBorrador
                         id={orden.id} tipo="orden" version={orden.version}
-                        disabled={editandoOrden || cambiosSinGuardar > 0 || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
+                        onPendienteChange={setCambiandoTipoBorrador}
+                        disabled={cambiosSinGuardar > 0 || cobrosStaged.length > 0 || guardandoEdicion || precioOrdenPendiente || revisandoCopiado || cuponValidando || descuentoAplicando || togglingFiscal || cancelando || emitiendoBorrador}
+                        motivoBloqueo={cobrosStaged.length > 0 ? "Quitá los pagos pendientes antes de cambiar el tipo de borrador." : undefined}
                       />}
                       {puedeEditarOrden && orden.estado === "borrador" ? (
                         <HeroButton
@@ -8865,7 +8869,9 @@ function PropuestaFichaContenido({
                 </div>
               ) : (
                 <div className="otd-page" style={{ padding: 0 }}>
-                  <PagosStagingTab
+                  {cambiandoTipoBorrador ? (
+                    <p role="status">Cambiando tipo de borrador…</p>
+                  ) : <PagosStagingTab
                     total={orden?.total ?? totalPropuesta}
                     sinComprobante={sinComprobante}
                     cobros={cobrosStaged}
@@ -8877,7 +8883,7 @@ function PropuestaFichaContenido({
                         prev.filter((_, i) => i !== index),
                       )
                     }
-                  />
+                  />}
                 </div>
               )
             ) : null}

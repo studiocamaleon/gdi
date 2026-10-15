@@ -14,6 +14,7 @@ import { getMockOrdenDetalle } from "@/lib/ordenes-trabajo";
 
 const mocks = vi.hoisted(() => ({
   guardar: vi.fn(),
+  cambiarTipo: vi.fn(),
   editarOrden: vi.fn(),
   revisarCopiado: vi.fn(),
   copiado: false,
@@ -119,7 +120,8 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
-  apiRequest: vi.fn(async () => {
+  apiRequest: vi.fn(async (path: string, opciones: unknown) => {
+    if (path.startsWith("/borradores/")) return mocks.cambiarTipo(path, opciones);
     throw new Error("Sin conexiones externas en esta prueba");
   }),
 }));
@@ -236,6 +238,7 @@ beforeEach(() => {
   vi.stubGlobal("PointerEvent", MouseEvent);
   vi.clearAllMocks();
   mocks.confirmar = null;
+  mocks.cambiarTipo.mockReset();
   mocks.copiado = false;
   mocks.eta = false;
   mocks.finalizado = false;
@@ -1185,4 +1188,77 @@ it("con todo pagado, un usuario sin permiso de entrega no puede emitir y entrega
     "Tu rol no permite registrar la entrega",
   );
   expect(mocks.crearOrden).not.toHaveBeenCalled();
+});
+
+
+function borradorParaCambiarTipo() {
+  const base = getMockOrdenDetalle("mock-0184")!;
+  return {
+    ...base,
+    id: "borrador-ficticio",
+    estado: "borrador" as const,
+    canalVenta: "mostrador",
+    fechaEntrega: "2099-01-10",
+    version: "2030-01-01T00:00:00.000Z",
+    productos: base.productos.map((producto, indice) => ({ ...producto, id: `item-ficticio-${indice}`, cotizacionItemId: `cotizacion-ficticia-${indice}`, fechaEntrega: "2099-01-10" })),
+  };
+}
+function botonCambiarTipo() {
+  return [...container.querySelectorAll<HTMLButtonElement>("button")]
+    .find((boton) => boton.textContent?.trim() === "Cambiar a presupuesto")!;
+}
+it("un borrador guardado permite cambiar de tipo al entrar a editar sin modificar datos", async () => {
+  mocks.cambiarTipo.mockResolvedValue({ id: "presupuesto-ficticio", tipo: "presupuesto" });
+  const orden = borradorParaCambiarTipo();
+  await montar(orden);
+  await click("Editar orden");
+  expect(container.textContent).toContain("Finalizar edición");
+  expect(botonCambiarTipo().disabled).toBe(false);
+  await click("Cambiar a presupuesto");
+  expect(mocks.cambiarTipo).toHaveBeenCalledExactlyOnceWith(`/borradores/orden/${orden.id}/a-presupuesto`, {
+    method: "POST", body: JSON.stringify({ version: orden.version }),
+  });
+  expect(mocks.replace).toHaveBeenCalledWith("/comercial/presupuestos/presupuesto-ficticio");
+  expect(mocks.editarOrden).not.toHaveBeenCalled();
+  expect(mocks.recotizar).not.toHaveBeenCalled();
+  expect(avisoAlNavegar).toEqual([false]);
+});
+it("el cambio de tipo sigue bloqueado si el borrador tiene datos comerciales sin guardar", async () => {
+  await montar(borradorParaCambiarTipo());
+  await click("Editar orden");
+  await verDatos();
+  await click("Canal Web de prueba");
+  expect(container.textContent).toContain("Guardar cambios");
+  expect(botonCambiarTipo().disabled).toBe(true);
+  await click("Cambiar a presupuesto");
+  expect(mocks.cambiarTipo).not.toHaveBeenCalled();
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it("no permite convertir un borrador con un pago pendiente de registrar", async () => {
+  await montar(borradorParaCambiarTipo());
+  await verPagos();
+  await click("Pago completo ficticio");
+  expect(botonCambiarTipo().disabled).toBe(true);
+  await click("Cambiar a presupuesto");
+  expect(mocks.cambiarTipo).not.toHaveBeenCalled();
+});
+it("bloquea edición y pagos durante la conversión y los recupera si falla", async () => {
+  let rechazar!: (error: Error) => void;
+  mocks.cambiarTipo.mockImplementation(() => new Promise((_resolve, reject) => { rechazar = reject; }));
+  await montar(borradorParaCambiarTipo());
+  await click("Editar orden");
+  await verPagos();
+  await click("Cambiar a presupuesto");
+  expect(container.textContent).toContain("Cambiando tipo de borrador…");
+  expect(container.textContent).not.toContain("Pago completo ficticio");
+  const botonFinalizar = [...container.querySelectorAll<HTMLButtonElement>("button")]
+    .find((boton) => boton.textContent?.trim() === "Finalizar edición")!;
+  expect(botonFinalizar.disabled).toBe(true);
+  await act(async () => rechazar(new Error("No se pudo guardar el cambio.")));
+  expect(container.textContent).toContain("Pago completo ficticio");
+  expect(botonFinalizar.disabled).toBe(false);
+  expect(botonCambiarTipo().disabled).toBe(false);
+  expect(mocks.replace).not.toHaveBeenCalled();
+  expect(mocks.editarOrden).not.toHaveBeenCalled();
+  expect(mocks.error).toHaveBeenCalledWith("No se pudo guardar el cambio.");
 });
