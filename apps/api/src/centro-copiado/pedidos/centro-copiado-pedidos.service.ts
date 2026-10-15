@@ -125,17 +125,18 @@ export class CentroCopiadoPedidosService {
       const precio = calculado.precios.find(
         (p) => p.id === item.documentoId,
       )?.precio;
+      // El tomo compuesto es un único ítem: su documentoId identifica al grupo,
+      // mientras grupoTomoId queda vacío para no reagruparlo en la ficha de OT.
+      const esTomo = objeto(item.jobContext._centroCopiado).esTomo === true;
+      const grupo = esTomo
+        ? preview.grupos.find((g) => g.id === item.documentoId)
+        : null;
       const miembros = dto.documentos.filter((d) =>
-        item.grupoTomoId
-          ? d.grupoId === item.grupoTomoId
-          : d.id === item.documentoId,
+        esTomo ? d.grupoId === item.documentoId : d.id === item.documentoId,
       );
       const filas = miembros.map(
         (d) => preview.documentos.find((p) => p.id === d.id)!,
       );
-      const grupo = item.grupoTomoId
-        ? preview.grupos.find((g) => g.id === item.grupoTomoId)
-        : null;
       if (!precio) {
         for (const fila of filas) {
           fila.error =
