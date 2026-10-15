@@ -1,5 +1,25 @@
 # Validación de producción
 
+## 2026-10-15, 13:21 UTC — Conversión de borrador con edición abierta
+
+**Revisión web:** `15600992fdbfbb476793e362a53fe3b43f894ccb`, [PR #96](https://github.com/studiocamaleon/gdi/pull/96), sobre `main` después de #95. Corrige el bloqueo de «Cambiar a presupuesto» al entrar a editar una OT en borrador sin modificar datos. Los cambios sin guardar, pagos preparados y operaciones pendientes siguen bloqueando la conversión; durante la solicitud no se permite editar ni agregar pagos. Un error recupera la edición sin perder el documento. Misma autorización de publicación del cambio de tipo; #92–#94 y dependencias automáticas fuera del lote.
+
+**Pruebas:** 54 casos web en tres suites, ESLint y tipos enfocados aprobados. La prueba nueva reprodujo el bloqueo antes de corregirlo. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/38737464703), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/38737464586), CodeQL sin alertas abiertas y Vercel aprobados. Compilación remota completa con tipos; sin cambios de marketing, backend o migraciones. El registro documental posterior vuelve a comprobarse antes del merge.
+
+**Chrome staging:** una OT ficticia guardada, sin cliente, permitió OT → presupuesto desde «Finalizar edición» → OT. Consultas de sólo lectura confirmaron total exacto $76,25, entrega 22/10/2026, cantidades, precios, costos, canal y snapshots conservados. Un cambio temporal de canal deshabilitó la conversión; cancelarlo recuperó la acción. Sin emisión, cobros ni producción; documento final archivado por la interfaz. El aviso React #418 de hidratación al cargar ya estaba documentado antes de este cambio y no se presenta como corregido; la conversión no produjo errores nuevos. Evidencia privada fuera de Git.
+
+**Imagen web comprobada:** `sha256:30391c7708a6d08bbffdb0007e5646a4f5f18d47c7e7b649cf4795f23b0959a9`. API/ambos workers conservan `4c73bcb767497225a671412e64b9791971d071ba`, digest `sha256:3ac7aec47283a7dbb612949a60876c117bc7a1566f6c8d26d6745bcfa2aa7b3b`. PDF y copiador mantienen sus imágenes. Seis máquinas y tamaños originales; 316 migraciones, ninguna nueva. Sin seeds ni resets.
+
+La primera subida al registro de Fly falló después de compilar; el reintento aprovechó la caché y completó la imagen. Se comprobó el mismo digest al copiarla a producción, sin recompilar. Constructor temporal `fly-builder-wild-thunder-663` retirado; Docker local y otros proyectos sin cambios.
+
+Sólo se actualizó la web de producción. Revisión ejecutada y Sentry comprobados, salud web/API 200, acceso directo privado 403 y BFF anónimo 401. Chrome cargó el listado y una ficha de OT sin errores de consola. No se guardaron ni convirtieron documentos comerciales reales.
+
+Fuentes exactas cifradas y custodiadas e inventario actualizado. Copia posterior `b1442479-3814-4793-9966-cdd87ed1a1cf`, completada `2026-10-15T13:19:39.408Z`: firma válida, manifiesto descifrado, revisión/digests/fuentes comprobados, 316 migraciones y 256 archivos. Los primeros sondeos encontraron la copia anterior. **No se repitió una restauración SQL completa.**
+
+Staging fue restituido a `5a1128328` (#94), incluidas sus seis imágenes, recursos e inventario. El lote de cantidad manual y exclusión sigue pendiente de aceptación. Ver [registro de staging](../staging/VALIDACION.md).
+
+Reversión sólo de web a `registry.fly.io/grafoprint-production-web@sha256:44e890368ab40ed832b3b280d5946d2ceee70b5c07386fc8185bd3fc342b69dc` (`a7d34a80b`), actualizando también el inventario del copiador. No requiere modificar esquema ni restaurar datos. El merge final del #96 conserva la revisión funcional; los commits posteriores registran la publicación.
+
 ## 2026-10-15, 02:24 UTC — Cambio de tipo de borrador publicado
 
 El titular autorizó publicar directamente después de las pruebas locales. Se realizó una comprobación técnica temporal en staging y se promovieron exactamente esas imágenes, sin otra aprobación pendiente.

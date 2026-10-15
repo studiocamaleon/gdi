@@ -6,6 +6,8 @@
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 
+> **2026-10-15, 13:21 UTC:** terminó el ensayo temporal del #96 y staging volvió nuevamente al lote #94, con sus imágenes e inventario originales y copia posterior verificada. La corrección de borradores se publicó en producción.
+
 Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
 ## Estado — 30 de septiembre de 2026 (Argentina)

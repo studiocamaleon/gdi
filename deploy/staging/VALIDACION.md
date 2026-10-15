@@ -1,5 +1,21 @@
 # Validación de staging — historial
 
+## 2026-10-15, 13:21 UTC — Ensayo temporal del desbloqueo de borradores
+
+**Revisión web:** `15600992fdbfbb476793e362a53fe3b43f894ccb`, [PR #96](https://github.com/studiocamaleon/gdi/pull/96), sobre `main` después de #95. Corrige el bloqueo de «Cambiar a presupuesto» al entrar a editar una OT en borrador sin modificar datos. Los cambios sin guardar, pagos preparados y operaciones pendientes siguen bloqueando la conversión; durante la solicitud no se permite editar ni agregar pagos. Un error recupera la edición sin perder el documento. Misma autorización de publicación del cambio de tipo; #92–#94 y dependencias automáticas fuera del lote.
+
+**Pruebas:** 54 casos web en tres suites, ESLint y tipos enfocados aprobados. La prueba nueva reprodujo el bloqueo antes de corregirlo. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/38737464703), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/38737464586), CodeQL sin alertas abiertas y Vercel aprobados. Compilación remota completa con tipos; sin cambios de marketing, backend o migraciones. El registro documental posterior vuelve a comprobarse antes del merge.
+
+**Chrome staging:** una OT ficticia guardada, sin cliente, permitió OT → presupuesto desde «Finalizar edición» → OT. Consultas de sólo lectura confirmaron total exacto $76,25, entrega 22/10/2026, cantidades, precios, costos, canal y snapshots conservados. Un cambio temporal de canal deshabilitó la conversión; cancelarlo recuperó la acción. Sin emisión, cobros ni producción; documento final archivado por la interfaz. El aviso React #418 de hidratación al cargar ya estaba documentado antes de este cambio y no se presenta como corregido; la conversión no produjo errores nuevos. Evidencia privada fuera de Git.
+
+**Imagen web comprobada:** `sha256:30391c7708a6d08bbffdb0007e5646a4f5f18d47c7e7b649cf4795f23b0959a9`. API/ambos workers conservan `4c73bcb767497225a671412e64b9791971d071ba`, digest `sha256:3ac7aec47283a7dbb612949a60876c117bc7a1566f6c8d26d6745bcfa2aa7b3b`. PDF y copiador mantienen sus imágenes. Seis máquinas y tamaños originales; 316 migraciones, ninguna nueva. Sin seeds ni resets.
+
+La primera subida al registro de Fly falló después de compilar; el reintento aprovechó la caché y completó la imagen. Se comprobó el mismo digest al copiarla a producción, sin recompilar. Constructor temporal `fly-builder-wild-thunder-663` retirado; Docker local y otros proyectos sin cambios.
+
+Durante el ensayo se instalaron temporalmente la web candidata y el backend de #95. Salud de los seis servicios y revisión por proceso correctas. Copia candidata `d01453e2-12f5-49d1-87ee-c3477b8da2fa`, completada `2026-10-15T13:13:38.349Z`, verificada con firma, manifiesto y fuentes de la revisión.
+
+**Estado final restituido:** lote #94, `5a1128328ba95c2cd08acc3773b19e2afd575627`. API y ambos workers: `sha256:481e539b61961498b31051726daef7f16bc8cf67fdec234381c273e967cedf59`; web: `sha256:43f6d5d35a9aaf580ed91476ae9129447f72d63b50b759ac12a4cb110b233cfe`. Seis imágenes, tamaños e inventario del copiador iguales a los anteriores. Salud HTTPS y controles anónimos correctos. Copia posterior `1e8a3a24-0e5c-4c1e-8a06-22a4794d1b6e`, completada `2026-10-15T13:20:25.707Z`, con firma y manifiesto verificados: 316 migraciones, 24 archivos y fuentes de #94. No se repitió restauración SQL. El lote #92–#94 sigue pendiente de aceptación del titular.
+
 ## 2026-10-15, 02:24 UTC — Ensayo temporal y promoción del cambio de borradores
 
 **Revisiones ejecutadas:** web `a7d34a80beefba6b80e7312b81a64b703a424bea`; API y ambos workers `4c73bcb767497225a671412e64b9791971d071ba`, con código backend idéntico al candidato final ([PR #95](https://github.com/studiocamaleon/gdi/pull/95)). Permite cambiar OT en borrador ↔ presupuesto sin emitir, conservando importes, costos, snapshots, descuentos, fechas, adjuntos, reservas y planificación. Valida empresa, permisos, funciones contratadas y versión; reintentos idempotentes. No incluye cantidad manual ni exclusión de pasos (#92–#94), todavía pendientes de aceptación de staging, ni propuestas automáticas de dependencias.
