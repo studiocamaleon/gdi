@@ -27,6 +27,8 @@ export type ItemEntrega = {
 
 export type OrdenEscaneada = {
   puedeCobrar?: boolean;
+  puedeEntregar?: boolean;
+  puedeRevertir?: boolean;
   produccionControlada?: boolean;
   requiereConfirmacionManual?: boolean;
   id: string;

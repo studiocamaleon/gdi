@@ -615,4 +615,24 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
     await http('post', `cuentas/${cuentas[0][0]}/arqueo`, 'cajero').send({ contado: 10 }).expect(403);
   });
 
+  it('la liquidación en lote valida permisos, empresa, duplicados y reintentos por HTTP', async () => {
+    const crear = async () => prisma.cobro.create({ data: { tenantId: tenants[0], metodoPagoId: metodos[0], cuentaDestinoId: cuentas[0][0], fecha: new Date('2026-09-01T15:00:00Z'), montoBruto: 100, netoAcreditado: 100, disponibleReal: 100, estadoAcreditacion: 'pendiente' } });
+    const propios = await Promise.all([crear(), crear()]);
+    const linea = (id: string) => ({ id, fecha: '2026-09-02', referencia: 'LIQ-HTTP-FICTICIA', comisionMonto: 0, comisionIvaMonto: 0, retenciones: [] });
+    const payload = { cobros: propios.map((c) => linea(c.id)) };
+    for (const actor of ['lector', 'sin-permisos', 'cobrador', 'cajero'])
+      await http('post', 'cobros/acreditar-lote', actor).send(payload).expect(403);
+    await http('post', 'cobros/acreditar-lote').send({ cobros: [linea(propios[0].id), linea(cobros[1])] }).expect(404);
+    await http('post', 'cobros/acreditar-lote').send({ cobros: [linea(propios[0].id), linea(propios[0].id)] }).expect(400);
+    await http('post', 'cobros/acreditar-lote').send({ cobros: [] }).expect(400);
+    await http('post', 'cobros/acreditar-lote').send({ cobros: [null] }).expect(400);
+    expect(await prisma.movimientoFondos.count({ where: { cobroId: { in: propios.map((c) => c.id) } } })).toBe(0);
+    for (let n = 0; n < 2; n++) {
+      const resultado = await http('post', 'cobros/acreditar-lote').send(payload).expect(201);
+      expect(resultado.body.acreditados).toBe(2);
+    }
+    expect(await prisma.movimientoFondos.count({ where: { cobroId: { in: propios.map((c) => c.id) } } })).toBe(2);
+  });
+
+
 });

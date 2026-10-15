@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsIn,
   IsISO8601,
@@ -187,4 +189,19 @@ export class AcreditarCobroDto {
   @Type(() => RetencionLineaDto)
   retenciones: RetencionLineaDto[];
   @IsString() @MinLength(1) @MaxLength(100) referencia: string;
+}
+
+export class CobroLiquidacionLoteDto extends AcreditarCobroDto {
+  @IsUUID() id: string;
+}
+
+/** Una liquidación común, con los importes revisados de cada cobro. */
+export class AcreditarCobrosLoteDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ArrayUnique((item: CobroLiquidacionLoteDto | null) => item?.id)
+  @ValidateNested({ each: true })
+  @Type(() => CobroLiquidacionLoteDto)
+  cobros: CobroLiquidacionLoteDto[];
 }

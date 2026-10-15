@@ -31,10 +31,7 @@ import {
   type ItemEntrega,
   type OrdenEscaneada,
 } from "@/lib/entrega-api";
-import {
-  getCuentasFondos,
-  getMetodosPago,
-} from "@/lib/administracion-api";
+import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
 import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
 import { crearIntentoCobro } from "@/lib/intento-cobro";
 import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
@@ -55,7 +52,8 @@ function iniciales(nombre: string) {
 const COLORES = ["#c2410c", "#1d4ed8", "#7c4dd6", "#16794a", "#9a6a11"];
 function colorDe(nombre: string) {
   let h = 0;
-  for (let i = 0; i < nombre.length; i++) h = (h * 31 + nombre.charCodeAt(i)) | 0;
+  for (let i = 0; i < nombre.length; i++)
+    h = (h * 31 + nombre.charCodeAt(i)) | 0;
   return COLORES[Math.abs(h) % COLORES.length];
 }
 
@@ -68,7 +66,7 @@ export function EntregaModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const { moneda } = useConfigRegional();
+  const { moneda, zonaHoraria } = useConfigRegional();
   const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
 
   const [orden, setOrden] = React.useState<OrdenEscaneada | null>(null);
@@ -77,11 +75,15 @@ export function EntregaModal({
   const [guardando, setGuardando] = React.useState(false);
   const enCurso = React.useRef(false);
   const intentoCobro = React.useRef(crearIntentoCobro());
-  const [preparacionConfirmada, setPreparacionConfirmada] = React.useState(false);
+  const [preparacionConfirmada, setPreparacionConfirmada] =
+    React.useState(false);
 
   // Cobro (sólo si hay saldo).
   const [metodos, setMetodos] = React.useState<MetodoPago[]>([]);
   const [cuentas, setCuentas] = React.useState<CuentaFondosResumen[]>([]);
+  const [errorCatalogos, setErrorCatalogos] = React.useState<string | null>(
+    null,
+  );
   const [medioId, setMedioId] = React.useState("");
   const [monto, setMonto] = React.useState("");
 
@@ -123,18 +125,24 @@ export function EntregaModal({
   React.useEffect(() => {
     if (!orden || orden.saldo <= 0 || orden.puedeCobrar === false) return;
     let vivo = true;
+    setErrorCatalogos(null);
     void Promise.all([getMetodosPago(), getCuentasFondos()])
       .then(([ms, cs]) => {
         if (!vivo) return;
         // El flujo rápido no captura banco, número ni vencimiento del valor.
         // Los cheques/eCheq se registran desde el formulario completo.
-        const activos = ms.filter(
-          (m) => m.activo && m.tipo !== "cheque_echeq",
-        );
+        const activos = ms.filter((m) => m.activo && m.tipo !== "cheque_echeq");
         setMetodos(activos);
         setCuentas(cs);
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (vivo)
+          setErrorCatalogos(
+            e instanceof Error
+              ? e.message
+              : "No se pudieron cargar los medios de pago.",
+          );
+      });
     return () => {
       vivo = false;
     };
@@ -167,16 +175,33 @@ export function EntregaModal({
 
   const confirmar = async () => {
     if (enCurso.current) return;
-    if (!orden || elegidos.length === 0 || (orden.requiereConfirmacionManual && !preparacionConfirmada)) return;
+    if (
+      !orden ||
+      orden.puedeEntregar === false ||
+      elegidos.length === 0 ||
+      (orden.requiereConfirmacionManual && !preparacionConfirmada)
+    )
+      return;
     if (tercero && (!tNombre.trim() || !tDni.trim())) return;
     enCurso.current = true;
     setGuardando(true);
     try {
       // La cuenta destino sale del método (su default) o de la primera
       // disponible: en el mostrador nadie elige la caja a mano.
+      const compatibles = cuentas.filter(
+        (c) =>
+          c.moneda === moneda.codigo &&
+          !["cartera_valores", "cartera_valores_legacy"].includes(c.tipo),
+      );
       const cuentaDestinoId =
-        medio?.cuentaDestinoId ?? cuentas[0]?.id ?? null;
-      const cobra = orden.puedeCobrar !== false && saldo > 0 && medio != null && montoNum > 0;
+        compatibles.find((c) => c.id === medio?.cuentaDestinoId)?.id ??
+        compatibles[0]?.id ??
+        null;
+      const cobra =
+        orden.puedeCobrar !== false &&
+        saldo > 0 &&
+        medio != null &&
+        montoNum > 0;
       if (cobra && !cuentaDestinoId) {
         toast.error(
           "No hay una cuenta de fondos configurada para acreditar el cobro.",
@@ -192,7 +217,12 @@ export function EntregaModal({
       }
       const cobro = cobra
         ? {
-            fecha: new Date().toISOString().slice(0, 10),
+            fecha: new Intl.DateTimeFormat("en-CA", {
+              timeZone: zonaHoraria,
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }).format(new Date()),
             metodoPagoId: medio!.id,
             cuentaDestinoId: cuentaDestinoId!,
             montoBruto: montoNum,
@@ -204,7 +234,9 @@ export function EntregaModal({
         : null;
       if (cobro && !clave) return;
       const r = await entregarItems(orden.id, {
-        ...(orden.requiereConfirmacionManual ? { confirmarPreparacionManual: preparacionConfirmada } : {}),
+        ...(orden.requiereConfirmacionManual
+          ? { confirmarPreparacionManual: preparacionConfirmada }
+          : {}),
         itemIds: elegidos.map((i) => i.id),
         ...(tercero
           ? { retiraTercero: { nombre: tNombre.trim(), dni: tDni.trim() } }
@@ -233,7 +265,7 @@ export function EntregaModal({
   };
 
   const revertir = async () => {
-    if (!orden) return;
+    if (!orden || orden.puedeRevertir === false) return;
     const motivo = "Revertida desde el mostrador";
     setGuardando(true);
     try {
@@ -268,6 +300,7 @@ export function EntregaModal({
   })();
   const puedeConfirmar =
     !guardando &&
+    orden?.puedeEntregar !== false &&
     elegidos.length > 0 &&
     (!orden?.requiereConfirmacionManual || preparacionConfirmada) &&
     (!tercero || (tNombre.trim() !== "" && tDni.trim() !== ""));
@@ -336,8 +369,15 @@ export function EntregaModal({
           <>
             {orden.requiereConfirmacionManual && !todoEntregado ? (
               <label className={s.note}>
-                <input type="checkbox" checked={preparacionConfirmada} onChange={(event) => setPreparacionConfirmada(event.target.checked)} />
-                Confirmo que los productos seleccionados están preparados para entregar.
+                <input
+                  type="checkbox"
+                  checked={preparacionConfirmada}
+                  onChange={(event) =>
+                    setPreparacionConfirmada(event.target.checked)
+                  }
+                />
+                Confirmo que los productos seleccionados están preparados para
+                entregar.
               </label>
             ) : null}
             {todoEntregado ? (
@@ -347,14 +387,16 @@ export function EntregaModal({
                   <b>Ya entregada.</b> Escaneala de nuevo sólo si necesitás
                   revertir la entrega.
                 </span>
-                <button
-                  type="button"
-                  className={s.lnk}
-                  onClick={() => void revertir()}
-                  disabled={guardando}
-                >
-                  Revertir entrega
-                </button>
+                {orden.puedeRevertir !== false && (
+                  <button
+                    type="button"
+                    className={s.lnk}
+                    onClick={() => void revertir()}
+                    disabled={guardando}
+                  >
+                    Revertir entrega
+                  </button>
+                )}
               </div>
             ) : enProduccion.length > 0 ? (
               <div className={`${s.note} ${s.warn}`}>
@@ -373,9 +415,11 @@ export function EntregaModal({
                 <InfoIcon />
                 <span>
                   {yaEntregados.length} producto
-                  {yaEntregados.length === 1 ? " ya se retiró" : "s ya se retiraron"}
-                  . Queda{pendientes.length === 1 ? "" : "n"} {pendientes.length}{" "}
-                  por entregar.
+                  {yaEntregados.length === 1
+                    ? " ya se retiró"
+                    : "s ya se retiraron"}
+                  . Queda{pendientes.length === 1 ? "" : "n"}{" "}
+                  {pendientes.length} por entregar.
                 </span>
               </div>
             ) : null}
@@ -491,15 +535,23 @@ export function EntregaModal({
                     Orden paga en su totalidad
                   </div>
                 ) : orden.puedeCobrar === false ? (
-                  <p className={s.k}>El registro de cobros no está habilitado para esta orden.</p>
+                  <p className={s.k}>
+                    El registro de cobros no está habilitado para esta orden.
+                  </p>
                 ) : !todoEntregado ? (
                   <div className={s.payBox}>
                     <div className={s.h}>Cobrar ahora</div>
-                    {metodos.length === 0 ? (
+                    {errorCatalogos ? (
+                      <p role="alert">
+                        No se pudieron cargar los medios de pago:{" "}
+                        {errorCatalogos}. Cerrá y volvé a abrir la entrega para
+                        reintentar.
+                      </p>
+                    ) : metodos.length === 0 ? (
                       <div className={s.f}>
                         <span className={s.k}>
-                          No hay métodos de pago configurados. Se puede
-                          entregar igual y cobrar después.
+                          No hay métodos de pago configurados. Se puede entregar
+                          igual y cobrar después.
                         </span>
                       </div>
                     ) : (
@@ -537,7 +589,10 @@ export function EntregaModal({
                               onChange={(e) => setMonto(e.target.value)}
                             />
                             {montoNum > 0 && montoNum < saldo ? (
-                              <span className={s.k} style={{ color: "#9a6a11" }}>
+                              <span
+                                className={s.k}
+                                style={{ color: "#9a6a11" }}
+                              >
                                 Queda un saldo de {fmt(saldo - montoNum)}.
                               </span>
                             ) : null}

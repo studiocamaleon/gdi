@@ -20,7 +20,7 @@ vi.mock("@/lib/administracion-api", () => ({
   getMetodosPago: mocks.metodos,
   getCuentasFondos: mocks.cuentas,
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("../administracion/cobro-formulario", () => ({
   CobroFormulario: () => <span>Formulario de cobro</span>,
 }));
@@ -34,7 +34,7 @@ it("el cobro al entregar conserva centavos y su clave al reintentar", async () =
     items:[{id:"item",nombre:"Plano",cantidad:1,total:100.25,listo:true,pasosHechos:1,pasosTotal:1,entregadoEl:null}],
   });
   mocks.metodos.mockResolvedValue([{id:"efectivo",nombre:"Efectivo",tipo:"efectivo",activo:true,comisionPct:0,cuentaDestinoId:"caja"}]);
-  mocks.cuentas.mockResolvedValue([{id:"caja",nombre:"Caja ficticia"}]);
+  mocks.cuentas.mockResolvedValue([{id:"caja",nombre:"Caja ficticia", moneda:"ARS",tipo:"caja"}]);
   mocks.entregar.mockRejectedValue(new Error("Respuesta perdida"));
   const container=document.createElement("div"),root=createRoot(container);
   document.body.append(container);
@@ -139,4 +139,31 @@ it("sin F01 la OT en preparación no ofrece señas ni consulta catálogos de cob
   } finally {
     await act(async () => root.unmount());
   }
+});
+
+it("el mostrador usa una cuenta compatible y operable si el destino del método no está disponible", async () => {
+  mocks.escanear.mockResolvedValue({ id: "orden", numero: "OT", estado: "finalizada", saldo: 100, total: 100, cobrado: 0, puedeCobrar: true, puedeEntregar: true, items: [{id:"item",nombre:"Prueba",cantidad:1,total:100,listo:true,pasosTotal:0,pasosHechos:0,entregadoEl:null}] });
+  mocks.metodos.mockResolvedValue([{id:"medio",nombre:"Medio ficticio",activo:true,tipo:"efectivo",cuentaDestinoId:"cuenta-no-asignada",comisionPct:0}]);
+  mocks.cuentas.mockResolvedValue([{id:"usd",moneda:"USD",tipo:"banco"},{id:"caja",moneda:"ARS",tipo:"caja"}]);
+  mocks.entregar.mockResolvedValue({entregados:1,ordenCerrada:true,cobro:null});
+  const container=document.createElement("div"), root=createRoot(container);
+  document.body.append(container);
+  try {
+    await act(async()=>root.render(<EntregaModal codigo="OT" onClose={vi.fn()} />));
+    const select=container.querySelector("select")!;
+    await act(async()=>{ select.value="medio";select.dispatchEvent(new Event("change",{bubbles:true})); });
+    await act(async()=>[...container.querySelectorAll("button")].find((b)=>b.textContent?.includes("Cobrar"))!.click());
+    expect(mocks.entregar).toHaveBeenCalledWith("orden",expect.objectContaining({cobro:expect.objectContaining({cuentaDestinoId:"caja",montoBruto:100})}));
+  } finally {await act(async()=>root.unmount());container.remove();}
+});
+it("consultar una orden no ofrece la entrega ni la reversión", async()=> {
+  mocks.escanear.mockResolvedValue({id:"orden",numero:"OT",estado:"finalizada",saldo:0,total:100,cobrado:100,puedeCobrar:false,puedeEntregar:false,puedeRevertir:false,items:[{id:"item",nombre:"Prueba",cantidad:1,total:100,listo:true,pasosTotal:0,pasosHechos:0,entregadoEl:null}]});
+  const container=document.createElement("div"), root=createRoot(container);
+  try {
+    await act(async()=>root.render(<EntregaModal codigo="OT" onClose={vi.fn()} />));
+    const boton=[...container.querySelectorAll("button")].find((b)=>b.textContent?.includes("Entregar"))!;
+    expect(boton.disabled).toBe(true);
+    await act(async()=>boton.click());
+    expect(mocks.entregar).not.toHaveBeenCalled();
+  } finally {await act(async()=>root.unmount());}
 });

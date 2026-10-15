@@ -22,6 +22,7 @@ import type { FamiliaListItem } from "../productos-servicios";
 import type { PendientePasoTipo } from "../pendientes-paso";
 import {
   getRuleFields,
+  estadoPasoRuleFields,
   jsonLogicToRuleGroup,
   summarizeRuleGroup,
 } from "../rule-builder";
@@ -583,6 +584,10 @@ function fuenteRitmoEfectiva(ctx: ContextoOpcion): string {
 /** Unidad nombrada para los sufijos del ritmo: la fuente derivada manda
  *  ("cortes de hierro"), después lo que el paso cuenta ("ml de perfil"). */
 function unidadRitmoNombrada(ctx: ContextoOpcion): string | null {
+  if (fuenteRitmoEfectiva(ctx) === "cantidad_manual") {
+    const config = ctx.paramsPaso.cantidadManual as { unidad?: string } | undefined;
+    return config?.unidad?.trim() || "unidades";
+  }
   return (
     etiquetaFuenteDerivada(ctx.familia, fuenteRitmoEfectiva(ctx)) ??
     unidadCantidadEfectiva(ctx)
@@ -947,15 +952,15 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     resumen: (ctx) => {
       const json = ctx.cfg.condicionActivacionJson;
       if (!json) return "Sin regla todavía";
-      const parsed = jsonLogicToRuleGroup(
-        json,
-        getRuleFields({ includeMeasureFields: true }),
-      );
+      const fields = getRuleFields({
+        includeMeasureFields: true,
+        extraFields: estadoPasoRuleFields(
+          ctx.otrosPasos.map((paso) => ({ value: paso.id, label: paso.nombre })),
+        ),
+      });
+      const parsed = jsonLogicToRuleGroup(json, fields);
       return parsed.supported
-        ? summarizeRuleGroup(
-            parsed.group,
-            getRuleFields({ includeMeasureFields: true }),
-          )
+        ? summarizeRuleGroup(parsed.group, fields)
         : "Regla avanzada (abrila para verla)";
     },
     origenValor: (ctx) =>
@@ -1237,8 +1242,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // no se ofrece (feedback del usuario). Configs legacy con tiempoManual
     // en pasos T-3 siguen visibles para poder apagarlas.
     visible: (ctx) =>
-      origenTiempoEfectivo(ctx) !== "maquina" ||
-      comercialNivelEfectivo(ctx) !== "no",
+      !(esT2(ctx) && fuenteRitmoEfectiva(ctx) === "cantidad_manual") && (
+        origenTiempoEfectivo(ctx) !== "maquina" || comercialNivelEfectivo(ctx) !== "no"
+      ),
     resumen: (ctx) => {
       const nivel = comercialNivelEfectivo(ctx);
       if (nivel === "no") return "No — se calcula solo";
@@ -2702,7 +2708,7 @@ const GRUPOS_ACTIVACION: GrupoEje[] = [
     id: "regla",
     titulo: "La condición",
     ayuda:
-      "El paso corre sólo cuando esto se cumple. Podés combinar medidas del ítem, opciones elegidas y tecnología.",
+      "El paso corre sólo cuando esto se cumple. Podés combinar medidas del ítem, opciones elegidas, tecnología y el estado de otro paso. Por ejemplo: Preprensa se ejecuta si Diseño gráfico está inactivo.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
     encabezado: "arriba",

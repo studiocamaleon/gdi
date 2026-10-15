@@ -1,3 +1,4 @@
+import { errorConfigCantidadManual } from '../motor-universal/cantidad-manual-paso';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { TipoCentroCosto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -330,6 +331,9 @@ export class FamiliasPasosService {
         );
       }
     }
+
+    const errorCantidad = errorConfigCantidadManual(dto.paramsPasoJson);
+    if (errorCantidad) throw new BadRequestException(errorCantidad);
 
     const multiplicadoresSoportados = new Set(
       familia.multiplicadoresSoportados,

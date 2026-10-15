@@ -29,6 +29,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Empty,
   EmptyHeader,
@@ -179,7 +181,14 @@ const faltaConfiguracion = (d: DocRow) =>
   d.modo === "CAD"
     ? !d.cad ||
       (d.cad.cotizacion !== undefined && !d.cad.cotizacion.revision) ||
-      !d.medidasPaginas?.length
+      !d.medidasPaginas?.length ||
+      d.medidasPaginas.some(
+        (m) =>
+          !Number.isFinite(m.anchoMm) ||
+          m.anchoMm <= 0 ||
+          !Number.isFinite(m.altoMm) ||
+          m.altoMm <= 0,
+      )
     : !d.papelMateriaPrimaId;
 
 const OPCIONES_COLOR = [
@@ -788,11 +797,11 @@ function CentroCopiadoContenido({
     ) => {
       const filas: DocRow[] = nuevos.flatMap((n): DocRow[] => {
         const esCad =
-          n.paginasAuto &&
-          !!n.medidasPaginas?.length &&
-          (tab === "CAD" ||
-            (formatosHojas.length > 0 &&
-              sugerirCad(n.medidasPaginas, formatosHojas)));
+          tab === "CAD" ||
+          (n.paginasAuto &&
+            !!n.medidasPaginas?.length &&
+            formatosHojas.length > 0 &&
+            sugerirCad(n.medidasPaginas, formatosHojas));
         if (esCad && !conCad) {
           toast.error(
             `${n.nombre}: el tamaño corresponde a Planos CAD, que no está incluido en el plan. No se agregó ni se redujo el archivo.`,
@@ -922,8 +931,19 @@ function CentroCopiadoContenido({
   );
 
   const agregarFilaManual = React.useCallback(() => {
-    agregarDocs([{ nombre: "", paginas: 0, paginasAuto: false, file: null }]);
-  }, [agregarDocs]);
+    if (guardando || leyendo || cargandoHojas || cargandoCad) return;
+    agregarDocs([
+      {
+        nombre: "",
+        paginas: tab === "CAD" ? 1 : 0,
+        paginasAuto: false,
+        file: null,
+        ...(tab === "CAD"
+          ? { medidasPaginas: [{ anchoMm: 0, altoMm: 0 }] }
+          : {}),
+      },
+    ]);
+  }, [agregarDocs, tab, guardando, leyendo, cargandoHojas, cargandoCad]);
 
   const aplicarATodos = React.useCallback(() => {
     setDocs((prev) =>
@@ -1358,6 +1378,7 @@ function CentroCopiadoContenido({
       orientacionesSeleccionadas(d.orientacionesPaginas, d.rangoPaginas),
     );
     const tieneArchivo = !!(d.file || d.archivoNombre);
+    const planoManual = esCad && !tieneArchivo;
     const gramajes = gramajesDe(d.papelMateriaPrimaId);
     const opciones = opcionesAbiertas.has(d.id);
     const anillado = !enGrupo ? previewDoc(d.id)?.anillado : null;
@@ -1367,7 +1388,7 @@ function CentroCopiadoContenido({
         : null) ||
       errorDoc(d.id) ||
       anillado?.error;
-    const nombre = d.nombre || `Documento ${index + 1}`;
+    const nombre = d.nombre || `${esCad ? "Plano" : "Documento"} ${index + 1}`;
     return (
       <React.Fragment key={d.id}>
         <tr
@@ -1514,6 +1535,11 @@ function CentroCopiadoContenido({
                     `${seleccion.paginas} de ${d.paginas} páginas`}
                 </div>
               </>
+            ) : planoManual ? (
+              <>
+                <span className={s.valorCelda}>1 plano</span>
+                <span className={s.cellHint}>Carga manual · sin archivo</span>
+              </>
             ) : (
               <>
                 <input
@@ -1641,7 +1667,48 @@ function CentroCopiadoContenido({
             </>
           )}
           <td>
-            {esCad ? (
+            {planoManual ? (
+              <FieldGroup className="grid grid-cols-2 gap-2">
+                {(["anchoMm", "altoMm"] as const).map((medida) => {
+                  const valor = d.medidasPaginas?.[0]?.[medida] ?? 0;
+                  const etiqueta = medida === "anchoMm" ? "Ancho" : "Alto";
+                  return (
+                    <Field
+                      key={medida}
+                      className="gap-1"
+                      data-invalid={valor <= 0}
+                    >
+                      <FieldLabel htmlFor={`${d.id}-${medida}`}>
+                        {etiqueta} (mm)
+                      </FieldLabel>
+                      <Input
+                        id={`${d.id}-${medida}`}
+                        type="number"
+                        min={0.01}
+                        step="any"
+                        inputMode="decimal"
+                        value={valor || ""}
+                        placeholder="0"
+                        aria-label={`${etiqueta} de ${nombre} (mm)`}
+                        aria-invalid={valor <= 0}
+                        onChange={(e) => {
+                          const medidas = {
+                            anchoMm: d.medidasPaginas?.[0]?.anchoMm ?? 0,
+                            altoMm: d.medidasPaginas?.[0]?.altoMm ?? 0,
+                            [medida]: Number(e.target.value) || 0,
+                          };
+                          editar(d.id, {
+                            medidasPaginas: [medidas],
+                            tamanoAnchoMm: medidas.anchoMm,
+                            tamanoAltoMm: medidas.altoMm,
+                          });
+                        }}
+                      />
+                    </Field>
+                  );
+                })}
+              </FieldGroup>
+            ) : esCad ? (
               <span className={s.medidaOriginal}>
                 {resumenMedidas(medidas)}
                 <small>Original</small>
@@ -1771,6 +1838,7 @@ function CentroCopiadoContenido({
                 </div>
               )}
               {opciones &&
+                tieneArchivo &&
                 !enGrupo &&
                 (esCad || conCad) &&
                 !!d.medidasPaginas?.length && (
@@ -2250,29 +2318,34 @@ function CentroCopiadoContenido({
                         docs.some((d) => d.modo === "CAD"),
                     )}
                   />
-                  {tab === "HOJAS" && (
-                    <div className={s.tablaHeadBtns}>
+                  <div className={s.tablaHeadBtns}>
+                    <ActionButton
+                      type="button"
+                      variant="outline"
+                      onPress={agregarFilaManual}
+                      isDisabled={
+                        guardando ||
+                        leyendo ||
+                        cargandoHojas ||
+                        cargandoCad ||
+                        (tab === "CAD" && !conCad)
+                      }
+                    >
+                      <Plus data-icon="inline-start" /> Fila manual
+                    </ActionButton>
+                    {tab === "HOJAS" && conTerminaciones && (
                       <ActionButton
                         type="button"
                         variant="outline"
-                        onPress={agregarFilaManual}
+                        onPress={anillarJuntos}
+                        isDisabled={sel.size < 2}
+                        title="Seleccioná dos o más documentos para crear un tomo"
                       >
-                        <Plus data-icon="inline-start" /> Fila manual
+                        <Layers data-icon="inline-start" />
+                        Crear tomo ({sel.size})
                       </ActionButton>
-                      {conTerminaciones && (
-                        <ActionButton
-                          type="button"
-                          variant="outline"
-                          onPress={anillarJuntos}
-                          isDisabled={sel.size < 2}
-                          title="Seleccioná dos o más documentos para crear un tomo"
-                        >
-                          <Layers data-icon="inline-start" />
-                          Crear tomo ({sel.size})
-                        </ActionButton>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
                 <Tabs.Panel id={tab} key={tab} className={s.tabPanel}>
                   {docsVisibles.length === 0 ? (
@@ -2288,7 +2361,7 @@ function CentroCopiadoContenido({
                         </EmptyTitle>
                         <EmptyDescription>
                           {tab === "CAD"
-                            ? "Arrastrá un PDF acá. Conservamos el tamaño original de cada página."
+                            ? "Arrastrá un PDF o agregá una fila manual con las medidas del plano."
                             : "Arrastrá archivos acá o agregá una fila manual."}
                         </EmptyDescription>
                       </EmptyHeader>
@@ -2315,7 +2388,9 @@ function CentroCopiadoContenido({
                           <col className={s.colCopies} />
                           <col className={s.colPaper} />
                           <col className={s.colWeight} />
-                          <col className={s.colSize} />
+                          <col
+                            className={tab === "CAD" ? s.colSizeCad : s.colSize}
+                          />
                           <col className={s.colColor} />
                           <col className={s.colFaces} />
                           <col className={s.colPrice} />
@@ -2629,7 +2704,7 @@ function CentroCopiadoContenido({
               errorPlan
                 ? errorPlan
                 : incompletos > 0
-                  ? `${incompletos} fila(s) con páginas, rangos o papel por completar`
+                  ? `${incompletos} fila(s) con páginas, rangos, medidas o papel por completar`
                   : tieneErroresCotizacion
                     ? "Corregí los errores de cotización antes de agregar la carga"
                     : undefined

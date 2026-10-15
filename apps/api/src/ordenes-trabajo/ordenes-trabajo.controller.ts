@@ -393,7 +393,7 @@ export class OrdenesTrabajoController {
   // Resolver el código es de lectura (el operador todavía no hizo nada);
   // entregar y revertir mueven el estado de la orden.
 
-  @Permiso("produccion.tablero.ver")
+  @Permiso("produccion.tablero.ver", "comercial.ordenes.ver")
   @Post('escaneo')
   escanear(
     @CurrentSession() auth: CurrentAuth,
@@ -402,7 +402,7 @@ export class OrdenesTrabajoController {
     return this.entrega.escanear(auth, payload.codigo);
   }
 
-  @Permiso("produccion.tablero.gestionar")
+  @Permiso("produccion.tablero.gestionar", "comercial.ordenes.gestionar")
   @Post(':id/entregar')
   entregar(
     @CurrentSession() auth: CurrentAuth,

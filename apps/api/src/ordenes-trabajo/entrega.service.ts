@@ -1,6 +1,9 @@
+import { expandir } from '../auth/permisos';
 import { productosComercialesConTrabajo } from './productos-comerciales';
 import {
   BadRequestException,
+  ForbiddenException,
+  ServiceUnavailableException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,10 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CobrosService } from '../administracion/cobros.service';
 import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
-import type {
-  EntregarItemsDto,
-  RevertirEntregaDto,
-} from './dto/entrega.dto';
+import type { EntregarItemsDto, RevertirEntregaDto } from './dto/entrega.dto';
 
 /**
  * Normaliza el número de orden tal como puede llegar del lector.
@@ -26,12 +26,14 @@ import type {
  * tecleado, desde otro cliente o desde una integración.
  */
 export function normalizarNumeroOrden(crudo: string): string {
-  return crudo
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '-')
-    // La sustitución anterior ya colapsó cada grupo a un solo separador.
-    .replace(/^-|-$/g, '');
+  return (
+    crudo
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      // La sustitución anterior ya colapsó cada grupo a un solo separador.
+      .replace(/^-|-$/g, '')
+  );
 }
 
 /**
@@ -107,7 +109,11 @@ export class EntregaService {
     return {
       id: orden.id,
       numero: orden.numero,
-      puedeCobrar: await this.cobros.puedeRegistrarEnOrden(auth, orden.id),
+      puedeEntregar: this.permisosEntrega(auth).entregar,
+      puedeRevertir: this.permisosEntrega(auth).revertir,
+      puedeCobrar:
+        this.permisosEntrega(auth).cobrar &&
+        (await this.cobros.puedeRegistrarEnOrden(auth, orden.id)),
       produccionControlada: orden.produccionControlada !== false,
       requiereConfirmacionManual:
         orden.produccionControlada === false && orden.estado !== 'finalizada',
@@ -129,7 +135,24 @@ export class EntregaService {
       // Lo que falta cobrar. Nunca negativo: un cobro de más no es un saldo
       // a favor de la orden, es un tema de cuenta corriente.
       saldo: Math.max(0, Math.round((total - cobrado) * 100) / 100),
-      items: productosComercialesConTrabajo(orden.items, true).map((item) => this.proyectarItem(item)),
+      items: productosComercialesConTrabajo(orden.items, true).map((item) =>
+        this.proyectarItem(item),
+      ),
+    };
+  }
+
+  private permisosEntrega(auth: CurrentAuth) {
+    const permisos = auth.mcp
+      ? (auth.permisos ?? new Set<string>())
+      : expandir([...(auth.permisos ?? [])]);
+    return {
+      entregar:
+        permisos.has('produccion.tablero.gestionar') ||
+        permisos.has('comercial.ordenes.gestionar'),
+      revertir: permisos.has('produccion.tablero.gestionar'),
+      cobrar:
+        permisos.has('administracion.cobrar') ||
+        permisos.has('administracion.cobrar.gestionar'),
     };
   }
 
@@ -143,14 +166,20 @@ export class EntregaService {
     entregadoEl: Date | null;
     entregadoPorNombre: string | null;
     retiradoPorNombre: string | null;
-    pasos: Array<{ estado: string; nombre: string; nestingLoteRol?: string | null }>;
+    pasos: Array<{
+      estado: string;
+      nombre: string;
+      nestingLoteRol?: string | null;
+    }>;
   }) {
-    const operativos = item.pasos.filter(p => p.nestingLoteRol !== 'PARTICIPANTE');
+    const operativos = item.pasos.filter(
+      (p) => p.nestingLoteRol !== 'PARTICIPANTE',
+    );
     const total = operativos.length;
     const hechos = operativos.filter((p) => p.estado === 'hecho').length;
     // Sin ruta materializada no hay nada que esperar: se considera listo
     // (mismo criterio que el tablero para los ítems sin pasos).
-    const listo = item.pasos.every(p => p.estado === 'hecho');
+    const listo = item.pasos.every((p) => p.estado === 'hecho');
     const enCurso = item.pasos.find((p) => p.estado !== 'hecho');
     const specs = Array.isArray(item.specsJson)
       ? (item.specsJson as Array<{ etiqueta: string; valor: string }>)
@@ -187,11 +216,18 @@ export class EntregaService {
    * la plata sin registrar, que es el error caro.
    */
   async entregar(auth: CurrentAuth, ordenId: string, dto: EntregarItemsDto) {
+    if (dto.cobro && !this.permisosEntrega(auth).cobrar) {
+      throw new ForbiddenException(
+        'No tenés permisos para registrar cobros. Podés entregar sin cargar un pago.',
+      );
+    }
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
       include: {
         items: {
-          include: { pasos: { select: { estado: true, nestingLoteRol: true } } },
+          include: {
+            pasos: { select: { estado: true, nestingLoteRol: true } },
+          },
         },
       },
     });
@@ -250,117 +286,146 @@ export class EntregaService {
     const ahora = new Date();
     const ids = aEntregar.map((i) => i.id);
 
-    await this.prisma.$transaction(async (tx) => {
-      if (dto.exigirPagoCompleto) {
-        // Bloquea la orden durante el cierre y usa pagos activos, no el
-        // importe mostrado por el navegador ni un total cacheado.
-        const [actual] = await tx.$queryRaw<
-          Array<{ total: unknown; estado: string }>
-        >`
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          if (dto.exigirPagoCompleto) {
+            // Bloquea la orden durante el cierre y usa pagos activos, no el
+            // importe mostrado por el navegador ni un total cacheado.
+            const [actual] = await tx.$queryRaw<
+              Array<{ total: unknown; estado: string }>
+            >`
           SELECT "total", "estado" FROM "OrdenTrabajo"
           WHERE "id" = ${orden.id}::uuid AND "tenantId" = ${auth.tenantId}::uuid
           FOR UPDATE
         `;
-        if (!actual || actual.estado !== 'finalizada') {
-          throw new BadRequestException(
-            'La orden debe estar finalizada antes de emitir y entregar.',
-          );
-        }
-        const [aplicados, directos] = await Promise.all([
-          tx.cobroOrden.aggregate({
+            if (!actual || actual.estado !== 'finalizada') {
+              throw new BadRequestException(
+                'La orden debe estar finalizada antes de emitir y entregar.',
+              );
+            }
+            const [aplicados, directos] = await Promise.all([
+              tx.cobroOrden.aggregate({
+                where: {
+                  tenantId: auth.tenantId,
+                  ordenId: orden.id,
+                  cobro: { anuladoEl: null },
+                },
+                _sum: { monto: true },
+              }),
+              tx.cobro.aggregate({
+                where: {
+                  tenantId: auth.tenantId,
+                  ordenId: orden.id,
+                  anuladoEl: null,
+                  aplicacionesOrden: { none: { ordenId: orden.id } },
+                },
+                _sum: { montoBruto: true },
+              }),
+            ]);
+            const pagado = Math.round(
+              (Number(aplicados._sum.monto ?? 0) +
+                Number(directos._sum.montoBruto ?? 0)) *
+                100,
+            );
+            if (
+              pagado <= 0 ||
+              pagado < Math.round(Number(actual.total) * 100)
+            ) {
+              throw new BadRequestException(
+                'Para emitir y entregar, la orden debe tener registrado el pago del 100% del total.',
+              );
+            }
+          }
+          await tx.ordenTrabajoItem.updateMany({
+            where: { id: { in: ids }, tenantId: auth.tenantId },
+            data: {
+              entregadoEl: ahora,
+              entregadoPorNombre: firma,
+              retiradoPorNombre: dto.retiraTercero?.nombre ?? null,
+              retiradoPorDni: dto.retiraTercero?.dni ?? null,
+            },
+          });
+
+          // La orden se cierra sola cuando ya no queda nada por retirar.
+          const pendientes = await tx.ordenTrabajoItem.count({
             where: {
               tenantId: auth.tenantId,
               ordenId: orden.id,
-              cobro: { anuladoEl: null },
+              parentItemId: null,
+              entregadoEl: null,
             },
-            _sum: { monto: true },
-          }),
-          tx.cobro.aggregate({
-            where: {
+          });
+          const cerrada = pendientes === 0;
+          if (cerrada) {
+            await tx.ordenTrabajo.update({
+              where: { id: orden.id },
+              data: { estado: 'entregada', progresoPct: 100 },
+            });
+            // `fechaEntregada` es el ancla del pedido de reseña: sólo la primera.
+            await tx.ordenTrabajo.updateMany({
+              where: { id: orden.id, fechaEntregada: null },
+              data: { fechaEntregada: ahora },
+            });
+          }
+
+          const nombres = aEntregar.map((i) => i.nombre).join(' · ');
+          await tx.ordenTrabajoEvento.create({
+            data: {
               tenantId: auth.tenantId,
               ordenId: orden.id,
-              anuladoEl: null,
-              aplicacionesOrden: { none: { ordenId: orden.id } },
+              tipo: cerrada ? 'estado' : 'nota',
+              descripcion: cerrada
+                ? `Entrega completa (${ids.length} producto${ids.length === 1 ? '' : 's'}): ${nombres}`
+                : `Entrega parcial (${ids.length} de ${productos.length}): ${nombres}. Quedan ${pendientes} sin retirar.`,
+              usuarioNombre: firma,
+              usuarioId: auth.userId,
+              origen: 'usuario',
+              datosJson: {
+                itemIds: ids,
+                cerrada,
+                ...(dto.retiraTercero
+                  ? {
+                      retiraTercero: {
+                        nombre: dto.retiraTercero.nombre,
+                        dni: dto.retiraTercero.dni,
+                      },
+                    }
+                  : {}),
+                ...(cobroCreado ? { cobroId: cobroCreado.id } : {}),
+                ...(orden.produccionControlada === false
+                  ? { preparacionManualConfirmada: true }
+                  : {}),
+              },
             },
-            _sum: { montoBruto: true },
-          }),
-        ]);
-        const pagado = Math.round(
-          (Number(aplicados._sum.monto ?? 0) +
-            Number(directos._sum.montoBruto ?? 0)) *
-            100,
+          });
+          await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, orden.id);
+        },
+        { timeout: 20000 },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2028'
+      ) {
+        throw new ServiceUnavailableException(
+          `No se pudo confirmar la entrega a tiempo. Actualizá la orden antes de reintentar.${cobroCreado ? ' El pago quedó registrado: revisá Pagos y reintentá sólo la entrega.' : ''}`,
+          { cause: error },
         );
-        if (pagado <= 0 || pagado < Math.round(Number(actual.total) * 100)) {
-          throw new BadRequestException(
-            'Para emitir y entregar, la orden debe tener registrado el pago del 100% del total.',
-          );
-        }
       }
-      await tx.ordenTrabajoItem.updateMany({
-        where: { id: { in: ids }, tenantId: auth.tenantId },
-        data: {
-          entregadoEl: ahora,
-          entregadoPorNombre: firma,
-          retiradoPorNombre: dto.retiraTercero?.nombre ?? null,
-          retiradoPorDni: dto.retiraTercero?.dni ?? null,
-        },
-      });
-
-      // La orden se cierra sola cuando ya no queda nada por retirar.
-      const pendientes = await tx.ordenTrabajoItem.count({
-        where: { tenantId: auth.tenantId, ordenId: orden.id, parentItemId: null, entregadoEl: null },
-      });
-      const cerrada = pendientes === 0;
-      if (cerrada) {
-        await tx.ordenTrabajo.update({
-          where: { id: orden.id },
-          data: { estado: 'entregada', progresoPct: 100 },
-        });
-        // `fechaEntregada` es el ancla del pedido de reseña: sólo la primera.
-        await tx.ordenTrabajo.updateMany({
-          where: { id: orden.id, fechaEntregada: null },
-          data: { fechaEntregada: ahora },
-        });
-      }
-
-      const nombres = aEntregar.map((i) => i.nombre).join(' · ');
-      await tx.ordenTrabajoEvento.create({
-        data: {
-          tenantId: auth.tenantId,
-          ordenId: orden.id,
-          tipo: cerrada ? 'estado' : 'nota',
-          descripcion: cerrada
-            ? `Entrega completa (${ids.length} producto${ids.length === 1 ? '' : 's'}): ${nombres}`
-            : `Entrega parcial (${ids.length} de ${productos.length}): ${nombres}. Quedan ${pendientes} sin retirar.`,
-          usuarioNombre: firma,
-          usuarioId: auth.userId,
-          origen: 'usuario',
-          datosJson: {
-            itemIds: ids,
-            cerrada,
-            ...(dto.retiraTercero
-              ? {
-                  retiraTercero: {
-                    nombre: dto.retiraTercero.nombre,
-                    dni: dto.retiraTercero.dni,
-                  },
-                }
-              : {}),
-            ...(cobroCreado ? { cobroId: cobroCreado.id } : {}),
-            ...(orden.produccionControlada === false
-              ? { preparacionManualConfirmada: true }
-              : {}),
-          },
-        },
-      });
-      await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, orden.id);
-    });
+      throw error;
+    }
 
     return {
       entregados: ids.length,
       ordenCerrada:
         (await this.prisma.ordenTrabajoItem.count({
-          where: { tenantId: auth.tenantId, ordenId: orden.id, parentItemId: null, entregadoEl: null },
+          where: {
+            tenantId: auth.tenantId,
+            ordenId: orden.id,
+            parentItemId: null,
+            entregadoEl: null,
+          },
         })) === 0,
       cobro: cobroCreado
         ? { id: cobroCreado.id, numeroRecibo: cobroCreado.numeroRecibo }

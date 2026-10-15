@@ -620,6 +620,19 @@ export async function acreditarCobro(
   });
 }
 
+export type AcreditarCobrosLotePayload = {
+  cobros: Array<AcreditarCobroPayload & { id: string }>;
+};
+export function acreditarCobrosLote(payload: AcreditarCobrosLotePayload) {
+  return apiRequest<{ ids: string[]; acreditados: number }>(
+    "/administracion/cobros/acreditar-lote",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 /** El gate del botón Facturar: ¿está activa la facturación electrónica (AFIP)? */
 export async function getFacturacionHabilitada(): Promise<boolean> {
   const r = await apiRequest<{ habilitada: boolean }>(

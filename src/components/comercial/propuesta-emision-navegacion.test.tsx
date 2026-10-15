@@ -1175,7 +1175,7 @@ it("emite y entrega un borrador de copiado finalizado sin exigir su fecha vieja"
     exigirPagoCompleto: true,
   });
 });
-it("con todo pagado, un usuario sin permiso de entrega no puede emitir y entregar", async () => {
+it("con todo pagado, gestionar la OT permite emitir y entregar sin gestionar Producción", async () => {
   mocks.puedeEntregar = false;
   await prepararCopiadoFinalizado();
   await verPagos();
@@ -1183,8 +1183,8 @@ it("con todo pagado, un usuario sin permiso de entrega no puede emitir y entrega
   const boton = [
     ...container.querySelectorAll<HTMLButtonElement>("button"),
   ].find((b) => b.textContent === "Emitir y entregar")!;
-  expect(boton.disabled).toBe(true);
-  expect(container.textContent).toContain(
+  expect(boton.disabled).toBe(false);
+  expect(container.textContent).not.toContain(
     "Tu rol no permite registrar la entrega",
   );
   expect(mocks.crearOrden).not.toHaveBeenCalled();

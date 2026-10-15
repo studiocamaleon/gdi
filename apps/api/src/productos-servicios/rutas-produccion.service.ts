@@ -1,3 +1,4 @@
+import { remapearEstadoPasos } from '../motor-universal/estado-pasos';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -594,6 +595,16 @@ export class RutasProduccionService {
                 (nombreEraDefaultDeRuta
                   ? destino.nombreVisible?.trim()
                   : config.nombreVisible?.trim()) || null,
+              condicionActivacionJson:
+                (remapearEstadoPasos(
+                  config.condicionActivacionJson,
+                  new Map(
+                    [...destinoPorOrigen].map(([id, destino]) => [
+                      id,
+                      destino.id,
+                    ]),
+                  ),
+                ) as Prisma.InputJsonValue) ?? Prisma.JsonNull,
               requiereRutaPasoIds: config.requiereRutaPasoIds
                 .map((id) => destinoPorOrigen.get(id)?.id)
                 .filter((id): id is string => Boolean(id)),
