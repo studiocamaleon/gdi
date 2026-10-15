@@ -56,6 +56,7 @@ import {
   ASUNTO_PRESUPUESTO,
   MENSAJE_PRESUPUESTO,
 } from './correo-presupuesto.plantilla';
+import { itemVisiblePresupuesto } from './presupuesto-importes';
 import { cargosVisiblesDe } from './presupuesto-cargos';
 
 /**
@@ -78,6 +79,7 @@ const ETIQUETA_MOTIVO: Record<string, string> = {
 };
 
 type EmisionJson = {
+  tratamientoFiscal?: string;
   fechaEntrega?: string;
   canalVenta?: string;
   validezDias?: number;
@@ -207,7 +209,7 @@ export class PresupuestosService {
       throw new ConflictException(
         'El presupuesto cambió mientras lo editabas. Recargalo antes de guardar.',
       );
-    if (dto.clienteId !== anterior.clienteId)
+    if (anterior.clienteId && dto.clienteId !== anterior.clienteId)
       throw new BadRequestException(
         'Las versiones deben conservar el cliente del presupuesto.',
       );
@@ -316,6 +318,7 @@ export class PresupuestosService {
       vendedorEmpleadoId: c.vendedorEmpleadoId,
       canalVenta: c.canalVenta,
       fechaEntrega: emision.fechaEntrega,
+      tratamientoFiscal: emision.tratamientoFiscal,
       validezDias: emision.validezDias,
       observaciones: c.observaciones,
       senaSugeridaPct:
@@ -503,18 +506,19 @@ export class PresupuestosService {
       dto.clienteId,
       new Set(reservasAnteriores.map((r) => r.cuponId)),
     );
+    const tratamientoFiscal = (anterior?.emisionJson as unknown as EmisionJson | null)?.tratamientoFiscal ?? 'FISCAL';
     const subtotal = r2(items.reduce((a, i) => a + i.subtotal, 0));
-    const impuestos = r2(items.reduce((a, i) => a + i.impuestos, 0));
+    const impuestos = tratamientoFiscal === 'SIN_COMPROBANTE' ? 0 : r2(items.reduce((a, i) => a + i.impuestos, 0));
     const cargos = await this.ordenes.autorizarCargosCotizados(
       auth,
       dto.cargos ?? [],
       subtotal,
     );
     const cargosDirectos = r2(
-      cargos.reduce((a, cargo) => a + Number(cargo.total ?? 0), 0),
+      cargos.reduce((a, cargo) => a + Number(tratamientoFiscal === 'SIN_COMPROBANTE' ? cargo.montoNeto ?? 0 : cargo.total ?? 0), 0),
     );
     const totalAntesCanje = r2(
-      items.reduce((a, i) => a + i.total, 0) + cargosDirectos,
+      items.reduce((a, i) => a + itemVisiblePresupuesto(i, tratamientoFiscal).total, 0) + cargosDirectos,
     );
     const fidelizacion = await this.fidelizacion.simularCotizacion(
       auth.tenantId,
@@ -532,6 +536,7 @@ export class PresupuestosService {
     }
     const total = r2(totalAntesCanje - fidelizacion.canjeMonto);
     const emisionJson: EmisionJson = {
+      tratamientoFiscal,
       fechaEntrega: dto.fechaEntrega,
       canalVenta: dto.canalVenta,
       validezDias,
@@ -1128,6 +1133,8 @@ export class PresupuestosService {
             select: { id: true },
           }),
         ),
+      version: c.updatedAt.toISOString(),
+      puedeCambiarTipo: c.estado === 'borrador' && c.versionVigente && !c.fechaEmision && !c.fechaEnvio && !c.publicToken && conversionPorItem.size === 0,
       estado: c.estado as PresupuestoEstado,
       cliente: c.cliente
         ? { id: c.cliente.id, nombre: c.cliente.nombre }
@@ -1178,7 +1185,7 @@ export class PresupuestosService {
       ordenConvertida: ordenConvertida?.numero ?? null,
       ordenConvertidaId: ordenConvertida?.id ?? null,
       ordenesConvertidas,
-      items: emision.items.map((i) => ({
+      items: emision.items.map((i) => itemVisiblePresupuesto(i, emision.tratamientoFiscal)).map((i) => ({
         cotizacionItemId: i.cotizacionItemId ?? null,
         codigo: i.codigo,
         nombre: i.nombre,
@@ -1326,7 +1333,7 @@ export class PresupuestosService {
     }
     await this.prisma.$transaction(async (tx) => {
       if (!opts.reenvio) await this.ordenes.exigirCopiadoEmitibleTx(tx, auth, {
-        canalVenta: emision.canalVenta, clienteId: c.clienteId, items: emision.items,
+        canalVenta: emision.canalVenta, clienteId: c.clienteId, items: emision.items, tratamientoFiscal: emision.tratamientoFiscal,
       });
       await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, {
         puntosEstimados: c.fidelizacionPuntosEstimados,
@@ -1688,6 +1695,8 @@ export class PresupuestosService {
         estado: 'pendiente',
         fechaEntrega: dto.fechaEntrega ?? emision.fechaEntrega ?? undefined,
         canalVenta: emision.canalVenta,
+        tratamientoFiscal: emision.tratamientoFiscal === 'SIN_COMPROBANTE' ? 'SIN_COMPROBANTE' : 'FISCAL',
+        ...(emision.tratamientoFiscal === 'SIN_COMPROBANTE' && !parcial ? { cargos: emision.cargos as unknown as import('../ordenes-trabajo/dto/crear-orden-trabajo.dto').CrearOrdenTrabajoCargoDto[] } : {}),
         cargosDirectos: parcial ? undefined : emision.cargosDirectos,
         observaciones: c.observaciones ?? undefined,
         fidelizacionCanjePuntos: puntosCanjeConversion,
@@ -1835,7 +1844,7 @@ export class PresupuestosService {
         canjeMonto: Number(c.fidelizacionCanjeMonto ?? 0),
         condicion: 'Se acreditan al completar, pagar y retirar el trabajo.',
       },
-      items: emision.items.map((i) => ({
+      items: emision.items.map((i) => itemVisiblePresupuesto(i, emision.tratamientoFiscal)).map((i) => ({
         nombre: i.nombre,
         cantidad: i.cantidad,
         cantidadUnidad: i.cantidadUnidad,

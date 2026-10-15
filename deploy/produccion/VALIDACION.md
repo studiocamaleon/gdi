@@ -1,5 +1,32 @@
 # Validación de producción
 
+## 2026-10-15, 02:24 UTC — Cambio de tipo de borrador publicado
+
+El titular autorizó publicar directamente después de las pruebas locales. Se realizó una comprobación técnica temporal en staging y se promovieron exactamente esas imágenes, sin otra aprobación pendiente.
+
+**Revisiones ejecutadas:** web `a7d34a80beefba6b80e7312b81a64b703a424bea`; API y ambos workers `4c73bcb767497225a671412e64b9791971d071ba`, con código backend idéntico al candidato final ([PR #95](https://github.com/studiocamaleon/gdi/pull/95)). Permite cambiar OT en borrador ↔ presupuesto sin emitir, conservando importes, costos, snapshots, descuentos, fechas, adjuntos, reservas y planificación. Valida empresa, permisos, funciones contratadas y versión; reintentos idempotentes. No incluye cantidad manual ni exclusión de pasos (#92–#94), todavía pendientes de aceptación de staging, ni propuestas automáticas de dependencias.
+
+**Validación:** 28 pruebas API en cuatro suites y 54 web en cuatro suites en local. [CI HTTP/aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/38668020257), [contenedores/tipos/login](https://github.com/studiocamaleon/gdi/actions/runs/38668020104) y CodeQL aprobados para la revisión funcional, sin alertas abiertas del PR. Compilaciones remotas con tipos; marketing/Grafo3D sin cambios. El registro final vuelve a pasar CI antes del merge.
+
+**Regresión de cabecera:** el primer ensayo de navegador detectó que la acción de OT dependía del modo edición, que a la vez la deshabilitaba. Se corrigió la condición de visibilidad y se agregó a CI una prueba sobre la ficha real que falló antes y pasó después, junto con los otros 15 casos del modo consulta. La web inicial no se promovió a producción.
+
+**Staging:** el servicio compilado pasó OT → presupuesto → OT, conservación de precios, costos y fecha, reintento, rechazo sin permisos y de versión vencida. Empresa y documentos ficticios dentro de una transacción revertida; se comprobó su ausencia al terminar. Chrome probó el recorrido real con un borrador QA de cinco A4, sin cliente, total exacto $381,25, conservado en ambos sentidos. Sin emisión ni producción; el borrador final quedó cancelado y los documentos de origen archivados con trazabilidad. No se enviaron presupuestos, pagos, facturas ni mensajes. Evidencias privadas fuera de Git.
+
+| Servicio | Digest comprobado en staging y promovido sin recompilar |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:3ac7aec47283a7dbb612949a60876c117bc7a1566f6c8d26d6745bcfa2aa7b3b` |
+| Web | `sha256:44e890368ab40ed832b3b280d5946d2ceee70b5c07386fc8185bd3fc342b69dc` |
+
+316 migraciones completas, ninguna nueva ni pendiente, checksums intactos. Seis máquinas saludables con los mismos recursos; API de producción conserva CPU performance / 2 GB. Salud HTTPS 200 y rechazos anónimos 403/401. Revisión y Sentry comprobados en los cuatro procesos actualizados. Gotenberg y copiador conservan sus imágenes. Desarrollo local y otros proyectos intactos.
+
+**Chrome de producción:** carga de órdenes y ficha de borrador existente, acción «Cambiar a presupuesto» disponible. En staging se reprodujo al recargar un aviso recuperable React #418 de hidratación de texto, observado también en producción antes de esta publicación. No bloqueó el recorrido de ida y vuelta; queda pendiente su diagnóstico y corrección independiente. No se declara consola libre de errores. La comprobación final en una pestaña nueva de producción —ficha, botón habilitado y vuelta al listado— no registró avisos ni errores de consola; la evidencia se conserva fuera de Git. Verificación de lectura: no se transformaron documentos comerciales reales. El cambio en ambos sentidos se ejercitó en staging. Configuración fiscal API/worker comprobada, sin emitir comprobantes; PDF ficticio de una página generado en memoria desde el worker, sin guardarlo.
+
+**Respaldo:** copia previa `abdf7d0e-c9c2-49ac-aa16-2d6b27010a7b`, completada `2026-10-15T01:03:40.113Z`, comprobada antes de desplegar. Fuentes exactas cifradas y retenidas 31 días e inventario del copiador actualizado. Copia posterior `abc27581-a1e9-4e59-8c25-58f973aab54a`, completada `2026-10-15T02:23:06.434Z`, firma y manifiesto descifrado verificados `2026-10-15T02:24:27.537Z`: 316 migraciones, 255 archivos y 8 fuentes. No se repitió una restauración SQL completa.
+
+**Staging y alcance:** después del ensayo temporal se restituyeron exactamente API/workers `sha256:481e539b61961498b31051726daef7f16bc8cf67fdec234381c273e967cedf59` y web `sha256:43f6d5d35a9aaf580ed91476ae9129447f72d63b50b759ac12a4cb110b233cfe`, revisión `5a1128328` del PR #94, junto al inventario anterior del copiador. El lote #92–#94 continúa abierto para las pruebas del titular. Esta publicación no lo promueve.
+
+**Cierre y reversión:** el cierre de #95 registra su merge y comprobación final de PR abiertos. Los commits documentales no cambian las imágenes publicadas. Para revertir sólo este cambio: API/workers `sha256:9661dd139d87f3a86b36ce4db0bea1692b9b2f9dedd99e37ed2545600136a4c7` y web `sha256:8b0f99cd99f120f2d98857900034f07c9161d03ec25542e16e6c43bc22e49957` de producción (`23fd03eec`). Conservar datos e historial, actualizar inventario y repetir salud. No hay esquema que revertir.
+
 ## 14/10/2026 — OT, cobros, conciliación y entregas por producto
 
 El titular confirmó que el lote funcionaba en staging y autorizó publicarlo completo en producción. [PR integrador #91](https://github.com/studiocamaleon/gdi/pull/91), conservando los commits de #84–#90. Dependencias automáticas #63, #64 y #71–#74, TPV y CORS local continúan fuera de este lote.

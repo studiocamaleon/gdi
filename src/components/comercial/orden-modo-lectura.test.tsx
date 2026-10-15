@@ -1,5 +1,6 @@
 import { podarPlata } from "../../../apps/api/src/auth/margenes";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRequire } from "node:module";
 import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
@@ -15,6 +16,10 @@ import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { PropuestaFicha } from "./propuesta-ficha";
 import { CostosOrdenTab } from "./costos-orden-tab";
 import type { PropuestaItem } from "@/lib/propuestas";
+
+const { JSDOM } = createRequire(import.meta.url)("jsdom") as {
+  JSDOM: new (html: string) => { window: { document: Document } };
+};
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
@@ -55,6 +60,16 @@ describe("una OT se abre en modo consulta", () => {
         </NotificacionesProvider>,
       );
       expect(html).toContain("Editar orden");
+      const documento = new JSDOM(html).window.document;
+      const cambiarTipo = Array.from(documento.querySelectorAll("button"))
+        .find((boton) => boton.textContent?.includes("Cambiar a presupuesto"));
+      if (estado === "borrador") {
+        // Cambiar el tipo debe funcionar al abrir la ficha, sin entrar a editar.
+        expect(cambiarTipo).toBeDefined();
+        expect(cambiarTipo?.disabled).toBe(false);
+      } else {
+        expect(cambiarTipo).toBeUndefined();
+      }
       expect(html).not.toContain(
         'aria-label="Sin comprobante fiscal en el sistema"',
       );
