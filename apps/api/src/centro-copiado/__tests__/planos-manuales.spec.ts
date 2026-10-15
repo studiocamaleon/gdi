@@ -1,4 +1,5 @@
 import { CentroCopiadoCadService } from '../centro-copiado-cad.service';
+import { jobContextCotizacionValido } from '../../motor-universal/cotizar.dto';
 import type { DocumentoInput } from '../adaptador';
 import { calcularComercialCad } from '../comercial/calculo-cad';
 import {
@@ -13,6 +14,8 @@ const perfil = {
   id: 'perfil-ficticio',
   revision: 'a'.repeat(64),
   productoId: 'producto-ficticio',
+  productoNombre: 'Plano de prueba',
+  productoCodigo: 'QA-PLANO',
   rutaAlternativaId: 'ruta-ficticia',
   configPasoId: 'paso-ficticio',
   maquinaId: 'plotter-ficticio',
@@ -85,6 +88,7 @@ it.each([
     );
     expect(item.error).toBeNull();
     expect(item.cantidad).toBe(copias);
+    expect(jobContextCotizacionValido(item.jobContext)).toBe(true);
     expect(item.especificaciones).toMatchObject({
       Plano: doc.nombre,
       Origen: 'Carga manual',

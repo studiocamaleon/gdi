@@ -199,7 +199,7 @@ export class CentroCopiadoCadService {
           grupoTomoId: null,
           esTomo: false,
           nombre: base.nombre,
-          archivoNombre: doc.archivoNombre,
+          ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
           paginas: doc.paginas,
           ...metadataRangoPaginas(doc),
           medidasPaginas: doc.medidasPaginas,
