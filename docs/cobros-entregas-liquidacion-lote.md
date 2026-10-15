@@ -1,6 +1,6 @@
 # Cobros, entregas y acreditación por liquidación
 
-Revisión local del 15/10/2026. Pendiente de publicación en staging y producción.
+Publicado y comprobado en staging el 15/10/2026, revisión `fc6277ff7` del PR #101. Producción e integración pendientes de aceptación. Ver [registro del despliegue](../deploy/staging/VALIDACION.md).
 
 ## Problemas corregidos
 
@@ -28,4 +28,6 @@ Un reintento de la misma liquidación no duplica movimientos. Si un cobro ya fue
 - Interfaz: selección, referencia compartida, preservación de comisiones, error y reintento, bloqueo de doble clic y ausencia de acciones sin permisos. Se conserva el circuito Emitir y entregar.
 - Navegador Chrome local: se abrió la vista real con cobros ficticios, se seleccionaron dos y se verificó el resumen con total $29.637 y una LIQ común; sin errores de consola. La escritura financiera se comprobó con la API y PostgreSQL de tests, no mediante la muestra visual.
 
-Las pruebas no ejecutan envíos, cobros externos ni operaciones sobre staging o producción. La muestra temporal usada para comprobar la interfaz no se incluye en la aplicación publicada.
+Las pruebas locales no ejecutan envíos ni cobros externos. La muestra temporal usada para comprobar la interfaz no se incluye en la aplicación publicada.
+
+En staging, Chrome comprobó el cobro y entrega de una OT ficticia de $12.000 por un vendedor y la acreditación conjunta de dos cobros de $10.000/$20.000 con una LIQ común: $29.637 netos. PostgreSQL y HTTP confirmaron saldo cero, un movimiento por cobro, rechazo del pago extra y del cambio de LIQ. Tres recibos PDF generados y sin errores de consola en los recorridos. Las cuentas ficticias quedaron desactivadas y su auditoría se conserva en una empresa separada; producción no se modificó.

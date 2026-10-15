@@ -1,5 +1,39 @@
 # Validación de staging — historial
 
+## 2026-10-15 — Cobros y entregas del vendedor; acreditación por LIQ
+
+[PR #101](https://github.com/studiocamaleon/gdi/pull/101), dependiente de #100. La rama incorpora #100 y conserva #99/#97/#98 y #94/#92/#93. Publicación autorizada sólo en staging. Producción, aceptación e integración pendientes. Las seis propuestas automáticas de dependencias quedan fuera.
+
+**Revisión funcional:** `fc6277ff7013053d638e26b6cd4c11dbaa8d6890`. [CI de permisos y aislamiento](https://github.com/studiocamaleon/gdi/actions/runs/38785828170), [contenedores, tipos, migraciones, login y PDF](https://github.com/studiocamaleon/gdi/actions/runs/38785828423) y comprobación de PR aprobados antes del despliegue. Tras incorporar el lote previo pasaron 84 regresiones locales: 42 API y 42 interfaz.
+
+El bloqueo de Chromium provenía de un paquete retirado del repositorio de seguridad de Debian. Se actualizó el pin de `155.0.8059.39` a `155.0.8059.79`, manteniendo la base por digest, el usuario sin privilegios y el aislamiento. CI compiló el PDF; después falló transitoriamente una descarga de `age` con HTTP 504. El reintento de la misma revisión pasó. Compilación de imágenes en Fly, sin compilar producción en la Mac ni aumentar recursos.
+
+**Cambios:** gestionar órdenes comerciales permite entregar; consultar órdenes permite escanear. La reversión continúa reservada a Producción. El cobro exige su propio permiso y una cuenta autorizada de la moneda correcta. La entrega rápida evita un destino predeterminado no asignado al vendedor, informa errores al cargar catálogos y usa la fecha local de la empresa. La transacción de entrega admite 20 segundos; si vence después de cobrar, lo comunica para evitar volver a registrar el pago. El antecedente observado en Sentry fue `P2028`, sin información suficiente para atribuirlo a un vendedor concreto.
+
+Tesorería permite seleccionar hasta 50 cobros, revisar sus comisiones y retenciones y acreditarlos con una fecha y LIQ comunes. La operación es atómica y un reintento idéntico conserva un único movimiento por cobro. Una LIQ distinta provoca conflicto. Se conservan los límites por empresa, permisos y cuentas; los cheques mantienen su circuito separado.
+
+**Ensayo de staging:** empresa y usuarios ficticios exclusivos, sin integraciones ni envíos. El vendedor accedió con su rol y cuentas restringidas. Se rechazó una caja no asignada (403); dos pagos electrónicos de $10.000/$20.000 se registraron una sola vez aun repitiendo sus solicitudes. Datos preexistentes preservados; el ensayo conserva su propia auditoría.
+
+**Navegador Chrome:** la acción de entrega apareció para el vendedor. «Cobrar $12.000 y entregar 1 producto» dejó la OT entregada, con un cobro y saldo cero; el formulario ya no permite otro pago. Se usó una cuenta autorizada aunque el destino predeterminado del método no estaba asignado al vendedor. Administración seleccionó los dos pendientes y los acreditó con `LIQ-QA-20261015`, fecha 15/10. El extracto mostró exactamente dos entradas conciliadas con esa referencia: $9.879 y $19.758. Sin errores ni advertencias de consola en los recorridos finales. Capturas privadas conservadas.
+
+**Confirmación HTTP y PostgreSQL:** OT entregada y cobrada al 100%; pago extra rechazado (400), vendedor sin permiso de acreditación rechazado (403), reintento de la misma LIQ sin duplicados y otra referencia rechazada (409). En total: tres cobros, tres movimientos, saldo $41.637 ($12.000 del mostrador más $29.637 de la LIQ), tres recibos PDF y cero envíos de WhatsApp. Las dos cuentas de usuario ficticias y su empresa se desactivaron al terminar, revocando sesiones y conservando los registros. El navegador quedó en el acceso normal.
+
+| Componente | Revisión / digest |
+| --- | --- |
+| API / worker / worker-pdf | `fc6277ff7` · `sha256:10ee2842c4d20dc1357363182510d6344eec12c6be25609b6ded288e9aa70785` |
+| Web | `fc6277ff7` · `sha256:08a10da0a3bc7cb0be50824a6c55b48be32906b4d6fbc0dabcb730499941e62a` |
+| Gotenberg / Chromium | `fc6277ff7` · `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, imagen conservada | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Operación:** API, ambos workers y web confirman `GRAFO_RELEASE=fc6277ff7013053d638e26b6cd4c11dbaa8d6890`. Chromium informa `155.0.8059.79` y generó un PDF real por la red privada. Seis máquinas saludables, mismos tamaños, 316 migraciones y ninguna nueva. Salud HTTPS 200/200, acceso anónimo rechazado 403/401. Los IDs y cantidades previos de empresas, usuarios, Inbox y archivos se conservaron, excluyendo las altas de la empresa QA. Las seis imágenes y tamaños de producción permanecen sin cambios. Se retiró únicamente el constructor remoto creado para este despliegue.
+
+Fuentes cifradas e inventario del copiador actualizados. Copia posterior `78c72a2e-5d65-4ea8-ac3f-8513d2539d96`, completada `2026-10-15T19:17:14.790Z`, con la revisión desplegada, cuatro imágenes, 316 migraciones, 27 archivos y ocho fuentes. Firma y manifiesto descifrado comprobados. **No se repitió restauración SQL:** esta comprobación no equivale a restaurar completamente la copia.
+
+El commit documental posterior registra lo ya desplegado; las imágenes mantienen la revisión funcional indicada. #101 y sus dependencias quedan abiertos, pendientes de aceptación de staging y autorización de producción/integración.
+
+**Reversión:** restaurar API y ambos workers a `sha256:cd47def9e7661f758655b7cf95788b479a69608a2cf0423c2d8d409a8a73c298`, web a `sha256:70ee70b16a4a6838a0980dfb094ebb4a61fba33e1d0a487310e8108b1be4c65d` y PDF a `sha256:4af1226f30e93ab4dc5d8aa51f4d14e21e7fc03adc5938835cde2f7fa5d5099d`, en sus repositorios de staging. Restituir el inventario previo del copiador. No hay migraciones que revertir; los cobros y la auditoría se conservan.
+
+
 ## 2026-10-15 — Fila manual en Planos CAD
 
 [PR #100](https://github.com/studiocamaleon/gdi/pull/100), dependiente de #99. Conserva los lotes #99/#97/#98 y #94/#92/#93. Autorización limitada a staging; producción y merge pendientes de aceptación. Dependencias automáticas fuera.
