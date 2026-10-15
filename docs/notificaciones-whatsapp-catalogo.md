@@ -6,6 +6,31 @@
 
 ---
 
+## Corrección de duplicados — 15/10/2026
+
+La consulta de producción y de campañas WATI confirmó pares con el mismo
+contenido y destinatario, identificadores distintos y ambas entregas confirmadas.
+La cola tenía una sola fila; el reintento había reemplazado el token anterior.
+No se conservaron los cuerpos HTTP originales, por lo que no se atribuye el
+incidente a un campo concreto de la respuesta. El camino que lo permitía trataba
+indicadores negativos dentro de HTTP 200 como rechazo seguro y reencolaba el aviso.
+
+- Si WATI devuelve un identificador para el destinatario, se conserva como
+  aceptación y se consulta su entrega, aun si otros indicadores lo contradicen.
+- Una respuesta 200 negativa, ambigua o un corte queda sin confirmar. No genera
+  otro POST automático. La consulta de campañas también reconcilia estos intentos,
+  correlacionando empresa, campaña, teléfono e identificador cuando existe.
+- Sólo un fallo confirmado de un mensaje identificable permite el reintento
+  manual. Una consulta vacía, ambigua o fallida conserva la incertidumbre.
+- Los rechazos HTTP explícitos anteriores al envío mantienen el backoff existente.
+  La reserva atómica, el token por intento y la clave única por evento se conservan.
+
+114 pruebas locales cubren respuestas contradictorias, PostgreSQL real,
+concurrencia, reinicio del despachador, recuperación del identificador, aislamiento,
+permisos y extensión. Nueve regresiones fallaron antes del cambio. Ningún ensayo
+contactó destinatarios reales. El diagnóstico de producción fue de sólo lectura.
+Referencia: [contrato de aceptación y seguimiento de WATI](https://support.wati.io/en/articles/11463225-how-to-track-template-message-delivery-and-message-status-using-wati-webhooks).
+
 ## 1. Validar el catálogo contra una cuenta real
 
 La idea de usar la cuenta de Corporearte como canario es correcta, pero

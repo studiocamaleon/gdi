@@ -87,6 +87,8 @@ export class DespachoService {
           },
           data: {
             estado: ESTADOS.incierta,
+            estadoEntrega: 'sin_confirmar',
+            estadoEntregaEl: new Date(),
             motivo:
               'No se pudo confirmar el resultado del envío. Revisá Wati antes de resolverlo.',
           },
@@ -303,10 +305,12 @@ export class DespachoService {
       return { estado: 'aceptada' };
     }
 
-    if (res.incierto) {
+    if (res.incierto !== false) {
       await this.marcar(id, token, ESTADOS.incierta, {
         intentos: n.intentos + 1,
         motivo: res.motivo,
+        estadoEntrega: 'sin_confirmar',
+        estadoEntregaEl: new Date(),
         programadaPara: null,
       });
       return { estado: 'incierta', motivo: res.motivo };

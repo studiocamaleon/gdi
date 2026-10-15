@@ -1,3 +1,5 @@
+import { WatiClient } from '../../wati/wati.client';
+import { WatiEntregaService } from '../../wati/wati-entrega.service';
 import { NotificacionesOrdenesService } from '../notificaciones-ordenes.service';
 import { versionReintento } from '../reintento';
 import { ValidationPipe } from '@nestjs/common';
@@ -158,6 +160,7 @@ async function preparar(c: Contexto, canal = 'WATI') {
     cola,
     web,
     wati,
+    integraciones,
     despacho,
     dentro,
     encolar,
@@ -826,4 +829,38 @@ describe('Aviso de orden finalizada y reintento manual', () => {
       expect((await x.leer(id)).estado).toBe('fallida');
     }),
   );
+});
+
+
+describe('respuestas Wati dudosas — cola y seguimiento con PostgreSQL', () => {
+  it.each([true, false])('un POST, incluso con respuesta negativa (ID presente: %s)', tieneId =>
+    conPlanesAsignados(prisma, async c => {
+      const x = await preparar(c), id = await x.nueva();
+      const envioHttp = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+        result: false,
+        receivers: [{ waId: numero, ...(tieneId ? { localMessageId: 'mensaje-qa' } : {}), errors: ['Confirmación pendiente'] }],
+      })));
+      try {
+        const client = new WatiClient();
+        const wati = { ...x.wati,
+          enviarPlantilla: client.enviarPlantilla.bind(client),
+          listarCampanias: jest.fn(async () => ({ broadcasts: [{ id: 'campania-qa', name: `grafo_${(await x.leer(id)).reservaToken}` }] })),
+          destinatariosCampania: jest.fn(async () => ({ recipients: [{ contact_phone: numero, local_message_id: 'mensaje-qa', status: 'delivered' }] })),
+        };
+        x.integraciones.credencialesWati.mockResolvedValue({ endpoint: 'https://live-mt-server.wati.io', tenantId: '123456', token: 'ficticio' });
+        const servicio = new DespachoService(c.db, x.integraciones as never, wati as never);
+        const r = await x.dentro(() => servicio.despachar(id));
+        expect(r.estado).toBe(tieneId ? 'aceptada' : 'incierta');
+        const token = (await x.leer(id)).reservaToken;
+        // El cron y un proceso recién iniciado no vuelven a enviar.
+        const reiniciado = new DespachoService(c.db, x.integraciones as never, wati as never);
+        await x.dentro(() => servicio.despachar(id));
+        await x.dentro(() => reiniciado.despachar(id));
+        expect(envioHttp).toHaveBeenCalledTimes(1);
+        await new WatiEntregaService(c.db, x.integraciones as never, wati as never).revisarTenant(x.tenantId);
+        expect(await x.leer(id)).toMatchObject({ estado: 'enviada', estadoEntrega: 'entregado', watiMensajeId: 'mensaje-qa', reservaToken: token, intentos: 1 });
+        await x.dentro(() => reiniciado.despachar(id));
+        expect(envioHttp).toHaveBeenCalledTimes(1);
+      } finally { envioHttp.mockRestore(); }
+    }));
 });

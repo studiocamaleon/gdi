@@ -84,6 +84,9 @@ describe('DespachoService — un hecho, un mensaje', () => {
       prisma as unknown as PrismaService,
       integraciones,
       wati,
+      // Esta suite comprueba la exclusión real de PostgreSQL; las capacidades
+      // y sus cambios de contrato se ejercitan en planes-avisos.integration.
+      { puedeOperar: jest.fn().mockResolvedValue(true) } as never,
     );
   });
 
@@ -151,7 +154,7 @@ describe('DespachoService — un hecho, un mensaje', () => {
   });
 
   it('si Wati falla, la fila vuelve a la cola sin reserva colgada', async () => {
-    enviarPlantilla.mockResolvedValue({ ok: false, motivo: 'Wati caída' });
+    enviarPlantilla.mockResolvedValue({ ok: false, incierto: false, motivo: 'Rechazo HTTP confirmado' });
     const id = await encolar();
 
     const res = await despachar(id, DENTRO_DE_VENTANA);

@@ -215,7 +215,7 @@ describe('WatiClient', () => {
       },
     );
 
-    it('conserva el rechazo explícito de Wati aunque el HTTP sea exitoso', async () => {
+    it('un resultado negativo con HTTP exitoso requiere comprobar la campaña', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -230,8 +230,7 @@ describe('WatiClient', () => {
         }),
       ).toMatchObject({
         ok: false,
-        incierto: false,
-        motivo: 'Plantilla rechazada',
+        incierto: true,
       });
     });
   });
@@ -281,7 +280,7 @@ describe('contrato de imagen variable y aceptación v2', () => {
   });
   it('no trata un destinatario inválido como aceptación', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ result: true, receivers: [{ waId: envio.telefono, isValidWhatsAppNumber: false, errors: [] }] })));
-    expect(await new WatiClient().enviarPlantilla(cred, envio)).toMatchObject({ ok: false, incierto: false });
+    expect(await new WatiClient().enviarPlantilla(cred, envio)).toMatchObject({ ok: false, incierto: true });
   });
   it('crea el encabezado variable y su muestra sólo para aprobación', async () => {
     const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(new Response('{"ok":true}'));
@@ -289,5 +288,37 @@ describe('contrato de imagen variable y aceptación v2', () => {
     const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
     expect(body.header.link).toBe('{{qr_url}}');
     expect(body.customParams).toContainEqual({ paramName: 'qr_url', paramValue: 'https://example.test/muestra.png' });
+  });
+});
+
+
+describe('WATI — respuestas contradictorias no duplican mensajes', () => {
+  const cred = { endpoint: 'https://live-mt-server.wati.io', tenantId: '123456', token: 'ficticio' };
+  const envio = { telefono: '5491150000000', plantilla: 'aviso_ficticio', parametros: {} };
+  afterEach(() => jest.restoreAllMocks());
+  it.each([
+    { result: false },
+    { result: true, isValidWhatsAppNumber: false },
+    { result: true, errors: ['Validación pendiente'] },
+  ])('conserva el mensaje creado aunque haya indicadores negativos: %j', async flags => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      result: flags.result,
+      receivers: [{ waId: envio.telefono, localMessageId: 'mensaje-creado', ...flags }],
+    })));
+    expect(await new WatiClient().enviarPlantilla(cred, envio)).toEqual({ ok: true, id: 'mensaje-creado' });
+  });
+  it.each([
+    { result: false, info: 'No se pudo confirmar la operación' },
+    { result: true, receivers: [{ waId: envio.telefono, isValidWhatsAppNumber: false }] },
+    { result: true, receivers: [{ waId: envio.telefono, errors: ['Estado pendiente'] }] },
+  ])('un HTTP 200 sin confirmación queda incierto, nunca habilita reenvío: %j', async body => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify(body)));
+    expect(await new WatiClient().enviarPlantilla(cred, envio)).toMatchObject({ ok: false, incierto: true });
+  });
+  it('no atribuye a este destino el identificador de otro receptor', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      result: false, receivers: [{ waId: '5491150009999', localMessageId: 'mensaje-ajeno' }],
+    })));
+    expect(await new WatiClient().enviarPlantilla(cred, envio)).toMatchObject({ ok: false, incierto: true });
   });
 });
