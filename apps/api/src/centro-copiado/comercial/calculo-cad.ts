@@ -100,7 +100,15 @@ function partesDocumento(
       const largo = new DecimalComercial(plan.altoMm).plus(
         new DecimalComercial(doc.rolloProduccion.margenMm).times(2),
       );
-      const porCopia = cantidadMl(largo.div(1000).toFixed());
+      // Puntos PDF → mm puede dejar más decimales que los 12 admitidos en ML.
+      // Normalizar sólo el consumo técnico conserva la geometría y escala del
+      // PDF; el redondeo comercial se aplica después, una vez por grupo.
+      const porCopia = cantidadMl(
+        largo
+          .div(1000)
+          .toDecimalPlaces(12, DecimalComercial.ROUND_HALF_UP)
+          .toFixed(),
+      );
       const consumo = cantidadMl(porCopia.times(copiasEfectivas).toFixed());
       return {
         referencia: {
