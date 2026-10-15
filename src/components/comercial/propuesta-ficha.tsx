@@ -43,6 +43,7 @@ import { DesgloseOperacionesCorte } from "./desglose-operaciones-corte";
 
 import { CampanaSelectorOrden } from "./campana-selector-orden";
 import { OrdenWorkspace, type OrdenWorkspaceHandle } from "./orden-workspace";
+import { CambiarTipoBorrador } from "./cambiar-tipo-borrador";
 import { CanalVentaSelector } from "./canal-venta-selector";
 import { canalVentaValido, nombreCanalVenta } from "@/lib/canales-venta";
 import workspaceStyles from "./orden-workspace.module.css";
@@ -4976,7 +4977,7 @@ function PropuestaFichaContenido({
   // cliente que viaja en el payload de crear; en una OT persistida se sincroniza
   // desde el flag y se alterna vía endpoint.
   const [sinComprobante, setSinComprobante] = React.useState(
-    ordenProp?.tratamientoFiscal === "SIN_COMPROBANTE",
+    (ordenProp?.tratamientoFiscal ?? presupuestoBase?.tratamientoFiscal) === "SIN_COMPROBANTE",
   );
   React.useEffect(() => {
     if (orden) setSinComprobante(orden.tratamientoFiscal === "SIN_COMPROBANTE");
@@ -5008,7 +5009,7 @@ function PropuestaFichaContenido({
     }
   }, [orden?.id, sinComprobante]);
   const puedeToggleFiscal =
-    puedeEditarOrden && (!modoOrden ||
+    puedeEditarOrden && !presupuestoBase && (!modoOrden ||
     (orden ? ["borrador", "pendiente"].includes(orden.estado) : false));
   // Atajo de teclado: X alterna sin comprobante, para quien prefiere no ir al
   // botón. Se ignora mientras se escribe (input/textarea/select/editable) y con
@@ -8258,6 +8259,10 @@ function PropuestaFichaContenido({
                           {orden.estado === "borrador" ? "Descartar borrador" : "Cancelar orden"}
                         </HeroButton>
                       ) : null}
+                      {puedeEditarOrden && orden.estado === "borrador" && <CambiarTipoBorrador
+                        id={orden.id} tipo="orden" version={orden.version}
+                        disabled={editandoOrden || cambiosSinGuardar > 0 || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador}
+                      />}
                       {puedeEditarOrden && orden.estado === "borrador" ? (
                         <HeroButton
                           type="button"
@@ -8413,7 +8418,7 @@ function PropuestaFichaContenido({
                   cliente={
                     <FieldCard label="Cliente" icon={<UserIcon />}>
                       <div className="flex items-center gap-2 text-sm text-foreground">
-                        {campoEditable("clienteId") && !presupuestoBase ? (
+                        {campoEditable("clienteId") && !presupuestoBase?.clienteId ? (
                           <div className="min-w-0 flex-1">
                             <ClienteLista
                               value={clienteId}

@@ -1,3 +1,5 @@
+import { CambiarTipoBorradorController } from './cambiar-tipo-borrador.controller';
+import { CambiarTipoBorradorService } from './cambiar-tipo-borrador.service';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
@@ -23,9 +25,10 @@ import { CorreoPresupuestoTransporte } from './correo-presupuesto.transporte';
     DatosEmpresaModule,
     CuponesModule,
   ],
-  controllers: [PresupuestosController],
+  controllers: [PresupuestosController, CambiarTipoBorradorController],
   providers: [
     PresupuestosService,
+    CambiarTipoBorradorService,
     PresupuestoPdfService,
     PresupuestoRenderService,
     PresupuestoPilotoService,

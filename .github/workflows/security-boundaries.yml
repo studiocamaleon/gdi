@@ -108,6 +108,8 @@ jobs:
             src/ordenes-trabajo/__tests__/entrega-pago-completo.spec.ts \
             src/ordenes-trabajo/__tests__/entrega-pago-completo.integration.spec.ts \
             src/presupuestos/__tests__/presupuestos.service.spec.ts \
+            src/presupuestos/__tests__/cambiar-tipo-borrador.integration.spec.ts \
+            src/presupuestos/__tests__/presupuesto-importes.spec.ts \
             src/presupuestos/__tests__/versiones-descarte.integration.spec.ts \
             src/ordenes-trabajo/__tests__/descartar-borrador.integration.spec.ts \
             src/auth/__tests__/recorridos-vistas.spec.ts \
@@ -171,6 +173,7 @@ jobs:
         run: |
           npm ci --include=dev --no-audit --no-fund
           node node_modules/vitest/vitest.mjs run \
+            src/components/comercial/cambiar-tipo-borrador.test.tsx \
             src/lib/centro-copiado-tarifarios-editor.test.ts \
             src/lib/centro-copiado-tarifarios-cuadricula.test.ts \
             src/lib/centro-copiado-tarifarios-sugerencias.test.ts \

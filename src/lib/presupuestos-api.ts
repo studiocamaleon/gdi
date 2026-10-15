@@ -92,6 +92,7 @@ export type PresupuestoVersion = {
 };
 
 export type PresupuestoEdicion = {
+  tratamientoFiscal?: string;
   id: string;
   numero: string;
   version: number;
@@ -119,6 +120,8 @@ export type PresupuestoEdicion = {
 };
 
 export type PresupuestoDetalle = {
+  version?: string;
+  puedeCambiarTipo?: boolean;
   versionPresupuesto?: number;
   versionVigente?: boolean;
   versiones?: PresupuestoVersion[];

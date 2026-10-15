@@ -23,6 +23,7 @@ import focus from "@/components/design-system/field-focus.module.css";
 import s from "./presupuesto-detalle-view.module.css";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { CambiarTipoBorrador } from "./cambiar-tipo-borrador";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   ArrowLeftIcon,
@@ -317,6 +318,7 @@ function PresupuestoDetalleContent({
           )}
         </div>
         <div className={s.headerActions}>
+          {d.puedeCambiarTipo && d.version && <CambiarTipoBorrador id={id} tipo="presupuesto" version={d.version} disabled={trabajando} />}
           {puedeVersionar && <ActionLink variant="outline" href={`/comercial/presupuestos/${id}/editar`}>Editar · nueva versión</ActionLink>}
           {puedeEnviar && d.estado === "borrador" && <ActionButton variant="outline" isDisabled={trabajando} onPress={() => setDescartarAbierto(true)}>Descartar borrador</ActionButton>}
           {d.estado === "enviado" && <ActionButton variant="outline" isDisabled={trabajando || !puedeEnviar || !conPresupuestos} onPress={() => setCorreoAbierto(true)}><SendIcon aria-hidden /> Enviar al cliente</ActionButton>}
