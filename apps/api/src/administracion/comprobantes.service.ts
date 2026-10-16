@@ -851,7 +851,9 @@ export class ComprobantesService {
         total: true,
         facturadoTotal: true,
         descuentoTotal: true,
+        cargosDirectos: true,
         cargosDirectosJson: true,
+        cotizacion: { select: { cargosDirectosCotizacionJson: true } },
         tratamientoFiscal: true,
         items: {
           where: { parentItemId: null },
@@ -1081,7 +1083,9 @@ export class ComprobantesService {
         total: true,
         facturadoTotal: true,
         tratamientoFiscal: true,
+        cargosDirectos: true,
         cargosDirectosJson: true,
+        cotizacion: { select: { cargosDirectosCotizacionJson: true } },
         items: {
           where: { parentItemId: null },
           orderBy: { ordenIndice: 'asc' },

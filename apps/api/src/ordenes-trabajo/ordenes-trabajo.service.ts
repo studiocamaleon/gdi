@@ -1,4 +1,5 @@
 import { validarCopiadoListo, exigirMarcaAntesDeEmision } from './copiado-listo';
+import { cargosConOrigen } from './cargos-con-origen';
 import { CentroCopiadoEmisionService } from '../centro-copiado/pedidos/centro-copiado-emision.service';
 import type { ContextoEmisionCopiado } from '../centro-copiado/pedidos/centro-copiado-pedidos.service';
 import { idsClientesPorNombre } from '../clientes/busqueda-clientes';
@@ -1510,6 +1511,7 @@ export class OrdenesTrabajoService {
       where: { id, tenantId: auth.tenantId },
       include: {
         ...LIST_INCLUDE,
+        cotizacion: { select: { cargosDirectosCotizacionJson: true } },
         cliente: { select: { nombre: true, telefonoCodigo: true, telefonoNumero: true } },
         _count: {
           select: {
@@ -1621,6 +1623,7 @@ export class OrdenesTrabajoService {
     );
     const detalle = {
       ...this.toDetalle({ ...orden, publicToken }),
+      cargos: cargosConOrigen(orden),
       clienteTelefono: orden.cliente?.telefonoNumero?.trim()
         ? [orden.cliente.telefonoCodigo, orden.cliente.telefonoNumero].filter(Boolean).join(' ').trim()
         : null,
@@ -1775,6 +1778,7 @@ export class OrdenesTrabajoService {
               total: true,
               clienteId: true,
               proyectoCampanaId: true,
+              cargosDirectosCotizacionJson: true,
               _count: { select: { items: true } },
             },
           })
@@ -1889,13 +1893,12 @@ export class OrdenesTrabajoService {
     let subtotal = items.reduce((s, i) => s + i.subtotal, 0);
     const impuestosItems = items.reduce((s, i) => s + i.impuestos, 0);
     const tratamientoFiscal = payload.tratamientoFiscal ?? 'FISCAL';
-    const cargos = await this.cargosAutorizados(
+    let cargos = await this.cargosAutorizados(
       auth.tenantId,
       payload.cargos ?? [],
       subtotal,
       decimales,
     );
-    let cargosPersistidos = cargos;
     const cargoPresupuesto =
       cargos.length === 0 &&
       cotizacion?.numero &&
@@ -1906,6 +1909,14 @@ export class OrdenesTrabajoService {
             Number(cotizacion.total) - items.reduce((s, i) => s + i.total, 0),
           )
         : 0;
+    if (cargoPresupuesto > 0 && tratamientoFiscal === 'FISCAL') {
+      // La conversión conserva lo aprobado, incluso si el catálogo cambió.
+      cargos = cargosConOrigen({
+        cargosDirectos: cargoPresupuesto,
+        cotizacion,
+      }) as typeof cargos;
+    }
+    let cargosPersistidos = cargos;
     if (
       cargos.length === 0 &&
       (payload.cargosDirectos ?? 0) > 0 &&
