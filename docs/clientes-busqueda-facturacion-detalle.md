@@ -25,3 +25,13 @@ Los importes parciales salen identificados como facturación parcial, sin afirma
 ## Validación
 
 Pruebas con empresas ficticias en la base local de test: autorregistro por HTTP, destinatarios y deduplicación, aislamiento y paginación sin tildes, frecuencia por producto, facturas individuales/agrupadas, cargos, descuentos, componentes, cantidades decimales, permisos fiscales y registro de lecturas. Pruebas de interfaz sobre los selectores reales y los datos enviados al confirmar. No se contacta ARCA ni se emiten comprobantes fiscales reales.
+
+## Cargos heredados de presupuestos — corrección del 16/10/2026
+
+Algunas conversiones fiscales conservaron el importe total de los cargos, pero dejaron vacío su detalle en la OT. La ficha mostraba un cargo genérico y el armado de la factura omitía ese importe, por lo que rechazaba la conciliación.
+
+La ficha y la facturación recuperan el snapshot del presupuesto enlazado únicamente cuando su suma coincide, a centavos, con el importe de cargos guardado en la OT. Se conservan descripción, neto e IVA originales, sin consultar el catálogo vigente ni modificar la deuda. Los cargos propios de la OT tienen prioridad; si se eliminaron o el respaldo no coincide, no se recuperan. La validación de productos más cargos contra el total sigue activa. Funciona en facturas individuales, parciales y agrupadas.
+
+Las conversiones fiscales completas guardan ahora ese desglose en la nueva OT. Las conversiones parciales no heredan los cargos de todo el presupuesto. No requiere migración ni reescritura de órdenes históricas.
+
+Validación local: 120 pruebas en seis suites sobre totales, detalle fiscal, respaldo de cargos, ficha y conversión/emisión de OT. Se reprodujo el rechazo antes de corregirlo y se comprobaron borradores de factura en la base aislada con empresas ficticias; el emisor fiscal se simuló, sin contactar ARCA. La revisión de tipos de los archivos productivos y pruebas nuevas pasó; la suite histórica de emisión usa dobles con tipos incompletos y se verificó mediante ejecución. La compilación completa queda en CI.

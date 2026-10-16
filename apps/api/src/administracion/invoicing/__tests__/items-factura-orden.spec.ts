@@ -303,3 +303,111 @@ describe('Detalle fiscal de productos y cargos', () => {
     ).toBe(Math.round(total * 100) / 100);
   });
 });
+
+describe('Cargos históricos conservados en el presupuesto de origen', () => {
+  const cargo = {
+    nombreSnapshot: 'Traslado ficticio',
+    montoNeto: 200,
+    impuestoPorcentaje: 21,
+    impuestoMonto: 42,
+    total: 242,
+  };
+  const historica = {
+    numero: 'OT-FICTICIA-ORIGEN',
+    total: 393.25,
+    facturadoTotal: 0,
+    cargosDirectos: 242,
+    cargosDirectosJson: [],
+    cotizacion: { cargosDirectosCotizacionJson: [cargo] },
+    items: [
+      {
+        nombre: 'Impresión ficticia',
+        cantidad: 1.25,
+        subtotal: 125,
+        total: 151.25,
+        descuentoMonto: 0,
+      },
+    ],
+  };
+
+  it.each(['A', 'B', 'C', 'E'] as const)(
+    '%s recupera el cargo original, sin sumar nuevamente IVA ni alterar cantidades',
+    (letra) => {
+      for (const cargosDirectosJson of [null, []]) {
+        const o = { ...historica, cargosDirectosJson };
+        const detalle = renglonesFacturaOrden(o, letra, o.total, 'items');
+        expect(detalle.map((i) => i.descripcion)).toEqual([
+          'Impresión ficticia',
+          'Traslado ficticio',
+        ]);
+        expect(detalle.map((i) => i.cantidad)).toEqual([1.25, 1]);
+        expect(calcularTotales(letra, detalle).total).toBe(o.total);
+        if (letra === 'A' || letra === 'B') {
+          expect(detalle[1].alicuotaIva).toBe(21);
+          expect(calcularTotales(letra, detalle).ivaTotal).toBe(68.25);
+        }
+        const resumen = renglonesFacturaOrden(o, letra, o.total, 'orden');
+        expect(calcularTotales(letra, resumen)).toEqual(
+          calcularTotales(letra, detalle),
+        );
+        const parcial = renglonesFacturaOrden(
+          { ...o, facturadoTotal: 100 },
+          letra,
+          100,
+          'items',
+        );
+        expect(calcularTotales(letra, parcial).total).toBe(100);
+        expect(
+          parcial.every((i) => i.descripcion.startsWith('Facturación parcial')),
+        ).toBe(true);
+      }
+    },
+  );
+
+  it('prioriza los cargos propios de la OT y nunca los duplica con el presupuesto', () => {
+    const o = {
+      ...historica,
+      cargosDirectosJson: [{ ...cargo, nombreSnapshot: 'Cargo propio' }],
+    };
+    const lineas = renglonesFacturaOrden(o, 'A', o.total, 'items');
+    expect(lineas).toHaveLength(2);
+    expect(lineas[1].descripcion).toBe('Cargo propio');
+    expect(calcularTotales('A', lineas).total).toBe(o.total);
+  });
+
+  it.each([null, [], [{ ...cargo, total: 243 }], [{ ...cargo, total: null }]])(
+    'sigue rechazando un cargo sin respaldo compatible (%j)',
+    (cargosDirectosCotizacionJson) => {
+      expect(() =>
+        renglonesFacturaOrden(
+          {
+            ...historica,
+            cotizacion: { cargosDirectosCotizacionJson },
+          },
+          'A',
+          historica.total,
+          'items',
+        ),
+      ).toThrow('no coincide');
+    },
+  );
+
+  it('no completa diferencias de una OT que ya tiene cargos detallados', () => {
+    expect(() =>
+      renglonesFacturaOrden(
+        {
+          ...historica,
+          cargosDirectosJson: [{ ...cargo, total: 121, montoNeto: 100 }],
+        },
+        'A',
+        historica.total,
+        'items',
+      ),
+    ).toThrow('no coincide');
+  });
+
+  it('no repone un cargo eliminado ni consulta el catálogo para inventar el faltante', () => {
+    const o = { ...historica, cargosDirectos: 0, total: 151.25 };
+    expect(renglonesFacturaOrden(o, 'A', o.total, 'items')).toHaveLength(1);
+  });
+});

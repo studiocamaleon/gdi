@@ -25,6 +25,7 @@ function escenario() {
   };
   const orden = {
     id: 'orden-demo',
+    numero: 'OT-FICTICIA-DETALLE',
     estado: 'pendiente',
     publicToken: 'token-ficticio-ya-existente',
     createdAt: fecha,
@@ -160,4 +161,14 @@ describe('vendedor en el detalle de la OT', () => {
     );
     expect(prisma.ordenTrabajoEvento.findMany).not.toHaveBeenCalled();
   });
+  it('muestra neto e IVA del cargo aprobado cuando la OT histórica sólo guardó su importe', async () => {
+    const { service, prisma, orden } = escenario();
+    const cargo = { nombreSnapshot: 'Traslado ficticio', montoNeto: 200, impuestoMonto: 42, impuestoPorcentaje: 21, total: 242 };
+    Object.assign(orden, { cargosDirectos: 242, cargosDirectosJson: [], cotizacion: { cargosDirectosCotizacionJson: [cargo] } });
+    const detalle = await service.findOne(auth, 'orden-demo');
+    expect(detalle.cargos).toEqual([cargo]);
+    expect(detalle.cargosDirectos).toBe(242);
+    expect(prisma.ordenTrabajo.findFirst).toHaveBeenCalledWith(expect.objectContaining({ include: expect.objectContaining({ cotizacion: { select: { cargosDirectosCotizacionJson: true } } }) }));
+  });
+
 });

@@ -2,14 +2,17 @@ import { BadRequestException } from '@nestjs/common';
 import type { LetraProvider } from './invoicing-provider';
 import { IVA_ID } from './codigos-arca';
 import { calcularTotales, type ItemCalculo } from './totales-comprobante';
+import {
+  cargosConOrigen,
+  type OrdenConCargos,
+} from '../../ordenes-trabajo/cargos-con-origen';
 
 export type DetalleFactura = 'items' | 'orden';
 type Numero = number | { toString(): string };
-export type OrdenParaFactura = {
+export type OrdenParaFactura = OrdenConCargos & {
   numero: string;
   total: Numero | null;
   facturadoTotal: Numero;
-  cargosDirectosJson?: unknown;
   items: Array<{
     parentItemId?: string | null;
     nombre: string;
@@ -133,9 +136,7 @@ export function renglonesFacturaOrden(
       descuento: Number(i.descuentoMonto ?? 0),
       impuestos: i.cotizacionItem?.impuestosSnapshotJson,
     }));
-  for (const raw of Array.isArray(orden.cargosDirectosJson)
-    ? orden.cargosDirectosJson
-    : []) {
+  for (const raw of cargosConOrigen(orden)) {
     const cargo = objeto(raw);
     fuentes.push({
       nombre:

@@ -90,6 +90,9 @@ jobs:
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
             src/administracion/__tests__/facturacion-permisos-http.integration.spec.ts \
             src/administracion/__tests__/facturacion-detalle.integration.spec.ts \
+            src/administracion/invoicing/__tests__/items-factura-orden.spec.ts \
+            src/ordenes-trabajo/__tests__/cargos-con-origen.spec.ts \
+            src/ordenes-trabajo/__tests__/vendedor-detalle.spec.ts \
             src/documentos-pdf/documentos-pdf.integration.spec.ts \
             src/administracion/__tests__/listados-paginados.spec.ts \
             src/administracion/__tests__/permisos-comprobantes.spec.ts \

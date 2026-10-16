@@ -794,6 +794,30 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     ).toBe('aprobado');
   });
 
+  it('conserva el desglose aprobado de cargos al convertir todo el presupuesto fiscal', async () => {
+    const opciones = await prepararConversion(1);
+    const cargo = { nombreSnapshot: 'Traslado ficticio', montoNeto: 200, impuestoMonto: 42, impuestoPorcentaje: 21, total: 242 };
+    await db.cotizacion.update({ where: { id: payload.cotizacionId }, data: { total: 342, cargosDirectosCotizacionJson: [cargo] } });
+    const orden = await ordenes.create(auth, payload, opciones);
+    const persistida = await db.ordenTrabajo.findUniqueOrThrow({ where: { id: orden.id } });
+    expect(persistida.cargosDirectosJson).toEqual([cargo]);
+    expect(Number(orden.cargosDirectos)).toBe(242);
+    expect(Number(orden.total)).toBe(342);
+  });
+
+  it('una conversión parcial no hereda los cargos completos del presupuesto', async () => {
+    const opciones = await prepararConversion(2);
+    await db.cotizacion.update({ where: { id: payload.cotizacionId }, data: {
+      total: 442,
+      cargosDirectosCotizacionJson: [{ nombreSnapshot: 'Traslado ficticio', montoNeto: 200, impuestoMonto: 42, impuestoPorcentaje: 21, total: 242 }],
+    } });
+    const orden = await ordenes.create(auth, { ...payload, items: payload.items.slice(0, 1) }, opciones);
+    const persistida = await db.ordenTrabajo.findUniqueOrThrow({ where: { id: orden.id } });
+    expect(persistida.cargosDirectosJson).toEqual([]);
+    expect(Number(persistida.cargosDirectos)).toBe(0);
+    expect(Number(persistida.total)).toBe(100);
+  });
+
   it('un plan sin ETA puede convertir y emitir con la fecha comercial vigente', async () => {
     const opciones = await prepararConversion(1);
     simularPlan(0);

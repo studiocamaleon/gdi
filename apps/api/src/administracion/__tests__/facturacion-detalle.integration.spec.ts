@@ -106,7 +106,9 @@ describe('Facturas detalladas y agrupadas con snapshots reales', () => {
       emitir: false,
       puntoVentaId,
     });
-    expect(f.items.map((i) => i.descripcion)).toEqual(['Tarjetas', 'Envío']);
+    expect(
+      (f.items as { descripcion: string }[]).map((i) => i.descripcion),
+    ).toEqual(['Tarjetas', 'Envío']);
     expect(f.total).toBe(363);
     const documento = await new FacturaService(db, {
       paraDocumentos: async () => ({ nombre: 'Empresa ficticia' }),
@@ -166,5 +168,97 @@ describe('Facturas detalladas y agrupadas con snapshots reales', () => {
         (f.itemsJson as { descripcion: string }[]).map((i) => i.descripcion),
       ).toEqual(['Tarjetas', 'Envío']);
     }
+  });
+  it('recupera cargos históricos en individual, parcial y agrupada sin modificar la OT ni emitir', async () => {
+    const cargo = {
+      nombreSnapshot: 'Traslado aprobado',
+      montoNeto: 200,
+      impuestoMonto: 42,
+      impuestoPorcentaje: 21,
+      total: 242,
+    };
+    const cotizacion = await db.cotizacion.create({
+      data: {
+        tenantId,
+        numero: 'PRES-FICTICIO-ORIGEN',
+        estado: 'convertido',
+        total: 363,
+        cargosDirectosCotizacionJson: [cargo],
+      },
+    });
+    const orden = await db.ordenTrabajo.create({
+      data: {
+        tenantId,
+        numero: 'OT-FICTICIA-HISTORICA',
+        estado: 'finalizada',
+        cotizacionId: cotizacion.id,
+        total: 363,
+        cargosDirectos: 242,
+        cargosDirectosJson: [],
+        items: {
+          create: {
+            tenantId,
+            nombre: 'Impresión aprobada',
+            codigo: 'I',
+            familia: 'Pruebas',
+            cantidad: 2.5,
+            cantidadUnidad: 'm2',
+            subtotal: 100,
+            impuestos: 21,
+            total: 121,
+          },
+        },
+      },
+    });
+    emitir.mockClear();
+    const individual = await service.facturarOrden(auth, orden.id, {
+      emitir: false,
+      puntoVentaId,
+    });
+    expect(individual.total).toBe(363);
+    expect(individual.ivaTotal).toBe(63);
+    expect(
+      (individual.items as { descripcion: string }[]).map((i) => i.descripcion),
+    ).toEqual(['Impresión aprobada', 'Traslado aprobado']);
+    expect(
+      (individual.items as { cantidad: number }[]).map((i) => i.cantidad),
+    ).toEqual([2.5, 1]);
+    expect(emitir).not.toHaveBeenCalled();
+    const parcial = await service.facturarOrden(auth, orden.id, {
+      emitir: false,
+      puntoVentaId,
+      monto: 121,
+    });
+    expect(parcial.total).toBe(121);
+    expect(
+      (parcial.items as { descripcion: string }[]).every((i) =>
+        i.descripcion.startsWith('Facturación parcial'),
+      ),
+    ).toBe(true);
+    const agrupada = await service.facturarLote(auth, {
+      ordenIds: [orden.id, ordenIds[0]],
+      puntoVentaId,
+      modo: 'agrupada',
+      detalle: 'items',
+    });
+    const comprobante = await db.comprobante.findUniqueOrThrow({
+      where: { id: agrupada.resultados[0].comprobante!.id },
+      include: { ordenes: true },
+    });
+    expect(Number(comprobante.total)).toBe(726);
+    expect(Number(comprobante.ivaTotal)).toBe(126);
+    expect(comprobante.ordenes.map((v) => Number(v.monto))).toEqual([363, 363]);
+    expect(
+      (comprobante.itemsJson as { descripcion: string }[]).map(
+        (i) => i.descripcion,
+      ),
+    ).toContain('OT-FICTICIA-HISTORICA · Traslado aprobado');
+    const conservada = await db.ordenTrabajo.findUniqueOrThrow({
+      where: { id: orden.id },
+    });
+    expect(conservada.cargosDirectosJson).toEqual([]);
+    expect(Number(conservada.facturadoTotal)).toBe(0);
+    expect(Number(conservada.total)).toBe(363);
+    expect(emitir).toHaveBeenCalledTimes(1); // Emisor local simulado; nunca ARCA.
   });
 });
