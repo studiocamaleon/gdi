@@ -1,5 +1,32 @@
 # Validación de producción
 
+## 2026-10-16, 23:14 UTC — Cargos del presupuesto al facturar una OT
+
+[PR #103](https://github.com/studiocamaleon/gdi/pull/103), desde `main`, con autorización del titular para probar staging y publicar producción sin emitir la factura afectada. Sólo esta corrección; dependencias automáticas, marketing y Grafo3D fuera.
+
+Algunas OT convertidas de presupuestos conservaban el importe total de los cargos, pero perdían su detalle e IVA. La facturación detallada los omitía y rechazaba la diferencia. Se recupera únicamente el snapshot del presupuesto enlazado cuando coincide exactamente, a centavos, con el importe guardado; un detalle propio tiene prioridad. Las nuevas conversiones fiscales completas conservan ese snapshot. No se recalculan precios actuales ni se inventa un cargo para cubrir diferencias.
+
+**Validación previa:** 120 pruebas locales en seis suites; cuatro regresiones reprodujeron el error antes del cambio. [CI HTTP y regresiones](https://github.com/studiocamaleon/gdi/actions/runs/38959605989), [contenedores, tipos, migraciones y login](https://github.com/studiocamaleon/gdi/actions/runs/38959606015), CodeQL sin alertas abiertas y Vercel aprobados sobre la revisión funcional. El commit documental posterior vuelve a pasar CI antes del merge.
+
+Ensayo sobre el servicio compilado de staging con empresa ficticia, proveedor manual y PostgreSQL: producto de 1,25 m², neto $125 e IVA $26,25; cargo neto $200 e IVA $42; total $393,25. Pasaron el borrador completo, parcial de $121, cuatro letras y ambos modos de detalle. Cero emisiones y conexiones externas. La transacción se revirtió y se comprobó que no quedó la empresa ficticia; seis tablas de control conservaron sus recuentos y huellas.
+
+| Servicio | Revisión de fuentes | Digest |
+| --- | --- | --- |
+| API / worker / worker-pdf | `2a65d4c26350ce53a250ab356fb098666855befd` | `sha256:d44ec43ed9d170772251409e2d548a68f8d4d73d7b4e45ebefe95ff99c6eb11b` |
+| Web, conservada | `fc6277ff7013053d638e26b6cd4c11dbaa8d6890` | `sha256:08a10da0a3bc7cb0be50824a6c55b48be32906b4d6fbc0dabcb730499941e62a` |
+| PDF, conservado | `fc6277ff7013053d638e26b6cd4c11dbaa8d6890` | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | Imagen previa | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+Backend compilado remotamente con tipos y promovido sin recompilar, con digest idéntico entre entornos. Revisión ejecutada comprobada en API y ambos workers. Seis servicios saludables, mismos tamaños; HTTPS 200 y acceso anónimo rechazado 403/401. 316 migraciones completas, checksums intactos y ninguna pendiente. Sin seeds, resets ni migraciones de datos. Las seis tablas de control conservaron recuentos y huellas. Constructor temporal retirado.
+
+**Producción:** comprobación de la OT afectada dentro de una transacción de sólo lectura. El método real de facturación preparó productos/cargos y resumen por OT con el total exacto aprobado, sin diferencias; la creación de comprobantes y la emisión estaban bloqueadas por el ensayo. Importe facturado conservado en cero. En Chrome, la ficha muestra el cargo original con neto/IVA correctos y el modal propone el saldo completo; se cerró sin emitir. Configuración fiscal del worker coherente con API y consulta de un comprobante ya existente ante ARCA correcta, sin emisión nueva. Consola sin errores ni advertencias durante el recorrido; Sentry sin incidencias de esta revisión en la consulta posterior inmediata, sin equivaler a observación prolongada.
+
+Copia previa verificada: `646f5e78-3370-420d-834b-0f0b9cef4c05`, completada `2026-10-16T22:04:10.458Z`, con firma y manifiesto descifrado.
+
+**Respaldo:** fuentes exactas cifradas y custodiadas e inventario actualizado. Copia posterior `baff298b-d06a-44d1-b2bc-f1811287088e`, completada `2026-10-16T23:13:38.053Z`: firma válida, manifiesto descifrado, revisión e imágenes comprobadas, 316 migraciones, 402 archivos y 8 fuentes. **No se repitió restauración SQL completa.**
+
+Reversión: API y ambos workers al digest anterior `sha256:59e1a73beb04a9a68953345628ec7e7a04c24fd20250381247ce8ffa3cd211bc` (`9d2cf372a`), en el registro de su entorno; restituir también el inventario previo del copiador. No hay esquema que revertir ni datos que borrar. El merge final de #103 conserva la revisión funcional; los commits posteriores sólo registran la publicación.
+
 ## 2026-10-15 — Lote de copiado, vendedor, LIQ y avisos sin duplicados
 
 El titular aceptó staging y autorizó publicar el lote completo, agregando la corrección de avisos repetidos. [PR integrador #102](https://github.com/studiocamaleon/gdi/pull/102), que conserva los commits de #101, #100, #99, #98, #97, #94, #93 y #92. Propuestas automáticas de dependencias #63/#64/#71–#74 fuera; marketing y Grafo3D sin cambios.
