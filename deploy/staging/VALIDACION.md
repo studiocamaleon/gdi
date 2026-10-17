@@ -1,5 +1,28 @@
 # Validación de staging — historial
 
+## 2026-10-17, 20:36 UTC — Autorización real con el sandbox de Meta
+
+Ensayo autorizado por el titular, realizado desde Chrome y el Inbox de staging. Meta confirmó el estado de Tech Provider y la creación de su cuenta sandbox. Se autorizó exclusivamente `https://staging.grafoprint.com.ar` para el SDK de JavaScript; el titular confirmó ese cambio, las condiciones presentadas por Meta y el acceso final a los activos del sandbox.
+
+**Resultado:** un único intento `SANDBOX`, creado a las 20:32:50 UTC, canjeado a las 20:36:46 UTC y `VERIFICADA` a las **20:36:48 UTC / 17:36:48 Argentina**. La interfaz mostró «Autorización de prueba verificada». El servidor canjeó el código y comprobó la aplicación, los permisos y la cuenta configurada mediante Graph; terminó sin código de fallo y retiró el token cifrado del intento.
+
+Se creó **Ensayo Meta Sandbox — Staging**, una empresa ficticia separada, con suscripción manual y acceso del administrador de ensayo existente. Se seleccionaron únicamente el número de prueba de Sandbox Business y Sandbox Messaging Account. El perfil de ensayo utilizó `example.com`; no se conectaron números ni cuentas de clientes.
+
+**Configuración:** API y worker principal conservan sus imágenes y reciben `META_CONEXION_MODO=sandbox`, la lista limitada a esa empresa y los identificadores de configuración y sandbox en el almacén de secretos de Fly. Los identificadores privados y las capturas permanecen fuera de Git. La autorización no habilita coexistencia para otras empresas. El worker mantiene la limpieza de intentos vencidos.
+
+| Componente | Fuente conservada | Digest conservado |
+| --- | --- | --- |
+| API / worker principal | `2a65d4c26350ce53a250ab356fb098666855befd` | `sha256:d44ec43ed9d170772251409e2d548a68f8d4d73d7b4e45ebefe95ff99c6eb11b` |
+| Web | `fc6277ff7013053d638e26b6cd4c11dbaa8d6890` | `sha256:08a10da0a3bc7cb0be50824a6c55b48be32906b4d6fbc0dabcb730499941e62a` |
+
+Actualización de configuración sobre las máquinas existentes, sin builds, cambios de tamaños, migraciones, seeds ni resets. La API pasó su control de salud tras reiniciar; el worker volvió a `started`. Durante el reinicio de la API, una navegación mostró el error recuperable de carga de vista; recargar después de recuperar la salud permitió continuar con la misma sesión. Worker PDF, Gotenberg, copiador y producción no se modificaron.
+
+**Conservación comprobada:** recuentos y SHA-256 de las seis tablas de Meta/Inbox de la demo anterior coinciden antes y después: un vínculo, cero autorizaciones, una conversación, 31 mensajes, 16 envíos y 12 adjuntos. La empresa sandbox terminó con cero vínculos operativos, altas de sincronización, conversaciones, mensajes y envíos. No se conservó el token temporal ni se solicitó historial. La creación de empresa y la autorización fueron comprobaciones sobre el código ya publicado; este cambio documental no modifica la aplicación.
+
+**Límites:** acredita el registro insertado real, el retorno al navegador y la verificación del servidor. El sandbox de Meta dura 30 días y no intercambia mensajes; no acredita coexistencia, historial ni mensajería de un número propio. La conexión sandbox queda habilitada sólo para la empresa ficticia indicada. Para apagarla, vaciar `META_CONEXION_MODO` y `META_CONEXION_TENANT_IDS` en API y worker principal, conservando los datos del ensayo. No borrar el sandbox ni revocar permisos de otras cuentas como parte de esa reversión. Esta operación no incluyó una restauración ni una verificación nueva de respaldos.
+
+Referencias: [cuentas sandbox de Meta](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview#sandbox-accounts) y [recorrido de Grafo](../../docs/meta-conexion-empresas.md).
+
 ## 2026-10-16, 23:14 UTC — Cargos del presupuesto al facturar una OT
 
 [PR #103](https://github.com/studiocamaleon/gdi/pull/103), desde `main`, con autorización del titular para probar staging y publicar producción sin emitir la factura afectada. Sólo esta corrección; dependencias automáticas, marketing y Grafo3D fuera.
