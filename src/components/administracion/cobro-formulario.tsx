@@ -34,6 +34,7 @@ import { useConfigRegional } from "@/components/navigation/config-regional-provi
 import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Input } from "@/components/ui/input";
+import { CobroConfirmacion } from "./cobro-confirmacion";
 
 const BANCOS = [
   "Banco Galicia",
@@ -100,6 +101,7 @@ export function CobroFormulario({
   guardando,
   submitLabelCheque = "Registrar valor en cartera",
   submitLabel = "Registrar cobro",
+  registroAlEmitir = false,
   onSubmit,
   onCancel,
   cancelHref,
@@ -111,19 +113,21 @@ export function CobroFormulario({
   guardando: boolean;
   submitLabel?: string;
   submitLabelCheque?: string;
+  registroAlEmitir?: boolean;
   onSubmit: (draft: CobroDraft) => void | Promise<void>;
   onCancel?: () => void;
   cancelHref?: string;
 }) {
   const intento = React.useRef(crearIntentoCobro());
   const [enviando, setEnviando] = React.useState(false);
+  const [porConfirmar, setPorConfirmar] = React.useState<CobroDraft | null>(null);
   const { moneda, zonaHoraria, paisCodigo } = useConfigRegional();
   const fmt = (n: number) => formatearMoneda(n, moneda);
   const conValores = useCapacidad("valores");
   const metodosActivos = metodos.filter(
     (m) => m.activo && (conValores || m.tipo !== "cheque_echeq"),
   );
-  const [metodoId, setMetodoId] = React.useState(metodosActivos[0]?.id ?? "");
+  const [metodoId, setMetodoId] = React.useState("");
   const metodo = metodosActivos.find((m) => m.id === metodoId) ?? null;
   const esCheque = metodo?.tipo === "cheque_echeq";
   const cuentasCompatibles = cuentas.filter(c =>
@@ -193,7 +197,7 @@ export function CobroFormulario({
       null);
   const cuentaUsada = cuentasCompatibles.find((c) => c.id === cuentaUsadaId);
   const estimacion =
-    fecha && !esCheque
+    fecha && metodo && !esCheque
       ? estimarAcreditacion(
           fecha,
           metodo?.plazoAcreditacionDias ?? 0,
@@ -202,7 +206,9 @@ export function CobroFormulario({
           metodo?.feriadosAdicionales?.filter(Boolean),
         )
       : null;
-  const fechaAcreditacion = esCheque
+  const fechaAcreditacion = !metodo
+    ? "Elegí un medio de pago"
+    : esCheque
     ? chq.modalidad === "diferido"
       ? chq.pago || "al acreditar el valor"
       : "al acreditar el valor"
@@ -253,8 +259,8 @@ export function CobroFormulario({
     limitarAlSaldo &&
     (saldo <= 0 || redondearDinero(bruto) > redondearDinero(saldo));
 
-  const submit = async () => {
-    if (guardando || enviando || excedeSaldo) return;
+  const revisar = () => {
+    if (guardando || enviando || porConfirmar || excedeSaldo) return;
     if (!metodo || !fecha || bruto <= 0 || (!esCheque && !cuentaUsadaId))
       return;
     if (disponible <= 0) {
@@ -328,12 +334,21 @@ export function CobroFormulario({
       disponibleReal: disponible,
       acreditacionLabel: fechaAcreditacion,
     };
+    setPorConfirmar(draft);
+  };
+
+  const confirmar = async () => {
+    if (!porConfirmar || guardando || enviando || excedeSaldo) return;
+    const draft = porConfirmar;
     const clave = intento.current.iniciar(draft.payload);
     if (!clave) return;
-    draft.payload.idempotencyKey = clave;
     setEnviando(true);
     try {
-      await onSubmit(draft);
+      await onSubmit({
+        ...draft,
+        payload: { ...draft.payload, idempotencyKey: clave },
+      });
+      setPorConfirmar(null);
     } catch {
       // El padre muestra el error. Reintentar conserva la misma clave.
       intento.current.liberar();
@@ -380,11 +395,16 @@ export function CobroFormulario({
               ) : null}
             </div>
             <div className="arc-field">
-              <label>Método de pago</label>
+              <label htmlFor="cobro-metodo-pago">Medio de pago</label>
               <select
+                id="cobro-metodo-pago"
+                required
                 value={metodoId}
                 onChange={(e) => seleccionarMetodo(e.target.value)}
               >
+                <option value="" disabled>
+                  Elegí un medio de pago
+                </option>
                 {metodosActivos.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.nombre}
@@ -412,11 +432,15 @@ export function CobroFormulario({
           </div>
           <div className="arc-auto-note">
             <ZapIcon />
-            Autocompletado desde{" "}
-            <b style={{ margin: "0 4px", color: "var(--ink-2)" }}>
-              {metodo?.nombre ?? "—"}
-            </b>{" "}
-            — podés ajustarlo.
+            {metodo ? (
+              <>
+                Autocompletado desde{" "}
+                <b style={{ margin: "0 4px", color: "var(--ink-2)" }}>
+                  {metodo.nombre}
+                </b>{" "}
+                — podés ajustarlo.
+              </>
+            ) : "Elegí un medio de pago para ver su acreditación."}
           </div>
           <div className="arc-frow3">
             <div className="arc-field autofilled">
@@ -474,7 +498,11 @@ export function CobroFormulario({
                 disabled={cuentasCompatibles.length === 0}
               >
                 {cuentasCompatibles.length === 0 ? (
-                  <option value="">Sin cuentas disponibles en {moneda.codigo}</option>
+                  <option value="">
+                    {metodo
+                      ? `Sin cuentas disponibles en ${moneda.codigo}`
+                      : "Primero elegí un medio de pago"}
+                  </option>
                 ) : null}
                 {cuentasCompatibles.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -482,7 +510,7 @@ export function CobroFormulario({
                   </option>
                 ))}
               </select>
-              {cuentasCompatibles.length === 0 ? (
+              {metodo && cuentasCompatibles.length === 0 ? (
                 <p className="mt-2 text-sm text-destructive">
                   No hay una cuenta compatible con este medio en {moneda.codigo}. Transferencias y tarjetas requieren banco o billetera; el efectivo requiere una caja asignada.
                 </p>
@@ -816,7 +844,9 @@ export function CobroFormulario({
         </div>
         <div className="arc-acct-hint">
           <LandmarkIcon />
-          {esCheque ? (
+          {!metodo ? (
+            <>Elegí un medio de pago para ver la cuenta de destino.</>
+          ) : esCheque ? (
             <>Valor en cartera · cuenta bancaria al depositar</>
           ) : (
             <>
@@ -841,6 +871,7 @@ export function CobroFormulario({
             className="btn btn-primary"
             disabled={
               bruto <= 0 ||
+              !fecha ||
               !metodo ||
               (!esCheque && !cuentaUsadaId) ||
               disponible <= 0 ||
@@ -848,7 +879,7 @@ export function CobroFormulario({
               enviando ||
               excedeSaldo
             }
-            onClick={submit}
+            onClick={revisar}
           >
             <CheckIcon />
             {guardando || enviando
@@ -872,6 +903,17 @@ export function CobroFormulario({
           ) : null}
         </div>
       </div>
+      {porConfirmar && (
+        <CobroConfirmacion
+          draft={porConfirmar}
+          registroAlEmitir={registroAlEmitir}
+          enviando={guardando || enviando}
+          onCancelar={() => {
+            if (!guardando && !enviando) setPorConfirmar(null);
+          }}
+          onConfirmar={confirmar}
+        />
+      )}
     </div>
   );
 }

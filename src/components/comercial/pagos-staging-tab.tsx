@@ -128,6 +128,7 @@ export function PagosStagingTab({
         <CobroFormulario
           saldo={saldo}
           limitarAlSaldo
+          registroAlEmitir
           metodos={metodosActivos}
           cuentas={cuentas}
           guardando={false}
