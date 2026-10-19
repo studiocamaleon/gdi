@@ -245,3 +245,17 @@ creó un único recibo nuevo. La OT de muestra conserva sus tres productos y tot
 $70.000: cobrado $7.500, saldo $62.500, banco $7.500 y caja efectivo $0.
 El formulario y el diálogo están disponibles en local. Cron, correo y Meta
 siguen desactivados; staging y producción no se modificaron.
+
+## Atajos de reportes — 19/10/2026
+
+El lote local incorpora `76ca81422` del PR #108: **Hoy** y **Esta semana** en el
+selector compartido de los nueve reportes. Hoy usa el día completo de la zona de
+la empresa; la semana va de lunes a domingo. Se conserva el período al cambiar
+de reporte y se mantienen el mes predeterminado y el rango personalizado.
+
+19 pruebas de períodos/resumen/permisos aprobadas; ESLint y tipos sin errores.
+En navegador local se verificaron 19/10 para Hoy y 19–25/10 para Esta semana,
+además del salto de Resumen ejecutivo a Comercial conservando el rango.
+Se usó un usuario ficticio de lectura en la empresa local de prueba, en Chrome,
+sin modificar el rol Vendedor ni su sesión del navegador integrado.
+No requiere migraciones ni cambios en la API. Staging y producción pendientes.
