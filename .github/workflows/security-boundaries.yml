@@ -190,6 +190,7 @@ jobs:
             src/components/comercial/centro-copiado-tarifarios-simulacion.test.tsx \
             src/components/comercial/centro-copiado-config-view.test.tsx \
             src/components/comercial/centro-copiado-pedido-precios.test.tsx \
+            src/hooks/use-calculo-automatico-copiado.test.tsx \
             src/components/comercial/agregar-producto-geometria.test.tsx \
             src/components/comercial/centro-copiado-sheet.test.tsx \
             src/components/comercial/propuesta-emision-navegacion.test.tsx \

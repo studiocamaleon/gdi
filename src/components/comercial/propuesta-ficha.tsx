@@ -1,5 +1,6 @@
 "use client";
 import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
+import { useCalculoAutomaticoCopiado } from "@/hooks/use-calculo-automatico-copiado";
 import {
   claveRevisionCopiado,
   ponerPrecioCopiado,
@@ -5984,13 +5985,6 @@ function PropuestaFichaContenido({
   >(null);
   const [revisandoCopiado, setRevisandoCopiado] = React.useState(false);
   const revisionCopiadoEnCurso = React.useRef(false);
-  const [solicitudRevisionCopiado, solicitarRevisionCopiado] = React.useReducer(
-    (n: number) => n + 1,
-    0,
-  );
-  const revisionAutomaticaProcesada = React.useRef(
-    JSON.stringify([0, canalVenta, clienteId, sinComprobante]),
-  );
   const [errorRevisionCopiado, setErrorRevisionCopiado] = React.useState<string | null>(
     null,
   );
@@ -6122,7 +6116,6 @@ function PropuestaFichaContenido({
     setItems((current) =>
       current.filter((candidate) => candidate.id !== item.id),
     );
-    if (metaCentroCopiado(item.jobContext)) solicitarRevisionCopiado();
     setEditadosIds((prev) => {
       if (!prev.has(item.id)) return prev;
       const next = new Set(prev);
@@ -6786,7 +6779,6 @@ function PropuestaFichaContenido({
         claveCopiadoRef.current !== claveInicio ||
         !permisoProductosRef.current
       ) {
-        if (permisoProductosRef.current) solicitarRevisionCopiado();
         return;
       }
       setRevisionCopiado(resultado);
@@ -6839,7 +6831,6 @@ function PropuestaFichaContenido({
         setEditadosIds(
           (prev) => new Set([...prev, ...nuevos.map((i) => i.id)]),
         );
-      toast.success("Precios de copiado actualizados para todo el pedido.");
     } catch (e) {
       const mensaje = e instanceof Error
         ? e.message
@@ -6858,36 +6849,17 @@ function PropuestaFichaContenido({
     sinComprobante,
     orden,
   ]);
-  React.useEffect(() => {
-    const solicitud = JSON.stringify([
-      solicitudRevisionCopiado, canalVenta, clienteId, sinComprobante,
-    ]);
-    if (!puedeModificarProductos || (orden && orden.estado !== "borrador")) {
-      revisionAutomaticaProcesada.current = solicitud;
-      return;
-    }
-    if (
-      solicitud === revisionAutomaticaProcesada.current ||
-      revisandoCopiado ||
-      revisionCopiadoEnCurso.current ||
-      !canalVenta
-    ) return;
-    revisionAutomaticaProcesada.current = solicitud;
-    if (items.some((i) => metaCentroCopiado(i.jobContext)))
-      void revisarCopiadoEnPedido();
-    // Una carga o cambio comercial dispara una revisión. Si cambia durante
-    // el cálculo, la siguiente solicitud espera; los errores no se reintentan solos.
-  }, [
-    solicitudRevisionCopiado,
-    revisandoCopiado,
-    canalVenta,
-    clienteId,
-    sinComprobante,
-    puedeModificarProductos,
-    orden,
-    items,
-    revisarCopiadoEnPedido,
-  ]);
+  useCalculoAutomaticoCopiado({
+    clave: claveCopiado,
+    habilitado:
+      puedeModificarProductos &&
+      (!orden || orden.estado === "borrador") &&
+      Boolean(canalVenta) &&
+      items.some((i) => metaCentroCopiado(i.jobContext)),
+    vigente: copiadoRevisado,
+    ocupado: revisandoCopiado,
+    calcular: revisarCopiadoEnPedido,
+  });
 
   /**
    * Emitir OT: snapshots + OrdenTrabajo en `pendiente`. El overlay muestra
@@ -9232,7 +9204,6 @@ function PropuestaFichaContenido({
                 : current;
               return [...base, ...nuevosConHerencia];
             });
-            if (!orden || orden.estado === "borrador") solicitarRevisionCopiado();
             // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
             // demasiado). Se los diferencia por la referencia (varianteNombre).
             setTab("productos");
