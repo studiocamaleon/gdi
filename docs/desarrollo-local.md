@@ -1,5 +1,13 @@
 # Desarrollo local
 
+## Producción en tiempo real — 19/10/2026
+
+Estado local actual: web en `localhost:3000` y API en `127.0.0.1:3001`, desde el worktree `produccion-tv`, rama `codex/produccion-tv` basada en `origin/main`. Node 24, Turbopack y límite de 2 GB por proceso; cron, correo y piloto de Meta permanecen desactivados. No se iniciaron workers ni se modificaron los otros proyectos de Docker.
+
+Aplicada la migración aditiva `20261019120000_pantallas_produccion` a desarrollo y tests: 317 migraciones, con permisos locales verificados. Se comprobó [la vista para televisores y la vinculación por código](produccion-en-tiempo-real.md) mediante pruebas HTTP, del BFF y navegador, con una empresa ficticia retirada al terminar. Las bases existentes se conservaron, sin seed ni reset. El chequeo de tipos de los módulos afectados pasó; la compilación completa queda para CI remoto por el límite de memoria de la Mac.
+
+No se desplegó staging ni producción. El usuario pidió reunir más cambios antes de publicar el lote en staging.
+
 ## Papel derivado de Centro de copiado — 13/10/2026
 
 La web, API y workers locales ejecutan `codex/copiado-papel-derivado` desde el checkout principal. Se mantienen Node 24, Turbopack, los límites de memoria del arranque habitual y las tareas programadas desactivadas. Esta rama depende del PR #76; no se publicó en staging ni producción.

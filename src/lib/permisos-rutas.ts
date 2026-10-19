@@ -18,6 +18,7 @@ export const RUTAS_VISTAS: Record<string, VistaClave> = {
   "/productos-servicios/cargos-directos": "costos.cargos",
   "/productos-servicios": "costos.catalogo",
   "/produccion/tablero": "produccion.tablero",
+  "/produccion/pantallas": "produccion.tablero",
   "/produccion/planificacion": "produccion.planificacion",
   "/produccion/colas": "produccion.colas",
   "/produccion/estaciones": "produccion.estaciones",
