@@ -103,6 +103,8 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
  * verifica el test de abajo.
  */
 const EXENTOS_CON_TENANT_ID = new Set([
+  // Dispositivo: pendiente sin empresa; después, acceso por hash y gestión por tenant.
+  'PantallaProduccion',
   'Membership',
   'Invitation',
   // Se resuelve por hash antes de establecer el contexto de autenticación.
@@ -123,6 +125,12 @@ const EXENTOS_CON_TENANT_ID = new Set([
  *    clave compuesta `userId_tenantId`), que es la condición de la excepción.
  */
 const ARCHIVOS_AUTORIZADOS = new Set([
+  'pantallas-produccion/pantallas-produccion.service.ts',
+  // Consultas existentes revisadas: todas filtran membership por tenantId;
+  // cuentas/lotes además por userId, y altas sólo destinatarios de esa empresa.
+  'administracion/acceso-cuentas.ts',
+  'administracion/facturacion-lotes.service.ts',
+  'clientes/solicitudes-alta.service.ts',
   'auth/auth.service.ts',
   // Recuperación global: revoca sesiones únicamente de la identidad del token.
   'auth/recuperacion.service.ts',

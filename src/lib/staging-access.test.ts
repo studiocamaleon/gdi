@@ -8,10 +8,58 @@ const webToken = "token-ficticio-web-api-para-pruebas-12345";
 const authorization = `Basic ${Buffer.from(`ensayo:${password}`).toString("base64")}`;
 beforeEach(() => {
   vi.stubEnv("STAGING_PRIVATE", "true");
+  vi.stubEnv("STAGING_BASIC_AUTH_ENABLED", undefined);
   vi.stubEnv("STAGING_ACCESS_USER", "ensayo");
   vi.stubEnv("STAGING_ACCESS_PASSWORD", password);
   vi.stubEnv("STAGING_WEB_API_TOKEN", webToken);
   vi.stubEnv("STAGING_WEB_ORIGIN", "https://staging.example.invalid");
+});
+
+describe("staging sin contraseña de entrada", () => {
+  beforeEach(() => vi.stubEnv("STAGING_BASIC_AUTH_ENABLED", "false"));
+
+  it.each(["/login", "/pantalla/produccion", "/api/pantalla/iniciar"])(
+    "permite abrir %s sin Basic y conserva las cabeceras de staging", (path) => {
+      vi.stubEnv("STAGING_ACCESS_USER", "");
+      vi.stubEnv("STAGING_ACCESS_PASSWORD", "");
+      const response = proxy(new NextRequest(`https://staging.example.invalid${path}`));
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      expect(response.headers.get("www-authenticate")).toBeNull();
+      expect(response.headers.get("x-robots-tag")).toContain("noindex");
+      expect(response.headers.get("cache-control")).toContain("no-store");
+    },
+  );
+
+  it("mantiene el login de usuario para la gestión de producción", () => {
+    const response = proxy(new NextRequest("https://staging.example.invalid/produccion/pantallas"));
+    expect(response.headers.get("location")).toBe("https://staging.example.invalid/login");
+    expect(response.headers.get("www-authenticate")).toBeNull();
+  });
+
+  it("rechaza orígenes ajenos aunque Basic esté deshabilitado", () => {
+    const incoming = new Headers({ origin: "https://externo.example.invalid", "fly-client-ip": "192.0.2.1" });
+    expect(controlAccesoStaging(incoming)?.status).toBe(403);
+    expect(() => cabecerasBackendStaging(incoming, new Headers())).toThrow("Acceso de staging no autorizado.");
+    expect(controlAccesoStaging(new Headers({ origin: "https://staging.example.invalid" }))).toBeNull();
+  });
+
+  it("conserva la autenticación privada entre web y API sin Basic", () => {
+    const incoming = new Headers({ "fly-client-ip": "192.0.2.1" });
+    const outgoing = new Headers({ "x-grafoprint-web-token": "falso", "x-grafoprint-client-ip": "8.8.8.8", "x-forwarded-for": "8.8.8.8", "x-real-ip": "8.8.8.8" });
+    cabecerasBackendStaging(incoming, outgoing);
+    expect(outgoing.get("x-grafoprint-web-token")).toBe(webToken);
+    expect(outgoing.get("x-grafoprint-client-ip")).toBe("192.0.2.1");
+    expect(outgoing.has("x-forwarded-for")).toBe(false);
+    expect(outgoing.has("x-real-ip")).toBe(false);
+    expect(() => cabecerasBackendStaging(new Headers(), new Headers())).toThrow("Conexión privada");
+    vi.stubEnv("STAGING_WEB_API_TOKEN", "");
+    expect(() => cabecerasBackendStaging(incoming, new Headers())).toThrow("Conexión privada");
+  });
+
+  it.each([undefined, "true", "", "0", "FALSE"])("sólo false explícito deshabilita Basic: %s", (value) => {
+    vi.stubEnv("STAGING_BASIC_AUTH_ENABLED", value);
+    expect(controlAccesoStaging(new Headers())?.status).toBe(401);
+  });
 });
 afterEach(() => vi.unstubAllEnvs());
 

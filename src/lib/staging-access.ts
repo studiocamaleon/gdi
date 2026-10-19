@@ -8,23 +8,26 @@ export function stagingPrivado() {
 
 export function controlAccesoStaging(headers: Headers): Response | null {
   if (!stagingPrivado()) return null;
-  const user = process.env.STAGING_ACCESS_USER;
-  const password = process.env.STAGING_ACCESS_PASSWORD;
-  if (!user || user.includes(":") || !password || password.length < 24) {
-    return new Response("El acceso de pruebas todavía no está configurado.", {
-      status: 503,
-    });
-  }
-  const expected = `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
-  const supplied = headers.get("authorization") ?? "";
-  // Comparación de bytes efímeros, sin generar ni almacenar hashes de claves.
-  const esperado = Buffer.from(expected);
-  const recibido = Buffer.from(supplied);
-  if (esperado.length !== recibido.length || !timingSafeEqual(esperado, recibido)) {
-    return new Response("Entorno de pruebas: se requiere acceso autorizado.", {
-      status: 401,
-      headers: { "WWW-Authenticate": 'Basic realm="Grafoprint staging", charset="UTF-8"' },
-    });
+  // Basic es opcional; el canal privado web/API sigue gobernado por STAGING_PRIVATE.
+  if (process.env.STAGING_BASIC_AUTH_ENABLED !== "false") {
+    const user = process.env.STAGING_ACCESS_USER;
+    const password = process.env.STAGING_ACCESS_PASSWORD;
+    if (!user || user.includes(":") || !password || password.length < 24) {
+      return new Response("El acceso de pruebas todavía no está configurado.", {
+        status: 503,
+      });
+    }
+    const expected = `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
+    const supplied = headers.get("authorization") ?? "";
+    // Comparación de bytes efímeros, sin generar ni almacenar hashes de claves.
+    const esperado = Buffer.from(expected);
+    const recibido = Buffer.from(supplied);
+    if (esperado.length !== recibido.length || !timingSafeEqual(esperado, recibido)) {
+      return new Response("Entorno de pruebas: se requiere acceso autorizado.", {
+        status: 401,
+        headers: { "WWW-Authenticate": 'Basic realm="Grafoprint staging", charset="UTF-8"' },
+      });
+    }
   }
   const origin = headers.get("origin");
   if (origin && origin !== process.env.STAGING_WEB_ORIGIN) {

@@ -18,7 +18,7 @@ vi.mock("@/lib/entrega-api", () => ({
 }));
 vi.mock("@/lib/administracion-api", () => ({
   getMetodosPago: mocks.metodos,
-  getCuentasFondos: mocks.cuentas,
+  getCuentasCobro: mocks.cuentas,
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("../administracion/cobro-formulario", () => ({

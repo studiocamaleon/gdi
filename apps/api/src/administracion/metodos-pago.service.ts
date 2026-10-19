@@ -2,7 +2,9 @@ import {
   alcanceCuentas,
   exigirTesoreriaCompleta,
   filtroCuentas,
+  puedeRegistrarCobros,
 } from './acceso-cuentas';
+import { cuentaCompatibleCobro, medioBancario } from '../common/cuentas-cobro';
 import { validarReglasRetencion } from './retenciones-validacion';
 import type { Prisma } from '@prisma/client';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -138,7 +140,7 @@ export class MetodosPagoService {
     const alcance = await alcanceCuentas(this.prisma, auth);
     const metodos = await this.prisma.metodoPago.findMany({
       where: { tenantId: auth.tenantId },
-      include: { cuentaDestino: { select: { id: true, nombre: true } } },
+      include: { cuentaDestino: { select: { id: true, nombre: true, tipo: true, activo: true } } },
       orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
     });
     return metodos.map((metodo) =>
@@ -148,7 +150,8 @@ export class MetodosPagoService {
         // destino predeterminado no concede acceso a otra cuenta.
         cuentaDestino:
           alcance.restringido &&
-          !alcance.operables.includes(metodo.cuentaDestinoId ?? '')
+          !alcance.operables.includes(metodo.cuentaDestinoId ?? '') &&
+          !(puedeRegistrarCobros(auth) && medioBancario(metodo.tipo) && metodo.cuentaDestino?.activo && cuentaCompatibleCobro(metodo.tipo, metodo.cuentaDestino.tipo))
             ? null
             : metodo.cuentaDestino,
       }),
@@ -304,6 +307,22 @@ export class MetodosPagoService {
       creados += 1;
     }
     return { creados, total: CATALOGO_SUGERIDO.length };
+  }
+
+  async listarCuentasCobro(auth: CurrentAuth) {
+    const alcance = await alcanceCuentas(this.prisma, auth);
+    return this.prisma.cuentaFondos.findMany({
+      where: {
+        tenantId: auth.tenantId, activo: true,
+        tipo: { in: ['caja', 'banco', 'billetera'] },
+        ...(alcance.restringido ? { OR: [
+          { id: { in: alcance.operables } },
+          ...(puedeRegistrarCobros(auth) ? [{ tipo: { in: ['banco', 'billetera'] } }] : []),
+        ] } : {}),
+      },
+      select: { id: true, nombre: true, tipo: true, moneda: true },
+      orderBy: { nombre: 'asc' },
+    });
   }
 
   async listarCuentas(auth: CurrentAuth) {

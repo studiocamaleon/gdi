@@ -20,7 +20,7 @@ vi.mock("@/lib/capacidades-server", () => ({
 }));
 vi.mock("@/lib/administracion-api", () => ({
   getCobros: m.cobros,
-  getCuentasFondos: m.cuentas,
+  getCuentasCobro: m.cuentas,
   getMetodosPago: m.metodos,
   getCuentaCorriente: m.cuentaCorriente,
 }));

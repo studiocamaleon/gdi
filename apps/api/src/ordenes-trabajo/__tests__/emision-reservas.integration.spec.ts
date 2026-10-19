@@ -326,7 +326,7 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
       }
       const ot = await db.ordenTrabajo.findUniqueOrThrow({
         where: { id: creada.id },
-        include: { items: true, pasos: true },
+        include: { items: true, pasos: { orderBy: { indice: 'asc' } } },
       });
       expect(ot.estado).toBe('finalizada');
       expect(ot.progresoPct).toBe(100);
@@ -1202,4 +1202,92 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
       }),
     ).toBe(1);
   });
+  async function snapshotExtra(nombre = 'PVC') {
+    const anterior = await db.cotizacionItem.findUniqueOrThrow({ where: { id: payload.items[0].cotizacionItemId } });
+    const { id, createdAt, updatedAt, ...datos } = anterior;
+    const revision = await db.cotizacion.create({ data: { tenantId: auth.tenantId } });
+    const nuevo = await db.cotizacionItem.create({ data: {
+      ...datos, cotizacionId: revision.id, snapshotJson: { producto: { nombre, codigo: 'PVC' } },
+      trazabilidadJson: anterior.trazabilidadJson as never,
+      precioConfigSnapshotJson: undefined, impuestosSnapshotJson: undefined,
+      comisionesSnapshotJson: undefined, precioEspecialClienteSnapshotJson: undefined,
+    } as never });
+    return { ...payload.items[0], cotizacionItemId: nuevo.id, nombre, codigo: 'PVC' };
+  }
+  async function enProduccion() {
+    const creada = await ordenes.create(auth, payload);
+    const item = await db.ordenTrabajoItem.findFirstOrThrow({ where: { ordenId: creada.id } });
+    await db.ordenTrabajoItemPaso.updateMany({ where: { itemId: item.id }, data: { estado: 'en_curso', iniciadoEl: new Date() } });
+    const orden = await db.ordenTrabajo.update({ where: { id: creada.id }, data: { estado: 'produccion' } });
+    return { orden, item };
+  }
+  it('agrega PVC en producción y conserva íntegros los pasos y componentes ya iniciados', async () => {
+    const { orden, item } = await enProduccion();
+    const hijo = await db.ordenTrabajoItem.create({ data: { tenantId: auth.tenantId, ordenId: orden.id, parentItemId: item.id, codigo: 'HIJO', nombre: 'Componente', familia: 'Interno', cantidad: 1, cantidadUnidad: 'u', subtotal: 0, impuestos: 0, total: 0, ordenIndice: 0 } });
+    const pasos = await db.ordenTrabajoItemPaso.findMany({ where: { itemId: item.id } });
+    await ordenes.editarLote(auth, orden.id, { expectedVersion: orden.updatedAt.toISOString(), items: [
+      { ...payload.items[0], id: item.id, conservar: true, nombre: 'Intento ignorado' }, await snapshotExtra(),
+    ] });
+    expect(await db.ordenTrabajoItemPaso.findMany({ where: { itemId: item.id } })).toEqual(pasos);
+    expect(await db.ordenTrabajoItem.findUnique({ where: { id: hijo.id } })).not.toBeNull();
+    expect((await db.ordenTrabajoItem.findUniqueOrThrow({ where: { id: item.id } })).nombre).toBe(item.nombre);
+    const pvc = await db.ordenTrabajoItem.findFirstOrThrow({ where: { ordenId: orden.id, codigo: 'PVC' } });
+    expect(await db.ordenTrabajoItemPaso.count({ where: { itemId: pvc.id, estado: 'pendiente' } })).toBeGreaterThan(0);
+    expect(Number((await db.ordenTrabajo.findUniqueOrThrow({ where: { id: orden.id } })).total)).toBe(200);
+  });
+  it('reemplaza un producto sin iniciar en producción, sin reescribir otro iniciado', async () => {
+    const { orden, item } = await enProduccion();
+    await ordenes.agregarItem(auth, orden.id, await snapshotExtra('Vinilo'));
+    const vinilo = await db.ordenTrabajoItem.findFirstOrThrow({ where: { ordenId: orden.id, nombre: 'Vinilo' } });
+    const hijo = await db.ordenTrabajoItem.create({ data: { tenantId: auth.tenantId, ordenId: orden.id, parentItemId: vinilo.id, codigo: 'HIJO', nombre: 'Componente viejo', familia: 'Interno', cantidad: 1, cantidadUnidad: 'u', subtotal: 0, impuestos: 0, total: 0, ordenIndice: 1 } });
+    const archivo = await db.archivo.create({ data: { tenantId: auth.tenantId, scope: 'ORDEN_ITEM', ordenItemId: hijo.id, key: `ficticio/${randomUUID()}`, nombreOriginal: 'arte-ficticio.pdf', mimeType: 'application/pdf' } });
+    await ordenes.editarItem(auth, orden.id, vinilo.id, await snapshotExtra('PVC'));
+    expect(await db.ordenTrabajoItem.findUnique({ where: { id: hijo.id } })).toBeNull();
+    expect((await db.archivo.findUniqueOrThrow({ where: { id: archivo.id } })).ordenItemId).toBe(vinilo.id);
+    expect((await db.ordenTrabajoItem.findUniqueOrThrow({ where: { id: vinilo.id } })).nombre).toBe('PVC');
+    expect(await db.ordenTrabajoItemPaso.count({ where: { itemId: item.id, estado: 'en_curso' } })).toBeGreaterThan(0);
+    await ordenes.quitarItem(auth, orden.id, vinilo.id);
+    expect(await db.ordenTrabajoItem.findUnique({ where: { id: vinilo.id } })).toBeNull();
+  });
+  it('rechaza modificar, quitar o reemplazar en lote un producto iniciado y revierte todo', async () => {
+    const { orden, item } = await enProduccion();
+    const nuevo = await snapshotExtra();
+    await expect(ordenes.editarItem(auth, orden.id, item.id, nuevo)).rejects.toThrow('trabajo iniciado');
+    await expect(ordenes.editarLote(auth, orden.id, { expectedVersion: orden.updatedAt.toISOString(), items: [nuevo] })).rejects.toThrow('trabajo iniciado');
+    expect(await db.ordenTrabajoItem.count({ where: { ordenId: orden.id } })).toBe(1);
+    expect((await db.ordenTrabajo.findUniqueOrThrow({ where: { id: orden.id } })).updatedAt).toEqual(orden.updatedAt);
+  });
+  it('bloquea agregar a una OT facturada y conserva importes cobrados', async () => {
+    const { orden, item } = await enProduccion();
+    const nuevo = await snapshotExtra();
+    await db.ordenTrabajo.update({ where: { id: orden.id }, data: { facturadoTotal: 1 } });
+    await expect(ordenes.agregarItem(auth, orden.id, nuevo)).rejects.toThrow('facturación');
+    await db.ordenTrabajo.update({ where: { id: orden.id }, data: { facturadoTotal: 0 } });
+    await ordenes.agregarItem(auth, orden.id, nuevo);
+    const pvc = await db.ordenTrabajoItem.findFirstOrThrow({ where: { ordenId: orden.id, codigo: 'PVC' } });
+    await db.ordenTrabajo.update({ where: { id: orden.id }, data: { cobradoTotal: 200 } });
+    await expect(ordenes.quitarItem(auth, orden.id, pvc.id)).rejects.toThrow(/cobrad/);
+    expect(await db.ordenTrabajoItem.count({ where: { ordenId: orden.id } })).toBe(2);
+  });
+
+  it.each(['componente', 'tanda', 'compra'])('protege el producto con %s aunque su paso propio siga pendiente', async (caso) => {
+    const creada = await ordenes.create(auth, payload);
+    const item = await db.ordenTrabajoItem.findFirstOrThrow({ where: { ordenId: creada.id } });
+    let itemId = item.id;
+    if (caso === 'componente') {
+      itemId = (await db.ordenTrabajoItem.create({ data: { tenantId: auth.tenantId, ordenId: creada.id, parentItemId: item.id, codigo: 'HIJO', nombre: 'Componente', familia: 'Interno', cantidad: 1, cantidadUnidad: 'u', subtotal: 0, impuestos: 0, total: 0, ordenIndice: 0 } })).id;
+      await db.ordenTrabajoItemPaso.create({ data: { tenantId: auth.tenantId, ordenId: creada.id, itemId, indice: 0, nombre: 'Trabajo hijo', familiaCodigo: 'manual', categoriaFamilia: 'manual', estado: 'hecho', completadoEl: new Date() } });
+    } else await db.ordenTrabajoItemPaso.updateMany({ where: { itemId }, data: caso === 'tanda' ? { nestingLoteId: 'tanda-ficticia' } : { estadoCompra: 'pedido' } });
+    await expect(ordenes.editarItem(auth, creada.id, item.id, await snapshotExtra())).rejects.toThrow(caso === 'tanda' ? 'tanda compartida' : 'trabajo iniciado');
+    expect(await db.ordenTrabajoItem.findUnique({ where: { id: itemId } })).not.toBeNull();
+  });
+  it('no agrega productos con una factura agrupada preparada aunque el total facturado siga en cero', async () => {
+    const { orden } = await enProduccion();
+    const cfg = await db.configuracionFiscal.create({ data: { tenantId: auth.tenantId, razonSocial: 'Empresa ficticia', cuit: '00000000000' } });
+    const pv = await db.puntoVenta.create({ data: { tenantId: auth.tenantId, configuracionFiscalId: cfg.id, numero: 1, nombre: 'Ensayo', modalidad: 'manual' } });
+    await db.comprobante.create({ data: { tenantId: auth.tenantId, tipo: 'factura', letra: 'B', puntoVentaId: pv.id, fecha: new Date(), receptorSnapshot: {}, itemsJson: [], ivaPorAlicuota: [], netoGravado: 100, total: 100, idempotencyKey: randomUUID(), estado: 'borrador', ordenes: { create: { tenantId: auth.tenantId, ordenId: orden.id, monto: 100 } } } });
+    await expect(ordenes.agregarItem(auth, orden.id, await snapshotExtra())).rejects.toThrow('facturación');
+    expect(await db.ordenTrabajoItem.count({ where: { ordenId: orden.id } })).toBe(1);
+  });
+
 });
