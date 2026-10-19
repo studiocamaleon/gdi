@@ -164,6 +164,7 @@ export type EditarOrdenTrabajoLotePayload = EditarOrdenTrabajoPayload & {
     CrearOrdenTrabajoItemPayload & {
       id?: string;
       archivosOrigenItemIds?: string[];
+      conservar?: boolean;
     }
   >;
 };

@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   presupuesto: vi.fn(),
   emitir: vi.fn(),
   cotizar: vi.fn(),
+  error: vi.fn(),
 }));
+vi.mock("sonner", () => ({ toast: { error: mocks.error, success: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mocks.push,
@@ -41,6 +43,7 @@ vi.mock("@/lib/presupuestos-api", async (original) => ({
 }));
 vi.mock("./tipo-cambio-documento", async (original) => ({
   ...(await original<typeof import("./tipo-cambio-documento")>()),
+  useTipoCambioDocumento: () => null,
   useMotorConTipoCambio: () => ({
     cotizarYGuardar: mocks.cotizar,
     cotizar: mocks.cotizar,
@@ -146,6 +149,8 @@ beforeEach(() => {
   }));
   HTMLElement.prototype.scrollTo = vi.fn();
   HTMLElement.prototype.scrollIntoView = vi.fn();
+  mocks.error.mockReset();
+  mocks.cotizar.mockReset().mockResolvedValue({ cotizacionId: "cot-nueva", cotizacionItemId: "snap-nuevo", result: { exitoso: true } });
   mocks.guardar.mockReset().mockResolvedValue(orden);
   el = document.createElement("div");
   document.body.append(el);
@@ -165,7 +170,7 @@ async function click(texto: string) {
   expect(boton(texto), texto).toBeDefined();
   await act(async () => boton(texto)!.click());
 }
-async function render(facturada = false, permiso = true) {
+async function render(facturada = false, permiso = true, produccion = false) {
   await act(async () =>
     root.render(
       <PermisosProvider
@@ -177,7 +182,7 @@ async function render(facturada = false, permiso = true) {
       >
         <NotificacionesProvider>
           <PropuestaFicha
-            orden={{ ...orden, facturadoTotal: facturada ? 100 : 0 }}
+            orden={{ ...orden, estado: produccion ? "produccion" : orden.estado, facturadoTotal: facturada ? 100 : 0, productos: orden.productos.map(p => ({...p, motivoBloqueoEdicion: produccion ? "Trabajo iniciado" : null})) }}
           />
         </NotificacionesProvider>
       </PermisosProvider>,
@@ -296,4 +301,24 @@ it("Guardar borrador de presupuesto usa su endpoint y agrupa snapshots previos, 
   expect(mocks.push).toHaveBeenCalledWith(
     "/comercial/presupuestos/presupuesto-prueba",
   );
+});
+
+it("ofrece agregar productos a una OT en producción sin factura y conserva los iniciados al guardar", async () => {
+  await render(false, true, true);
+  await click("Editar orden");
+  expect(boton("Agregar producto")).toBeDefined();
+  expect(el.textContent).toContain("editar los que todavía no empezaron");
+  expect([...el.querySelectorAll("button")].filter(b => b.getAttribute("aria-label")?.includes("Quitar producto"))).toHaveLength(0);
+  await click("Producto de ensayo");
+  await click("Guardar cambios");
+  expect(mocks.error.mock.calls).toEqual([]);
+  expect(mocks.guardar).toHaveBeenCalled();
+  const enviados = mocks.guardar.mock.calls[0][1].items;
+  expect(enviados.filter((i: any) => i.id).every((i: any) => i.conservar === true)).toBe(true);
+  expect(enviados.filter((i: any) => !i.id)).toHaveLength(1);
+});
+it("no ofrece agregar productos a una OT en producción facturada", async () => {
+  await render(true, true, true);
+  await click("Editar orden");
+  expect(boton("Agregar producto")).toBeUndefined();
 });

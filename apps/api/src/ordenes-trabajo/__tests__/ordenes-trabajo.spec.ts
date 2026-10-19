@@ -545,8 +545,8 @@ describe('OrdenesTrabajoService — puedeEditarItems', () => {
     expect(svc().puedeEditarItems('pendiente')).toBe(true);
   });
 
-  it('desde produccion en adelante el contenido queda congelado', () => {
-    expect(svc().puedeEditarItems('produccion')).toBe(false);
+  it('producción admite cambios sujetos al candado por ítem; cerradas no', () => {
+    expect(svc().puedeEditarItems('produccion')).toBe(true);
     expect(svc().puedeEditarItems('finalizada')).toBe(false);
     expect(svc().puedeEditarItems('entregada')).toBe(false);
   });

@@ -196,6 +196,7 @@ jobs:
             src/components/administracion/tesoreria-view.test.tsx \
             src/components/administracion/tesoreria-conciliacion.test.tsx \
             src/components/administracion/cobro-saldo.test.tsx \
+            src/components/comercial/cargos-orden-edicion.test.tsx \
             src/components/mostrador/entrega-manual.test.tsx \
             src/lib/descuentos-orden.test.ts \
             src/lib/eta-fechas.test.ts
