@@ -230,3 +230,18 @@ cargar la matriz, definir el margen y publicar. Luego asignar el tarifario en
 Canales y activar la asignación. En un pedido borrador, cargar los trabajos y
 usar «Actualizar precios de copiado» antes de emitir. No se activó ninguna
 política ni se cargaron precios de prueba en las empresas existentes.
+
+## Confirmación de cobros — 19/10/2026
+
+El lote local incorpora `6d651d37a` del PR #107. El medio de pago comienza vacío
+para cada cobro y el resumen previo permite volver a corregir antes de registrar.
+Se aprobaron 38 pruebas de interfaz/lógica de cobros y el chequeo de tipos de los
+componentes modificados. Sin nueva migración ni cambios de servicios.
+
+En navegador, con la empresa ficticia y el rol Vendedor, se cargaron $1.000 en
+efectivo, se abrió la confirmación y se volvió a corregir. La base seguía idéntica.
+Se cambió a $2.500 por transferencia y Banco de prueba; sólo al confirmar se
+creó un único recibo nuevo. La OT de muestra conserva sus tres productos y total
+$70.000: cobrado $7.500, saldo $62.500, banco $7.500 y caja efectivo $0.
+El formulario y el diálogo están disponibles en local. Cron, correo y Meta
+siguen desactivados; staging y producción no se modificaron.
