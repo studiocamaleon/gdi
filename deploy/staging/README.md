@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-16, 23:14 UTC.** API y ambos workers ejecutan `2a65d4c26` del [PR #103](https://github.com/studiocamaleon/gdi/pull/103): facturación de OT con el detalle e IVA originales de cargos del presupuesto. Pruebas locales, CI, staging y comprobación de sólo lectura en producción aprobados; no se emitió la factura. Web y PDF conservan `fc6277ff7`. Seis servicios saludables, mismos recursos, 316 migraciones y copia posterior con firma/manifiesto verificados. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-17, 20:36 UTC.** Autorización real de Meta sandbox verificada desde el Inbox, limitada a la empresa ficticia «Ensayo Meta Sandbox — Staging». Token temporal retirado y demo anterior intacta. Sólo cambió la configuración de API y worker principal: backend conserva `2a65d4c26` del [PR #103](https://github.com/studiocamaleon/gdi/pull/103), web y PDF conservan `fc6277ff7`; mismos recursos y sin migraciones nuevas. Coexistencia e historial siguen pendientes de ensayo con un número propio. No se modificó producción. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 

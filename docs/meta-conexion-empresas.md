@@ -2,9 +2,11 @@
 
 26/09/2026 · Rama `codex/meta-alta-sincronizacion` · Desarrollo local.
 
+**Actualización 17/10/2026:** el registro insertado real con sandbox se completó en staging. Un único intento quedó `VERIFICADA`, con token retirado y confirmación visible en el Inbox de una empresa ficticia separada. La configuración de sandbox está limitada a esa empresa en API y worker; las conexiones reales de coexistencia continúan deshabilitadas. Ver [evidencia y reversión](../deploy/staging/VALIDACION.md). Los resultados locales del 26/09 se conservan abajo como antecedente.
+
 ## Estado actual
 
-El recorrido de autorización ya tiene pantalla, endpoints protegidos y trabajo persistente en el servidor. **Las conexiones reales siguen deshabilitadas.** No se modificaron Meta, staging, producción ni sus secretos.
+El recorrido de autorización ya tiene pantalla, endpoints protegidos y trabajo persistente en el servidor. **La autorización sandbox está comprobada en staging; las conexiones reales de coexistencia siguen deshabilitadas.** Producción conserva su configuración anterior.
 
 Hay dos modos de ensayo, elegidos por el servidor y limitados a empresas específicas:
 
@@ -73,7 +75,7 @@ La pantalla muestra preparación, solicitudes aceptadas, progreso informado por 
 1. Completado en local: [lectura general, lista de conversaciones, paginación y SSE por empresa](meta-inbox-lectura-general.md). Continúa apagado mediante `META_INBOX_LECTURA_ENABLED=false`; no se validó todavía con datos reales de coexistencia.
 2. Implementado en local: [estado del historial y reconexión coordinada](meta-importacion-reconexion.md). Diferencia lo recibido de lo esperado, contempla entregas tardías y pausa/restauración por cambio de celular. Sigue pendiente validar el recorrido real y resolver operativamente solicitudes inciertas; no hay un botón que repita una importación.
 3. Medir recepción y procesamiento con carga representativa, revisar el límite HTTP de 3 MB y la capacidad compartida del worker; añadir métricas y reglas de conservación de crudos.
-4. Desplegar el lote revisado a staging con flags apagados, registrar dominios HTTPS y configurar Facebook Login for Business. Activar primero el sandbox para una empresa de ensayo; probar allí el SDK real y documentar su resultado.
+4. Completado el 17/10: dominio HTTPS de staging autorizado, configuración de Facebook Login for Business vinculada y sandbox habilitado para una empresa ficticia separada. SDK, selección del sandbox, retorno, canje y verificación del servidor comprobados. El token se retiró al finalizar; no se creó un canal operativo.
 5. Ensayar coexistencia con un número propio elegible y los permisos disponibles. Confirmar suscripciones de la app, recepción firmada, solicitudes, revocación desde WhatsApp Business y reconexión. Las pruebas simuladas no sustituyen ese recorrido.
 6. Completar envíos, ventanas de atención, plantillas, descarga privada de archivos y tipos de mensaje pendientes antes de presentar la integración como terminada.
 
@@ -90,7 +92,7 @@ Valores privados, fuera de Git:
 - `META_INBOX_RECEPCION_ENABLED=true`: además del modo y la lista, necesario para coexistencia. Preparar API y calc-worker juntos.
 - `META_INBOX_LECTURA_ENABLED=true`: habilita en la API la lectura y el stream generales. No activa recepción ni solicitudes. Sigue en `false` durante este recorrido local.
 
-No copiar credenciales de staging a local. Los valores reales siguen sin habilitarse. `GRAFO_LOCAL_DISABLE_CRON=true` con `NODE_ENV=development` mantiene apagados tanto el alta automática como el procesador de recepción en este recorrido local. Los tests invocan los servicios directamente con cuentas ficticias y Graph simulado.
+No copiar credenciales de staging a local. El sandbox autorizado en staging no habilita el recorrido local. `GRAFO_LOCAL_DISABLE_CRON=true` con `NODE_ENV=development` mantiene apagados tanto el alta automática como el procesador de recepción en este recorrido local. Los tests invocan los servicios directamente con cuentas ficticias y Graph simulado.
 
 ## Migración y verificación
 
