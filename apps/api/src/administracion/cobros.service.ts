@@ -704,7 +704,9 @@ export class CobrosService {
       if (
         payload.idempotencyKey &&
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === 'P2002' &&
+        Array.isArray(error.meta?.target) &&
+        error.meta.target.includes('idempotencyKey')
       ) {
         const existente = await this.prisma.cobro.findUniqueOrThrow({
           where: {
