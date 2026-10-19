@@ -603,7 +603,8 @@ it("revisa copiado completo y emite con los mismos precios y snapshots revisados
     estado: "enviado",
   });
   await preparar();
-  await click("Actualizar precios");
+  expect(container.textContent).not.toContain("Actualizar precios");
+  expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
   expect(mocks.revisarCopiado).toHaveBeenCalledWith(
     expect.objectContaining({
       items: ["snapshot-qa"],
@@ -705,7 +706,8 @@ it("al agregar una carga aplica automáticamente el tarifario y al agregar otra 
   await click("Canal de prueba");
   await click("Agregar carga de copiado ficticia");
   expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
-  expect(container.textContent).toContain("Ver precios por hoja");
+  expect(container.textContent).not.toContain("Actualizar precios");
+  expect(container.textContent).not.toContain("Reintentar cálculo");
   expect(container.textContent).toContain("121,00");
   await click("Agregar carga de copiado ficticia");
   expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
@@ -739,7 +741,8 @@ it("espera el canal y recalcula cuando se elige, sin dar por revisado el precio 
   await verDatos();
   await click("Canal de prueba");
   expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
-  expect(container.textContent).toContain("Ver precios por hoja");
+  expect(container.textContent).not.toContain("Actualizar precios");
+  expect(container.textContent).not.toContain("Reintentar cálculo");
 });
 it("si cambia el canal durante la revisión descarta la respuesta vieja y procesa el canal nuevo", async () => {
   let terminar!: (r: unknown) => void;
@@ -796,10 +799,11 @@ it("un fallo mantiene un aviso visible y permite reintentar explícitamente", as
   expect(mocks.revisarCopiado).toHaveBeenCalledOnce();
   expect(container.textContent).toContain("Falló la revisión ficticia");
   mocks.revisarCopiado.mockResolvedValue(revisionTarifario());
-  await click("Actualizar precios");
+  await click("Reintentar cálculo");
   expect(mocks.revisarCopiado).toHaveBeenCalledTimes(2);
   expect(container.textContent).not.toContain("Falló la revisión ficticia");
-  expect(container.textContent).toContain("Ver precios por hoja");
+  expect(container.textContent).not.toContain("Actualizar precios");
+  expect(container.textContent).not.toContain("Reintentar cálculo");
 });
 
 it("guarda una fecha manual sin recalcular ni reemplazar el precio acordado", async () => {
