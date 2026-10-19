@@ -635,4 +635,28 @@ describe('Tesorería: permisos y relaciones entre empresas por HTTP', () => {
   });
 
 
+  it('el cobrador registra bancos de su empresa sin saldos, egresos ni acceso a otra empresa', async () => {
+    const banco = await prisma.cuentaFondos.create({ data: { tenantId: tenants[0], nombre: 'Banco prueba comercial', tipo: 'banco', moneda: 'ARS', saldo: 12345 } });
+    const ajeno = await prisma.cuentaFondos.create({ data: { tenantId: tenants[1], nombre: 'Banco ajeno', tipo: 'banco', moneda: 'ARS' } });
+    const metodo = await prisma.metodoPago.create({ data: { tenantId: tenants[0], codigo: 'transferencia-qa', nombre: 'Transferencia QA', tipo: 'transferencia', cuentaDestinoId: banco.id } });
+    const lista = await http('get', 'cuentas-cobro', 'cobrador').expect(200);
+    expect(lista.body.find((c: any) => c.id === banco.id)).toEqual({ id: banco.id, nombre: banco.nombre, tipo: 'banco', moneda: 'ARS' });
+    expect(lista.body.map((c: any) => c.id)).not.toContain(ajeno.id);
+    expect(lista.body.map((c: any) => c.id)).not.toContain(cuentas[0][1]);
+    await http('get', 'cuentas-cobro', 'sin-permisos').expect(403);
+    const catalogo = await http('get', 'metodos-pago', 'cobrador').expect(200);
+    expect(catalogo.body.find((m: any) => m.id === metodo.id).cuentaDestinoId).toBe(banco.id);
+    const orden = await prisma.ordenTrabajo.create({ data: { tenantId: tenants[0], numero: `OT-BANCO-${randomUUID()}`, estado: 'produccion', subtotal: 100, impuestos: 0, total: 100 } });
+    const body = { ordenId: orden.id, fecha: '2026-10-19', metodoPagoId: metodo.id, cuentaDestinoId: banco.id, montoBruto: 10, comisionPctAplicada: 0, idempotencyKey: randomUUID() };
+    await http('post', 'cobros', 'cobrador').send({ ...body, cuentaDestinoId: cuentas[0][0] }).expect(400);
+    await http('post', 'cobros', 'cobrador').send({ ...body, cuentaDestinoId: ajeno.id }).expect(404);
+    const cobro = await http('post', 'cobros', 'cobrador').send(body).expect(201);
+    await http('post', 'cobros', 'cobrador').send(body).expect(201);
+    expect(await prisma.cobro.count({ where: { ordenId: orden.id } })).toBe(1);
+    expect(await prisma.movimientoFondos.count({ where: { cobroId: cobro.body.id, cuentaId: banco.id } })).toBe(1);
+    await http('get', `cuentas/${banco.id}/movimientos`, 'cobrador').expect(403);
+    await http('post', 'cuentas/transferencias', 'cobrador').send({ desdeCuentaId: banco.id, haciaCuentaId: cuentas[0][0], monto: 5 }).expect(403);
+    await http('delete', `cobros/${cobro.body.id}`, 'cobrador').send({ motivo: 'No autorizado' }).expect(403);
+  });
+
 });

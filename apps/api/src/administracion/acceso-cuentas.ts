@@ -1,4 +1,9 @@
-import { ForbiddenException } from '@nestjs/common';
+import { cuentaCompatibleCobro, medioBancario } from '../common/cuentas-cobro';
+import {
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 
@@ -70,4 +75,33 @@ export async function destinosTransferencia(db: Db, auth: CurrentAuth) {
     select: { id: true, nombre: true, moneda: true },
     orderBy: { nombre: 'asc' },
   });
+}
+
+/** Cobrar en un banco no habilita saldos, egresos, transferencias ni conciliación. */
+export function puedeRegistrarCobros(auth: CurrentAuth) {
+  return ['administracion.cobrar', 'administracion.cobrar.gestionar'].some(
+    (p) => auth.permisos?.has(p),
+  );
+}
+export async function exigirCuentaCobro(
+  db: Db,
+  auth: CurrentAuth,
+  id: string,
+  medio: string,
+) {
+  const alcance = await alcanceCuentas(db, auth);
+  const permiteBanco = medioBancario(medio) && puedeRegistrarCobros(auth);
+  if (!permiteBanco) exigirCuenta(alcance, id);
+  const cuenta = await db.cuentaFondos.findFirst({
+    where: { id, tenantId: auth.tenantId, activo: true },
+    select: { tipo: true },
+  });
+  if (!cuenta)
+    throw new NotFoundException('No se encontró una cuenta destino activa.');
+  if (!cuentaCompatibleCobro(medio, cuenta.tipo))
+    throw new BadRequestException(
+      medioBancario(medio)
+        ? 'Las transferencias y los pagos electrónicos deben ingresar a una cuenta bancaria o billetera, nunca a una caja de efectivo.'
+        : 'El efectivo debe ingresar a una caja de efectivo.',
+    );
 }

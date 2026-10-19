@@ -135,7 +135,8 @@ function rutearSesion(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
-  const isOpenPath = OPEN_PATH_RE.test(pathname);
+  // Sólo la carcasa de la TV es abierta; sus datos requieren credencial propia.
+  const isOpenPath = OPEN_PATH_RE.test(pathname) || pathname === "/pantalla/produccion";
   const esBackoffice =
     pathname === "/backoffice" || pathname.startsWith("/backoffice/");
 

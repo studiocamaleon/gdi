@@ -17,6 +17,17 @@ function request(path: string, tipo?: "empresa" | "plataforma" | "vencida") {
   });
 }
 
+describe("carcasa pública de TV", () => {
+  it.each([undefined, "empresa", "plataforma", "vencida"] as const)("abre sólo la ruta exacta con sesión %s", tipo => {
+    expect(proxy(request("/pantalla/produccion", tipo)).headers.get("x-middleware-next")).toBe("1");
+  });
+  it("mantiene privada la gestión y las rutas con prefijos parecidos", () => {
+    for (const path of ["/produccion/pantallas", "/pantalla/produccion/privado", "/pantalla/produccion-admin"]) {
+      expect(proxy(request(path)).headers.get("location")).toBe("http://localhost:3000/login");
+    }
+  });
+});
+
 describe("enlaces de invitación", () => {
   it.each([undefined, "empresa", "plataforma", "vencida"] as const)(
     "permite validar el enlace con sesión %s",

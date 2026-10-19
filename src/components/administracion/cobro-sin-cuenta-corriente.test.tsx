@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/administracion-api", () => ({
   getCuentaCorriente: mocks.cuenta,
   getCobros: vi.fn().mockResolvedValue([]),
-  getCuentasFondos: vi.fn().mockResolvedValue([]),
+  getCuentasCobro: vi.fn().mockResolvedValue([]),
   getMetodosPago: vi.fn().mockResolvedValue([]),
   crearCobro: vi.fn(),
 }));

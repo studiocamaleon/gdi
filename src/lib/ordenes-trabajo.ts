@@ -187,6 +187,7 @@ export type OrdenTrabajoItemSnapshot = {
 
 /** Producto (item) de la OT — proyección del snapshot de CotizacionItem. */
 export type OrdenTrabajoProducto = {
+  motivoBloqueoEdicion?: string | null;
   listoEnMostrador?: boolean;
   listoEnMostradorEl?: string | null;
   listoEnMostradorPorNombre?: string | null;

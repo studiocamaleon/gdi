@@ -1,9 +1,11 @@
+import { exigirCuentaOperable } from '../acceso-cuentas';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CobrosService } from '../cobros.service';
+import { RecibosService } from '../recibos.service';
 import { FacturacionOrdenesService } from '../facturacion-ordenes.service';
 
 describe('Cobros de OT: saldo e idempotencia (base aislada)', () => {
@@ -140,6 +142,134 @@ describe('Cobros de OT: saldo e idempotencia (base aislada)', () => {
     movimientos: await prisma.movimientoFondos.count({ where: { ordenId } }),
     aplicaciones: await prisma.cobroOrden.count({ where: { ordenId } }),
     eventos: await prisma.ordenTrabajoEvento.count({ where: { ordenId } }),
+  });
+
+  it('numera recibos por empresa sin colisiones y conserva la idempotencia', async () => {
+    const otraEmpresa = randomUUID();
+    const recibosConNumeracion = {
+      ...recibos,
+      numerar: RecibosService.prototype.numerar,
+    };
+    const numeracionReal = new CobrosService(
+      prisma,
+      new FacturacionOrdenesService(prisma),
+      recibosConNumeracion as never,
+      avisos as never,
+      { reconciliarOrden: jest.fn() } as never,
+      capacidades as never,
+    );
+    await prisma.tenant.create({
+      data: {
+        id: otraEmpresa,
+        nombre: 'Otra empresa ficticia',
+        slug: `recibos-${otraEmpresa}`,
+      },
+    });
+    try {
+      const miembro = await prisma.membership.create({
+        data: {
+          tenantId: otraEmpresa,
+          userId: auth.userId,
+          rol: 'ADMINISTRADOR',
+        },
+      });
+      const cuenta = await prisma.cuentaFondos.create({
+        data: {
+          tenantId: otraEmpresa,
+          nombre: 'Banco ficticio',
+          tipo: 'banco',
+        },
+      });
+      const metodo = await prisma.metodoPago.create({
+        data: {
+          tenantId: otraEmpresa,
+          codigo: 'TRANSFERENCIA',
+          nombre: 'Transferencia',
+          tipo: 'transferencia',
+          cuentaDestinoId: cuenta.id,
+        },
+      });
+      const otraOrden = await prisma.ordenTrabajo.create({
+        data: {
+          tenantId: otraEmpresa,
+          numero: 'OT-FICTICIA',
+          estado: 'produccion',
+          total: 100,
+        },
+      });
+      const primeraOrden = await orden();
+      const primero = await numeracionReal.create(auth, {
+        ...payload(primeraOrden.id, 10),
+        fecha: '2095-01-10',
+      });
+      const otraAuth = {
+        ...auth,
+        tenantId: otraEmpresa,
+        membershipId: miembro.id,
+      };
+      const otroPayload = {
+        ordenId: otraOrden.id,
+        montoBruto: 10,
+        fecha: '2095-01-10',
+        metodoPagoId: metodo.id,
+        cuentaDestinoId: cuenta.id,
+        comisionPctAplicada: 0,
+        idempotencyKey: randomUUID(),
+      };
+      const segundo = await numeracionReal.create(otraAuth, otroPayload);
+      expect(primero.numeroRecibo).toBe('REC-2095-0001');
+      expect(segundo.numeroRecibo).toBe(primero.numeroRecibo);
+      expect(segundo.id).not.toBe(primero.id);
+      expect((await numeracionReal.create(otraAuth, otroPayload)).id).toBe(
+        segundo.id,
+      );
+      expect(
+        await prisma.cobro.count({ where: { tenantId: otraEmpresa } }),
+      ).toBe(1);
+      expect(
+        Number(
+          (
+            await prisma.cuentaFondos.findFirstOrThrow({
+              where: { id: cuenta.id, tenantId: otraEmpresa },
+            })
+          ).saldo,
+        ),
+      ).toBe(10);
+      await expect(
+        prisma.cobro.create({
+          data: {
+            tenantId: otraEmpresa,
+            metodoPagoId: metodo.id,
+            cuentaDestinoId: cuenta.id,
+            fecha: new Date(),
+            montoBruto: 10,
+            netoAcreditado: 10,
+            disponibleReal: 10,
+            numeroRecibo: segundo.numeroRecibo,
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'P2002' });
+      const siguiente = await numeracionReal.create(otraAuth, {
+        ...otroPayload,
+        idempotencyKey: randomUUID(),
+      });
+      expect(siguiente.numeroRecibo).toBe('REC-2095-0002');
+      // Una colisión diferente no se disfraza de reintento ni de un 404.
+      jest
+        .spyOn(recibosConNumeracion, 'numerar')
+        .mockResolvedValueOnce(segundo.numeroRecibo!);
+      await expect(
+        numeracionReal.create(otraAuth, {
+          ...otroPayload,
+          idempotencyKey: randomUUID(),
+        }),
+      ).rejects.toMatchObject({ code: 'P2002' });
+      expect(
+        await prisma.cobro.count({ where: { tenantId: otraEmpresa } }),
+      ).toBe(2);
+    } finally {
+      await prisma.tenant.delete({ where: { id: otraEmpresa } });
+    }
   });
 
   it('rechaza cobrar una OT saldada aunque Cobros esté habilitado', async () => {
@@ -301,4 +431,107 @@ describe('Cobros de OT: saldo e idempotencia (base aislada)', () => {
     );
     await servicio.create(auth, payload(o.id, 40));
   });
+  it.each(['transferencia', 'tarjeta_debito', 'tarjeta_credito'])(
+    'vendedor restringido registra %s en Banco sin operar esa cuenta',
+    async (tipo) => {
+      const banco = await prisma.cuentaFondos.create({
+        data: {
+          tenantId,
+          nombre: `Banco ensayo ${tipo}`,
+          tipo: 'banco',
+          moneda: 'ARS',
+        },
+      });
+      const medio = await prisma.metodoPago.create({
+        data: {
+          tenantId,
+          codigo: randomUUID(),
+          nombre: tipo,
+          tipo,
+          cuentaDestinoId: banco.id,
+          plazoAcreditacionDias: tipo === 'transferencia' ? 0 : 2,
+        },
+      });
+      const vendedor = {
+        ...auth,
+        role: RolSistema.OPERADOR,
+        permisos: new Set(['acceso.por_vista', 'administracion.cobrar']),
+      };
+      await prisma.membership.update({
+        where: { id: auth.membershipId },
+        data: { cuentasRestringidas: true, cuentasOperablesIds: [cuentaId] },
+      });
+      try {
+        const o = await orden(300);
+        const entrada = {
+          ...payload(o.id, 100),
+          metodoPagoId: medio.id,
+          cuentaDestinoId: banco.id,
+        };
+        const cobro = await servicio.create(vendedor, entrada);
+        expect((await servicio.create(vendedor, entrada)).id).toBe(cobro.id);
+        expect(
+          Number(
+            (
+              await prisma.ordenTrabajo.findUniqueOrThrow({
+                where: { id: o.id },
+              })
+            ).cobradoTotal,
+          ),
+        ).toBe(100);
+        expect(
+          (await prisma.cobro.findUniqueOrThrow({ where: { id: cobro.id } }))
+            .cuentaDestinoId,
+        ).toBe(banco.id);
+        expect(
+          (await servicio.findAll(vendedor, { ordenId: o.id }))[0]
+            .puedeAbrirRecibo,
+        ).toBe(true);
+        expect(
+          await prisma.movimientoFondos.count({
+            where: { cobroId: cobro.id, cuentaId },
+          }),
+        ).toBe(0);
+        await expect(
+          exigirCuentaOperable(prisma, vendedor, banco.id),
+        ).rejects.toThrow('acceso');
+        await expect(
+          servicio.create(vendedor, {
+            ...entrada,
+            idempotencyKey: randomUUID(),
+            cuentaDestinoId: cuentaId,
+          }),
+        ).rejects.toThrow('nunca a una caja');
+        await expect(
+          servicio.create(
+            { ...vendedor, permisos: new Set() },
+            { ...entrada, idempotencyKey: randomUUID() },
+          ),
+        ).rejects.toThrow('acceso');
+        await prisma.cuentaFondos.update({
+          where: { id: banco.id },
+          data: { activo: false },
+        });
+        await expect(
+          servicio.create(vendedor, {
+            ...entrada,
+            idempotencyKey: randomUUID(),
+          }),
+        ).rejects.toThrow('activa');
+        await expect(
+          servicio.create(vendedor, {
+            ...entrada,
+            idempotencyKey: randomUUID(),
+            cuentaDestinoId: randomUUID(),
+          }),
+        ).rejects.toThrow('activa');
+        expect(await prisma.cobro.count({ where: { ordenId: o.id } })).toBe(1);
+      } finally {
+        await prisma.membership.update({
+          where: { id: auth.membershipId },
+          data: { cuentasRestringidas: false, cuentasOperablesIds: [] },
+        });
+      }
+    },
+  );
 });

@@ -78,6 +78,8 @@ jobs:
         # No requieren seed, cuentas reales ni acceso a proveedores externos.
         run: |
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/pantallas-produccion/pantallas-produccion.integration.spec.ts \
+            src/pantallas-produccion/entregas-pantalla.spec.ts \
             src/auth/__tests__/revocacion-multi-instancia.integration.spec.ts \
             src/usuarios/__tests__/crear-usuario.spec.ts \
             src/usuarios/__tests__/password.spec.ts \
@@ -179,6 +181,9 @@ jobs:
         run: |
           npm ci --include=dev --no-audit --no-fund
           node node_modules/vitest/vitest.mjs run \
+            'src/app/api/pantalla/[accion]/route.test.ts' \
+            src/lib/pantalla-produccion.test.ts \
+            src/proxy.test.ts \
             src/components/comercial/cambiar-tipo-borrador.test.tsx \
             src/components/administracion/acreditaciones-lote.test.tsx \
             src/components/comercial/orden-modo-lectura.test.tsx \
@@ -196,6 +201,7 @@ jobs:
             src/components/administracion/tesoreria-view.test.tsx \
             src/components/administracion/tesoreria-conciliacion.test.tsx \
             src/components/administracion/cobro-saldo.test.tsx \
+            src/components/comercial/cargos-orden-edicion.test.tsx \
             src/components/mostrador/entrega-manual.test.tsx \
             src/lib/descuentos-orden.test.ts \
             src/lib/eta-fechas.test.ts

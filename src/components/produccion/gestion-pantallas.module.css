@@ -1,0 +1,132 @@
+.page {
+  background: var(--canvas-background);
+  color: var(--foreground);
+  padding: 28px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-text);
+  font-size: 14px;
+  width: fit-content;
+}
+.header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.header > svg {
+  color: var(--accent);
+  width: 36px;
+  height: 36px;
+}
+.header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+}
+.header p,
+.panel p,
+.instructions p {
+  color: var(--muted-text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.panel,
+.instructions {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.panel h2,
+.instructions h2 {
+  font-size: 20px;
+  font-weight: 650;
+}
+.instructions {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.instructions code {
+  display: block;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+.form {
+  display: flex;
+  align-items: end;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.fields {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr;
+  flex: 1;
+  min-width: min(100%, 450px);
+}
+.panel small,
+.details span,
+.details small {
+  color: var(--muted-text);
+  font-size: 13px;
+}
+.listHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+.list li > svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--muted-text);
+}
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+@media (max-width: 750px) {
+  .page {
+    padding: 16px;
+  }
+  .instructions {
+    flex-direction: column;
+    align-items: start;
+  }
+  .fields {
+    grid-template-columns: 1fr;
+  }
+  .list li {
+    flex-wrap: wrap;
+  }
+  .details {
+    flex-basis: calc(100% - 48px);
+  }
+}

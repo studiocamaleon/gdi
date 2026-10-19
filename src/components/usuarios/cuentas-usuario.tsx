@@ -153,8 +153,10 @@ export function CuentasUsuario({
                   </FieldSet>
                 ))}
                 <p className={styles.aclaracion}>
-                  Una lista vacía significa que no tiene cuentas autorizadas.
-                  Los cobros y pagos también respetan las cuentas asignadas.
+                  Una lista vacía no habilita cuentas para operar. El efectivo y los pagos
+                  usan las cuentas asignadas. Con permiso para cobrar, puede registrar
+                  transferencias y tarjetas en bancos o billeteras de la empresa
+                  sin consultar sus saldos ni mover fondos.
                 </p>
               </>
             )}

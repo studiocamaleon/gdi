@@ -1,5 +1,33 @@
 # Desarrollo local
 
+## Lote local: pantalla TV, cobros y edición de OT — 19/10/2026
+
+Estado local actual: web en `localhost:3000` y API en `127.0.0.1:3001` desde el worktree `lote-local-produccion`, rama `codex/lote-local-produccion`. Reúne localmente el PR #106 (pantalla TV, `d75750a03`) y el PR #107 (cobros bancarios y edición de OT, `c73cefbb1`) en `8030e1c95`. Los PR mantienen su base en `main`; esta rama de prueba no se publica ni modifica `main`.
+
+Se reemplazaron únicamente los procesos web/API anteriores de `produccion-tv`. Continúan Node 24, Turbopack y límite de 2 GB por proceso; cron, correo, Meta y telemetría externa desactivados. No se iniciaron workers ni se modificó Docker. Se reutilizan exclusivamente las configuraciones privadas locales existentes. No hubo nuevas migraciones, seeds ni resets: se conserva la migración de pantallas ya aplicada y las bases anteriores.
+
+Las [correcciones de cobros y edición](cobros-y-edicion-ot.md) pasaron 245 pruebas de API y 58 de interfaz. Sobre el lote combinado pasaron nuevamente 98 pruebas de API, incluidas vinculación de pantallas, aislamiento entre empresas, permisos bancarios y edición de productos en producción. API comprobada con base disponible; el detalle de validación de la pantalla anterior se conserva abajo.
+
+Pendiente publicar el conjunto en staging cuando Lucas termine de definir los otros cambios. No se desplegó staging ni producción.
+
+### Ensayo visible de cobros y edición — 19/10/2026
+
+En el mismo lote se completó el recorrido con una empresa ficticia y el rol Vendedor estándar, restringido a una sola caja de efectivo. Se registró una transferencia de $5.000 en Banco, recibo `REC-2026-0001`; la caja quedó en cero. En `OT-PRUEBA-001` se reemplazó el vinilo pendiente por PVC de 3 mm desde Editar especificaciones → Cambiar. Después de guardar y recargar: estado producción, total $40.000, cobrado $5.000 y saldo $35.000; el otro producto mantuvo el mismo paso iniciado y su fecha de inicio. La muestra queda disponible para continuar la revisión; no se modificaron las empresas existentes.
+
+Ampliación del ensayo: desde la misma sesión de Vendedor se agregó una unidad adicional de PVC como renglón independiente. Tras guardar y recargar quedaron tres productos: dos PVC pendientes y el banner iniciado. Total $70.000, cobrado $5.000, saldo $65.000. Se comparó el banner antes/después: mismo ítem, precio, paso, estado e inicio; el cobro y las cuentas tampoco cambiaron. En modo edición el banner no ofrece «Editar especificaciones» ni «Quitar», mientras los PVC pendientes sí pueden editarse. No requirió cambios de código.
+
+El ensayo encontró una restricción global incorrecta del número de recibo. Se incorporó el commit `b05c0e36c` del PR #107 y se aplicó `20261019160000_recibos_numero_por_empresa` sólo a local/test: 318 migraciones junto con TV. Conserva registros y números existentes. La regresión falló antes de la migración y pasó después; además pasaron 38 pruebas de cobros/permisos y 66 de cobros/edición sobre el lote (con solapamiento).
+
+Las dependencias de API también se clonaron con APFS dentro del worktree: Turbopack no admite el enlace fuera de su raíz al compilar la ficha de OT. La API de este ensayo arranca con `R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET=` para usar almacenamiento en disco `.storage/`, conservando los `.env` privados intactos. Los archivos anteriores de R2 no se alteraron. Web y API fueron los únicos procesos reiniciados; cron, correo y Meta siguen apagados. Sin staging ni producción.
+
+## Producción en tiempo real — 19/10/2026
+
+Estado del ensayo inicial (reemplazado por el lote descrito arriba): web en `localhost:3000` y API en `127.0.0.1:3001`, desde el worktree `produccion-tv`, rama `codex/produccion-tv` basada en `origin/main`. Node 24, Turbopack y límite de 2 GB por proceso; cron, correo y piloto de Meta permanecen desactivados. No se iniciaron workers ni se modificaron los otros proyectos de Docker.
+
+Aplicada la migración aditiva `20261019120000_pantallas_produccion` a desarrollo y tests: 317 migraciones, con permisos locales verificados. Se comprobó [la vista para televisores y la vinculación por código](produccion-en-tiempo-real.md) mediante pruebas HTTP, del BFF y navegador, con una empresa ficticia retirada al terminar. Las bases existentes se conservaron, sin seed ni reset. El chequeo de tipos de los módulos afectados pasó; la compilación completa queda para CI remoto por el límite de memoria de la Mac.
+
+No se desplegó staging ni producción. El usuario pidió reunir más cambios antes de publicar el lote en staging.
+
 ## Papel derivado de Centro de copiado — 13/10/2026
 
 La web, API y workers locales ejecutan `codex/copiado-papel-derivado` desde el checkout principal. Se mantienen Node 24, Turbopack, los límites de memoria del arranque habitual y las tareas programadas desactivadas. Esta rama depende del PR #76; no se publicó en staging ni producción.
@@ -202,3 +230,32 @@ cargar la matriz, definir el margen y publicar. Luego asignar el tarifario en
 Canales y activar la asignación. En un pedido borrador, cargar los trabajos y
 usar «Actualizar precios de copiado» antes de emitir. No se activó ninguna
 política ni se cargaron precios de prueba en las empresas existentes.
+
+## Confirmación de cobros — 19/10/2026
+
+El lote local incorpora `6d651d37a` del PR #107. El medio de pago comienza vacío
+para cada cobro y el resumen previo permite volver a corregir antes de registrar.
+Se aprobaron 38 pruebas de interfaz/lógica de cobros y el chequeo de tipos de los
+componentes modificados. Sin nueva migración ni cambios de servicios.
+
+En navegador, con la empresa ficticia y el rol Vendedor, se cargaron $1.000 en
+efectivo, se abrió la confirmación y se volvió a corregir. La base seguía idéntica.
+Se cambió a $2.500 por transferencia y Banco de prueba; sólo al confirmar se
+creó un único recibo nuevo. La OT de muestra conserva sus tres productos y total
+$70.000: cobrado $7.500, saldo $62.500, banco $7.500 y caja efectivo $0.
+El formulario y el diálogo están disponibles en local. Cron, correo y Meta
+siguen desactivados; staging y producción no se modificaron.
+
+## Atajos de reportes — 19/10/2026
+
+El lote local incorpora `76ca81422` del PR #108: **Hoy** y **Esta semana** en el
+selector compartido de los nueve reportes. Hoy usa el día completo de la zona de
+la empresa; la semana va de lunes a domingo. Se conserva el período al cambiar
+de reporte y se mantienen el mes predeterminado y el rango personalizado.
+
+19 pruebas de períodos/resumen/permisos aprobadas; ESLint y tipos sin errores.
+En navegador local se verificaron 19/10 para Hoy y 19–25/10 para Esta semana,
+además del salto de Resumen ejecutivo a Comercial conservando el rango.
+Se usó un usuario ficticio de lectura en la empresa local de prueba, en Chrome,
+sin modificar el rol Vendedor ni su sesión del navegador integrado.
+No requiere migraciones ni cambios en la API. Staging y producción pendientes.

@@ -20,6 +20,8 @@ export const MODELOS_EXENTOS: ReadonlySet<string> = new Set<string>([
   'WebhookWhatsappCrudo',
   'User',
   'AuthSession',
+  // Se autentica antes de conocer la empresa. Gestión siempre con tenant explícito.
+  'PantallaProduccion',
   'UserMfa',
   // Recuperación de identidad global y cuotas compartidas: sin acceso por tenant.
   'AccesoToken',
