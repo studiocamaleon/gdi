@@ -2915,17 +2915,33 @@ export class MotorUniversalService {
     } | null;
   }) {
     const desglosePrecio = args.cotizacion.desglosePrecio;
-    // Centro de copiado muestra planos físicos; el motor puede costear el
-    // producto por ML. Conservar ambas magnitudes evita guardar 5,96 planos
-    // para una carga de 10 copias y rechazarla después al revisar la OT.
+    // La unidad visible de copiado puede diferir de la del costeador:
+    // planos en lugar de ML y libros anillados en lugar de hojas. Conservar
+    // la cantidad productiva en el snapshot y expresar los unitarios por
+    // la misma unidad que construirItems devuelve para revisar la OT.
     const copiado = args.jobContext._centroCopiado as
-      | { modo?: unknown }
+      | { modo?: unknown; esTomo?: unknown; terminaciones?: unknown }
       | undefined;
     const esPlanoCopiado = copiado?.modo === 'CAD';
-    const cantidadItem = esPlanoCopiado
-      ? args.cotizacion.cantidadPedida
-      : args.cotizacion.cantidadComercialReal;
-    const unitarioPlano = (total: number) =>
+    const juegos = Number(args.jobContext.juegos);
+    const esLibroCopiado =
+      !esPlanoCopiado &&
+      copiado?.esTomo === false &&
+      Array.isArray(copiado.terminaciones) &&
+      copiado.terminaciones.includes('Anillado') &&
+      Number.isInteger(juegos) &&
+      juegos > 0;
+    const unidadCopiado = esPlanoCopiado
+      ? 'u'
+      : esLibroCopiado
+        ? 'libros'
+        : null;
+    const cantidadItem = esLibroCopiado
+      ? juegos
+      : esPlanoCopiado
+        ? args.cotizacion.cantidadPedida
+        : args.cotizacion.cantidadComercialReal;
+    const unitarioCopiado = (total: number) =>
       new Prisma.Decimal(total).div(cantidadItem).toString();
     const precioResultado = desglosePrecio
       ? {
@@ -2965,7 +2981,7 @@ export class MotorUniversalService {
           id: args.producto.productoId,
           codigo: args.producto.productoCodigo,
           nombre: args.producto.productoNombre,
-          unidadComercial: esPlanoCopiado ? 'u' : args.producto.unidadComercial,
+          unidadComercial: unidadCopiado ?? args.producto.unidadComercial,
           modoMedidas: args.producto.modoMedidas,
           minimoComercialBase: args.producto.minimoComercialBase,
         },
@@ -3009,13 +3025,13 @@ export class MotorUniversalService {
           costos: args.cotizacion.costos,
         },
       } as never,
-      costoUnitario: esPlanoCopiado
-        ? unitarioPlano(args.cotizacion.costos.total)
+      costoUnitario: unidadCopiado
+        ? unitarioCopiado(args.cotizacion.costos.total)
         : args.cotizacion.costos.unitario.toString(),
       costoTotal: args.cotizacion.costos.total.toString(),
       precioNetoUnitario:
-        esPlanoCopiado && desglosePrecio
-          ? unitarioPlano(desglosePrecio.precioNetoTotal)
+        unidadCopiado && desglosePrecio
+          ? unitarioCopiado(desglosePrecio.precioNetoTotal)
           : desglosePrecio?.precioNetoUnitario?.toString() ?? null,
       precioNetoTotal: desglosePrecio?.precioNetoTotal?.toString() ?? null,
       impuestosPorFueraTotal: desglosePrecio
@@ -3025,8 +3041,8 @@ export class MotorUniversalService {
           ).toString()
         : null,
       precioUnitario:
-        esPlanoCopiado && precioResultado
-          ? unitarioPlano(precioResultado.precioTotal)
+        unidadCopiado && precioResultado
+          ? unitarioCopiado(precioResultado.precioTotal)
           : precioResultado?.precioUnitario?.toString() ?? null,
       precioTotal: precioResultado?.precioTotal?.toString() ?? null,
       descuentoTipo: args.descuento?.tipo ?? null,
