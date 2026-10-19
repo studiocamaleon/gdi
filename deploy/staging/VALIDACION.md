@@ -1,5 +1,23 @@
 # Validación de staging — historial
 
+## 2026-10-19, 21:01 UTC — Staging sin contraseña HTTP Basic adicional
+
+Pedido explícito de Lucas para facilitar la prueba del Raspberry. [PR #111](https://github.com/studiocamaleon/gdi/pull/111), dependiente de #110: rama creada desde `origin/main` actualizado, incorporando el lote desplegado; base temporal `codex/lote-produccion-staging`. Al resolver la dependencia, ajustar la base a `main`. No se modificó el PR #110 listo para revisión ni se fusionaron propuestas.
+
+**Sólo web actualizada:** fuentes `34b206698a91dfda6b1288a386b3fbf437b309eb`, imagen `registry.fly.io/grafoprint-staging-web@sha256:df20e36fa86014960930bd1c08d4109d8ae386ad1edcd021f5d0649482c8e96b`. API y ambos workers conservan `acb576be008205570c906dd0545c30a41b027823` y `sha256:6e7be8e9d5a8be85202b54cfcaa85c5e530b752ad27e5a130a35177ddf3158b1`. PDF y copiador conservan sus imágenes. Sin migraciones, cambios de esquema, seeds ni resets; el manifiesto del respaldo registra 318 migraciones.
+
+`STAGING_BASIC_AUTH_ENABLED=false` quita únicamente la contraseña de entrada. `STAGING_PRIVATE=true` permanece activo para autenticar web→API, validar el origen y conservar las cabeceras privadas/noindex. Se mantienen la sesión y los permisos de Grafo y la credencial de cada TV. Las credenciales Basic existentes se conservan para poder reactivar ese control; ninguna huella de los secretos de API, workers y web cambió.
+
+**Comprobaciones:** seis regresiones reprodujeron el bloqueo antes del cambio; luego pasaron 93 pruebas locales de acceso, origen, proxy, sesión, BFF y pantalla, además de ESLint y diff. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39320376447), [contenedores/tipos/migraciones/login](https://github.com/studiocamaleon/gdi/actions/runs/39320376397) y Vercel aprobados para las fuentes desplegadas. El commit de registro incorpora las suites de acceso/origen/sesión/BFF al CI HTTP; no cambia el código de las imágenes. Compilación remota con tipos, sin builds de producción ni reinicios de Docker en la Mac.
+
+Ensayo real con clientes HTTP nuevos **sin encabezado Basic**: login y `/pantalla/produccion` responden 200; la gestión sin sesión redirige al login. BFF sin sesión y datos de TV sin vincular devuelven 401 sin desafío Basic. API directa rechaza con 403; escrituras sin Origin o con origen ajeno rechazan con 403. Robots y noindex/no-store se conservan. Una cuenta administradora ficticia pudo iniciar sesión, vincular una TV temporal, consultar entregas y revocarla; la lectura posterior se rechazó. La TV no pudo usar la sesión de usuario. Se revocó sólo ese dispositivo de ensayo; no se revocaron otras TVs ni se modificaron datos comerciales.
+
+Los seis servicios de staging están iniciados y saludables con sus tamaños anteriores. Las seis imágenes y recursos de producción coinciden con el inventario previo; `main` permanece sin cambios. Constructor remoto propio retirado tras la compilación. El Raspberry físico y la aceptación del lote #110 siguen pendientes.
+
+**Recuperación:** fuentes cifradas y custodiadas, inventario mixto del copiador actualizado. Copia `9ae3d996-6ca3-476b-a06d-b80817794b33`, completada `2026-10-19T21:00:25.427Z`: firma válida, manifiesto descifrado y referencias exactas de fuentes/imágenes, 318 migraciones, 30 archivos y 9 fuentes. La clave privada se usó sólo en la Mac. **No se repitió restauración SQL completa.**
+
+**Reversión:** volver a `STAGING_BASIC_AUTH_ENABLED=true` y publicar la misma imagen web; `STAGING_PRIVATE` debe seguir en `true`. Alternativamente, restaurar sólo la web anterior `sha256:7f0e0acfdd0cd9ed87ef7e68b5186eb273ad616e34b5023b71580dbd90c82966`. Conservar datos y vinculación de TVs, y ajustar el inventario del copiador a las versiones reales. No implica publicar producción.
+
 ## 2026-10-19, 19:55 UTC — Lote de producción, cobros y reportes
 
 Lucas autorizó reunir los cambios locales y probarlos juntos **sólo en staging**, antes de decidir producción. [PR integrador #110](https://github.com/studiocamaleon/gdi/pull/110), creado desde `origin/main` (`5b1ee5c0e`), conserva los commits de #106 (TV), #107 (cobros/edición de OT), #108 (períodos de reportes), #109 (En espera colapsado) y el registro del sandbox #104. Las propuestas de dependencias quedan fuera. **No se fusionó `main` ni se publicó producción.** Los PR fuente siguen abiertos hasta la aceptación e integración del lote.
