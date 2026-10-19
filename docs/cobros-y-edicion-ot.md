@@ -25,6 +25,15 @@ como un reintento exitoso.
 Los recibos bancarios se pueden consultar desde su OT sin alterar los permisos
 para operar la cuenta. No se reclasifican cobros históricos.
 
+El formulario inicia sin medio de pago, incluso si hay uno solo. Es obligatorio
+elegirlo. Antes de enviar se muestra una confirmación con monto bruto y moneda,
+medio, cuenta destino, fecha y referencia (o número de cheque, si corresponde).
+**Volver a corregir** o cerrar conserva lo cargado y no registra nada.
+**Confirmar y registrar** envía exactamente los datos revisados, bloquea dobles
+clics y conserva la clave de idempotencia ante una respuesta perdida.
+En una OT nueva, la confirmación agrega el pago a la propuesta y aclara que se
+registrará al emitirla. Cada cobro nuevo vuelve a exigir la elección del medio.
+
 ## Edición de una OT en producción
 
 Desde **Editar orden**, se pueden agregar productos y modificar o quitar
@@ -58,6 +67,8 @@ cuentas de otra empresa, conservación de permisos de Tesorería, altas y cambio
 en producción, pasos y componentes conservados, rechazo por ejecución,
 compra/tanda/facturación y por reducción debajo de lo cobrado. Pruebas de React
 cubren el selector bancario y agregar productos conservando los iniciados.
+El recorrido de confirmación cubre elección obligatoria, cierre/corrección sin
+envíos, envío de los datos corregidos, doble clic, reintentos y alta en propuestas.
 
 La prueba de numeración reprodujo el fallo con dos empresas ficticias antes
 de la migración; luego confirmó ambos recibos, reintentos sin duplicación y
