@@ -697,6 +697,7 @@ model NotificacionWhatsapp {
 }
 
 model Tenant {
+  pantallasProduccion PantallaProduccion[]
   facturacionLotes FacturacionLote[]
   facturacionLoteItems FacturacionLoteItem[]
   solicitudesAltaCliente SolicitudAltaCliente[]
@@ -1411,6 +1412,7 @@ model Rol {
 }
 
 model Membership {
+  pantallasProduccion PantallaProduccion[]
   id              String          @id @default(uuid()) @db.Uuid
   userId          String          @db.Uuid
   tenantId        String          @db.Uuid
@@ -1449,6 +1451,28 @@ model Membership {
   @@unique([userId, tenantId])
   @@index([tenantId])
   @@index([rolId])
+}
+
+/// Credencial exclusiva de lectura para TV. Nunca guarda el secreto ni el código.
+model PantallaProduccion {
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenantId            String?   @db.Uuid
+  membershipId        String?   @db.Uuid
+  tokenHash           String    @unique
+  codigoHash          String?   @unique
+  venceCodigoEl       DateTime
+  nombre              String?
+  intervaloSegundos   Int       @default(15)
+  creadaEl            DateTime  @default(now())
+  vinculadaEl         DateTime?
+  revocadaEl          DateTime?
+  expiraEl            DateTime
+  ultimaConexionEl    DateTime?
+  tenant              Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  membership          Membership? @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, creadaEl])
+  @@index([expiraEl])
 }
 
 model AuthSession {
