@@ -2,7 +2,8 @@
 
 Preparado en `codex/cobros-edicion-ot`, desde `origin/main` (`5b1ee5c0e`).
 Este bloque es independiente de la vista TV del PR #106 y se acumula para el
-próximo lote. No requiere migraciones ni cambios de credenciales.
+próximo lote. Incluye la migración `20261019160000_recibos_numero_por_empresa`;
+no requiere cambios de credenciales.
 
 ## Registro de cobros
 
@@ -16,6 +17,11 @@ La API y el formulario comparten la compatibilidad: efectivo → caja;
 transferencia/tarjetas/QR/débito automático → banco o billetera. Un destino
 predeterminado incompatible no se utiliza. Si falta una cuenta compatible,
 el formulario bloquea el registro; la API también rechaza el intento.
+La numeración del recibo es única dentro de cada empresa: dos empresas pueden
+emitir `REC-2026-0001` sin colisión. La migración conserva todos los recibos y
+sus números. Un conflicto distinto de la clave de idempotencia no se trata
+como un reintento exitoso.
+
 Los recibos bancarios se pueden consultar desde su OT sin alterar los permisos
 para operar la cuenta. No se reclasifican cobros históricos.
 
@@ -52,5 +58,9 @@ cuentas de otra empresa, conservación de permisos de Tesorería, altas y cambio
 en producción, pasos y componentes conservados, rechazo por ejecución,
 compra/tanda/facturación y por reducción debajo de lo cobrado. Pruebas de React
 cubren el selector bancario y agregar productos conservando los iniciados.
+
+La prueba de numeración reprodujo el fallo con dos empresas ficticias antes
+de la migración; luego confirmó ambos recibos, reintentos sin duplicación y
+rechazo de números repetidos dentro de una misma empresa.
 
 No se ejecutaron seeds, resets, integraciones externas ni despliegues.

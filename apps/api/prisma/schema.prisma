@@ -5040,7 +5040,7 @@ model Cobro {
   notas                     String?
   /// REC-AAAA-NNNN (ReciboContador). El recibo es el documento del cobro:
   /// 1:1 con él, sin entidad propia. Ver docs/recibos-pago-diseno.md
-  numeroRecibo              String?               @unique
+  numeroRecibo              String?
   /// "N° de operación" del medio de pago: el identificador que devuelve la
   /// transferencia, el cupón o el ticket. Es lo que el cliente reconoce.
   referencia                String?               @db.VarChar(60)
@@ -5066,6 +5066,7 @@ model Cobro {
   aplicacionesOrden         CobroOrden[]
   archivos                  Archivo[]
 
+  @@unique([tenantId, numeroRecibo])
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])
