@@ -1,6 +1,7 @@
 import {
   alcanceCuentas,
-  exigirCuentaOperable,
+  exigirCuentaCobro,
+  puedeRegistrarCobros,
   exigirTesoreriaCompleta,
 } from './acceso-cuentas';
 import {
@@ -14,6 +15,7 @@ import {
   validarFechaLiquidacion,
   validarRetenciones,
 } from './retenciones-validacion';
+import { MEDIOS_BANCARIOS } from '../common/cuentas-cobro';
 import { claveFechaEnZona } from '../common/zona';
 import type {
   AcreditarCobroDto,
@@ -136,7 +138,7 @@ export class CobrosService {
       },
       include: {
         metodoPago: { select: { nombre: true, tipo: true } },
-        cuentaDestino: { select: { nombre: true } },
+        cuentaDestino: { select: { nombre: true, tipo: true } },
         cliente: { select: { nombre: true } },
         retenciones: true,
         valores: { select: { id: true, estado: true, numero: true } },
@@ -152,7 +154,8 @@ export class CobrosService {
       // cajas no puede inventar un saldo pendiente ni habilitar cobros dobles.
       // Este resumen comercial no revela qué cuenta no asignada recibió el pago.
       ...(alcance.restringido &&
-      !alcance.operables.includes(cobro.cuentaDestinoId ?? '')
+      !alcance.operables.includes(cobro.cuentaDestinoId ?? '') &&
+      !(puedeRegistrarCobros(auth) && MEDIOS_BANCARIOS.includes(cobro.metodoPago.tipo) && ['banco', 'billetera'].includes(cobro.cuentaDestino?.tipo ?? ''))
         ? {
             cuentaDestinoNombre: null,
             referenciaAcreditacion: null,
@@ -173,9 +176,7 @@ export class CobrosService {
   }
 
   async create(auth: CurrentAuth, payload: CrearCobroDto) {
-    if (payload.cuentaDestinoId)
-      await exigirCuentaOperable(this.prisma, auth, payload.cuentaDestinoId);
-    else await exigirTesoreriaCompleta(this.prisma, auth);
+    // La cuenta se valida junto con el medio; operar Tesorería es otro permiso.
     if (payload.idempotencyKey) {
       const existente = await this.prisma.cobro.findUnique({
         where: {
@@ -228,6 +229,9 @@ export class CobrosService {
     ]);
     if (!metodo)
       throw new NotFoundException('No se encontró el método de pago.');
+    if (payload.cuentaDestinoId)
+      await exigirCuentaCobro(this.prisma, auth, payload.cuentaDestinoId, metodo.tipo);
+    else await exigirTesoreriaCompleta(this.prisma, auth);
     if (payload.ordenId && !orden) {
       throw new NotFoundException('No se encontró la orden.');
     }
@@ -403,7 +407,7 @@ export class CobrosService {
     try {
       resultado = await ejecutarTransaccionFondos(this.prisma, async (tx) => {
         if (payload.cuentaDestinoId)
-          await exigirCuentaOperable(tx, auth, payload.cuentaDestinoId);
+          await exigirCuentaCobro(tx, auth, payload.cuentaDestinoId, metodo.tipo);
         else await exigirTesoreriaCompleta(tx, auth);
         await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
           'identidad',
@@ -985,7 +989,7 @@ export class CobrosService {
       },
       include: {
         metodoPago: { select: { nombre: true, tipo: true } },
-        cuentaDestino: { select: { nombre: true } },
+        cuentaDestino: { select: { nombre: true, tipo: true } },
         cliente: { select: { nombre: true } },
         orden: { select: { id: true, numero: true } },
         valores: { select: { estado: true, numero: true } },
@@ -1155,12 +1159,18 @@ export class CobrosService {
         id,
         tenantId: auth.tenantId,
         ...(alcance.restringido
-          ? { cuentaDestinoId: { in: alcance.operables } }
+          ? { OR: [
+              { cuentaDestinoId: { in: alcance.operables } },
+              ...(puedeRegistrarCobros(auth) ? [{
+                cuentaDestino: { tipo: { in: ['banco', 'billetera'] } },
+                metodoPago: { tipo: { in: MEDIOS_BANCARIOS } },
+              }] : []),
+            ] }
           : {}),
       },
       include: {
         metodoPago: { select: { nombre: true, tipo: true } },
-        cuentaDestino: { select: { nombre: true } },
+        cuentaDestino: { select: { nombre: true, tipo: true } },
         cliente: { select: { nombre: true } },
         retenciones: true,
         valores: { select: { id: true, estado: true, numero: true } },

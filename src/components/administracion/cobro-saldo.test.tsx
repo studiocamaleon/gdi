@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/administracion-api", () => ({
   crearCobro: mocks.crear,
   getMetodosPago: mocks.metodos,
-  getCuentasFondos: mocks.cuentas,
+  getCuentasCobro: mocks.cuentas,
 }));
 vi.mock("../navigation/capacidades-provider", () => ({
   useCapacidad: () => true,
@@ -176,4 +176,17 @@ it("no permite agregar pagos en la OT nueva cuando ya se cargó su total", async
     b.textContent?.includes("Agregar cobro"),
   );
   expect(agregar?.disabled).toBe(true);
+});
+
+it.each(["transferencia", "tarjeta_debito", "tarjeta_credito"])("%s nunca ofrece ni selecciona efectivo, aunque sea el destino predeterminado", async tipo => {
+  const medios = [{ ...metodos[0], id: tipo, tipo, nombre: tipo } as MetodoPago];
+  await act(async () => root.render(<CobroFormulario saldo={100} metodos={medios} cuentas={[
+    ...cuentas, { id: "banco", nombre: "Banco ficticio", tipo: "banco", moneda: "ARS" },
+  ]} guardando={false} onSubmit={vi.fn()} />));
+  const selector = el.querySelector<HTMLSelectElement>("#cobro-cuenta-destino")!;
+  expect([...selector.options].map(o => o.value)).toEqual(["banco"]);
+  expect(selector.value).toBe("banco");
+  await act(async () => root.render(<CobroFormulario saldo={100} metodos={medios} cuentas={cuentas} guardando={false} onSubmit={vi.fn()} />));
+  expect(selector.value).toBe("");
+  expect(boton().disabled).toBe(true);
 });

@@ -8,6 +8,7 @@ import {
 import { AGENTES_RETENCION } from "./retenciones-config-editor";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
+import { cuentaCompatibleCobro } from "../../../apps/api/src/common/cuentas-cobro";
 import * as React from "react";
 import Link from "next/link";
 import {
@@ -122,15 +123,12 @@ export function CobroFormulario({
   const metodosActivos = metodos.filter(
     (m) => m.activo && (conValores || m.tipo !== "cheque_echeq"),
   );
-  const cuentasCompatibles = cuentas.filter(
-    (c) =>
-      c.moneda === moneda.codigo &&
-      c.tipo !== "cartera_valores" &&
-      c.tipo !== "cartera_valores_legacy",
-  );
   const [metodoId, setMetodoId] = React.useState(metodosActivos[0]?.id ?? "");
   const metodo = metodosActivos.find((m) => m.id === metodoId) ?? null;
   const esCheque = metodo?.tipo === "cheque_echeq";
+  const cuentasCompatibles = cuentas.filter(c =>
+    c.moneda === moneda.codigo && !!metodo && cuentaCompatibleCobro(metodo.tipo, c.tipo),
+  );
 
   // El texto viaja con los separadores de la moneda (lo maneja MoneyInput);
   // el número parseado se guarda aparte para no re-parsear en cada cálculo.
@@ -189,7 +187,7 @@ export function CobroFormulario({
   const disponible = redondearDinero(neto - totalRet);
   const cuentaUsadaId = esCheque
     ? null
-    : (cuentaId ??
+    : (cuentasCompatibles.find(c => c.id === cuentaId)?.id ??
       cuentasCompatibles.find((c) => c.id === metodo?.cuentaDestinoId)?.id ??
       cuentasCompatibles[0]?.id ??
       null);
@@ -486,7 +484,7 @@ export function CobroFormulario({
               </select>
               {cuentasCompatibles.length === 0 ? (
                 <p className="mt-2 text-sm text-destructive">
-                  No tenés una cuenta disponible en {moneda.codigo}. Pedí al administrador que revise las cuentas activas y las asignadas a tu usuario.
+                  No hay una cuenta compatible con este medio en {moneda.codigo}. Transferencias y tarjetas requieren banco o billetera; el efectivo requiere una caja asignada.
                 </p>
               ) : null}
             </div>

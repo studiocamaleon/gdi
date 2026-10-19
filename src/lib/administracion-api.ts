@@ -327,6 +327,10 @@ export async function instalarCatalogoMetodosPago(): Promise<{
   });
 }
 
+export async function getCuentasCobro(): Promise<CuentaFondosResumen[]> {
+  return apiRequest<CuentaFondosResumen[]>("/administracion/cuentas-cobro");
+}
+
 export async function getCuentasFondos(): Promise<CuentaFondosResumen[]> {
   return apiRequest<CuentaFondosResumen[]>("/administracion/cuentas");
 }
