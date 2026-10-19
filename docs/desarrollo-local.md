@@ -10,6 +10,14 @@ Las [correcciones de cobros y edición](cobros-y-edicion-ot.md) pasaron 245 prue
 
 Pendiente publicar el conjunto en staging cuando Lucas termine de definir los otros cambios. No se desplegó staging ni producción.
 
+### Ensayo visible de cobros y edición — 19/10/2026
+
+En el mismo lote se completó el recorrido con una empresa ficticia y el rol Vendedor estándar, restringido a una sola caja de efectivo. Se registró una transferencia de $5.000 en Banco, recibo `REC-2026-0001`; la caja quedó en cero. En `OT-PRUEBA-001` se reemplazó el vinilo pendiente por PVC de 3 mm desde Editar especificaciones → Cambiar. Después de guardar y recargar: estado producción, total $40.000, cobrado $5.000 y saldo $35.000; el otro producto mantuvo el mismo paso iniciado y su fecha de inicio. La muestra queda disponible para continuar la revisión; no se modificaron las empresas existentes.
+
+El ensayo encontró una restricción global incorrecta del número de recibo. Se incorporó el commit `b05c0e36c` del PR #107 y se aplicó `20261019160000_recibos_numero_por_empresa` sólo a local/test: 318 migraciones junto con TV. Conserva registros y números existentes. La regresión falló antes de la migración y pasó después; además pasaron 38 pruebas de cobros/permisos y 66 de cobros/edición sobre el lote (con solapamiento).
+
+Las dependencias de API también se clonaron con APFS dentro del worktree: Turbopack no admite el enlace fuera de su raíz al compilar la ficha de OT. La API de este ensayo arranca con `R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET=` para usar almacenamiento en disco `.storage/`, conservando los `.env` privados intactos. Los archivos anteriores de R2 no se alteraron. Web y API fueron los únicos procesos reiniciados; cron, correo y Meta siguen apagados. Sin staging ni producción.
+
 ## Producción en tiempo real — 19/10/2026
 
 Estado del ensayo inicial (reemplazado por el lote descrito arriba): web en `localhost:3000` y API en `127.0.0.1:3001`, desde el worktree `produccion-tv`, rama `codex/produccion-tv` basada en `origin/main`. Node 24, Turbopack y límite de 2 GB por proceso; cron, correo y piloto de Meta permanecen desactivados. No se iniciaron workers ni se modificaron los otros proyectos de Docker.
