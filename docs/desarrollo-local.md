@@ -1,8 +1,18 @@
 # Desarrollo local
 
+## Lote local: pantalla TV, cobros y edición de OT — 19/10/2026
+
+Estado local actual: web en `localhost:3000` y API en `127.0.0.1:3001` desde el worktree `lote-local-produccion`, rama `codex/lote-local-produccion`. Reúne localmente el PR #106 (pantalla TV, `d75750a03`) y el PR #107 (cobros bancarios y edición de OT, `c73cefbb1`) en `8030e1c95`. Los PR mantienen su base en `main`; esta rama de prueba no se publica ni modifica `main`.
+
+Se reemplazaron únicamente los procesos web/API anteriores de `produccion-tv`. Continúan Node 24, Turbopack y límite de 2 GB por proceso; cron, correo, Meta y telemetría externa desactivados. No se iniciaron workers ni se modificó Docker. Se reutilizan exclusivamente las configuraciones privadas locales existentes. No hubo nuevas migraciones, seeds ni resets: se conserva la migración de pantallas ya aplicada y las bases anteriores.
+
+Las [correcciones de cobros y edición](cobros-y-edicion-ot.md) pasaron 245 pruebas de API y 58 de interfaz. Sobre el lote combinado pasaron nuevamente 98 pruebas de API, incluidas vinculación de pantallas, aislamiento entre empresas, permisos bancarios y edición de productos en producción. API comprobada con base disponible; el detalle de validación de la pantalla anterior se conserva abajo.
+
+Pendiente publicar el conjunto en staging cuando Lucas termine de definir los otros cambios. No se desplegó staging ni producción.
+
 ## Producción en tiempo real — 19/10/2026
 
-Estado local actual: web en `localhost:3000` y API en `127.0.0.1:3001`, desde el worktree `produccion-tv`, rama `codex/produccion-tv` basada en `origin/main`. Node 24, Turbopack y límite de 2 GB por proceso; cron, correo y piloto de Meta permanecen desactivados. No se iniciaron workers ni se modificaron los otros proyectos de Docker.
+Estado del ensayo inicial (reemplazado por el lote descrito arriba): web en `localhost:3000` y API en `127.0.0.1:3001`, desde el worktree `produccion-tv`, rama `codex/produccion-tv` basada en `origin/main`. Node 24, Turbopack y límite de 2 GB por proceso; cron, correo y piloto de Meta permanecen desactivados. No se iniciaron workers ni se modificaron los otros proyectos de Docker.
 
 Aplicada la migración aditiva `20261019120000_pantallas_produccion` a desarrollo y tests: 317 migraciones, con permisos locales verificados. Se comprobó [la vista para televisores y la vinculación por código](produccion-en-tiempo-real.md) mediante pruebas HTTP, del BFF y navegador, con una empresa ficticia retirada al terminar. Las bases existentes se conservaron, sin seed ni reset. El chequeo de tipos de los módulos afectados pasó; la compilación completa queda para CI remoto por el límite de memoria de la Mac.
 
