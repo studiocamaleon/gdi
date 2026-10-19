@@ -126,6 +126,11 @@ const EXENTOS_CON_TENANT_ID = new Set([
  */
 const ARCHIVOS_AUTORIZADOS = new Set([
   'pantallas-produccion/pantallas-produccion.service.ts',
+  // Consultas existentes revisadas: todas filtran membership por tenantId;
+  // cuentas/lotes además por userId, y altas sólo destinatarios de esa empresa.
+  'administracion/acceso-cuentas.ts',
+  'administracion/facturacion-lotes.service.ts',
+  'clientes/solicitudes-alta.service.ts',
   'auth/auth.service.ts',
   // Recuperación global: revoca sesiones únicamente de la identidad del token.
   'auth/recuperacion.service.ts',
