@@ -1,6 +1,6 @@
 # Producción en tiempo real
 
-Vista de sólo lectura para televisores del taller. Implementada y comprobada en local; **pendiente de publicar con el próximo lote de staging**. No se configuró todavía un Raspberry físico.
+Vista de sólo lectura para televisores del taller. Implementada y comprobada en local y staging con el lote #110 (`acb576be0`, 19/10/2026). **Pendientes la aceptación y producción**; no se configuró todavía un Raspberry físico. Ver [el registro del ensayo](../deploy/staging/VALIDACION.md).
 
 ## Entrada y vinculación
 
@@ -33,11 +33,11 @@ chromium --kiosk --no-first-run --user-data-dir="$HOME/.config/grafo-tv" 'https:
 
 No usar incógnito ni borrar las cookies del perfil. La orientación física y el ahorro de pantalla se configuran en el sistema del Raspberry. El arranque automático depende de su versión: en el escritorio con labwc, la guía oficial indica `~/.config/labwc/autostart`. Agregar allí el comando de lanzamiento con `&`, conservando las entradas existentes. Ver [guía oficial de kiosco de Raspberry Pi](https://www.raspberrypi.com/tutorials/how-to-use-a-raspberry-pi-in-kiosk-mode/).
 
-`localhost` en el Raspberry apunta al propio Raspberry, no a la Mac. La prueba de esta entrega se hizo en el navegador local; no se abrió el servidor de desarrollo a la red. Para la prueba física usaremos la dirección de staging cuando se autorice publicar el lote. Staging conserva su protección de acceso propia, además de la vinculación por código.
+`localhost` en el Raspberry apunta al propio Raspberry, no a la Mac. La prueba de esta entrega se hizo en el navegador local; no se abrió el servidor de desarrollo a la red. Para la prueba física ya está disponible `https://staging.grafoprint.com.ar/pantalla/produccion`. Staging conserva su protección de acceso propia, además de la vinculación por código.
 
 ## Implementación y comprobación
 
-- Migración aditiva `20261019120000_pantallas_produccion`: aplicada sólo a desarrollo y `gdi_saas_test`, con permisos del rol local comprobados. Sin seeds, resets ni cambios en datos existentes.
+- Migración aditiva `20261019120000_pantallas_produccion`: aplicada a desarrollo, `gdi_saas_test` y staging, con permisos de ejecución comprobados. Sin seeds, resets ni cambios en datos existentes.
 - `PantallaProduccion` almacena hashes de credencial y código. La credencial aleatoria de 256 bits vive exclusivamente en una cookie HttpOnly, SameSite Strict y Secure en producción. No aparece en URLs, almacenamiento del navegador accesible a JavaScript ni respuestas JSON.
 - El BFF `/api/pantalla/[accion]` acepta cuatro acciones cerradas, comprueba origen en escrituras y usa el canal privado existente hacia la API. No reenvía la sesión personal ni cabeceras arbitrarias.
 - Los endpoints del dispositivo validan su credencial, empresa, miembro autorizante, permisos, IP y vencimiento en cada consulta. La TV no puede usar endpoints de usuario. La gestión excluye MCP, impersonación y sesiones de plataforma.
@@ -48,3 +48,7 @@ No usar incógnito ni borrar las cookies del perfil. La orientación física y e
 Comprobaciones locales: 11 pruebas nuevas de API y 17 de aislamiento del modelo; 38 comprobaciones de frontend/BFF/rutas (incluyendo las existentes de proxy), tipos de los módulos afectados, lint del frontend y guard de CSS. El chequeo completo de tipos de API y web agotó el límite local de 2 GB; la comprobación acotada de ambos módulos pasó. Se actualizaron tres entradas preexistentes del registro de servicios permitidos de la suite de aislamiento después de revisar que sus consultas filtran empresa y usuario según corresponde. No cambian los permisos de ejecución.
 
 En el navegador se comprobó el ingreso normal de una cuenta ficticia, la autorización desde Pantallas, la lectura automática de 14 entregas de prueba, rotación y pausa, recarga conservando la vinculación, resoluciones CSS 1080×1920 y 1920×1080 sin desbordes, pérdida de conexión y recuperación. La revocación desde gestión elimina los datos del TV. Se corrigió durante el recorrido el uso de enlaces en botones Base UI. La empresa y el usuario ficticios del ensayo se retiran al finalizar; no se modifican usuarios ni órdenes existentes.
+
+## Ensayo de staging — 19/10/2026
+
+En una empresa ficticia separada se comprobó vinculación por código, 17 entregas de hoy/atrasadas, rotación cada diez segundos, pausa, recarga y revocación. Una segunda vinculación dejó una TV demo para la aceptación. Chrome solicitó nuevamente la protección HTTP Basic de staging después de revocar; completarla permitió continuar. No se desactivó esa protección. La empresa de ensayo queda disponible hasta cerrar la aceptación, con notificaciones pausadas. El Raspberry físico y su arranque automático siguen pendientes.

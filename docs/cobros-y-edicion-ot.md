@@ -1,8 +1,8 @@
 # Cobros bancarios y cambios de productos en OT
 
 Preparado en `codex/cobros-edicion-ot`, desde `origin/main` (`5b1ee5c0e`).
-Este bloque es independiente de la vista TV del PR #106 y se acumula para el
-próximo lote. Incluye la migración `20261019160000_recibos_numero_por_empresa`;
+Este bloque es independiente de la vista TV del PR #106 y fue reunido con ella
+en el lote #110, comprobado en staging el 19/10/2026 (`acb576be0`). Incluye la migración `20261019160000_recibos_numero_por_empresa`;
 no requiere cambios de credenciales.
 
 ## Registro de cobros
@@ -74,4 +74,10 @@ La prueba de numeración reprodujo el fallo con dos empresas ficticias antes
 de la migración; luego confirmó ambos recibos, reintentos sin duplicación y
 rechazo de números repetidos dentro de una misma empresa.
 
-No se ejecutaron seeds, resets, integraciones externas ni despliegues.
+En el ensayo local no se ejecutaron seeds, resets, integraciones externas ni despliegues.
+
+## Comprobación en staging
+
+Vendedor con caja restringida registró transferencia, débito y crédito en Banco, sin acceso a Tesorería. Se comprobaron rechazo de transferencia a efectivo, cuentas no asignadas, idempotencia y lectura de los tres recibos PDF. El formulario exigió elegir el medio; abrir/cancelar la confirmación no registró el cobro y confirmar guardó una sola transferencia de $5.000.
+
+En la OT ficticia en producción se reemplazó el vinilo pendiente por PVC y se agregó otro PVC: tres productos, total $70.000 y $7.000 cobrados. El banner iniciado conservó exactamente sus pasos e inicio; su modificación directa fue rechazada con 409. La empresa de ensayo queda para aceptación con avisos pausados; no hubo envíos. Producción permanece sin cambios. Ver [versiones, pruebas y reversión](../deploy/staging/VALIDACION.md).

@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-17, 20:36 UTC.** Autorización real de Meta sandbox verificada desde el Inbox, limitada a la empresa ficticia «Ensayo Meta Sandbox — Staging». Token temporal retirado y demo anterior intacta. Sólo cambió la configuración de API y worker principal: backend conserva `2a65d4c26` del [PR #103](https://github.com/studiocamaleon/gdi/pull/103), web y PDF conservan `fc6277ff7`; mismos recursos y sin migraciones nuevas. Coexistencia e historial siguen pendientes de ensayo con un número propio. No se modificó producción. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-19, 19:55 UTC.** Lote [#110](https://github.com/studiocamaleon/gdi/pull/110) publicado y comprobado en staging: TV con código y rotación, cobros bancarios del vendedor con confirmación, edición de productos pendientes en OT en producción, Hoy/Esta semana y En espera colapsado. API, workers y web ejecutan `acb576be0`; PDF conserva su imagen. 318 migraciones, mismos recursos y secretos de Meta; copia posterior verificada. Pendientes la aceptación de Lucas y el Raspberry físico. Producción y `main` permanecen sin cambios. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 
