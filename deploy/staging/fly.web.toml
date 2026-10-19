@@ -10,6 +10,7 @@ kill_timeout = 30
 
 [env]
   STAGING_PRIVATE = "true"
+  STAGING_BASIC_AUTH_ENABLED = "false"
   STAGING_WEB_ORIGIN = "https://staging.grafoprint.com.ar"
   PORT = "3000"
   HOSTNAME = "0.0.0.0"

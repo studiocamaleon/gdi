@@ -33,7 +33,7 @@ chromium --kiosk --no-first-run --user-data-dir="$HOME/.config/grafo-tv" 'https:
 
 No usar incógnito ni borrar las cookies del perfil. La orientación física y el ahorro de pantalla se configuran en el sistema del Raspberry. El arranque automático depende de su versión: en el escritorio con labwc, la guía oficial indica `~/.config/labwc/autostart`. Agregar allí el comando de lanzamiento con `&`, conservando las entradas existentes. Ver [guía oficial de kiosco de Raspberry Pi](https://www.raspberrypi.com/tutorials/how-to-use-a-raspberry-pi-in-kiosk-mode/).
 
-`localhost` en el Raspberry apunta al propio Raspberry, no a la Mac. La prueba de esta entrega se hizo en el navegador local; no se abrió el servidor de desarrollo a la red. Para la prueba física ya está disponible `https://staging.grafoprint.com.ar/pantalla/produccion`. Staging conserva su protección de acceso propia, además de la vinculación por código.
+`localhost` en el Raspberry apunta al propio Raspberry, no a la Mac. La prueba de esta entrega se hizo en el navegador local; no se abrió el servidor de desarrollo a la red. Para la prueba física ya está disponible `https://staging.grafoprint.com.ar/pantalla/produccion`. Staging permite abrir esta vista sin la contraseña HTTP Basic adicional; los datos requieren la vinculación por código. La gestión de pantallas conserva el login y los permisos de Grafo.
 
 ## Implementación y comprobación
 
@@ -51,4 +51,4 @@ En el navegador se comprobó el ingreso normal de una cuenta ficticia, la autori
 
 ## Ensayo de staging — 19/10/2026
 
-En una empresa ficticia separada se comprobó vinculación por código, 17 entregas de hoy/atrasadas, rotación cada diez segundos, pausa, recarga y revocación. Una segunda vinculación dejó una TV demo para la aceptación. Chrome solicitó nuevamente la protección HTTP Basic de staging después de revocar; completarla permitió continuar. No se desactivó esa protección. La empresa de ensayo queda disponible hasta cerrar la aceptación, con notificaciones pausadas. El Raspberry físico y su arranque automático siguen pendientes.
+En una empresa ficticia separada se comprobó vinculación por código, 17 entregas de hoy/atrasadas, rotación cada diez segundos, pausa, recarga y revocación. Una segunda vinculación dejó una TV demo para la aceptación. Chrome solicitó nuevamente la protección HTTP Basic de staging después de revocar; completarla permitió continuar. Ese ensayo conservaba Basic; posteriormente se separó este control y se deshabilitó en staging para facilitar el acceso del Raspberry. La empresa de ensayo queda disponible hasta cerrar la aceptación, con notificaciones pausadas. El Raspberry físico y su arranque automático siguen pendientes.
