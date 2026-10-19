@@ -78,6 +78,7 @@
 }
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -99,6 +100,7 @@
 }
 .periods {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 3px;
   padding: 3px;
