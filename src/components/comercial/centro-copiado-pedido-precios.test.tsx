@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
@@ -69,6 +69,7 @@ async function mostrar(
   r: RevisionCopiado | null = revision(),
   vigente = true,
   permisos = ["finanzas.ver_margenes", "comercial.aprobar_descuento"],
+  opciones: Partial<ComponentProps<typeof CentroCopiadoPedidoPrecios>> = {},
 ) {
   await act(async () =>
     root.render(
@@ -79,6 +80,7 @@ async function mostrar(
           ocupado={false}
           editable
           onRevisar={revisar}
+          {...opciones}
         />
       </PermisosProvider>,
     ),
@@ -114,12 +116,12 @@ it.each(["REQUIERE_AUTORIZACION", "BLOQUEADO", "NO_VERIFICABLE"])(
     expect(el.textContent).not.toMatch(/autorizar|bloqueada|contribución/i);
   },
 );
-it("un cambio de pedido oculta la tabla anterior y permite actualizar", async () => {
+it("un cambio de pedido oculta los precios anteriores sin pedir una actualización manual", async () => {
   await mostrar(revision(), false);
   expect(el.querySelector("table")).toBeNull();
-  expect(el.textContent).toContain("Actualizá los precios");
-  await act(async () => boton("Actualizar precios")!.click());
-  expect(revisar).toHaveBeenCalledOnce();
+  expect(el.querySelector("button")).toBeNull();
+  expect(el.querySelector('[role="alert"]')).toBeNull();
+  expect(revisar).not.toHaveBeenCalled();
 });
 it("un precio ausente sigue pendiente aunque se retire el control de contribución", async () => {
   const r = revision();
@@ -152,5 +154,50 @@ it("distingue rangos por carilla y CAD del precio final por hoja o metro", async
 });
 it("un canal de motor revisado no agrega un bloque sin información", async () => {
   await mostrar({ modalidad: "MOTOR" });
+  expect(el.textContent).toBe("");
+});
+
+it("mientras calcula sólo muestra el estado y no un botón", async () => {
+  await mostrar(revision(), false, [], { ocupado: true });
+  expect(el.querySelector('[role="status"]')?.textContent).toContain(
+    "Actualizando precios",
+  );
+  expect(el.querySelector("button")).toBeNull();
+  expect(el.querySelector("table")).toBeNull();
+});
+it("un error permite reintentar el cálculo", async () => {
+  await mostrar(revision(), false, [], {
+    error: "No se pudo conectar con el servidor.",
+  });
+  expect(el.querySelector('[role="alert"]')?.textContent).toContain(
+    "No se pudo conectar",
+  );
+  expect(boton("Actualizar precios")).toBeUndefined();
+  await act(async () => boton("Reintentar cálculo")!.click());
+  expect(revisar).toHaveBeenCalledOnce();
+});
+it("un precio faltante permite reintentar después de corregir el tarifario", async () => {
+  const r = revision();
+  if (r.modalidad !== "TARIFARIO") throw new Error("fixture");
+  r.calculado.estado = "PRECIO_PENDIENTE";
+  await mostrar(r);
+  await act(async () => boton("Reintentar cálculo")!.click());
+  expect(revisar).toHaveBeenCalledOnce();
+});
+it("pedir el canal o consultar sin edición no ofrece reintentos", async () => {
+  await mostrar(null, false, [], { faltaCanal: true });
+  expect(el.textContent).toContain("Elegí un canal");
+  expect(el.querySelector("button")).toBeNull();
+  await mostrar(null, false, [], {
+    editable: false,
+    error: "Error de cálculo",
+  });
+  expect(el.querySelector("button")).toBeNull();
+});
+it("una revisión histórica sin desglose no ofrece otra acción de cálculo", async () => {
+  const r = revision();
+  if (r.modalidad !== "TARIFARIO") throw new Error("fixture");
+  r.resumenPrecios = undefined;
+  await mostrar(r);
   expect(el.textContent).toBe("");
 });
