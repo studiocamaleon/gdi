@@ -1,7 +1,5 @@
-import {
-  pasosReferenciadosPorEstado,
-  validarCondicionesEstadoPasos,
-} from '../motor-universal/estado-pasos';
+import { validarEstadosPasosRuta } from './validar-estados-pasos-ruta';
+import { pasosReferenciadosPorEstado } from '../motor-universal/estado-pasos';
 import { validarPerfilesNiveles } from './validar-perfiles-niveles';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
@@ -169,52 +167,11 @@ export class ConfigPasosService {
     alternativa: { id: string; rutaId: string; rutaVersion: number },
     dto: UpsertProductoConfigPasoDto,
   ) {
-    const configs = await tx.productoConfigPaso.findMany({
-      where: {
-        tenantId,
-        productoRutaAlternativaId: alternativa.id,
-        activo: true,
-      },
+    await validarEstadosPasosRuta(tx, tenantId, alternativa, {
+      ...dto,
+      modoActivacion: dto.modoActivacion ?? 'OBLIGATORIO',
+      condicionActivacionJson: dto.condicionActivacionJson ?? null,
     });
-    const candidatas = configs.filter(
-      (config) => config.rutaPasoId !== dto.rutaPasoId,
-    );
-    if (
-      ![...candidatas, dto].some(
-        (config) =>
-          config.modoActivacion === 'CONDICIONAL' &&
-          pasosReferenciadosPorEstado(config.condicionActivacionJson).length,
-      )
-    )
-      return;
-    const pasos = await tx.rutaPaso.findMany({
-      where: {
-        tenantId,
-        rutaId: alternativa.rutaId,
-        version: alternativa.rutaVersion,
-        activo: true,
-      },
-    });
-    try {
-      validarCondicionesEstadoPasos(
-        pasos.map((paso) => {
-          const config =
-            paso.id === dto.rutaPasoId
-              ? dto
-              : candidatas.find((item) => item.rutaPasoId === paso.id);
-          return {
-            rutaPasoId: paso.id,
-            configPasoId: paso.id,
-            nombreVisible: config?.nombreVisible || paso.nombreVisible,
-            familiaCodigo: paso.familiaCodigo,
-            modoActivacion: config?.modoActivacion ?? 'OBLIGATORIO',
-            condicionActivacionJson: config?.condicionActivacionJson,
-          };
-        }),
-      );
-    } catch (error) {
-      throw new BadRequestException((error as Error).message);
-    }
   }
 
   async upsertConfigPaso(

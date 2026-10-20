@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { remapearEstadoPasos } from '../motor-universal/estado-pasos';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -319,6 +321,7 @@ export class ProductoRutasService {
             pasos: { orderBy: { orden: 'asc' } },
           },
         },
+        pasosExtras: true,
         configPasos: {
           include: {
             slotsMateriales: {
@@ -373,6 +376,9 @@ export class ProductoRutasService {
         },
       });
 
+      const extraDuplicadoPorOrigen = new Map(
+        origen.pasosExtras.map((paso) => [paso.id, randomUUID()]),
+      );
       for (const config of origen.configPasos) {
         if (!pasosOrigen.some((paso) => paso.id === config.rutaPasoId))
           continue;
@@ -384,7 +390,10 @@ export class ProductoRutasService {
             ordenFlujo: config.ordenFlujo,
             modoActivacion: config.modoActivacion,
             condicionActivacionJson: this.jsonOrNull(
-              config.condicionActivacionJson,
+              remapearEstadoPasos(
+                config.condicionActivacionJson,
+                extraDuplicadoPorOrigen,
+              ) as Prisma.JsonValue,
             ),
             modoTiempo: config.modoTiempo,
             mecanismoCantidad: config.mecanismoCantidad,
@@ -491,6 +500,37 @@ export class ProductoRutasService {
         }
       }
 
+      if (origen.pasosExtras.length > 0) {
+        await tx.productoPasoExtra.createMany({
+          data: origen.pasosExtras.map((paso) => ({
+            ...paso,
+            createdAt: undefined,
+            updatedAt: undefined,
+            id: extraDuplicadoPorOrigen.get(paso.id)!,
+            tenantId,
+            rutaAlternativaId: alternativaDuplicada.id,
+            condicionActivacionJson: this.jsonOrNull(
+              remapearEstadoPasos(
+                paso.condicionActivacionJson,
+                extraDuplicadoPorOrigen,
+              ) as Prisma.JsonValue,
+            ),
+            mecanismoCantidadConfigJson: this.jsonOrNull(
+              paso.mecanismoCantidadConfigJson,
+            ),
+            paramsPasoJson: this.jsonOrNull(paso.paramsPasoJson),
+            configSlotsMaterialesJson: this.jsonOrNull(
+              paso.configSlotsMaterialesJson,
+            ),
+            configMaquinasCandidatasJson: this.jsonOrNull(
+              paso.configMaquinasCandidatasJson,
+            ),
+            configCargosDirectosJson: this.jsonOrNull(
+              paso.configCargosDirectosJson,
+            ),
+          })),
+        });
+      }
       return alternativaDuplicada;
     });
   }

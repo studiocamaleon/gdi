@@ -18,6 +18,7 @@ function serviceCon(
   prisma: Record<string, unknown>,
   familias: Partial<FamiliasPasosService> = {},
 ) {
+  prisma.$transaction ??= async (callback: (tx: unknown) => unknown) => callback(prisma);
   return new CargosDirectosProductoService(prisma as unknown as PrismaService, familias as FamiliasPasosService, capacidadesDePrueba());
 }
 

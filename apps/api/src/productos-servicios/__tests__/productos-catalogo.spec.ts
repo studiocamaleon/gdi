@@ -57,6 +57,7 @@ describe('Catálogo de productos', () => {
     ]);
     const prisma = {
       producto: { findMany, count: jest.fn().mockResolvedValue(1) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest
         .fn()
         .mockImplementation((promises) => Promise.all(promises)),
@@ -334,8 +335,10 @@ describe('Catálogo de productos', () => {
             {
               id: 'config-original',
               rutaPasoId: 'paso-1',
-              modoActivacion: 'OBLIGATORIO',
-              condicionActivacionJson: null,
+              modoActivacion: 'CONDICIONAL',
+              condicionActivacionJson: {
+                '==': [{ var: 'pasoActivo_extra-empaque' }, 1],
+              },
               modoTiempo: 'T-1',
               mecanismoCantidad: null,
               mecanismoCantidadConfigJson: null,
@@ -374,13 +377,16 @@ describe('Catálogo de productos', () => {
       ],
       pasosExtras: [
         {
+          id: 'extra-empaque',
           rutaAlternativaId: 'ruta-original',
           insertarDespuesDeRutaPasoId: 'paso-1',
           ordenInterno: 1,
           familiaCodigo: 'embalaje',
           nombreVisible: 'Empaque especial',
-          modoActivacion: 'OPCIONAL',
-          condicionActivacionJson: null,
+          modoActivacion: 'CONDICIONAL',
+          condicionActivacionJson: {
+            '==': [{ var: 'pasoActivo_extra-diseno' }, 0],
+          },
           modoTiempo: 'T-1',
           mecanismoCantidad: null,
           mecanismoCantidadConfigJson: null,
@@ -403,6 +409,13 @@ describe('Catálogo de productos', () => {
       comisionesAplicadas: [],
       preciosEspecialesClientes: [],
     };
+    origen.pasosExtras.push({
+      ...origen.pasosExtras[0],
+      id: 'extra-diseno',
+      nombreVisible: 'Diseño',
+      modoActivacion: 'OPCIONAL',
+      condicionActivacionJson: null as never,
+    });
     const productoCreate = jest.fn().mockResolvedValue({ id: 'copia' });
     const configCreate = jest.fn().mockResolvedValue({ id: 'config-copia' });
     const tercerizadoCreateMany = jest.fn().mockResolvedValue({ count: 1 });
@@ -439,6 +452,15 @@ describe('Catálogo de productos', () => {
     const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     await service.duplicarProducto('tenant-1', 'original', { nombre: 'Copia' });
+    const [empaque, diseno] = extraCreateMany.mock.calls[0][0].data;
+    expect(empaque.id).not.toBe('extra-empaque');
+    expect(diseno.id).not.toBe('extra-diseno');
+    expect(configCreate.mock.calls[0][0].data.condicionActivacionJson).toEqual({
+      '==': [{ var: `pasoActivo_${empaque.id}` }, 1],
+    });
+    expect(empaque.condicionActivacionJson).toEqual({
+      '==': [{ var: `pasoActivo_${diseno.id}` }, 0],
+    });
 
     expect(productoCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -470,13 +492,13 @@ describe('Catálogo de productos', () => {
     );
     expect(extraCreateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: [
+        data: expect.arrayContaining([
           expect.objectContaining({
             rutaAlternativaId: 'ruta-copia',
             nombreVisible: 'Empaque especial',
             centroCostoId: 'cc-1',
           }),
-        ],
+        ]),
       }),
     );
   });
