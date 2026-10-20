@@ -139,6 +139,9 @@
 .card[data-late="true"] {
   border-left-color: var(--danger);
 }
+.card[data-ready="true"] {
+  border-left-color: var(--success);
+}
 .cardTop {
   display: flex;
   align-items: center;

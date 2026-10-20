@@ -2,6 +2,8 @@
 
 Vista de sólo lectura para televisores del taller. Implementada y comprobada en local y staging con el lote #110 (`acb576be0`, 19/10/2026). Publicada también en producción con el lote #113; no se configuró todavía un Raspberry físico. Ver [el registro del ensayo](../deploy/staging/VALIDACION.md).
 
+**Corrección publicada — 20/10/2026, PR #114:** las entregas listas ya no se consideran atrasadas ni pendientes de hoy. El ensayo reprodujo el fallo anterior y comprobó OT finalizadas, ítems listos, componentes pendientes y rotación. Pasaron 15 pruebas de API (incluida lectura HTTP con PostgreSQL de test), ocho de interfaz/BFF/paginación, lint y guard de CSS. Sin migraciones ni cambios en órdenes existentes. Se reprodujo el caso en staging con una OT terminada de fecha vencida, se comprobó la clasificación y rotación corregidas y se promovieron las mismas imágenes a producción. La lectura de producción también conserva las listas vencidas fuera de atrasadas.
+
 ## Entrada y vinculación
 
 1. En el navegador del TV, abrir `/pantalla/produccion` en el mismo dominio de Grafo. En desarrollo: `http://localhost:3000/pantalla/produccion`.
@@ -15,11 +17,11 @@ La gestión muestra nombre, duración, vencimiento y última conexión conocida 
 
 ## Qué muestra
 
-- Entregas pendientes con fecha de hoy o anterior, ordenadas por fecha, OT e ítem. Las fechas civiles se comparan usando el día y la zona horaria de la empresa.
+- Entregas pendientes con fecha de hoy o anterior. La rotación prioriza las atrasadas sin terminar, luego las pendientes de hoy y finalmente las listas para entregar. Dentro de cada grupo se ordenan por fecha, OT e ítem. Las fechas civiles se comparan usando el día y la zona horaria de la empresa.
 - Una tarjeta por producto entregable o lote; los componentes se agrupan con su trabajo. Los agrupadores de lotes no duplican cantidades.
 - Número de OT, producto, cliente (o cliente de mostrador), cantidad, fecha, etapa y pasos completados. No se publican precios, márgenes, adjuntos ni datos de contacto.
 - Las órdenes finalizadas y los productos listos permanecen hasta registrar la entrega. Se excluyen borradores, canceladas, entregadas, ítems retirados, fechas futuras e ítems sin fecha comprometida.
-- «Atrasadas» y «Para hoy» cuentan entregas, no órdenes. «Listas para entregar» es un subconjunto de ambas: las tarjetas aclaran su estado.
+- «Atrasadas», «Para hoy» y «Listas para entregar» cuentan entregas, no órdenes, y son grupos separados. Como en Panel general, una OT finalizada nunca se marca atrasada. También queda lista una entrega marcada para mostrador o con todos sus pasos y componentes terminados, aunque otro producto de la misma OT siga pendiente. Las listas conservan su fecha sin etiqueta de atraso ni urgencia roja; no suman a las pendientes de hoy.
 
 La vista ocupa la altura disponible y calcula cuántas tarjetas entran. Usa una columna en vertical y dos cuando hay suficiente ancho. Rota todas las páginas, sin desplazar automáticamente la página; incluye pausa y pantalla completa. La consulta se repite cada diez segundos independientemente de la rotación. Si falla, conserva la lectura anterior con un aviso visible; vuelve a sincronizarse cuando se recupera la conexión. Una autorización rechazada borra las entregas.
 

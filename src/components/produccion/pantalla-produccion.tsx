@@ -280,24 +280,24 @@ export function PantallaProduccion() {
         <div data-tone="late">
           <span>Atrasadas</span>
           <strong>{datos.resumen.atrasadas}</strong>
-          <small>entregas pendientes</small>
+          <small>sin terminar</small>
         </div>
         <div>
           <span>Para hoy</span>
           <strong>{datos.resumen.hoy}</strong>
-          <small>entregas del día</small>
+          <small>pendientes de producción</small>
         </div>
         <div data-tone="ready">
           <span>Listas para entregar</span>
           <strong>{datos.resumen.listas}</strong>
-          <small>de hoy y atrasadas</small>
+          <small>producción terminada</small>
         </div>
       </div>
       <div className={s.sectionTitle}>
         <h2>
           Entregas pendientes <span>{datos.filas.length}</span>
         </h2>
-        <span>Primero las más atrasadas</span>
+        <span>Primero atrasadas, luego pendientes de hoy</span>
       </div>
       {sinConexion && (
         <div className={s.offline} role="status">
@@ -324,9 +324,11 @@ export function PantallaProduccion() {
                 <div className={s.cardTop}>
                   <strong>{fila.orden}</strong>
                   <span className={s.due}>
-                    {fila.atrasada
-                      ? `Atrasada · ${fila.fecha.split("-").reverse().join("/")}`
-                      : "Entrega hoy"}
+                    {fila.estado === "lista"
+                      ? `Entrega · ${fila.fecha.split("-").reverse().join("/")}`
+                      : fila.atrasada
+                        ? `Atrasada · ${fila.fecha.split("-").reverse().join("/")}`
+                        : "Entrega hoy"}
                   </span>
                 </div>
                 <h3 title={fila.producto}>{fila.producto}</h3>
