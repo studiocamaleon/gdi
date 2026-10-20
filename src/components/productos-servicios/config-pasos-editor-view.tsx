@@ -3069,9 +3069,9 @@ export function ConfigPasosEditorView({
     ...technologyRuleFields,
     ...(!configuracionBase
       ? estadoPasoRuleFields(
-          rutaAlternativa.ruta.pasos.map((paso) => ({
+          pasosAsistente.map((paso, index) => ({
             value: paso.id,
-            label: `Paso ${paso.orden} · ${configs[paso.id]?.nombreVisible?.trim() || paso.nombreVisible || familiasMap.get(paso.familiaCodigo)?.nombre || paso.familiaCodigo}`,
+            label: `Paso ${index + 1} · ${paso.nombre}`,
           })),
           pasoId,
         )

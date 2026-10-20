@@ -99,9 +99,14 @@ describe('ConfigPasosService — estado de otro paso', () => {
       nombreVisible: 'Diseño gráfico',
     },
   ];
-  async function validar(configs: unknown[], dto: unknown) {
+  async function validar(
+    configs: unknown[],
+    dto: unknown,
+    extras: unknown[] = [],
+  ) {
     const tx = {
       productoConfigPaso: { findMany: jest.fn().mockResolvedValue(configs) },
+      productoPasoExtra: { findMany: jest.fn().mockResolvedValue(extras) },
       rutaPaso: { findMany: jest.fn().mockResolvedValue(pasos) },
     };
     const { service } = crearServicio();
@@ -130,6 +135,47 @@ describe('ConfigPasosService — estado de otro paso', () => {
       modoActivacion: 'CONDICIONAL',
       condicionActivacionJson: regla('diseno'),
     });
+  });
+  it.each([0, 1])(
+    'acepta el estado %s de un paso extra del producto',
+    async (estado) => {
+      await validar(
+        [],
+        {
+          rutaPasoId: 'preprensa',
+          modoActivacion: 'CONDICIONAL',
+          condicionActivacionJson: {
+            '==': [{ var: 'pasoActivo_extra-diseno' }, estado],
+          },
+        },
+        [
+          {
+            id: 'extra-diseno',
+            modoActivacion: 'OPCIONAL',
+            familiaCodigo: 'diseno_grafico',
+          },
+        ],
+      );
+    },
+  );
+  it('rechaza un ciclo entre un paso base y un extra', async () => {
+    await expect(
+      validar(
+        [],
+        {
+          rutaPasoId: 'preprensa',
+          modoActivacion: 'CONDICIONAL',
+          condicionActivacionJson: regla('extra-diseno'),
+        },
+        [
+          {
+            id: 'extra-diseno',
+            modoActivacion: 'CONDICIONAL',
+            condicionActivacionJson: regla('preprensa'),
+          },
+        ],
+      ),
+    ).rejects.toThrow('circular');
   });
   it('rechaza referencias ajenas al guardar', async () => {
     await expect(

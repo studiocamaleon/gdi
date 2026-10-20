@@ -1,3 +1,9 @@
+import { randomUUID } from 'node:crypto';
+import { validarEstadosPasosRuta } from './validar-estados-pasos-ruta';
+import {
+  pasosReferenciadosPorEstado,
+  type PasoConEstado,
+} from '../motor-universal/estado-pasos';
 import { validarPerfilesNiveles } from './validar-perfiles-niveles';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
@@ -741,42 +747,55 @@ export class CargosDirectosProductoService {
       maxOrdenExtra?._max.ordenFlujo ?? -1,
     );
 
-    return this.prisma.productoPasoExtra.create({
-      data: {
-        tenantId,
+    const id = randomUUID();
+    return this.prisma.$transaction(async (tx) => {
+      await this.validarEstadoExtra(tx, tenantId, {
+        id,
         productoId,
         rutaAlternativaId: dto.rutaAlternativaId ?? null,
         familiaCodigo: dto.familiaCodigo,
-        insertarDespuesDeRutaPasoId: dto.insertarDespuesDeRutaPasoId ?? null,
-        ordenInterno,
-        ordenFlujo: maxOrdenFlujo >= 0 ? maxOrdenFlujo + 1 : null,
-        nombreVisible: base.nombreVisible ?? null,
+        nombreVisible: base.nombreVisible,
         modoActivacion,
-        condicionActivacionJson:
-          (condicionActivacionJson as never) ?? Prisma.JsonNull,
-        modoTiempo: dto.modoTiempo ?? base.modoTiempo ?? null,
-        mecanismoCantidad:
-          dto.mecanismoCantidad ?? base.mecanismoCantidad ?? null,
-        mecanismoCantidadConfigJson:
-          (base.mecanismoCantidadConfigJson as never) ?? Prisma.JsonNull,
-        multiplicadoresActivos: base.multiplicadoresActivos ?? [],
-        paramsPasoJson:
-          ((dto.paramsPasoJson !== undefined
-            ? dto.paramsPasoJson
-            : base.paramsPasoJson) as never) ?? Prisma.JsonNull,
-        setupOverrideMin: base.setupOverrideMin ?? null,
-        cleanupOverrideMin: base.cleanupOverrideMin ?? null,
-        tiempoFijoOverrideMin: base.tiempoFijoOverrideMin ?? null,
-        maquinaM1Id,
-        perfilM1Id,
-        // Centro de costo sólo aplica si el paso NO tiene máquina.
-        centroCostoId,
-        configSlotsMaterialesJson:
-          (base.slotsMateriales as never) ?? Prisma.JsonNull,
-        configMaquinasCandidatasJson:
-          (base.maquinasCandidatas as never) ?? Prisma.JsonNull,
-        activo: true,
-      },
+        condicionActivacionJson,
+      });
+      return tx.productoPasoExtra.create({
+        data: {
+          id,
+          tenantId,
+          productoId,
+          rutaAlternativaId: dto.rutaAlternativaId ?? null,
+          familiaCodigo: dto.familiaCodigo,
+          insertarDespuesDeRutaPasoId: dto.insertarDespuesDeRutaPasoId ?? null,
+          ordenInterno,
+          ordenFlujo: maxOrdenFlujo >= 0 ? maxOrdenFlujo + 1 : null,
+          nombreVisible: base.nombreVisible ?? null,
+          modoActivacion,
+          condicionActivacionJson:
+            (condicionActivacionJson as never) ?? Prisma.JsonNull,
+          modoTiempo: dto.modoTiempo ?? base.modoTiempo ?? null,
+          mecanismoCantidad:
+            dto.mecanismoCantidad ?? base.mecanismoCantidad ?? null,
+          mecanismoCantidadConfigJson:
+            (base.mecanismoCantidadConfigJson as never) ?? Prisma.JsonNull,
+          multiplicadoresActivos: base.multiplicadoresActivos ?? [],
+          paramsPasoJson:
+            ((dto.paramsPasoJson !== undefined
+              ? dto.paramsPasoJson
+              : base.paramsPasoJson) as never) ?? Prisma.JsonNull,
+          setupOverrideMin: base.setupOverrideMin ?? null,
+          cleanupOverrideMin: base.cleanupOverrideMin ?? null,
+          tiempoFijoOverrideMin: base.tiempoFijoOverrideMin ?? null,
+          maquinaM1Id,
+          perfilM1Id,
+          // Centro de costo sólo aplica si el paso NO tiene máquina.
+          centroCostoId,
+          configSlotsMaterialesJson:
+            (base.slotsMateriales as never) ?? Prisma.JsonNull,
+          configMaquinasCandidatasJson:
+            (base.maquinasCandidatas as never) ?? Prisma.JsonNull,
+          activo: true,
+        },
+      });
     });
   }
 
@@ -918,9 +937,48 @@ export class CargosDirectosProductoService {
         (dto.configMaquinasCandidatasJson as never) ?? Prisma.JsonNull;
     if (dto.activo !== undefined) data.activo = dto.activo;
 
-    return this.prisma.productoPasoExtra.update({
-      where: { id: pasoExtraId },
-      data,
+    return this.prisma.$transaction(async (tx) => {
+      await this.validarEstadoExtra(tx, tenantId, { ...existente, ...dto });
+      return tx.productoPasoExtra.update({
+        where: { id: pasoExtraId },
+        data,
+      });
+    });
+  }
+
+  private async validarEstadoExtra(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    extra: {
+      id: string;
+      productoId: string;
+      rutaAlternativaId: string | null;
+      activo?: boolean;
+    } & Partial<PasoConEstado>,
+  ) {
+    if (!extra.rutaAlternativaId) {
+      if (pasosReferenciadosPorEstado(extra.condicionActivacionJson).length) {
+        throw new BadRequestException(
+          'La condición necesita un paso de una ruta concreta del producto.',
+        );
+      }
+      return;
+    }
+    const alternativa = await tx.productoRutaAlternativa.findFirst({
+      where: { id: extra.rutaAlternativaId, tenantId, productoId: extra.productoId },
+    });
+    if (!alternativa)
+      throw new BadRequestException(
+        'La ruta del paso no pertenece a este producto.',
+      );
+    await validarEstadosPasosRuta(tx, tenantId, alternativa, {
+      rutaPasoId: extra.id,
+      configPasoId: extra.id,
+      nombreVisible: extra.nombreVisible,
+      familiaCodigo: extra.familiaCodigo,
+      modoActivacion: extra.modoActivacion ?? 'OBLIGATORIO',
+      condicionActivacionJson: extra.condicionActivacionJson,
+      activo: extra.activo,
     });
   }
 
@@ -983,7 +1041,10 @@ export class CargosDirectosProductoService {
     });
     if (!existente)
       throw new NotFoundException(`Paso extra ${pasoExtraId} no encontrado`);
-    return this.prisma.productoPasoExtra.delete({ where: { id: pasoExtraId } });
+    return this.prisma.$transaction(async (tx) => {
+      await this.validarEstadoExtra(tx, tenantId, { ...existente, activo: false });
+      return tx.productoPasoExtra.delete({ where: { id: pasoExtraId } });
+    });
   }
 
   // ── Validaciones compartidas ────────────────────────────────────────

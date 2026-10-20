@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { remapearEstadoPasos } from '../motor-universal/estado-pasos';
 import { validarMargenOpcionales } from './precio/margen-opcionales';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { isDeepStrictEqual } from 'node:util';
@@ -758,6 +760,9 @@ export class ProductosService {
         });
 
         const rutaDuplicadaPorOrigen = new Map<string, string>();
+        const extraDuplicadoPorOrigen = new Map(
+          origen.pasosExtras.map((paso) => [paso.id, randomUUID()]),
+        );
 
         for (const rutaAlt of origen.rutasAlternativas) {
           const rutaDuplicada = await tx.productoRutaAlternativa.create({
@@ -786,7 +791,10 @@ export class ProductosService {
                 ordenFlujo: config.ordenFlujo,
                 modoActivacion: config.modoActivacion,
                 condicionActivacionJson: this.jsonOrNull(
-                  config.condicionActivacionJson,
+                  remapearEstadoPasos(
+                    config.condicionActivacionJson,
+                    extraDuplicadoPorOrigen,
+                  ) as Prisma.JsonValue,
                 ),
                 modoTiempo: config.modoTiempo,
                 mecanismoCantidad: config.mecanismoCantidad,
@@ -921,6 +929,7 @@ export class ProductosService {
         if (origen.pasosExtras.length > 0) {
           await tx.productoPasoExtra.createMany({
             data: origen.pasosExtras.map((paso) => ({
+              id: extraDuplicadoPorOrigen.get(paso.id)!,
               tenantId,
               productoId: productoDuplicado.id,
               rutaAlternativaId: paso.rutaAlternativaId
@@ -933,7 +942,10 @@ export class ProductosService {
               nombreVisible: paso.nombreVisible,
               modoActivacion: paso.modoActivacion,
               condicionActivacionJson: this.jsonOrNull(
-                paso.condicionActivacionJson,
+                remapearEstadoPasos(
+                  paso.condicionActivacionJson,
+                  extraDuplicadoPorOrigen,
+                ) as Prisma.JsonValue,
               ),
               modoTiempo: paso.modoTiempo,
               mecanismoCantidad: paso.mecanismoCantidad,

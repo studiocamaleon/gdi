@@ -1,5 +1,37 @@
 # Validación de staging — historial
 
+## 2026-10-20, 23:13 UTC — Refilado condicionado al estado de Troquelado
+
+Lucas autorizó publicar y probar en staging el [PR #117](https://github.com/studiocamaleon/gdi/pull/117) y, si funcionaban las condiciones activo e inactivo, promoverlo a producción. Rama independiente desde `main` (`9683c9c2d`), sin incorporar el PR #116 de WhatsApp ni dependencias automáticas. Revisión funcional **`92b49288c7df43d801c964a82647947801fce316`**; el commit documental posterior registra esta publicación sin reconstruir imágenes.
+
+El selector «Estado de otro paso» incluye los pasos base y los extras de la misma alternativa, con sus nombres y orden visibles. La API valida referencias y ciclos sobre esa misma secuencia; rechaza retirar un extra todavía referenciado. Duplicar producto o alternativa conserva extras y remapea sus condiciones.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:ac048e8ce0996df59e8ec6c253a4630abed180bee14ca202367e8d251d3e0925` |
+| Web | `sha256:e7f96c433a8538f0c927026af93b2a10bae976ae6528aae67b6765a64b8c9207` |
+| PDF, conservado | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Ensayo:** producto y empresa ficticios, con Refilado y Troquelado como extras; Troquelado aparece después de Refilado para probar también referencias a pasos posteriores. Desde Chrome se guardó primero «Troquelado es Activo» y luego «Troquelado es Inactivo». Ambas guardaron correctamente; tras recargar se comprobó la persistencia. Las cuatro cotizaciones HTTP usaron la configuración guardada por la interfaz:
+
+| Condición de Refilado | Troquelado seleccionado | Refilado se ejecuta | Minutos / costo de Refilado |
+| --- | --- | --- | --- |
+| Activo | No | No | 0 / 0 |
+| Activo | Sí | Sí | 10 / 166,67 |
+| Inactivo | No | Sí | 10 / 166,67 |
+| Inactivo | Sí | No | 0 / 0 |
+
+Los importes son del centro ficticio del ensayo, no tarifas reales. No se crearon OT, cobros ni facturas. Las notificaciones de la empresa ficticia continuaron pausadas. La cotización no se guardó como documento comercial.
+
+**Validación:** 58 pruebas de API y 55 de frontend, comprobación de tipos y prueba de regresión del selector que fallaba con el código anterior. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39509911000), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/39509910907), análisis y check CodeQL sin alertas abiertas del PR y Vercel aprobados. El registro documental final vuelve a pasar CI antes del merge. Marketing/Grafo3D y sus configuraciones no cambian.
+
+**Operación:** compilaciones remotas con tipos, sin builds de producción ni cambios de Docker en la Mac. Revisión comprobada en API, web y ambos workers; seis servicios saludables, recursos y secretos conservados. Constructor remoto propio retirado al finalizar la publicación. Web/API 200, API directa protegida 403 y BFF sin sesión 401. Se conservan login y permisos, el acceso sin Basic de staging y la configuración de WhatsApp. Base con 318 migraciones completas, checksums intactos y ninguna pendiente; sin migraciones, seeds ni resets.
+
+**Respaldo:** fuentes cifradas custodiadas e inventario actualizado. Copia posterior completada `2026-10-20T23:12:18.317Z`, con firma, huellas y descifrado del manifiesto comprobados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 31 archivos. Ante cortes de conexión B2 desde la Mac, la descarga cifrada y custodia se hicieron mediante el copiador existente; la firma y el descifrado se comprobaron localmente con las claves bajo custodia, sin transferirlas al servidor. No se cambiaron permisos, retención ni cifrado. **No se repitió una restauración SQL completa.** Evidencia detallada, accesos e identificadores privados fuera de Git.
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:a5b602b6d201b19824a49a2ecf8f1a878231d1b90b9da0c44e458fe037d61e30`; web a `registry.fly.io/grafoprint-staging-web@sha256:c48f6b7fe2776537f7443ee1c780166ce83cc79a2d5a2067e1373b9bd7582732` (revisión `e5244c3c7`, #115). Restituir el inventario del copiador; no revertir esquema ni borrar datos. La reversión vuelve a ocultar los extras en el selector y puede impedir guardar condiciones que ya los referencien.
+
 ## 2026-10-20, 19:19 UTC — Panel y TV: una misma prioridad de trabajo pendiente
 
 Lucas autorizó publicar el [PR #115](https://github.com/studiocamaleon/gdi/pull/115) en staging, comprobar la coincidencia entre Panel y TV y, si era correcta, promoverlo a producción. Parte de `main` actualizado (`f1b1f56cb`), sin dependencias de otros PR. Revisión funcional **`e5244c3c756b93382c14e2a82538b6165e37aeae`**; el commit posterior registra la publicación sin reconstruir imágenes.

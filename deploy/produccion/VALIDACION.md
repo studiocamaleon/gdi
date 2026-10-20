@@ -1,5 +1,34 @@
 # Validación de producción
 
+## 2026-10-20, 23:23 UTC — Condiciones por estado de pasos extra
+
+Publicado el [PR #117](https://github.com/studiocamaleon/gdi/pull/117), con autorización de Lucas para promover después de comprobar Refilado dependiente de Troquelado activo e inactivo en staging. Revisión funcional **`92b49288c7df43d801c964a82647947801fce316`**, desde `main` (`9683c9c2d`); el registro documental posterior no modifica las imágenes. El PR #116 de WhatsApp y las propuestas de dependencias son independientes y quedan fuera.
+
+El selector incluye pasos base y extras de la misma alternativa, con su nombre visible. La API valida referencias y ciclos en esa misma secuencia, evita retirar un extra referenciado y conserva las relaciones al duplicar producto o alternativa.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:ac048e8ce0996df59e8ec6c253a4630abed180bee14ca202367e8d251d3e0925` |
+| Web | `sha256:e7f96c433a8538f0c927026af93b2a10bae976ae6528aae67b6765a64b8c9207` |
+| PDF, conservado | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Validación funcional:** en un producto ficticio de staging se guardaron desde Chrome ambas condiciones de Refilado y se confirmó persistencia tras recargar. Las cuatro cotizaciones usan esa configuración guardada: con «Activo», Refilado se ejecuta sólo al seleccionar Troquelado; con «Inactivo», sólo al omitirlo. El paso activo aporta 10 minutos y costo 166,67 del centro ficticio; el inactivo aporta cero minutos y costo. Se probó una referencia a un paso posterior. No se generaron documentos comerciales para el ensayo.
+
+**Comprobación de producción:** catálogo y flujo existentes accesibles; el selector de Refilado muestra Troquelado y los demás pasos. Se inspeccionaron opciones sin guardar cambios en el producto real y se cerró la pestaña propia descartando el estado local. No se crearon ni modificaron OT, pagos o facturas. Durante el reemplazo de la API hubo una carga transitoria fallida; una vez saludables los servicios, la recarga y el recorrido funcionaron.
+
+58 pruebas locales de API, 55 de frontend y tipos aprobados; la regresión del selector fallaba sobre el código anterior. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39509911000), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/39509910907), CodeQL sin alertas abiertas y Vercel aprobados para el candidato. El último commit documental vuelve a pasar CI antes del merge. Marketing/Grafo3D y su configuración no cambian.
+
+**Operación:** se promovieron exactamente los manifiestos probados en staging, sin recompilar. Revisión comprobada en API, web y ambos workers. Seis servicios saludables; HTTPS web/API 200, API directa privada 403 y BFF sin sesión 401. Mismos recursos, regiones y huellas de secretos de los ocho servicios de ambos entornos. El worker fiscal conserva su configuración automática y coincide con la API; no se emitió ni se hizo una nueva consulta fiscal real. Constructor propio temporal retirado; no se alteraron Docker ni servidores locales.
+
+**Datos:** 318 migraciones completas, checksums intactos y ninguna pendiente, sin ejecutar migraciones, seeds ni resets. Las verificaciones de base de producción fueron de sólo lectura. Accesos e identificadores privados permanecen fuera de Git.
+
+**Respaldo:** fuentes exactas cifradas y custodiadas, inventario actualizado y copia posterior completada `2026-10-20T23:22:21.302Z`. Firma, huellas y descifrado del manifiesto verificados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 575 archivos. Los cortes de B2 desde la Mac se resolvieron transfiriendo las fuentes ya cifradas mediante el copiador existente; se descargó la evidencia cifrada y se verificó localmente con las claves bajo custodia. No se transfirieron claves de descifrado al servidor ni se cambiaron permisos, retención o cifrado. **No se repitió una restauración SQL completa.**
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-production-api@sha256:a5b602b6d201b19824a49a2ecf8f1a878231d1b90b9da0c44e458fe037d61e30`; web a `registry.fly.io/grafoprint-production-web@sha256:c48f6b7fe2776537f7443ee1c780166ce83cc79a2d5a2067e1373b9bd7582732` (`e5244c3c7`, #115). Restituir el inventario del copiador. No requiere revertir esquema ni borrar datos; vuelve a ocultar extras en el selector y puede rechazar el guardado de condiciones que los referencien.
+
+El cierre integra #117 en `main` conservando la revisión funcional y este registro. Se vuelven a consultar los PR abiertos; no se cierran trabajos independientes ni se borran sus ramas o carpetas.
+
 ## 2026-10-20, 19:19 UTC — Panel y TV: una misma prioridad de trabajo pendiente
 
 Lucas autorizó publicar el [PR #115](https://github.com/studiocamaleon/gdi/pull/115) en staging, comprobar la coincidencia entre Panel y TV y, si era correcta, promoverlo a producción. Parte de `main` actualizado (`f1b1f56cb`), sin dependencias de otros PR. Revisión funcional **`e5244c3c756b93382c14e2a82538b6165e37aeae`**; el commit posterior registra la publicación sin reconstruir imágenes.
