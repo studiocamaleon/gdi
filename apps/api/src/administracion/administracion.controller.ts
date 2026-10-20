@@ -745,7 +745,13 @@ export class AdministracionController {
     return this.metodosPagoService.toggle(auth, id);
   }
 
-  /** Idem métodos de pago: es la cuenta a la que entra lo que se cobra. */
+  @Permiso("administracion.cobrar", "administracion.cobrar.gestionar")
+  @Get('cuentas-cobro')
+  listarCuentasCobro(@CurrentSession() auth: CurrentAuth) {
+    return this.metodosPagoService.listarCuentasCobro(auth);
+  }
+
+  /** Cuentas operables para configuración y egresos. */
   @Permiso("administracion.tesoreria.ver", "administracion.cobrar.ver", "administracion.pagar.ver", "configuracion.metodos.ver", "administracion.cobrar", "administracion.egresos.ver")
   @Get('cuentas')
   listarCuentas(@CurrentSession() auth: CurrentAuth) {

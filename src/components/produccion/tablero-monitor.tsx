@@ -1,6 +1,9 @@
 "use client";
 
-import { Factory, RefreshCw } from "lucide-react";
+import { Factory, RefreshCw, Monitor } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { ActionButton } from "@/components/design-system/action-button";
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import { estadoMonitorProduccion } from "@/lib/sincronizacion-tablero";
@@ -16,6 +19,7 @@ export function TableroMonitor({ zona, actualizadoEl, conexion, error, refreshin
   onRefresh: () => void;
 }) {
   const scope = useDesignScope();
+  const puedeConfigurar = usePuede("produccion.configurar");
   const designTheme = useDesignTheme();
   const ahora = useRelojProduccion(1000, actualizadoEl?.getTime() ?? null);
   const estado = estadoMonitorProduccion(conexion, actualizadoEl?.getTime() ?? null, ahora, error);
@@ -45,6 +49,7 @@ export function TableroMonitor({ zona, actualizadoEl, conexion, error, refreshin
           <span className={s.date}>{fecha?.toLocaleDateString("es-AR", { timeZone: zona, weekday: "short", day: "2-digit", month: "short", year: "numeric" }) ?? "Cargando reloj"}</span>
         </div>
         <div className={s.sync}>
+          {puedeConfigurar && <Button variant="outline" nativeButton={false} render={<Link href="/produccion/pantallas" />}><Monitor data-icon="inline-start" />Pantallas</Button>}
           <ActionButton variant="outline" isPending={refreshing} onPress={onRefresh}>
             <RefreshCw aria-hidden="true" />{refreshing ? "Actualizando" : "Actualizar"}
           </ActionButton>

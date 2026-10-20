@@ -18,9 +18,11 @@
 import type { RangoPanel } from "@/lib/panel-api";
 import { claveFechaEnZona, ZONA_DEFAULT } from "@/lib/zona";
 
-export type PeriodoKey = "mes" | "mesPasado" | "trimestre" | "anio";
+export type PeriodoKey = "hoy" | "semana" | "mes" | "mesPasado" | "trimestre" | "anio";
 
 export const PERIODOS: Array<{ key: PeriodoKey; label: string }> = [
+  { key: "hoy", label: "Hoy" },
+  { key: "semana", label: "Esta semana" },
   { key: "mes", label: "Este mes" },
   { key: "mesPasado", label: "Mes pasado" },
   { key: "trimestre", label: "Trimestre actual" },
@@ -89,8 +91,17 @@ export function rangoDe(
   zona: string = ZONA_DEFAULT,
 ): RangoPanel {
   if (p === "mes") return {};
-  const [y, m] = claveFechaEnZona(new Date(), zona).split("-").map(Number);
+  const hoy = claveFechaEnZona(new Date(), zona);
+  const [y, m, d] = hoy.split("-").map(Number);
   const m0 = m - 1; // a mes 0-11, como Date
+  if (p === "hoy") return { desde: hoy, hasta: hoy };
+  if (p === "semana") {
+    // Semana calendario de lunes a domingo, incluso al cruzar mes o año.
+    // UTC sólo hace aritmética sobre el día ya resuelto en la zona del tenant.
+    const diasDesdeLunes = (new Date(Date.UTC(y, m0, d)).getUTCDay() + 6) % 7;
+    const lunes = d - diasDesdeLunes;
+    return { desde: clave(y, m0, lunes), hasta: clave(y, m0, lunes + 6) };
+  }
   if (p === "mesPasado") {
     return { desde: clave(y, m0 - 1, 1), hasta: clave(y, m0, 0) };
   }

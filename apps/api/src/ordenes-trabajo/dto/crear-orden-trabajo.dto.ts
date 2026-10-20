@@ -316,6 +316,11 @@ export class EditarOrdenTrabajoDto {
 }
 
 export class EditarOrdenTrabajoItemLoteDto extends CrearOrdenTrabajoItemDto {
+  /** Conserva íntegra la línea persistida. Los demás campos no la reescriben. */
+  @IsOptional()
+  @IsBoolean()
+  conservar?: boolean;
+
   /** ID de la línea si ya existe; sin ID se crea dentro del mismo commit. */
   @IsOptional()
   @IsUUID()

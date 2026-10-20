@@ -40,11 +40,9 @@ export function CentroCopiadoPedidoPrecios({
   const aviso = faltaCanal
     ? "Elegí un canal de venta para cotizar las impresiones."
     : error ||
-      (pendiente
+      (pendiente && vigente
         ? "Falta un precio en el tarifario. Completalo antes de emitir."
-        : !vigente
-          ? "Actualizá los precios de copiado antes de emitir."
-          : null);
+        : null);
   if (ocupado)
     return (
       <p className={styles.pedidoPrecios} role="status">
@@ -57,19 +55,14 @@ export function CentroCopiadoPedidoPrecios({
         <Alert variant={pendiente || error ? "destructive" : "default"}>
           <AlertDescription>{aviso}</AlertDescription>
         </Alert>
-        {editable && !faltaCanal && (
+        {editable && !faltaCanal && (error || pendiente) && (
           <Button variant="ghost" size="sm" onClick={onRevisar}>
-            Actualizar precios
+            Reintentar cálculo
           </Button>
         )}
       </div>
     );
-  if (!r?.resumenPrecios?.length)
-    return r && editable ? (
-      <Button variant="ghost" size="sm" onClick={onRevisar}>
-        Ver precios por hoja
-      </Button>
-    ) : null;
+  if (!vigente || !r?.resumenPrecios?.length) return null;
   const cantidad = (v: string) =>
     Number(v).toLocaleString(moneda.locale, { maximumFractionDigits: 4 });
   return (

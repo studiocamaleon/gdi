@@ -78,6 +78,8 @@ jobs:
         # No requieren seed, cuentas reales ni acceso a proveedores externos.
         run: |
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/pantallas-produccion/pantallas-produccion.integration.spec.ts \
+            src/pantallas-produccion/entregas-pantalla.spec.ts \
             src/auth/__tests__/revocacion-multi-instancia.integration.spec.ts \
             src/usuarios/__tests__/crear-usuario.spec.ts \
             src/usuarios/__tests__/password.spec.ts \
@@ -179,6 +181,13 @@ jobs:
         run: |
           npm ci --include=dev --no-audit --no-fund
           node node_modules/vitest/vitest.mjs run \
+            src/lib/staging-access.test.ts \
+            src/lib/request-origin.test.ts \
+            'src/app/api/session/route.test.ts' \
+            'src/app/api/backend/[...path]/route.test.ts' \
+            'src/app/api/pantalla/[accion]/route.test.ts' \
+            src/lib/pantalla-produccion.test.ts \
+            src/proxy.test.ts \
             src/components/comercial/cambiar-tipo-borrador.test.tsx \
             src/components/administracion/acreditaciones-lote.test.tsx \
             src/components/comercial/orden-modo-lectura.test.tsx \
@@ -190,12 +199,14 @@ jobs:
             src/components/comercial/centro-copiado-tarifarios-simulacion.test.tsx \
             src/components/comercial/centro-copiado-config-view.test.tsx \
             src/components/comercial/centro-copiado-pedido-precios.test.tsx \
+            src/hooks/use-calculo-automatico-copiado.test.tsx \
             src/components/comercial/agregar-producto-geometria.test.tsx \
             src/components/comercial/centro-copiado-sheet.test.tsx \
             src/components/comercial/propuesta-emision-navegacion.test.tsx \
             src/components/administracion/tesoreria-view.test.tsx \
             src/components/administracion/tesoreria-conciliacion.test.tsx \
             src/components/administracion/cobro-saldo.test.tsx \
+            src/components/comercial/cargos-orden-edicion.test.tsx \
             src/components/mostrador/entrega-manual.test.tsx \
             src/lib/descuentos-orden.test.ts \
             src/lib/eta-fechas.test.ts
@@ -224,6 +235,7 @@ jobs:
             src/centro-copiado/comercial/__tests__/calculo-hojas.spec.ts \
             src/centro-copiado/comercial/__tests__/validaciones.spec.ts \
             src/centro-copiado/__tests__/persistencia-cad.spec.ts \
+            src/centro-copiado/__tests__/persistencia-anillado.spec.ts \
             src/centro-copiado/__tests__/planos-manuales.spec.ts \
             src/centro-copiado/pedidos/__tests__/preview-canal.spec.ts \
             src/centro-copiado/comercial/__tests__/calculo-cad.spec.ts \

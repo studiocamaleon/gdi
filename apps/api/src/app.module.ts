@@ -34,6 +34,7 @@ import { TenantsModule } from './tenants/tenants.module';
 import { PlataformaModule } from './plataforma/plataforma.module';
 import { InventarioModule } from './inventario/inventario.module';
 import { ProduccionModule } from './produccion/produccion.module';
+import { PantallasProduccionModule } from './pantallas-produccion/pantallas-produccion.module';
 import { ProductosServiciosModule } from './productos-servicios/productos-servicios.module';
 import { MotorUniversalModule } from './motor-universal/motor.module';
 import { McpModule } from './mcp/mcp.module';
@@ -145,6 +146,7 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
     InventarioModule,
     ComprasModule,
     ProduccionModule,
+    PantallasProduccionModule,
     ProductosServiciosModule,
     MotorUniversalModule,
     McpModule,

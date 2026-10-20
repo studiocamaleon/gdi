@@ -1,5 +1,109 @@
 # Validación de staging — historial
 
+## 2026-10-20, 05:25 UTC — Lote de producción en tiempo real, cobros, OT y copiado
+
+[PR integrador #113](https://github.com/studiocamaleon/gdi/pull/113), creado desde `origin/main` (`5b1ee5c0e`), conserva los commits de #104 y #106–#112. Lucas autorizó publicar el conjunto en producción después de comprobar una OT con anillado en staging. Las propuestas de Dependabot quedan fuera. Revisión funcional ejecutada **`6ee6dee98cfc07cfca1fa093ef5d7f75d0ba2a0d`**; los commits posteriores sólo registran la publicación y no reconstruyen las imágenes.
+
+El lote incorpora la pantalla **Producción en tiempo real**, rotación automática y vinculación por código; cobros bancarios para vendedor con selección obligatoria y confirmación; edición y agregado de productos pendientes en OT sin facturar; atajos Hoy/Esta semana; En espera inicialmente colapsado; cálculo automático de copiado y corrección de anillado. El registro del sandbox de Meta es documental: no habilita mensajería de producción. La eliminación de HTTP Basic es exclusiva de staging; se conservan autenticación, permisos y canal privado web/API.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:64c308ad713c1716d4038be83e939205c5de7c8a711703df6ea7cb04aab5d910` |
+| Web | `sha256:080067d3ced86b030ce39252399fbd41c7c94c99a0ecc6f51cfd8d03392f0151` |
+| PDF, conservado | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+Backend y web compilados en remoto con tipos. La conexión de seguimiento de la web se interrumpió tras tipos; se recuperó la imagen final del constructor, se verificó su revisión y BUILD_ID y se subió sin recompilar. Las credenciales temporales de registro se revocaron y el constructor propio se retiró. Producción utiliza exactamente los digests comprobados en staging, sin recompilar. Se conservan seis máquinas por entorno y todos sus tamaños, incluida API performance en producción. Salud web/API 200, acceso directo privado 403 y BFF sin sesión 401; revisión comprobada en los cuatro procesos actualizados. Las huellas de secretos de API, web y ambos workers se conservaron en los dos entornos. La configuración fiscal del worker de producción coincide con la API y mantiene su modo automático; no se realizó una nueva consulta ni emisión real a ARCA.
+
+**Pruebas:** 154 pruebas locales de interfaz en nueve suites y 23 de API en cuatro suites. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39335049714), [contenedores/tipos/migraciones](https://github.com/studiocamaleon/gdi/actions/runs/39335049649), CodeQL sin alertas abiertas y Vercel aprobados en la revisión funcional. El último commit documental vuelve a comprobarse antes del merge. No se desactivaron controles para integrar.
+
+**Anillado en staging:** con datos y PDF ficticios, primero se reprodujo el rechazo «El archivo y su cálculo productivo no coinciden». El cálculo guardaba hojas como cantidad del producto mientras la revisión esperaba libros. Ahora conserva libros y precio unitario por libro, sin aflojar la validación del archivo. Se cargó un original de 25 páginas A4 BN con anillado, se pasó de uno a dos ejemplares y la tarifa cambió automáticamente de $100 a $80 por hoja al alcanzar 50 hojas. La OT se emitió y recargó correctamente: 2 libros, 50 hojas, total $8.167,24. No apareció «Actualizar precios» ni el error anterior; sólo se ofrece reintentar ante un fallo real. No se emitieron facturas ni se registraron cobros para esta prueba.
+
+Durante la redirección posterior a la emisión, Chrome registró un fallo de red al cargar RSC y mostró el aviso de salida. La OT ya existía: se abrió desde el listado y se recargó, sin repetir la emisión. Se observó además un aviso de hidratación React 418; no bloqueó la ficha ni alteró los datos comprobados. No se considera una consola libre de avisos.
+
+La regresión del lote conserva la OT ficticia anterior con dos PVC y un banner iniciado, total $70.000 y $7.000 cobrados. El vendedor puede seleccionar Banco; transferencia a efectivo y acceso a Tesorería siguen rechazados. El banner iniciado continúa bloqueado. Se comprobó acceso sin Basic, login, origen y vinculación/revocación de una TV temporal; el ensayo funcional detallado del lote #110 queda en el registro del 19/10. El Raspberry físico y la mensajería con un número propio siguen siendo ensayos pendientes.
+
+**Esquema:** 318 migraciones completas. Producción incorpora únicamente `20261019120000_pantallas_produccion` y `20261019160000_recibos_numero_por_empresa`, ya presentes en staging. Tabla nueva de pantallas y unicidad de recibos por empresa, conservando los recibos existentes. Rol de ejecución actualizado; checksums previos comprobados. Sin seeds, resets ni restauraciones sobre las bases activas. Las comprobaciones en producción son de lectura: gestión de pantallas sin dispositivos, Resumen ejecutivo con Hoy y Esta semana, y tablero con atrasadas y listos expandidos. En espera tiene cero trabajos en ese momento. No se crean OT, pagos ni comprobantes ficticios allí.
+
+**Respaldo:** fuentes exactas cifradas y custodiadas; inventario del copiador actualizado a las imágenes activas. Copia posterior completada `2026-10-20T05:08:12.602Z`: firma válida, huella y manifiesto descifrado, revisión/fuentes/imágenes comprobadas, 318 migraciones y 30 archivos. Evidencia detallada y accesos fuera de Git. El comprobante de staging precede a la última OT ficticia y su PDF; las copias horarias siguientes recogerán esa prueba. **No se repitió restauración SQL completa.**
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:6e7be8e9d5a8be85202b54cfcaa85c5e530b752ad27e5a130a35177ddf3158b1`; web a `registry.fly.io/grafoprint-staging-web@sha256:df20e36fa86014960930bd1c08d4109d8ae386ad1edcd021f5d0649482c8e96b`. Conservar la tabla de pantallas, los recibos y su unicidad por empresa; no borrar datos ni revertir el esquema para deshacer imágenes. Revisar compatibilidad antes de volver al código anterior y restituir el inventario del copiador. Esa reversión vuelve a introducir los comportamientos corregidos. PDF y copiador conservan sus imágenes.
+
+La integración final de #113 conserva todas las fuentes del lote. Los PR absorbidos se fusionan o cierran por inclusión comprobada; el estado final se registra en el PR integrador. No se eliminan worktrees que utiliza el desarrollo local.
+
+## 2026-10-19, 21:01 UTC — Staging sin contraseña HTTP Basic adicional
+
+Pedido explícito de Lucas para facilitar la prueba del Raspberry. [PR #111](https://github.com/studiocamaleon/gdi/pull/111), dependiente de #110: rama creada desde `origin/main` actualizado, incorporando el lote desplegado; base temporal `codex/lote-produccion-staging`. Al resolver la dependencia, ajustar la base a `main`. No se modificó el PR #110 listo para revisión ni se fusionaron propuestas.
+
+**Sólo web actualizada:** fuentes `34b206698a91dfda6b1288a386b3fbf437b309eb`, imagen `registry.fly.io/grafoprint-staging-web@sha256:df20e36fa86014960930bd1c08d4109d8ae386ad1edcd021f5d0649482c8e96b`. API y ambos workers conservan `acb576be008205570c906dd0545c30a41b027823` y `sha256:6e7be8e9d5a8be85202b54cfcaa85c5e530b752ad27e5a130a35177ddf3158b1`. PDF y copiador conservan sus imágenes. Sin migraciones, cambios de esquema, seeds ni resets; el manifiesto del respaldo registra 318 migraciones.
+
+`STAGING_BASIC_AUTH_ENABLED=false` quita únicamente la contraseña de entrada. `STAGING_PRIVATE=true` permanece activo para autenticar web→API, validar el origen y conservar las cabeceras privadas/noindex. Se mantienen la sesión y los permisos de Grafo y la credencial de cada TV. Las credenciales Basic existentes se conservan para poder reactivar ese control; ninguna huella de los secretos de API, workers y web cambió.
+
+**Comprobaciones:** seis regresiones reprodujeron el bloqueo antes del cambio; luego pasaron 93 pruebas locales de acceso, origen, proxy, sesión, BFF y pantalla, además de ESLint y diff. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39320376447), [contenedores/tipos/migraciones/login](https://github.com/studiocamaleon/gdi/actions/runs/39320376397) y Vercel aprobados para las fuentes desplegadas. El commit de registro incorpora las suites de acceso/origen/sesión/BFF al CI HTTP; no cambia el código de las imágenes. Compilación remota con tipos, sin builds de producción ni reinicios de Docker en la Mac.
+
+Ensayo real con clientes HTTP nuevos **sin encabezado Basic**: login y `/pantalla/produccion` responden 200; la gestión sin sesión redirige al login. BFF sin sesión y datos de TV sin vincular devuelven 401 sin desafío Basic. API directa rechaza con 403; escrituras sin Origin o con origen ajeno rechazan con 403. Robots y noindex/no-store se conservan. Una cuenta administradora ficticia pudo iniciar sesión, vincular una TV temporal, consultar entregas y revocarla; la lectura posterior se rechazó. La TV no pudo usar la sesión de usuario. Se revocó sólo ese dispositivo de ensayo; no se revocaron otras TVs ni se modificaron datos comerciales.
+
+Los seis servicios de staging están iniciados y saludables con sus tamaños anteriores. Las seis imágenes y recursos de producción coinciden con el inventario previo; `main` permanece sin cambios. Constructor remoto propio retirado tras la compilación. El Raspberry físico y la aceptación del lote #110 siguen pendientes.
+
+**Recuperación:** fuentes cifradas y custodiadas, inventario mixto del copiador actualizado. Copia `9ae3d996-6ca3-476b-a06d-b80817794b33`, completada `2026-10-19T21:00:25.427Z`: firma válida, manifiesto descifrado y referencias exactas de fuentes/imágenes, 318 migraciones, 30 archivos y 9 fuentes. La clave privada se usó sólo en la Mac. **No se repitió restauración SQL completa.**
+
+**Reversión:** volver a `STAGING_BASIC_AUTH_ENABLED=true` y publicar la misma imagen web; `STAGING_PRIVATE` debe seguir en `true`. Alternativamente, restaurar sólo la web anterior `sha256:7f0e0acfdd0cd9ed87ef7e68b5186eb273ad616e34b5023b71580dbd90c82966`. Conservar datos y vinculación de TVs, y ajustar el inventario del copiador a las versiones reales. No implica publicar producción.
+
+## 2026-10-19, 19:55 UTC — Lote de producción, cobros y reportes
+
+Lucas autorizó reunir los cambios locales y probarlos juntos **sólo en staging**, antes de decidir producción. [PR integrador #110](https://github.com/studiocamaleon/gdi/pull/110), creado desde `origin/main` (`5b1ee5c0e`), conserva los commits de #106 (TV), #107 (cobros/edición de OT), #108 (períodos de reportes), #109 (En espera colapsado) y el registro del sandbox #104. Las propuestas de dependencias quedan fuera. **No se fusionó `main` ni se publicó producción.** Los PR fuente siguen abiertos hasta la aceptación e integración del lote.
+
+**Revisión funcional ejecutada:** `acb576be008205570c906dd0545c30a41b027823`. Pasaron 108 pruebas locales del conjunto en ocho archivos. [CI HTTP, permisos y regresiones](https://github.com/studiocamaleon/gdi/actions/runs/39309712375), [contenedores, tipos, migraciones y login](https://github.com/studiocamaleon/gdi/actions/runs/39309712582), [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/39309702095) y Vercel aprobados antes del despliegue; cero alertas CodeQL abiertas del PR. Las imágenes backend y web se compilaron remotamente con tipos. El commit documental posterior registra estos resultados sin reconstruir imágenes.
+
+| Servicio | Revisión de fuentes | Digest |
+| --- | --- | --- |
+| API / worker / worker-pdf | `acb576be008205570c906dd0545c30a41b027823` | `sha256:6e7be8e9d5a8be85202b54cfcaa85c5e530b752ad27e5a130a35177ddf3158b1` |
+| Web | `acb576be008205570c906dd0545c30a41b027823` | `sha256:7f0e0acfdd0cd9ed87ef7e68b5186eb273ad616e34b5023b71580dbd90c82966` |
+| PDF, conservado | `fc6277ff7013053d638e26b6cd4c11dbaa8d6890` | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | Imagen previa | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Migraciones:** `20261019120000_pantallas_produccion` y `20261019160000_recibos_numero_por_empresa`; 318 completas, ninguna pendiente y checksums previos intactos. Rol de ejecución actualizado mediante el procedimiento existente. Sin seeds, resets ni borrados. Las seis tablas de control conservaron sus recuentos y huellas tras migrar; al finalizar el ensayo también coinciden al excluir los datos ficticios nuevos.
+
+**Ensayo HTTP y de navegador en la empresa aislada «Ensayo del lote · Staging»:**
+
+- Vendedor con cuentas restringidas sólo a su caja de efectivo: Banco aparece para cobrar, sin permitir operar Tesorería. Transferencia a efectivo rechazada (400), caja no asignada rechazada (403), Tesorería denegada (403). Débito y crédito de $1.000 cada uno registrados a Banco; reintentos devuelven el mismo cobro.
+- El formulario comienza sin medio elegido y con registro deshabilitado. Transferencia de $5.000: confirmación muestra monto, medio, banco, fecha y referencia. Abrirla no genera movimientos; «Volver a corregir» conserva los datos. Confirmar registra una sola vez. Resultado: tres cobros, $7.000 cobrados y tres recibos PDF accesibles para el vendedor. Las tarjetas conservan su circuito de acreditación pendiente.
+- OT en producción, sin facturar: vinilo pendiente de $20.000 reemplazado por PVC de $30.000; agregado otro PVC de $30.000. Total final $70.000, tres productos, estado producción conservado. El banner iniciado mantiene exactamente su ID, paso, estado e inicio; no ofrece edición ni eliminación en la interfaz. El intento directo de modificarlo devuelve 409.
+- Operación diaria: «En espera» aparece colapsado, admite expansión manual y vuelve a colapsarse al recargar. «Con retraso» permanece expandido.
+- Reportes: Hoy = 19/10/2026; Esta semana = lunes 19 a domingo 25/10/2026, usando la zona de la empresa. Cambiar de Resumen ejecutivo a Comercial conserva el período en la URL y en pantalla. Los nueve reportes comparten el selector comprobado en CI/local.
+- TV: vinculación por código desde Pantallas; 17 entregas (7 atrasadas, 10 de hoy, 4 listas para entregar), ordenadas por atraso. Rotación observada entre páginas de nueve cada diez segundos, pausa sin avance y recarga conservando la autorización. Revocar elimina las entregas en la siguiente consulta. Nueva vinculación comprobada y demo disponible. En staging, Chrome volvió a solicitar HTTP Basic después de revocar; los intentos de nuevo código vencieron mientras ese diálogo estaba pendiente. Completar la protección existente permitió generar y vincular otro código, sin cambiar el código ni reducir controles.
+
+Los datos y cuentas son ficticios, con notificaciones pausadas y sin números ni integraciones. Cero envíos Inbox/WhatsApp del ensayo. Se conservaron las empresas demo y sandbox anteriores. La empresa, sus dos usuarios y la TV demo quedan disponibles para la aceptación de Lucas; sus accesos privados y capturas permanecen fuera de Git. Retirar esa muestra al cerrar el ensayo, conservando su auditoría. **Pendiente:** aceptación del lote y prueba en el Raspberry/TV físico; la adaptación vertical/horizontal se había comprobado en local. No se ensayó un número real de WhatsApp.
+
+Seis servicios de staging iniciados y saludables, tamaños originales; revisión comprobada en API, ambos workers y web. HTTPS de API/web 200, accesos anónimos protegidos. Huellas de todos los secretos de API, workers y web sin cambios, incluida la configuración de Meta. Las seis imágenes y los recursos de producción coinciden con el inventario previo. Constructor temporal de este lote retirado; desarrollo local conservado.
+
+**Respaldo:** fuentes exactas cifradas y custodiadas, inventario del copiador actualizado. Copia posterior `b24d9150-223f-4670-99a0-a4fff7d45605`, completada `2026-10-19T19:52:27.749Z`: firma válida, manifiesto descifrado, revisión e imágenes exactas, 318 migraciones, 30 archivos y ocho fuentes. El comprobante y manifiesto cifrado se descargaron desde el copiador y se verificaron localmente con la clave de custodia; la clave privada no salió de la Mac. **No se repitió restauración SQL completa.**
+
+**Reversión:** API y ambos workers al digest previo `sha256:d44ec43ed9d170772251409e2d548a68f8d4d73d7b4e45ebefe95ff99c6eb11b` (`2a65d4c26`); web a `sha256:08a10da0a3bc7cb0be50824a6c55b48be32906b4d6fbc0dabcb730499941e62a` (`fc6277ff7`). Conservar configuración, PDF, datos y el esquema posterior a las migraciones. No restaurar el índice global de recibos: las empresas pueden compartir numeración. Restituir el inventario compatible del copiador y custodiar cualquier revisión de corrección. Producción requerirá una autorización posterior y la promoción de estas mismas imágenes verificadas.
+
+## 2026-10-17, 20:36 UTC — Autorización real con el sandbox de Meta
+
+Ensayo autorizado por el titular, realizado desde Chrome y el Inbox de staging. Meta confirmó el estado de Tech Provider y la creación de su cuenta sandbox. Se autorizó exclusivamente `https://staging.grafoprint.com.ar` para el SDK de JavaScript; el titular confirmó ese cambio, las condiciones presentadas por Meta y el acceso final a los activos del sandbox.
+
+**Resultado:** un único intento `SANDBOX`, creado a las 20:32:50 UTC, canjeado a las 20:36:46 UTC y `VERIFICADA` a las **20:36:48 UTC / 17:36:48 Argentina**. La interfaz mostró «Autorización de prueba verificada». El servidor canjeó el código y comprobó la aplicación, los permisos y la cuenta configurada mediante Graph; terminó sin código de fallo y retiró el token cifrado del intento.
+
+Se creó **Ensayo Meta Sandbox — Staging**, una empresa ficticia separada, con suscripción manual y acceso del administrador de ensayo existente. Se seleccionaron únicamente el número de prueba de Sandbox Business y Sandbox Messaging Account. El perfil de ensayo utilizó `example.com`; no se conectaron números ni cuentas de clientes.
+
+**Configuración:** API y worker principal conservan sus imágenes y reciben `META_CONEXION_MODO=sandbox`, la lista limitada a esa empresa y los identificadores de configuración y sandbox en el almacén de secretos de Fly. Los identificadores privados y las capturas permanecen fuera de Git. La autorización no habilita coexistencia para otras empresas. El worker mantiene la limpieza de intentos vencidos.
+
+| Componente | Fuente conservada | Digest conservado |
+| --- | --- | --- |
+| API / worker principal | `2a65d4c26350ce53a250ab356fb098666855befd` | `sha256:d44ec43ed9d170772251409e2d548a68f8d4d73d7b4e45ebefe95ff99c6eb11b` |
+| Web | `fc6277ff7013053d638e26b6cd4c11dbaa8d6890` | `sha256:08a10da0a3bc7cb0be50824a6c55b48be32906b4d6fbc0dabcb730499941e62a` |
+
+Actualización de configuración sobre las máquinas existentes, sin builds, cambios de tamaños, migraciones, seeds ni resets. La API pasó su control de salud tras reiniciar; el worker volvió a `started`. Durante el reinicio de la API, una navegación mostró el error recuperable de carga de vista; recargar después de recuperar la salud permitió continuar con la misma sesión. Worker PDF, Gotenberg, copiador y producción no se modificaron.
+
+**Conservación comprobada:** recuentos y SHA-256 de las seis tablas de Meta/Inbox de la demo anterior coinciden antes y después: un vínculo, cero autorizaciones, una conversación, 31 mensajes, 16 envíos y 12 adjuntos. La empresa sandbox terminó con cero vínculos operativos, altas de sincronización, conversaciones, mensajes y envíos. No se conservó el token temporal ni se solicitó historial. La creación de empresa y la autorización fueron comprobaciones sobre el código ya publicado; este cambio documental no modifica la aplicación.
+
+**Límites:** acredita el registro insertado real, el retorno al navegador y la verificación del servidor. El sandbox de Meta dura 30 días y no intercambia mensajes; no acredita coexistencia, historial ni mensajería de un número propio. La conexión sandbox queda habilitada sólo para la empresa ficticia indicada. Para apagarla, vaciar `META_CONEXION_MODO` y `META_CONEXION_TENANT_IDS` en API y worker principal, conservando los datos del ensayo. No borrar el sandbox ni revocar permisos de otras cuentas como parte de esa reversión. Esta operación no incluyó una restauración ni una verificación nueva de respaldos.
+
+Referencias: [cuentas sandbox de Meta](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview#sandbox-accounts) y [recorrido de Grafo](../../docs/meta-conexion-empresas.md).
+
 ## 2026-10-16, 23:14 UTC — Cargos del presupuesto al facturar una OT
 
 [PR #103](https://github.com/studiocamaleon/gdi/pull/103), desde `main`, con autorización del titular para probar staging y publicar producción sin emitir la factura afectada. Sólo esta corrección; dependencias automáticas, marketing y Grafo3D fuera.

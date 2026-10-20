@@ -524,7 +524,7 @@ function Grupo({
   entrando: CambiosCeldas;
 }) {
   const [abierto, setAbierto] = useState(
-    inicialmenteAbierto ?? grupo.items.length > 0,
+    grupo.key !== "waiting" && (inicialmenteAbierto ?? grupo.items.length > 0),
   );
   const [limite, setLimite] = useState(30);
   const planes = useMemo(

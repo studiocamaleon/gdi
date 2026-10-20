@@ -13,7 +13,7 @@ import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
 import {
   getCobros,
   getCuentaCorriente,
-  getCuentasFondos,
+  getCuentasCobro,
   getMetodosPago,
 } from "@/lib/administracion-api";
 import { getOrdenTrabajo } from "@/lib/ordenes-trabajo-api";
@@ -57,7 +57,7 @@ export default async function RegistrarCobroPage({
   try {
     [metodos, cuentas] = await Promise.all([
       getMetodosPago(),
-      getCuentasFondos(),
+      getCuentasCobro(),
     ]);
     if (ordenId) {
       const [detalle, cobros] = await Promise.all([

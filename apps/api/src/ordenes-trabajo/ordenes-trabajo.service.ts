@@ -1,3 +1,4 @@
+import { bloqueosEdicionProductos, exigirProductosEditablesTx, retirarComponentesPendientesTx } from './edicion-productos';
 import { validarCopiadoListo, exigirMarcaAntesDeEmision } from './copiado-listo';
 import { cargosConOrigen } from './cargos-con-origen';
 import { CentroCopiadoEmisionService } from '../centro-copiado/pedidos/centro-copiado-emision.service';
@@ -1621,8 +1622,14 @@ export class OrdenesTrabajoService {
       auth.tenantId,
       orden.items.map((i) => i.id),
     );
+    const bloqueosProductos = orden.estado === 'borrador' || !orden.items.length ? new Map<string, string>()
+      : await bloqueosEdicionProductos(this.prisma, auth.tenantId, orden.id);
+    const comercial = this.toDetalle({ ...orden, publicToken });
     const detalle = {
-      ...this.toDetalle({ ...orden, publicToken }),
+      ...comercial,
+      productos: comercial.productos.map(p => ({
+        ...p, motivoBloqueoEdicion: bloqueosProductos.get(p.id) ?? null,
+      })),
       cargos: cargosConOrigen(orden),
       clienteTelefono: orden.cliente?.telefonoNumero?.trim()
         ? [orden.cliente.telefonoCodigo, orden.cliente.telefonoNumero].filter(Boolean).join(' ').trim()
@@ -2610,6 +2617,7 @@ export class OrdenesTrabajoService {
           CrearOrdenTrabajoItemDto & {
             id?: string;
             archivosOrigenItemIds?: string[];
+            conservar?: boolean;
           }
         >
       | undefined;
@@ -2630,6 +2638,11 @@ export class OrdenesTrabajoService {
         throw new BadRequestException(
           'Algún producto editado no pertenece a esta orden.',
         );
+      }
+      for (const item of payload.items.filter(i => i.conservar)) {
+        const previo = orden.items.find(i => i.id === item.id && !i.parentItemId);
+        if (!previo || previo.cotizacionItemId !== item.cotizacionItemId || item.archivosOrigenItemIds?.length)
+          throw new BadRequestException('La línea a conservar no coincide con la orden. Recargá antes de guardar.');
       }
       const origenesArchivos = payload.items.flatMap(
         (item) => item.archivosOrigenItemIds ?? [],
@@ -2713,20 +2726,7 @@ export class OrdenesTrabajoService {
         ),
         payload.tipoCambioId,
       );
-      if (
-        orden.cotizacionId &&
-        snapshots.some(
-          (snapshot) =>
-            snapshot.cotizacionId !== orden.cotizacionId &&
-            !historicosSinCambio.has(snapshot.id),
-        )
-      ) {
-        if (!payload.tipoCambioId) {
-          const nuevos = snapshots.filter(s => !historicosSinCambio.has(s.id));
-          const contenedores = [...new Set(nuevos.map(s => s.cotizacionId))];
-          const revisionCopiado = contenedores.length === 1 && await this.prisma.centroCopiadoPedidoCalculo.findFirst({ where: { tenantId: auth.tenantId, cotizacionId: contenedores[0] } });
-          if (!revisionCopiado) throw new BadRequestException('Algún producto no pertenece a la cotización de la orden.');
-        }
+      if (snapshots.some(snapshot => !historicosSinCambio.has(snapshot.id))) {
         // Una revisión monetaria crea snapshots nuevos y conserva intacta la
         // cotización de origen (incluido un presupuesto convertido).
         const usadoEnOtraOrden = await this.prisma.ordenTrabajoItem.findFirst({
@@ -2754,6 +2754,7 @@ export class OrdenesTrabajoService {
           decimales,
         ),
         id: item.id,
+        conservar: item.conservar,
         archivosOrigenItemIds: item.archivosOrigenItemIds,
       }));
       this.validarMontosItems(itemsAutorizados);
@@ -2771,6 +2772,7 @@ export class OrdenesTrabajoService {
         CrearOrdenTrabajoItemDto & {
           id?: string;
           archivosOrigenItemIds?: string[];
+          conservar?: boolean;
         }
       >;
       if (estado !== 'borrador') {
@@ -2898,14 +2900,23 @@ export class OrdenesTrabajoService {
             .filter((itemId): itemId is string => Boolean(itemId)),
         );
         const eliminados = orden.items
+          .filter(item => !item.parentItemId)
           .map((item) => item.id)
           .filter((itemId) => !conservados.has(itemId));
+        await exigirProductosEditablesTx(tx, auth.tenantId, orden.id, [
+          ...eliminados,
+          ...itemsAutorizados.filter(i => i.id && !i.conservar).map(i => i.id!),
+        ]);
         const materializables: ItemAMaterializar[] = [];
         const transferenciasArchivos: Array<{
           destinoId: string;
           origenIds: string[];
         }> = [];
         for (const [ordenIndice, item] of itemsAutorizados.entries()) {
+          if (item.id && item.conservar) {
+            await tx.ordenTrabajoItem.update({ where: { id: item.id }, data: { ordenIndice } });
+            continue;
+          }
           let destinoId: string;
           if (item.id) {
             const previo = await tx.ordenTrabajoItem.findFirstOrThrow({
@@ -2934,6 +2945,8 @@ export class OrdenesTrabajoService {
               throw new ConflictException(
                 'Eliminá la distribución antes de cambiar la cotización o la cantidad del producto.',
               );
+            if (previo.cotizacionItemId !== item.cotizacionItemId && !previo.contieneLotesEntrega)
+              await retirarComponentesPendientesTx(tx, auth.tenantId, orden.id, item.id);
             const actualizado = await tx.ordenTrabajoItem.update({
               where: { id: item.id },
               data: { ...this.buildItemData(item), personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item, previo, estado === 'borrador'), ordenIndice },
@@ -2975,7 +2988,7 @@ export class OrdenesTrabajoService {
           eliminados,
           transferenciasArchivos,
         );
-        if (estado === 'pendiente') {
+        if (estado !== 'borrador') {
           await this.materializarPasosItems(
             tx,
             auth.tenantId,
@@ -2984,8 +2997,10 @@ export class OrdenesTrabajoService {
           );
         }
         itemIdsParaPreparar = materializables.map((item) => item.id);
-        if (estado === 'pendiente') {
-          await this.reconciliarCupones(tx, auth, orden.id, itemsAutorizados);
+        if (estado !== 'borrador') {
+          await this.reconciliarCupones(tx, auth, orden.id, await tx.ordenTrabajoItem.findMany({
+            where: { tenantId: auth.tenantId, ordenId: orden.id, parentItemId: null },
+          }));
         }
       }
       if (itemsAutorizados || cargosActualizados !== undefined) {
@@ -3343,12 +3358,11 @@ export class OrdenesTrabajoService {
   // ── Edición de items ─────────────────────────────────────────────────
 
   /**
-   * Los items sólo se tocan mientras el taller no arrancó (regla acordada
-   * 2026-07-16): borrador y pendiente. En produccion+ el contenido queda
-   * congelado — cambios de alcance ahí son otra conversación de negocio.
+   * La OT en producción admite altas y cambios de productos aún sin iniciar.
+   * Facturación y ejecución se verifican de nuevo dentro de la transacción.
    */
   puedeEditarItems(estado: OrdenTrabajoEstado): boolean {
-    return estado === 'borrador' || estado === 'pendiente';
+    return estado === 'borrador' || estado === 'pendiente' || estado === 'produccion';
   }
 
   private async cargarOrdenParaItems(auth: CurrentAuth, ordenId: string) {
@@ -3817,6 +3831,8 @@ export class OrdenesTrabajoService {
       where: { id: ordenId },
       select: {
         facturadoTotal: true,
+        cobradoTotal: true,
+        fidelizacionCanjeMonto: true,
         tenantId: true,
         tratamientoFiscal: true,
         cargosDirectosJson: true,
@@ -3838,7 +3854,8 @@ export class OrdenesTrabajoService {
       sinComprobante ? 'SIN_COMPROBANTE' : 'FISCAL',
       cargosDirectosFallback,
     );
-    const total = subtotal + impuestos + cargosDirectos;
+    const total = subtotal + impuestos + cargosDirectos - Number(actual.fidelizacionCanjeMonto);
+    validarTotalCobrado(total, actual.cobradoTotal);
     if (total < Number(actual.facturadoTotal) - 0.01) {
       const { moneda } = regional;
       const dinero = (n: number) =>
@@ -4307,7 +4324,6 @@ export class OrdenesTrabajoService {
     const usado = await this.prisma.ordenTrabajoItem.count({
       where: {
         tenantId: auth.tenantId,
-        ordenId,
         cotizacionItemId,
         ...(exceptoItemId ? { id: { not: exceptoItemId } } : {}),
       },
@@ -4335,10 +4351,6 @@ export class OrdenesTrabajoService {
       this.validarSnapshotDisponible(auth, orden.id, payload.cotizacionItemId),
       regionalDelTenant(this.prisma, auth.tenantId),
     ]);
-    if (orden.cotizacionId && snapshot.cotizacionId !== orden.cotizacionId)
-      throw new BadRequestException(
-        'La cotización del producto no pertenece a la orden.',
-      );
     const item = this.itemAutorizado(
       payload,
       snapshot,
@@ -4390,6 +4402,7 @@ export class OrdenesTrabajoService {
         throw new ConflictException(
           'La orden cambió mientras agregabas el producto. Recargala e intentá nuevamente.',
         );
+      await exigirProductosEditablesTx(tx, auth.tenantId, orden.id, []);
       const creado = await tx.ordenTrabajoItem.create({
         data: {
           tenantId: auth.tenantId,
@@ -4401,7 +4414,7 @@ export class OrdenesTrabajoService {
       });
       creadoId = creado.id;
       // La orden ya está emitida: el item nuevo entra al Tablero con pasos.
-      if (orden.estado === 'pendiente') {
+      if (orden.estado !== 'borrador') {
         await this.materializarPasosItems(tx, auth.tenantId, [
           {
             id: creado.id,
@@ -4478,10 +4491,6 @@ export class OrdenesTrabajoService {
       ),
       regionalDelTenant(this.prisma, auth.tenantId),
     ]);
-    if (orden.cotizacionId && snapshot.cotizacionId !== orden.cotizacionId)
-      throw new BadRequestException(
-        'La cotización del producto no pertenece a la orden.',
-      );
     const item = this.itemAutorizado(
       payload,
       snapshot,
@@ -4555,6 +4564,7 @@ export class OrdenesTrabajoService {
         throw new ConflictException(
           'La orden cambió mientras editabas el producto. Recargala e intentá nuevamente.',
         );
+      await exigirProductosEditablesTx(tx, auth.tenantId, orden.id, [existente.id]);
       const loteActual = await tx.ordenTrabajoItem.findFirstOrThrow({
         where: { id: existente.id, tenantId: auth.tenantId },
         select: {
@@ -4576,14 +4586,15 @@ export class OrdenesTrabajoService {
         throw new ConflictException(
           'Eliminá la distribución antes de cambiar la cotización o la cantidad del producto.',
         );
+      if (loteActual.cotizacionItemId !== item.cotizacionItemId && !loteActual.contieneLotesEntrega)
+        await retirarComponentesPendientesTx(tx, auth.tenantId, orden.id, existente.id);
       await tx.ordenTrabajoItem.update({
         where: { id: existente.id },
         data: { ...this.buildItemData(item), personalPrevistoJson: await this.prepararPersonalPrevisto(tx, auth, item, existente, orden.estado === 'borrador') },
       });
       // Emitida: el item pudo cambiar de snapshot/ruta → pasos de nuevo.
-      // No hay ejecución que pisar: ejecutar promueve a `produccion`, y ahí
-      // los items quedan congelados.
-      if (orden.estado === 'pendiente') {
+      // El candado por producto comprobó que no hay ejecución que reemplazar.
+      if (orden.estado !== 'borrador') {
         await this.materializarPasosItems(
           tx,
           auth.tenantId,
@@ -4683,8 +4694,9 @@ export class OrdenesTrabajoService {
         throw new ConflictException(
           'La orden cambió mientras quitabas el producto. Recargala e intentá nuevamente.',
         );
+      await exigirProductosEditablesTx(tx, auth.tenantId, orden.id, [existente.id]);
       await tx.ordenTrabajoItem.delete({ where: { id: existente.id } });
-      if (orden.estado === 'pendiente') {
+      if (orden.estado !== 'borrador') {
         const itemsCupon = await tx.ordenTrabajoItem.findMany({
           where: { ordenId: orden.id },
           select: { descuentoCuponId: true, descuentoMonto: true },

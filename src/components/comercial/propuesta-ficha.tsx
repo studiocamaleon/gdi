@@ -1,5 +1,6 @@
 "use client";
 import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
+import { useCalculoAutomaticoCopiado } from "@/hooks/use-calculo-automatico-copiado";
 import {
   claveRevisionCopiado,
   ponerPrecioCopiado,
@@ -5565,9 +5566,9 @@ function PropuestaFichaContenido({
     [orden, puedeEditarOrden, camposEdicion],
   );
 
-  /** Items tocables sólo antes de que el taller arranque (espejo backend). */
+  /** La ejecución bloquea cada producto; la factura bloquea toda la OT. */
   const puedeTocarItems =
-    !!orden && (orden.estado === "borrador" || orden.estado === "pendiente");
+    !!orden && orden.facturadoTotal === 0 && ["borrador", "pendiente", "produccion"].includes(orden.estado);
   /**
    * Una sola puerta de edición: los items (agregar/editar/quitar) sólo se
    * habilitan DENTRO del modo "Editar orden", igual que los field-cards.
@@ -5584,6 +5585,8 @@ function PropuestaFichaContenido({
     !cuponValidando &&
     !descuentoAplicando &&
     (!modoOrden || itemsEnEdicion);
+  const motivoBloqueoProducto = React.useCallback((id: string) =>
+    orden?.productos.find(p => p.id === id)?.motivoBloqueoEdicion ?? null, [orden]);
   const permisoProductosRef = React.useRef(puedeModificarProductos);
   React.useLayoutEffect(() => {
     permisoProductosRef.current = puedeModificarProductos;
@@ -5984,13 +5987,6 @@ function PropuestaFichaContenido({
   >(null);
   const [revisandoCopiado, setRevisandoCopiado] = React.useState(false);
   const revisionCopiadoEnCurso = React.useRef(false);
-  const [solicitudRevisionCopiado, solicitarRevisionCopiado] = React.useReducer(
-    (n: number) => n + 1,
-    0,
-  );
-  const revisionAutomaticaProcesada = React.useRef(
-    JSON.stringify([0, canalVenta, clienteId, sinComprobante]),
-  );
   const [errorRevisionCopiado, setErrorRevisionCopiado] = React.useState<string | null>(
     null,
   );
@@ -6119,17 +6115,17 @@ function PropuestaFichaContenido({
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
   const quitarItemDeOrden = React.useCallback((item: PropuestaItem) => {
+    if (motivoBloqueoProducto(item.id)) return;
     setItems((current) =>
       current.filter((candidate) => candidate.id !== item.id),
     );
-    if (metaCentroCopiado(item.jobContext)) solicitarRevisionCopiado();
     setEditadosIds((prev) => {
       if (!prev.has(item.id)) return prev;
       const next = new Set(prev);
       next.delete(item.id);
       return next;
     });
-  }, []);
+  }, [motivoBloqueoProducto]);
 
   const cancelarEdicion = React.useCallback(() => {
     if (!orden || togglingFiscal || cancelando || precioOrdenPendiente) return;
@@ -6216,7 +6212,7 @@ function PropuestaFichaContenido({
                 return {
                   ...(preparado?.payload ??
                     itemToOrdenItemPayload(item, cotizacionItemId)),
-                  ...(idsPersistidos.has(item.id) ? { id: item.id } : {}),
+                  ...(idsPersistidos.has(item.id) ? { id: item.id, conservar: !preparado } : {}),
                 };
               })
             : undefined;
@@ -6581,12 +6577,13 @@ function PropuestaFichaContenido({
    */
   const abrirEdicion = React.useCallback(
     (item: PropuestaItem) => {
-      if (!puedeModificarProductos) return;
+      if (!puedeModificarProductos || motivoBloqueoProducto(item.id)) return;
       if (esCentroCopiado(item)) {
         const carga = cargaDeItem(item);
         const deLaCarga = carga
           ? items.filter((i) => cargaDeItem(i) === carga)
           : [item];
+        if (deLaCarga.some(i => motivoBloqueoProducto(i.id))) return;
         setCopiadoEditItems(deLaCarga);
         setCopiadoOpen(true);
       } else {
@@ -6594,7 +6591,7 @@ function PropuestaFichaContenido({
         setAddOpen(true);
       }
     },
-    [puedeModificarProductos, esCentroCopiado, cargaDeItem, items],
+    [puedeModificarProductos, esCentroCopiado, cargaDeItem, items, motivoBloqueoProducto],
   );
 
   /**
@@ -6786,7 +6783,6 @@ function PropuestaFichaContenido({
         claveCopiadoRef.current !== claveInicio ||
         !permisoProductosRef.current
       ) {
-        if (permisoProductosRef.current) solicitarRevisionCopiado();
         return;
       }
       setRevisionCopiado(resultado);
@@ -6839,7 +6835,6 @@ function PropuestaFichaContenido({
         setEditadosIds(
           (prev) => new Set([...prev, ...nuevos.map((i) => i.id)]),
         );
-      toast.success("Precios de copiado actualizados para todo el pedido.");
     } catch (e) {
       const mensaje = e instanceof Error
         ? e.message
@@ -6858,36 +6853,17 @@ function PropuestaFichaContenido({
     sinComprobante,
     orden,
   ]);
-  React.useEffect(() => {
-    const solicitud = JSON.stringify([
-      solicitudRevisionCopiado, canalVenta, clienteId, sinComprobante,
-    ]);
-    if (!puedeModificarProductos || (orden && orden.estado !== "borrador")) {
-      revisionAutomaticaProcesada.current = solicitud;
-      return;
-    }
-    if (
-      solicitud === revisionAutomaticaProcesada.current ||
-      revisandoCopiado ||
-      revisionCopiadoEnCurso.current ||
-      !canalVenta
-    ) return;
-    revisionAutomaticaProcesada.current = solicitud;
-    if (items.some((i) => metaCentroCopiado(i.jobContext)))
-      void revisarCopiadoEnPedido();
-    // Una carga o cambio comercial dispara una revisión. Si cambia durante
-    // el cálculo, la siguiente solicitud espera; los errores no se reintentan solos.
-  }, [
-    solicitudRevisionCopiado,
-    revisandoCopiado,
-    canalVenta,
-    clienteId,
-    sinComprobante,
-    puedeModificarProductos,
-    orden,
-    items,
-    revisarCopiadoEnPedido,
-  ]);
+  useCalculoAutomaticoCopiado({
+    clave: claveCopiado,
+    habilitado:
+      puedeModificarProductos &&
+      (!orden || orden.estado === "borrador") &&
+      Boolean(canalVenta) &&
+      items.some((i) => metaCentroCopiado(i.jobContext)),
+    vigente: copiadoRevisado,
+    ocupado: revisandoCopiado,
+    calcular: revisarCopiadoEnPedido,
+  });
 
   /**
    * Emitir OT: snapshots + OrdenTrabajo en `pendiente`. El overlay muestra
@@ -8649,6 +8625,9 @@ function PropuestaFichaContenido({
             }
           >
             {orden && <OrdenSectionHeading section={tab} />}
+            {orden?.estado === "produccion" && editandoOrden && tab === "productos" && (
+              <p role="status">Podés agregar productos y editar los que todavía no empezaron. Los productos con trabajo iniciado, terminado o en tandas compartidas se conservan. Una OT facturada no admite cambios de productos.</p>
+            )}
             {tab === "productos" ? (
               <OrdenProductosTable
                 catalogo={initialProductos}
@@ -8692,7 +8671,7 @@ function PropuestaFichaContenido({
                           : i));
                       }
                     : undefined,
-                  onRemove: item.listoEnMostradorEl ? undefined : modoOrden
+                  onRemove: item.listoEnMostradorEl || motivoBloqueoProducto(item.id) ? undefined : modoOrden
                     ? itemsEnEdicion
                       ? () => quitarItemDeOrden(item)
                       : undefined
@@ -8711,7 +8690,7 @@ function PropuestaFichaContenido({
                     margenEtaDias={margenPorProducto(item.motorCodigo)}
                     noLaborables={colasTaller?.noLaborables}
                     onEdit={
-                      item.listoEnMostradorEl ? undefined : modoOrden
+                      item.listoEnMostradorEl || motivoBloqueoProducto(item.id) ? undefined : modoOrden
                         ? itemsEnEdicion && item.jobContext && item.motorCodigo
                           ? () => abrirEdicion(item)
                           : undefined
@@ -8747,7 +8726,7 @@ function PropuestaFichaContenido({
                     fechaEstimada={fechaEstimada}
                     entregaInmediataFecha={emitirYEntregar ? offsetDate(0, zonaHoraria) : undefined}
                     readOnly={modoOrden}
-                    editarFecha={itemsEnEdicion && editandoOrden}
+                    editarFecha={itemsEnEdicion && editandoOrden && !motivoBloqueoProducto(item.id)}
                     prepararCorte={modoOrden && puedeEditarOrden && puedeVerProduccion && persistedItemIds.has(item.id)}
                     onDistribucionGuardada={
                       orden ? () => {
@@ -9232,7 +9211,6 @@ function PropuestaFichaContenido({
                 : current;
               return [...base, ...nuevosConHerencia];
             });
-            if (!orden || orden.estado === "borrador") solicitarRevisionCopiado();
             // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
             // demasiado). Se los diferencia por la referencia (varianteNombre).
             setTab("productos");

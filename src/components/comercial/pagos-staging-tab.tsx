@@ -12,7 +12,7 @@ import {
   type CobroDraft,
 } from "@/components/administracion/cobro-formulario";
 import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
-import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
+import { getCuentasCobro, getMetodosPago } from "@/lib/administracion-api";
 import { formatMonedaOrden } from "@/lib/ordenes-trabajo";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 
@@ -47,7 +47,7 @@ export function PagosStagingTab({
   React.useEffect(() => {
     if (!conCobros || !puedeCobrar) return;
     let activo = true;
-    Promise.all([getMetodosPago(), getCuentasFondos()])
+    Promise.all([getMetodosPago(), getCuentasCobro()])
       .then(([m, c]) => {
         if (!activo) return;
         setMetodos(m);
@@ -128,6 +128,7 @@ export function PagosStagingTab({
         <CobroFormulario
           saldo={saldo}
           limitarAlSaldo
+          registroAlEmitir
           metodos={metodosActivos}
           cuentas={cuentas}
           guardando={false}

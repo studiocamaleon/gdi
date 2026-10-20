@@ -31,7 +31,7 @@ import {
   type ItemEntrega,
   type OrdenEscaneada,
 } from "@/lib/entrega-api";
-import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
+import { getCuentasCobro, getMetodosPago } from "@/lib/administracion-api";
 import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
 import { crearIntentoCobro } from "@/lib/intento-cobro";
 import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
@@ -126,7 +126,7 @@ export function EntregaModal({
     if (!orden || orden.saldo <= 0 || orden.puedeCobrar === false) return;
     let vivo = true;
     setErrorCatalogos(null);
-    void Promise.all([getMetodosPago(), getCuentasFondos()])
+    void Promise.all([getMetodosPago(), getCuentasCobro()])
       .then(([ms, cs]) => {
         if (!vivo) return;
         // El flujo rápido no captura banco, número ni vencimiento del valor.
