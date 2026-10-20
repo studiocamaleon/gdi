@@ -17,9 +17,9 @@ La gestión muestra nombre, duración, vencimiento y última conexión conocida 
 
 ## Qué muestra
 
-**Ajuste local del 20/10/2026, pendiente de publicar:** el TV queda dedicado al
+**Ajuste publicado el 20/10/2026, PR #115:** el TV queda dedicado al
 trabajo que falta terminar. El comportamiento siguiente reemplaza el de #114,
-que todavía mostraba tarjetas listas para entregar.
+que mostraba tarjetas listas para entregar.
 
 - Sólo productos o lotes sin terminar con fecha vencida o de hoy. Primero van
   las atrasadas, de la más antigua a la más reciente; después las de hoy. Los
@@ -73,3 +73,5 @@ En el navegador se comprobó el ingreso normal de una cuenta ficticia, la autori
 ## Ensayo de staging — 19/10/2026
 
 En una empresa ficticia separada se comprobó vinculación por código, 17 entregas de hoy/atrasadas, rotación cada diez segundos, pausa, recarga y revocación. Una segunda vinculación dejó una TV demo para la aceptación. Chrome solicitó nuevamente la protección HTTP Basic de staging después de revocar; completarla permitió continuar. Ese ensayo conservaba Basic; posteriormente se separó este control y se deshabilitó en staging para facilitar el acceso del Raspberry. La empresa de ensayo queda disponible hasta cerrar la aceptación, con notificaciones pausadas. El Raspberry físico y su arranque automático siguen pendientes.
+
+Publicación de #115: Panel y TV coincidieron en staging (15 atrasadas y 1 pendiente de hoy), incluidos identificadores y avances. Se verificó la rotación sin terminadas y se revocaron los dispositivos temporales. Producción recibió exactamente las mismas imágenes y pasó una comparación completa de sólo lectura. Recargar las pantallas abiertas para cargar la interfaz nueva; la vinculación existente se conserva. Ver [registro operativo](../deploy/produccion/VALIDACION.md).

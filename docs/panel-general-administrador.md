@@ -34,7 +34,7 @@ Compartir la presentación no cambia los permisos ni el alcance de datos.
 `vistasDisponibles` ni `previsualizando`. El controlador y la página ignoran
 cualquier antiguo `?vista=...`; no hay sustitución de permisos por otro rol.
 
-**Corrección local del 20/10/2026, pendiente de publicar:** Panel y TV comparten
+**Corrección publicada el 20/10/2026, PR #115:** Panel y TV comparten
 `common/entregas-produccion.ts`. Las prioridades, los contadores superiores y las
 alertas del Panel se construyen a partir de las mismas entregas clasificadas,
 leídas después de la reconciliación existente del tablero.
@@ -163,4 +163,7 @@ actuales: 4 atrasadas, 1 pendiente de hoy, 2 listas y 1 próxima. Se verificaron
 contadores, pestañas, enlaces y rotación: sólo las cinco pendientes entran al
 TV. La muestra no escribió en bases ni usó integraciones; sus servidores y
 rutas temporales se retiraron. Los servicios habituales de desarrollo siguieron
-ejecutando su carpeta anterior. Staging y producción todavía conservan #114.
+ejecutando su carpeta anterior. Durante ese ensayo, staging y producción
+conservaban #114.
+
+Publicación de #115: se comprobó en staging la coincidencia de 15 atrasadas y 1 pendiente de hoy entre Panel y TV, con seis terminadas sólo en el Panel. Producción recibió los mismos digests y pasó la comparación completa en una transacción de sólo lectura. Ver [registro operativo](../deploy/produccion/VALIDACION.md).
