@@ -4,7 +4,7 @@
 
 > **Estado vigente: 2026-10-20, 19:19 UTC.** API, ambos workers y web ejecutan `e5244c3c7` del [PR #115](https://github.com/studiocamaleon/gdi/pull/115). Panel y TV comparten productos/lotes pendientes y prioridades; el TV excluye lo terminado. Paridad comprobada en staging y producción, mismas imágenes por digest, seis servicios saludables y 318 migraciones sin cambios. Fuentes custodiadas y comprobantes posteriores de respaldo verificados. Ver [VALIDACION.md](VALIDACION.md).
 
-> **Configuración de WhatsApp, 2026-10-20:** coexistencia habilitada en API y worker exclusivamente para una empresa ficticia de staging, con notificaciones automáticas pausadas. Cinco suscripciones de la app Meta verificadas con el callback existente de staging. El registro insertado se abre desde el Inbox; autorización del número real, recepción y mensajes todavía pendientes. Se conservan imágenes, recursos y canal independiente de prueba. Producción no se modificó. Ver [el ensayo](VALIDACION.md).
+> **Configuración de WhatsApp, 2026-10-20:** el titular decidió no conectar un número propio. API y worker volvieron a sandbox, limitado a la empresa original del ensayo del 17/10; coexistencia está deshabilitada. Los intentos reales quedaron cancelados, sin vínculo ni mensajes. Se conservan las cinco suscripciones de la app Meta al callback de staging, imágenes, recursos y canal independiente de prueba. Producción no se modificó. Ver [el ensayo y su cierre](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 
