@@ -1,5 +1,31 @@
 # Validación de staging — historial
 
+## 2026-10-20, 22:00 UTC — Vuelta a sandbox sin conectar un número propio
+
+El titular decidió no usar un número propio para el ensayo. La lectura previa comprobó dos intentos `COEXISTENCIA` en estado `CANCELADA`, sin verificación ni token retenido, y cero vínculos, altas, conversaciones, mensajes y envíos en la empresa usada para preparar la conexión. No fue necesario borrar registros ni revocar un número.
+
+API y worker restauraron `META_CONEXION_MODO=sandbox` y la lista privada original de la empresa del ensayo del 17/10. Se conservan la revisión funcional `e5244c3c756b93382c14e2a82538b6165e37aeae`, las imágenes, los recursos y las demás variables. Coexistencia queda deshabilitada. Las cinco suscripciones de la app al callback de staging permanecen configuradas; no implican por sí solas una autorización de un número real. No se modificaron producción ni el canal independiente de prueba.
+
+El sandbox permite repetir autorización, retorno y verificación, pero su número no intercambia mensajes. El número de prueba de Cloud API es una alternativa distinta para mensajería y requiere un destinatario real autorizado; no conecta ese destinatario a Grafo ni importa su historial. Ese canal necesita renovar su credencial antes de otro ensayo. Si no se utiliza ningún teléfono real, las pruebas de conversaciones deben ser simuladas y no acreditan mensajería real ni coexistencia. No se realizó un nuevo intercambio de mensajes ni se pidió al titular conectar su teléfono.
+
+Referencias verificadas en la documentación oficial: [limitaciones del sandbox](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview#sandbox-account-limitations) y [prueba de Cloud API](https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started).
+
+## 2026-10-20, 20:28 UTC — Preparación del ensayo real de coexistencia de WhatsApp
+
+El titular pidió retomar Embedded Signup en staging y confirmó que el teléfono de prueba ya usa WhatsApp Business. Se habilitó el modo `coexistencia` exclusivamente para una empresa ficticia existente, con notificaciones automáticas pausadas. La autorización sandbox del 17/10 se conserva como antecedente; no demuestra intercambio de mensajes ni importación de un número real.
+
+**Configuración comprobada:** API y worker principal cambiaron sólo `META_CONEXION_MODO` y la lista privada `META_CONEXION_TENANT_IDS`. Recepción, lectura, envíos y configuración del canal independiente de prueba mantienen sus valores anteriores. La empresa inició con cero vínculos, autorizaciones, altas, conversaciones, mensajes y envíos de Inbox. Los recuentos de otras empresas no cambiaron durante la preparación. Credenciales e identificadores privados permanecen fuera de Git.
+
+La suscripción de la app Meta conservó el callback `https://api-staging.grafoprint.com.ar/api/webhooks/whatsapp` y el campo `messages`. Se incorporaron `account_update`, `history`, `smb_app_state_sync` y `smb_message_echoes`; una lectura posterior de Graph confirmó la suscripción activa y los cinco campos. No se suscribió todavía una WABA real ni se concedieron permisos sobre un número por esta operación.
+
+**Versión conservada:** API y worker ejecutan `e5244c3c756b93382c14e2a82538b6165e37aeae`, imagen `sha256:a5b602b6d201b19824a49a2ecf8f1a878231d1b90b9da0c44e458fe037d61e30`. Sin builds, migraciones, seeds, resets ni cambios de recursos. Salud HTTPS de API 200; configuración de ambos procesos verificada. Web, worker PDF, Gotenberg, copiador y producción no se modificaron.
+
+**Recorrido y límite actual:** Chrome mostró «Conectar WhatsApp» habilitado para la empresa de ensayo. Se preparó el intento y «Continuar con Meta» abrió el popup. La política de seguridad del navegador impidió al agente leer esa ventana; se solicitó al titular completar allí el registro. Al cierre de esta preparación todavía no están comprobados el retorno, la creación del vínculo, las solicitudes de contactos/historial, los eventos de coexistencia ni un intercambio de mensajes. No presentar esta preparación como una integración terminada. El historial sólo debe compartirse mediante la elección del titular en Meta.
+
+**Reversión:** antes de una autorización real completada, restaurar en API y worker el modo `sandbox` y su lista privada anterior, conservando todos los registros. Para detener nuevas altas y el avance del worker de alta, vaciar modo y lista en ambos servicios. Esto no revoca permisos en Meta ni desconecta por sí solo un vínculo ya autorizado. Si el titular completó el alta, comprobar primero su estado y acordar el cierre del canal; no borrar datos ni retirar suscripciones que ya use otra cuenta. El callback y el inventario anterior de suscripciones están custodiados fuera de Git. No se realizó una nueva restauración ni comprobación de respaldos en esta preparación.
+
+Referencia: [incorporación de usuarios de WhatsApp Business](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users), consultada el 20/10/2026; [recorrido y límites de Grafo](../../docs/meta-conexion-empresas.md).
+
 ## 2026-10-20, 19:19 UTC — Panel y TV: una misma prioridad de trabajo pendiente
 
 Lucas autorizó publicar el [PR #115](https://github.com/studiocamaleon/gdi/pull/115) en staging, comprobar la coincidencia entre Panel y TV y, si era correcta, promoverlo a producción. Parte de `main` actualizado (`f1b1f56cb`), sin dependencias de otros PR. Revisión funcional **`e5244c3c756b93382c14e2a82538b6165e37aeae`**; el commit posterior registra la publicación sin reconstruir imágenes.
