@@ -230,6 +230,74 @@ describe('TV: vinculación, lectura y aislamiento con PostgreSQL y guards reales
     expect(datos.body.empresa).toBe(`Taller ficticio ${ganadora}`);
   });
 
+  it('la lectura prioriza los ítems sin terminar y separa las OT e ítems listos con fecha vencida', async () => {
+    const hoy = diaEnZona(new Date(), 'America/Argentina/Buenos_Aires');
+    const ayer = new Date(`${hoy}T00:00:00Z`);
+    ayer.setUTCDate(ayer.getUTCDate() - 1);
+    const ids = [randomUUID(), randomUUID()];
+    const producto = (nombre: string, listoEnMostrador = false) => ({
+      tenantId: tenantIds[0],
+      codigo: 'QA',
+      nombre,
+      familia: 'Test',
+      cantidad: 1,
+      cantidadUnidad: 'un',
+      subtotal: 100,
+      impuestos: 0,
+      total: 100,
+      listoEnMostrador,
+    });
+    try {
+      await prisma.ordenTrabajo.create({
+        data: {
+          id: ids[0],
+          tenantId: tenantIds[0],
+          numero: 'OT-LISTA-FICTICIA',
+          estado: 'finalizada',
+          fechaEntrega: ayer,
+          items: { create: producto('Orden terminada') },
+        },
+      });
+      await prisma.ordenTrabajo.create({
+        data: {
+          id: ids[1],
+          tenantId: tenantIds[0],
+          numero: 'OT-MIXTA-FICTICIA',
+          estado: 'produccion',
+          fechaEntrega: new Date(`${hoy}T00:00:00Z`),
+          items: {
+            create: [
+              { ...producto('Ítem atrasado'), fechaEntrega: ayer },
+              { ...producto('Ítem listo', true), fechaEntrega: ayer },
+            ],
+          },
+        },
+      });
+      const tv = await iniciar();
+      expect((await vincular(tv.codigo)).status).toBe(201);
+      const r = await get('/pantalla-produccion/datos', tv.token).expect(200);
+      expect(r.body.resumen).toEqual({ atrasadas: 1, hoy: 1, listas: 2 });
+      expect(r.body.filas.map((f: { producto: string }) => f.producto)).toEqual([
+        'Ítem atrasado',
+        'Trabajo privado 0',
+        'Orden terminada',
+        'Ítem listo',
+      ]);
+      expect(r.body.filas[0]).toMatchObject({
+        atrasada: true,
+        estado: 'pendiente',
+      });
+      expect(r.body.filas.slice(2)).toEqual([
+        expect.objectContaining({ atrasada: false, estado: 'lista' }),
+        expect.objectContaining({ atrasada: false, estado: 'lista' }),
+      ]);
+    } finally {
+      await prisma.ordenTrabajo.deleteMany({
+        where: { tenantId: tenantIds[0], id: { in: ids } },
+      });
+    }
+  });
+
   it('impide listar/revocar otras empresas y retira datos al revocar', async () => {
     const tv = await iniciar();
     expect((await vincular(tv.codigo)).status).toBe(201);

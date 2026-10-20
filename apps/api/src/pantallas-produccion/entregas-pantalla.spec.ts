@@ -83,7 +83,7 @@ it('separa lotes y componentes, descarta lo entregado y futuro sin duplicar cant
     etapa: 'Corte',
     pasosTotal: 1,
   });
-  expect(r.resumen).toEqual({ atrasadas: 1, hoy: 1, listas: 1 });
+  expect(r.resumen).toEqual({ atrasadas: 1, hoy: 0, listas: 1 });
 });
 it('mantiene finalizadas hasta la entrega y no inventa avance sin pasos', () => {
   const r = entregasParaPantalla(
@@ -122,4 +122,76 @@ it('destaca el bloqueo y cuenta los pasos completados', () => {
     pasosHechos: 1,
     pasosTotal: 2,
   });
+});
+
+it.each(['2026-10-18', '2026-10-19'])(
+  'separa las listas del trabajo pendiente aunque su fecha sea %s',
+  (fecha) => {
+    const r = entregasParaPantalla(
+      [
+        orden([item('finalizada')], {
+          estado: 'finalizada',
+          fechaEntrega: new Date(fecha),
+        }),
+        orden([
+          item('mostrador', {
+            listoEnMostrador: true,
+            fechaEntrega: new Date(fecha),
+          }),
+          item('pasos-terminados', {
+            fechaEntrega: new Date(fecha),
+            pasos: [{ indice: 0, nombre: 'Corte', estado: 'hecho' }],
+          }),
+        ]),
+      ],
+      '2026-10-19',
+    );
+    expect(r.filas).toHaveLength(3);
+    expect(r.filas.every((f) => f.estado === 'lista' && !f.atrasada)).toBe(true);
+    expect(r.resumen).toEqual({ atrasadas: 0, hoy: 0, listas: 3 });
+  },
+);
+
+it('prioriza trabajo sin terminar por fecha del ítem, sin adelantar las listas antiguas', () => {
+  const r = entregasParaPantalla(
+    [
+      orden([
+        item('lista-antigua', {
+          fechaEntrega: new Date('2026-10-01'),
+          listoEnMostrador: true,
+        }),
+        item('para-hoy'),
+        item('atrasada', {
+          fechaEntrega: new Date('2026-10-18'),
+          pasos: [{ indice: 0, nombre: 'Impresión', estado: 'hecho' }],
+        }),
+        item('componente-pendiente', {
+          parentItemId: 'atrasada',
+          pasos: [{ indice: 0, nombre: 'Terminación', estado: 'pendiente' }],
+        }),
+        item('lista-con-componentes', {
+          fechaEntrega: new Date('2026-10-17'),
+          pasos: [{ indice: 0, nombre: 'Impresión', estado: 'hecho' }],
+        }),
+        item('componente-terminado', {
+          parentItemId: 'lista-con-componentes',
+          pasos: [{ indice: 0, nombre: 'Terminación', estado: 'hecho' }],
+        }),
+      ]),
+    ],
+    '2026-10-19',
+  );
+  expect(r.filas.map((f) => f.id)).toEqual([
+    'atrasada',
+    'para-hoy',
+    'lista-antigua',
+    'lista-con-componentes',
+  ]);
+  expect(r.filas[0]).toMatchObject({
+    atrasada: true,
+    estado: 'pendiente',
+    pasosHechos: 1,
+    pasosTotal: 2,
+  });
+  expect(r.resumen).toEqual({ atrasadas: 1, hoy: 1, listas: 2 });
 });

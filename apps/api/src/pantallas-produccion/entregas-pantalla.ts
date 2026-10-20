@@ -113,7 +113,9 @@ export function entregasParaPantalla(ordenes: OrdenPantalla[], hoy: string) {
             cantidad: Number(item.cantidad),
             unidad: item.cantidadUnidad,
             fecha,
-            atrasada: fecha < hoy,
+            // Como en Panel general: una entrega terminada espera el retiro,
+            // no vuelve a ser trabajo atrasado por su fecha comprometida.
+            atrasada: !lista && fecha < hoy,
             estado,
             etapa,
             pasosHechos: hechos,
@@ -124,6 +126,7 @@ export function entregasParaPantalla(ordenes: OrdenPantalla[], hoy: string) {
     })
     .sort(
       (a, b) =>
+        Number(a.estado === 'lista') - Number(b.estado === 'lista') ||
         a.fecha.localeCompare(b.fecha) ||
         a.orden.localeCompare(b.orden, 'es', { numeric: true }) ||
         a.id.localeCompare(b.id),
@@ -132,7 +135,7 @@ export function entregasParaPantalla(ordenes: OrdenPantalla[], hoy: string) {
     filas,
     resumen: {
       atrasadas: filas.filter((f) => f.atrasada).length,
-      hoy: filas.filter((f) => !f.atrasada).length,
+      hoy: filas.filter((f) => f.estado !== 'lista' && f.fecha === hoy).length,
       listas: filas.filter((f) => f.estado === 'lista').length,
     },
   };
