@@ -1,3 +1,4 @@
+import { filtroOrdenesEntregas } from '../common/entregas-produccion';
 import {
   BadRequestException,
   ForbiddenException,
@@ -173,16 +174,8 @@ export class PantallasProduccionService {
       empresa.datosEmpresa?.zonaHoraria ?? 'America/Argentina/Buenos_Aires';
     const actualizadoEl = new Date();
     const hoy = diaEnZona(actualizadoEl, zona);
-    const hasta = new Date(`${hoy}T00:00:00Z`);
     const ordenes = await this.prisma.ordenTrabajo.findMany({
-      where: {
-        tenantId,
-        estado: { in: ['pendiente', 'produccion', 'finalizada'] },
-        OR: [
-          { fechaEntrega: { lte: hasta } },
-          { items: { some: { tenantId, fechaEntrega: { lte: hasta } } } },
-        ],
-      },
+      where: filtroOrdenesEntregas(tenantId, {}, hoy),
       select: seleccionOrdenPantalla,
     });
     // El heartbeat no modifica órdenes ni dispara reconciliaciones de producción.
