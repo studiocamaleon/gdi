@@ -56,12 +56,21 @@ const render = (initialData = data) =>
 afterEach(() => vi.useRealTimers());
 
 describe("Panel de administrador", () => {
-  it("muestra las entregas de hoy del grupo completo, sin filtrarlas del resumen limitado", () => {
+  it("abre primero atrasadas y conserva el total de hoy aunque limite las filas visibles", () => {
     const html = render();
-    expect(html).toContain("OT-HOY");
-    expect(html).not.toContain("OT-ATRASADA");
+    expect(html).toContain("OT-ATRASADA");
     expect(html).toContain('aria-label="Atrasadas 8"');
-    expect(html).toContain("Mostrando 1 de 1 orden.");
+    expect(html).toContain('aria-label="Pendientes para hoy 1"');
+    expect(html).toContain("Mostrando 1 de 8 productos o lotes.");
+  });
+
+  it("abre hoy cuando no hay atrasadas", () => {
+    const html = render({
+      ...data,
+      entregas: { ...data.entregas!, atrasada: { items: [], total: 0 } },
+    });
+    expect(html).toContain("OT-HOY");
+    expect(html).toContain("Mostrando 1 de 1 producto o lote.");
   });
 
   it("distingue una orden sin ruta de una producción completada", () => {

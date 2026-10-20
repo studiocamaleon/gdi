@@ -196,6 +196,10 @@
   gap: 32px;
   margin-top: 28px;
 }
+.deliverySection {
+  min-width: 0;
+  scroll-margin-top: 24px;
+}
 .column {
   display: grid;
   min-width: 0;

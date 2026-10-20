@@ -83,7 +83,15 @@ describe('Panel General', () => {
         estado: 'pendiente',
         fechaEntrega: new Date(`${fecha}T00:00:00Z`),
         cliente: null,
-        items: [],
+        items: [
+          {
+            id: `item-${i}`,
+            nombre: 'Producto ficticio',
+            cantidad: 1,
+            cantidadUnidad: 'un',
+            pasos: [],
+          },
+        ],
       })),
     );
     const respuesta = await servicio.obtener(
@@ -93,9 +101,11 @@ describe('Panel General', () => {
     expect(respuesta.entregas?.atrasada.total).toBe(8);
     expect(respuesta.entregas?.atrasada.items).toHaveLength(6);
     expect(respuesta.entregas?.hoy.total).toBe(2);
+    expect(respuesta.kpis.find((k) => k.id === 'entregas-hoy')?.valor).toBe(2);
+    expect(respuesta.kpis.find((k) => k.id === 'atrasadas')?.valor).toBe(8);
     expect(respuesta.entregas?.hoy.items.map((e) => e.id)).toEqual([
-      'ot-8',
-      'ot-9',
+      'item-8',
+      'item-9',
     ]);
     expect(respuesta.entregas?.proxima.total).toBe(2);
     expect(
@@ -105,13 +115,7 @@ describe('Panel General', () => {
       expect.objectContaining({
         where: {
           tenantId: 'tenant-a',
-          OR: [
-            {
-              estado: { in: ['pendiente', 'produccion'] },
-              fechaEntrega: { lte: new Date('2026-09-22T00:00:00Z') },
-            },
-            { estado: 'finalizada' },
-          ],
+          estado: { in: ['pendiente', 'produccion', 'finalizada'] },
         },
       }),
     );
@@ -152,7 +156,11 @@ describe('Panel General', () => {
     const sinResumen = authCon(['panel.ver', 'configuracion.gestionar']);
     await servicio.obtener(sinResumen);
     expect(admin.obtener).not.toHaveBeenCalled();
-    const auth = authCon(['panel.ver', 'configuracion.gestionar', 'reportes.resumen.ver']);
+    const auth = authCon([
+      'panel.ver',
+      'configuracion.gestionar',
+      'reportes.resumen.ver',
+    ]);
     await servicio.obtener({ ...auth, role: 'OPERADOR' });
     expect(admin.obtener).not.toHaveBeenCalled();
     await servicio.obtener(auth);
@@ -337,11 +345,14 @@ describe('Panel General', () => {
     ).ordenesProximas('tenant-a', '2026-08-19', '2026-08-26', {});
 
     expect(proximas[0]).toMatchObject({
-      producto: '2 productos',
-      productos: [
-        { id: 'item-1', nombre: 'Tarjetas', progresoPct: 50 },
-        { id: 'item-2', nombre: 'Sobres', progresoPct: 100 },
-      ],
+      producto: 'Tarjetas',
+      riesgo: 'proxima',
+      productos: [{ id: 'item-1', nombre: 'Tarjetas', progresoPct: 50 }],
+    });
+    expect(proximas[1]).toMatchObject({
+      producto: 'Sobres',
+      riesgo: 'lista',
+      progresoPct: 100,
     });
   });
 

@@ -34,32 +34,49 @@ Compartir la presentación no cambia los permisos ni el alcance de datos.
 `vistasDisponibles` ni `previsualizando`. El controlador y la página ignoran
 cualquier antiguo `?vista=...`; no hay sustitución de permisos por otro rol.
 
-`entregas` divide las órdenes autorizadas en `hoy`, `atrasada`, `proxima` y `lista`
-**antes** del límite: cada grupo devuelve hasta seis órdenes y su total. Una
-cola de atrasadas no oculta las entregas de hoy. Se conservan tenant, permisos,
-alcance comercial, zona horaria y fechas de la consulta existente. Próximas
-abarca desde mañana hasta siete días inclusive. Sin acceso a ese resumen, la
-API devuelve `entregas: null` y la vista no ofrece el bloque ni sus enlaces.
+**Corrección publicada el 20/10/2026, PR #115:** Panel y TV comparten
+`common/entregas-produccion.ts`. Las prioridades, los contadores superiores y las
+alertas del Panel se construyen a partir de las mismas entregas clasificadas,
+leídas después de la reconciliación existente del tablero.
 
-Desde la corrección del 07/10/2026, las tres categorías por fecha sólo contienen
-órdenes pendientes o en producción. «Atrasadas» significa que la fecha prometida
-ya pasó y todavía no se terminó el trabajo; se usa el día local de la empresa.
-El KPI y la alerta de atraso aplican ese mismo criterio.
+Cada fila y cada unidad de esos contadores es **un producto o lote de entrega**,
+no una OT, una pieza física ni un componente interno. Una OT mixta puede tener
+productos en grupos diferentes. La fecha propia del producto/lote prevalece;
+si no existe, hereda la fecha de la OT. Las fechas civiles no se desplazan a UTC:
+se comparan con el día local de la empresa.
 
-Las finalizadas aparecen en `lista` («Para retirar»), incluso si no tienen fecha,
-su fecha ya pasó o está a más de siete días. El estado «Lista para retirar» sale
-del cierre de la OT, no de un porcentaje redondeado de avance. Al entregar la OT
-sale del grupo. El historial de cumplimiento conserva si el trabajo se terminó
-a tiempo o tarde; este cambio sólo corrige la prioridad operativa actual.
-Se retiraron el resumen de entregas anterior y los campos exclusivos de las
-vistas eliminadas (`trabajoPersonal`, resumen administrativo duplicado y metadatos
-de selección). Los accesos a Producción/Mi mesa siguen siendo acciones existentes,
-no variantes del Panel.
+| Grupo | Criterio |
+| --- | --- |
+| Atrasadas | Fecha anterior a hoy y trabajo sin terminar. |
+| Pendientes para hoy | Fecha de hoy y trabajo sin terminar. |
+| Próximos 7 días | Trabajo sin terminar, desde mañana hasta siete días inclusive. |
+| Para retirar | Trabajo terminado y todavía no entregado, sin límite de fecha. |
 
-El pie explicita cuántas órdenes se muestran. «Ver órdenes» abre el listado
-completo, que también contiene las finalizadas pendientes de entrega. El filtro
-`urgencia=atrasadas` del listado contempla pendiente/producción y coincide con
-el criterio del panel. Los enlaces existentes de KPIs y alertas se conservan.
+Un producto está terminado si la OT está finalizada, fue marcado listo en
+mostrador o todos sus pasos y componentes están hechos. Los participantes de un
+lote también deben recibir su cierre. Un producto sin pasos no se considera
+terminado automáticamente. Se excluyen borradores, canceladas, entregadas e
+ítems retirados. Los pendientes sin fecha o con fecha posterior a siete días
+siguen disponibles en Órdenes; no se inventa una prioridad de entrega.
+
+Los agrupadores de lotes y sus componentes no suman otra entrega: los componentes
+heredan `loteEntregaId`, pero sólo la raíz de cada lote es entregable. Su trabajo
+sí participa del estado y avance del producto. Panel y TV usan el mismo cálculo
+de avance ponderado, excluyendo participaciones del cómputo duplicado de trabajo.
+
+Cada grupo devuelve hasta seis productos/lotes y su **total completo**. El pie
+explicita ese límite; la TV rota todos los pendientes de hoy y atrasados. El
+Panel abre primero Atrasadas si hay trabajo vencido, y de lo contrario Hoy.
+Los indicadores y las alertas de entrega abren su pestaña correspondiente.
+«Ver órdenes» conserva el acceso al listado general.
+
+Se mantienen los permisos y el alcance comercial: un vendedor ve sus órdenes
+asignadas y un aviso lo aclara. La TV autorizada muestra toda la empresa. Para
+el mismo alcance y la misma lectura, los totales de Hoy y Atrasadas coinciden.
+El Panel consulta cada 30 segundos y la TV cada 10; durante un cambio pueden
+mostrar lecturas de momentos distintos. Ambas indican su actualización y
+advierten si no pudieron renovar los datos. Sin acceso al resumen, la API devuelve
+`entregas: null` y no se ofrecen esos datos ni sus enlaces.
 
 ## Qué mide cada bloque
 
@@ -131,3 +148,22 @@ apuntan a los tokens compartidos; no se importa el reset o tema global de HeroUI
 - Navegador con sesión real: una URL antigua `?vista=operario` muestra el Panel
   único, sin selector ni botón Actualizar. Se mantienen entregas agrupadas y
   actualización automática. Escritorio y móvil sin desborde horizontal.
+
+## Comprobación local de prioridades — 20/10/2026
+
+73 pruebas de API y 21 de interfaz/BFF/paginación. Se reprodujeron antes de
+corregirlos el contador de hoy que incluía finalizadas y el doble conteo de
+componentes que heredan un lote. La prueba con PostgreSQL de test compara
+contadores, IDs y avance de Panel/TV, incluyendo fechas propias, OT mixta,
+retiro parcial, reprogramación, cierre y reapertura de componentes. Conserva
+las pruebas de permisos y aislamiento del dispositivo. Sin migraciones.
+
+La revisión visual local usó respuestas ficticias generadas por los servicios
+actuales: 4 atrasadas, 1 pendiente de hoy, 2 listas y 1 próxima. Se verificaron
+contadores, pestañas, enlaces y rotación: sólo las cinco pendientes entran al
+TV. La muestra no escribió en bases ni usó integraciones; sus servidores y
+rutas temporales se retiraron. Los servicios habituales de desarrollo siguieron
+ejecutando su carpeta anterior. Durante ese ensayo, staging y producción
+conservaban #114.
+
+Publicación de #115: se comprobó en staging la coincidencia de 15 atrasadas y 1 pendiente de hoy entre Panel y TV, con seis terminadas sólo en el Panel. Producción recibió los mismos digests y pasó la comparación completa en una transacción de sólo lectura. Ver [registro operativo](../deploy/produccion/VALIDACION.md).

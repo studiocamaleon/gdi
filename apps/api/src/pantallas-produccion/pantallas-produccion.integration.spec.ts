@@ -205,7 +205,7 @@ describe('TV: vinculación, lectura y aislamiento con PostgreSQL y guards reales
     expect(r.body.filas.map((f: { producto: string }) => f.producto)).toEqual([
       'Trabajo privado 0',
     ]);
-    expect(r.body.resumen).toEqual({ atrasadas: 0, hoy: 1, listas: 0 });
+    expect(r.body.resumen).toEqual({ atrasadas: 0, hoy: 1 });
     expect(JSON.stringify(r.body)).not.toMatch(
       /tokenHash|codigoHash|password|subtotal|impuestos|total":999|Trabajo privado 1/,
     );
@@ -276,21 +276,14 @@ describe('TV: vinculación, lectura y aislamiento con PostgreSQL y guards reales
       const tv = await iniciar();
       expect((await vincular(tv.codigo)).status).toBe(201);
       const r = await get('/pantalla-produccion/datos', tv.token).expect(200);
-      expect(r.body.resumen).toEqual({ atrasadas: 1, hoy: 1, listas: 2 });
-      expect(r.body.filas.map((f: { producto: string }) => f.producto)).toEqual([
-        'Ítem atrasado',
-        'Trabajo privado 0',
-        'Orden terminada',
-        'Ítem listo',
-      ]);
+      expect(r.body.resumen).toEqual({ atrasadas: 1, hoy: 1 });
+      expect(r.body.filas.map((f: { producto: string }) => f.producto)).toEqual(
+        ['Ítem atrasado', 'Trabajo privado 0'],
+      );
       expect(r.body.filas[0]).toMatchObject({
         atrasada: true,
         estado: 'pendiente',
       });
-      expect(r.body.filas.slice(2)).toEqual([
-        expect.objectContaining({ atrasada: false, estado: 'lista' }),
-        expect.objectContaining({ atrasada: false, estado: 'lista' }),
-      ]);
     } finally {
       await prisma.ordenTrabajo.deleteMany({
         where: { tenantId: tenantIds[0], id: { in: ids } },

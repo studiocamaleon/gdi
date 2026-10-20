@@ -88,6 +88,7 @@ export function getPanelActividad(cursor?: string): Promise<PanelActividad> {
 }
 
 export type PanelGeneralData = {
+  alcanceEntregas?: "propias" | "empresa";
   administrador?: PanelAdministrador | null;
   entregas: Record<
     PanelGeneralEntrega["riesgo"],

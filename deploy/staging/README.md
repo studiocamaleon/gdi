@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-20, 17:41 UTC.** API, ambos workers y web ejecutan `c98872af8` del [PR #114](https://github.com/studiocamaleon/gdi/pull/114): las entregas terminadas ya no figuran atrasadas en el TV. Caso vencido comprobado en staging y mismas imágenes promovidas a producción. Seis servicios saludables, recursos conservados, 318 migraciones sin cambios y comprobante posterior de respaldo verificado. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-20, 19:19 UTC.** API, ambos workers y web ejecutan `e5244c3c7` del [PR #115](https://github.com/studiocamaleon/gdi/pull/115). Panel y TV comparten productos/lotes pendientes y prioridades; el TV excluye lo terminado. Paridad comprobada en staging y producción, mismas imágenes por digest, seis servicios saludables y 318 migraciones sin cambios. Fuentes custodiadas y comprobantes posteriores de respaldo verificados. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 

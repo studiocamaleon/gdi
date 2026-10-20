@@ -1,5 +1,9 @@
 import { calcularProgreso } from '../common/progreso-produccion';
-import { productosComercialesConTrabajo } from '../ordenes-trabajo/productos-comerciales';
+import {
+  clasificarEntregasProduccion,
+  filtroOrdenesEntregas,
+  seleccionEntregasProduccion,
+} from '../common/entregas-produccion';
 import { Injectable } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 
@@ -133,7 +137,11 @@ export class PanelGeneralService {
     const gestionaComercial = permisos.has('comercial.ordenes.gestionar');
     const veProduccion = permisos.has('produccion.tablero.ver');
     const gestionaProduccion = permisos.has('produccion.tablero.gestionar');
-    const gestionaAdministracion = ['administracion.facturacion.gestionar','administracion.cobrar.gestionar','administracion.pagar.gestionar'].every(p => permisos.has(p));
+    const gestionaAdministracion = [
+      'administracion.facturacion.gestionar',
+      'administracion.cobrar.gestionar',
+      'administracion.pagar.gestionar',
+    ].every((p) => permisos.has(p));
     const aprueba = permisos.has('comercial.aprobar_descuento');
     const perfilSoloProductivo =
       veProduccion &&
@@ -175,39 +183,43 @@ export class PanelGeneralService {
           vendedorSinVinculo: false,
         });
 
-    const [
-      tablero,
-      ordenesProximas,
-      comerciales,
-      administracion,
-      cuello,
-      administrador,
-    ] = await Promise.all([
-      tableroPromise,
-      perfilSoloProductivo || (!veProduccion && !veComercial)
-        ? Promise.resolve([])
-        : this.ordenesProximas(auth.tenantId, hoy, enSiete, filtroVendedor),
-      veComercial && permisos.has('comercial.presupuestos.ver') && !vendedorSinVinculo
-        ? this.resumenComercial(auth.tenantId, hoy, enTres, filtroVendedor)
-        : Promise.resolve({ pendientesAprobacion: 0, porVencer: 0 }),
-      gestionaAdministracion
-        ? this.resumenAdministracion(auth.tenantId, hoy, enSiete)
-        : Promise.resolve<ResumenAdministracion | null>(null),
-      veProduccion && !perfilSoloProductivo && !comercialSoloPropio
-        ? this.cuelloBotella(auth.tenantId, hoy)
-        : Promise.resolve(null),
-      puedeConsultarActividadGeneral(auth)
-        ? this.admin.obtener(auth, hoy, zonaHoraria)
-        : Promise.resolve(null),
-    ]);
+    const [tablero, comerciales, administracion, cuello, administrador] =
+      await Promise.all([
+        tableroPromise,
+        veComercial &&
+        permisos.has('comercial.presupuestos.ver') &&
+        !vendedorSinVinculo
+          ? this.resumenComercial(auth.tenantId, hoy, enTres, filtroVendedor)
+          : Promise.resolve({ pendientesAprobacion: 0, porVencer: 0 }),
+        gestionaAdministracion
+          ? this.resumenAdministracion(auth.tenantId, hoy, enSiete)
+          : Promise.resolve<ResumenAdministracion | null>(null),
+        veProduccion && !perfilSoloProductivo && !comercialSoloPropio
+          ? this.cuelloBotella(auth.tenantId, hoy)
+          : Promise.resolve(null),
+        puedeConsultarActividadGeneral(auth)
+          ? this.admin.obtener(auth, hoy, zonaHoraria)
+          : Promise.resolve(null),
+      ]);
 
+    // Leer después del tablero: su reconciliación puede actualizar estados.
+    // Los totales y sus listas salen de esta única lectura, sin contar de nuevo.
+    const ordenesProximas =
+      perfilSoloProductivo || (!veProduccion && !veComercial)
+        ? []
+        : await this.ordenesProximas(
+            auth.tenantId,
+            hoy,
+            enSiete,
+            filtroVendedor,
+          );
     const prod = veProduccion
       ? await this.resumenProduccion(
           auth.tenantId,
-          hoy,
           filtroVendedor,
           tablero,
           perfilSoloProductivo,
+          ordenesProximas,
         )
       : {
           entregasHoy: 0,
@@ -250,6 +262,9 @@ export class PanelGeneralService {
 
     return {
       administrador,
+      alcanceEntregas: comercialSoloPropio
+        ? ('propias' as const)
+        : ('empresa' as const),
       entregas:
         !perfilSoloProductivo && (veProduccion || veComercial)
           ? {
@@ -291,10 +306,10 @@ export class PanelGeneralService {
 
   private async resumenProduccion(
     tenantId: string,
-    hoy: string,
     filtroVendedor: Prisma.OrdenTrabajoWhereInput,
     tablero: Tablero,
     soloPersonal: boolean,
+    entregas: EntregaPanel[],
   ): Promise<ResumenProduccion> {
     if (soloPersonal) {
       const propios = tablero.items.filter((item) =>
@@ -311,56 +326,31 @@ export class PanelGeneralService {
       };
     }
 
-    const [entregasHoy, atrasadas, listosRetiro, enProduccion, bloqueados] =
-      await Promise.all([
-        this.prisma.ordenTrabajo.count({
-          where: {
-            tenantId,
-            ...filtroVendedor,
-            estado: { in: ['pendiente', 'produccion', 'finalizada'] },
-            fechaEntrega: fechaDb(hoy),
-          },
-        }),
-        this.prisma.ordenTrabajo.count({
-          where: {
-            tenantId,
+    const [enProduccion, bloqueados] = await Promise.all([
+      this.prisma.ordenTrabajo.count({
+        where: { tenantId, ...filtroVendedor, estado: 'produccion' },
+      }),
+      this.prisma.ordenTrabajoItemPaso.count({
+        where: {
+          tenantId,
+          OR: [
+            { nestingLoteRol: null },
+            { nestingLoteRol: { not: 'PARTICIPANTE' } },
+          ],
+          estado: 'bloqueado',
+          orden: {
             ...filtroVendedor,
             estado: { in: ['pendiente', 'produccion'] },
-            fechaEntrega: { lt: fechaDb(hoy) },
           },
-        }),
-        this.prisma.ordenTrabajoItem.count({
-          where: {
-            tenantId,
-            parentItemId: null,
-            entregadoEl: null,
-            orden: { ...filtroVendedor, estado: 'finalizada' },
-          },
-        }),
-        this.prisma.ordenTrabajo.count({
-          where: { tenantId, ...filtroVendedor, estado: 'produccion' },
-        }),
-        this.prisma.ordenTrabajoItemPaso.count({
-          where: {
-            tenantId,
-            OR: [
-              { nestingLoteRol: null },
-              { nestingLoteRol: { not: 'PARTICIPANTE' } },
-            ],
-            estado: 'bloqueado',
-            orden: {
-              ...filtroVendedor,
-              estado: { in: ['pendiente', 'produccion'] },
-            },
-          },
-        }),
-      ]);
+        },
+      }),
+    ]);
     return {
-      entregasHoy,
-      atrasadas,
+      entregasHoy: entregas.filter((e) => e.riesgo === 'hoy').length,
+      atrasadas: entregas.filter((e) => e.riesgo === 'atrasada').length,
       enProduccion,
       bloqueados,
-      listosRetiro,
+      listosRetiro: entregas.filter((e) => e.riesgo === 'lista').length,
     };
   }
 
@@ -371,84 +361,35 @@ export class PanelGeneralService {
     filtroVendedor: Prisma.OrdenTrabajoWhereInput,
   ): Promise<EntregaPanel[]> {
     const filas = await this.prisma.ordenTrabajo.findMany({
-      where: {
-        tenantId,
-        ...filtroVendedor,
-        OR: [
-          {
-            estado: { in: ['pendiente', 'produccion'] },
-            fechaEntrega: { lte: fechaDb(enSiete) },
-          },
-          // Una OT terminada espera el retiro, incluso sin fecha o fuera de
-          // la ventana de siete días. Nunca vuelve a atrasarse por no retirarla.
-          { estado: 'finalizada' },
-        ],
-      },
-      orderBy: [{ fechaEntrega: 'asc' }, { createdAt: 'asc' }],
-      include: {
-        cliente: { select: { nombre: true } },
-        items: {
-          orderBy: { ordenIndice: 'asc' },
-          select: {
-            id: true,
-            parentItemId: true,
-            nombre: true,
-            pasos: {
-              orderBy: { indice: 'asc' },
-              select: {
-                estado: true,
-                nestingLoteRol: true,
-                duracionEstimadaMin: true,
-                nombre: true,
-                centroCostoNombre: true,
-              },
-            },
-          },
-        },
-      },
+      where: filtroOrdenesEntregas(tenantId, filtroVendedor),
+      select: seleccionEntregasProduccion,
     });
-    return filas.map((orden) => {
-      const comerciales = productosComercialesConTrabajo(orden.items);
-      const pasos = comerciales.flatMap((i) => i.pasos);
-
-      const productos = comerciales.map((item) => {
+    return clasificarEntregasProduccion(filas, hoy)
+      .filter((e) => e.riesgo === 'lista' || (e.fecha && e.fecha <= enSiete))
+      .map((e) => {
+        const progreso = e.progreso;
         return {
-          id: item.id,
-          nombre: item.nombre,
-          progresoPct: calcularProgreso(item.pasos, orden.estado).porcentaje,
-          progreso: calcularProgreso(item.pasos, orden.estado),
+          id: e.id,
+          numero: e.orden,
+          cliente: e.cliente,
+          producto: e.producto,
+          productos: [
+            {
+              id: e.id,
+              nombre: e.producto,
+              progresoPct: progreso.porcentaje,
+              progreso,
+            },
+          ],
+          fechaEntrega: e.fecha,
+          progresoPct: progreso.porcentaje,
+          progreso,
+          riesgo: e.riesgo as EntregaPanel['riesgo'],
+          pasoActual: e.pasoActual,
+          estacionActual: e.estacionActual,
+          href: `/produccion/ordenes/${e.ordenId}`,
         };
       });
-      const actual =
-        pasos.find((p) =>
-          ['en_curso', 'pausado', 'bloqueado'].includes(p.estado),
-        ) ?? pasos.find((p) => p.estado !== 'hecho');
-      const fecha = orden.fechaEntrega?.toISOString().slice(0, 10) ?? null;
-      return {
-        id: orden.id,
-        numero: orden.numero,
-        cliente: orden.cliente?.nombre ?? 'Sin cliente',
-        producto:
-          comerciales.length === 1
-            ? (comerciales[0]?.nombre ?? 'Sin productos')
-            : `${comerciales.length} productos`,
-        productos,
-        fechaEntrega: fecha,
-        progresoPct: calcularProgreso(pasos, orden.estado).porcentaje,
-        progreso: calcularProgreso(pasos, orden.estado),
-        riesgo:
-          orden.estado === 'finalizada'
-            ? 'lista'
-            : fecha! < hoy
-              ? 'atrasada'
-              : fecha === hoy
-                ? 'hoy'
-                : 'proxima',
-        pasoActual: actual?.nombre ?? null,
-        estacionActual: actual?.centroCostoNombre ?? null,
-        href: `/produccion/ordenes/${orden.id}`,
-      };
-    });
   }
 
   private async resumenComercial(
@@ -462,7 +403,8 @@ export class PanelGeneralService {
         where: {
           tenantId,
           ...filtroVendedor,
-          numero: { not: null }, versionVigente: true,
+          numero: { not: null },
+          versionVigente: true,
           estado: 'pendiente_aprobacion',
         },
       }),
@@ -470,7 +412,8 @@ export class PanelGeneralService {
         where: {
           tenantId,
           ...filtroVendedor,
-          numero: { not: null }, versionVigente: true,
+          numero: { not: null },
+          versionVigente: true,
           estado: 'enviado',
           fechaValidez: { gte: fechaDb(hoy), lte: fechaDb(enTres) },
         },
@@ -607,11 +550,11 @@ export class PanelGeneralService {
       kpis.push(
         {
           id: 'entregas-hoy',
-          etiqueta: 'Entregas de hoy',
+          etiqueta: 'Pendientes para hoy',
           valor: prod.entregasHoy,
           formato: 'cantidad',
           tono: prod.entregasHoy ? 'atencion' : 'ok',
-          detalle: 'Órdenes comprometidas para hoy',
+          detalle: 'Productos o lotes sin terminar para hoy',
           href: '/produccion/ordenes',
         },
         {
@@ -620,7 +563,7 @@ export class PanelGeneralService {
           valor: prod.atrasadas,
           formato: 'cantidad',
           tono: prod.atrasadas ? 'critico' : 'ok',
-          detalle: 'Órdenes sin terminar con fecha vencida',
+          detalle: 'Productos o lotes sin terminar con fecha vencida',
           href: '/produccion/ordenes?urgencia=atrasadas',
         },
         {
@@ -647,7 +590,7 @@ export class PanelGeneralService {
           valor: prod.listosRetiro,
           formato: 'cantidad',
           tono: prod.listosRetiro ? 'atencion' : 'ok',
-          detalle: 'Productos terminados sin entregar',
+          detalle: 'Productos o lotes terminados sin entregar',
           href: '/produccion/ordenes?estado=finalizada',
         },
       );
@@ -743,7 +686,7 @@ export class PanelGeneralService {
               id: 'ordenes-atrasadas',
               dominio: 'produccion',
               severidad: 'critico',
-              titulo: 'Órdenes atrasadas',
+              titulo: 'Entregas atrasadas',
               detalle:
                 'La fecha prometida ya venció y la producción sigue sin terminar.',
               cantidad: input.prod.atrasadas,

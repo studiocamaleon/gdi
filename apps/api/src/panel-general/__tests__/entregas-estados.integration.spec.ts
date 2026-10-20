@@ -4,6 +4,11 @@ import type { CurrentAuth } from '../../auth/auth.types';
 import { expandir } from '../../auth/permisos';
 import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { PanelGeneralService } from '../panel-general.service';
+import {
+  filtroOrdenesEntregas,
+  seleccionEntregasProduccion,
+} from '../../common/entregas-produccion';
+import { entregasParaPantalla } from '../../pantallas-produccion/entregas-pantalla';
 
 describe('Atrasos de producción y órdenes para retirar (PostgreSQL)', () => {
   const db = new PrismaClient();
@@ -118,6 +123,9 @@ describe('Atrasos de producción y órdenes para retirar (PostgreSQL)', () => {
           expect(panel.entregas?.hoy.items.map((o) => o.numero)).toEqual([
             'hoy',
           ]);
+          expect(panel.kpis.find((k) => k.id === 'entregas-hoy')?.valor).toBe(
+            panel.entregas?.hoy.total,
+          );
           expect(panel.entregas?.proxima.items.map((o) => o.numero)).toEqual([
             'proxima',
           ]);
@@ -146,6 +154,150 @@ describe('Atrasos de producción y órdenes para retirar (PostgreSQL)', () => {
           const actualizado = await service.obtener(auth);
           expect(actualizado.entregas?.lista.total).toBe(3);
           expect(actualizado.entregas?.atrasada.total).toBe(2);
+
+          // OT mixta fuera de la ventana: mandan las fechas y el trabajo de
+          // cada producto. Un componente pendiente impide darlo por terminado.
+          const tenantId = auth.tenantId;
+          const mixta = await tx.ordenTrabajo.create({
+            data: {
+              tenantId,
+              numero: 'mixta',
+              estado: 'produccion',
+              fechaEntrega: new Date('2026-10-20'),
+            },
+          });
+          const item = async (
+            nombre: string,
+            fecha: string | null,
+            extras: {
+              parentItemId?: string;
+              listoEnMostrador?: boolean;
+              entregadoEl?: Date;
+            } = {},
+          ) =>
+            tx.ordenTrabajoItem.create({
+              data: {
+                tenantId,
+                ordenId: mixta.id,
+                codigo: nombre,
+                nombre,
+                familia: 'Prueba',
+                cantidad: 1,
+                cantidadUnidad: 'un',
+                subtotal: 0,
+                impuestos: 0,
+                total: 0,
+                fechaEntrega: fecha ? new Date(fecha) : null,
+                ...extras,
+              },
+            });
+          const atrasado = await item('Pendiente vencido', '2026-10-06');
+          const hoyItem = await item('Pendiente hoy', '2026-10-07');
+          const padre = await item(
+            'Producto con componente pendiente',
+            '2026-10-05',
+          );
+          const hijo = await item('Componente', null, {
+            parentItemId: padre.id,
+          });
+          const completo = await item('Terminado por pasos', '2026-10-06');
+          const mostrador = await item('Terminado en mostrador', '2026-10-07', {
+            listoEnMostrador: true,
+          });
+          await item('Entregado parcialmente', '2026-10-06', {
+            entregadoEl: new Date(),
+          });
+          await item('Futuro propio', '2026-10-30');
+          await item('Hereda fecha futura', null);
+          for (const [itemId, estado] of [
+            [padre.id, 'hecho'],
+            [hijo.id, 'pendiente'],
+            [completo.id, 'hecho'],
+          ]) {
+            await tx.ordenTrabajoItemPaso.create({
+              data: {
+                tenantId,
+                ordenId: mixta.id,
+                itemId,
+                estado,
+                indice: 0,
+                nombre: 'Operación ficticia',
+                familiaCodigo: 'prueba',
+                categoriaFamilia: 'prueba',
+              },
+            });
+          }
+          const comparar = async () => {
+            const panel = await service.obtener(auth);
+            const tv = entregasParaPantalla(
+              await tx.ordenTrabajo.findMany({
+                where: filtroOrdenesEntregas(tenantId, {}, panel.fechaLocal),
+                select: seleccionEntregasProduccion,
+              }),
+              panel.fechaLocal,
+            );
+            for (const [grupo, kpi, claveTV] of [
+              ['atrasada', 'atrasadas', 'atrasadas'],
+              ['hoy', 'entregas-hoy', 'hoy'],
+            ] as const) {
+              expect(panel.kpis.find((k) => k.id === kpi)?.valor).toBe(
+                panel.entregas![grupo].total,
+              );
+              expect(tv.resumen[claveTV]).toBe(panel.entregas![grupo].total);
+              expect(
+                tv.filas
+                  .filter((f) => f.atrasada === (grupo === 'atrasada'))
+                  .map((f) => f.id),
+              ).toEqual(panel.entregas![grupo].items.map((f) => f.id));
+            }
+            expect(
+              panel.kpis.find((k) => k.id === 'listos-retiro')?.valor,
+            ).toBe(panel.entregas!.lista.total);
+            expect(tv.filas.every((f) => f.estado !== 'lista')).toBe(true);
+            for (const fila of tv.filas) {
+              const entrega = [
+                ...panel.entregas!.atrasada.items,
+                ...panel.entregas!.hoy.items,
+              ].find((e) => e.id === fila.id)!;
+              expect(fila.progresoPct).toBe(entrega.progresoPct);
+            }
+            return { panel, tv };
+          };
+          const mixto = await comparar();
+          expect(mixto.tv.resumen).toEqual({ atrasadas: 4, hoy: 2 });
+          expect(
+            mixto.tv.filas.filter((f) => f.orden === 'mixta').map((f) => f.id),
+          ).toEqual([padre.id, atrasado.id, hoyItem.id]);
+          expect(mixto.panel.entregas!.lista.items.map((f) => f.id)).toEqual(
+            expect.arrayContaining([completo.id, mostrador.id]),
+          );
+          // Reprogramar mueve la misma entrega en ambos lugares.
+          await tx.ordenTrabajoItem.update({
+            where: { id: atrasado.id },
+            data: { fechaEntrega: new Date('2026-10-07') },
+          });
+          expect((await comparar()).tv.resumen).toEqual({
+            atrasadas: 3,
+            hoy: 3,
+          });
+          // Completar el componente saca el producto de ambos pendientes.
+          await tx.ordenTrabajoItemPaso.updateMany({
+            where: { itemId: hijo.id },
+            data: { estado: 'hecho' },
+          });
+          expect((await comparar()).tv.resumen).toEqual({
+            atrasadas: 2,
+            hoy: 3,
+          });
+          // Reabrirlo lo devuelve a la misma prioridad en los dos.
+          await tx.ordenTrabajoItemPaso.updateMany({
+            where: { itemId: hijo.id },
+            data: { estado: 'pendiente' },
+          });
+          expect((await comparar()).tv.resumen).toEqual({
+            atrasadas: 3,
+            hoy: 3,
+          });
           throw rollback;
         },
         { timeout: 20000 },

@@ -1,5 +1,34 @@
 # Validación de producción
 
+## 2026-10-20, 19:19 UTC — Panel y TV: una misma prioridad de trabajo pendiente
+
+Lucas autorizó publicar el [PR #115](https://github.com/studiocamaleon/gdi/pull/115) en staging, comprobar la coincidencia entre Panel y TV y, si era correcta, promoverlo a producción. Parte de `main` actualizado (`f1b1f56cb`), sin dependencias de otros PR. Revisión funcional **`e5244c3c756b93382c14e2a82538b6165e37aeae`**; el commit posterior registra la publicación sin reconstruir imágenes.
+
+**Resultado:** ambos clasifican por producto o raíz de lote entregable, con su fecha propia y el día local de la empresa. Los componentes no duplican entregas. Contadores, pestañas y alertas del Panel parten de una única lectura. El TV rota exclusivamente pendientes: primero vencidos y después los de hoy. Los terminados quedan en «Para retirar» del Panel. Se conservan los permisos del vendedor; su alcance propio se aclara en pantalla. Los avances también comparten cálculo.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:a5b602b6d201b19824a49a2ecf8f1a878231d1b90b9da0c44e458fe037d61e30` |
+| Web | `sha256:c48f6b7fe2776537f7443ee1c780166ce83cc79a2d5a2067e1373b9bd7582732` |
+| PDF, conservado | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Ensayo de staging:** la empresa ficticia conserva las notificaciones pausadas. Se agregó una OT con productos vencido, de hoy, terminado y futuro, cada uno con fecha propia. Antes, el Panel mostraba 12 atrasadas y 0 para hoy, mientras el TV mostraba 15, 1 y seis listas. Después, ambos muestran **15 atrasadas y 1 pendiente para hoy**; seis listas quedan exclusivamente en el Panel. Se verificaron totales, identificadores y avance de las filas por HTTP, y la lista completa en una transacción `READ ONLY / RepeatableRead` con los servicios compilados. El producto de hoy muestra 25 % en ambas vistas. Chrome comprobó los contadores, sus pestañas y la rotación, sin tarjetas terminadas en TV. Los dispositivos temporales del ensayo se revocaron y se verificó rechazo de sus credenciales; se conservaron las OT ficticias.
+
+**Pruebas:** 73 de API y 21 de web en local, tipos focalizados, lint y CSS guard aprobados. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39473705060), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/39473705184), CodeQL sin alertas del PR y Vercel aprobados. El primer intento de CI tuvo una instalación incompleta de Lightning CSS; el reintento del mismo código pasó todos los controles, sin omitir pruebas ni cambiar dependencias. El registro final vuelve a pasar CI antes del merge.
+
+**Operación:** compilaciones remotas con tipos; promoción de los mismos manifiestos por digest, sin reconstruir para producción. El constructor temporal se creó en `iad` tras falta de capacidad en `gru` y se retiró al terminar. Los servicios mantienen regiones, recursos y secretos; seis máquinas saludables por entorno, incluida API performance en producción. Salud HTTPS 200, API directa privada 403 y BFF sin sesión 401; revisión exacta comprobada en API, web y ambos workers. Configuración fiscal del worker de producción verificada sin emitir comprobantes. No se alteraron Docker ni servidores locales.
+
+**Datos:** 318 migraciones completas, checksums intactos y ninguna pendiente; no se ejecutaron migraciones, seeds ni resets. La comprobación de producción usó lectura consistente de los datos vigentes y verificó igualdad de todos los identificadores, totales y avances pendientes entre los servicios de Panel y TV. No se crearon órdenes, pagos, facturas ni dispositivos de prueba en producción.
+
+Las pantallas abiertas deben recargarse una vez para cargar la nueva interfaz; luego conservan sus consultas automáticas. El Raspberry físico no se configuró en este ensayo. Panel y TV pueden reflejar instantes distintos durante una actualización (consultas cada 30 y 10 segundos); la comparación utiliza el mismo alcance empresarial y una misma instantánea.
+
+**Respaldo:** fuentes exactas cifradas y custodiadas, inventario actualizado y copia posterior completada `2026-10-20T19:19:20.855Z`. Firma, huella y descifrado del manifiesto comprobados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 564 archivos. **No se repitió una restauración SQL completa.** Claves, identificadores privados y evidencia detallada permanecen fuera de Git.
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-production-api@sha256:6d45001a28a9155b28cea0fded75aa4e0dfdf645abe1e7f4841561f0347ed483`; web a `registry.fly.io/grafoprint-production-web@sha256:fa218c19a013a7f2b3b275cf1b170279ce34ec647740afc42ffe1d736f2aabed` (revisión `c98872af8`, #114). Restituir el inventario del copiador; no requiere revertir esquema ni borrar registros. Esa reversión reintroduce las diferencias de unidades y mantiene tarjetas listas en TV.
+
+El cierre integra #115 conservando la revisión funcional y este registro. Las propuestas independientes de dependencias quedan fuera; se consultan nuevamente los PR abiertos al terminar.
+
 ## 2026-10-20, 17:41 UTC — TV: listas para entregar sin atraso
 
 Lucas autorizó probar una OT lista para entregar con fecha vencida en staging y, si dejaba de aparecer atrasada, publicar la corrección en producción. [PR #114](https://github.com/studiocamaleon/gdi/pull/114), creado desde `origin/main` actualizado (`08111a912`). Revisión funcional **`c98872af839e7a32dc497ee9613c6a0d4ec3c5c6`**. Los commits documentales posteriores registran la publicación sin reconstruir imágenes.

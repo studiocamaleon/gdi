@@ -17,11 +17,30 @@ La gestión muestra nombre, duración, vencimiento y última conexión conocida 
 
 ## Qué muestra
 
-- Entregas pendientes con fecha de hoy o anterior. La rotación prioriza las atrasadas sin terminar, luego las pendientes de hoy y finalmente las listas para entregar. Dentro de cada grupo se ordenan por fecha, OT e ítem. Las fechas civiles se comparan usando el día y la zona horaria de la empresa.
-- Una tarjeta por producto entregable o lote; los componentes se agrupan con su trabajo. Los agrupadores de lotes no duplican cantidades.
-- Número de OT, producto, cliente (o cliente de mostrador), cantidad, fecha, etapa y pasos completados. No se publican precios, márgenes, adjuntos ni datos de contacto.
-- Las órdenes finalizadas y los productos listos permanecen hasta registrar la entrega. Se excluyen borradores, canceladas, entregadas, ítems retirados, fechas futuras e ítems sin fecha comprometida.
-- «Atrasadas», «Para hoy» y «Listas para entregar» cuentan entregas, no órdenes, y son grupos separados. Como en Panel general, una OT finalizada nunca se marca atrasada. También queda lista una entrega marcada para mostrador o con todos sus pasos y componentes terminados, aunque otro producto de la misma OT siga pendiente. Las listas conservan su fecha sin etiqueta de atraso ni urgencia roja; no suman a las pendientes de hoy.
+**Ajuste publicado el 20/10/2026, PR #115:** el TV queda dedicado al
+trabajo que falta terminar. El comportamiento siguiente reemplaza el de #114,
+que mostraba tarjetas listas para entregar.
+
+- Sólo productos o lotes sin terminar con fecha vencida o de hoy. Primero van
+  las atrasadas, de la más antigua a la más reciente; después las de hoy. Los
+  empates se ordenan por OT e ítem.
+- Una tarjeta por producto entregable o raíz de lote. Los agrupadores y los
+  componentes internos —aunque hereden `loteEntregaId`— no duplican entregas.
+- Fecha propia del producto/lote, con la fecha de OT como respaldo. El día se
+  resuelve en la zona horaria de la empresa sin desplazar fechas civiles.
+- Las OT finalizadas, productos listos en mostrador y productos con todos sus
+  pasos/componentes hechos quedan fuera del TV. También se excluyen entregadas,
+  borradores, canceladas, ítems retirados, fechas futuras y pendientes sin fecha.
+- Dos contadores: **Atrasadas** y **Pendientes para hoy**. Su suma es el total
+  de tarjetas rotadas. «Todo al día» significa que no queda trabajo pendiente
+  con fecha de hoy o vencida; puede haber productos futuros o listos para retirar.
+- Número de OT, producto, cliente, cantidad, fecha, etapa y avance ponderado,
+  calculado igual que en Panel general. No publica importes, archivos ni contactos.
+
+Comparte la clasificación con [Panel general](panel-general-administrador.md#entregas-por-fecha).
+Para el mismo alcance empresarial y momento de consulta, ambos tienen los mismos
+pendientes. «Para retirar» se conserva únicamente en el Panel. El alcance propio
+del vendedor no se amplía para igualarlo a la TV de toda la empresa.
 
 La vista ocupa la altura disponible y calcula cuántas tarjetas entran. Usa una columna en vertical y dos cuando hay suficiente ancho. Rota todas las páginas, sin desplazar automáticamente la página; incluye pausa y pantalla completa. La consulta se repite cada diez segundos independientemente de la rotación. Si falla, conserva la lectura anterior con un aviso visible; vuelve a sincronizarse cuando se recupera la conexión. Una autorización rechazada borra las entregas.
 
@@ -54,3 +73,5 @@ En el navegador se comprobó el ingreso normal de una cuenta ficticia, la autori
 ## Ensayo de staging — 19/10/2026
 
 En una empresa ficticia separada se comprobó vinculación por código, 17 entregas de hoy/atrasadas, rotación cada diez segundos, pausa, recarga y revocación. Una segunda vinculación dejó una TV demo para la aceptación. Chrome solicitó nuevamente la protección HTTP Basic de staging después de revocar; completarla permitió continuar. Ese ensayo conservaba Basic; posteriormente se separó este control y se deshabilitó en staging para facilitar el acceso del Raspberry. La empresa de ensayo queda disponible hasta cerrar la aceptación, con notificaciones pausadas. El Raspberry físico y su arranque automático siguen pendientes.
+
+Publicación de #115: Panel y TV coincidieron en staging (15 atrasadas y 1 pendiente de hoy), incluidos identificadores y avances. Se verificó la rotación sin terminadas y se revocaron los dispositivos temporales. Producción recibió exactamente las mismas imágenes y pasó una comparación completa de sólo lectura. Recargar las pantallas abiertas para cargar la interfaz nueva; la vinculación existente se conserva. Ver [registro operativo](../deploy/produccion/VALIDACION.md).
