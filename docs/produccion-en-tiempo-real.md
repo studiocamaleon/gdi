@@ -1,6 +1,6 @@
 # Producción en tiempo real
 
-Vista de sólo lectura para televisores del taller. Implementada y comprobada en local y staging con el lote #110 (`acb576be0`, 19/10/2026). **Pendientes la aceptación y producción**; no se configuró todavía un Raspberry físico. Ver [el registro del ensayo](../deploy/staging/VALIDACION.md).
+Vista de sólo lectura para televisores del taller. Implementada y comprobada en local y staging con el lote #110 (`acb576be0`, 19/10/2026). Publicada también en producción con el lote #113; no se configuró todavía un Raspberry físico. Ver [el registro del ensayo](../deploy/staging/VALIDACION.md).
 
 ## Entrada y vinculación
 
@@ -33,11 +33,11 @@ chromium --kiosk --no-first-run --user-data-dir="$HOME/.config/grafo-tv" 'https:
 
 No usar incógnito ni borrar las cookies del perfil. La orientación física y el ahorro de pantalla se configuran en el sistema del Raspberry. El arranque automático depende de su versión: en el escritorio con labwc, la guía oficial indica `~/.config/labwc/autostart`. Agregar allí el comando de lanzamiento con `&`, conservando las entradas existentes. Ver [guía oficial de kiosco de Raspberry Pi](https://www.raspberrypi.com/tutorials/how-to-use-a-raspberry-pi-in-kiosk-mode/).
 
-`localhost` en el Raspberry apunta al propio Raspberry, no a la Mac. La prueba de esta entrega se hizo en el navegador local; no se abrió el servidor de desarrollo a la red. Para la prueba física ya está disponible `https://staging.grafoprint.com.ar/pantalla/produccion`. Staging permite abrir esta vista sin la contraseña HTTP Basic adicional; los datos requieren la vinculación por código. La gestión de pantallas conserva el login y los permisos de Grafo.
+`localhost` en el Raspberry apunta al propio Raspberry, no a la Mac. La prueba de esta entrega se hizo en el navegador local; no se abrió el servidor de desarrollo a la red. Para la prueba física están disponibles `https://staging.grafoprint.com.ar/pantalla/produccion` y `https://app.grafoprint.com.ar/pantalla/produccion`. Staging permite abrir esta vista sin la contraseña HTTP Basic adicional; los datos requieren la vinculación por código. La gestión de pantallas conserva el login y los permisos de Grafo.
 
 ## Implementación y comprobación
 
-- Migración aditiva `20261019120000_pantallas_produccion`: aplicada a desarrollo, `gdi_saas_test` y staging, con permisos de ejecución comprobados. Sin seeds, resets ni cambios en datos existentes.
+- Migración aditiva `20261019120000_pantallas_produccion`: aplicada a desarrollo, `gdi_saas_test`, staging y producción, con permisos de ejecución comprobados. Sin seeds, resets ni cambios en datos existentes.
 - `PantallaProduccion` almacena hashes de credencial y código. La credencial aleatoria de 256 bits vive exclusivamente en una cookie HttpOnly, SameSite Strict y Secure en producción. No aparece en URLs, almacenamiento del navegador accesible a JavaScript ni respuestas JSON.
 - El BFF `/api/pantalla/[accion]` acepta cuatro acciones cerradas, comprueba origen en escrituras y usa el canal privado existente hacia la API. No reenvía la sesión personal ni cabeceras arbitrarias.
 - Los endpoints del dispositivo validan su credencial, empresa, miembro autorizante, permisos, IP y vencimiento en cada consulta. La TV no puede usar endpoints de usuario. La gestión excluye MCP, impersonación y sesiones de plataforma.

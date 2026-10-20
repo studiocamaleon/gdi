@@ -1,5 +1,36 @@
 # Validación de staging — historial
 
+## 2026-10-20, 05:25 UTC — Lote de producción en tiempo real, cobros, OT y copiado
+
+[PR integrador #113](https://github.com/studiocamaleon/gdi/pull/113), creado desde `origin/main` (`5b1ee5c0e`), conserva los commits de #104 y #106–#112. Lucas autorizó publicar el conjunto en producción después de comprobar una OT con anillado en staging. Las propuestas de Dependabot quedan fuera. Revisión funcional ejecutada **`6ee6dee98cfc07cfca1fa093ef5d7f75d0ba2a0d`**; los commits posteriores sólo registran la publicación y no reconstruyen las imágenes.
+
+El lote incorpora la pantalla **Producción en tiempo real**, rotación automática y vinculación por código; cobros bancarios para vendedor con selección obligatoria y confirmación; edición y agregado de productos pendientes en OT sin facturar; atajos Hoy/Esta semana; En espera inicialmente colapsado; cálculo automático de copiado y corrección de anillado. El registro del sandbox de Meta es documental: no habilita mensajería de producción. La eliminación de HTTP Basic es exclusiva de staging; se conservan autenticación, permisos y canal privado web/API.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:64c308ad713c1716d4038be83e939205c5de7c8a711703df6ea7cb04aab5d910` |
+| Web | `sha256:080067d3ced86b030ce39252399fbd41c7c94c99a0ecc6f51cfd8d03392f0151` |
+| PDF, conservado | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+Backend y web compilados en remoto con tipos. La conexión de seguimiento de la web se interrumpió tras tipos; se recuperó la imagen final del constructor, se verificó su revisión y BUILD_ID y se subió sin recompilar. Las credenciales temporales de registro se revocaron y el constructor propio se retiró. Producción utiliza exactamente los digests comprobados en staging, sin recompilar. Se conservan seis máquinas por entorno y todos sus tamaños, incluida API performance en producción. Salud web/API 200, acceso directo privado 403 y BFF sin sesión 401; revisión comprobada en los cuatro procesos actualizados. Las huellas de secretos de API, web y ambos workers se conservaron en los dos entornos. La configuración fiscal del worker de producción coincide con la API y mantiene su modo automático; no se realizó una nueva consulta ni emisión real a ARCA.
+
+**Pruebas:** 154 pruebas locales de interfaz en nueve suites y 23 de API en cuatro suites. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39335049714), [contenedores/tipos/migraciones](https://github.com/studiocamaleon/gdi/actions/runs/39335049649), CodeQL sin alertas abiertas y Vercel aprobados en la revisión funcional. El último commit documental vuelve a comprobarse antes del merge. No se desactivaron controles para integrar.
+
+**Anillado en staging:** con datos y PDF ficticios, primero se reprodujo el rechazo «El archivo y su cálculo productivo no coinciden». El cálculo guardaba hojas como cantidad del producto mientras la revisión esperaba libros. Ahora conserva libros y precio unitario por libro, sin aflojar la validación del archivo. Se cargó un original de 25 páginas A4 BN con anillado, se pasó de uno a dos ejemplares y la tarifa cambió automáticamente de $100 a $80 por hoja al alcanzar 50 hojas. La OT se emitió y recargó correctamente: 2 libros, 50 hojas, total $8.167,24. No apareció «Actualizar precios» ni el error anterior; sólo se ofrece reintentar ante un fallo real. No se emitieron facturas ni se registraron cobros para esta prueba.
+
+Durante la redirección posterior a la emisión, Chrome registró un fallo de red al cargar RSC y mostró el aviso de salida. La OT ya existía: se abrió desde el listado y se recargó, sin repetir la emisión. Se observó además un aviso de hidratación React 418; no bloqueó la ficha ni alteró los datos comprobados. No se considera una consola libre de avisos.
+
+La regresión del lote conserva la OT ficticia anterior con dos PVC y un banner iniciado, total $70.000 y $7.000 cobrados. El vendedor puede seleccionar Banco; transferencia a efectivo y acceso a Tesorería siguen rechazados. El banner iniciado continúa bloqueado. Se comprobó acceso sin Basic, login, origen y vinculación/revocación de una TV temporal; el ensayo funcional detallado del lote #110 queda en el registro del 19/10. El Raspberry físico y la mensajería con un número propio siguen siendo ensayos pendientes.
+
+**Esquema:** 318 migraciones completas. Producción incorpora únicamente `20261019120000_pantallas_produccion` y `20261019160000_recibos_numero_por_empresa`, ya presentes en staging. Tabla nueva de pantallas y unicidad de recibos por empresa, conservando los recibos existentes. Rol de ejecución actualizado; checksums previos comprobados. Sin seeds, resets ni restauraciones sobre las bases activas. Las comprobaciones en producción son de lectura: gestión de pantallas sin dispositivos, Resumen ejecutivo con Hoy y Esta semana, y tablero con atrasadas y listos expandidos. En espera tiene cero trabajos en ese momento. No se crean OT, pagos ni comprobantes ficticios allí.
+
+**Respaldo:** fuentes exactas cifradas y custodiadas; inventario del copiador actualizado a las imágenes activas. Copia posterior completada `2026-10-20T05:08:12.602Z`: firma válida, huella y manifiesto descifrado, revisión/fuentes/imágenes comprobadas, 318 migraciones y 30 archivos. Evidencia detallada y accesos fuera de Git. El comprobante de staging precede a la última OT ficticia y su PDF; las copias horarias siguientes recogerán esa prueba. **No se repitió restauración SQL completa.**
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:6e7be8e9d5a8be85202b54cfcaa85c5e530b752ad27e5a130a35177ddf3158b1`; web a `registry.fly.io/grafoprint-staging-web@sha256:df20e36fa86014960930bd1c08d4109d8ae386ad1edcd021f5d0649482c8e96b`. Conservar la tabla de pantallas, los recibos y su unicidad por empresa; no borrar datos ni revertir el esquema para deshacer imágenes. Revisar compatibilidad antes de volver al código anterior y restituir el inventario del copiador. Esa reversión vuelve a introducir los comportamientos corregidos. PDF y copiador conservan sus imágenes.
+
+La integración final de #113 conserva todas las fuentes del lote. Los PR absorbidos se fusionan o cierran por inclusión comprobada; el estado final se registra en el PR integrador. No se eliminan worktrees que utiliza el desarrollo local.
+
 ## 2026-10-19, 21:01 UTC — Staging sin contraseña HTTP Basic adicional
 
 Pedido explícito de Lucas para facilitar la prueba del Raspberry. [PR #111](https://github.com/studiocamaleon/gdi/pull/111), dependiente de #110: rama creada desde `origin/main` actualizado, incorporando el lote desplegado; base temporal `codex/lote-produccion-staging`. Al resolver la dependencia, ajustar la base a `main`. No se modificó el PR #110 listo para revisión ni se fusionaron propuestas.

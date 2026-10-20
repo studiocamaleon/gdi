@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-19, 21:01 UTC.** La web de staging ejecuta `34b206698` y permite entrar sin contraseña HTTP Basic adicional (PR [#111](https://github.com/studiocamaleon/gdi/pull/111)). Login, permisos de Grafo y vinculación de TV por código comprobados; el canal privado web/API sigue activo. API y workers conservan `acb576be0` del lote #110, PDF y copiador sus imágenes. Mismos tamaños y secretos; respaldo posterior con firma y manifiesto verificados. Pendientes aceptación del lote y Raspberry físico. Producción y `main` sin cambios. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-20, 05:25 UTC.** API, ambos workers y web ejecutan `6ee6dee98` del [PR #113](https://github.com/studiocamaleon/gdi/pull/113): lote de TV, cobros, edición de OT, reportes y copiado. OT con anillado creada en staging, precios automáticos y sin el error de integridad. Mismos digests promovidos a producción; seis servicios saludables, recursos conservados, 318 migraciones y comprobante posterior del respaldo verificado. Raspberry físico pendiente. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 
