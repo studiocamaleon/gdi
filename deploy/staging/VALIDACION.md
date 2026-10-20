@@ -1,5 +1,34 @@
 # Validación de staging — historial
 
+## 2026-10-20, 17:41 UTC — TV: listas para entregar sin atraso
+
+Lucas autorizó probar una OT lista para entregar con fecha vencida en staging y, si dejaba de aparecer atrasada, publicar la corrección en producción. [PR #114](https://github.com/studiocamaleon/gdi/pull/114), creado desde `origin/main` actualizado (`08111a912`). Revisión funcional **`c98872af839e7a32dc497ee9613c6a0d4ec3c5c6`**. Los commits documentales posteriores registran la publicación sin reconstruir imágenes.
+
+La TV conserva las entregas terminadas en «Listas para entregar», sin sumarlas a «Atrasadas» ni «Para hoy». La rotación prioriza atrasadas sin terminar, luego pendientes de hoy y finalmente listas. Una tarjeta lista mantiene su fecha de entrega, con borde verde y sin etiqueta de atraso. Se conserva el tratamiento de fechas de ítems, componentes y lotes.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:6d45001a28a9155b28cea0fded75aa4e0dfdf645abe1e7f4841561f0347ed483` |
+| Web | `sha256:fa218c19a013a7f2b3b275cf1b170279ce34ec647740afc42ffe1d736f2aabed` |
+| PDF, conservado | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Validación:** 15 pruebas locales de API, incluida lectura HTTP con PostgreSQL de test, y ocho de interfaz/BFF/paginación; lint y guard de CSS aprobados. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39461532893), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/39461532884), CodeQL sin alertas abiertas y Vercel aprobados para el candidato. El commit documental final vuelve a pasar CI antes del merge.
+
+**Staging, antes y después:** en la empresa ficticia de ensayo, con notificaciones pausadas, se prepararon una OT finalizada con fecha 17/10 y otra pendiente con fecha 19/10. Antes del cambio, la primera tenía simultáneamente estado `lista` y `atrasada=true`. Después queda `lista`, `atrasada=false`; la pendiente conserva `atrasada=true` y aparece antes, aunque su fecha sea posterior. Con los mismos 19 productos, el contador pasa de 19 a 14 atrasadas, conservando cinco listas y cero pendientes de hoy. Los grupos ya no se solapan. Se comprobó por HTTP y en Chrome la tarjeta lista sin «Atrasada», su fecha original, borde verde y la rotación. Los dos dispositivos temporales del ensayo se revocaron; se conservaron las OTs ficticias y las demás pantallas.
+
+Backend y web compilados remotamente con tipos; producción recibió los mismos digests verificados en staging. El primer intento de crear constructor en `gru` falló por falta de capacidad; sólo el constructor temporal se creó en `iad`, sin mover servicios de aplicación. Constructor propio retirado al terminar. No se compiló producción en la Mac ni se alteraron procesos locales u otros proyectos.
+
+**Operación:** seis servicios saludables por entorno; mismos tamaños y regiones, incluida la API performance de producción. Revisión comprobada en los cuatro procesos actualizados. Salud HTTPS 200, API directa privada 403 y BFF sin sesión 401. Secretos de API, web y workers conservados; worker fiscal de producción coherente con la API. 318 migraciones completas, checksums intactos y ninguna pendiente; no se ejecutaron migraciones, seeds ni resets. No se registraron cobros, facturas ni mensajes de prueba en producción.
+
+**Lectura en producción:** se consultaron las órdenes vigentes dentro de una transacción de sólo lectura, usando la selección y transformación compiladas de la TV. Se comprobó que todas las listas, incluidas las de fecha vencida, quedan fuera de atrasadas y después de los trabajos pendientes. No se modificaron órdenes ni se crearon dispositivos en producción. La instalación física y el arranque del Raspberry siguen fuera de este ensayo.
+
+**Respaldo:** fuentes exactas cifradas y custodiadas e inventario actualizado. Copia posterior completada `2026-10-20T17:30:32.348Z`: firma, huella y manifiesto descifrado verificados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 31 archivos. Las copias horarias de las 16:00 UTC fallaron antes de esta publicación; el ciclo siguiente volvió a completar ambos entornos y se verificaron copias recientes antes del despliegue. No se cambió la configuración para superar ese fallo. **No se repitió restauración SQL completa.** Evidencias y claves fuera de Git.
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:64c308ad713c1716d4038be83e939205c5de7c8a711703df6ea7cb04aab5d910`; web a `registry.fly.io/grafoprint-staging-web@sha256:080067d3ced86b030ce39252399fbd41c7c94c99a0ecc6f51cfd8d03392f0151` (revisión anterior `6ee6dee98`). Restituir también el inventario del copiador. No hay esquema que revertir ni datos que borrar; volver a esas imágenes reintroduce la clasificación errónea de TV.
+
+El merge final de #114 conserva la revisión funcional y los registros operativos. Las propuestas independientes de dependencias quedan fuera de este cambio; se consultan nuevamente los PR abiertos al cerrar.
+
 ## 2026-10-20, 05:25 UTC — Lote de producción en tiempo real, cobros, OT y copiado
 
 [PR integrador #113](https://github.com/studiocamaleon/gdi/pull/113), creado desde `origin/main` (`5b1ee5c0e`), conserva los commits de #104 y #106–#112. Lucas autorizó publicar el conjunto en producción después de comprobar una OT con anillado en staging. Las propuestas de Dependabot quedan fuera. Revisión funcional ejecutada **`6ee6dee98cfc07cfca1fa093ef5d7f75d0ba2a0d`**; los commits posteriores sólo registran la publicación y no reconstruyen las imágenes.

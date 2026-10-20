@@ -2,7 +2,7 @@
 
 Vista de sólo lectura para televisores del taller. Implementada y comprobada en local y staging con el lote #110 (`acb576be0`, 19/10/2026). Publicada también en producción con el lote #113; no se configuró todavía un Raspberry físico. Ver [el registro del ensayo](../deploy/staging/VALIDACION.md).
 
-**Corrección local — 20/10/2026:** las entregas listas ya no se consideran atrasadas ni pendientes de hoy. El ensayo reprodujo el fallo anterior y comprobó OT finalizadas, ítems listos, componentes pendientes y rotación. Pasaron 15 pruebas de API (incluida lectura HTTP con PostgreSQL de test), ocho de interfaz/BFF/paginación, lint y guard de CSS. Sin migraciones ni cambios en órdenes existentes. Esta corrección está pendiente de publicación en staging y producción.
+**Corrección publicada — 20/10/2026, PR #114:** las entregas listas ya no se consideran atrasadas ni pendientes de hoy. El ensayo reprodujo el fallo anterior y comprobó OT finalizadas, ítems listos, componentes pendientes y rotación. Pasaron 15 pruebas de API (incluida lectura HTTP con PostgreSQL de test), ocho de interfaz/BFF/paginación, lint y guard de CSS. Sin migraciones ni cambios en órdenes existentes. Se reprodujo el caso en staging con una OT terminada de fecha vencida, se comprobó la clasificación y rotación corregidas y se promovieron las mismas imágenes a producción. La lectura de producción también conserva las listas vencidas fuera de atrasadas.
 
 ## Entrada y vinculación
 
