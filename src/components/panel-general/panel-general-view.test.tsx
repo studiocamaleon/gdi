@@ -162,6 +162,6 @@ describe("Panel general único", () => {
     expect(carga).not.toContain("Actualizar");
     const vacio = render();
     expect(vacio).toContain("Todo bajo control");
-    expect(vacio).toContain("Sin entregas para hoy");
+    expect(vacio).toContain("Sin trabajo pendiente para hoy");
   });
 });

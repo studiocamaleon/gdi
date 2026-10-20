@@ -11,6 +11,8 @@ export type EntregaPantalla = {
   etapa: string;
   pasosHechos: number;
   pasosTotal: number;
+  progresoPct: number | null;
+  progresoExplicacion: string;
 };
 export type DatosPantalla = {
   empresa: string;
@@ -19,7 +21,7 @@ export type DatosPantalla = {
   hoy: string;
   actualizadoEl: string;
   intervaloSegundos: number;
-  resumen: { atrasadas: number; hoy: number; listas: number };
+  resumen: { atrasadas: number; hoy: number };
   filas: EntregaPantalla[];
 };
 export type EstadoVinculo =

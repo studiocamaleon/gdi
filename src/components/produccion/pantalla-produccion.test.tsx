@@ -25,6 +25,8 @@ const fila = (
   etapa: "Pendiente · Corte",
   pasosHechos: 0,
   pasosTotal: 1,
+  progresoPct: 0,
+  progresoExplicacion: "0 de 1 operaciones completadas.",
   ...extras,
 });
 const datos: DatosPantalla = {
@@ -34,16 +36,10 @@ const datos: DatosPantalla = {
   hoy: "2026-10-19",
   actualizadoEl: "2026-10-19T15:00:00Z",
   intervaloSegundos: 15,
-  resumen: { atrasadas: 1, hoy: 1, listas: 1 },
+  resumen: { atrasadas: 1, hoy: 1 },
   filas: [
     fila("ATRASADA", { fecha: "2026-10-18", atrasada: true }),
     fila("HOY"),
-    fila("LISTA", {
-      fecha: "2026-10-01",
-      estado: "lista",
-      etapa: "Lista para entregar",
-      pasosHechos: 1,
-    }),
   ],
 };
 let root: Root;
@@ -82,8 +78,9 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("rota atrasadas, pendientes de hoy y listas sin llamar hoy o atrasado a un trabajo terminado", async () => {
+it("rota sólo trabajo pendiente, primero atrasadas y luego hoy", async () => {
   await act(async () => root.render(<PantallaProduccion />));
+  expect(contenedor.textContent).not.toContain("Listas para entregar");
   const tarjeta = () => contenedor.querySelector("article")!;
   expect(tarjeta().textContent).toContain("Atrasada · 18/10/2026");
   expect(tarjeta().getAttribute("data-late")).toBe("true");
@@ -93,14 +90,22 @@ it("rota atrasadas, pendientes de hoy y listas sin llamar hoy o atrasado a un tr
   expect(tarjeta().textContent).toContain("Entrega hoy");
 
   await act(async () => vi.advanceTimersByTimeAsync(15_000));
-  expect(tarjeta().textContent).toContain("OT-LISTA");
-  expect(tarjeta().textContent).toContain("Lista para entregar");
-  expect(tarjeta().textContent).toContain("Entrega · 01/10/2026");
-  expect(tarjeta().textContent).not.toContain("Atrasada");
-  expect(tarjeta().textContent).not.toContain("Entrega hoy");
-  expect(tarjeta().getAttribute("data-late")).toBe("false");
-  expect(tarjeta().getAttribute("data-ready")).toBe("true");
-
-  await act(async () => vi.advanceTimersByTimeAsync(15_000));
   expect(tarjeta().textContent).toContain("OT-ATRASADA");
+});
+
+it("muestra todo al día cuando no queda producción para hoy ni atrasada", async () => {
+  vi.mocked(fetch).mockImplementation(
+    async (url) =>
+      ({
+        ok: true,
+        json: async () =>
+          String(url).endsWith("/datos")
+            ? { ...datos, filas: [], resumen: { atrasadas: 0, hoy: 0 } }
+            : { estado: "vinculada", nombre: datos.pantalla },
+      }) as Response,
+  );
+  await act(async () => root.render(<PantallaProduccion />));
+  expect(contenedor.textContent).toContain("Todo al día");
+  expect(contenedor.querySelector("article")).toBeNull();
+  expect(contenedor.textContent).not.toContain("Listas para entregar");
 });

@@ -25,7 +25,10 @@ import { useDesignScope } from "@/components/design-system/appearance";
 import theme from "@/components/design-system/brand-theme.module.css";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { formatearMoneda } from "@/lib/moneda";
-import type { PanelGeneralData } from "@/lib/panel-general-api";
+import type {
+  PanelGeneralData,
+  PanelGeneralEntrega,
+} from "@/lib/panel-general-api";
 import { PanelCard, Empty } from "./panel-admin-card";
 import { Entregas } from "./panel-admin-entregas";
 import { ActividadLista } from "./panel-admin-actividad";
@@ -66,6 +69,15 @@ export function PanelAdminView({
   error: string | null;
   abrir: (href: string) => void;
 }) {
+  const [grupoEntrega, setGrupoEntrega] = useState<
+    PanelGeneralEntrega["riesgo"] | undefined
+  >();
+  const grupoKpi: Record<string, PanelGeneralEntrega["riesgo"]> = {
+    "entregas-hoy": "hoy",
+    atrasadas: "atrasada",
+    "ordenes-atrasadas": "atrasada",
+    "listos-retiro": "lista",
+  };
   const scope = useDesignScope();
   const { moneda } = useConfigRegional();
   const [modal, setModal] = useState<"actividad" | "documentacion" | null>(
@@ -110,6 +122,12 @@ export function PanelAdminView({
           No pudimos actualizar; conservamos la última información disponible.
         </p>
       )}
+      {data.alcanceEntregas === "propias" && (
+        <p className={s.sub}>
+          Mostrando tus órdenes asignadas. El TV muestra el trabajo de toda la
+          empresa.
+        </p>
+      )}
       <section className={s.overview} aria-label="Indicadores de hoy">
         <div className={s.overviewHead}>
           <h2>
@@ -130,10 +148,16 @@ export function PanelAdminView({
             return (
               <Link
                 href={
-                  kpi.id === "bloqueados"
-                    ? "/produccion/tablero?estado=blocked"
-                    : kpi.href
+                  data.entregas && grupoKpi[kpi.id]
+                    ? "#entregas-priorizar"
+                    : kpi.id === "bloqueados"
+                      ? "/produccion/tablero?estado=blocked"
+                      : kpi.href
                 }
+                onClick={() => {
+                  if (data.entregas && grupoKpi[kpi.id])
+                    setGrupoEntrega(grupoKpi[kpi.id]);
+                }}
                 key={kpi.id}
                 className={s.kpi}
                 data-tone={kpi.tono}
@@ -183,7 +207,16 @@ export function PanelAdminView({
         </nav>
       )}
       <div className={s.layout} data-deliveries={Boolean(data.entregas)}>
-        {data.entregas && <Entregas grupos={data.entregas} abrir={abrir} />}
+        {data.entregas && (
+          <div id="entregas-priorizar" className={s.deliverySection}>
+            <Entregas
+              grupos={data.entregas}
+              abrir={abrir}
+              grupoSeleccionado={grupoEntrega}
+              onGrupoChange={setGrupoEntrega}
+            />
+          </div>
+        )}
         <aside className={s.column}>
           <PanelCard
             titulo="Requieren atención"
@@ -198,7 +231,11 @@ export function PanelAdminView({
               <div className={s.attention}>
                 {data.atencion.map((alerta) => (
                   <Link
-                    href={alerta.href}
+                    href={
+                      data.entregas && grupoKpi[alerta.id]
+                        ? "#entregas-priorizar"
+                        : alerta.href
+                    }
                     key={alerta.id}
                     data-severity={alerta.severidad}
                     onClick={
@@ -207,7 +244,9 @@ export function PanelAdminView({
                             e.preventDefault();
                             setModal("documentacion");
                           }
-                        : undefined
+                        : data.entregas && grupoKpi[alerta.id]
+                          ? () => setGrupoEntrega(grupoKpi[alerta.id])
+                          : undefined
                     }
                   >
                     <b>{alerta.cantidad.toLocaleString("es-AR")}</b>

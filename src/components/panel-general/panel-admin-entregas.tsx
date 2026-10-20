@@ -80,29 +80,32 @@ type Riesgo = PanelGeneralEntrega["riesgo"];
 const GRUPOS: { id: Riesgo; label: string; vacio: string; detalle: string }[] =
   [
     {
-      id: "hoy",
-      label: "Hoy",
-      vacio: "Sin entregas para hoy",
-      detalle: "No hay órdenes con entrega comprometida para hoy.",
-    },
-    {
       id: "atrasada",
       label: "Atrasadas",
-      vacio: "Entregas al día",
-      detalle: "No hay órdenes sin terminar con una fecha de entrega vencida.",
+      vacio: "Sin trabajo atrasado",
+      detalle:
+        "No hay productos ni lotes sin terminar con fecha de entrega vencida.",
+    },
+    {
+      id: "hoy",
+      label: "Pendientes para hoy",
+      vacio: "Sin trabajo pendiente para hoy",
+      detalle:
+        "No quedan productos ni lotes sin terminar con entrega para hoy. Lo terminado está en Para retirar.",
     },
     {
       id: "proxima",
-      label: "Próximas",
+      label: "Próximos 7 días",
       vacio: "Sin entregas próximas",
       detalle:
-        "No hay órdenes comprometidas entre mañana y los próximos siete días.",
+        "No hay productos ni lotes sin terminar con entrega entre mañana y los próximos siete días.",
     },
     {
       id: "lista",
       label: "Para retirar",
-      vacio: "Sin órdenes para retirar",
-      detalle: "Las órdenes finalizadas pendientes de entrega aparecerán acá.",
+      vacio: "Sin entregas para retirar",
+      detalle:
+        "Los productos o lotes terminados y aún no entregados aparecen acá, independientemente de su fecha.",
     },
   ];
 
@@ -191,7 +194,8 @@ function ListaEntregas({
         })}
       </ul>
       <p className={s.deliveryFoot}>
-        Mostrando {items.length} de {total} {total === 1 ? "orden" : "órdenes"}.
+        Mostrando {items.length} de {total}{" "}
+        {total === 1 ? "producto o lote" : "productos o lotes"}.
       </p>
     </>
   );
@@ -200,16 +204,24 @@ function ListaEntregas({
 export function Entregas({
   grupos,
   abrir,
+  grupoSeleccionado,
+  onGrupoChange,
 }: {
   grupos: NonNullable<PanelGeneralData["entregas"]>;
   abrir: (href: string) => void;
+  grupoSeleccionado?: Riesgo;
+  onGrupoChange?: (grupo: Riesgo) => void;
 }) {
-  const [grupo, setGrupo] = useState<Riesgo>("hoy");
+  const [eleccion, setEleccion] = useState<Riesgo | null>(null);
+  const grupo =
+    grupoSeleccionado ??
+    eleccion ??
+    (grupos.atrasada.total ? "atrasada" : "hoy");
   return (
     <PanelCard
       titulo="Entregas a priorizar."
       className={s.deliveryPanel}
-      descripcion="Cada compromiso, a tiempo."
+      descripcion="Una entrega por producto o lote. Primero lo atrasado, después lo de hoy."
       accion={
         <ActionButton
           variant="ghost"
@@ -222,7 +234,10 @@ export function Entregas({
     >
       <Tabs
         selectedKey={grupo}
-        onSelectionChange={(key) => setGrupo(key as Riesgo)}
+        onSelectionChange={(key) => {
+          setEleccion(key as Riesgo);
+          onGrupoChange?.(key as Riesgo);
+        }}
         className={s.deliveryTabs}
       >
         <NavigationTabList

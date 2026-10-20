@@ -280,22 +280,17 @@ export function PantallaProduccion() {
         <div data-tone="late">
           <span>Atrasadas</span>
           <strong>{datos.resumen.atrasadas}</strong>
-          <small>sin terminar</small>
+          <small>productos o lotes sin terminar</small>
         </div>
         <div>
-          <span>Para hoy</span>
+          <span>Pendientes para hoy</span>
           <strong>{datos.resumen.hoy}</strong>
-          <small>pendientes de producción</small>
-        </div>
-        <div data-tone="ready">
-          <span>Listas para entregar</span>
-          <strong>{datos.resumen.listas}</strong>
-          <small>producción terminada</small>
+          <small>productos o lotes sin terminar</small>
         </div>
       </div>
       <div className={s.sectionTitle}>
         <h2>
-          Entregas pendientes <span>{datos.filas.length}</span>
+          Trabajo pendiente <span>{datos.filas.length}</span>
         </h2>
         <span>Primero atrasadas, luego pendientes de hoy</span>
       </div>
@@ -319,16 +314,13 @@ export function PantallaProduccion() {
                 className={s.card}
                 key={fila.id}
                 data-late={fila.atrasada}
-                data-ready={fila.estado === "lista"}
               >
                 <div className={s.cardTop}>
                   <strong>{fila.orden}</strong>
                   <span className={s.due}>
-                    {fila.estado === "lista"
-                      ? `Entrega · ${fila.fecha.split("-").reverse().join("/")}`
-                      : fila.atrasada
-                        ? `Atrasada · ${fila.fecha.split("-").reverse().join("/")}`
-                        : "Entrega hoy"}
+                    {fila.atrasada
+                      ? `Atrasada · ${fila.fecha.split("-").reverse().join("/")}`
+                      : "Entrega hoy"}
                   </span>
                 </div>
                 <h3 title={fila.producto}>{fila.producto}</h3>
@@ -343,27 +335,21 @@ export function PantallaProduccion() {
                 </div>
                 <div className={s.stage}>
                   <span className={s.stageText} title={fila.etapa}>
-                    {fila.estado === "lista" ? (
-                      <Check aria-hidden="true" />
-                    ) : (
-                      <ArrowRight aria-hidden="true" />
-                    )}
+                    <ArrowRight aria-hidden="true" />
                     {fila.etapa}
                   </span>
                   <span>
-                    {fila.pasosTotal
-                      ? `${fila.pasosHechos}/${fila.pasosTotal}`
-                      : ""}
+                    {fila.progresoPct != null ? `${fila.progresoPct}%` : ""}
                   </span>
                 </div>
                 {fila.pasosTotal > 0 && (
                   <div
                     className={s.progress}
-                    aria-label={`${fila.pasosHechos} de ${fila.pasosTotal} pasos terminados`}
+                    aria-label={fila.progresoExplicacion}
                   >
                     <span
                       style={{
-                        width: `${(fila.pasosHechos / fila.pasosTotal) * 100}%`,
+                        width: `${fila.progresoPct ?? 0}%`,
                       }}
                     />
                   </div>
@@ -375,7 +361,10 @@ export function PantallaProduccion() {
           <div className={s.empty}>
             <Check aria-hidden="true" />
             <h2>Todo al día</h2>
-            <p>No hay entregas de hoy ni atrasadas pendientes.</p>
+            <p>
+              No quedan productos ni lotes sin terminar con entrega vencida o
+              para hoy.
+            </p>
           </div>
         )}
       </div>
