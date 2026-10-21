@@ -23,6 +23,7 @@ import type { CurrentAuth } from '../../auth/auth.types';
 import type { CrearOrdenTrabajoDto } from '../dto/crear-orden-trabajo.dto';
 import { EtaService } from '../../eta/eta.service';
 import { calendarioDefault } from '../../eta/motor/estaciones-tipos';
+import { UsuariosService } from '../../usuarios/usuarios.service';
 
 // Emisión real (create/cambiarEstado), stock y compras en la DB aislada.
 // Sólo se sustituyen servicios externos y el enriquecimiento de la respuesta.
@@ -1046,6 +1047,39 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     const intacta = await db.ordenTrabajo.findUniqueOrThrow({ where: { id: o.id } });
     expect(Number(intacta.total)).toBe(100);
     expect(intacta.cargosDirectosJson).toEqual([]);
+  });
+
+  it('atribuye las nuevas OT y presupuestos al administrador vinculado y conserva las ventas al desvincularlo', async () => {
+    const membership = await db.membership.create({
+      data: { tenantId: auth.tenantId, userId: auth.userId, rol: 'ADMINISTRADOR' },
+    });
+    const empleado = await db.empleado.create({
+      data: {
+        tenantId: auth.tenantId, nombreCompleto: 'Ana Administradora Demo',
+        emailPrincipal: 'ana@example.invalid', telefonoCodigo: '', telefonoNumero: '',
+        sector: 'Comercial', fechaIngreso: new Date('2026-01-01'),
+      },
+    });
+    const usuarios = new UsuariosService(db, { invalidarTenant: jest.fn() } as never, {} as never);
+    await usuarios.editar(auth, auth.userId, { empleadoId: empleado.id });
+    expect(await db.membership.findUnique({ where: { id: membership.id } })).toMatchObject({ rol: 'ADMINISTRADOR', activa: true });
+
+    const orden = await ordenes.create(auth, { ...payload, estado: 'borrador' });
+    expect(await db.ordenTrabajo.findUnique({ where: { id: orden.id } })).toMatchObject({ vendedorEmpleadoId: empleado.id });
+    const snapshot = await db.cotizacionItem.findUniqueOrThrow({ where: { id: payload.items[0].cotizacionItemId } });
+    const presupuestos = Object.assign(Object.create(PresupuestosService.prototype), {
+      prisma: db, ordenes, capacidades, fidelizacion: new FidelizacionService(db, capacidades), nombreCache: new Map(),
+      detalle: (_auth: CurrentAuth, id: string) => db.cotizacion.findUniqueOrThrow({ where: { id } }),
+    }) as PresupuestosService;
+    const presupuesto = await presupuestos.guardarBorrador(auth, {
+      cotizacionId: snapshot.cotizacionId, clienteId: payload.clienteId!, canalVenta: 'mostrador', items: payload.items,
+    });
+    expect(presupuesto).toMatchObject({ vendedorEmpleadoId: empleado.id });
+    await usuarios.editar(auth, auth.userId, { empleadoId: null });
+    expect(await db.empleado.findUnique({ where: { id: empleado.id } })).toMatchObject({ userId: null });
+    expect(await db.ordenTrabajo.findUnique({ where: { id: orden.id } })).toMatchObject({ vendedorEmpleadoId: empleado.id });
+    expect(await db.cotizacion.findUnique({ where: { id: presupuesto.id } })).toMatchObject({ vendedorEmpleadoId: empleado.id });
+    expect(await db.eventoAcceso.count({ where: { tenantId: auth.tenantId, tipo: { in: ['empleado_vinculado', 'empleado_desvinculado'] } } })).toBe(2);
   });
 
   it('guarda el presupuesto con productos y cargos sin crear OT, enlaces ni envíos', async () => {
