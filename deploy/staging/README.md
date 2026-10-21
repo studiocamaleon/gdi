@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-20, 23:23 UTC.** API, ambos workers y web ejecutan `92b49288c7` del [PR #117](https://github.com/studiocamaleon/gdi/pull/117). Las condiciones por estado incluyen los pasos extra: Refilado puede depender de Troquelado activo o inactivo. Cuatro combinaciones de cálculo y guardado en interfaz comprobados en staging; producción usa las mismas imágenes por digest. Seis servicios saludables y 318 migraciones sin cambios. Fuentes custodiadas y comprobantes posteriores de respaldo verificados. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-21, 16:54 UTC.** API, ambos workers y web ejecutan `231f572703` del [PR #118](https://github.com/studiocamaleon/gdi/pull/118). Los administradores pueden asociarse a un empleado conservando su rol. Vinculación propia y vendedor automático en una OT comprobados en staging; producción usa las mismas imágenes por digest. Seis servicios saludables, 318 migraciones sin cambios y comprobantes posteriores de respaldo verificados. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 

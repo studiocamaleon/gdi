@@ -1,5 +1,34 @@
 # Validación de producción
 
+## 2026-10-21, 16:54 UTC — Empleado vinculado al administrador y vendedor automático
+
+Lucas autorizó publicar el [PR #118](https://github.com/studiocamaleon/gdi/pull/118), probar la asociación de su administrador y una OT en staging y, si funcionaba, promover a producción. Revisión funcional **`231f5727036285d54643a520c1975bc6af8b6f02`**, desde `main` (`d44a067c3`). El registro documental posterior no reconstruye imágenes. WhatsApp #116 y las propuestas de dependencias quedan fuera.
+
+Configuración → Usuarios permite vincular, cambiar o quitar el empleado de usuarios existentes, incluido el propio administrador, conservando rol y acceso. El empleado asociado es el vendedor predeterminado de nuevas OT y presupuestos cuando no se elige otro. Se rechazan legajos ajenos, dados de baja u ocupados por otro usuario; el cambio es transaccional y queda auditado. El historial comercial conserva su vendedor.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:ce102c1db524ad8ed169f0ae33ade0142896590930b7c60f08f820f5f4c51b91` |
+| Web | `sha256:784542e77ef1b1b56183b251ba390fb6fa5cfb00f65212a426da8a557050fc4b` |
+| PDF, conservado | `sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Ensayo en staging:** desde Chrome, con el administrador de la empresa de demostración, se creó un legajo de prueba con contactos ficticios. En Configuración → Usuarios se vinculó a la propia fila «VOS» y se comprobó persistencia tras recargar. Se creó y emitió una OT de ensayo sin elegir manualmente vendedor: el detalle y la base guardaron el empleado asociado. Una transacción de sólo lectura confirmó que el rol Administrador, sus restricciones y los vendedores de las 12 OT anteriores permanecieron iguales. Se utilizó un cliente ficticio sin contacto real ni consentimiento de WhatsApp; no hubo cobros, facturas ni envíos externos. El legajo y la OT ficticia permanecen en staging para revisión.
+
+**Lectura en producción:** Configuración → Usuarios carga correctamente y la propia fila del administrador ofrece «Vincular empleado». El selector responde correctamente y explica que no hay legajos disponibles: los actuales ya pertenecen a otros usuarios. Falta crear el legajo propio para completar la asociación real. Se cerró sin guardar: el ensayo de asociación y la OT son exclusivos de staging; no se crearon órdenes ni se modificaron legajos reales en producción. Una carga durante el reemplazo de la API falló de forma transitoria; con el despliegue saludable, la recarga y la consulta funcionaron.
+
+**Pruebas:** 92 de API y seis del formulario aprobadas en local, incluida integración con base para vincular → OT → presupuesto → desvincular y conservar atribución histórica. Tipos del formulario y lint aprobados. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39603999242), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/39603999115), análisis y check CodeQL sin alertas abiertas del PR y Vercel aprobados para el candidato. El último commit documental se comprueba nuevamente antes del merge. Marketing/Grafo3D y sus configuraciones no cambian.
+
+**Operación:** compilación remota y promoción de los mismos manifiestos por digest, sin reconstruir entre entornos. Revisión comprobada en API, ambos workers y web; seis servicios saludables, HTTPS web/API 200, API directa protegida 403 y BFF sin sesión 401. Recursos, regiones y secretos de aplicación conservados. Configuración fiscal automática de producción comprobada entre API y worker; staging conserva su proveedor manual y no valida ARCA. No se emitieron comprobantes ni se hizo una consulta fiscal real. Constructor temporal propio retirado; Docker y otros proyectos locales intactos.
+
+**Datos:** 318 migraciones completas, checksums intactos y ninguna pendiente. Sin migraciones, seeds ni resets. Las comprobaciones de producción fueron de sólo lectura. Evidencia detallada, nombres e identificadores privados permanecen fuera de Git.
+
+**Respaldo:** fuentes cifradas custodiadas e inventario actualizado. Copia posterior completada `2026-10-21T16:54:11.000Z`, con firma, huellas y descifrado del manifiesto comprobados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 606 archivos. La custodia y descarga cifradas usaron el copiador existente; firma y descifrado se verificaron localmente, sin transferir claves privadas al servidor. **No se repitió una restauración SQL completa.**
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-production-api@sha256:ac048e8ce0996df59e8ec6c253a4630abed180bee14ca202367e8d251d3e0925`; web a `registry.fly.io/grafoprint-production-web@sha256:e7f96c433a8538f0c927026af93b2a10bae976ae6528aae67b6765a64b8c9207` (`92b49288c7`, #117). Restituir el inventario del copiador; no revertir esquema ni borrar datos. Se pierde el nuevo control de vinculación, pero las asociaciones y atribuciones ya guardadas permanecen.
+
+El cierre integra #118 en `main` conservando la revisión funcional y este registro. Se consultan otra vez los PR abiertos; no se cierran propuestas independientes ni se borran sus ramas o carpetas.
+
 ## 2026-10-20, 23:23 UTC — Condiciones por estado de pasos extra
 
 Publicado el [PR #117](https://github.com/studiocamaleon/gdi/pull/117), con autorización de Lucas para promover después de comprobar Refilado dependiente de Troquelado activo e inactivo en staging. Revisión funcional **`92b49288c7df43d801c964a82647947801fce316`**, desde `main` (`9683c9c2d`); el registro documental posterior no modifica las imágenes. El PR #116 de WhatsApp y las propuestas de dependencias son independientes y quedan fuera.
