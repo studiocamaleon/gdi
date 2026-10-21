@@ -203,6 +203,32 @@ en el modelo: el desacople no pide migración, pide pantalla.
   empleado preseleccionado. No se pierde el camino corto; deja de haber dos
   formularios que hacen lo mismo.
 
+### Vincular usuarios existentes, incluido el administrador (21/10/2026)
+
+En **Configuración → Usuarios**, cada fila permite **Vincular empleado** o
+**Cambiar empleado**. También está habilitado en la fila marcada **VOS**, con
+el permiso de gestión de usuarios. El vínculo es independiente del rol:
+el administrador conserva su acceso y puede asociarse a su propio legajo.
+Si todavía no existe, se crea desde **Registros → Empleados**.
+
+El selector consulta empleados activos de la empresa y excluye los vinculados
+a otras cuentas. Se puede quitar la asociación eligiendo **Sin vincular**.
+La API valida pertenencia, estado y disponibilidad antes de reemplazar el
+vínculo; un conflicto revierte la operación. El cambio se registra en actividad
+y renueva la información de sesión. No habilita cambiarse el propio rol ni
+quitarse el acceso.
+
+Las nuevas OT y presupuestos usan ese empleado como vendedor cuando no se
+indica otro. Las ventas anteriores conservan su vendedor: no se realiza una
+reasignación histórica. No requiere migración ni otra cuenta de acceso.
+
+Comprobación local con empresas ficticias: vincular al propio administrador,
+guardar OT y presupuesto con su legajo, desvincular y conservar las ventas,
+rechazar legajos ocupados, inactivos o ajenos y preservar las protecciones del
+propio acceso. El formulario también comprueba permisos, carga fallida,
+reintento y error al guardar. Recorrido de navegador verificado con el selector
+real y el rol Administrador intacto.
+
 ### 4.2 La contraseña (agregado después de F3)
 
 Preguntado: *¿la clave no debería poder crearse desde Usuarios?* Mirando el

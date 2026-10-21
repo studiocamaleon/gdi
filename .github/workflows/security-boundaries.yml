@@ -82,6 +82,7 @@ jobs:
             src/pantallas-produccion/entregas-pantalla.spec.ts \
             src/auth/__tests__/revocacion-multi-instancia.integration.spec.ts \
             src/usuarios/__tests__/crear-usuario.spec.ts \
+            src/usuarios/__tests__/vinculo-empleado.spec.ts \
             src/usuarios/__tests__/password.spec.ts \
             src/motor-universal/__tests__/impresion-corte-area-compartida.spec.ts \
             src/motor-universal/__tests__/cuadros-varias-medidas.spec.ts \
@@ -181,6 +182,7 @@ jobs:
         run: |
           npm ci --include=dev --no-audit --no-fund
           node node_modules/vitest/vitest.mjs run \
+            src/components/usuarios/empleado-usuario.test.tsx \
             src/lib/staging-access.test.ts \
             src/lib/request-origin.test.ts \
             'src/app/api/session/route.test.ts' \

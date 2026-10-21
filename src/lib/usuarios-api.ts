@@ -21,7 +21,7 @@ export type UsuarioDelTenant = {
   activa: boolean;
   empleado: { id: string; nombreCompleto: string } | null;
   estado: EstadoUsuario;
-  /** El que está mirando: no puede tocarse a sí mismo. */
+  /** El que está mirando: puede vincularse a un empleado, pero no quitarse el acceso ni cambiarse el rol. */
   esYo: boolean;
 };
 

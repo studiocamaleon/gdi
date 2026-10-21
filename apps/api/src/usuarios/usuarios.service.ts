@@ -396,6 +396,21 @@ export class UsuariosService {
 
       if (dto.empleadoId !== undefined) {
         await this.vincularEmpleado(tx, auth.tenantId, dto.empleadoId, userId);
+        await tx.eventoAcceso.create({
+          data: {
+            tenantId: auth.tenantId,
+            actorUserId: auth.userId,
+            actorNombre: auth.impersonacion?.actorNombre ?? auth.email,
+            usuarioAfectadoId: userId,
+            usuarioAfectadoNombre:
+              membership.user.nombreCompleto || membership.user.email,
+            tipo: dto.empleadoId ? 'empleado_vinculado' : 'empleado_desvinculado',
+            descripcion: dto.empleadoId
+              ? 'Actualizó el empleado vinculado al usuario.'
+              : 'Desvinculó el empleado del usuario.',
+            datosJson: { empleadoId: dto.empleadoId },
+          },
+        });
       }
 
       if (dto.activa === false) {
@@ -1022,34 +1037,39 @@ export class UsuariosService {
    * a otro implica soltar el anterior.
    */
   private async vincularEmpleado(
-    db: {
-      empleado: {
-        updateMany: (args: unknown) => Promise<unknown>;
-        findFirst: (args: unknown) => Promise<{ id: string } | null>;
-      };
-    },
+    db: Pick<Prisma.TransactionClient, 'empleado'>,
     tenantId: string,
     empleadoId: string | null,
     userId: string,
   ) {
+    if (empleadoId) {
+      const empleado = await db.empleado.findFirst({
+        where: { id: empleadoId, tenantId, activo: true },
+        select: { id: true, userId: true },
+      });
+      if (!empleado) {
+        throw new NotFoundException('Ese empleado no existe o está dado de baja.');
+      }
+      if (empleado.userId && empleado.userId !== userId) {
+        throw new ConflictException(
+          'Ese empleado ya está vinculado a otro usuario. Desvinculalo de esa cuenta primero.',
+        );
+      }
+    }
     await db.empleado.updateMany({
       where: { tenantId, userId },
       data: { userId: null },
     });
     if (!empleadoId) return;
-    const empleado = await db.empleado.findFirst({
-      where: { id: empleadoId, tenantId, activo: true },
-      select: { id: true },
-    });
-    if (!empleado) {
-      throw new NotFoundException(
-        'Ese empleado no existe o está dado de baja.',
-      );
-    }
-    await db.empleado.updateMany({
-      where: { id: empleadoId, tenantId },
+    const vinculado = await db.empleado.updateMany({
+      where: { id: empleadoId, tenantId, activo: true, userId: null },
       data: { userId },
     });
+    if (vinculado.count !== 1) {
+      throw new ConflictException(
+        'El empleado cambió mientras guardabas. Volvé a consultar el vínculo.',
+      );
+    }
   }
 }
 

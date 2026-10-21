@@ -5,6 +5,8 @@ import {
 } from "@/components/configuracion/configuracion-workspace";
 
 import { CuentasUsuario } from "./cuentas-usuario";
+import { EmpleadoUsuario } from "./empleado-usuario";
+import { Button } from "@/components/ui/button";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { CupoEquipo } from "./cupo-equipo";
 import * as React from "react";
@@ -74,6 +76,7 @@ export function UsuariosView({
 }) {
   const puedeGestionar = usePuede("configuracion.usuarios.gestionar");
   const [cuentasDe, setCuentasDe] = React.useState<UsuarioDelTenant | null>(null);
+  const [empleadoDe, setEmpleadoDe] = React.useState<UsuarioDelTenant | null>(null);
   const { fechaHoraCorta } = useFecha();
   const [datos, setDatos] = React.useState(inicial);
   const [roles, setRoles] = React.useState(rolesIniciales);
@@ -246,7 +249,9 @@ export function UsuariosView({
           {invitando && (
             <FormularioInvitacion
               roles={roles}
-              empleados={empleados}
+              empleados={empleados.filter(
+                (e) => !datos.usuarios.some((u) => u.empleado?.id === e.id),
+              )}
               onCancelar={() => setInvitando(false)}
               /**
                * Refresca el listado pero NO cierra la ficha: la cierra el "Listo"
@@ -301,6 +306,15 @@ export function UsuariosView({
                 </select>
 
                 <div className="usr-acciones">
+                  {puedeGestionar && (
+                    <Button
+                      variant="ghost"
+                      disabled={guardando === u.id}
+                      onClick={() => setEmpleadoDe(u)}
+                    >
+                      {u.empleado ? "Cambiar empleado" : "Vincular empleado"}
+                    </Button>
+                  )}
                   {puedeGestionar && <button className="btn ghost" onClick={() => setCuentasDe(u)}>Cajas y cuentas</button>}
                   {/* Vale para los dos casos: al que nunca entró se le DA una
                   clave (si el link no le llegó o no lo abre) y al que la
@@ -509,6 +523,14 @@ export function UsuariosView({
       )}
 
       {cuentasDe && <CuentasUsuario key={cuentasDe.id} usuario={cuentasDe} onCerrar={() => setCuentasDe(null)} onGuardado={recargar} />}
+      {empleadoDe && (
+        <EmpleadoUsuario
+          key={empleadoDe.id}
+          usuario={empleadoDe}
+          onCerrar={() => setEmpleadoDe(null)}
+          onGuardado={recargar}
+        />
+      )}
       <ConfirmacionDestructiva
         open={aDesactivar !== null}
         onOpenChange={(abierto) => {
@@ -686,8 +708,9 @@ function FormularioInvitacion({
       </p>
 
       <p className="usr-ayuda">
-        {descripcionDelRol(roles, rolId)} Vincular con un empleado sirve para la
-        mesa de trabajo y las comisiones: quien no es del taller no lo necesita.
+        {descripcionDelRol(roles, rolId)} El empleado vinculado se usa como
+        vendedor en nuevas ventas y para la mesa de trabajo y las comisiones.
+        Es opcional y también puede vincularse a un administrador.
       </p>
       <div className="usr-form-acciones">
         <button className="btn ghost" onClick={onCancelar} disabled={enviando}>
