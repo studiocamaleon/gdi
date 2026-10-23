@@ -44,9 +44,10 @@ export function CantidadManualConfigFields({
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        Se pedirá la cantidad total de este paso cuando esté activo. El ritmo se
-        expresa en esta misma unidad; no modifica la medida ni los materiales
-        del producto.
+        Al cotizar se ingresará la cantidad total de este paso en{" "}
+        {config.unidad || "la unidad indicada"}. El tiempo se calculará con esa
+        cantidad y el ritmo definido abajo. Esta cantidad no modifica las
+        medidas ni los materiales del producto.
       </p>
     </div>
   );
