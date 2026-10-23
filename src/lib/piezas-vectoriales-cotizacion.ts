@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from "./limites-piezas-vectoriales";
 import type { FuenteDisenoVectorial } from "@/components/comercial/diseno-vectorial-cotizador";
 import type { FuenteGuardada } from "./geometrias-producto-api";
 import type { ConfiguracionGeometriasComerciales } from "./producto-geometrias";
@@ -86,7 +87,7 @@ export function piezasVectorialesValidas(
     Number.isSafeInteger(cantidadProductos) &&
     cantidadProductos > 0 &&
     piezas.length > 0 &&
-    piezas.length <= 30 &&
+    piezas.length <= MAX_PIEZAS_VECTORIALES &&
     new Set(piezas.map((p) => p.id)).size === piezas.length &&
     piezas.every(
       (p) =>

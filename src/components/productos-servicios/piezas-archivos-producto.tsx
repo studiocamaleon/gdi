@@ -1,4 +1,5 @@
 "use client";
+import { MAX_PIEZAS_VECTORIALES } from "@/lib/limites-piezas-vectoriales";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
@@ -230,14 +231,18 @@ export function PiezasArchivosProducto({
     setError("");
     try {
       const cantidadImportar = seleccion.exteriorIds?.length ?? 1;
+      const reemplazada =
+        fuentes.find((f) => f.id === pendiente.fuenteId) ??
+        (!pendiente.fuenteId ? fuentes.find((f) => !f.predeterminada) : undefined);
       if (
-        fuentes.filter((f) => f.predeterminada).length +
+        fuentes.length +
+          idsReservados.length +
           cantidadImportar -
-          (pendiente.fuenteId ? 1 : 0) >
-        30
+          (reemplazada ? 1 : 0) >
+        MAX_PIEZAS_VECTORIALES
       )
         throw new Error(
-          "Podés cargar hasta 30 piezas. Revisá la selección antes de importar.",
+          `Podés cargar hasta ${MAX_PIEZAS_VECTORIALES} piezas. Revisá la selección antes de importar.`,
         );
       const { fuentes: interpretadas } = await guardarInterpretacionesProducto(
         productoId,
@@ -331,7 +336,7 @@ export function PiezasArchivosProducto({
               type="button"
               variant="outline"
               className={styles.secondaryAction}
-              disabled={fuentes.length >= 30 || ocupado}
+              disabled={fuentes.length >= MAX_PIEZAS_VECTORIALES || ocupado}
               onClick={() =>
                 onChange([...fuentes, nuevaFuenteGeometria(fuentes)])
               }
@@ -346,7 +351,7 @@ export function PiezasArchivosProducto({
               ocupado ||
               fuentes.filter((f) => f.predeterminada).length +
                 idsReservados.length >=
-                30
+                MAX_PIEZAS_VECTORIALES
             }
             onClick={() => seleccionar()}
           >
@@ -378,9 +383,11 @@ export function PiezasArchivosProducto({
             archivos.length +
               fuentes.filter((f) => f.predeterminada).length +
               idsReservados.length >
-              30
+              MAX_PIEZAS_VECTORIALES
           ) {
-            setError("Se admiten hasta 30 diseños por producto.");
+            setError(
+              `Se admiten hasta ${MAX_PIEZAS_VECTORIALES} diseños por producto.`,
+            );
             return;
           }
           const [primero, ...resto] = archivos;

@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from '../../productos-servicios/geometrias/limites-piezas-vectoriales';
 import * as polygonClipping from 'polygon-clipping';
 import type {
   AnilloTrabajoNesting,
@@ -17,7 +18,7 @@ type ResultadoSinValidacion = Omit<
 
 const TOLERANCIA_MM = 0.02;
 const TOLERANCIA_AREA_MM2 = 0.01;
-const MAX_TIPOS_PIEZA = 500;
+const MAX_TIPOS_PIEZA = MAX_PIEZAS_VECTORIALES;
 const MAX_INSTANCIAS = 10_000;
 const MAX_PUNTOS = 250_000;
 

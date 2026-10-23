@@ -6,6 +6,8 @@ import {
 } from "./piezas-vectoriales-cotizacion";
 import type { FuenteGuardada } from "./geometrias-producto-api";
 import type { ConfiguracionGeometriasComerciales } from "./producto-geometrias";
+import { piezasComponenteValidas } from "./piezas-componente";
+import { MAX_PIEZAS_VECTORIALES } from "./limites-piezas-vectoriales";
 
 const fuente = {
   schemaVersion: 2,
@@ -35,6 +37,32 @@ const configuracion: ConfiguracionGeometriasComerciales = {
   ],
 };
 describe("colección comercial del producto simple", () => {
+  it.each([31, 50, MAX_PIEZAS_VECTORIALES])(
+    "admite %i diseños en productos y componentes",
+    (cantidad) => {
+      const piezas = Array.from({ length: cantidad }, (_, i) => ({
+        id: `pieza-${i}`,
+        nombre: `Pieza ${i + 1}`,
+        cantidadPorUnidad: 1,
+        fuente,
+      }));
+      expect(piezasVectorialesValidas(piezas)).toBe(true);
+      expect(piezasComponenteValidas(piezas)).toBe(true);
+    },
+  );
+  it("mantiene el límite de capacidad del motor sin aceptar duplicados", () => {
+    const piezas = Array.from(
+      { length: MAX_PIEZAS_VECTORIALES + 1 },
+      (_, i) => ({
+        id: `pieza-${i}`,
+        nombre: `Pieza ${i + 1}`,
+        cantidadPorUnidad: 1,
+        fuente,
+      }),
+    );
+    expect(piezasVectorialesValidas(piezas)).toBe(false);
+    expect(piezasComponenteValidas(piezas)).toBe(false);
+  });
   it("inicializa todos los diseños guardados y respeta una eliminación explícita", () => {
     const piezas = piezasVectorialesIniciales(null, configuracion, null, {});
     expect(piezas.map((p) => p.id)).toEqual(["principal", "soporte"]);

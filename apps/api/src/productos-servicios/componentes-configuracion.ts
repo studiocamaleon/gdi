@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from './geometrias/limites-piezas-vectoriales';
 import { BadRequestException } from '@nestjs/common';
 import type { JobContext } from '../motor-universal/tipos';
 import { esColeccionVectorialValida } from './geometrias/coleccion-vectorial';
@@ -173,7 +174,11 @@ function esRegistro(value: unknown): value is Record<string, unknown> {
 export function leerPiezasComponente(
   value: unknown,
 ): PiezaComponenteFabricado[] | null {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 30)
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > MAX_PIEZAS_VECTORIALES
+  )
     return null;
   const ids = new Set<string>();
   let rectangular: boolean | undefined;
@@ -198,6 +203,7 @@ export function leerPiezasComponente(
     rectangular = esRectangular;
     if (esRectangular) {
       if (
+        value.length > 30 ||
         pieza.fuente != null ||
         !esRegistro(pieza.medidas) ||
         ![pieza.medidas.anchoMm, pieza.medidas.altoMm].every(

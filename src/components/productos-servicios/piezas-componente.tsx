@@ -1,4 +1,5 @@
 "use client";
+import { MAX_PIEZAS_VECTORIALES } from "@/lib/limites-piezas-vectoriales";
 import { Button, Input } from "./producto-ui";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { LibraryIcon } from "lucide-react";
@@ -57,7 +58,7 @@ export function PiezasComponente({
                 fuente: f.predeterminada!,
                 cantidadPorUnidad: 1,
               })),
-          ].slice(0, 30),
+          ].slice(0, MAX_PIEZAS_VECTORIALES),
         )
       }
     >

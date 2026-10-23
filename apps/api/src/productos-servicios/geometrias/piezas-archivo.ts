@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from './limites-piezas-vectoriales';
 import type {
   EntidadInspeccion,
   FuenteGuardada,
@@ -140,8 +141,14 @@ export function separarPiezasArchivo(
   seleccion: SeleccionVector & { exteriorIds: string[] },
 ) {
   const ids = seleccion.exteriorIds;
-  if (!ids.length || ids.length > 30 || new Set(ids).size !== ids.length)
-    throw new Error('Seleccioná entre 1 y 30 piezas distintas para importar.');
+  if (
+    !ids.length ||
+    ids.length > MAX_PIEZAS_VECTORIALES ||
+    new Set(ids).size !== ids.length
+  )
+    throw new Error(
+      `Seleccioná entre 1 y ${MAX_PIEZAS_VECTORIALES} piezas distintas para importar.`,
+    );
   const detectadas = detectarPiezasArchivo(inspeccion);
   const elegidas = ids.map((id) => {
     const e = inspeccion.entidades.find((e) => e.id === id);

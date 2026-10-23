@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from "./limites-piezas-vectoriales";
 import type {
   PiezaComponenteFabricado,
   PiezaRectangularComponente,
@@ -16,7 +17,8 @@ export function piezasComponenteValidas(
 ): boolean {
   return (
     piezas.length > 0 &&
-    piezas.length <= 30 &&
+    piezas.length <=
+      (piezas.every(esPiezaRectangular) ? 30 : MAX_PIEZAS_VECTORIALES) &&
     new Set(piezas.map((p) => p.id)).size === piezas.length &&
     piezas.every(
       (p) =>
