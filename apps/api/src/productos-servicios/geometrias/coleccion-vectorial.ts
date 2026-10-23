@@ -1,9 +1,14 @@
+import { MAX_PIEZAS_VECTORIALES } from './limites-piezas-vectoriales';
 /** Misma colección para piezas de receta, productos simples y diseños heredados. */
 export function esColeccionVectorialValida(
   value: unknown,
   validarFuente: (fuente: unknown) => boolean,
 ): boolean {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 30)
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > MAX_PIEZAS_VECTORIALES
+  )
     return false;
   const ids = new Set<string>();
   return value.every((p: unknown) => {

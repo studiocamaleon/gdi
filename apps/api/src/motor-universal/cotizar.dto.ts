@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from '../productos-servicios/geometrias/limites-piezas-vectoriales';
 import { esColeccionVectorialValida } from '../productos-servicios/geometrias/coleccion-vectorial';
 import { Type } from 'class-transformer';
 import {
@@ -202,7 +203,7 @@ export function jobContextCotizacionValido(value: unknown): boolean {
       ctx.geometriasVectoriales as Record<string, unknown>,
     );
     if (
-      fuentes.length > 30 ||
+      fuentes.length > MAX_PIEZAS_VECTORIALES ||
       fuentes.some(
         ([id, fuente]) =>
           !/^[a-z0-9][a-z0-9_-]{0,59}$/.test(id) ||

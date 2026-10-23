@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from '../../productos-servicios/geometrias/limites-piezas-vectoriales';
 import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
 import svgpath from 'svgpath';
@@ -10,7 +11,7 @@ import type {
 } from './tipos';
 
 const MAX_SVG_BYTES = 512 * 1024;
-const MAX_CONTORNOS = 500;
+const MAX_CONTORNOS = MAX_PIEZAS_VECTORIALES;
 const MAX_PUNTOS = 8_000;
 const MAX_PUNTOS_CRUDOS = 100_000;
 const TOLERANCIAS_SIMPLIFICACION_MM = [0.15, 0.25, 0.35, 0.5, 0.75, 1, 1.5];

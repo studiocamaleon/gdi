@@ -1628,6 +1628,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "El número que multiplica al ritmo cuando entra una orden: la cantidad pedida, la que calcula el paso, o una magnitud que dejó un paso anterior (puntos de soldadura, m² a pintar…).",
     visible: (ctx) =>
       requiereMecanismoCantidad(ctx.cfg, ctx.familia) &&
+      // La cantidad manual ya define la base del tiempo en la regla. El
+      // mecanismo operativo se conserva para materiales/herencias, pero no
+      // se presenta como una segunda base del reloj.
+      !(esT2(ctx) && fuenteRitmoEfectiva(ctx) === "cantidad_manual") &&
       (ctx.familia?.mecanismosCantidadSoportados?.length ?? 4) > 1 &&
       // Comandado por máquina, la cantidad la definen la máquina y el
       // acomodado — nada que preguntar acá (feedback del usuario; el

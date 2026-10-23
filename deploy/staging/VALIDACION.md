@@ -1,5 +1,34 @@
 # Validación de staging — historial
 
+## 2026-10-23, 14:26 UTC — Cantidad manual del paso y SVG de más de 30 piezas
+
+Lucas autorizó publicar el [PR #119](https://github.com/studiocamaleon/gdi/pull/119) en staging, probarlo y promoverlo a producción si los controles eran correctos. Revisión funcional **`f94e85fa82eb5117433d11fe788b1dbae83b045a`**, desde `main` (`c9720d56a`). El registro documental posterior no reconstruye las imágenes. Sin dependencias de otros PR ni cambios en marketing.
+
+Al seleccionar «Cantidad ingresada al cotizar», el tiempo usa el dato propio del paso y el editor deja de mostrar «Sobre qué cantidad se aplica». La ayuda aclara el nombre, la unidad y el ritmo. Se conserva la configuración operativa para materiales. La importación, el catálogo, los componentes, la cotización y las capas aceptan hasta 500 diseños vectoriales; se mantienen los límites de tamaño y geometría del archivo.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:6ccd111fb3b890db07307cbbd3a38391b7d668111e9fdd37b761569d552865ae` |
+| Web | `sha256:c047ca8b416ca8b64a7c232cd25cdb783a1d6b900fc1617b92ded479e63434a2` |
+| PDF | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Ensayo funcional:** se reprodujeron ambos problemas en la versión anterior de staging. El mismo SVG ficticio de 50 cuadrados primero mostró el rechazo de 30 piezas y luego se importó completo desde Chrome, se guardó y conservó sus 50 diseños al recargar. La cotización HTTP con esas 50 fuentes fue exitosa y el análisis geométrico acomodó las 50 piezas en una placa. Con ritmo de 8 m²/h, una cantidad propia de 5 m² produce 37,5 minutos aunque la cantidad del producto pase de 3 a 9; 2,5 m² producen 18,75 minutos. La pantalla corregida muestra la explicación y no el selector redundante. El producto ficticio queda en staging para revisión. No se crearon OT, cobros ni facturas para esta prueba.
+
+**Controles:** 60 pruebas web y 81 de API aprobadas en local, incluidos SVG de 50 y 500 diseños, preparación de cotización y acomodo real de 50 piezas. Tipos focalizados de 21 archivos, lint y diff sin errores. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/39960578359), [contenedores/tipos y recorrido](https://github.com/studiocamaleon/gdi/actions/runs/39960578342), CodeQL sin alertas abiertas y Vercel aprobados en la revisión funcional. El commit documental final vuelve a comprobarse antes del merge.
+
+**Compilación PDF:** el primer CI reprodujo el fallo por el paquete Chromium `155.0.8059.79` retirado de Debian. Se fijó `156.0.8078.47-1~deb13u1`, comprobado en el [repositorio oficial de Debian](https://packages.debian.org/trixie/chromium). El nuevo CI pasó, incluida la generación de PDF y los controles de privilegios. Staging y producción generaron un PDF sintético por su red privada y confirmaron la versión de Chromium, manteniendo el aislamiento del servicio.
+
+**Operación:** imágenes compiladas en Fly y promovidas por digest, sin reconstruir entre entornos. Los fallos transitorios al subir web/PDF al registro se resolvieron publicando las mismas imágenes ya compiladas; los tokens temporales se revocaron. Revisión comprobada en API, ambos workers y web; seis servicios saludables y recursos conservados. HTTPS web/API 200, API directa protegida 403 y BFF sin sesión 401. Secretos de aplicación conservados. Worker fiscal de producción comprobado con su configuración y una consulta ARCA de sólo lectura, sin emitir comprobantes; staging conserva el proveedor manual. Constructor temporal propio retirado. Sin compilaciones de producción, cambios de Docker ni interrupciones de otros proyectos en la Mac.
+
+**Datos:** 318 migraciones completas, checksums intactos y ninguna pendiente. Sin migraciones, seeds ni resets. En producción se comprobó la interfaz seleccionando cantidad manual en un editor sin guardar y se validaron los servicios mediante lecturas; el PDF sintético no se guardó como documento comercial. Accesos, nombres e identificadores privados permanecen fuera de Git.
+
+**Respaldo:** fuentes exactas cifradas, inventario actualizado y copia posterior completada `2026-10-23T14:08:23.937Z`. Firma, huellas y descifrado del manifiesto comprobados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 33 archivos. Custodia y descarga cifradas mediante el copiador existente; verificación local sin transferir claves privadas al servidor. **No se repitió una restauración SQL completa.**
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:ce102c1db524ad8ed169f0ae33ade0142896590930b7c60f08f820f5f4c51b91`; web a `registry.fly.io/grafoprint-staging-web@sha256:784542e77ef1b1b56183b251ba390fb6fa5cfb00f65212a426da8a557050fc4b`; PDF a `registry.fly.io/grafoprint-staging-pdf@sha256:ba8741f852324cc52fc1a7e3cde1d0c4910a5abedc790894ea00962933dfcb92`. Restituir el inventario del copiador; no revertir esquema ni borrar datos. La reversión vuelve a limitar la edición/importación vectorial a 30 diseños y puede impedir operar colecciones mayores ya guardadas.
+
+El cierre integra #119 en `main` y consulta los PR abiertos. No hay PR absorbidos; WhatsApp #116 y las dependencias automáticas son trabajos independientes.
+
 ## 2026-10-21, 16:54 UTC — Empleado vinculado al administrador y vendedor automático
 
 Lucas autorizó publicar el [PR #118](https://github.com/studiocamaleon/gdi/pull/118), probar la asociación de su administrador y una OT en staging y, si funcionaba, promover a producción. Revisión funcional **`231f5727036285d54643a520c1975bc6af8b6f02`**, desde `main` (`d44a067c3`). El registro documental posterior no reconstruye imágenes. WhatsApp #116 y las propuestas de dependencias quedan fuera.

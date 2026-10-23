@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-21, 16:54 UTC.** API, ambos workers y web ejecutan `231f572703` del [PR #118](https://github.com/studiocamaleon/gdi/pull/118). Los administradores pueden asociarse a un empleado conservando su rol. Vinculación propia y vendedor automático en una OT comprobados en staging; producción usa las mismas imágenes por digest. Seis servicios saludables, 318 migraciones sin cambios y comprobantes posteriores de respaldo verificados. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-23, 14:26 UTC.** API, ambos workers y web ejecutan `f94e85fa82` del [PR #119](https://github.com/studiocamaleon/gdi/pull/119). Cantidad manual del paso aclarada e importación de hasta 500 diseños vectoriales; SVG de 50 piezas importado, guardado y cotizado en staging. Producción usa las mismas imágenes por digest. PDF con Chromium 156.0.8078.47 comprobado. Seis servicios saludables, 318 migraciones sin cambios y comprobantes posteriores de respaldo verificados. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 

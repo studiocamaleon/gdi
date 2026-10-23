@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from './limites-piezas-vectoriales';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -37,7 +38,7 @@ import { recuperarCapasGuardadas } from './recuperar-capas';
 class CapasFabricacionDto {
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(30)
+  @ArrayMaxSize(MAX_PIEZAS_VECTORIALES)
   @IsUUID('4', { each: true })
   geometriaIds!: string[];
 }

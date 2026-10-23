@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from './limites-piezas-vectoriales';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -54,7 +55,7 @@ class OperacionDto {
 class InterpretarDto extends ArchivoGeometriaDto {
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(30)
+  @ArrayMaxSize(MAX_PIEZAS_VECTORIALES)
   @ArrayUnique()
   @IsString({ each: true })
   @MaxLength(160, { each: true })

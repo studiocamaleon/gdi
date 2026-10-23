@@ -1,3 +1,4 @@
+import { MAX_PIEZAS_VECTORIALES } from './geometrias/limites-piezas-vectoriales';
 import type { FuenteGuardada } from './geometrias/interpretar-vector';
 import { BadRequestException } from '@nestjs/common';
 
@@ -83,7 +84,7 @@ export function validarGeometriasComerciales(atributos: unknown): void {
     Number(raw.version) !== 1 ||
     !MODOS_GEOMETRIA_COMERCIAL.includes(raw.modo as ModoGeometriaComercial) ||
     !Array.isArray(raw.fuentes) ||
-    raw.fuentes.length > 30 ||
+    raw.fuentes.length > MAX_PIEZAS_VECTORIALES ||
     (raw.permitirCotizacionManual !== undefined &&
       typeof raw.permitirCotizacionManual !== 'boolean')
   ) {

@@ -593,6 +593,29 @@ describe("sección Tiempo y costo", () => {
     expect(clavesPrensa).not.toContain("oficio.talonario");
   });
 
+  it("la cantidad ingresada al cotizar no muestra una segunda base del tiempo", () => {
+    const cfg: Partial<UpsertConfigPasoPayload> = {
+      modoTiempo: "T-2",
+      mecanismoCantidad: "HEREDAR_DEL_OUTPUT_CANONICO",
+      mecanismoCantidadConfigJson: { campoOutput: "m2_consumidos" },
+      paramsPasoJson: {
+        productivityQuantitySource: "cantidad_manual",
+        productivityUnit: "unidades_h",
+        productivityValue: 8,
+        cantidadManual: { etiqueta: "Superficie a desplotear", unidad: "m²" },
+      },
+    };
+    const claves = opcionesDeSeccion("tiempo", ctxBase({ cfg })).map((op) => op.clave);
+    expect(claves).toContain("tiempo.productividad");
+    expect(claves).not.toContain("tiempo.cantidad_operativa");
+    expect(cfg.mecanismoCantidadConfigJson).toEqual({ campoOutput: "m2_consumidos" });
+
+    const automaticas = opcionesDeSeccion("tiempo", ctxBase({
+      cfg: { ...cfg, paramsPasoJson: { productivityQuantitySource: "area_piezas_m2", productivityUnit: "m2_h" } },
+    })).map((op) => op.clave);
+    expect(automaticas).toContain("tiempo.cantidad_operativa");
+  });
+
   it("con HEREDAR, el control único de cantidad nombra la magnitud", () => {
     const cantidad = ESQUEMA_PASO.find(
       (op) => op.clave === "tiempo.cantidad_operativa",
