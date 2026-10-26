@@ -1,5 +1,34 @@
 # Validación de producción
 
+## 2026-10-26, 23:22 UTC — Carteles compuestos y vinilo sin impresión con troquelado
+
+Lucas autorizó publicar las mejoras de carteles compuestos del [PR #120](https://github.com/studiocamaleon/gdi/pull/120) y la corrección de vinilo del [PR #121](https://github.com/studiocamaleon/gdi/pull/121), después de las pruebas de staging. Se promovieron las mismas imágenes verificadas, sin reconstruir: backend **`dfa866cba1ee44326d8845419aef0b9385a49ac4`**, combinación de ambos cambios; web **`7bd8703295cd1d857fe1afb0c91bbaeff300c996`**. El código del lote integrado coincide con la revisión combinada; sólo difieren estos registros documentales. Marketing y los demás PR quedan fuera.
+
+**Carteles:** un solo SVG/DXF y ancho final proporcional alimentan los componentes. El diseño aparece antes de los materiales y cada componente utiliza tarjetas ilustradas de placa. El resumen refleja el plan calculado y permite revisar los layouts por material y máquina. El frente láser puede dividir piezas sobredimensionadas, con unión recta por defecto; Polyfan conserva encastres. Se respetan las políticas explícitas de máquina y la protección de recorridos CAD internos.
+
+**Vinilo:** el nesting inicial incorpora márgenes, separación y orientación del plotter activo que comparte el rollo. El corte conserva esas posiciones y el material incluye el largo necesario. «Sin impresión» mantiene tiempo y costo de impresión en cero; continúa el rechazo de rollos que físicamente no entran en la máquina.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:23570178c1d0c9b4a80123199d0dfdbf1d54bc1712c82d7ae5e2b86cecaf12c0` |
+| Web | `sha256:6f1fe0a935ddbbf59b3f82d94ca48dcaf8602e54aeaba0f5029c32c05e4c03e9` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Staging:** los SVG y DXF de diagnóstico cotizan el cartel Polyfan/Metalex a aproximadamente 170 cm, con dos placas, dos layouts y 78 fragmentos. Se comprobaron las partes 1/2 y 2/2 del frente de Metalex. Las 5.000 piezas de vinilo de 4 × 4 cm cotizan sin impresión con medio corte y corte profundo; CMYK también funciona y quitar el corte conserva el resultado anterior. Detalle en [VALIDACION de staging](../staging/VALIDACION.md).
+
+**Chrome en producción:** Vinilo impreso blanco, 5.000 unidades de 4 × 4 cm, «Sin impresión» y «Troquelado / Medio corte» devuelve precio y habilita agregar a la OT, sin el error de márgenes anterior. El cartel compuesto disponible de Polyfan con acrílico cotiza el SVG a 170 cm: dos placas, dos layouts y 77 fragmentos, 39 en Polyfan con una división y 38 enteros en acrílico. Se revisaron ambos lotes y las tarjetas ilustradas. El compuesto Metalex no figura en este catálogo de producción; su división se ensayó en staging con la misma versión. No se guardaron órdenes, presupuestos, cobros ni facturas. Los archivos de diagnóstico, precios, nombres e identificadores privados permanecen fuera de Git.
+
+**Controles:** 117 pruebas locales para vinilo y 181 del lote combinado aprobadas; los recorridos y pruebas previas de carteles constan en staging. [CI HTTP del lote exacto](https://github.com/studiocamaleon/gdi/actions/runs/40414078504) y [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/40414075824) aprobados. CodeQL sin alertas abiertas y Vercel aprobados en los PR de origen. El cierre documental vuelve a comprobar HTTP, contenedores, CodeQL y Vercel antes del merge de #121.
+
+**Operación:** los manifiestos promovidos conservan exactamente sus digests. Revisión comprobada en los cuatro servicios actualizados; seis máquinas saludables, recursos y secretos de aplicación conservados. HTTPS web/API 200, API directa protegida 403 y BFF anónimo 401. Configuración fiscal coherente entre API y worker, y consulta ARCA de sólo lectura desde el worker aprobada, sin emisiones. 318 migraciones completas con checksums intactos, ninguna pendiente; sin migraciones, seeds ni resets. Las lecturas de base verificaron ausencia de lotes fiscales activos. No se compiló en la Mac, no se modificó Docker y no se creó un constructor remoto adicional para esta promoción.
+
+**Respaldo:** copia previa con firma y manifiesto comprobados. Ambas fuentes exactas cifradas quedaron bajo custodia y el inventario del copiador refleja la combinación de revisiones e imágenes. Copia posterior completada `2026-10-26T23:21:43.489Z`: firma, huellas y descifrado del manifiesto comprobados; revisión, ambas fuentes e imágenes coincidentes, 318 migraciones y 862 archivos. Verificación local con las claves bajo custodia, sin transferirlas al servidor. **No se repitió una restauración SQL completa.**
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-production-api@sha256:6ccd111fb3b890db07307cbbd3a38391b7d668111e9fdd37b761569d552865ae`; web a `registry.fly.io/grafoprint-production-web@sha256:c047ca8b416ca8b64a7c232cd25cdb783a1d6b900fc1617b92ded479e63434a2` (`f94e85fa82`). Conservar PDF y restituir el inventario previo del copiador. No revertir esquema ni borrar datos; la reversión recupera el flujo anterior de carteles y el fallo del vinilo sin impresión con troquelado.
+
+**Integración:** #120 se integró primero en `main` (`69563003fe9cb902fbd6961c60ae12218c367831`). #121 incorpora ese estado sin cambios funcionales adicionales, registra la publicación y se integra después de su CI final. El cierre comprueba que ambos PR estén fusionados, que `main` contenga el código publicado y que los PR independientes permanezcan sin modificar.
+
 ## 2026-10-23, 14:26 UTC — Cantidad manual del paso y SVG de más de 30 piezas
 
 Lucas autorizó publicar el [PR #119](https://github.com/studiocamaleon/gdi/pull/119) en staging, probarlo y promoverlo a producción si los controles eran correctos. Revisión funcional **`f94e85fa82eb5117433d11fe788b1dbae83b045a`**, desde `main` (`c9720d56a`). El registro documental posterior no reconstruye las imágenes. Sin dependencias de otros PR ni cambios en marketing.

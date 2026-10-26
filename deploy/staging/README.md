@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-26, 22:22 UTC.** API, ambos workers y web ejecutan `7bd870329`, del [PR #120](https://github.com/studiocamaleon/gdi/pull/120). Plan de fabricación calculado para diseños completos y división del frente láser con uniones rectas. Chrome comprobó SVG y DXF a 170 cm con Polyfan y Metalex: una placa por material, 39 fragmentos por placa y el mismo importe. Seis servicios saludables y copia posterior verificada. Pendiente aceptación comercial de Lucas e integración/publicación autorizadas; producción conserva su versión. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-26.** API y ambos workers ejecutan `dfa866cba1`, combinación de carteles [#120](https://github.com/studiocamaleon/gdi/pull/120) y vinilo [#121](https://github.com/studiocamaleon/gdi/pull/121). La web conserva `7bd8703295`. Cotizadas desde Chrome 5.000 piezas de 4 × 4 cm sin impresión con medio corte y corte profundo, y con CMYK; el cartel Polyfan/Metalex conserva su frente dividido y sus dos placas. Seis servicios saludables, recursos y secretos de aplicación conservados. Lote autorizado y promovido a producción con las mismas imágenes; ver el [registro de producción](../produccion/VALIDACION.md). Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 

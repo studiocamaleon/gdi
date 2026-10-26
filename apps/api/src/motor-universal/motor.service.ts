@@ -4370,16 +4370,20 @@ export class MotorUniversalService {
           slot.heredaDeRutaPasoId && origenes.has(slot.heredaDeRutaPasoId),
         );
       if (hereda) origenes.add(paso.rutaPasoId);
-      if (
-        paso.tercerizado ||
-        resolverFamilia(paso.familiaCodigo)?.nestingConfig?.estrategia !==
-          'irregular_placa' ||
-        !(
-          debeEjecutarNestingVectorial(paso, ctx) ||
-          debeEjecutarNestingRectangularCorte(paso, ctx)
-        )
-      )
-        continue;
+      const estrategia =
+        resolverFamilia(paso.familiaCodigo)?.nestingConfig?.estrategia;
+      // El plotter también recibe el acomodo del material sin impresión.
+      // Un sustrato propio del plotter no comparte ese rollo; las hojas
+      // conservan su circuito de pliegos, sin imponer márgenes de rollo.
+      const comparteRollo =
+        estrategia === 'corte_rollo' &&
+        esSustratoRollo(material) &&
+        (!slot || hereda);
+      const compartePlaca =
+        estrategia === 'irregular_placa' &&
+        (debeEjecutarNestingVectorial(paso, ctx) ||
+          debeEjecutarNestingRectangularCorte(paso, ctx));
+      if (paso.tercerizado || !(comparteRollo || compartePlaca)) continue;
       // Las recetas existentes pueden elegir la misma variante en ambos
       // pasos sin HEREDA_DE_PASO. También comparten placa y registro.
       if (slot && !hereda) {
