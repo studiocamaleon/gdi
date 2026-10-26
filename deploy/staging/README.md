@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-23, 14:26 UTC.** API, ambos workers y web ejecutan `f94e85fa82` del [PR #119](https://github.com/studiocamaleon/gdi/pull/119). Cantidad manual del paso aclarada e importación de hasta 500 diseños vectoriales; SVG de 50 piezas importado, guardado y cotizado en staging. Producción usa las mismas imágenes por digest. PDF con Chromium 156.0.8078.47 comprobado. Seis servicios saludables, 318 migraciones sin cambios y comprobantes posteriores de respaldo verificados. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-26, 17:14 UTC.** API, ambos workers y web ejecutan `5437fc96cc` del [PR #120](https://github.com/studiocamaleon/gdi/pull/120). Carga de diseño completo en carteles compuestos y corrección DXF publicadas para pruebas; SVG y DXF conservan 38 piezas y 13 huecos y completan el nesting en placas de dos tamaños. Seis servicios saludables y respaldo posterior verificado. Pendientes el resumen del plan del compuesto, que aún muestra «Pendiente de cálculo», y la aceptación comercial de Lucas, incluido Metalex. Producción conserva la versión anterior; el PR no está fusionado. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 

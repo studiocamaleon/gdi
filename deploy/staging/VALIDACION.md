@@ -1,5 +1,32 @@
 # Validación de staging — historial
 
+## 2026-10-26, 17:14 UTC — Carteles compuestos e importación DXF en staging
+
+Lucas autorizó publicar el [PR #120](https://github.com/studiocamaleon/gdi/pull/120) en staging para hacer pruebas antes de decidir la promoción a producción. Revisión funcional **`5437fc96cc2d90f42a94159dfc5e2f33b4e2d122`**, desde `main` (`4507b64b1`). El commit documental posterior registra esta publicación sin reconstruir imágenes. No se fusionó el PR ni se modificó producción.
+
+Los carteles compuestos permiten cargar un diseño SVG o DXF completo y definir un ancho con alto proporcional. Cada componente recibe esa fuente y calcula con su material y máquina; las opciones CAD por piezas quedan disponibles como alternativa avanzada. El DXF conserva huecos, islas, orientación vertical y cierres casi repetidos. La interpretación CAD que exige conservar recorridos explica por qué no puede dividir una pieza sobredimensionada.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:7fa43afbcc0bacea1bcf5bbed0c6cb0a5e4fefc1ab0d528c0e456b55c6d55075` |
+| Web | `sha256:9f25b09a55cf01c082bcfc9f68fdae56fb3d23c9b4a5df74d9bab7dad3354de2` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Ensayo en staging:** sesión normal de una cuenta ficticia, API y worker reales. Ambos formatos se normalizaron con 38 piezas y 13 huecos. Para un ancho final de 170 cm, una placa de 120 × 60 cm requirió una división y devolvió 39 ubicaciones en una placa, usando OpenNest; una placa de 244 × 122 cm conservó las 38 piezas enteras en una placa. Los cuatro trabajos terminaron correctamente. Además, desde Chrome y con la cuenta de demostración se cargaron ambos formatos en el cartel compuesto de Polyfan con acrílico, a 170 cm y Polyfan blanco de 20 mm: los dos devolvieron el mismo precio y habilitaron agregar el producto, sin abrir opciones avanzadas. No equivale a la aceptación comercial del precio por parte de Lucas. No se crearon órdenes ni se guardaron presupuestos. Archivos del diagnóstico y evidencia privada fuera de Git.
+
+**Controles:** 76 pruebas de API y 29 de web aprobadas en local, TypeScript de ambos, lint frontend y control CSS correctos. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/40360692199), [contenedores/tipos y recorrido](https://github.com/studiocamaleon/gdi/actions/runs/40360692037), CodeQL sin alertas abiertas del PR y Vercel aprobados para la revisión funcional. El primer intento de CI falló al descargar una tipografía existente; el reintento completo y la compilación remota pasaron sin modificar fuentes. El último commit documental vuelve a comprobarse antes del merge.
+
+**Operación:** API, ambos workers y web ejecutan la revisión indicada. Seis servicios saludables, tamaños y secretos de aplicación conservados. HTTPS web/API 200, API directa protegida 403 y BFF sin sesión 401. Compilación remota con tipos; constructor temporal propio retirado. Sin migraciones, seeds ni resets, sin builds de producción en la Mac y sin cambios de Docker ni otros proyectos.
+
+**Respaldo:** copia previa verificada, fuentes exactas cifradas custodiadas e inventario actualizado. Copia posterior completada `2026-10-26T17:10:23.996Z`, con firma, huellas y descifrado del manifiesto comprobados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 33 archivos. Verificación local con las claves bajo custodia. **No se repitió una restauración SQL completa.**
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:6ccd111fb3b890db07307cbbd3a38391b7d668111e9fdd37b761569d552865ae`; web a `registry.fly.io/grafoprint-staging-web@sha256:c047ca8b416ca8b64a7c232cd25cdb783a1d6b900fc1617b92ded479e63434a2` (`f94e85fa82`, #119). Restituir el inventario anterior del copiador. No revertir esquema ni borrar datos. Vuelven la importación previa y el editor de piezas del compuesto.
+
+**Incidencia de interfaz:** después de cotizar correctamente el compuesto, el resumen «Plan de fabricación» sigue mostrando «Pendiente de cálculo» y no permite revisar desde ese bloque los layouts por material. Queda registrado para corregir y verificar antes de producción.
+
+**Pendiente:** corregir esa presentación del plan y obtener la aceptación de Lucas del recorrido de cotización simple y compuesto con ambos formatos, incluyendo un frente Metalex y sus máquinas. Producción y merge quedan para después de esa validación. No hay PR absorbidos; los restantes trabajos son independientes.
+
 ## 2026-10-23, 14:26 UTC — Cantidad manual del paso y SVG de más de 30 piezas
 
 Lucas autorizó publicar el [PR #119](https://github.com/studiocamaleon/gdi/pull/119) en staging, probarlo y promoverlo a producción si los controles eran correctos. Revisión funcional **`f94e85fa82eb5117433d11fe788b1dbae83b045a`**, desde `main` (`c9720d56a`). El registro documental posterior no reconstruye las imágenes. Sin dependencias de otros PR ni cambios en marketing.
