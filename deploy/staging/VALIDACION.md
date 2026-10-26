@@ -1,5 +1,27 @@
 # Validación de staging — historial
 
+## 2026-10-26, 18:41 UTC — Diseño primero y placas visuales en componentes
+
+Correcciones del [PR #120](https://github.com/studiocamaleon/gdi/pull/120) solicitadas durante la prueba de staging. API y ambos workers ejecutan **`b385ae84b6c79e54418e10027daf75250ae37d32`**; web **`6c146ee2edf54606b0494c8b68f2f420e1667602`**. El registro documental posterior no reconstruye imágenes. PR en borrador, sin fusionar ni publicar en producción.
+
+El diseño compartido y las geometrías comerciales aparecen antes de los materiales. Los componentes reutilizan los selectores visuales del producto, con color, espesor y formato. La API completa las opciones ya publicadas con datos descriptivos de variantes activas de la misma empresa; no amplía opciones ni entrega costos/precios. No requiere editar ni republicar recetas. La diferencia anterior afectaba a todos los componentes, no sólo a Metalex.
+
+La comprobación en staging detectó que una placa con un solo espesor quedaba como fila compacta y el estilo general reducía su dibujo. La revisión final conserva la tarjeta ilustrada también para una única variante, tanto en el producto como en el componente.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:f283b9444d39277b97aefd34ffd353f83718c0f7ffcc3f9cdd64371e31a8282e` |
+| Web | `sha256:8cdd799e65f3a355b36ee2a209543904c770e26a51277ad4c3db7a0534a9540f` |
+| PDF y copiador | Conservan los digests del registro anterior |
+
+**Comprobaciones:** 32 pruebas web y nueve de API; 17 de las pruebas visuales repetidas y aprobadas tras el ajuste de tarjeta única. TypeScript web y build de API, ESLint y control CSS correctos. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/40377288506), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/40377288562), CodeQL y Vercel aprobados para la última revisión funcional. Chrome autenticado en la empresa demo: diseño primero, selección de Metalex Plata, tarjeta de placa única con ilustración de 47 × 29 px y cotización exitosa del SVG. No se guardaron órdenes ni presupuestos. Se conserva la pestaña original del usuario; evidencia y archivos de diagnóstico fuera de Git.
+
+**Operación y recuperación:** seis servicios saludables, tamaños y secretos de aplicación conservados; web/API 200, API directa protegida 403 y BFF anónimo 401. 318 migraciones, sin cambios de esquema, seeds ni resets. Imágenes compiladas remotamente con tipos y constructores temporales propios retirados. Producción conserva imágenes y recursos. Fuentes exactas cifradas custodiadas e inventario del copiador actualizado. Copia posterior completada **`2026-10-26T18:40:22.635Z`**: firma, huellas, manifiesto descifrado, fuentes e imágenes comprobados; 33 archivos. **No se repitió restauración SQL completa.**
+
+**Pendientes antes de producción:** el resumen del plan sigue indicando «Pendiente de cálculo» aunque haya precio. En el frente Metalex también se reprodujo un rechazo de nesting por una pieza mayor que el área útil, sin rotación que permita acomodarla; la carga del SVG sí termina. Queda resolver la decisión de placa/división y presentar un mensaje comercial útil, además de la aceptación de Lucas. No se modificaron las políticas productivas ni se dividió automáticamente ese frente.
+
+**Reversión de este bloque:** API/workers a `registry.fly.io/grafoprint-staging-api@sha256:7fa43afbcc0bacea1bcf5bbed0c6cb0a5e4fefc1ab0d528c0e456b55c6d55075`; web a `registry.fly.io/grafoprint-staging-web@sha256:9f25b09a55cf01c082bcfc9f68fdae56fb3d23c9b4a5df74d9bab7dad3354de2` (`5437fc96cc`). Restituir el inventario del copiador, sin borrar ni restaurar datos. Los otros PR abiertos son independientes; no hay PR absorbidos.
+
 ## 2026-10-26, 17:14 UTC — Carteles compuestos e importación DXF en staging
 
 Lucas autorizó publicar el [PR #120](https://github.com/studiocamaleon/gdi/pull/120) en staging para hacer pruebas antes de decidir la promoción a producción. Revisión funcional **`5437fc96cc2d90f42a94159dfc5e2f33b4e2d122`**, desde `main` (`4507b64b1`). El commit documental posterior registra esta publicación sin reconstruir imágenes. No se fusionó el PR ni se modificó producción.
