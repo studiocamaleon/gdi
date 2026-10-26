@@ -650,12 +650,31 @@ async function despacharNesting(
     if (jobContext.modoCotizacionVectorial === 'placas') {
       throw new NestingIrregularError('La estimación por placas necesita un material plano y una máquina de impresión sobre placas.');
     }
-    return runShelfRollo(
+    const cortes =
+      paso.familiaCodigo === 'impresion_por_area'
+        ? (opts?.pasosCortePosteriores ?? []).filter(
+            (corte) =>
+              estrategiaNestingDeFamilia(corte.familiaCodigo) === 'corte_rollo',
+          )
+        : [];
+    const conjunta = limitarRolloPorCorte(
+      config, cortes, jobContext, materialResuelto,
+    );
+    const resultado = runShelfRollo(
       paso,
       conLonaBrutaSiExiste(jobContext),
       materialResuelto,
-      config,
+      conjunta,
     );
+    if (conjunta !== config && !resultado && jobContext.piezas?.length)
+      throw new NestingIrregularError(
+        'Las piezas no caben en el ancho útil compartido del rollo y el plotter. Revisá las medidas, los márgenes o las máquinas elegidas.',
+      );
+    if (conjunta !== config && resultado?.visualConfig)
+      resultado.visualConfig.restriccionCortePosterior = {
+        pasos: cortes.map((p) => p.configPasoId),
+      };
+    return resultado;
   }
   const configImpresion = config;
   const cortes = paso.familiaCodigo === 'impresion_por_area'
@@ -678,6 +697,33 @@ async function despacharNesting(
     return finalizar(resultado ? {...resultado, layoutVinculadoGeometriaVectorial:true} : null);
   }
   return finalizar(runGrid2DMultiForArea(paso, jobContext, configCompartida));
+}
+
+/** Reserva desde el primer acomodo los bordes y espacios que necesitará
+ * el corte. Su largo completo se compra y se conserva en el plotter. */
+function limitarRolloPorCorte(
+  impresion: NestingConfigResolved,
+  cortes: PasoCargado[],
+  ctx: JobContext,
+  material: MaterialResueltoParaNesting | null,
+): NestingConfigResolved {
+  if (!cortes.length) return impresion;
+  const config = { ...impresion, margins: { ...impresion.margins } };
+  for (const corte of cortes) {
+    const anchoMaquina = anchoMaximoRolloMaquina(corte.maquina);
+    if (anchoMaquina != null && (impresion.rollWidthMm ?? 0) > anchoMaquina)
+      throw new MotorCotizacionError(
+        'layout_impresion_plotter_incompatible',
+        'El rollo elegido supera el ancho admitido por el plotter. Elegí otra máquina o un rollo compatible.',
+      );
+    const limite = resolveNestingConfig(corte, ctx, material);
+    for (const lado of ['leftMm', 'rightMm', 'startMm', 'endMm'] as const)
+      config.margins[lado] = Math.max(config.margins[lado], limite.margins[lado]);
+    config.separationHMm = Math.max(config.separationHMm, limite.separationHMm);
+    config.separationVMm = Math.max(config.separationVMm, limite.separationVMm);
+    config.allowRotation = config.allowRotation && limite.allowRotation;
+  }
+  return config;
 }
 
 /** El acomodo sigue expresado sobre la placa comprada. Los márgenes del
