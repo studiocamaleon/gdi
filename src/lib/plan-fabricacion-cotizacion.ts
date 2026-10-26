@@ -33,6 +33,21 @@ export type PlanFabricacion = {
   operaciones: OperacionPlan[];
 };
 
+function tieneFuenteFabricacion(contexto?: Record<string, unknown>): boolean {
+  if (!contexto) return false;
+  // El diseño completo puede llegar como fuente resuelta o como geometrías
+  // comerciales. Las colecciones son sólo otra forma de aportar las piezas.
+  return Boolean(
+    contexto.disenoVectorialFuente ||
+      (contexto.geometriasVectoriales &&
+        Object.keys(contexto.geometriasVectoriales).length > 0) ||
+      (Array.isArray(contexto.disenosVectoriales) &&
+        contexto.disenosVectoriales.length > 0) ||
+      (Array.isArray(contexto.piezas) &&
+        contexto.piezas.some((p) => p?.cantidadPorUnidad != null)),
+  );
+}
+
 export function obtenerPlanesFabricacion(
   cotizacion?: CotizacionFabricacion | null,
   jobContext?: Record<string, unknown>,
@@ -90,16 +105,7 @@ export function obtenerPlanesFabricacion(
     );
     for (const [index, c] of (componentes ?? []).entries()) {
       const scope = `${ruta}/${index}:${c.ocurrenciaId ?? c.codigo}`;
-      const contexto = c.jobContext as
-        | {
-            disenosVectoriales?: unknown[];
-            piezas?: Array<{ cantidadPorUnidad?: number }>;
-          }
-        | undefined;
-      if (
-        contexto?.disenosVectoriales?.length ||
-        contexto?.piezas?.some((p) => p.cantidadPorUnidad != null)
-      ) {
+      if (tieneFuenteFabricacion(c.jobContext)) {
         for (const [i, p] of (c.pasos ?? []).entries()) {
           if (
             !p.activado ||
@@ -142,10 +148,7 @@ export function obtenerPlanesFabricacion(
       );
     }
   };
-  if (
-    Array.isArray(jobContext?.disenosVectoriales) &&
-    jobContext.disenosVectoriales.length
-  ) {
+  if (tieneFuenteFabricacion(jobContext)) {
     recorrer(
       [
         {

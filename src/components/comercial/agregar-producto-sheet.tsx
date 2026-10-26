@@ -6097,7 +6097,9 @@ function ApConfigStep({
   }, [pasoVectorialActivo, motorConfig.seleccionMaquina]);
   const configuracionEncastresVectoriales = React.useMemo(() => {
     const pasoCorte =
-      pasoVectorialActivo?.rutaPaso.familiaCodigo === "corte_hilo_caliente"
+      ["corte_hilo_caliente", "corte_laser"].includes(
+        pasoVectorialActivo?.rutaPaso.familiaCodigo ?? "",
+      )
         ? pasoVectorialActivo
         : null;
     if (!pasoCorte) return resolverConfiguracionEncastresVectoriales(null);
@@ -6107,6 +6109,7 @@ function ApConfigStep({
     const maquina = candidata?.maquina ?? pasoCorte.maquinaM1;
     return resolverConfiguracionEncastresVectoriales(
       maquina?.parametrosTecnicosJson ?? null,
+      pasoCorte.rutaPaso.familiaCodigo,
     );
   }, [pasoVectorialActivo, motorConfig.seleccionMaquina]);
   const importarMedidasPdf = (paginas: PaginaPdfImportada[], archivos: File[]) => {

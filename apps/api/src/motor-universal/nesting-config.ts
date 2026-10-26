@@ -527,7 +527,17 @@ export function resolveNestingConfig(
       true,
     commonLine,
     configuracionEncastres:
-      resolverConfiguracionEncastresVectoriales(maqParams),
+      resolverConfiguracionEncastresVectoriales({
+        ...maqParams,
+        // El frente se arma con uniones rectas; el hilo caliente conserva
+        // sus encastres. Una política explícita de máquina tiene prioridad.
+        tipoUnionVectorial:
+          maqParams.tipoUnionVectorial ??
+          maqParams.tipoUnion ??
+          (resolverFamilia(paso.familiaCodigo)?.codigo === 'corte_laser'
+            ? 'recta'
+            : 'cola_milano'),
+      }),
     pieceBleedMm,
     separationHMm,
     separationVMm,
