@@ -46,6 +46,31 @@ export function admiteColeccionVectorial(
   );
 }
 
+/** Los componentes generan sus nestings al cotizar. No necesitan un nesting
+ * previo del padre sobre una placa única, que no representa sus materiales. */
+export function disenoCompartidoListo(
+  estructura: string | undefined,
+  configuracion: ConfiguracionGeometriasComerciales,
+  fuentes: Record<string, FuenteDisenoVectorial>,
+) {
+  const valida = (f?: FuenteDisenoVectorial) =>
+    Boolean(
+      f?.svg &&
+      Number.isFinite(f.anchoFinalMm) &&
+      f.anchoFinalMm > 0 &&
+      (f.altoFinalMm == null ||
+        (Number.isFinite(f.altoFinalMm) && f.altoFinalMm > 0)),
+    );
+  return (
+    estructura === "COMPUESTO" &&
+    configuracion.fuentes.length > 0 &&
+    configuracion.fuentes.some((f) => valida(fuentes[f.id])) &&
+    configuracion.fuentes.every(
+      (f) => (!f.requerida && !fuentes[f.id]) || valida(fuentes[f.id]),
+    )
+  );
+}
+
 export function esFuenteInterpretada(
   fuente: FuenteDisenoVectorial,
 ): fuente is FuenteGuardada {

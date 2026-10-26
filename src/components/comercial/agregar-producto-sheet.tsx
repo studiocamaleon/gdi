@@ -36,6 +36,7 @@ import { PiezasVectorialesCotizacion } from "./piezas-vectoriales-cotizacion";
 import {
   idsFuentesVectorialesHeredadas,
   admiteColeccionVectorial,
+  disenoCompartidoListo,
   aplicarColeccionVectorial,
   piezasVectorialesIniciales,
   piezasVectorialesValidas,
@@ -9069,6 +9070,24 @@ function ApConfigStep({
             fuentes={motorConfig.geometriasVectoriales}
             colecciones={motorConfig.coleccionesVectoriales}
             cantidad={qty}
+            onFuenteChange={(id, fuente) =>
+              setMotorConfig((current) => {
+                const coleccionesVectoriales = {
+                  ...current.coleccionesVectoriales,
+                };
+                delete coleccionesVectoriales[id];
+                return {
+                  ...current,
+                  geometriasVectoriales: {
+                    ...current.geometriasVectoriales,
+                    [id]: fuente,
+                  },
+                  coleccionesVectoriales,
+                  disenoVectorialFuente: null,
+                  disenoVectorialAnalisis: null,
+                };
+              })
+            }
             onProcesandoChange={(importandoPiezasVectoriales) =>
               setMotorConfig((current) =>
                 current.importandoPiezasVectoriales ===
@@ -9454,6 +9473,8 @@ function ApConfigStep({
         cotizacion={cotizacionExitosa}
         jobContext={ruleContext}
         esperado={Boolean(
+          (configuracionHeredada.fuentes.length > 0 &&
+            Object.keys(motorConfig.geometriasVectoriales).length > 0) ||
           Object.values(motorConfig.coleccionesVectoriales).some(
             (p) => p.length,
           ) ||
@@ -10138,6 +10159,11 @@ export function AgregarProductoSheet({
     const requiereArchivoVectorial =
       requiereDisenoVectorial && !cotizaVectorialPorMedidas;
     const disenoVectorialListo = Boolean(
+      disenoCompartidoListo(
+        productoDetalle.estructuraProducto,
+        geometriasComerciales,
+        motorConfig.geometriasVectoriales,
+      ) ||
       (coleccionesHeredadas.length > 0 &&
         coleccionesHeredadas.every((p) => piezasVectorialesValidas(p, qty))) ||
       (requiereArchivoVectorial &&
