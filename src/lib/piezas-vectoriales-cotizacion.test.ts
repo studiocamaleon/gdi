@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   idsFuentesVectorialesHeredadas,
+  disenoCompartidoListo,
   piezasVectorialesIniciales,
   piezasVectorialesValidas,
 } from "./piezas-vectoriales-cotizacion";
@@ -106,6 +107,27 @@ describe("colección comercial del producto simple", () => {
 });
 
 describe("fuentes compartidas de un compuesto", () => {
+  it("habilita el cálculo de cada material sin exigir un nesting previo del padre", () => {
+    const cfg = { ...configuracion, fuentes: [configuracion.fuentes[0]] };
+    const fuentes = {
+      principal: {
+        ...fuente,
+        schemaVersion: 1 as const,
+        procedencia: undefined,
+      },
+    };
+    expect(disenoCompartidoListo("COMPUESTO", cfg, fuentes)).toBe(true);
+    expect(disenoCompartidoListo("SIMPLE", cfg, fuentes)).toBe(false);
+    expect(disenoCompartidoListo("COMPUESTO", configuracion, fuentes)).toBe(
+      false,
+    );
+    expect(
+      disenoCompartidoListo("COMPUESTO", cfg, {
+        principal: { ...fuentes.principal, anchoFinalMm: 0 },
+      }),
+    ).toBe(false);
+    expect(disenoCompartidoListo("COMPUESTO", cfg, {})).toBe(false);
+  });
   it("reutiliza la herencia y mantiene separadas las piezas fijas y otras fuentes", () => {
     const heredado = {
       configuracionJson: {

@@ -376,6 +376,8 @@ export type BindingParametroComponente = {
     } | null;
   } | null;
   opciones?: Array<{ valor: string; etiqueta: string }>;
+  /** Catálogo comercial de las opciones del componente, sin costos ni precios. */
+  materiales?: import("./selectores-materiales").CandidatoMaterialVisual[];
 };
 
 export type PiezaVectorialComponente = {
@@ -2681,8 +2683,12 @@ export const CONFIGURACION_ENCASTRES_VECTORIALES_DEFAULT: ConfiguracionEncastres
 
 export function resolverConfiguracionEncastresVectoriales(
   value: Record<string, unknown> | null | undefined,
+  familiaCodigo?: string,
 ): ConfiguracionEncastresVectoriales {
   const defaults = CONFIGURACION_ENCASTRES_VECTORIALES_DEFAULT;
+  const tipoUnion =
+    value?.tipoUnionVectorial ?? value?.tipoUnion ??
+    (familiaCodigo === "corte_laser" ? "recta" : defaults.tipoUnion);
   const cantidadMinima = Math.round(
     numeroConfiguracion(
       value?.cantidadMinimaEncastres ?? value?.cantidadMinima,
@@ -2693,7 +2699,9 @@ export function resolverConfiguracionEncastresVectoriales(
   );
   return {
     tipoUnion:
-      value?.tipoUnionVectorial === "recta" || value?.tipoUnion === "recta"
+      value?.tipoUnionVectorial === "recta" ||
+      value?.tipoUnion === "recta" ||
+      tipoUnion === "recta"
         ? "recta"
         : "cola_milano",
     anchoEncastreMm: numeroConfiguracion(

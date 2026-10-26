@@ -18,6 +18,7 @@ export function MaterialSelectorRigido({
   return (
     <MaterialSelectorVisual
       {...props}
+      mostrarTarjetaUnica
       eje="Espesor"
       etiquetaBusqueda="Buscar material, espesor o formato"
       ejemploBusqueda="Ej. acrílico, 5 mm…"

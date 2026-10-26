@@ -2,6 +2,8 @@ import type { Helper } from 'dxf';
 import { crearHelperDxfSeguro, DxfSeguroError } from './dxf-seguro';
 import type { DiagnosticoSvg } from './tipos';
 import { analizarSvgFabricacion, SvgFabricacionError } from './svg-parser';
+import { detectarPiezasArchivo } from '../../productos-servicios/geometrias/piezas-archivo';
+import type { EntidadInspeccion } from '../../productos-servicios/geometrias/interpretar-vector';
 
 export type FormatoFuenteVectorial = 'SVG' | 'DXF';
 
@@ -273,24 +275,76 @@ function svgDesdePolilineasDxf(
     })),
     toleranciaConexion,
   );
-  const paths = contornos.flatMap(({ puntos, capa }, index) => {
-    if (puntos.length < 2) return [];
+  // Usar la misma contención completa que el importador CAD: dos figuras
+  // que se cruzan o se tocan no se vuelven exterior/hueco sólo por su inicio.
+  const entidades: EntidadInspeccion[] = [];
+  const trazados = new Map<string, string>();
+  const abiertos: string[] = [];
+  contornos.forEach(({ puntos, capa }, index) => {
+    if (puntos.length < 2) return;
     const [primeroX, primeroY] = puntos[0];
     const [ultimoX, ultimoY] = puntos[puntos.length - 1];
     const cerrado =
       Math.hypot(primeroX - ultimoX, primeroY - ultimoY) <= toleranciaConexion;
     const efectivos = cerrado ? puntos.slice(0, -1) : puntos;
     const d = efectivos
-      .map(([x, y], puntoIndex) => `${puntoIndex === 0 ? 'M' : 'L'}${x},${y}`)
+      // CAD crece hacia arriba y SVG hacia abajo. Conservar la orientación
+      // del dibujo, además de sus dimensiones, evita reflejar las letras.
+      .map(
+        ([x, y], puntoIndex) =>
+          `${puntoIndex === 0 ? 'M' : 'L'}${x},${min.y + max.y - y}`,
+      )
       .join('');
-    const id = escapeXml(`${capa}_${index + 1}`);
-    return [`<g id="${id}"><path d="${d}${cerrado ? 'Z' : ''}" /></g>`];
+    if (cerrado) {
+      const id = String(index);
+      const area =
+        Math.abs(
+          efectivos.reduce((s, [x, y], i) => {
+            const siguiente = efectivos[(i + 1) % efectivos.length];
+            return s + x * siguiente[1] - siguiente[0] * y;
+          }, 0),
+        ) / 2;
+      entidades.push({
+        id,
+        capa,
+        cerrada: true,
+        apertura: 0,
+        area,
+        ancho:
+          Math.max(...efectivos.map((p) => p[0])) -
+          Math.min(...efectivos.map((p) => p[0])),
+        alto:
+          Math.max(...efectivos.map((p) => p[1])) -
+          Math.min(...efectivos.map((p) => p[1])),
+        puntos: efectivos.map(([x, y]) => ({ x, y })),
+      });
+      trazados.set(id, `${d}Z`);
+    } else {
+      abiertos.push(
+        `<g id="${escapeXml(`${capa}_${index + 1}`)}"><path d="${d}" /></g>`,
+      );
+    }
+  });
+  const piezas = detectarPiezasArchivo({
+    formato: 'DXF',
+    unidadDeclarada: null,
+    entidades,
+    sugeridaId: '',
+    avisos: [],
+  });
+  const paths = piezas.map(({ exteriorId, interioresIds }) => {
+    const capa = entidades.find((e) => e.id === exteriorId)!.capa;
+    const d = [exteriorId, ...interioresIds]
+      .map((id) => trazados.get(id))
+      .join('');
+    return `<g id="${escapeXml(`${capa}_${exteriorId}`)}"><path d="${d}" /></g>`;
   });
   return [
     '<svg xmlns="http://www.w3.org/2000/svg"',
     ` viewBox="${min.x} ${min.y} ${max.x - min.x} ${max.y - min.y}"`,
     ' fill="none" stroke="#000">',
     ...paths,
+    ...abiertos,
     '</svg>',
   ].join('');
 }
@@ -370,10 +424,14 @@ function quitarPuntosConsecutivosRepetidos(
   puntos: Array<[number, number]>,
   tolerancia: number,
 ): Array<[number, number]> {
-  return puntos.filter(
-    (punto, index) =>
-      index === 0 || !coinciden(punto, puntos[index - 1], tolerancia),
-  );
+  const limpios: Array<[number, number]> = [];
+  for (const punto of puntos) {
+    // Comparar con el último conservado: una cadena de puntos próximos no
+    // debe quitar el cierre de una spline ni volverla un contorno abierto.
+    if (!limpios.length || !coinciden(punto, limpios.at(-1)!, tolerancia))
+      limpios.push(punto);
+  }
+  return limpios;
 }
 
 function estaCerrado(

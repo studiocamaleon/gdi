@@ -121,7 +121,7 @@ describe('Catálogo de familias', () => {
           usarDisenoVectorial: true,
         }),
       ).toContain('diseno_vectorial');
-      expect(familia.permiteSegmentacionVectorial).not.toBe(true);
+      expect(familia.permiteSegmentacionVectorial === true).toBe(codigo === 'corte_laser');
       expect(familia.paramsPasoSchema).toContainEqual(
         expect.objectContaining({
           campo: 'permitirIngresoPorMedidas',
