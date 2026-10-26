@@ -58,6 +58,7 @@ import {
 import { motivosCambioEntreSnapshots } from './estado-publicacion-receta';
 import { leerGeometriasComerciales } from './geometrias-comerciales';
 import { configuracionComponenteParaCotizacion } from './producto-cotizacion-publico';
+import { conMaterialesComponentes, idsMaterialesComponentes } from './materiales-componentes-cotizacion';
 
 type AutorReceta = Pick<CurrentAuth, 'tenantId'> &
   Partial<Pick<CurrentAuth, 'userId' | 'email' | 'impersonacion'>>;
@@ -486,13 +487,30 @@ export class RecetasProductoService {
         } } },
       },
     });
+    const varianteIds = idsMaterialesComponentes(recetas.flatMap((receta) =>
+      receta.revisionPublicada?.componentes.map((componente) => componente.configuracionJson) ?? [],
+    ));
+    const variantes = varianteIds.length ? await this.prisma.materiaPrimaVariante.findMany({
+      where: {
+        id: { in: varianteIds }, tenantId: auth.tenantId, activo: true,
+        materiaPrima: { tenantId: auth.tenantId, activo: true },
+      },
+      select: {
+        id: true, sku: true, nombreVariante: true, atributosVarianteJson: true,
+        precioReferencia: true,
+        materiaPrima: { select: { id: true, nombre: true, templateId: true } },
+      },
+    }) : [];
+    const materiales = new Map(variantes.map((variante) => [variante.id, variante]));
     return recetas.map((receta) => ({
       rutaAlternativa: receta.rutaAlternativa,
       revisionPublicada: receta.revisionPublicada ? {
         componentes: receta.revisionPublicada.componentes.map((componente) => ({
           ...componente,
           cantidad: Number(componente.cantidad),
-          configuracionJson: configuracionComponenteParaCotizacion(componente.configuracionJson),
+          configuracionJson: conMaterialesComponentes(
+            configuracionComponenteParaCotizacion(componente.configuracionJson), materiales,
+          ),
         })),
       } : null,
     }));

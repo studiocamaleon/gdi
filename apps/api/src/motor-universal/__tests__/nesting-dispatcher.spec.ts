@@ -16,6 +16,12 @@ import {
 import { analizarSvgFabricacion } from '../geometria-vectorial/svg-parser';
 import { calcularOutputsCanonicos } from '../outputs-canonicos';
 import type { LayoutProduccionCompartido } from '../tipos';
+import type { JobContext } from '../tipos';
+import {
+  prepararProblemaOpenNest,
+  finalizarProblemaOpenNest,
+} from '../geometria-vectorial/opennest-adapter';
+import { resolverNestingBaseSeguro } from '../../workers/geometria/nesting-base-seguro';
 
 describe('formato físico del material', () => {
   it('reconoce un rollo especial por metadata sin confundir su subfamilia ambigua', () => {
@@ -494,6 +500,57 @@ describe('runNestingForPaso rollo optimizado', () => {
 });
 
 describe('runNestingForPaso geometría vectorial', () => {
+  it.each([1_000, 1_500])('cotiza el frente láser de %s mm y divide sólo la pieza que excede la placa', async (anchoMm) => {
+    const fuente = {
+      schemaVersion: 1 as const,
+      nombreArchivo: 'cartel-ficticio.svg',
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${anchoMm} 60"><path d="M0 0H${anchoMm}V30H0Z"/><path fill-rule="evenodd" d="M0 40H20V60H0Z M5 45H15V55H5Z"/></svg>`,
+      anchoFinalMm: anchoMm,
+      altoFinalMm: 60,
+    };
+    const geometria = analizarSvgFabricacion(fuente).geometria;
+    const contexto: JobContext = { cantidad: 2, disenoVectorialFuente: fuente, geometriaVectorial: geometria };
+    const resolveIrregularNesting = jest.fn(async ({ problema }) => {
+      const preparado = prepararProblemaOpenNest({ problema, claveSemilla: 'cartel-ficticio' });
+      expect(preparado.trabajo).toBeDefined();
+      const trabajo = preparado.trabajo!;
+      return finalizarProblemaOpenNest({
+        contexto: preparado,
+        resultado: resolverNestingBaseSeguro({
+          ...trabajo,
+          tenantId: 'empresa-ficticia', solicitadoEl: '', correlationId: 'prueba',
+        }),
+      });
+    });
+    const result = await runNestingForPaso({
+      ...buildPaso('auto'),
+      familiaCodigo: 'corte_laser',
+      // El frente recibe el archivo del cartel; no pide otra carga comercial.
+      paramsPasoJson: { usarDisenoVectorial: false, nestingConfig: { allowRotation: false, separationHMm: 1 } },
+      maquina: null,
+    } as never, contexto, {
+      id: 'metalex-ficticio', nombre: 'Metalex de prueba', subfamilia: 'SUSTRATO_RIGIDO', precioReferencia: 1000,
+      atributosVarianteJson: { anchoMm: 1200, altoMm: 600, margenNoUtilizableMm: 5 },
+    }, { resolveIrregularNesting });
+
+    expect(resolveIrregularNesting).toHaveBeenCalledTimes(1);
+    expect(result?.cantidadCalculada).toBeGreaterThan(0);
+    expect(result?.placements).toHaveLength(anchoMm > 1200 ? 6 : 4);
+    expect(result?.metricasRaw).toMatchObject({
+      piezasOriginales: 4,
+      unionesFisicas: anchoMm > 1200 ? 2 : 0,
+      configuracionEncastres: { tipoUnion: 'recta' },
+    });
+    expect(result?.placements.every((p) => p.xMm >= 5 && p.yMm >= 5 && p.xMm + p.widthMm <= 1195.001 && p.yMm + p.heightMm <= 595.001)).toBe(true);
+    if (anchoMm > 1200) {
+      expect(result?.placements.filter((p) => p.meta?.segmentacion)).toHaveLength(4);
+      expect(contexto.piezaPerimetroTotalM).toBeGreaterThan(geometria.perimetroTotalMm * 2 / 1000);
+    } else {
+      expect(result?.placements.some((p) => p.meta?.segmentacion)).toBe(false);
+      expect(contexto.piezaPerimetroTotalM).toBeCloseTo(geometria.perimetroTotalMm * 2 / 1000);
+    }
+  });
+
   it('acepta encastres irregulares aunque se superpongan sus rectángulos envolventes', () => {
     const base = {
       cantidadCalculada: 1,

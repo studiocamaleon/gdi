@@ -857,6 +857,7 @@ const plotter_corte: DefinicionFamilia = {
 
 const corte_laser: DefinicionFamilia = {
   codigo: 'corte_laser',
+  permiteSegmentacionVectorial: true,
   nombre: 'Corte láser',
   categoria: 'corte_y_formado',
   descripcion:
@@ -936,6 +937,7 @@ const corte_laser: DefinicionFamilia = {
 const troquelado_digital: DefinicionFamilia = {
   ...corte_laser,
   codigo: 'troquelado_digital',
+  permiteSegmentacionVectorial: false,
   nombre: 'Mesa de corte digital',
   descripcion: 'Procesa piezas en placa con herramientas y perfiles por operación.',
   plantillasCompatibles: ['MESA_DE_CORTE'],

@@ -1,5 +1,76 @@
 # Validación de staging — historial
 
+## 2026-10-26, 22:22 UTC — Plan calculado y división del frente láser
+
+Corrección del [PR #120](https://github.com/studiocamaleon/gdi/pull/120), solicitada durante la revisión del cartel compuesto. API, ambos workers y web ejecutan **`7bd8703295cd1d857fe1afb0c91bbaeff300c996`**. El commit documental posterior registra esta versión sin reconstruir imágenes. Producción conserva sus imágenes y recursos; no se fusionó el PR.
+
+El resumen reconoce diseños completos y fuentes heredadas, además de colecciones, y muestra los layouts de cada material. El corte láser puede dividir piezas que excedan el área útil, con uniones rectas por defecto; Polyfan conserva sus encastres. La política explícita de máquina tiene prioridad, y vista previa y cálculo usan la misma configuración. El recorrido costeado incluye las uniones. CNC y mesa digital conservan su política anterior; sigue vigente la protección de piezas CAD con operaciones internas.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:766169a599e8571d2131d898fb8e5b2c76312447f27d58569658774e8e656040` |
+| Web | `sha256:6f1fe0a935ddbbf59b3f82d94ca48dcaf8602e54aeaba0f5029c32c05e4c03e9` |
+| PDF y copiador | Conservan los digests del registro anterior |
+
+**Comprobaciones:** 129 pruebas API y 46 web aprobadas, TypeScript web y build de API, ESLint y diff correctos. Los dos archivos de diagnóstico se ensayaron también en local con el adaptador del worker: 38 piezas originales y 39 fragmentos por material, con una unión. El solver local de base comprueba geometría, sin certificar el acomodo óptimo. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/40407588806), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/40407588804), CodeQL sin alertas abiertas del PR y Vercel aprobados para la revisión funcional. Los checks del commit documental se revisan antes de integrar.
+
+**Chrome en staging:** ambos formatos cotizan el cartel de Polyfan con frente Metalex a aproximadamente 170 cm, con Polyfan blanco de 20 mm y Metalex Plata de 2 mm. Devuelven el mismo importe y habilitan agregar el producto. El resumen pasa a «Calculado»: dos placas, dos layouts y 78 fragmentos en total. Se abrieron ambos materiales: una placa de 120 × 60 cm y 39 fragmentos por material; el frente muestra las partes 1/2 y 2/2 de la pieza sobredimensionada. Reemplazar el archivo invalida el plan anterior y vuelve a calcular. La pestaña de prueba queda abierta con el layout de Metalex; la pestaña original del usuario se conserva. No se guardaron órdenes ni presupuestos. Archivos y evidencia privada fuera de Git; fixtures versionados ficticios.
+
+**Operación y recuperación:** seis servicios saludables, tamaños y secretos de aplicación conservados; web/API 200, API protegida 403 y BFF anónimo 401. Sin migraciones nuevas, seeds ni resets. Imágenes compiladas remotamente con tipos. La primera subida de la web falló en el registro de Fly; el reintento reutilizó las capas y terminó correctamente. Constructor temporal propio retirado. Fuentes exactas cifradas custodiadas e inventario del copiador actualizado. Copia posterior completada **`2026-10-26T22:20:48.503Z`**: firma, huellas, manifiesto descifrado, fuentes e imágenes coincidentes; 318 migraciones y 33 archivos. **No se repitió una restauración SQL completa.**
+
+**Pendiente antes de producción:** aceptación comercial de Lucas y autorización posterior de integración/publicación. Las dos incidencias de la validación anterior quedaron corregidas y comprobadas. Los otros PR abiertos son independientes; no hay PR absorbidos.
+
+**Reversión de este bloque:** API/workers a `registry.fly.io/grafoprint-staging-api@sha256:f283b9444d39277b97aefd34ffd353f83718c0f7ffcc3f9cdd64371e31a8282e` (`b385ae84b`); web a `registry.fly.io/grafoprint-staging-web@sha256:8cdd799e65f3a355b36ee2a209543904c770e26a51277ad4c3db7a0534a9540f` (`6c146ee2e`). Restituir el inventario anterior del copiador sin borrar ni restaurar datos.
+
+## 2026-10-26, 18:41 UTC — Diseño primero y placas visuales en componentes
+
+Correcciones del [PR #120](https://github.com/studiocamaleon/gdi/pull/120) solicitadas durante la prueba de staging. API y ambos workers ejecutan **`b385ae84b6c79e54418e10027daf75250ae37d32`**; web **`6c146ee2edf54606b0494c8b68f2f420e1667602`**. El registro documental posterior no reconstruye imágenes. PR en borrador, sin fusionar ni publicar en producción.
+
+El diseño compartido y las geometrías comerciales aparecen antes de los materiales. Los componentes reutilizan los selectores visuales del producto, con color, espesor y formato. La API completa las opciones ya publicadas con datos descriptivos de variantes activas de la misma empresa; no amplía opciones ni entrega costos/precios. No requiere editar ni republicar recetas. La diferencia anterior afectaba a todos los componentes, no sólo a Metalex.
+
+La comprobación en staging detectó que una placa con un solo espesor quedaba como fila compacta y el estilo general reducía su dibujo. La revisión final conserva la tarjeta ilustrada también para una única variante, tanto en el producto como en el componente.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:f283b9444d39277b97aefd34ffd353f83718c0f7ffcc3f9cdd64371e31a8282e` |
+| Web | `sha256:8cdd799e65f3a355b36ee2a209543904c770e26a51277ad4c3db7a0534a9540f` |
+| PDF y copiador | Conservan los digests del registro anterior |
+
+**Comprobaciones:** 32 pruebas web y nueve de API; 17 de las pruebas visuales repetidas y aprobadas tras el ajuste de tarjeta única. TypeScript web y build de API, ESLint y control CSS correctos. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/40377288506), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/40377288562), CodeQL y Vercel aprobados para la última revisión funcional. Chrome autenticado en la empresa demo: diseño primero, selección de Metalex Plata, tarjeta de placa única con ilustración de 47 × 29 px y cotización exitosa del SVG. No se guardaron órdenes ni presupuestos. Se conserva la pestaña original del usuario; evidencia y archivos de diagnóstico fuera de Git.
+
+**Operación y recuperación:** seis servicios saludables, tamaños y secretos de aplicación conservados; web/API 200, API directa protegida 403 y BFF anónimo 401. 318 migraciones, sin cambios de esquema, seeds ni resets. Imágenes compiladas remotamente con tipos y constructores temporales propios retirados. Producción conserva imágenes y recursos. Fuentes exactas cifradas custodiadas e inventario del copiador actualizado. Copia posterior completada **`2026-10-26T18:40:22.635Z`**: firma, huellas, manifiesto descifrado, fuentes e imágenes comprobados; 33 archivos. **No se repitió restauración SQL completa.**
+
+**Pendientes antes de producción:** el resumen del plan sigue indicando «Pendiente de cálculo» aunque haya precio. En el frente Metalex también se reprodujo un rechazo de nesting por una pieza mayor que el área útil, sin rotación que permita acomodarla; la carga del SVG sí termina. Queda resolver la decisión de placa/división y presentar un mensaje comercial útil, además de la aceptación de Lucas. No se modificaron las políticas productivas ni se dividió automáticamente ese frente.
+
+**Reversión de este bloque:** API/workers a `registry.fly.io/grafoprint-staging-api@sha256:7fa43afbcc0bacea1bcf5bbed0c6cb0a5e4fefc1ab0d528c0e456b55c6d55075`; web a `registry.fly.io/grafoprint-staging-web@sha256:9f25b09a55cf01c082bcfc9f68fdae56fb3d23c9b4a5df74d9bab7dad3354de2` (`5437fc96cc`). Restituir el inventario del copiador, sin borrar ni restaurar datos. Los otros PR abiertos son independientes; no hay PR absorbidos.
+
+## 2026-10-26, 17:14 UTC — Carteles compuestos e importación DXF en staging
+
+Lucas autorizó publicar el [PR #120](https://github.com/studiocamaleon/gdi/pull/120) en staging para hacer pruebas antes de decidir la promoción a producción. Revisión funcional **`5437fc96cc2d90f42a94159dfc5e2f33b4e2d122`**, desde `main` (`4507b64b1`). El commit documental posterior registra esta publicación sin reconstruir imágenes. No se fusionó el PR ni se modificó producción.
+
+Los carteles compuestos permiten cargar un diseño SVG o DXF completo y definir un ancho con alto proporcional. Cada componente recibe esa fuente y calcula con su material y máquina; las opciones CAD por piezas quedan disponibles como alternativa avanzada. El DXF conserva huecos, islas, orientación vertical y cierres casi repetidos. La interpretación CAD que exige conservar recorridos explica por qué no puede dividir una pieza sobredimensionada.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:7fa43afbcc0bacea1bcf5bbed0c6cb0a5e4fefc1ab0d528c0e456b55c6d55075` |
+| Web | `sha256:9f25b09a55cf01c082bcfc9f68fdae56fb3d23c9b4a5df74d9bab7dad3354de2` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Ensayo en staging:** sesión normal de una cuenta ficticia, API y worker reales. Ambos formatos se normalizaron con 38 piezas y 13 huecos. Para un ancho final de 170 cm, una placa de 120 × 60 cm requirió una división y devolvió 39 ubicaciones en una placa, usando OpenNest; una placa de 244 × 122 cm conservó las 38 piezas enteras en una placa. Los cuatro trabajos terminaron correctamente. Además, desde Chrome y con la cuenta de demostración se cargaron ambos formatos en el cartel compuesto de Polyfan con acrílico, a 170 cm y Polyfan blanco de 20 mm: los dos devolvieron el mismo precio y habilitaron agregar el producto, sin abrir opciones avanzadas. No equivale a la aceptación comercial del precio por parte de Lucas. No se crearon órdenes ni se guardaron presupuestos. Archivos del diagnóstico y evidencia privada fuera de Git.
+
+**Controles:** 76 pruebas de API y 29 de web aprobadas en local, TypeScript de ambos, lint frontend y control CSS correctos. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/40360692199), [contenedores/tipos y recorrido](https://github.com/studiocamaleon/gdi/actions/runs/40360692037), CodeQL sin alertas abiertas del PR y Vercel aprobados para la revisión funcional. El primer intento de CI falló al descargar una tipografía existente; el reintento completo y la compilación remota pasaron sin modificar fuentes. El último commit documental vuelve a comprobarse antes del merge.
+
+**Operación:** API, ambos workers y web ejecutan la revisión indicada. Seis servicios saludables, tamaños y secretos de aplicación conservados. HTTPS web/API 200, API directa protegida 403 y BFF sin sesión 401. Compilación remota con tipos; constructor temporal propio retirado. Sin migraciones, seeds ni resets, sin builds de producción en la Mac y sin cambios de Docker ni otros proyectos.
+
+**Respaldo:** copia previa verificada, fuentes exactas cifradas custodiadas e inventario actualizado. Copia posterior completada `2026-10-26T17:10:23.996Z`, con firma, huellas y descifrado del manifiesto comprobados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 33 archivos. Verificación local con las claves bajo custodia. **No se repitió una restauración SQL completa.**
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:6ccd111fb3b890db07307cbbd3a38391b7d668111e9fdd37b761569d552865ae`; web a `registry.fly.io/grafoprint-staging-web@sha256:c047ca8b416ca8b64a7c232cd25cdb783a1d6b900fc1617b92ded479e63434a2` (`f94e85fa82`, #119). Restituir el inventario anterior del copiador. No revertir esquema ni borrar datos. Vuelven la importación previa y el editor de piezas del compuesto.
+
+**Incidencia de interfaz:** después de cotizar correctamente el compuesto, el resumen «Plan de fabricación» sigue mostrando «Pendiente de cálculo» y no permite revisar desde ese bloque los layouts por material. Queda registrado para corregir y verificar antes de producción.
+
+**Pendiente:** corregir esa presentación del plan y obtener la aceptación de Lucas del recorrido de cotización simple y compuesto con ambos formatos, incluyendo un frente Metalex y sus máquinas. Producción y merge quedan para después de esa validación. No hay PR absorbidos; los restantes trabajos son independientes.
+
 ## 2026-10-23, 14:26 UTC — Cantidad manual del paso y SVG de más de 30 piezas
 
 Lucas autorizó publicar el [PR #119](https://github.com/studiocamaleon/gdi/pull/119) en staging, probarlo y promoverlo a producción si los controles eran correctos. Revisión funcional **`f94e85fa82eb5117433d11fe788b1dbae83b045a`**, desde `main` (`c9720d56a`). El registro documental posterior no reconstruye las imágenes. Sin dependencias de otros PR ni cambios en marketing.

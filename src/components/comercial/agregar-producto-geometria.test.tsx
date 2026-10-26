@@ -3,14 +3,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ProductoDetalle } from "@/lib/productos-servicios";
-import type { CotizarResponse } from "@/lib/productos-servicios-api";
+import type { CotizarResponse, RevisionRecetaCotizacion } from "@/lib/productos-servicios-api";
 import {
   AgregarProductoSheet,
   buildJobContext,
   DEFAULT_MOTOR_CONFIG,
 } from "./agregar-producto-sheet";
 
-const api = vi.hoisted(() => ({ cotizar: vi.fn(), producto: vi.fn() }));
+const api = vi.hoisted(() => ({ cotizar: vi.fn(), producto: vi.fn(), revision: undefined as RevisionRecetaCotizacion | undefined }));
 vi.mock("./tipo-cambio-documento", () => ({
   useMotorConTipoCambio: () => ({
     cotizar: api.cotizar,
@@ -26,7 +26,7 @@ vi.mock("@/components/navigation/permisos-provider", () => ({
   usePuede: () => false,
 }));
 vi.mock("@/hooks/use-receta-cotizacion", () => ({
-  useRecetaCotizacion: () => null,
+  useRecetaCotizacion: () => api.revision,
 }));
 vi.mock("@/components/nesting/plan-lotes-cotizacion", () => ({
   PlanLotesCotizacion: () => null,
@@ -103,6 +103,7 @@ const calculo = {
 let el: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  api.revision = undefined;
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.useFakeTimers();
   vi.stubGlobal(
@@ -136,6 +137,30 @@ const avanzarCalculo = () =>
   act(async () => {
     await vi.advanceTimersByTimeAsync(500);
   });
+
+it.each([true, false])("el archivo aparece antes de los materiales (fuente heredada: %s)", async (heredada) => {
+  const p = producto("corte_hilo_caliente");
+  p.estructuraProducto = "COMPUESTO";
+  p.atributosComercialesJson = { geometriasComerciales: { version: 1, modo: "VECTORIAL", fuentes: [{ id: "diseno", nombre: "Diseño de prueba", requerida: true }] } };
+  api.revision = { componentes: heredada ? [{ id: "frente", codigo: "FRENTE", nombre: "Frente", cantidad: 1, formula: "por_unidad", configuracionJson: { version: 2, bindings: [{ clave: "disenoVectorialFuente", etiqueta: "Diseño", tipoDato: "vectorial", origen: "PADRE", padreClave: "geometriasVectoriales.diseno" }] } }] : [] };
+  p.rutasAlternativas[0].configPasos[0].rutaPaso.herramientasCotizacion = [];
+  p.rutasAlternativas[0].configPasos[0].slotsMateriales = [{
+    id: "sustrato", slotCodigo: "sustrato_corte", modoSeleccion: "COMERCIAL_ELIGE",
+    candidatos: [{ materiaPrimaId: "espuma", defaultVarianteId: "blanco", todasLasVariantes: true,
+      materiaPrima: { id: "espuma", nombre: "Placa de prueba", templateId: "sustrato_rigido_v1",
+        variantes: [{ id: "blanco", sku: "PLACA-20", precioCargado: true, atributosVarianteJson: { espesor: 20, ancho: 1.2, alto: 0.6, colorBase: "Blanco" } }] }, variantes: [],
+    }],
+  }] as unknown as typeof p.rutasAlternativas[0]["configPasos"][0]["slotsMateriales"];
+  api.producto.mockResolvedValue(p);
+  api.cotizar.mockResolvedValue({ exitoso: true, cotizacion: calculo, errores: [] });
+  await act(async () => root.render(<AgregarProductoSheet open onOpenChange={vi.fn()} productos={[p]} fechaEntregaDefault="2026-09-30" onAddItem={vi.fn()} />));
+  await act(async () => el.querySelector<HTMLButtonElement>('button[role="option"]')!.click());
+  const archivo = el.querySelector('input[type="file"]');
+  const material = el.querySelector('svg[viewBox="0 0 47 29"]');
+  expect(archivo).not.toBeNull();
+  expect(material).not.toBeNull();
+  expect(archivo!.compareDocumentPosition(material!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
 
 it("por placas usa sólo las placas ingresadas, sin multiplicar por una cantidad anterior oculta", () => {
   const p = producto("corte_hilo_caliente");
