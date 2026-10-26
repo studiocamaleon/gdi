@@ -91,6 +91,113 @@ const dxfRectanguloConLineas = [
 ].join('\n');
 
 describe('normalizarFuenteVectorial', () => {
+  const polilineas = (piezas: Array<{ capa: string; puntos: number[][] }>) =>
+    [
+      '0',
+      'SECTION',
+      '2',
+      'ENTITIES',
+      ...piezas.flatMap(({ capa, puntos }) => [
+        '0',
+        'LWPOLYLINE',
+        '8',
+        capa,
+        '90',
+        String(puntos.length),
+        '70',
+        '1',
+        ...puntos.flatMap(([x, y]) => ['10', String(x), '20', String(y)]),
+      ]),
+      '0',
+      'ENDSEC',
+      '0',
+      'EOF',
+    ].join('\n');
+  const rect = (x: number, y: number, w: number, h: number) => [
+    [x, y],
+    [x + w, y],
+    [x + w, y + h],
+    [x, y + h],
+  ];
+
+  it('conserva huecos e islas de una letra sin cotizarlos como piezas macizas', () => {
+    const result = normalizarFuenteVectorial({
+      nombreArchivo: 'cartel-ficticio.dxf',
+      contenido: polilineas([
+        { capa: 'CORTE', puntos: rect(0, 0, 100, 80) },
+        { capa: 'CORTE', puntos: rect(20, 20, 60, 40) },
+        { capa: 'CORTE', puntos: rect(40, 30, 20, 20) },
+        { capa: 'CORTE', puntos: rect(120, 0, 20, 80) },
+      ]),
+    });
+    const g = analizarSvgFabricacion({
+      svg: result.svg,
+      anchoFinalMm: 140,
+    }).geometria;
+    expect(g.piezas).toHaveLength(3);
+    expect(
+      g.piezas.flatMap((p) => p.contornos).filter((c) => c.esHueco),
+    ).toHaveLength(1);
+    expect(g.areaTotalMm2).toBeCloseTo(7600);
+    expect(g.perimetroTotalMm).toBeCloseTo(840);
+  });
+
+  it('no convierte un contorno de otra capa en hueco y mantiene arriba/abajo de CAD', () => {
+    const result = normalizarFuenteVectorial({
+      nombreArchivo: 'capas-ficticias.dxf',
+      contenido: polilineas([
+        { capa: 'CORTE', puntos: rect(0, 0, 100, 100) },
+        { capa: 'OTRA', puntos: rect(10, 70, 20, 10) },
+      ]),
+    });
+    const g = analizarSvgFabricacion({
+      svg: result.svg,
+      anchoFinalMm: 100,
+    }).geometria;
+    expect(g.piezas).toHaveLength(2);
+    expect(g.piezas.flatMap((p) => p.contornos).every((c) => !c.esHueco)).toBe(
+      true,
+    );
+    expect(g.piezas.find((p) => p.anchoMm === 20)?.origenYmm).toBe(20);
+  });
+
+  it('no vuelve hueco una pieza que empieza adentro pero se extiende fuera de otra', () => {
+    const result = normalizarFuenteVectorial({
+      nombreArchivo: 'piezas-ficticias.dxf',
+      contenido: polilineas([
+        { capa: 'CORTE', puntos: rect(0, 0, 100, 20) },
+        { capa: 'CORTE', puntos: rect(90, 5, 30, 10) },
+      ]),
+    });
+    const g = analizarSvgFabricacion({
+      svg: result.svg,
+      anchoFinalMm: 120,
+    }).geometria;
+    expect(g.piezas).toHaveLength(2);
+    expect(g.piezas.every((p) => p.contornos.length === 1)).toBe(true);
+  });
+
+  it('conserva el cierre aunque termine con una cadena de puntos casi repetidos', () => {
+    const puntos = [
+      ...rect(0, 0, 100, 100),
+      ...Array.from({ length: 12 }, (_, i) => [0, (11 - i) * 0.000001]),
+    ];
+    const result = normalizarFuenteVectorial({
+      nombreArchivo: 'cierre-ficticio.dxf',
+      contenido: polilineas([
+        { capa: 'CORTE', puntos },
+        { capa: 'CORTE', puntos: rect(20, 20, 60, 60) },
+      ]),
+    });
+    const g = analizarSvgFabricacion({
+      svg: result.svg,
+      anchoFinalMm: 100,
+    }).geometria;
+    expect(g.piezas).toHaveLength(1);
+    expect(g.piezas[0].contornos.filter((c) => c.esHueco)).toHaveLength(1);
+    expect(g.areaTotalMm2).toBeCloseTo(6400);
+  });
+
   const exhibidor = readFileSync(
     join(__dirname, 'fixtures/exhibidor-capa-congelada.dxf'),
     'utf8',

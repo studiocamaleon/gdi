@@ -274,6 +274,17 @@ export function errorPublicoCotizacion(
   const mensaje = sanitizarRazonCotizacion(reason);
   const hrefProduccion = `/productos-servicios/${encodeURIComponent(productoId)}?tab=produccion&vista=operaciones${rutaAlternativaId ? `&rutaAltId=${encodeURIComponent(rutaAlternativaId)}` : ''}`;
 
+  if (/recorridos conservados.*divisi[oó]n/i.test(mensaje)) {
+    return {
+      codigo: 'NESTING_FALLIDO',
+      mensaje:
+        'Una pieza supera el área útil de corte y su interpretación CAD no permite dividirla automáticamente.',
+      sugerencia:
+        'Para un cartel de contornos, cargá el diseño completo y definí su medida final. Si necesitás conservar operaciones o capas CAD, dividí esa pieza en el archivo original o elegí una placa y máquina con mayor área útil.',
+      accion: { tipo: 'GENERAR_NESTING', etiqueta: 'Revisar diseño y medidas' },
+    };
+  }
+
   if (/cambios productivos sin publicar/i.test(mensaje)) {
     return {
       codigo: 'RECETA_DESACTUALIZADA',
