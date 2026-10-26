@@ -376,6 +376,8 @@ export type BindingParametroComponente = {
     } | null;
   } | null;
   opciones?: Array<{ valor: string; etiqueta: string }>;
+  /** Catálogo comercial de las opciones del componente, sin costos ni precios. */
+  materiales?: import("./selectores-materiales").CandidatoMaterialVisual[];
 };
 
 export type PiezaVectorialComponente = {

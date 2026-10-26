@@ -43,6 +43,7 @@ import { ControlArchivoVectorial } from "./geometrias-vectoriales-cotizacion";
 import styles from "./componentes-fabricados-cotizacion.module.css";
 import { PiezasRectangulares } from "@/components/productos-servicios/piezas-rectangulares";
 import { esPiezaRectangular } from "@/lib/piezas-componente";
+import { MaterialSelectorCatalogo } from "./material-selector-catalogo";
 
 const CLAVE_OCURRENCIAS_ADICIONALES = "__ocurrenciasAdicionales";
 
@@ -348,7 +349,10 @@ function CamposParametros({
   }
   return (
     <FieldGroup className={styles.fields}>
-      {bindings.map((binding) => {
+      {[...bindings].sort((a, b) =>
+        Number(b.tipoDato === "vectorial" || b.clave === "disenoVectorialFuente") -
+        Number(a.tipoDato === "vectorial" || a.clave === "disenoVectorialFuente"),
+      ).map((binding) => {
         const currentValue = leerRuta(current, binding.clave) ?? binding.valor;
         const unidadVisible = unidadVisibleParametro(
           binding.clave,
@@ -389,6 +393,18 @@ function CamposParametros({
                 }
               />
             </label>
+          );
+        }
+        if (binding.materiales) {
+          return (
+            <div className={styles.materialField} key={binding.clave}>
+              <MaterialSelectorCatalogo
+                candidatos={binding.materiales}
+                etiquetaSlot={binding.etiqueta}
+                selected={String(currentValue ?? "")}
+                onSelect={(value) => onChange(escribirRuta(current, binding.clave, value))}
+              />
+            </div>
           );
         }
         return (
