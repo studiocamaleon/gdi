@@ -1,5 +1,32 @@
 # Validación de staging — historial
 
+## 2026-10-26 — Vinilo sin impresión con troquelado, junto con carteles compuestos
+
+El [PR #121](https://github.com/studiocamaleon/gdi/pull/121) corrige el rechazo al cotizar **5.000 piezas de 4 × 4 cm** de Vinilo impreso blanco, eligiendo «Sin impresión» y troquelado. La preparación del material eliminaba los márgenes de impresión, pero el plotter necesitaba márgenes propios y rechazaba ese acomodo. El primer nesting ahora respeta los márgenes, separaciones y orientación del corte activo; el plotter conserva esas mismas posiciones. El material incluye el largo necesario y el modo sin impresión conserva tiempo y costo de impresión en cero. Los rollos que físicamente no entran en el plotter siguen rechazándose.
+
+Trabajo independiente desde `main` en `codex/vinilo-sin-impresion-troquelado`, revisión funcional **`baedae037243821197d09ab1799b7cb01c298ef8`**. Para conservar las mejoras ya probadas del [PR #120](https://github.com/studiocamaleon/gdi/pull/120), staging combina ambos en **`codex/staging-carteles-vinilo`**, revisión **`dfa866cba1ee44326d8845419aef0b9385a49ac4`**. No hay dependencia funcional entre los PR ni merge a `main`. No se modificó producción ni marketing.
+
+| Servicio | Revisión / digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `dfa866cba1` · `sha256:23570178c1d0c9b4a80123199d0dfdbf1d54bc1712c82d7ae5e2b86cecaf12c0` |
+| Web, conservada | `7bd8703295` · `sha256:6f1fe0a935ddbbf59b3f82d94ca48dcaf8602e54aeaba0f5029c32c05e4c03e9` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Ensayo en Chrome:** el error de márgenes se reprodujo tanto en producción como en staging antes del cambio. Después, el mismo producto de staging cotiza las 5.000 piezas sin impresión con medio corte y corte profundo, y también con CMYK y corte profundo. Quitar el troquelado conserva el precio anterior del material sin impresión. El inventario de staging exige elegir el rollo a reponer; se usó la selección comercial existente de 1,06 m, sin modificar existencias ni la receta. Los nombres de niveles de corte difieren entre los catálogos de ambos entornos. Las cotizaciones no se guardaron como OT o presupuesto y no generaron cobros ni envíos.
+
+**Carteles:** nueva cotización del SVG de prueba a 170 cm en Polyfan con frente de Metalex: 2 placas, 2 layouts y 78 piezas; una placa de 120 × 60 cm y 39 piezas por material. El visor de Metalex muestra las partes 1/2 y 2/2 de la pieza dividida. Se conservaron el diseño antes de los materiales, las tarjetas de placas y el resumen del plan. Archivo y evidencia privada fuera de Git.
+
+**Controles:** 117 pruebas locales del cambio, tipos de API aprobados y 181 pruebas del lote combinado. Se incluyen conservación del registro, costo de material, opcional desactivado, herencia a través de laminado, papel y rechazo de anchos incompatibles. La regresión de 5.000 piezas fallaba con el error observado antes de corregirlo. CI del cambio: [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/40413975543), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/40413975564) y [CodeQL](https://github.com/studiocamaleon/gdi/actions/runs/40413973179) aprobados, sin alertas abiertas de los PR. CI del lote exacto: [HTTP](https://github.com/studiocamaleon/gdi/actions/runs/40414078504) y [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/40414075824) aprobados mediante ejecución manual sobre su rama. CodeQL corresponde a los PR de origen.
+
+**Operación:** API compilada en remoto y desplegada por digest en los tres procesos de backend; web y PDF reutilizados. Revisión comprobada en cada servicio, seis máquinas saludables y recursos conservados. HTTPS web/API 200, API directa protegida 403 y BFF sin sesión 401. Secretos de aplicación conservados y constructor temporal propio retirado. Las seis máquinas de producción conservan sus imágenes y recursos. Sin migraciones nuevas, seeds, resets ni cambios en Docker local.
+
+**Respaldo:** fuentes cifradas custodiadas e inventario actualizado con ambas revisiones. Copia posterior completada `2026-10-26T22:54:21.038Z`: firma, huellas y descifrado del manifiesto comprobados; revisión e imágenes coincidentes, 318 migraciones y 33 archivos. **No se repitió una restauración SQL completa.** Evidencia y claves bajo custodia privada, fuera de Git.
+
+**Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:766169a599e8571d2131d898fb8e5b2c76312447f27d58569658774e8e656040` (`7bd8703295`); conservar web/PDF y restituir el inventario previo del copiador. No revertir datos ni esquema.
+
+**Pendiente:** aceptación de Lucas en staging y autorización para integrar/publicar producción. #120 y #121 permanecen abiertos por ese pendiente; no se cierran propuestas independientes.
+
 ## 2026-10-23, 14:26 UTC — Cantidad manual del paso y SVG de más de 30 piezas
 
 Lucas autorizó publicar el [PR #119](https://github.com/studiocamaleon/gdi/pull/119) en staging, probarlo y promoverlo a producción si los controles eran correctos. Revisión funcional **`f94e85fa82eb5117433d11fe788b1dbae83b045a`**, desde `main` (`c9720d56a`). El registro documental posterior no reconstruye las imágenes. Sin dependencias de otros PR ni cambios en marketing.
