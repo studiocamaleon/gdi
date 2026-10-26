@@ -33,6 +33,16 @@ describe('identidad durable de cotizaciones', () => {
 });
 
 describe('errores públicos de cotización', () => {
+  it('explica el bloqueo por división CAD en lugar de ocultarlo como error desconocido', () => {
+    const error = errorPublicoCotizacion(
+      'Las piezas con recorridos conservados requieren preparar su división en el archivo original.',
+      'producto-ficticio',
+    );
+    expect(error.codigo).toBe('NESTING_FALLIDO');
+    expect(error.mensaje).toContain('área útil');
+    expect(error.sugerencia).toContain('diseño completo');
+    expect(error.accion.tipo).toBe('GENERAR_NESTING');
+  });
   it('conserva el motivo de una receta desactualizada y ofrece publicarla', () => {
     const error = errorPublicoCotizacion(
       'La receta publicada V12 tiene cambios productivos sin publicar. Actualizá y publicá una nueva revisión antes de cotizar por esta vía.',

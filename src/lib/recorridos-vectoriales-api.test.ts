@@ -44,6 +44,11 @@ describe("descargaArchivoInstalacionHref", () => {
 });
 
 describe("resolverConfiguracionEncastresVectoriales", () => {
+  it("usa unión recta para la vista previa del láser y respeta la máquina", () => {
+    expect(resolverConfiguracionEncastresVectoriales(null, "corte_laser").tipoUnion).toBe("recta");
+    expect(resolverConfiguracionEncastresVectoriales({ tipoUnionVectorial: "cola_milano" }, "corte_laser").tipoUnion).toBe("cola_milano");
+    expect(resolverConfiguracionEncastresVectoriales(null, "corte_hilo_caliente").tipoUnion).toBe("cola_milano");
+  });
   it("adapta la configuración persistida de la máquina", () => {
     expect(
       resolverConfiguracionEncastresVectoriales({

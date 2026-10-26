@@ -42,6 +42,29 @@ describe('nesting vectorial heredado', () => {
 });
 
 describe('resolveNestingConfig', () => {
+  it.each([
+    ['corte_laser', true, 'recta'],
+    ['corte_hilo_caliente', true, 'cola_milano'],
+    ['cnc', false, 'cola_milano'],
+    ['troquelado_digital', false, 'cola_milano'],
+    ['impresion_por_area', false, 'cola_milano'],
+  ])('resuelve la división predeterminada de %s', (familiaCodigo, permite, tipoUnion) => {
+    const config = resolveNestingConfig(paso({ familiaCodigo }), jobContext, null);
+    expect(config.permitirSegmentacionVectorial).toBe(permite);
+    expect(config.configuracionEncastres.tipoUnion).toBe(tipoUnion);
+  });
+
+  it('respeta una unión configurada explícitamente en la máquina láser', () => {
+    const config = resolveNestingConfig(paso({
+      familiaCodigo: 'corte_laser',
+      maquina: {
+        id: 'laser-1', codigo: 'LASER-001', nombre: 'Láser', plantilla: 'corte_laser',
+        parametrosTecnicosJson: { tipoUnionVectorial: 'cola_milano' },
+      },
+    }), jobContext, null);
+    expect(config.configuracionEncastres.tipoUnion).toBe('cola_milano');
+  });
+
   it('toma de la máquina la política para conservar la composición vectorial', () => {
     const config = resolveNestingConfig(
       paso({

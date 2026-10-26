@@ -124,6 +124,32 @@ describe("plan de fabricación de la cotización", () => {
       ),
     ).toBe(true);
   });
+  it("incluye los diseños completos heredados por Polyfan y Metalex sin exigir una colección", () => {
+    const c = cotizacion([componente("polyfan"), componente("metalex")]);
+    for (const componente of c.componentesFabricados!) {
+      componente.jobContext = {
+        disenoVectorialFuente: { schemaVersion: 1, nombreArchivo: "cartel.svg", svg: '<svg viewBox="0 0 1500 30" />' },
+      };
+      componente.pasos = [{
+        ...componente.pasos![0],
+        familiaCodigo: componente.codigo === "polyfan" ? "corte_hilo_caliente" : "corte_laser",
+        nestingResult: resultado(undefined, componente.codigo),
+      }];
+    }
+    const antes = JSON.stringify(c);
+    const planes = obtenerPlanesFabricacion(c);
+    expect(planes.map((p) => p.material)).toEqual(["polyfan", "metalex"]);
+    expect(planes.every((p) => p.operaciones.length === 1 && p.operaciones[0].esCorte)).toBe(true);
+    expect(JSON.stringify(c)).toBe(antes);
+  });
+  it.each([
+    { disenoVectorialFuente: { nombreArchivo: "cartel.svg" } },
+    { geometriasVectoriales: { cartel: { nombreArchivo: "cartel.dxf" } } },
+  ])("incluye el diseño completo de la raíz con su contexto comercial", (jobContext) => {
+    const c = { ...cotizacion([]), pasos: componente().pasos } as CotizacionFabricacion;
+    expect(obtenerPlanesFabricacion(c, jobContext)).toHaveLength(1);
+    expect(obtenerPlanesFabricacion(c, { geometriasVectoriales: {} })).toEqual([]);
+  });
   it("incluye las colecciones rectangulares en los planes sin exigir un DXF", () => {
     const c = cotizacion();
     c.componentesFabricados![0].jobContext = {

@@ -12,21 +12,11 @@ import { compararProductosPorUso } from "@/lib/productos-por-uso";
 import { normalizarBusqueda } from "@/lib/busqueda-texto";
 import { ActionButton } from "@/components/design-system/action-button";
 import { MaterialAutomaticoStock } from "./material-automatico-stock";
+import { MaterialSelectorCatalogo } from "./material-selector-catalogo";
 import { CantidadProductoInput } from "./cantidad-producto-input";
-import { MaterialSelectorRollo } from "./material-selector-rollo";
-import { crearGruposRollos } from "@/lib/selector-rollos";
 import { decisionesMaterialStock, hayDecisionMaterialStockPendiente } from "@/lib/seleccion-material-stock";
-import { MaterialSelectorRigido } from "./material-selector-rigido";
-import { crearGruposRigidos } from "@/lib/selector-rigidos";
-import { MaterialSelectorLaminado } from "./material-selector-laminado";
-import { crearGruposLaminados } from "@/lib/selector-laminados";
-import { MaterialSelectorPapel } from "./material-selector-papel";
-import { MaterialSelectorColor } from "./material-selector-color";
-import { crearGruposColores, esSelectorColor } from "@/lib/selector-colores";
-import {
-  crearGruposPapeles,
-  esSelectorPapel,
-} from "@/lib/selector-papeles";
+import { esSelectorColor } from "@/lib/selector-colores";
+import { esSelectorPapel } from "@/lib/selector-papeles";
 import { seleccionVarianteVisualResuelta } from "@/lib/selectores-materiales";
 
 import * as React from "react";
@@ -36,6 +26,7 @@ import { PiezasVectorialesCotizacion } from "./piezas-vectoriales-cotizacion";
 import {
   idsFuentesVectorialesHeredadas,
   admiteColeccionVectorial,
+  disenoCompartidoListo,
   aplicarColeccionVectorial,
   piezasVectorialesIniciales,
   piezasVectorialesValidas,
@@ -6106,7 +6097,9 @@ function ApConfigStep({
   }, [pasoVectorialActivo, motorConfig.seleccionMaquina]);
   const configuracionEncastresVectoriales = React.useMemo(() => {
     const pasoCorte =
-      pasoVectorialActivo?.rutaPaso.familiaCodigo === "corte_hilo_caliente"
+      ["corte_hilo_caliente", "corte_laser"].includes(
+        pasoVectorialActivo?.rutaPaso.familiaCodigo ?? "",
+      )
         ? pasoVectorialActivo
         : null;
     if (!pasoCorte) return resolverConfiguracionEncastresVectoriales(null);
@@ -6116,6 +6109,7 @@ function ApConfigStep({
     const maquina = candidata?.maquina ?? pasoCorte.maquinaM1;
     return resolverConfiguracionEncastresVectoriales(
       maquina?.parametrosTecnicosJson ?? null,
+      pasoCorte.rutaPaso.familiaCodigo,
     );
   }, [pasoVectorialActivo, motorConfig.seleccionMaquina]);
   const importarMedidasPdf = (paginas: PaginaPdfImportada[], archivos: File[]) => {
@@ -6608,67 +6602,6 @@ function ApConfigStep({
         : humanizeCodigo(slot.slotCodigo);
     const selected =
       motorConfig.seleccionMaterial[key] ?? defaultSlotCandidateId(slot) ?? "";
-    const gruposPapeles = crearGruposPapeles(slot.candidatos);
-    if (gruposPapeles !== null) {
-      return (
-        <MaterialSelectorPapel
-          key={key}
-          etiquetaSlot={etiquetaSlot}
-          grupos={gruposPapeles}
-          selected={
-            motorConfig.seleccionMaterial[key] ?? defaultSlotCandidateId(slot) ?? ""
-          }
-          onSelect={(variantId) => setMaterial(key, variantId)}
-          sinTarjeta={options?.sinTarjeta}
-        />
-      );
-    }
-    const gruposRigidos = crearGruposRigidos(slot.candidatos);
-    const gruposColores = crearGruposColores(slot.candidatos);
-    if (gruposRigidos !== null && (gruposColores?.length ?? 0) <= 1) {
-      return (
-        <MaterialSelectorRigido
-          key={key}
-          etiquetaSlot={etiquetaSlot}
-          grupos={gruposRigidos}
-          selected={selected}
-          onSelect={(variantId) => setMaterial(key, variantId)}
-          sinTarjeta={options?.sinTarjeta}
-        />
-      );
-    }
-    if (gruposColores !== null) {
-      return (
-        <MaterialSelectorColor
-          key={key}
-          etiquetaSlot={etiquetaSlot}
-          grupos={gruposColores}
-          selected={selected}
-          onSelect={(variantId) => setMaterial(key, variantId)}
-          sinTarjeta={options?.sinTarjeta}
-        />
-      );
-    }
-    const gruposLaminados = crearGruposLaminados(slot.candidatos);
-    if (gruposLaminados !== null) {
-      return (
-        <MaterialSelectorLaminado
-          key={key}
-          etiquetaSlot={etiquetaSlot}
-          grupos={gruposLaminados}
-          selected={selected}
-          onSelect={(variantId) => setMaterial(key, variantId)}
-          sinTarjeta={options?.sinTarjeta}
-        />
-      );
-    }
-    const gruposRollos = crearGruposRollos(slot.candidatos);
-    if (gruposRollos !== null) {
-      return <MaterialSelectorRollo key={key} etiquetaSlot={etiquetaSlot}
-        grupos={gruposRollos} selected={selected}
-        onSelect={(variantId) => setMaterial(key, variantId)}
-        sinTarjeta={options?.sinTarjeta} />;
-    }
     const selectedCandidate =
       slot.candidatos.find((candidate) =>
         candidate.variantes.some((variant) => variant.variantId === selected),
@@ -6746,15 +6679,25 @@ function ApConfigStep({
         : null;
 
     return (
-      <MaterialSelectorCompacto
+      <MaterialSelectorCatalogo
         key={key}
+        candidatos={slot.candidatos}
         etiquetaSlot={etiquetaSlot}
-        grupos={grupos}
         selected={selected}
         onSelect={(variantId) => setMaterial(key, variantId)}
-        alerta={alerta}
-        hint={hint}
         sinTarjeta={options?.sinTarjeta}
+        fallback={
+          <MaterialSelectorCompacto
+            key={key}
+            etiquetaSlot={etiquetaSlot}
+            grupos={grupos}
+            selected={selected}
+            onSelect={(variantId) => setMaterial(key, variantId)}
+            alerta={alerta}
+            hint={hint}
+            sinTarjeta={options?.sinTarjeta}
+          />
+        }
       />
     );
   };
@@ -8054,6 +7997,96 @@ function ApConfigStep({
         sticky
       />
 
+      {configuracionHeredada.fuentes.length > 0 &&
+        (geometriasComerciales.modo === "VECTORIAL" ||
+          (geometriasComerciales.modo === "AMBAS" &&
+            modoCotizacionVectorialVisible === "svg")) && (
+          <PiezasHeredadasCotizacion
+            productoId={product.id!}
+            configuracion={configuracionHeredada}
+            fuentes={motorConfig.geometriasVectoriales}
+            colecciones={motorConfig.coleccionesVectoriales}
+            cantidad={qty}
+            onFuenteChange={(id, fuente) =>
+              setMotorConfig((current) => {
+                const coleccionesVectoriales = {
+                  ...current.coleccionesVectoriales,
+                };
+                delete coleccionesVectoriales[id];
+                return {
+                  ...current,
+                  geometriasVectoriales: {
+                    ...current.geometriasVectoriales,
+                    [id]: fuente,
+                  },
+                  coleccionesVectoriales,
+                  disenoVectorialFuente: null,
+                  disenoVectorialAnalisis: null,
+                };
+              })
+            }
+            onProcesandoChange={(importandoPiezasVectoriales) =>
+              setMotorConfig((current) =>
+                current.importandoPiezasVectoriales ===
+                importandoPiezasVectoriales
+                  ? current
+                  : { ...current, importandoPiezasVectoriales },
+              )
+            }
+            onChange={(id, piezas) =>
+              setMotorConfig((current) => {
+                const geometriasVectoriales = {
+                  ...current.geometriasVectoriales,
+                };
+                if (piezas[0]) geometriasVectoriales[id] = piezas[0].fuente;
+                else delete geometriasVectoriales[id];
+                return {
+                  ...current,
+                  coleccionesVectoriales: {
+                    ...current.coleccionesVectoriales,
+                    [id]: piezas,
+                  },
+                  geometriasVectoriales,
+                  disenoVectorialFuente: null,
+                  disenoVectorialAnalisis: null,
+                };
+              })
+            }
+          />
+        )}
+      {!coleccionVectorialHabilitada &&
+      geometriasComerciales.fuentes.length > 0 &&
+      (geometriasComerciales.modo === "VECTORIAL" ||
+        (geometriasComerciales.modo === "AMBAS" &&
+          modoCotizacionVectorialVisible === "svg")) ? (
+        <GeometriasVectorialesCotizacion
+          configuracion={{
+            ...geometriasComerciales,
+            fuentes: geometriasComerciales.fuentes.filter(
+              (f) => !fuentesHeredadas.has(f.id),
+            ),
+          }}
+          componentes={revisionCotizacion?.componentes}
+          cantidad={qty}
+          calculados={
+            !cotizacionDesactualizada && !cotizando
+              ? cotizacionExitosa?.componentesFabricados
+              : undefined
+          }
+          values={motorConfig.geometriasVectoriales}
+          ocultarFuenteId={
+            editorVectorialHabilitado ? fuenteGeometricaPrincipalId : null
+          }
+          onChange={(geometriasVectoriales) =>
+            setMotorConfig((current) => ({
+              ...current,
+              geometriasVectoriales,
+              disenoVectorialAnalisis: null,
+            }))
+          }
+        />
+      ) : null}
+
       <div className="ap-config-section">
         {product.real && productoDetalle?.rutasAlternativas.length ? (
           <div className="ap-specs ap-specs-calculo">
@@ -9059,78 +9092,6 @@ function ApConfigStep({
         )}
       </div>
 
-      {configuracionHeredada.fuentes.length > 0 &&
-        (geometriasComerciales.modo === "VECTORIAL" ||
-          (geometriasComerciales.modo === "AMBAS" &&
-            modoCotizacionVectorialVisible === "svg")) && (
-          <PiezasHeredadasCotizacion
-            productoId={product.id!}
-            configuracion={configuracionHeredada}
-            fuentes={motorConfig.geometriasVectoriales}
-            colecciones={motorConfig.coleccionesVectoriales}
-            cantidad={qty}
-            onProcesandoChange={(importandoPiezasVectoriales) =>
-              setMotorConfig((current) =>
-                current.importandoPiezasVectoriales ===
-                importandoPiezasVectoriales
-                  ? current
-                  : { ...current, importandoPiezasVectoriales },
-              )
-            }
-            onChange={(id, piezas) =>
-              setMotorConfig((current) => {
-                const geometriasVectoriales = {
-                  ...current.geometriasVectoriales,
-                };
-                if (piezas[0]) geometriasVectoriales[id] = piezas[0].fuente;
-                else delete geometriasVectoriales[id];
-                return {
-                  ...current,
-                  coleccionesVectoriales: {
-                    ...current.coleccionesVectoriales,
-                    [id]: piezas,
-                  },
-                  geometriasVectoriales,
-                  disenoVectorialFuente: null,
-                  disenoVectorialAnalisis: null,
-                };
-              })
-            }
-          />
-        )}
-      {!coleccionVectorialHabilitada &&
-      geometriasComerciales.fuentes.length > 0 &&
-      (geometriasComerciales.modo === "VECTORIAL" ||
-        (geometriasComerciales.modo === "AMBAS" &&
-          modoCotizacionVectorialVisible === "svg")) ? (
-        <GeometriasVectorialesCotizacion
-          configuracion={{
-            ...geometriasComerciales,
-            fuentes: geometriasComerciales.fuentes.filter(
-              (f) => !fuentesHeredadas.has(f.id),
-            ),
-          }}
-          componentes={revisionCotizacion?.componentes}
-          cantidad={qty}
-          calculados={
-            !cotizacionDesactualizada && !cotizando
-              ? cotizacionExitosa?.componentesFabricados
-              : undefined
-          }
-          values={motorConfig.geometriasVectoriales}
-          ocultarFuenteId={
-            editorVectorialHabilitado ? fuenteGeometricaPrincipalId : null
-          }
-          onChange={(geometriasVectoriales) =>
-            setMotorConfig((current) => ({
-              ...current,
-              geometriasVectoriales,
-              disenoVectorialAnalisis: null,
-            }))
-          }
-        />
-      ) : null}
-
       {product.id && motorConfig.rutaAlternativaId ? (
         <ComponentesFabricadosCotizacion
           revision={revisionCotizacion}
@@ -9454,6 +9415,8 @@ function ApConfigStep({
         cotizacion={cotizacionExitosa}
         jobContext={ruleContext}
         esperado={Boolean(
+          (configuracionHeredada.fuentes.length > 0 &&
+            Object.keys(motorConfig.geometriasVectoriales).length > 0) ||
           Object.values(motorConfig.coleccionesVectoriales).some(
             (p) => p.length,
           ) ||
@@ -10138,6 +10101,11 @@ export function AgregarProductoSheet({
     const requiereArchivoVectorial =
       requiereDisenoVectorial && !cotizaVectorialPorMedidas;
     const disenoVectorialListo = Boolean(
+      disenoCompartidoListo(
+        productoDetalle.estructuraProducto,
+        geometriasComerciales,
+        motorConfig.geometriasVectoriales,
+      ) ||
       (coleccionesHeredadas.length > 0 &&
         coleccionesHeredadas.every((p) => piezasVectorialesValidas(p, qty))) ||
       (requiereArchivoVectorial &&
