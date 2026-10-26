@@ -100,6 +100,7 @@ it("muestra placas del catálogo y conserva el ID elegido dentro del componente"
   expect(el.textContent).toContain("120 × 60 cm");
   expect(el.textContent).toContain("2 mm");
   expect(el.querySelector('svg[viewBox="0 0 47 29"]')).not.toBeNull();
+  expect(el.querySelector('button[role="radio"][aria-label*="Oro · 2 mm"] svg')).not.toBeNull();
   await act(async () =>
     el
       .querySelector<HTMLButtonElement>(
@@ -114,6 +115,7 @@ it("muestra placas del catálogo y conserva el ID elegido dentro del componente"
     el.querySelector('[aria-checked="true"]')?.getAttribute("aria-label"),
   ).toContain("Plata");
   expect(el.querySelector('svg[viewBox="0 0 47 29"]')).not.toBeNull();
+  expect(el.querySelector('button[role="radio"][aria-label*="Plata · 2 mm"] svg')).not.toBeNull();
 });
 
 it("no sustituye por otra variante una selección retirada del catálogo", async () => {

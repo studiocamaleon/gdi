@@ -67,10 +67,11 @@ it("la selección es única entre colores/materiales y no se puede desmarcar", a
   expect(el.querySelectorAll('[aria-checked="true"]')).toHaveLength(1);
 });
 
-it("una única variante resuelta se muestra como dato, y una pendiente requiere elección", async () => {
+it("una única variante conserva su tarjeta ilustrada y una pendiente requiere elección", async () => {
   const unico = { ...candidato, variantes: [candidato.variantes[0]] };
   await render("pvc-3", vi.fn(), [unico]);
-  expect(el.querySelectorAll("button")).toHaveLength(0);
+  expect(el.querySelectorAll("button")).toHaveLength(1);
+  expect(el.querySelector('button[aria-checked="true"] svg[viewBox="0 0 47 29"]')).not.toBeNull();
   expect(el.textContent).toContain("122 × 244 cm");
   await render("obsoleta", vi.fn(), [unico]);
   expect(el.querySelectorAll("button")).toHaveLength(1);
