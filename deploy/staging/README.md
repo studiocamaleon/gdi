@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-26, 18:41 UTC.** API y ambos workers ejecutan `b385ae84b`; web `6c146ee2e`, del [PR #120](https://github.com/studiocamaleon/gdi/pull/120). Diseño vectorial antes de los materiales y selectores visuales compartidos con componentes, incluidas placas con una sola variante. Comprobado en Chrome con Metalex; seis servicios saludables y copia posterior verificada. Pendientes el resumen del plan, el tratamiento de piezas que exceden la placa del frente y la aceptación comercial. Producción conserva su versión; el PR sigue en borrador. Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-26, 22:22 UTC.** API, ambos workers y web ejecutan `7bd870329`, del [PR #120](https://github.com/studiocamaleon/gdi/pull/120). Plan de fabricación calculado para diseños completos y división del frente láser con uniones rectas. Chrome comprobó SVG y DXF a 170 cm con Polyfan y Metalex: una placa por material, 39 fragmentos por placa y el mismo importe. Seis servicios saludables y copia posterior verificada. Pendiente aceptación comercial de Lucas e integración/publicación autorizadas; producción conserva su versión. Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 
