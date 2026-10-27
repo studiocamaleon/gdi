@@ -201,6 +201,7 @@ import type { BriefDisenoArchivoPendiente } from "@/lib/brief-diseno";
 import { ProduccionOrdenTab } from "@/components/comercial/produccion-orden-tab";
 import { MaterialesOrdenTab } from "@/components/comercial/materiales-orden-tab";
 import { BastidorVisor } from "@/components/carteleria/bastidor-visor";
+import { recolectarBastidoresCotizacion } from "@/lib/bastidores-cotizacion";
 import { StepperOt } from "@/components/comercial/stepper-ot";
 import {
   estimarDemoraNuevos,
@@ -2192,9 +2193,6 @@ function TiemposExtraPasoList({
   );
 }
 
-/** Clave del tab del visor 3D del bastidor dentro de "Disposición de piezas". */
-const TAB_BASTIDOR_3D = "__bastidor3d__";
-
 type ComponenteWorkflowVista = ComponenteWorkflowCotizacion<PasoCosteo> & {
   politicaEjecucion?: "INLINE" | "INDEPENDIENTE";
   jobContext?: {
@@ -2447,18 +2445,10 @@ function AprovechamientoItemSinLotesView({
   ampliada = false,
   prepararCorte = false,
 }: FabricacionItemProps) {
-  // Cartelería con estructura de bastidor: se muestra el visor 3D del marco a
-  // fabricar. El visor pide la estructura del snapshot y se auto-oculta si no
-  // la hay (ítem sin OT emitida todavía).
-  const esBastidor = item.cotizacion.pasos.some(
-    (paso) => paso.familiaCodigo === "estructura_bastidor",
-  );
-  // La estructura viene DENTRO de la cotización que la ficha ya tiene: el
-  // visor la dibuja al toque, sin esperar a que el ítem exista en la base
-  // (mientras se compone la orden no hay nada persistido que fetchear).
-  const estructuraBastidorLocal =
-    item.cotizacion.pasos.find((paso) => paso.estructuraBastidor)
-      ?.estructuraBastidor ?? null;
+  // El bastidor también puede fabricarse dentro de un componente del cartel.
+  // Su snapshot permite mostrar el 3D antes de guardar o emitir la orden.
+  const bastidores = recolectarBastidoresCotizacion(item.cotizacion);
+  const esBastidor = bastidores.length > 0;
   const fuentesNesting = React.useMemo(
     () => recolectarNestingsCotizacion(item.cotizacion, item.jobContext),
     [item.cotizacion, item.jobContext],
@@ -2484,7 +2474,9 @@ function AprovechamientoItemSinLotesView({
   }, [item.cotizacion.pasos]);
 
   const [activeNestingKey, setActiveNestingKey] = React.useState("");
-  const bastidorActivo = activeNestingKey === TAB_BASTIDOR_3D;
+  const bastidorActivo = bastidores.find(
+    (bastidor) => bastidor.key === activeNestingKey,
+  );
   const activeNestingTab = bastidorActivo
     ? null
     : (nestingTabs.find((tab) => tab.key === activeNestingKey) ??
@@ -2502,7 +2494,7 @@ function AprovechamientoItemSinLotesView({
   // del bastidor al final (cuando el ítem lo tiene). Comparten la misma tira.
   const tabsDisposicion = [
     ...nestingTabs.map((tab) => ({ key: tab.key, label: tab.label })),
-    ...(esBastidor ? [{ key: TAB_BASTIDOR_3D, label: "Bastidor 3D" }] : []),
+    ...bastidores.map(({ key, label }) => ({ key, label })),
   ];
 
   React.useEffect(() => {
@@ -2546,6 +2538,7 @@ function AprovechamientoItemSinLotesView({
           </div>
           <div className={nestingStyles.itemNestings}>
             <Tabs
+              className="min-w-0"
               value={activeNestingKey}
               onValueChange={(value) => setActiveNestingKey(String(value))}
             >
@@ -2564,17 +2557,20 @@ function AprovechamientoItemSinLotesView({
               <TabsContent
                 value={activeNestingKey}
                 aria-label={
-                  bastidorActivo ? "Bastidor 3D" : activeNestingTab?.label
+                  bastidorActivo ? bastidorActivo.label : activeNestingTab?.label
                 }
               >
                 {bastidorActivo ? (
-                  <div className={itemStyles.nestingContent} key="bastidor3d">
+                  <div
+                    className={itemStyles.nestingContent}
+                    key={bastidorActivo.key}
+                  >
                     {/* Estructura local primero (cotización en memoria); el fetch
                     por CotizacionItem/OT-item queda de fallback para ítems
                     rehidratados sin cotización en mano. */}
                     <BastidorVisor
                       itemId={item.cotizacionItemId ?? item.id}
-                      estructuraLocal={estructuraBastidorLocal}
+                      estructuraLocal={bastidorActivo.estructura}
                     />
                   </div>
                 ) : activeNestingTab ? (

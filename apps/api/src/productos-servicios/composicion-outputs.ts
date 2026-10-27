@@ -27,7 +27,9 @@ function unidadCanonica(clave: string): string | null {
 
 function leerRuta(root: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((value, key) => {
-    return value && typeof value === 'object' && !Array.isArray(value)
+    if (Array.isArray(value))
+      return /^\d+$/.test(key) ? value[Number(key)] : undefined;
+    return value && typeof value === 'object'
       ? (value as Record<string, unknown>)[key]
       : undefined;
   }, root);
@@ -61,6 +63,29 @@ export function catalogoSalidasPublicasComposicion(
     for (const output of outputsGeometricosDeFamilia(
       familia.derivador?.publicaCanon,
     )) {
+      // El bastidor ya publica las cuatro tiras por cartel. Exponemos sus
+      // medidas para enlazar componentes sin repetir la fórmula del pliegue.
+      if (output.key === 'cenefaTirasMm') {
+        ['superior', 'inferior', 'izquierda', 'derecha'].forEach(
+          (lado, index) => {
+            for (const eje of ['largoMm', 'anchoMm'] as const) {
+              const clave = `${output.key}.${index}.${eje}`;
+              if (vistas.has(clave)) continue;
+              vistas.add(clave);
+              salidas.push({
+                clave,
+                etiqueta: `${pasoNombre} · Cenefa ${lado} · ${eje === 'largoMm' ? 'largo' : 'desarrollo'}`,
+                tipoDato: 'number',
+                unidad: 'mm',
+                unidadVisible: 'cm',
+                familiaCodigo: paso.familiaCodigo,
+                pasoNombre,
+              });
+            }
+          },
+        );
+        continue;
+      }
       if (output.key.endsWith('TirasMm')) continue;
       for (const eje of ['anchoMm', 'altoMm'] as const) {
         const clave = `${output.key}.${eje}`;

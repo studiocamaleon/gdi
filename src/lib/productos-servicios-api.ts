@@ -2285,6 +2285,7 @@ export interface CotizarResponse {
           mermaAdicional?: MermaAdicionalMaterialInput;
         }>;
         nestingResult?: NestingViewerInput;
+        estructuraBastidor?: import("./estructura-bastidor-api").EstructuraBastidor;
         iluminacionTira?: import("../../apps/api/src/motor-universal/iluminacion-tira-led.contrato").IluminacionTiraEjecutada;
         operacionesInternas?: OperacionInternaCosteadaInput[];
       }>;
