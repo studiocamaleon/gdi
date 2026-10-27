@@ -9782,6 +9782,7 @@ export class MotorUniversalService {
       if (!cantidad || !materialResuelto) return Number.NaN;
       const conversion = materialUnitConversion(materialResuelto.contextoUnidades ?? {
         unidadStock: materialResuelto.unidadStock ?? 'unidad',
+        unidadCompra: 'unidad',
         atributos: materialResuelto.atributosVarianteJson ?? {},
       }, 'unidad', unidadEfectivaDeFormula(slot.formula, materialResuelto.unidadStock));
       return conversion.ok ? cantidad * conversion.factor : Number.NaN;
