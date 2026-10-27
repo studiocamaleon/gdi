@@ -35,6 +35,7 @@ export type SubfamiliaMateriaPrima =
   | "filamento_3d"
   | "resina_3d"
   | "modulo_led_carteleria"
+  | "tira_led_carteleria"
   | "fuente_alimentacion_led"
   | "cableado_conectica"
   | "controlador_led"
@@ -227,6 +228,7 @@ export const subfamiliaMateriaPrimaLabels: Record<SubfamiliaMateriaPrima, string
   filamento_3d: "Filamento 3D",
   resina_3d: "Resina 3D",
   modulo_led_carteleria: "Módulo LED cartelería",
+  tira_led_carteleria: "Tira LED cartelería",
   fuente_alimentacion_led: "Fuente alimentación LED",
   cableado_conectica: "Cableado y conectica",
   controlador_led: "Controlador LED",

@@ -2477,6 +2477,28 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     },
   },
   {
+    id: "tira_led_carteleria_v1",
+    nombre: "Tira LED flexible / zigzag",
+    descripcion: "Tira LED por metro para cartelería. Completar los datos de la ficha del proveedor.",
+    familia: "electronica_carteleria",
+    subfamilia: "tira_led_carteleria",
+    tipoTecnico: "tira_led_carteleria",
+    unidadStock: "metro_lineal",
+    unidadCompra: "rollo",
+    camposTecnicos: [
+      { key: "modelo", label: "Modelo", type: "text", required: true },
+      { key: "potencia", label: "Consumo por metro", type: "number", unit: "w", required: true },
+      { key: "tension", label: "Tensión", type: "text", options: ["12V", "24V"], required: true },
+      { key: "corte", label: "Distancia entre cortes", type: "number", unit: "mm", preferredDisplayUnit: "cm", required: true },
+      { key: "largo", label: "Largo del rollo", type: "number", unit: "m", required: true },
+      { key: "maxAlimentacion", label: "Largo máximo por alimentación", type: "number", unit: "m", required: false, descripcion: "Según el fabricante. No es el largo del rollo." },
+      { key: "temperaturaColor", label: "Temperatura de color", type: "text", options: ["Cálido", "Neutro", "Frío"], required: false },
+    ],
+    dimensionesVariante: ["modelo", "potencia", "tension", "corte", "largo", "maxAlimentacion", "temperaturaColor"],
+    requiredAtributos: ["modelo", "potencia", "tension", "corte", "largo"],
+    atributosIniciales: {},
+  },
+  {
     id: "fuente_alimentacion_led_v1",
     nombre: "Fuente de alimentación LED",
     descripcion:

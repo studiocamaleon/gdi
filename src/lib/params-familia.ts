@@ -35,6 +35,8 @@ export const ETIQUETAS_VALOR_PARAM: Record<string, string> = {
   alto_al_frente: "Alto al frente",
   area: "Por área (grilla sobre la cara)",
   recorrido: "Por recorrido (siguiendo el trazo)",
+  horizontal: "Horizontal",
+  vertical: "Vertical",
 };
 
 export const DESCRIPCIONES_VALOR_PARAM: Record<string, string> = {};

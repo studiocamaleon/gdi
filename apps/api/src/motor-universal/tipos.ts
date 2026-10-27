@@ -866,6 +866,7 @@ export interface PasoEjecutado {
    * sheet, no el default de la ruta—. Sólo en pasos con derivador de bastidor.
    */
   estructuraBastidor?: EstructuraBastidorEjecutada;
+  iluminacionTira?: import('./iluminacion-tira-led.contrato').IluminacionTiraEjecutada;
 }
 
 /**

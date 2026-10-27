@@ -1,3 +1,4 @@
+import { seleccionarFuentesTira } from './iluminacion-tira-led';
 import { ESTADOS_ACTIVACION, resolverEstadosActivacion, type ContextoEstados } from './estado-pasos';
 import { cantidadManualKey, leerCantidadManual, usaCantidadManual, errorConfigCantidadManual, errorValorCantidadManual } from './cantidad-manual-paso';
 import { precioPapelCortado } from '../inventario/precio-papel-cortado';
@@ -4339,6 +4340,7 @@ export class MotorUniversalService {
       outputsCanonicos,
       capacidades,
       estructuraBastidor,
+      iluminacionTira: derivacionesDelJobContext(jobContext)[paso.configPasoId]?.traza?.iluminacionTira as PasoEjecutado['iluminacionTira'],
     };
   }
 
@@ -5429,6 +5431,7 @@ export class MotorUniversalService {
       nestingResult,
       recorridoCorte,
       estructuraBastidor,
+      iluminacionTira: derivacionesDelJobContext(jobContext)[paso.configPasoId]?.traza?.iluminacionTira as PasoEjecutado['iluminacionTira'],
     };
   }
 
@@ -8808,6 +8811,41 @@ export class MotorUniversalService {
     subfamilia?: string | null;
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
+    const fuenteTira = paso && resolverFamilia(paso.familiaCodigo)?.slotsRequeridos
+      .find((decl) => decl.codigo === slot.slotCodigo)?.dimensionamientoFuenteTira;
+    if (fuenteTira && paso) {
+      const derivacion = derivacionesDelJobContext(jobContext)[paso.configPasoId];
+      if (!derivacion || derivacion.diagnostico) return null;
+      const ids = this.getSlotCandidatoVarianteIds(slot);
+      const elegida = this.getEleccionMaterialComercial(slot, jobContext, paso);
+      const candidatas = slot.modoSeleccion === 'HARDCODED'
+        ? [slot.materialVariante].filter((v) => v && v.activo !== false && v.materiaPrimaActiva !== false)
+        : elegida && ids.includes(elegida)
+          ? [await this.cargarVariantePorId(tenantId, elegida)]
+          : !elegida && slot.modoSeleccion === 'MOTOR_ELIGE_AUTO'
+            ? await Promise.all(ids.map(id => this.cargarVariantePorId(tenantId, id)))
+            : [];
+      const filtro = slot.criterioFiltroCampo;
+      const valor = filtro ? jobContext[filtro] : undefined;
+      const validas = candidatas.filter((v): v is NonNullable<typeof v> =>
+        v != null && (!filtro || valor == null || valor === '' || textoPrimitivo(v.atributosVarianteJson?.[filtro]) === textoPrimitivo(valor)));
+      const plan = seleccionarFuentesTira(validas, derivacion.magnitudes);
+      if (!plan) {
+        derivacion.diagnostico = {
+          codigo: 'tira_led_sin_fuente_compatible',
+          mensaje: `No hay una fuente utilizable de ${derivacion.magnitudes.tensionV} V para la tira LED.`,
+          sugerencia: 'Revisá tensión, capacidad en W, precio y selección de las fuentes de este paso.',
+        };
+        return null;
+      }
+      derivacion.magnitudes.fuentes = plan.cantidad * Number(jobContext.cantidad ?? 1);
+      const traza = derivacion.traza?.iluminacionTira as Record<string, unknown> | undefined;
+      if (traza) traza.fuentes = {
+        porCartel: plan.cantidad, capacidadW: plan.capacidadW,
+        consumoMaximoPorFuenteW: plan.consumoMaximoPorFuenteW,
+      };
+      return plan.variante;
+    }
     if (slot.modoSeleccion === 'HEREDA_DE_PASO') {
       return slot.materialHeredado
         ? this.resolverMaterialSlot(
@@ -9133,6 +9171,10 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): ErrorMotor {
+    const diagnostico = derivacionesDelJobContext(jobContext)[paso.configPasoId]?.diagnostico;
+    if (diagnostico && resolverFamilia(paso.familiaCodigo)?.slotsRequeridos.find(s => s.codigo === slot.slotCodigo)?.dimensionamientoFuenteTira) {
+      return { ...diagnostico, severidad: 'ERROR', rutaPasoId: paso.rutaPasoId, rutaPasoOrden: paso.rutaPasoOrden, familiaCodigo: paso.familiaCodigo };
+    }
     const candidatoVarianteIds = this.getSlotCandidatoVarianteIds(slot);
     const eleccion = this.getEleccionMaterialComercial(slot, jobContext, paso);
     const slotLabel = slot.slotCodigo.replace(/_/g, ' ');
@@ -9726,12 +9768,21 @@ export class MotorUniversalService {
     // configuró su propia regla (base × factor: "3 anclajes por m²"), gana
     // su configuración y se sigue el camino normal. Genérico: sin nombres
     // de familia ni de slot.
-    if (slot.cantidadBase) return null;
     const familia = resolverFamilia(paso.familiaCodigo);
     const decl = familia?.slotsRequeridos.find(
       (s) => s.codigo === slot.slotCodigo,
     );
     if (!decl) return null;
+    if (decl.dimensionamientoFuenteTira) {
+      const cantidad = derivacionesDelJobContext(jobContext)[paso.configPasoId]?.magnitudes.fuentes;
+      if (!cantidad || !materialResuelto) return Number.NaN;
+      const conversion = materialUnitConversion(materialResuelto.contextoUnidades ?? {
+        unidadStock: materialResuelto.unidadStock ?? 'unidad',
+        atributos: materialResuelto.atributosVarianteJson ?? {},
+      }, 'unidad', unidadEfectivaDeFormula(slot.formula, materialResuelto.unidadStock));
+      return conversion.ok ? cantidad * conversion.factor : Number.NaN;
+    }
+    if (slot.cantidadBase && !decl.cantidadDerivadaObligatoria) return null;
     if (decl.cantidadFija !== undefined) {
       // `cantidadFija` es POR CARTEL, no por trabajo: dos backlights llevan
       // dos fuentes (cada uno la suya, elegida por SUS watts), no una.

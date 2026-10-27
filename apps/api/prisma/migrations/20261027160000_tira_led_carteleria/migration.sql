@@ -1,0 +1,1 @@
+ALTER TYPE "SubfamiliaMateriaPrima" ADD VALUE 'TIRA_LED_CARTELERIA';
