@@ -48,6 +48,7 @@ export type FamiliaCodigo =
   | 'estructura_bastidor'
   | 'iluminacion_led'
   | 'iluminacion_tira_led'
+  | 'iluminacion_tubos_led'
   // Operaciones manuales
   | 'embalaje'
   | 'trabajo_manual'
