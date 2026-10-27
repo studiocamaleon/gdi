@@ -71,6 +71,7 @@ it.each([
   [{ ...tira, potencia: undefined }, params],
   [{ ...tira, tension: '220V' }, params],
   [{ ...tira, corte: Infinity }, params],
+  [{ ...tira, maxAlimentacion: -1 }, params],
   [tira, { ...params, separacionCm: 0 }],
   [tira, { ...params, separacionCm: undefined }],
   [tira, { ...params, retiroBordeCm: 200 }],
@@ -104,6 +105,25 @@ it('acepta coma decimal y formato de tensión del proveedor', () => {
       corte: '25',
     }).magnitudes.wattsPorCartel,
   ).toBeCloseTo(225.6);
+});
+
+it('prioriza la medida comercial vigente sobre las piezas sin medida visible', () => {
+  const r = calcularTiraLed({ ...job(), medidaCustomMm: { anchoMm: 1000, altoMm: 500 } }, params, tira);
+  expect(r.traza?.iluminacionTira).toMatchObject({ anchoMm: 1000, altoMm: 500, filas: 5, largoFilaMm: 950 });
+});
+
+it('valida y dimensiona también una fuente heredada de otro paso', async () => {
+  const ctx = job(2);
+  derivacionesDelJobContext(ctx).luz = calcularTiraLed(ctx, params, tira);
+  const service = Object.create(MotorUniversalService.prototype);
+  const r = await service.resolverMaterialSlot('empresa-ficticia', {
+    slotCodigo: 'fuente', modoSeleccion: 'HEREDA_DE_PASO', candidatos: [],
+    materialHeredado: { paso: { configPasoId: 'previo', familiaCodigo: 'trabajo_manual' }, slot: {
+      modoSeleccion: 'HARDCODED', materialVariante: fuente('heredada', 150),
+    } },
+  }, ctx, { configPasoId: 'luz', familiaCodigo: 'iluminacion_tira_led' });
+  expect(r?.id).toBe('heredada');
+  expect(derivacionesDelJobContext(ctx).luz?.magnitudes.fuentes).toBe(4);
 });
 
 it('elige una fuente compatible por cartel y el consumo escala con la cantidad', () => {

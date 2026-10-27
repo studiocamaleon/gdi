@@ -67,7 +67,7 @@ export function calcularTiraLed(
     );
   }
   const medida =
-    ctx.interiorMm ?? ctx.medidaVisibleMm ?? piezas[0] ?? ctx.medidaCustomMm;
+    ctx.interiorMm ?? ctx.medidaVisibleMm ?? ctx.piezasVisibles?.[0] ?? ctx.medidaCustomMm ?? ctx.piezas?.[0];
   const anchoMm = numero(medida?.anchoMm);
   const altoMm = numero(medida?.altoMm);
   const vertical = params.orientacion === 'vertical';
@@ -100,6 +100,10 @@ export function calcularTiraLed(
   const maxAlimentacionM = numero(
     attrs.maxAlimentacion ?? attrs.maxAlimentacionM,
   );
+  const maxDeclarado = attrs.maxAlimentacion ?? attrs.maxAlimentacionM;
+  if (maxDeclarado != null && maxDeclarado !== '' && (!Number.isFinite(maxAlimentacionM) || maxAlimentacionM <= 0)) {
+    return error('El largo máximo por alimentación no es válido.', 'Completá un largo positivo según el fabricante o dejalo pendiente.');
+  }
   const cortesPorAlimentacion =
     Number.isFinite(maxAlimentacionM) && maxAlimentacionM > 0
       ? Math.floor((maxAlimentacionM * 1000) / corteMm + 1e-9)
@@ -183,7 +187,8 @@ export function seleccionarFuentesTira<T extends FuenteLedCandidata>(
     const attrs = variante.atributosVarianteJson ?? {};
     if (
       tensionLed(attrs.tension) !== tensionV ||
-      !(Number(variante.precioReferencia) > 0)
+      !(Number(variante.precioReferencia) > 0) ||
+      !Number.isFinite(Number(variante.precioReferencia))
     )
       return [];
     const capacidadW = numero(attrs.capacidad);

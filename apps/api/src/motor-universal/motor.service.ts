@@ -8818,8 +8818,12 @@ export class MotorUniversalService {
       if (!derivacion || derivacion.diagnostico) return null;
       const ids = this.getSlotCandidatoVarianteIds(slot);
       const elegida = this.getEleccionMaterialComercial(slot, jobContext, paso);
+      const heredada = slot.modoSeleccion === 'HEREDA_DE_PASO' && slot.materialHeredado
+        ? await this.resolverMaterialSlot(tenantId, slot.materialHeredado.slot, jobContext, slot.materialHeredado.paso)
+        : null;
       const candidatas = slot.modoSeleccion === 'HARDCODED'
         ? [slot.materialVariante].filter((v) => v && v.activo !== false && v.materiaPrimaActiva !== false)
+        : slot.modoSeleccion === 'HEREDA_DE_PASO' ? [heredada]
         : elegida && ids.includes(elegida)
           ? [await this.cargarVariantePorId(tenantId, elegida)]
           : !elegida && slot.modoSeleccion === 'MOTOR_ELIGE_AUTO'

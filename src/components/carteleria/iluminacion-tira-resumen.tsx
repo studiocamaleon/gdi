@@ -18,7 +18,7 @@ export function IluminacionTiraResumen({ plan }: { plan: IluminacionTiraEjecutad
             return <line key={i} x1={horizontal ? inicio : posicion} y1={horizontal ? posicion : inicio} x2={horizontal ? inicio + plan.largoFilaMm : posicion} y2={horizontal ? posicion : inicio + plan.largoFilaMm} stroke="currentColor" strokeWidth={2} vectorEffect="non-scaling-stroke" />;
           })}
         </svg>
-        <p>{plan.filas} filas de {numero(plan.largoFilaMm / 100)} cm · {numero(plan.metrosPorCartel)} m de tira · {numero(plan.wattsPorCartel)} W a {plan.tensionV} V.</p>
+        <p>{plan.filas} filas de {numero(plan.largoFilaMm / 10)} cm · {numero(plan.metrosPorCartel)} m de tira · {numero(plan.wattsPorCartel)} W a {plan.tensionV} V.</p>
         <p>{plan.fuentes ? `${plan.fuentes.porCartel} fuente${plan.fuentes.porCartel === 1 ? '' : 's'} de ${numero(plan.fuentes.capacidadW)} W por cartel` : 'Fuentes pendientes de selección'} · margen adicional {numero(plan.margenPct)}%.</p>
         <p className="text-sm text-muted-foreground">Separación real: {numero(plan.separacionRealMm / 10)} cm. Validar uniformidad con el frente y la profundidad elegidos. El dibujo muestra la distribución; las conexiones se definen en taller.</p>
         <p className="text-sm text-muted-foreground">{plan.maxAlimentacionM === null ? 'Pendiente: confirmar con el proveedor el largo máximo de tira por alimentación.' : `Límite declarado: ${numero(plan.maxAlimentacionM)} m por alimentación; al menos ${plan.alimentacionesMinimas} tramos alimentados por cartel.`}</p>
