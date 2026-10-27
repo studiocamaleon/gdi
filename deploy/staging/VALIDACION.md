@@ -1,5 +1,44 @@
 # Validación de staging — historial
 
+## 2026-10-27, 21:33 UTC — Backlight completo para pruebas en staging
+
+Publicado por pedido de Lucas el [PR #122](https://github.com/studiocamaleon/gdi/pull/122), revisión funcional **`26065a161dfe3a5331a5f5e62af53600781cdb7d`**. API, ambos workers y web ejecutan esa revisión. El PR permanece abierto para aceptación; no se fusionó ni se publicó en producción.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:ce645cb5bc3ac6d765258bdf283adbb929eb7fd274711fc089106f091b0de222` |
+| Web | `sha256:3bce8b1388885698503e94873c0a632e8b0a192b71eef93da66ae4e526a25b60` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Producto preparado:** `PRUEBA-BACKLIGHT-COMPLETO`, «PRUEBA · Cartel Backlight completo», activo y con receta publicada en la empresa demo de staging. Incluye bastidor doble, lona con demasía, iluminación zigzag y cableado, fondo, cenefas horizontales y verticales, fijaciones y armado final. El nodo `estructura_bastidor` aporta geometría, despiece y visor 3D; sus outputs alimentan las medidas de los demás componentes. Las cenefas tienen solapas de 2 cm por lado, comparten nesting entre sí y el fondo queda excluido expresamente de esa agrupación.
+
+En staging no había bastidor ni Backlight compuesto previos. Se crearon siete productos de ensayo y cuatro materiales con cinco variantes, sin seeds ni resets. La lona original y su configuración quedaron iguales; se utilizó una copia. El bastidor usa trabajo de taller con ritmo de referencia de 30 ml/h, porque no había proveedor configurado. Los nuevos precios y tiempos son ficticios o de referencia. La configuración vive en la base de staging: integrar el código no crea esta receta en producción.
+
+**Cotizaciones verificadas con el motor desplegado:**
+
+| Medida en cm | Cantidad de carteles | Chapas de cenefas | Chapas de fondo | Fuentes por cartel |
+| --- | --- | --- | --- | --- |
+| 240 × 120 × 15 | 1 | 1 | 1 | 1 |
+| 240 × 120 × 15 | 2 | 1 | 2 | 1 |
+| 240 × 120 × 15 | 3 | 2 | 3 | 1 |
+| 180 × 90 × 20 | 1 | 1 | 1 | 1 |
+| 300 × 150 × 20, panelizado | 1 | 2 | 3 | 2 |
+
+Se comprobaron las seis partes, sus medidas heredadas, todas las piezas del nesting, los tiempos de plegado y la proyección de stock sin duplicar lotes. La chapa de prueba declara una hoja = una unidad. La tira es de 12 V y 8 W/m, con corte cada 25 mm, separación de ensayo de 10 cm y margen de fuente del 30%. El caso base usa 27,6 m y 220,8 W; el mayor, 43,5 m y 348 W, con dos fuentes iguales de aproximadamente 29,17 A a 12 V.
+
+**Chrome:** se cotizó el producto completo ingresando solamente 240 × 120 × 15 cm y cantidad uno. El detalle «Aprovechamiento» muestra lona, fondo independiente, cuatro cenefas en una chapa y bastidor 3D. Se verificaron las medidas de 240 × 19 cm y 120 × 19 cm, y el despiece de 18 piezas, tres barras de 6 m, dos refuerzos y 16 soldaduras. Se dejó abierta la vista 3D; consola sin errores. No se guardó ni emitió una OT.
+
+**Controles y operación:** 60 pruebas locales relacionadas de nesting/materiales aprobadas, además de las verificaciones previas del PR. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/40577109459), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/40577109654), CodeQL sin alertas abiertas del PR y Vercel aprobados en la revisión funcional. Compilaciones remotas con tipos; constructor temporal propio retirado. Seis servicios saludables y tamaños conservados, secretos de aplicación sin cambios, web/API 200, API directa 403 y BFF anónimo 401. Producción conserva sus seis imágenes y recursos.
+
+Aplicada únicamente la migración aditiva `20261027160000_tira_led_carteleria`: **319 migraciones**, ninguna pendiente y checksums previos intactos. La migración no cambió los datos controlados; la preparación posterior conservó empresas, usuarios, órdenes y archivos. No se copiaron credenciales de staging al desarrollo local ni se modificaron los procesos locales.
+
+**Recuperación:** fuentes exactas cifradas custodiadas, inventario actualizado y copia posterior completada **`2026-10-27T21:31:47.111Z`**. Firma, huellas y manifiesto descifrado verificados; revisión, imágenes, fuentes, 319 migraciones y 33 archivos coincidentes. **No se repitió una restauración SQL completa.** Evidencias y configuración de ensayo fuera de Git.
+
+**Pendiente antes de producción:** aceptación de Lucas, validación de precios/unidades del catálogo comercial, ritmo de herrería, separación óptica de LED y largo máximo por alimentación. Este último continúa indicado como pendiente. No hay autorización de producción ni PR absorbidos.
+
+**Reversión:** API/workers a `registry.fly.io/grafoprint-staging-api@sha256:23570178c1d0c9b4a80123199d0dfdbf1d54bc1712c82d7ae5e2b86cecaf12c0`; web a `registry.fly.io/grafoprint-staging-web@sha256:6f1fe0a935ddbbf59b3f82d94ca48dcaf8602e54aeaba0f5029c32c05e4c03e9`. Conservar el enum aditivo y los datos; desactivar los productos de ensayo si se vuelve a una versión sin la familia de tira LED. Restituir el inventario del copiador correspondiente.
+
 ## 2026-10-26 — Vinilo sin impresión con troquelado, junto con carteles compuestos
 
 El [PR #121](https://github.com/studiocamaleon/gdi/pull/121) corrige el rechazo al cotizar **5.000 piezas de 4 × 4 cm** de Vinilo impreso blanco, eligiendo «Sin impresión» y troquelado. La preparación del material eliminaba los márgenes de impresión, pero el plotter necesitaba márgenes propios y rechazaba ese acomodo. El primer nesting ahora respeta los márgenes, separaciones y orientación del corte activo; el plotter conserva esas mismas posiciones. El material incluye el largo necesario y el modo sin impresión conserva tiempo y costo de impresión en cero. Los rollos que físicamente no entran en el plotter siguen rechazándose.
