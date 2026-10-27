@@ -1,4 +1,6 @@
 "use client";
+
+import { IluminacionTiraResumen } from "@/components/carteleria/iluminacion-tira-resumen";
 import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
 import { useCalculoAutomaticoCopiado } from "@/hooks/use-calculo-automatico-copiado";
 import {
@@ -2417,6 +2419,9 @@ function ProduccionItemSinLotesView({
         </CardHeader>
         <CardContent>
           <WorkflowCotizacion cotizacion={item.cotizacion} />
+          {[...item.cotizacion.pasos, ...(item.cotizacion.componentesFabricados ?? []).flatMap((componente) => componente.pasos ?? [])].filter((paso) => paso.iluminacionTira).map((paso) => (
+            <IluminacionTiraResumen key={paso.configPasoId} plan={paso.iluminacionTira!} />
+          ))}
         </CardContent>
       </Card>
     </div>
