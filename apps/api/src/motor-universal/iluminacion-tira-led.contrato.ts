@@ -18,6 +18,7 @@ export interface IluminacionTiraEjecutada {
   fuentes?: {
     porCartel: number;
     capacidadW: number;
+    corrienteA?: number;
     consumoMaximoPorFuenteW: number;
   };
 }

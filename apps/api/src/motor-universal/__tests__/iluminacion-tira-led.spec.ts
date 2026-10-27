@@ -158,6 +158,42 @@ it('dimensiona varias fuentes sin sobrecargar una por el redondeo de cortes', ()
   ).toBeNull();
 });
 
+it('elige por amperios y tensión aunque falten watts o la capacidad guardada esté desactualizada', () => {
+  const r = calcularTiraLed(job(), params, tira);
+  const candidatas = [20, 25, 30].map((corriente) => ({
+    ...fuente(`f${corriente}`, 0),
+    atributosVarianteJson: {
+      corriente,
+      tension: '12V',
+      // Una capacidad vieja no debe permitir elegir una fuente de sólo 20 A.
+      ...(corriente === 20 ? { capacidad: 500 } : {}),
+    },
+  }));
+  expect(seleccionarFuentesTira(candidatas, r.magnitudes)).toMatchObject({
+    variante: { id: 'f25' }, cantidad: 1, corrienteA: 25, capacidadW: 300,
+  });
+});
+
+it.each(['12V', '24V'])('calcula amperios a %s y admite varias fuentes cargadas con coma decimal', (tension) => {
+  const r = calcularTiraLed(job(), params, { ...tira, tension });
+  const plan = seleccionarFuentesTira([{
+    ...fuente('por-amperios', 0),
+    atributosVarianteJson: { corriente: '12,5', tension },
+  }], r.magnitudes)!;
+  expect(plan.cantidad).toBe(tension === '12V' ? 2 : 1);
+  expect(plan.corrienteA).toBe(12.5);
+  expect(plan.consumoMaximoPorFuenteW / r.magnitudes.tensionV * 1.3)
+    .toBeLessThanOrEqual(plan.corrienteA);
+});
+
+it.each([0, -1, 'inválido', Infinity])('rechaza una corriente declarada inválida (%s), aunque existan watts guardados', (corriente) => {
+  const r = calcularTiraLed(job(), params, tira);
+  expect(seleccionarFuentesTira([{
+    ...fuente('invalida', 500),
+    atributosVarianteJson: { corriente, tension: '12V', capacidad: 500 },
+  }], r.magnitudes)).toBeNull();
+});
+
 it('integra selección y cantidad de fuentes en el motor, también para elección fija', async () => {
   const ctx = job(2);
   derivacionesDelJobContext(ctx).paso = calcularTiraLed(ctx, params, tira);

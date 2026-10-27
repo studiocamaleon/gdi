@@ -83,7 +83,7 @@ async function cotizar(cantidad: number, tensionFuente = '12V') {
         'fuente',
         material(
           'fuente',
-          { capacidad: 150, tension: tensionFuente },
+          { corriente: 12.5, tension: tensionFuente },
           2000,
           'UNIDAD',
         ),
@@ -194,7 +194,7 @@ it.each([1, 2])(
     });
     expect(p.iluminacionTira).toMatchObject({
       metrosPorCartel: 28.2,
-      fuentes: { porCartel: 2 },
+      fuentes: { porCartel: 2, corrienteA: 12.5, capacidadW: 150 },
     });
   },
 );

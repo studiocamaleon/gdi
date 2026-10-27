@@ -169,6 +169,7 @@ export function seleccionarFuentesTira<T extends FuenteLedCandidata>(
   variante: T;
   cantidad: number;
   capacidadW: number;
+  corrienteA: number;
   consumoMaximoPorFuenteW: number;
 } | null {
   const { wattsPorCartel, wattsPorCorte, tensionV, margenFuentePct } =
@@ -191,7 +192,15 @@ export function seleccionarFuentesTira<T extends FuenteLedCandidata>(
       !Number.isFinite(Number(variante.precioReferencia))
     )
       return [];
-    const capacidadW = numero(attrs.capacidad);
+    // La ficha de inventario carga A y V. No depender de una capacidad en W
+    // previamente calculada por la interfaz, que podría faltar o estar vieja.
+    // Mantener compatibilidad con fuentes antiguas cargadas sólo en watts.
+    const tieneCorriente = attrs.corriente != null && String(attrs.corriente).trim() !== '';
+    const corrienteA = tieneCorriente
+      ? numero(attrs.corriente)
+      : numero(attrs.capacidad) / tensionV;
+    if (!Number.isFinite(corrienteA) || corrienteA <= 0) return [];
+    const capacidadW = corrienteA * tensionV;
     if (!Number.isFinite(capacidadW) || capacidadW <= 0) return [];
     const cortesPorFuente = Math.floor(
       capacidadW / (1 + margenFuentePct / 100) / wattsPorCorte + 1e-9,
@@ -203,6 +212,7 @@ export function seleccionarFuentesTira<T extends FuenteLedCandidata>(
         variante,
         cantidad,
         capacidadW,
+        corrienteA,
         consumoMaximoPorFuenteW: Math.ceil(cortes / cantidad) * wattsPorCorte,
       },
     ];

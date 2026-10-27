@@ -8838,14 +8838,14 @@ export class MotorUniversalService {
         derivacion.diagnostico = {
           codigo: 'tira_led_sin_fuente_compatible',
           mensaje: `No hay una fuente utilizable de ${derivacion.magnitudes.tensionV} V para la tira LED.`,
-          sugerencia: 'Revisá tensión, capacidad en W, precio y selección de las fuentes de este paso.',
+          sugerencia: 'Revisá tensión, corriente en A, precio y selección de las fuentes de este paso.',
         };
         return null;
       }
       derivacion.magnitudes.fuentes = plan.cantidad * Number(jobContext.cantidad ?? 1);
       const traza = derivacion.traza?.iluminacionTira as Record<string, unknown> | undefined;
       if (traza) traza.fuentes = {
-        porCartel: plan.cantidad, capacidadW: plan.capacidadW,
+        porCartel: plan.cantidad, capacidadW: plan.capacidadW, corrienteA: plan.corrienteA,
         consumoMaximoPorFuenteW: plan.consumoMaximoPorFuenteW,
       };
       return plan.variante;
