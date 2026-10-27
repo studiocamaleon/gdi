@@ -1,5 +1,38 @@
 # Validación de staging — historial
 
+## 2026-10-27, 22:45 UTC — Backlight con tubos a 220 V comprobado
+
+Revisión funcional **`0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`** del [PR #122](https://github.com/studiocamaleon/gdi/pull/122), desplegada en API, ambos workers y web. Lucas autorizó publicar el Backlight en producción con bastidor de hierro 20 × 20, lona Backlight, tubos de 60 o 120 cm a 220 V sin fuente, fondo y cenefas. Este ensayo comprueba esa configuración antes de promover las mismas imágenes.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:382b7d01dc63c169578ff16434eb443660357f37efd03aa57faa10f761130d6c` |
+| Web | `sha256:c490c20224d21f828c9fe5c3c97153929d6088bfc0542fc15ada77d48147b211` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Iluminación:** nueva familia `iluminacion_tubos_led` y ficha técnica para tubos. Compara variantes autorizadas, costo y orientaciones, utiliza tubos enteros de una misma variante por cartel y considera las medidas interiores del bastidor, el paso configurado y la holgura de montaje. No agrega fuente externa. Expone plano, cantidad y consumo; rechaza medidas incompatibles, tensión incorrecta o datos incompletos. Se conserva el cálculo de tiras zigzag y fuentes del mismo PR.
+
+**Producto de ensayo:** `PRUEBA-TUBOS-CARTEL-BACKLIGHT`, «PRUEBA · Cartel Backlight», con cinco productos auxiliares y seis componentes (la cenefa se usa para horizontales y laterales). Se conservaron los ensayos anteriores. Tres materiales de prueba independientes reproducen las unidades y atributos necesarios sin modificar los originales. La lona original conserva su receta. El bastidor emite despiece, interior, lona, fondo y tiras; las cenefas tienen solapas de 2 cm por lado y nesting conjunto, con el fondo excluido.
+
+| Medida en cm | Cantidad | Tubos por cartel | Consumo por cartel | Chapas totales de fondo y cenefas |
+| --- | --- | --- | --- | --- |
+| 240 × 120 × 15 | 1 | 12 de 60 cm | 108 W | 2 |
+| 240 × 120 × 15 | 2 | 12 de 60 cm | 108 W | 3 |
+| 240 × 120 × 15 | 3 | 12 de 60 cm | 108 W | 5 |
+| 180 × 90 × 20 | 1 | 6 de 60 cm | 54 W | 2 |
+| 300 × 150 × 20 | 1 | 10 de 120 cm | 180 W | 5 |
+
+Los cinco casos verifican cantidades, precio por hoja sin duplicación, dimensiones heredadas, 20 minutos de plegado por cartel y ausencia de fuente. Se usan paso máximo de 30 cm y holgura de 2 cm; son parámetros del taller, no una certificación de uniformidad luminosa. No mezcla largos de tubo dentro de un mismo cartel.
+
+**Chrome:** cotización de 240 × 120 × 15 cm completada con medidas y cantidad. Flujo muestra 12 tubos en cuatro filas, 108 W y conexión directa a 220 V. Aprovechamiento muestra fondo separado, cuatro cenefas en una chapa de 122 × 244 cm y bastidor 3D con 18 piezas, tres barras, dos refuerzos y 16 soldaduras. Sin guardar OT ni presupuesto.
+
+**Controles:** 76 pruebas de API y siete de web relacionadas, cinco cotizaciones completas locales, compilaciones remotas con tipos y diff aprobados. [CI HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/40593127344), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/40593127498), CodeQL sin alertas abiertas del PR y Vercel aprobados en esta revisión. El primer build de API detectó una unión de tipos incompleta; la revisión publicada la corrige y pasó la compilación completa. Constructor temporal propio retirado; sin builds de producción ni cambios en Docker local.
+
+**Operación y respaldo:** 319 migraciones, ninguna nueva en staging, checksums intactos. Seis servicios saludables y tamaños conservados; web/API 200, API directa 403 y BFF anónimo 401. Fuentes cifradas custodiadas e inventario actualizado. Copia posterior completada **`2026-10-27T22:43:37.776Z`**, con firma, huellas, manifiesto descifrado, revisión, imágenes y fuentes verificadas; 319 migraciones y 33 archivos. No se repitió una restauración SQL completa.
+
+**Reversión:** API/workers a `sha256:ce645cb5bc3ac6d765258bdf283adbb929eb7fd274711fc089106f091b0de222` y web a `sha256:3bce8b1388885698503e94873c0a632e8b0a192b71eef93da66ae4e526a25b60` en sus registros de staging. Desactivar el nuevo producto si se vuelve a una versión sin tubos; conservar el enum aditivo y los datos. Restituir también el inventario del copiador.
+
 ## 2026-10-27, 21:33 UTC — Backlight completo para pruebas en staging
 
 Publicado por pedido de Lucas el [PR #122](https://github.com/studiocamaleon/gdi/pull/122), revisión funcional **`26065a161dfe3a5331a5f5e62af53600781cdb7d`**. API, ambos workers y web ejecutan esa revisión. El PR permanece abierto para aceptación; no se fusionó ni se publicó en producción.
