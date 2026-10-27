@@ -1891,6 +1891,37 @@ const iluminacion_led: DefinicionFamilia = {
   ],
 };
 
+const iluminacion_tubos_led: DefinicionFamilia = {
+  codigo: 'iluminacion_tubos_led', nombre: 'Iluminación con tubos LED a 220 V',
+  descripcion: 'Elige tubos enteros según el espacio interior y la separación del taller, comparando ambas orientaciones. Alimentación directa a 220 V, sin fuente externa.',
+  categoria: 'estructural_montaje', editorParamsGenerico: true,
+  relacionMaquinaSoportada: ['M-0'], modosTiempoSoportados: ['T-2'],
+  mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'], modoActivacionDefault: 'OBLIGATORIO',
+  multiplicadoresSoportados: [], permiteSlotsAdicionales: true,
+  slotsRequeridos: [
+    { codigo: 'tubos_led', nombre: 'Tubos LED (longitud automática)', tipo: 'INSUMO_PASO', requerido: true,
+      compatibilidadMaterial: { templateIds: ['tubo_led_carteleria_v1'] },
+      seleccionTubosLed: true, formulaForzada: 'fijo', magnitudDerivada: 'tubos', cantidadDerivadaObligatoria: true },
+    { codigo: 'cableado', nombre: 'Cableado (estimación)', tipo: 'INSUMO_PASO', requerido: false,
+      compatibilidadMaterial: { subfamiliasMateriaPrima: ['CABLEADO_CONECTICA'] },
+      formulaForzada: 'por_metro_lineal', magnitudDerivada: 'cableMl' },
+  ],
+  plantillasCompatibles: [], inputsRequeridos: [], validaciones: [],
+  outputsCanonicos: ['watts_led'],
+  derivador: { codigo: 'sembrado_tubos_led', materialSlot: 'tubos_led', magnitudPrincipal: 'tubos', unidadPrincipal: 'tubos',
+    outputs: { watts_led: 'watts' }, mensajeSinDatos: 'no pudo distribuir los tubos LED.',
+    sugerenciaSinDatos: 'Revisá las medidas interiores, longitud, tensión y separación de los tubos.' },
+  paramsPasoSchema: [
+    { campo: 'separacionCm', etiqueta: 'Separación máxima (cm)', tipo: 'number', requerido: false, descripcion: 'Si queda vacío se usa el paso de la variante. Criterio del taller según profundidad y frente.' },
+    { campo: 'orientacion', etiqueta: 'Orientación de los tubos', tipo: 'enum', valoresPermitidos: ['automatico', 'horizontal', 'vertical'], default: 'automatico', requerido: true },
+    { campo: 'retiroBordeCm', etiqueta: 'Holgura de montaje en cada borde (cm)', tipo: 'number', default: 2, requerido: true, descripcion: 'Se descuenta del interior del bastidor. Verificar el espacio necesario para los soportes del tubo.' },
+    { campo: 'factorCablePerimetro', etiqueta: 'Cable: factor sobre el perímetro', tipo: 'number', default: 1.4, requerido: false },
+    { campo: 'cablePorTuboCm', etiqueta: 'Cable adicional por tubo (cm)', tipo: 'number', default: 20, requerido: false },
+  ],
+  productosTipicos: ['Cartel Backlight', 'Caja de luz'],
+};
+
 const iluminacion_tira_led: DefinicionFamilia = {
   codigo: 'iluminacion_tira_led',
   nombre: 'Iluminación con tira LED',
@@ -2414,6 +2445,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   estructura_bastidor,
   iluminacion_led,
   iluminacion_tira_led,
+  iluminacion_tubos_led,
   embalaje,
   trabajo_manual,
   modificacion_post,

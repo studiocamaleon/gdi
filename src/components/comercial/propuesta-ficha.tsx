@@ -1,6 +1,7 @@
 "use client";
 
 import { IluminacionTiraResumen } from "@/components/carteleria/iluminacion-tira-resumen";
+import { IluminacionTubosResumen } from "@/components/carteleria/iluminacion-tubos-resumen";
 import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
 import { useCalculoAutomaticoCopiado } from "@/hooks/use-calculo-automatico-copiado";
 import {
@@ -2430,6 +2431,9 @@ function ProduccionItemSinLotesView({
           <WorkflowCotizacion cotizacion={item.cotizacion} />
           {[...item.cotizacion.pasos, ...(item.cotizacion.componentesFabricados ?? []).flatMap((componente) => componente.pasos ?? [])].filter((paso) => paso.iluminacionTira).map((paso) => (
             <IluminacionTiraResumen key={paso.configPasoId} plan={paso.iluminacionTira!} />
+          ))}
+          {[...item.cotizacion.pasos, ...(item.cotizacion.componentesFabricados ?? []).flatMap((componente) => componente.pasos ?? [])].filter((paso) => paso.iluminacionTubos).map((paso) => (
+            <IluminacionTubosResumen key={paso.configPasoId} plan={paso.iluminacionTubos!} />
           ))}
         </CardContent>
       </Card>

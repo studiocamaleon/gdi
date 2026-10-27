@@ -2287,6 +2287,7 @@ export interface CotizarResponse {
         nestingResult?: NestingViewerInput;
         estructuraBastidor?: import("./estructura-bastidor-api").EstructuraBastidor;
         iluminacionTira?: import("../../apps/api/src/motor-universal/iluminacion-tira-led.contrato").IluminacionTiraEjecutada;
+      iluminacionTubos?: import("../../apps/api/src/motor-universal/iluminacion-tubos-led").IluminacionTubosEjecutada;
         operacionesInternas?: OperacionInternaCosteadaInput[];
       }>;
       componentes?: Array<Record<string, unknown>>;
@@ -2531,6 +2532,7 @@ export interface CotizarResponse {
        */
       estructuraBastidor?: import("@/lib/estructura-bastidor-api").EstructuraBastidor;
       iluminacionTira?: import("../../apps/api/src/motor-universal/iluminacion-tira-led.contrato").IluminacionTiraEjecutada;
+      iluminacionTubos?: import("../../apps/api/src/motor-universal/iluminacion-tubos-led").IluminacionTubosEjecutada;
       // === Tercerización ===
       tercerizado?: boolean;
       /** Atributos elegidos (eje→valor) con etiquetas, para Especificaciones. */

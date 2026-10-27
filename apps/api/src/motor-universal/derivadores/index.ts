@@ -1,5 +1,6 @@
 import { errorPerfilEstructural } from '../../inventario/perfil-estructural';
 import { calcularTiraLed } from '../iluminacion-tira-led';
+import { calcularTubosLed } from '../iluminacion-tubos-led';
 import { calcularBarrasNecesarias } from '../estructura-bastidor';
 /**
  * Catálogo de derivadores geométricos (docs/derivadores-geometricos-diseno.md §3.2).
@@ -288,6 +289,7 @@ const DERIVADORES: Record<string, Derivador> = {
   bastidor_rectangular,
   sembrado_led,
   sembrado_tira_led: calcularTiraLed,
+  sembrado_tubos_led: calcularTubosLed,
   layout_ojales,
 };
 

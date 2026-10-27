@@ -867,6 +867,7 @@ export interface PasoEjecutado {
    */
   estructuraBastidor?: EstructuraBastidorEjecutada;
   iluminacionTira?: import('./iluminacion-tira-led.contrato').IluminacionTiraEjecutada;
+  iluminacionTubos?: import('./iluminacion-tubos-led').IluminacionTubosEjecutada;
 }
 
 /**

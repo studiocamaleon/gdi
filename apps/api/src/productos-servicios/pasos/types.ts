@@ -257,6 +257,8 @@ export interface SlotDeclarado {
   /** Fuente de tensión constante: dimensiona una o más unidades con la carga
    * eléctrica del derivador de tiras; también valida elecciones explícitas. */
   dimensionamientoFuenteTira?: boolean;
+  /** Elige tubos enteros que entren y respeten la separación del taller. */
+  seleccionTubosLed?: boolean;
   /**
    * Selección por capacidad de fábrica: si el slot de DB no configura los
    * tres campos del criterio, el motor usa MENOR_CAPACIDAD_QUE_CUMPLA con
