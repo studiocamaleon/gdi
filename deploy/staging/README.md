@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-26.** API y ambos workers ejecutan `dfa866cba1`, combinación de carteles [#120](https://github.com/studiocamaleon/gdi/pull/120) y vinilo [#121](https://github.com/studiocamaleon/gdi/pull/121). La web conserva `7bd8703295`. Cotizadas desde Chrome 5.000 piezas de 4 × 4 cm sin impresión con medio corte y corte profundo, y con CMYK; el cartel Polyfan/Metalex conserva su frente dividido y sus dos placas. Seis servicios saludables, recursos y secretos de aplicación conservados. Lote autorizado y promovido a producción con las mismas imágenes; ver el [registro de producción](../produccion/VALIDACION.md). Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-10-27, 22:45 UTC.** API, ambos workers y web ejecutan `0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`, [Backlight #122](https://github.com/studiocamaleon/gdi/pull/122). «PRUEBA · Cartel Backlight» incorpora bastidor 3D, lona, selección de tubos de 60 o 120 cm a 220 V sin fuente, fondo separado y cenefas con nesting conjunto. Cinco cotizaciones y el recorrido visual en Chrome comprobados. Se conserva el ensayo anterior con tira zigzag. 319 migraciones, seis servicios saludables y recursos conservados. La promoción autorizada se registra en [producción](../produccion/VALIDACION.md). Ver [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 

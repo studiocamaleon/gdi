@@ -23,6 +23,7 @@ const EJES_COLOR: Record<string, { claves: readonly string[]; etiqueta: string }
   toner_v1: { claves: ["color"], etiqueta: "Color del tóner" },
   neon_flex_led_v1: { claves: ["colorLuz"], etiqueta: "Color de luz" },
   modulo_led_carteleria_v1: { claves: ["temperaturaColor"], etiqueta: "Temperatura de luz" },
+  tira_led_carteleria_v1: { claves: ["temperaturaColor"], etiqueta: "Temperatura de luz" },
 };
 
 export type MuestraColor =

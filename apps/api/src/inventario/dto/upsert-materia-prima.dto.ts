@@ -52,6 +52,7 @@ export enum SubfamiliaMateriaPrimaDto {
   filamento_3d = 'filamento_3d',
   resina_3d = 'resina_3d',
   modulo_led_carteleria = 'modulo_led_carteleria',
+  tira_led_carteleria = 'tira_led_carteleria',
   fuente_alimentacion_led = 'fuente_alimentacion_led',
   cableado_conectica = 'cableado_conectica',
   controlador_led = 'controlador_led',

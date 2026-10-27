@@ -47,6 +47,8 @@ export type FamiliaCodigo =
   | 'ensamble_estructural'
   | 'estructura_bastidor'
   | 'iluminacion_led'
+  | 'iluminacion_tira_led'
+  | 'iluminacion_tubos_led'
   // Operaciones manuales
   | 'embalaje'
   | 'trabajo_manual'
@@ -169,6 +171,7 @@ export type SubfamiliaMateriaPrimaCompat =
   | 'FILAMENTO_3D'
   | 'RESINA_3D'
   | 'MODULO_LED_CARTELERIA'
+  | 'TIRA_LED_CARTELERIA'
   | 'FUENTE_ALIMENTACION_LED'
   | 'CABLEADO_CONECTICA'
   | 'CONTROLADOR_LED'
@@ -247,9 +250,16 @@ export interface SlotDeclarado {
    * [Etapa 2 derivadores: era `cantidadSlotPrimitivaCarteleria` en motor]
    */
   magnitudDerivada?: string;
+  /** Mantiene el consumo ligado al cálculo físico (p. ej. metros de tira y watts). */
+  cantidadDerivadaObligatoria?: boolean;
   /** Cantidad fija del slot (la fuente LED: 1 por cartel), gane quien gane
    *  la selección. [Etapa 2 derivadores: era un if por slot en motor] */
   cantidadFija?: number;
+  /** Fuente de tensión constante: dimensiona una o más unidades con la carga
+   * eléctrica del derivador de tiras; también valida elecciones explícitas. */
+  dimensionamientoFuenteTira?: boolean;
+  /** Elige tubos enteros que entren y respeten la separación del taller. */
+  seleccionTubosLed?: boolean;
   /**
    * Selección por capacidad de fábrica: si el slot de DB no configura los
    * tres campos del criterio, el motor usa MENOR_CAPACIDAD_QUE_CUMPLA con

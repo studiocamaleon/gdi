@@ -73,6 +73,7 @@ const GEOMETRY: Record<
   laminado_film_v1: { ancho: 0.001, largo: 1 },
   laminado_pouch_v1: { ancho: 0.001, alto: 0.001 },
   iman_flexible_rollo_v1: { ancho: 0.001, largo: 1 },
+  tira_led_carteleria_v1: { largo: 1 },
 };
 
 type Edge = {

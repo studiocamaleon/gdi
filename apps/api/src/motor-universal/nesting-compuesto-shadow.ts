@@ -1,6 +1,7 @@
 import { materialesDeCotizaciones } from '../ordenes-trabajo/materiales-cotizacion.proyeccion';
 import { contextoStockCotizacion, necesidadesDePasos } from './disponibilidad-materiales';
 import { materialUnitConversion } from '../inventario/material-units';
+import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
 import { demandaDesdeTiempo } from '../eta/motor/demanda-humana';
 import { recalcularOperacionesCongeladas } from './procesamiento-corte';
 import { aplicarRepartoCorte, planificarRepartoCorte } from './repartir-operaciones-corte';
@@ -423,13 +424,20 @@ function candidatoDesdePaso(args: {
   const tieneDemanda = esIrregular
     ? demandaGenerica.length > 0 && (nesting.solucionNesting != null || vectorImpreso)
     : demanda.length > 0;
-  if (!visual || !tieneDemanda || !nesting.maquina?.id) {
+  // M-0 es una ejecución real: las placas manuales se agrupan por taller,
+  // proceso y dotación. Una máquina faltante en un proceso mecanizado sigue
+  // siendo una configuración incompleta.
+  const esManual = esPliego && !nesting.maquina?.id &&
+    !paso.tiempo?.maquinaId && !paso.tercerizado &&
+    admitePasoSinMaquina(paso.familiaCodigo) &&
+    Boolean(paso.tiempo?.centroCostoId) && !paso.tiempo?.procesamientoCorte;
+  if (!visual || !tieneDemanda || (!nesting.maquina?.id && !esManual)) {
     return {
       exclusion: {
         ...baseExclusion,
         codigo: 'CONFIGURACION_INCOMPLETA',
         motivo:
-          'Falta demanda, máquina o configuración geométrica para firmar el lote con seguridad.',
+          'Falta demanda, máquina o centro de trabajo manual, o configuración geométrica para firmar el lote con seguridad.',
       },
     };
   }
@@ -549,7 +557,7 @@ function candidatoDesdePaso(args: {
       politicaEjecucion: componente.politicaEjecucion,
       familiaCodigo: paso.familiaCodigo,
       algoritmo: algorithmPolicy,
-      maquinaId: nesting.maquina.id,
+      maquinaId: nesting.maquina?.id ?? null,
       perfilId: nesting.perfil?.id ?? null,
       operacionesCorte: paso.tiempo?.procesamientoCorte ? { firma: paso.tiempo.procesamientoCorte.firmaConfiguracion, redondeo: paso.tiempo.procesamientoCorte.redondeo } : null,
       modoColor: nesting.modoColor ?? null,
@@ -671,8 +679,12 @@ function candidatoDesdePaso(args: {
     familiaCodigo: paso.familiaCodigo,
     algoritmo: esIrregular
       ? `irregular:${nesting.solucionNesting?.versionAlgoritmo ?? 1}`
-      : nesting.algorithm,
-    maquinaId: nesting.maquina.id,
+      : esManual ? 'grid-2d-multi' : nesting.algorithm,
+    maquinaId: nesting.maquina?.id ?? null,
+    ...(esManual ? { ejecucionManual: {
+      centroCostoId: paso.tiempo!.centroCostoId,
+      dotacionOperarios: paso.tiempo!.dotacionOperarios,
+    } } : {}),
     perfilId: nesting.perfil?.id ?? null,
       operacionesCorte: paso.tiempo?.procesamientoCorte ? { firma: paso.tiempo.procesamientoCorte.firmaConfiguracion, redondeo: paso.tiempo.procesamientoCorte.redondeo } : null,
     modoColor: nesting.modoColor ?? null,
@@ -1224,12 +1236,17 @@ function aplicarGrupoConsolidado(args: {
     costoMaterialConsolidadoBase * factorMermaOperativa,
     6,
   );
-  const setupCompartido = Math.max(
+  // Compartir una placa manual no reduce el trabajo de cada pieza.
+  const esManual = !args.participantes[0].nesting.maquina?.id;
+  const agruparPreparacion = (...valores: number[]) => esManual
+    ? valores.reduce((total, valor) => total + valor, 0)
+    : Math.max(...valores);
+  const setupCompartido = agruparPreparacion(
     ...args.participantes.map(
       (participante) => participante.paso.tiempo?.setupMin ?? 0,
     ),
   );
-  const cleanupCompartido = Math.max(
+  const cleanupCompartido = agruparPreparacion(
     ...args.participantes.map(
       (participante) => participante.paso.tiempo?.cleanupMin ?? 0,
     ),
@@ -1238,7 +1255,7 @@ function aplicarGrupoConsolidado(args: {
     0,
     Number(args.participantes[0].paso.tiempo?.tarifaHora ?? 0),
   );
-  const costoPreparacionConsolidado = redondear(
+  const costoPreparacionConsolidado = esManual ? costoPreparacionIndependiente : redondear(
     ((setupCompartido + cleanupCompartido) / 60) * tarifaHora,
     6,
   );
@@ -1308,7 +1325,7 @@ function aplicarGrupoConsolidado(args: {
   );
   const areasTotal = pesos.reduce((total, area) => total + area, 0);
   const materialAsignado = asignarMonto(costoMaterialConsolidado, pesos, 6);
-  const preparacionAsignada = asignarMonto(
+  const preparacionAsignada = esManual ? args.participantes.map(costoPreparacion) : asignarMonto(
     costoPreparacionConsolidado,
     pesos,
     6,
@@ -1383,7 +1400,7 @@ function aplicarGrupoConsolidado(args: {
     let diferenciaEjecucion = 0;
     if (repartoCorte) {
       diferenciaEjecucion = aplicarRepartoCorte(paso, repartoCorte[index]);
-    } else if (paso.tiempo) {
+    } else if (paso.tiempo && !esManual) {
       const preparacionMinAnterior =
         paso.tiempo.setupMin + paso.tiempo.cleanupMin;
       const runMinAnterior = paso.tiempo.runMin;
@@ -1418,7 +1435,7 @@ function aplicarGrupoConsolidado(args: {
       );
     }
 
-    if (paso.tiempo) paso.tiempo.demandaHumana = demandaDesdeTiempo({...paso.tiempo, demandaHumana:null});
+    if (paso.tiempo && !esManual) paso.tiempo.demandaHumana = demandaDesdeTiempo({...paso.tiempo, demandaHumana:null});
 
     const diferenciaMaterial = material.costoTotal - costoMaterialAnterior;
     const diferenciaTotal =
@@ -1461,7 +1478,10 @@ function aplicarGrupoConsolidado(args: {
     });
   });
 
-  const duracionEstimadaMin = redondear(
+  const duracionEstimadaMin = esManual ? redondear(
+    args.participantes.reduce((total, p) => total + (p.paso.tiempo?.totalMin ?? 0), 0),
+    6,
+  ) : redondear(
     setupCompartido +
       cleanupCompartido +
       args.participantes.reduce(

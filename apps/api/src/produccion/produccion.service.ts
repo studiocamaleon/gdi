@@ -282,13 +282,29 @@ export class ProduccionService {
       trazabilidad = cotizacionItem.trazabilidadJson;
     }
 
-    const pasos = ((trazabilidad as { pasos?: unknown[] } | null)?.pasos ??
-      []) as Array<{
-      estructuraBastidor?: EstructuraBastidorEjecutada;
-    }>;
-    const estructura = pasos.find(
-      (paso) => paso.estructuraBastidor,
-    )?.estructuraBastidor;
+    type NodoBastidor = {
+      pasos?: Array<{
+        activado?: boolean;
+        estructuraBastidor?: EstructuraBastidorEjecutada;
+      }>;
+      componentesFabricados?: NodoBastidor[];
+      componentes?: NodoBastidor[];
+    };
+    const buscar = (
+      nodo: NodoBastidor | null,
+    ): EstructuraBastidorEjecutada | undefined => {
+      const propia = nodo?.pasos?.find(
+        (paso) => paso.activado !== false && paso.estructuraBastidor,
+      )?.estructuraBastidor;
+      if (propia) return propia;
+      for (const componente of nodo?.componentesFabricados ??
+        nodo?.componentes ??
+        []) {
+        const estructura = buscar(componente);
+        if (estructura) return estructura;
+      }
+    };
+    const estructura = buscar(trazabilidad as NodoBastidor | null);
     if (!estructura) {
       throw new NotFoundException(
         'El ítem no tiene estructura de bastidor en el snapshot (si es anterior a esta función, re-cotizalo).',

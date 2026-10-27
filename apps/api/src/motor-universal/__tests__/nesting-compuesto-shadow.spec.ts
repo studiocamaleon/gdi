@@ -256,6 +256,97 @@ const analizar = (componentes: ComponenteFabricadoCosteado[]) =>
     componentes,
   });
 
+describe('placas compartidas en procesos manuales', () => {
+  function cenefa(codigo: string, largoMm: number, cantidad = 2) {
+    const c = componente(codigo, nestingBase({
+      maquina: undefined,
+      perfil: undefined,
+      modoColor: null,
+      tecnologia: null,
+      substrates: [{ kind: 'sheet', count: 1, widthMm: 1220, heightMm: 2440 }],
+      demandaRectangular: [{ pieceId: codigo, cantidad, anchoMm: 190, altoMm: largoMm }],
+      visualConfig: {
+        margins: { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 },
+        spacing: { horizontalMm: 0, verticalMm: 0 },
+        allowRotation: true,
+        usableArea: { xMm: 0, yMm: 0, widthMm: 1220, heightMm: 2440 },
+      },
+    }));
+    const paso = c.pasos![0];
+    paso.familiaCodigo = 'montaje_sobre_sustrato';
+    paso.tiempo!.maquinaId = null;
+    paso.tiempo!.centroCostoId = 'taller-ficticio';
+    return c;
+  }
+
+  it.each([1, 2])('nestea juntas las cenefas de %s carteles y mantiene separado el fondo', async (cantidad) => {
+    const horizontales = cenefa('CENEFAS-H', 2400, cantidad * 2);
+    const verticales = cenefa('CENEFAS-V', 1200, cantidad * 2);
+    const tiempoHorizontal = horizontales.pasos![0].tiempo!;
+    tiempoHorizontal.extraMin = 3;
+    tiempoHorizontal.totalMin += 3;
+    tiempoHorizontal.costo += 3;
+    const fondo = cenefa('FONDO', 2400);
+    fondo.nestingCompartido = { excluido: true, motivo: 'El fondo se fabrica en otra chapa' };
+    const fondoAntes = JSON.stringify(fondo);
+    const tiemposAntes = [horizontales, verticales].map(c => structuredClone(c.pasos![0].tiempo));
+    const resultado = (await aplicarNestingCompuestoRectangular({
+      politica: 'CONSOLIDAR_COMPATIBLES', tenantId: 'empresa-ficticia',
+      productoPadreId: 'backlight-ficticio', recetaRevisionId: 'receta-ficticia',
+      componentes: [horizontales, verticales, fondo],
+    }))!;
+    expect(resultado.aplicadoACostos).toBe(true);
+    expect(resultado.grupos).toHaveLength(1);
+    const lote = resultado.grupos[0].lote!;
+    expect(lote.nestingResult.cantidadCalculada).toBe(1);
+    expect(lote.nestingResult.placements).toHaveLength(4 * cantidad);
+    expect(new Set(lote.participantes.map(p => p.componenteCodigo))).toEqual(new Set(['CENEFAS-H', 'CENEFAS-V']));
+    expect(lote.costoMaterialTotal).toBe(10);
+    expect([horizontales, verticales].reduce((s, c) => s + c.pasos![0].materiales![0].cantidad, 0)).toBeCloseTo(1);
+    expect([horizontales, verticales].map(c => c.pasos![0].tiempo)).toEqual(tiemposAntes);
+    expect(lote.duracionEstimadaMin).toBe(35);
+    expect(JSON.stringify(fondo)).toBe(fondoAntes);
+    expect(resultado.exclusiones).toContainEqual(expect.objectContaining({ componenteCodigo: 'FONDO', codigo: 'COMPONENTE_EXCLUIDO' }));
+  });
+
+  it('combina cenefas panelizadas con tiras enteras del mismo proceso manual', async () => {
+    const horizontales = cenefa('CENEFAS-H', 1500, 4);
+    horizontales.pasos![0].nestingResult!.algorithm = 'grid-2d-multi';
+    const verticales = cenefa('CENEFAS-V', 1500, 2);
+    const resultado = (await aplicarNestingCompuestoRectangular({
+      politica: 'CONSOLIDAR_COMPATIBLES', tenantId: 'empresa-ficticia',
+      productoPadreId: 'backlight-ficticio', recetaRevisionId: 'receta-ficticia',
+      componentes: [horizontales, verticales],
+    }))!;
+    expect(resultado.grupos).toHaveLength(1);
+    expect(resultado.grupos[0].lote!.nestingResult.placements).toHaveLength(6);
+    expect(resultado.grupos[0].lote!.nestingResult.cantidadCalculada).toBe(1);
+  });
+
+  it.each(['centro', 'dotacion', 'material'])('separa procesos con distinto %s', async (diferencia) => {
+    const a = cenefa('A', 2400), b = cenefa('B', 1200);
+    if (diferencia === 'centro') b.pasos![0].tiempo!.centroCostoId = 'otro-taller-ficticio';
+    if (diferencia === 'dotacion') b.pasos![0].tiempo!.dotacionOperarios = 2;
+    if (diferencia === 'material') {
+      b.pasos![0].materiales![0].materialVarianteId = 'otra-chapa-ficticia';
+      b.pasos![0].nestingResult!.sustrato!.materialVarianteId = 'otra-chapa-ficticia';
+    }
+    expect((await analizar([a, b]))!.grupos).toHaveLength(0);
+  });
+
+  it.each(['sin-centro', 'mecanizado', 'tercerizado'])('rechaza configuración manual %s', async (caso) => {
+    const a = cenefa('A', 2400), b = cenefa('B', 1200);
+    for (const c of [a, b]) {
+      if (caso === 'sin-centro') c.pasos![0].tiempo!.centroCostoId = null;
+      if (caso === 'mecanizado') c.pasos![0].familiaCodigo = 'impresion_por_area';
+      if (caso === 'tercerizado') c.pasos![0].tercerizado = true;
+    }
+    const resultado = (await analizar([a, b]))!;
+    expect(resultado.grupos).toHaveLength(0);
+    expect(resultado.exclusiones.every(e => e.codigo === 'CONFIGURACION_INCOMPLETA')).toBe(true);
+  });
+});
+
 describe('F4 consolidación ejecutable', () => {
   it('no reacomoda una impresión condicionada por la zona útil del corte posterior', async () => {
     const n = nestingBase();

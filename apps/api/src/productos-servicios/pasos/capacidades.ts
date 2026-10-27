@@ -155,6 +155,7 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
   pintura_m2: { capacidad: 'm2_consumidos', etiqueta: 'm² a pintar', atributo: true },
   fondo_m2: { capacidad: 'm2_consumidos', etiqueta: 'm² de chapa trasera', atributo: true },
   modulos_led: { capacidad: 'unidades_procesadas', etiqueta: 'módulos LED' },
+  metros_tira_led: { capacidad: 'metros_lineales', etiqueta: 'metros de tira LED' },
   watts_led: { capacidad: 'unidades_procesadas', etiqueta: 'watts cargados', atributo: true },
 
   // ── impresión ───────────────────────────────────────────────────────

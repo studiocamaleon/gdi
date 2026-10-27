@@ -196,6 +196,7 @@ const MP = {
     familiasMateriaPrima: ['ELECTRONICA_CARTELERIA', 'NEON_LUMINARIA'],
     subfamiliasMateriaPrima: [
       'MODULO_LED_CARTELERIA',
+      'TIRA_LED_CARTELERIA',
       'FUENTE_ALIMENTACION_LED',
       'CABLEADO_CONECTICA',
       'CONTROLADOR_LED',
@@ -1890,6 +1891,86 @@ const iluminacion_led: DefinicionFamilia = {
   ],
 };
 
+const iluminacion_tubos_led: DefinicionFamilia = {
+  codigo: 'iluminacion_tubos_led', nombre: 'Iluminación con tubos LED a 220 V',
+  descripcion: 'Elige tubos enteros según el espacio interior y la separación del taller, comparando ambas orientaciones. Alimentación directa a 220 V, sin fuente externa.',
+  categoria: 'estructural_montaje', editorParamsGenerico: true,
+  relacionMaquinaSoportada: ['M-0'], modosTiempoSoportados: ['T-2'],
+  mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'], modoActivacionDefault: 'OBLIGATORIO',
+  multiplicadoresSoportados: [], permiteSlotsAdicionales: true,
+  slotsRequeridos: [
+    { codigo: 'tubos_led', nombre: 'Tubos LED (longitud automática)', tipo: 'INSUMO_PASO', requerido: true,
+      compatibilidadMaterial: { templateIds: ['tubo_led_carteleria_v1'] },
+      seleccionTubosLed: true, formulaForzada: 'fijo', magnitudDerivada: 'tubos', cantidadDerivadaObligatoria: true },
+    { codigo: 'cableado', nombre: 'Cableado (estimación)', tipo: 'INSUMO_PASO', requerido: false,
+      compatibilidadMaterial: { subfamiliasMateriaPrima: ['CABLEADO_CONECTICA'] },
+      formulaForzada: 'por_metro_lineal', magnitudDerivada: 'cableMl' },
+  ],
+  plantillasCompatibles: [], inputsRequeridos: [], validaciones: [],
+  outputsCanonicos: ['watts_led'],
+  derivador: { codigo: 'sembrado_tubos_led', materialSlot: 'tubos_led', magnitudPrincipal: 'tubos', unidadPrincipal: 'tubos',
+    outputs: { watts_led: 'watts' }, mensajeSinDatos: 'no pudo distribuir los tubos LED.',
+    sugerenciaSinDatos: 'Revisá las medidas interiores, longitud, tensión y separación de los tubos.' },
+  paramsPasoSchema: [
+    { campo: 'separacionCm', etiqueta: 'Separación máxima (cm)', tipo: 'number', requerido: false, descripcion: 'Si queda vacío se usa el paso de la variante. Criterio del taller según profundidad y frente.' },
+    { campo: 'orientacion', etiqueta: 'Orientación de los tubos', tipo: 'enum', valoresPermitidos: ['automatico', 'horizontal', 'vertical'], default: 'automatico', requerido: true },
+    { campo: 'retiroBordeCm', etiqueta: 'Holgura de montaje en cada borde (cm)', tipo: 'number', default: 2, requerido: true, descripcion: 'Se descuenta del interior del bastidor. Verificar el espacio necesario para los soportes del tubo.' },
+    { campo: 'factorCablePerimetro', etiqueta: 'Cable: factor sobre el perímetro', tipo: 'number', default: 1.4, requerido: false },
+    { campo: 'cablePorTuboCm', etiqueta: 'Cable adicional por tubo (cm)', tipo: 'number', default: 20, requerido: false },
+  ],
+  productosTipicos: ['Cartel Backlight', 'Caja de luz'],
+};
+
+const iluminacion_tira_led: DefinicionFamilia = {
+  codigo: 'iluminacion_tira_led',
+  nombre: 'Iluminación con tira LED',
+  descripcion: 'Distribuye filas de tira LED flexible o zigzag, calcula metros y consumo, y dimensiona fuentes de la misma tensión. La separación se valida en taller para la profundidad y el frente del cartel.',
+  categoria: 'estructural_montaje',
+  editorParamsGenerico: true,
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
+  mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'],
+  modoActivacionDefault: 'OBLIGATORIO',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'tira_led', nombre: 'Tira LED', tipo: 'INSUMO_PASO', requerido: true,
+      compatibilidadMaterial: { templateIds: ['tira_led_carteleria_v1'] },
+      formulaForzada: 'por_metro_lineal', magnitudDerivada: 'metrosTira', cantidadDerivadaObligatoria: true,
+    },
+    {
+      codigo: 'fuente', nombre: 'Fuentes compatibles (automático)', tipo: 'INSUMO_PASO', requerido: true,
+      compatibilidadMaterial: { subfamiliasMateriaPrima: ['FUENTE_ALIMENTACION_LED'] },
+      formulaForzada: 'fijo', magnitudDerivada: 'fuentes', dimensionamientoFuenteTira: true,
+    },
+    {
+      codigo: 'cableado', nombre: 'Cableado (estimación)', tipo: 'INSUMO_PASO', requerido: false,
+      compatibilidadMaterial: { subfamiliasMateriaPrima: ['CABLEADO_CONECTICA'] },
+      formulaForzada: 'por_metro_lineal', magnitudDerivada: 'cableMl',
+    },
+  ],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [], inputsRequeridos: [], validaciones: [],
+  outputsCanonicos: ['metros_tira_led', 'watts_led'],
+  derivador: {
+    codigo: 'sembrado_tira_led', magnitudPrincipal: 'metrosTira', unidadPrincipal: 'm de tira',
+    materialSlot: 'tira_led', outputs: { metros_tira_led: 'metrosTira', watts_led: 'watts' },
+    mensajeSinDatos: 'no pudo calcular la tira LED.',
+    sugerenciaSinDatos: 'Revisá medida, separación entre filas y datos eléctricos de la tira.',
+  },
+  paramsPasoSchema: [
+    { campo: 'separacionCm', etiqueta: 'Separación máxima entre filas (cm)', tipo: 'number', requerido: true, descripcion: 'Criterio del taller según tira, profundidad y frente. Debe validarse con una muestra iluminada.' },
+    { campo: 'orientacion', etiqueta: 'Orientación de las filas', tipo: 'enum', valoresPermitidos: ['horizontal', 'vertical'], default: 'horizontal', requerido: true },
+    { campo: 'retiroBordeCm', etiqueta: 'Retiro mínimo del borde (cm)', tipo: 'number', default: 2.5, requerido: true },
+    { campo: 'margenFuentePct', etiqueta: 'Potencia adicional de la fuente (%)', tipo: 'number', default: 30, requerido: true, descripcion: '30% significa consumo × 1,3. Ajustar según la ficha de la fuente y condiciones de trabajo.' },
+    { campo: 'factorCablePerimetro', etiqueta: 'Cable: factor sobre el perímetro', tipo: 'number', default: 1.4, requerido: false },
+    { campo: 'cablePorFilaCm', etiqueta: 'Cable adicional por fila (cm)', tipo: 'number', default: 12, requerido: false },
+  ],
+  productosTipicos: ['Cartel backlight', 'Caja de luz'],
+};
+
 const montaje_sobre_sustrato: DefinicionFamilia = {
   codigo: 'montaje_sobre_sustrato',
   // [Tanda C] Antes: defaults cableados por nombre en el editor.
@@ -2363,6 +2444,8 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   ensamble_estructural,
   estructura_bastidor,
   iluminacion_led,
+  iluminacion_tira_led,
+  iluminacion_tubos_led,
   embalaje,
   trabajo_manual,
   modificacion_post,

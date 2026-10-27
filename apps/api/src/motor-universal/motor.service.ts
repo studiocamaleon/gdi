@@ -1,3 +1,4 @@
+import { seleccionarFuentesTira } from './iluminacion-tira-led';
 import { ESTADOS_ACTIVACION, resolverEstadosActivacion, type ContextoEstados } from './estado-pasos';
 import { cantidadManualKey, leerCantidadManual, usaCantidadManual, errorConfigCantidadManual, errorValorCantidadManual } from './cantidad-manual-paso';
 import { precioPapelCortado } from '../inventario/precio-papel-cortado';
@@ -287,6 +288,7 @@ import {
 import { declaraEfectoDemasia, leerEfectoDemasia } from './efectos-paso';
 import { calcularBarrasNecesarias } from './estructura-bastidor';
 import { runDerivador } from './derivadores';
+import { seleccionarTubosLed } from './iluminacion-tubos-led';
 import {
   derivacionesDelJobContext,
   type ResultadoDerivador,
@@ -4339,6 +4341,8 @@ export class MotorUniversalService {
       outputsCanonicos,
       capacidades,
       estructuraBastidor,
+      iluminacionTira: derivacionesDelJobContext(jobContext)[paso.configPasoId]?.traza?.iluminacionTira as PasoEjecutado['iluminacionTira'],
+      iluminacionTubos: derivacionesDelJobContext(jobContext)[paso.configPasoId]?.traza?.iluminacionTubos as PasoEjecutado['iluminacionTubos'],
     };
   }
 
@@ -5429,6 +5433,8 @@ export class MotorUniversalService {
       nestingResult,
       recorridoCorte,
       estructuraBastidor,
+      iluminacionTira: derivacionesDelJobContext(jobContext)[paso.configPasoId]?.traza?.iluminacionTira as PasoEjecutado['iluminacionTira'],
+      iluminacionTubos: derivacionesDelJobContext(jobContext)[paso.configPasoId]?.traza?.iluminacionTubos as PasoEjecutado['iluminacionTubos'],
     };
   }
 
@@ -8808,6 +8814,71 @@ export class MotorUniversalService {
     subfamilia?: string | null;
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
+    const tubosLed = paso && resolverFamilia(paso.familiaCodigo)?.slotsRequeridos
+      .find((decl) => decl.codigo === slot.slotCodigo)?.seleccionTubosLed;
+    if (tubosLed && paso) {
+      const ids = this.getSlotCandidatoVarianteIds(slot);
+      const elegida = this.getEleccionMaterialComercial(slot, jobContext, paso);
+      const candidatas = slot.modoSeleccion === 'HARDCODED'
+        ? [slot.materialVariante].filter(v => v && v.activo !== false && v.materiaPrimaActiva !== false)
+        : slot.modoSeleccion === 'HEREDA_DE_PASO' && slot.materialHeredado
+          ? [await this.resolverMaterialSlot(tenantId, slot.materialHeredado.slot, jobContext, slot.materialHeredado.paso)]
+          : elegida && ids.includes(elegida)
+            ? [await this.cargarVariantePorId(tenantId, elegida)]
+            : !elegida && slot.modoSeleccion === 'MOTOR_ELIGE_AUTO'
+              ? await Promise.all(ids.map(id => this.cargarVariantePorId(tenantId, id))) : [];
+      const validas = candidatas.filter((v): v is NonNullable<typeof v> => v != null &&
+        (!slot.criterioFiltroCampo || jobContext[slot.criterioFiltroCampo] == null || jobContext[slot.criterioFiltroCampo] === '' ||
+          textoPrimitivo(v.atributosVarianteJson?.[slot.criterioFiltroCampo]) === textoPrimitivo(jobContext[slot.criterioFiltroCampo])));
+      // Comparar costos por tubo aun si el inventario se expresa en packs.
+      const porUnidad = validas.flatMap(v => {
+        const conversion = materialUnitConversion(v.contextoUnidades ?? {
+          unidadStock: v.unidadStock ?? 'unidad', unidadCompra: 'unidad', atributos: v.atributosVarianteJson ?? {},
+        }, 'unidad', v.unidadStock ?? 'unidad');
+        return conversion.ok ? [{ ...v, precioReferencia: v.precioReferencia == null ? null : v.precioReferencia * conversion.factor }] : [];
+      });
+      const seleccion = seleccionarTubosLed(porUnidad, jobContext, this.paramsEfectivosDelPaso(paso, jobContext));
+      return validas.find(v => v.id === seleccion?.id) ?? null;
+    }
+    const fuenteTira = paso && resolverFamilia(paso.familiaCodigo)?.slotsRequeridos
+      .find((decl) => decl.codigo === slot.slotCodigo)?.dimensionamientoFuenteTira;
+    if (fuenteTira && paso) {
+      const derivacion = derivacionesDelJobContext(jobContext)[paso.configPasoId];
+      if (!derivacion || derivacion.diagnostico) return null;
+      const ids = this.getSlotCandidatoVarianteIds(slot);
+      const elegida = this.getEleccionMaterialComercial(slot, jobContext, paso);
+      const heredada = slot.modoSeleccion === 'HEREDA_DE_PASO' && slot.materialHeredado
+        ? await this.resolverMaterialSlot(tenantId, slot.materialHeredado.slot, jobContext, slot.materialHeredado.paso)
+        : null;
+      const candidatas = slot.modoSeleccion === 'HARDCODED'
+        ? [slot.materialVariante].filter((v) => v && v.activo !== false && v.materiaPrimaActiva !== false)
+        : slot.modoSeleccion === 'HEREDA_DE_PASO' ? [heredada]
+        : elegida && ids.includes(elegida)
+          ? [await this.cargarVariantePorId(tenantId, elegida)]
+          : !elegida && slot.modoSeleccion === 'MOTOR_ELIGE_AUTO'
+            ? await Promise.all(ids.map(id => this.cargarVariantePorId(tenantId, id)))
+            : [];
+      const filtro = slot.criterioFiltroCampo;
+      const valor = filtro ? jobContext[filtro] : undefined;
+      const validas = candidatas.filter((v): v is NonNullable<typeof v> =>
+        v != null && (!filtro || valor == null || valor === '' || textoPrimitivo(v.atributosVarianteJson?.[filtro]) === textoPrimitivo(valor)));
+      const plan = seleccionarFuentesTira(validas, derivacion.magnitudes);
+      if (!plan) {
+        derivacion.diagnostico = {
+          codigo: 'tira_led_sin_fuente_compatible',
+          mensaje: `No hay una fuente utilizable de ${derivacion.magnitudes.tensionV} V para la tira LED.`,
+          sugerencia: 'Revisá tensión, corriente en A, precio y selección de las fuentes de este paso.',
+        };
+        return null;
+      }
+      derivacion.magnitudes.fuentes = plan.cantidad * Number(jobContext.cantidad ?? 1);
+      const traza = derivacion.traza?.iluminacionTira as Record<string, unknown> | undefined;
+      if (traza) traza.fuentes = {
+        porCartel: plan.cantidad, capacidadW: plan.capacidadW, corrienteA: plan.corrienteA,
+        consumoMaximoPorFuenteW: plan.consumoMaximoPorFuenteW,
+      };
+      return plan.variante;
+    }
     if (slot.modoSeleccion === 'HEREDA_DE_PASO') {
       return slot.materialHeredado
         ? this.resolverMaterialSlot(
@@ -9133,6 +9204,18 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): ErrorMotor {
+    if (resolverFamilia(paso.familiaCodigo)?.slotsRequeridos.find(s => s.codigo === slot.slotCodigo)?.seleccionTubosLed) {
+      return {
+        codigo: 'tubos_led_sin_distribucion', severidad: 'ERROR', rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden, familiaCodigo: paso.familiaCodigo,
+        mensaje: 'No hay tubos LED seleccionados que entren y cubran el interior con la separación configurada.',
+        sugerencia: 'Revisá los candidatos de este paso, largo, tensión de 220 V, precio, separación y holgura de montaje.',
+      };
+    }
+    const diagnostico = derivacionesDelJobContext(jobContext)[paso.configPasoId]?.diagnostico;
+    if (diagnostico && resolverFamilia(paso.familiaCodigo)?.slotsRequeridos.find(s => s.codigo === slot.slotCodigo)?.dimensionamientoFuenteTira) {
+      return { ...diagnostico, severidad: 'ERROR', rutaPasoId: paso.rutaPasoId, rutaPasoOrden: paso.rutaPasoOrden, familiaCodigo: paso.familiaCodigo };
+    }
     const candidatoVarianteIds = this.getSlotCandidatoVarianteIds(slot);
     const eleccion = this.getEleccionMaterialComercial(slot, jobContext, paso);
     const slotLabel = slot.slotCodigo.replace(/_/g, ' ');
@@ -9726,12 +9809,30 @@ export class MotorUniversalService {
     // configuró su propia regla (base × factor: "3 anclajes por m²"), gana
     // su configuración y se sigue el camino normal. Genérico: sin nombres
     // de familia ni de slot.
-    if (slot.cantidadBase) return null;
     const familia = resolverFamilia(paso.familiaCodigo);
     const decl = familia?.slotsRequeridos.find(
       (s) => s.codigo === slot.slotCodigo,
     );
     if (!decl) return null;
+    if (decl.seleccionTubosLed) {
+      const cantidad = derivacionesDelJobContext(jobContext)[paso.configPasoId]?.magnitudes.tubos;
+      if (!cantidad || !materialResuelto) return Number.NaN;
+      const conversion = materialUnitConversion(materialResuelto.contextoUnidades ?? {
+        unidadStock: materialResuelto.unidadStock ?? 'unidad', unidadCompra: 'unidad', atributos: materialResuelto.atributosVarianteJson ?? {},
+      }, 'unidad', unidadEfectivaDeFormula(slot.formula, materialResuelto.unidadStock));
+      return conversion.ok ? cantidad * conversion.factor : Number.NaN;
+    }
+    if (decl.dimensionamientoFuenteTira) {
+      const cantidad = derivacionesDelJobContext(jobContext)[paso.configPasoId]?.magnitudes.fuentes;
+      if (!cantidad || !materialResuelto) return Number.NaN;
+      const conversion = materialUnitConversion(materialResuelto.contextoUnidades ?? {
+        unidadStock: materialResuelto.unidadStock ?? 'unidad',
+        unidadCompra: 'unidad',
+        atributos: materialResuelto.atributosVarianteJson ?? {},
+      }, 'unidad', unidadEfectivaDeFormula(slot.formula, materialResuelto.unidadStock));
+      return conversion.ok ? cantidad * conversion.factor : Number.NaN;
+    }
+    if (slot.cantidadBase && !decl.cantidadDerivadaObligatoria) return null;
     if (decl.cantidadFija !== undefined) {
       // `cantidadFija` es POR CARTEL, no por trabajo: dos backlights llevan
       // dos fuentes (cada uno la suya, elegida por SUS watts), no una.
