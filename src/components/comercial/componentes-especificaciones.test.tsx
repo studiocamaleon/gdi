@@ -88,6 +88,21 @@ describe("vista de especificaciones de la propuesta", () => {
     expect(specs).toContainEqual({ lbl: "Material", val: "Acrílico" });
   });
 
+  it("no usa los tornillos del armado como material principal del cartel compuesto", () => {
+    const armado = {
+      activado: true,
+      familiaCodigo: "trabajo_manual",
+      materiales: [{ ...material, slotCodigo: "insumo_manual", materialNombre: "Tornillos de acero" }],
+    };
+    expect(buildOrdenItemSpecs(item([armado]))).not.toContainEqual(
+      expect.objectContaining({ lbl: "Material" }),
+    );
+    // Los productos simples conservan su material y las cotizaciones previas.
+    expect(buildOrdenItemSpecs(item([armado], []))).toContainEqual({
+      lbl: "Material", val: "Tornillos de acero",
+    });
+  });
+
   it("conserva las especificaciones históricas si no hay materiales efectivos en componentes", () => {
     expect(buildOrdenItemSpecs(item([], []))).toContainEqual({
       lbl: "Material",

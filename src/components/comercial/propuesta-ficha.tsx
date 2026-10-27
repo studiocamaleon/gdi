@@ -1222,7 +1222,18 @@ function getMainCommercialMaterial(item: PropuestaItem) {
     );
   });
 
-  return preferred?.material ?? materiales[0]?.material ?? null;
+  // En un compuesto, los insumos de armado (tornillos, cable, adhesivo)
+  // no representan el material principal del producto completo.
+  const fallback = componentesTienenMaterialEfectivo(
+    item.cotizacion.componentesFabricados,
+  )
+    ? materiales.find(({ material }) =>
+        ["sustrato", "papel", "pliego", "media", "material", "producto_base", "blank"].some(
+          (key) => normalizeSearchText(material.slotCodigo).includes(key),
+        ),
+      )
+    : materiales[0];
+  return preferred?.material ?? fallback?.material ?? null;
 }
 
 function isMaterialSpecKey(key: string, label: string) {
