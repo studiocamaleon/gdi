@@ -24,6 +24,7 @@ import { CostosValidacionesService } from '../costos/costos-validaciones.service
 import { CostosTarifasService } from '../costos/costos-tarifas.service';
 import { CostosRepartoService } from '../costos/costos-reparto.service';
 import { TipoCentroCostoDto } from '../costos/dto/upsert-centro-costo.dto';
+import { MetodosPagoService } from '../administracion/metodos-pago.service';
 import { CobrosService } from '../administracion/cobros.service';
 import { FacturacionOrdenesService } from '../administracion/facturacion-ordenes.service';
 import { RecibosService } from '../administracion/recibos.service';
@@ -229,6 +230,27 @@ describe('alta sin recursos', () => {
       }, origen);
     },
   );
+
+  it.each([
+    { paisCodigo: 'CL', monedaCodigo: 'CLP', total: 2 },
+    { paisCodigo: 'AR', monedaCodigo: 'ARS', total: 9 },
+  ])('instala los medios de $paisCodigo sin reutilizar una caja en USD', async ({ paisCodigo, monedaCodigo, total }) => {
+    await escenario(async (c) => {
+      await c.tx.datosEmpresa.update({
+        where: { tenantId: c.tenantId }, data: { paisCodigo, monedaCodigo },
+      });
+      const caja = await c.tx.cuentaFondos.create({
+        data: { tenantId: c.tenantId, nombre: 'Caja mostrador', tipo: 'caja', moneda: 'USD' },
+      });
+      const catalogo = new MetodosPagoService(c.prisma as never);
+      expect(await catalogo.instalarCatalogo(c.auth)).toEqual({ creados: total, total });
+      expect(await c.tx.metodoPago.findFirstOrThrow({
+        where: { tenantId: c.tenantId, codigo: 'efectivo' },
+      })).toMatchObject({ cuentaDestinoId: null });
+      expect(await c.tx.cuentaFondos.findUniqueOrThrow({ where: { id: caja.id } }))
+        .toMatchObject({ moneda: 'USD' });
+    });
+  });
 
   it('caracteriza el cierre de bienvenida: hoy permite completarlo sin productos', async () => {
     await escenario(async (c) => {
@@ -792,24 +814,20 @@ it.each(['digital', 'gran-formato', 'mixto'] as const)(
       ).toBe('entregada');
       if (tipo === 'digital') {
         const db = c.prisma as never;
-        const caja = await c.tx.cuentaFondos.create({
-          data: {
-            tenantId: c.tenantId,
-            nombre: 'Caja del taller',
-            tipo: 'caja',
-            moneda: 'CLP',
-          },
+        const catalogo = new MetodosPagoService(db);
+        expect(await catalogo.instalarCatalogo(c.auth)).toEqual({ creados: 2, total: 2 });
+        expect(await catalogo.instalarCatalogo(c.auth)).toEqual({ creados: 0, total: 2 });
+        const caja = await c.tx.cuentaFondos.findUniqueOrThrow({
+          where: { tenantId_nombre: { tenantId: c.tenantId, nombre: 'Caja mostrador' } },
         });
-        const medio = await c.tx.metodoPago.create({
-          data: {
-            tenantId: c.tenantId,
-            nombre: 'Efectivo',
-            codigo: 'EFECTIVO',
-            tipo: 'efectivo',
-            cuentaDestinoId: caja.id,
-            plazoAcreditacionDias: 0,
-          },
+        expect(caja.moneda).toBe('CLP');
+        const medios = await c.tx.metodoPago.findMany({
+          where: { tenantId: c.tenantId }, orderBy: { orden: 'asc' },
         });
+        expect(medios.map(m => [m.codigo, Number(m.ivaComisionPct), m.sufreRetencion]))
+          .toEqual([['efectivo', 0, false], ['transferencia', 0, false]]);
+        const medio = medios[0];
+        expect(medio.cuentaDestinoId).toBe(caja.id);
         const pdf = new ReciboPdfService();
         const recibos = new RecibosService(
           db,

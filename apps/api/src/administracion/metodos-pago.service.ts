@@ -4,6 +4,7 @@ import {
   filtroCuentas,
   puedeRegistrarCobros,
 } from './acceso-cuentas';
+import { regionalDelTenant } from '../common/regional';
 import { cuentaCompatibleCobro, medioBancario } from '../common/cuentas-cobro';
 import { validarReglasRetencion } from './retenciones-validacion';
 import type { Prisma } from '@prisma/client';
@@ -116,6 +117,11 @@ const CATALOGO_SUGERIDO: Array<{
     sufreRetencion: true,
   },
 ];
+
+// Los convenios de tarjeta, comisiones y retenciones los configura el taller chileno.
+const CATALOGO_CHILE = CATALOGO_SUGERIDO
+  .filter(({ codigo }) => codigo === 'efectivo' || codigo === 'transferencia')
+  .map(medio => ({ ...medio, sufreRetencion: false }));
 
 function slugify(nombre: string): string {
   return nombre
@@ -263,8 +269,10 @@ export class MetodosPagoService {
   async instalarCatalogo(auth: CurrentAuth) {
     await exigirTesoreriaCompleta(this.prisma, auth);
     await this.capacidades.exigir(auth.tenantId, 'cobros');
+    const region = await regionalDelTenant(this.prisma, auth.tenantId);
+    const catalogo = region.paisCodigo === 'CL' ? CATALOGO_CHILE : CATALOGO_SUGERIDO;
     let creados = 0;
-    for (const [indice, sugerido] of CATALOGO_SUGERIDO.entries()) {
+    for (const [indice, sugerido] of catalogo.entries()) {
       const existe = await this.prisma.metodoPago.findFirst({
         where: { tenantId: auth.tenantId, codigo: sugerido.codigo },
         select: { id: true },
@@ -284,10 +292,13 @@ export class MetodosPagoService {
             tenantId: auth.tenantId,
             nombre: sugerido.cuentaSugerida.nombre,
             tipo: sugerido.cuentaSugerida.tipo,
+            moneda: region.moneda.codigo,
           },
           update: {},
         });
-        cuentaDestinoId = cuenta.id;
+        if (cuenta.moneda === region.moneda.codigo && cuenta.activo && cuenta.tipo === sugerido.cuentaSugerida.tipo) {
+          cuentaDestinoId = cuenta.id;
+        }
       }
 
       await this.prisma.metodoPago.create({
@@ -306,7 +317,7 @@ export class MetodosPagoService {
       });
       creados += 1;
     }
-    return { creados, total: CATALOGO_SUGERIDO.length };
+    return { creados, total: catalogo.length };
   }
 
   async listarCuentasCobro(auth: CurrentAuth) {
