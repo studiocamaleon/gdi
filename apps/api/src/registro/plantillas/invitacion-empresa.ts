@@ -5,7 +5,9 @@ export type DatosInvitacionEmpresa = {
   plan: string;
   url: string;
   venceEl: Date;
+  zonaHoraria?: string;
   trialHasta: Date | null;
+  pilotoPendiente?: boolean;
   moneda: string;
   mensual: number | null;
   implementacion: number | null;
@@ -27,8 +29,10 @@ export function crearCorreoInvitacionEmpresa(
     new Intl.DateTimeFormat('es-AR', {
       dateStyle: 'long',
       timeStyle: 'short',
-      timeZone: 'UTC',
-    }).format(d) + ' UTC';
+      timeZone: args.zonaHoraria ?? 'UTC',
+    }).format(d) +
+    ' ' +
+    (args.zonaHoraria ?? 'UTC');
   const importe = (n: number) =>
     `${args.moneda} ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(n)}`;
   const filas = [
@@ -36,7 +40,9 @@ export function crearCorreoInvitacionEmpresa(
     ['Plan', args.plan],
     ...(args.trialHasta
       ? [['Prueba disponible hasta', fecha(args.trialHasta)]]
-      : []),
+      : args.pilotoPendiente
+        ? [['Prueba gratuita', '30 días desde que aceptes esta invitación']]
+        : []),
     ...(args.mensual !== null
       ? [['Abono mensual al contratar', importe(args.mensual)]]
       : []),

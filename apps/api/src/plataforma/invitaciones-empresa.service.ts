@@ -59,6 +59,7 @@ export class InvitacionesEmpresaService {
       include: {
         tenant: {
           include: {
+            datosEmpresa: { select: { zonaHoraria: true } },
             suscripcion: {
               include: {
                 plan: true,
@@ -93,6 +94,8 @@ export class InvitacionesEmpresaService {
           url: invitacionUrl,
           venceEl: i.expiresAt,
           trialHasta: s?.trialHasta ?? null,
+          pilotoPendiente: Boolean(s?.piloto30Dias && !s.trialHasta),
+          zonaHoraria: i.tenant.datosEmpresa?.zonaHoraria,
           moneda:
             precioMensual?.moneda ??
             contenido?.precios?.moneda ??
@@ -104,10 +107,12 @@ export class InvitacionesEmpresaService {
               : null
             : contenido?.precios
               ? contenido.precios.mensual
-              : s && !s.plan.precioAConsultar
+              : s && !s.implementacionResueltaEl && !s.plan.precioAConsultar
                 ? Number(s.plan.precioMensual)
                 : null,
-          implementacion: contenido?.comercial?.implementacion ?? null,
+          implementacion: s?.implementacionResueltaEl
+            ? Number(s.implementacionImporte ?? 0)
+            : (contenido?.comercial?.implementacion ?? null),
         },
         { idempotencyKey: `invitacion-empresa/${i.id}/${tokenHash}` },
       );
