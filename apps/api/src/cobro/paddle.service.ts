@@ -2,6 +2,13 @@ import { textoErrorLog } from '../common/log-seguro';
 import { Injectable, Logger } from '@nestjs/common';
 import { Environment, Paddle } from '@paddle/paddle-node-sdk';
 
+// Paddle entrega unidades mínimas: 12900 son 129 USD o 12900 CLP.
+function montoPaddle(unidades: string | number | null | undefined, moneda = 'USD') {
+  const decimales = new Intl.NumberFormat('en', { style: 'currency', currency: moneda })
+    .resolvedOptions().maximumFractionDigits ?? 2;
+  return Number(unidades ?? 0) / 10 ** decimales;
+}
+
 /**
  * Cliente de Paddle. Aísla el SDK del resto del sistema: nadie más importa
  * `@paddle/paddle-node-sdk`, así sumar MercadoPago después es agregar otro
@@ -253,7 +260,9 @@ export class PaddleService {
       const precio = await this.cliente.prices.get(priceId);
       const bruto = Number(precio.unitPrice?.amount ?? '0');
       return {
-        monto: Number.isFinite(bruto) ? bruto / 100 : 0,
+        monto: Number.isFinite(bruto)
+          ? montoPaddle(bruto, precio.unitPrice?.currencyCode)
+          : 0,
         moneda: precio.unitPrice?.currencyCode ?? 'USD',
         productId: precio.productId ?? null,
         descripcion: precio.description ?? '',
@@ -298,7 +307,7 @@ export class PaddleService {
         id: t.id,
         numero: t.invoiceNumber ?? null,
         fecha: t.billedAt ?? t.createdAt ?? null,
-        total: Number(t.details?.totals?.total ?? '0') / 100,
+        total: montoPaddle(t.details?.totals?.total, t.currencyCode),
         moneda: t.currencyCode ?? 'USD',
         estado: t.status,
       }));
@@ -459,8 +468,8 @@ export class PaddleService {
     });
     const t = p.immediateTransaction?.details?.totals;
     return {
-      aCobrar: Number(t?.grandTotal ?? 0) / 100,
-      aCredito: Number(t?.creditToBalance ?? 0) / 100,
+      aCobrar: montoPaddle(t?.grandTotal, p.currencyCode),
+      aCredito: montoPaddle(t?.creditToBalance, p.currencyCode),
       moneda: p.currencyCode,
       impuestosEnCheckout: false,
     };
@@ -542,8 +551,8 @@ export class PaddleService {
       const moneda = p.currencyCode ?? 'USD';
       if (!t) return { aCobrar: 0, aCredito: 0, moneda };
       return {
-        aCobrar: Number(t.grandTotal ?? '0') / 100,
-        aCredito: Number(t.creditToBalance ?? '0') / 100,
+        aCobrar: montoPaddle(t.grandTotal, moneda),
+        aCredito: montoPaddle(t.creditToBalance, moneda),
         moneda,
       };
     } catch (error) {

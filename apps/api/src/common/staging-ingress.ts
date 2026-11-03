@@ -16,7 +16,17 @@ export function configurarEntradaStaging(express: Express): boolean {
   }
   const digest = (value: string) => createHash('sha256').update(value).digest();
   const expected = digest(token);
-  // El primer lanzamiento de producción no habilita Inbox ni cobros Paddle.
+  const paddleHabilitado = process.env.PADDLE_WEBHOOK_ENABLED === 'true';
+  if (
+    paddleHabilitado &&
+    (process.env.PADDLE_ENV !== (production ? 'production' : 'sandbox') ||
+      !process.env.PADDLE_API_KEY?.trim() ||
+      !process.env.PADDLE_WEBHOOK_SECRET?.trim())
+  ) {
+    throw new Error(
+      'El webhook de Paddle necesita el entorno correcto, la API key y el secreto de firma.',
+    );
+  }
   const metaHabilitado =
     staging && process.env.STAGING_META_WEBHOOK_ENABLED === 'true';
   if (
@@ -56,6 +66,14 @@ export function configurarEntradaStaging(express: Express): boolean {
       metaHabilitado &&
       ['GET', 'POST'].includes(req.method) &&
       req.path === '/api/webhooks/whatsapp'
+    ) {
+      next();
+      return;
+    }
+    if (
+      paddleHabilitado &&
+      req.method === 'POST' &&
+      req.path === '/api/webhooks/paddle'
     ) {
       next();
       return;
