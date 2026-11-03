@@ -14,7 +14,7 @@ const info = () => ({ accountId: 'cuenta', bucketId: 'bucket', action: 'upload',
     value: { mode: 'compliance', retainUntilTimestamp: 1000 } } });
 
 function escenario({ upload = 'https://pod-000-1007-13.backblaze.com/b2api/v4/b2_upload_file/bucket/x', download = 'https://f001.backblazeb2.com',
-  update = true, cambiarInfo = () => {}, fallo = null } = {}) {
+  update = true, cambiarInfo = () => {}, fallo = null, subir } = {}) {
   const calls = []; let detalle = info(); cambiarInfo(detalle);
   const b2 = new DestinoB2(env, { fetchFn: async (url, init) => {
     calls.push({ url, init }); assert.equal(init.redirect, 'error');
@@ -26,7 +26,11 @@ function escenario({ upload = 'https://pod-000-1007-13.backblaze.com/b2api/v4/b2
     if (url.endsWith('b2_list_buckets')) return Response.json({ buckets: [{ bucketId: 'bucket', accountId: 'cuenta', bucketType: 'allPrivate',
       lifecycleRules: [], fileLockConfiguration: { isClientAuthorizedToRead: true, value: { isFileLockEnabled: true,
         defaultRetention: { mode: 'compliance', period: { unit: 'days', duration: 30 } } } } }] });
-    if (url.endsWith('b2_get_upload_url')) return Response.json({ bucketId: 'bucket', authorizationToken: 'subida-demo', uploadUrl: upload });
+    if (url.endsWith('b2_get_upload_url')) {
+      const numero = calls.filter(c => c.url.endsWith('b2_get_upload_url')).length;
+      return Response.json({ bucketId: 'bucket', authorizationToken: `subida-${numero}`, uploadUrl: subir ? `${upload}/${numero}` : upload });
+    }
+    if (subir && url.startsWith(upload)) return subir(init, detalle);
     if (url.endsWith('b2_get_file_info')) return Response.json(detalle);
     if (url.endsWith('b2_update_file_retention')) {
       if (update) detalle.fileRetention.value.retainUntilTimestamp = JSON.parse(init.body).fileRetention.retainUntilTimestamp;
@@ -85,3 +89,34 @@ test('descarga mediante fileId y autorización en cabecera, nunca URL pública',
 test('rechazos del proveedor no revelan su cuerpo', async () => {
   const { b2 } = escenario({ fallo: 403 }); await assert.rejects(b2.iniciar(), e => !e.message.includes('secreto-ficticio'));
 });
+
+for (const caso of [
+  { estados: [503, 200], exito: true }, { estados: [503, 503, 503], exito: false },
+  { estados: [403], exito: false },
+]) {
+  test(`subida B2 con respuestas ${caso.estados.join(', ')}`, async t => {
+    const dir = await mkdtemp(join(tmpdir(), 'b2-reintento-'));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const file = join(dir, 'cipher');
+    await writeFile(file, 'contenido!');
+    let intentos = 0;
+    const { b2, calls } = escenario({ subir: async (init, detalle) => {
+      const chunks = [];
+      for await (const chunk of init.body) chunks.push(chunk);
+      assert.equal(Buffer.concat(chunks).toString(), 'contenido!');
+      assert.equal(init.headers.Authorization, `subida-${intentos + 1}`);
+      assert.equal(init.headers['X-Bz-Content-Sha1'], ref.sha1);
+      assert.equal(init.headers['X-Bz-File-Retention-Mode'], 'compliance');
+      const status = caso.estados[intentos++];
+      return status === 200 ? Response.json(detalle) : new Response(null, { status });
+    } });
+    await b2.iniciar();
+    const subida = b2.subir(file, ref.fileName, ref, 1000);
+    if (caso.exito) {
+      assert.deepEqual(await subida, ref);
+      assert.ok(calls.at(-1).url.endsWith('b2_get_file_info'));
+    } else await assert.rejects(subida, /B2 rechazó/);
+    assert.equal(intentos, caso.estados.length);
+    assert.equal(calls.filter(c => c.url.endsWith('b2_get_upload_url')).length, intentos);
+  });
+}
