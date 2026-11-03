@@ -186,6 +186,7 @@ export function ModeloProductivoEditorView({
           modeloProductivo={{
             active: modeloAbierto,
             estructura,
+            aristas: revisionVisible?.grafoProduccionJson?.aristas,
             componentes: revisionVisible?.componentes ?? [],
             etapas: revisionVisible?.pasosCompuestosJson ?? [],
             nodoSeleccionado,

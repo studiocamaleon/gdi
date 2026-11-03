@@ -56,6 +56,10 @@ import {
   SheetTitle,
 } from "./nodos-sheet";
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
+import {
+  construirColumnasProductivas,
+  type AristaProductivaVisual,
+} from "@/lib/modelo-productivo-layout";
 import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-tercerizado-panel";
 
 import maq from "@/components/productos-servicios/en-que-maquina.module.css";
@@ -163,7 +167,6 @@ import {
   estadoPasoRuleFields,
   jsonLogicToRuleGroup,
   type RuleFieldDefinition,
-  type RuleOperator,
   validateRuleGroup,
 } from "@/lib/rule-builder";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
@@ -209,9 +212,11 @@ interface Props {
   modeloProductivo?: {
     active: boolean;
     estructura: "SIMPLE" | "COMPUESTO";
+    aristas?: AristaProductivaVisual[] | null;
     componentes: Array<{
       codigo: string;
       nombre: string;
+      nodosPredecesoresClaves?: string[];
       nodoIncorporacionClave?: string | null;
     }>;
     etapas: Array<{
@@ -3022,62 +3027,6 @@ export function ConfigPasosEditorView({
     () => getPersonalizaciones(producto.personalizacionesJson),
     [producto.personalizacionesJson],
   );
-  // Variables de regla POR PASO: "Si <Tecnología> de <Paso>", "Si <Quién
-  // hace el paso> de <Paso>". Una definición por variable con el selector de
-  // paso aparte (no un item de lista por cada paso). Extensible: agregar
-  // una variable nueva acá y su clave `<prefijo><configPasoId>` al jobContext.
-  const technologyRuleFields = React.useMemo<RuleFieldDefinition[]>(() => {
-    const pasos = rutaAlternativa.ruta.pasos.map((rutaPaso) => {
-      const configPaso = rutaAlternativa.configPasos.find(
-        (config) => config.rutaPasoId === rutaPaso.id,
-      );
-      const familia = familiasMap.get(rutaPaso.familiaCodigo);
-      return {
-        value: configPaso?.id ?? rutaPaso.id,
-        label: `Paso ${rutaPaso.orden} · ${
-          familia?.nombre ?? rutaPaso.familiaCodigo
-        }`,
-      };
-    });
-    if (pasos.length === 0) return [];
-    return [
-      {
-        key: "tecnologia_",
-        label: "Tecnología",
-        kind: "select" as const,
-        valueKind: "string" as const,
-        operators: ["=", "!="] as RuleOperator[],
-        options: TECHNOLOGY_RULE_OPTIONS,
-        pasos,
-      },
-      {
-        key: "quienHace_",
-        label: "Quién hace el paso",
-        kind: "select" as const,
-        valueKind: "string" as const,
-        operators: ["=", "!="] as RuleOperator[],
-        options: [
-          { value: "empresa", label: "Lo produce la empresa" },
-          { value: "proveedor", label: "La hace un proveedor" },
-        ],
-        pasos,
-      },
-    ];
-  }, [familiasMap, rutaAlternativa.configPasos, rutaAlternativa.ruta.pasos]);
-
-  const activationRuleFields = (pasoId?: string) => [
-    ...technologyRuleFields,
-    ...(!configuracionBase
-      ? estadoPasoRuleFields(
-          pasosAsistente.map((paso, index) => ({
-            value: paso.id,
-            label: `Paso ${index + 1} · ${paso.nombre}`,
-          })),
-          pasoId,
-        )
-      : []),
-  ];
-
   // Estado: por cada paso de la ruta, su configuración (existente o nueva)
   const [configs, setConfigs] = React.useState<ConfigState>(() => {
     const initial: ConfigState = {};
@@ -4745,6 +4694,102 @@ export function ConfigPasosEditorView({
         "OBLIGATORIO",
     };
   });
+  // El lienzo guarda el recorrido en sus conexiones, sin renumerar ordenFlujo.
+  // Las condiciones deben seguir los mismos momentos, incluidos los enlaces
+  // que pasan por componentes. Los IDs de las reglas guardadas no cambian.
+  const pasosParaReglas = (() => {
+    if (modeloProductivo?.aristas == null) return pasosAsistente;
+    // Dentro de un momento paralelo, el lienzo usa base + extras para desempatar.
+    const ordenLienzo = new Map([
+      ...rutaAlternativa.ruta.pasos,
+      ...pasosExtras,
+    ].map((paso, index) => [paso.id, index]));
+    const nodosPaso = pasosAsistente.map((paso) => ({
+      clave: `${paso.esExtra ? "extra" : "ruta"}:${paso.id}`,
+      tipo: "PASO" as const,
+      orden: 100 + (ordenLienzo.get(paso.id) ?? 0),
+      paso,
+    }));
+    const nodosComponente = modeloProductivo.componentes.map(
+      (componente, index) => ({
+        clave: `componente:${componente.codigo}`,
+        tipo: "COMPONENTE" as const,
+        orden: index,
+        paso: null,
+      }),
+    );
+    const aristas = [
+      ...modeloProductivo.aristas,
+      ...modeloProductivo.componentes.flatMap((componente) => {
+        const clave = `componente:${componente.codigo}`;
+        return [
+          ...(componente.nodosPredecesoresClaves ?? []).map((desdeClave) => ({
+            desdeClave,
+            haciaClave: clave,
+          })),
+          ...(componente.nodoIncorporacionClave
+            ? [{
+                desdeClave: clave,
+                haciaClave: componente.nodoIncorporacionClave,
+              }]
+            : []),
+        ];
+      }),
+    ];
+    return construirColumnasProductivas(
+      [...nodosPaso, ...nodosComponente],
+      aristas,
+    )
+      .flat()
+      .flatMap((nodo) => (nodo.paso ? [nodo.paso] : []));
+  })();
+  const opcionesPasosReglas = pasosParaReglas.map((paso, index) => ({
+    value: paso.id,
+    label: `Paso ${index + 1} · ${paso.nombre}`,
+  }));
+  // Tecnología y responsable conservan el ID de configuración que ya usaban,
+  // pero comparten orden, numeración y nombre visible con el estado del paso.
+  const pasosTecnologia = opcionesPasosReglas
+    .filter((opcion) =>
+      rutaAlternativa.ruta.pasos.some((paso) => paso.id === opcion.value),
+    )
+    .map((opcion) => ({
+      ...opcion,
+      value: rutaAlternativa.configPasos.find(
+        (config) => config.rutaPasoId === opcion.value,
+      )?.id ?? opcion.value,
+    }));
+  const technologyRuleFields: RuleFieldDefinition[] = pasosTecnologia.length
+    ? [
+        {
+          key: "tecnologia_",
+          label: "Tecnología",
+          kind: "select",
+          valueKind: "string",
+          operators: ["=", "!="],
+          options: TECHNOLOGY_RULE_OPTIONS,
+          pasos: pasosTecnologia,
+        },
+        {
+          key: "quienHace_",
+          label: "Quién hace el paso",
+          kind: "select",
+          valueKind: "string",
+          operators: ["=", "!="],
+          options: [
+            { value: "empresa", label: "Lo produce la empresa" },
+            { value: "proveedor", label: "La hace un proveedor" },
+          ],
+          pasos: pasosTecnologia,
+        },
+      ]
+    : [];
+  const activationRuleFields = (pasoId?: string) => [
+    ...technologyRuleFields,
+    ...(!configuracionBase
+      ? estadoPasoRuleFields(opcionesPasosReglas, pasoId)
+      : []),
+  ];
   // Props compartidos por las dos presentaciones del esquema (asistente
   // flotante y vista guiada expandida): una fuente, dos shells.
   // Herencia explícita: el TEXTO (jsonTexts) es la fuente al guardar, pero la
