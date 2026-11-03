@@ -72,8 +72,6 @@ jobs:
           npm run test:dependencias
           npm run prisma:generate
           npm run prisma:migrate:deploy
-      - name: Comprobar entradas y dependencias web/API con datos ficticios
-        run: node --test scripts/entradas-dependencias.test.cjs
       - name: Comprobar permisos, referencias ajenas y enlaces públicos por HTTP
         working-directory: apps/api
         # Lista explícita: estas suites crean y retiran sus propios fixtures.
@@ -214,6 +212,8 @@ jobs:
             src/components/mostrador/entrega-manual.test.tsx \
             src/lib/descuentos-orden.test.ts \
             src/lib/eta-fechas.test.ts
+      - name: Comprobar entradas y dependencias web/API con datos ficticios
+        run: node --test scripts/entradas-dependencias.test.cjs
       - name: Comprobar exclusión de pasos por estado y operaciones de OT
         working-directory: apps/api
         run: |
