@@ -9,6 +9,7 @@ kill_timeout = 30
   build-target = "web"
 
 [env]
+  PADDLE_ENV = "sandbox"
   STAGING_PRIVATE = "true"
   STAGING_BASIC_AUTH_ENABLED = "false"
   STAGING_WEB_ORIGIN = "https://staging.grafoprint.com.ar"

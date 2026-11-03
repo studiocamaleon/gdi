@@ -64,3 +64,22 @@ it('rechaza una IP inválida incluso con la credencial de producción correcta',
     .set('x-grafoprint-client-ip', '1.1.1.1, 8.8.8.8')
     .expect(400);
 });
+
+it('el permiso para Paddle sólo admite POST a su ruta exacta y exige configuración de producción', async () => {
+  Object.assign(process.env, {
+    PADDLE_WEBHOOK_ENABLED: 'true',
+    PADDLE_ENV: 'production',
+    PADDLE_API_KEY: 'pdl_live_apikey_ficticia',
+    PADDLE_WEBHOOK_SECRET: 'firma-ficticia',
+  });
+  const app = server();
+  await request(app).post('/api/webhooks/paddle').expect(200);
+  await request(app).get('/api/webhooks/paddle').expect(403);
+  await request(app).post('/api/webhooks/paddle/extra').expect(403);
+  await request(app).post('/api/webhooks/whatsapp').expect(403);
+  process.env.PADDLE_ENV = 'sandbox';
+  expect(server).toThrow('Paddle');
+  process.env.PADDLE_ENV = 'production';
+  delete process.env.PADDLE_WEBHOOK_SECRET;
+  expect(server).toThrow('Paddle');
+});

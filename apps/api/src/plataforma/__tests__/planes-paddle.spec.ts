@@ -330,3 +330,47 @@ it.each(['mensual', 'anual'] as const)(
       expect(reactivacion.items).toHaveLength(2);
     }),
 );
+
+it('el tester dado de alta antes de Paddle puede pasar de prueba vencida a sólo el abono', () =>
+  conPlanesAsignados(prisma, async (c) => {
+    const manual = await c.tx.plan.create({
+      data: {
+        codigo: randomUUID(),
+        nombre: 'Piloto',
+        precioMensual: 0,
+        featuresJson: {},
+      },
+    });
+    const alta = await new TenantProvisioningService().provisionarBase(c.tx, {
+      nombre: 'Taller de prueba',
+      origen: 'plataforma',
+      paisCodigo: 'CL',
+      zonaHoraria: 'America/Santiago',
+      piloto30Dias: true,
+      plan: { id: manual.id, trialDias: null },
+    });
+    await c.tx.suscripcion.update({
+      where: { tenantId: alta.tenantId },
+      data: {
+        trialHasta: new Date(Date.now() - 60000),
+        estado: 'suspendida',
+      },
+    });
+    const x = await escenario(c, 199);
+    const a = await x.activar();
+    const r = await revisarContratacion(c.tx, alta.tenantId, {
+      ofertaId: a.actual!.ofertaId,
+      ciclo: 'mensual',
+      adicionales: 0,
+    });
+    expect(r.tipo).toBe('checkout');
+    expect(r.vista).toMatchObject({
+      implementacion: 0,
+      implementacionPriceId: null,
+      totalInicial: 190,
+      totalPeriodo: 190,
+    });
+    expect(r.items).toEqual([
+      { priceId: a.actual!.mensual.priceId, quantity: 1 },
+    ]);
+  }));

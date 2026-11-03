@@ -1,3 +1,4 @@
+import { PAIS_DEFAULT, phoneCodeDe } from "@/lib/paises";
 /**
  * La lista de países vive en `paises.ts`: estaba duplicada acá y en el otro
  * módulo, y el día que se agregara un país en uno solo las dos altas iban a
@@ -108,7 +109,7 @@ export type ProveedorPayload = {
   }>;
 };
 
-export function createEmptyProveedor(): ProveedorDetalle {
+export function createEmptyProveedor(pais = PAIS_DEFAULT): ProveedorDetalle {
   return {
     id: "",
     nombre: "",
@@ -116,8 +117,8 @@ export function createEmptyProveedor(): ProveedorDetalle {
     contacto: "",
     email: "",
     ciudad: "",
-    pais: "AR",
-    telefonoCodigo: "54",
+    pais,
+    telefonoCodigo: phoneCodeDe(pais),
     telefonoNumero: "",
     cuit: "",
     condicionIva: "",
@@ -132,7 +133,7 @@ export function createEmptyProveedor(): ProveedorDetalle {
         nombre: "",
         cargo: "",
         email: "",
-        telefonoCodigo: "54",
+        telefonoCodigo: phoneCodeDe(pais),
         telefonoNumero: "",
         principal: true,
       },
@@ -141,7 +142,7 @@ export function createEmptyProveedor(): ProveedorDetalle {
       {
         id: crypto.randomUUID(),
         descripcion: "",
-        pais: "AR",
+        pais,
         codigoPostal: "",
         direccion: "",
         numero: "",

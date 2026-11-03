@@ -184,8 +184,12 @@ const ETIQUETA_FEATURE: Record<string, string> = {
 };
 
 function precio(monto: number, moneda: string): string {
-  const simbolo = moneda === "USD" ? "US$" : "$";
-  return `${simbolo}${monto.toLocaleString("es-AR", { maximumFractionDigits: 2 })}`;
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: moneda,
+    currencyDisplay: "code",
+    minimumFractionDigits: 0,
+  }).format(monto);
 }
 
 function detallesDe(features: Record<string, unknown>): string[] {
@@ -252,7 +256,13 @@ type CheckoutInline = {
   contratacion?: VistaContratacion;
 };
 
-export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
+export function SuscripcionView({
+  inicial,
+  checkoutWeb,
+}: {
+  inicial: EstadoSuscripcion;
+  checkoutWeb: { entorno: "production" | "sandbox"; token: string | null };
+}) {
   const router = useRouter();
   const puedeGestionar = usePuede("configuracion.suscripcion.gestionar");
   const { fechaCorta } = useFecha();
@@ -290,11 +300,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     () => inicial.actual?.planCodigo ?? inicial.planes.at(-1)?.codigo ?? null,
   );
 
-  const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
-  const entorno =
-    process.env.NEXT_PUBLIC_PADDLE_ENV === "production"
-      ? "production"
-      : "sandbox";
+  const { token, entorno } = checkoutWeb;
 
   React.useEffect(() => {
     if (!puedeGestionar) return;
@@ -599,7 +605,9 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     if (!checkoutInline || !paddle) return;
     const transaccionId = checkoutInline.contratacion?.transaccionId;
     if (!transaccionId) {
-      setCheckoutError("Volvé a revisar el plan antes de continuar con el pago.");
+      setCheckoutError(
+        "Volvé a revisar el plan antes de continuar con el pago.",
+      );
       setCheckoutCargando(false);
       return;
     }
@@ -733,7 +741,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
         <div className="sub-empty">
           <div className="sub-empty-tt">Cobro no configurado</div>
           <div className="sub-empty-sub">
-            La suscripción todavía no está habilitada en este entorno.
+            {datos.prueba.enPrueba
+              ? `Tu prueba gratuita vence el ${fechaLarga(datos.prueba.hasta)}. El cobro de suscripciones todavía no está disponible.`
+              : datos.prueba.vencida
+                ? "Tu prueba terminó y la empresa está en modo de lectura. Contactá a Grafoprint para continuar."
+                : "El cobro de suscripciones todavía no está disponible."}
           </div>
         </div>
       </SuscripcionWorkspace>
@@ -1313,7 +1325,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                             setElegido(p.codigo);
                             elegirPlan(p);
                           }}
-                          isDisabled={!puedeGestionar || confirmando || abriendo === p.codigo}
+                          isDisabled={
+                            !puedeGestionar ||
+                            confirmando ||
+                            abriendo === p.codigo
+                          }
                         >
                           {abriendo === p.codigo
                             ? "Abriendo…"

@@ -57,7 +57,7 @@ import {
   useDesignScope,
   useDesignTheme,
 } from "@/components/design-system/appearance";
-import { useFecha } from "@/components/navigation/config-regional-provider";
+import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
 import {
   Empty,
   EmptyHeader,
@@ -207,6 +207,7 @@ export function EmpleadoFicha({
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const { fechaNumerica, hora } = useFecha();
+  const { paisCodigo } = useConfigRegional();
   const readOnly = !canManage || !empleado.activo;
   const router = useRouter();
   const [isSaving, startSaving] = React.useTransition();
@@ -252,7 +253,7 @@ export function EmpleadoFicha({
   }, [activeDireccionId, direcciones]);
 
   const addDireccion = () => {
-    const newDireccion = createEmptyDireccion();
+    const newDireccion = createEmptyDireccion(paisCodigo);
     setDirecciones((current) => [
       ...current,
       { ...newDireccion, principal: current.length === 0 },

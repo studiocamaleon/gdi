@@ -6626,6 +6626,8 @@ model Suscripcion {
   /// contra esta fecha, así nunca quedan desactualizados. Al vencer, el cron
   /// pasa la suscripción a 'suspendida' — cierra los gates por plan pero el
   /// tenant sigue entrando y viendo sus datos. Ver docs/suscripciones-cobro-diseno.md
+  /// Alta asistida con 30 días desde la primera aceptación y sin cargo inicial.
+  piloto30Dias            Boolean @default(false)
   trialHasta              DateTime?
   desde                   DateTime  @default(now())
   hasta                   DateTime?

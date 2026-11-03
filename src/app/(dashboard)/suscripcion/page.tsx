@@ -1,5 +1,6 @@
 import { SuscripcionView } from "@/components/suscripcion/suscripcion-view";
 import { getSuscripcion, type EstadoSuscripcion } from "@/lib/suscripcion-api";
+import { configuracionPaddleWeb } from "@/lib/paddle-web";
 import { ApiError } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -38,5 +39,10 @@ export default async function SuscripcionPage() {
     );
   }
 
-  return <SuscripcionView inicial={datos} />;
+  return (
+    <SuscripcionView
+      inicial={datos}
+      checkoutWeb={configuracionPaddleWeb(process.env)}
+    />
+  );
 }

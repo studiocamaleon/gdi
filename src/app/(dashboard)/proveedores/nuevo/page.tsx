@@ -1,3 +1,4 @@
+import { getCurrentUserCached } from "@/lib/auth-server";
 import { tieneCapacidad } from "@/lib/capacidades-server";
 import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
@@ -23,9 +24,10 @@ export default async function NuevoProveedorPage() {
   if (!(await tienePermiso("registros.proveedores.gestionar"))) {
     return <SinPermiso modulo="Gestionar proveedores" />;
   }
+  const { currentUser } = await getCurrentUserCached();
   return (
     <DesignSystemProvider theme="brand" appearance="light">
-      <ProveedorFicha proveedor={createEmptyProveedor()} mode="create" />
+      <ProveedorFicha proveedor={createEmptyProveedor(currentUser.tenantActual?.regional?.paisCodigo)} mode="create" />
     </DesignSystemProvider>
   );
 }

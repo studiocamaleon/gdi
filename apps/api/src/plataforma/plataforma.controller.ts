@@ -11,6 +11,9 @@ import {
 } from '@nestjs/common';
 import {
   IsEmail,
+  IsBoolean,
+  IsTimeZone,
+  ValidateIf,
   IsIn,
   IsOptional,
   IsString,
@@ -23,6 +26,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { PAISES_LATAM } from '../common/paises';
 import { EmpresasPlataformaService } from './empresas.service';
 import { PermitirEnrolamientoPlataforma } from '../auth/enrolamiento-plataforma';
 import { CurrentSession } from '../auth/current-auth.decorator';
@@ -140,6 +144,25 @@ export class CrearTenantDto {
 
   @IsEmail()
   adminEmail: string;
+
+  // Los clientes antiguos pueden omitir ambos y conservan el alta argentina.
+  @ValidateIf(
+    (dto: CrearTenantDto) =>
+      dto.paisCodigo !== undefined || dto.zonaHoraria !== undefined,
+  )
+  @IsIn(PAISES_LATAM)
+  paisCodigo?: string;
+
+  @ValidateIf(
+    (dto: CrearTenantDto) =>
+      dto.paisCodigo !== undefined || dto.zonaHoraria !== undefined,
+  )
+  @IsTimeZone({ message: 'Elegí una zona horaria válida para el taller.' })
+  zonaHoraria?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  piloto30Dias?: boolean;
 }
 
 /**

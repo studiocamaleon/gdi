@@ -1,0 +1,1 @@
+ALTER TABLE "Suscripcion" ADD COLUMN "piloto30Dias" BOOLEAN NOT NULL DEFAULT false;

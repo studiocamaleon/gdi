@@ -119,11 +119,29 @@ it("si el correo falla conserva el alta y el reintento usa la misma empresa", as
   await input("empresa-slug", "empresa-prueba");
   await input("empresa-email", "persona@example.com");
   await act(async () => {
-    const s = container.querySelector<HTMLSelectElement>("select")!;
+    const s = container.querySelector<HTMLSelectElement>("#empresa-plan")!;
     s.value = "plan-1";
     s.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  for (const [id, valor] of [
+    ["empresa-pais", "CL"],
+    ["empresa-condiciones", "piloto"],
+  ]) {
+    await act(async () => {
+      const s = container.querySelector<HTMLSelectElement>(`#${id}`)!;
+      s.value = valor;
+      s.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+  expect(container.textContent).toContain("CLP");
   await act(async () => boton("Crear y enviar").click());
+  expect(mocks.crear).toHaveBeenCalledWith(
+    expect.objectContaining({
+      paisCodigo: "CL",
+      zonaHoraria: "America/Santiago",
+      piloto30Dias: true,
+    }),
+  );
   expect(container.textContent).toContain(
     "Empresa creada · correo sin confirmar",
   );
