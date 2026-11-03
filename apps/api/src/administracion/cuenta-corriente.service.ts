@@ -1,3 +1,5 @@
+import { regionalDelTenant } from '../common/regional';
+import { claveFechaEnZona } from '../common/zona';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CurrentAuth } from '../auth/auth.types';
@@ -16,6 +18,8 @@ import {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+// Mismo formato de fecha calendario que entrega Prisma para una columna DATE.
+const diaDelTaller = (d: Date, zona: string) => new Date(claveFechaEnZona(d, zona));
 
 /** La deuda comercial de una orden: lo vendido menos lo cobrado, piso 0. */
 const deudaDe = (o: { total: unknown; cobradoTotal: unknown }) =>
@@ -96,7 +100,8 @@ export class CuentaCorrienteService {
         cliente: { select: { nombre: true, cuit: true } },
       },
     });
-    const hoy = new Date();
+    const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
+    const hoy = diaDelTaller(new Date(), zonaHoraria);
     const porCliente = new Map<
       string,
       {
@@ -126,7 +131,7 @@ export class CuentaCorrienteService {
       // La emisión genera el cargo, no fija su vencimiento. Sin fecha
       // comercial/finalización, calcularAging lo clasifica como «A vencer».
       acc.comps.push({
-        vencimiento: o.fechaVencimientoComercial ?? o.fechaFinalizada,
+        vencimiento: o.fechaVencimientoComercial ?? (o.fechaFinalizada ? diaDelTaller(o.fechaFinalizada, zonaHoraria) : null),
         saldo: deuda,
       });
       acc.total += Number(o.total ?? 0);
@@ -193,6 +198,7 @@ export class CuentaCorrienteService {
       throw new NotFoundException(`No existe el cliente ${clienteId}`);
     }
 
+    const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
     const [ordenes, cobros, ultimaOrden, historicos] = await Promise.all([
       this.prisma.ordenTrabajo.findMany({
         where: {
@@ -376,7 +382,7 @@ export class CuentaCorrienteService {
     // vencimiento comercial. Una OT sin fecha queda «A vencer».
     const paraAging: ComprobanteAging[] = ordenes
       .map((o) => ({
-        vencimiento: o.fechaVencimientoComercial ?? o.fechaFinalizada,
+        vencimiento: o.fechaVencimientoComercial ?? (o.fechaFinalizada ? diaDelTaller(o.fechaFinalizada, zonaHoraria) : null),
         saldo: deudaDe(o),
       }))
       .filter((c) => c.saldo > 0);
@@ -387,7 +393,7 @@ export class CuentaCorrienteService {
         saldo: Number(c.saldoPendiente),
       });
     }
-    const aging = calcularAging(paraAging, new Date());
+    const aging = calcularAging(paraAging, diaDelTaller(new Date(), zonaHoraria));
     const sinVencimiento = r2(
       paraAging.filter((c) => c.vencimiento === null).reduce((s, c) => s + c.saldo, 0),
     );

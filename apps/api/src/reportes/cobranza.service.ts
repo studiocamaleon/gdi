@@ -1,8 +1,9 @@
+import { claveFechaEnZona } from '../common/zona';
 import { alcanceCuentas, filtroCuentas } from '../administracion/acceso-cuentas';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { diasDelRango, finExclusivo, type Rango } from './periodo';
+import { diasEntreClaves, diasDelRango, finExclusivo, type Rango } from './periodo';
 
 /**
  * Cobranza — el eje financiero del Panel. Aging de deuda (foto al día de
@@ -13,7 +14,6 @@ import { diasDelRango, finExclusivo, type Rango } from './periodo';
  */
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-const MS_DIA = 86_400_000;
 
 type FranjaAging = 'A vencer' | '0-30' | '31-60' | '61-90' | '+90';
 const FRANJAS: FranjaAging[] = ['A vencer', '0-30', '31-60', '61-90', '+90'];
@@ -125,7 +125,7 @@ export class CobranzaService {
       ]);
 
     // ── Aging + deudores ──────────────────────────────────────────────
-    const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const hoyLocal = claveFechaEnZona(hoy, rango.zona);
     const aging: Record<FranjaAging, number> = {
       'A vencer': 0,
       '0-30': 0,
@@ -140,11 +140,9 @@ export class CobranzaService {
         r2(Number(o.total ?? 0) - Number(o.cobradoTotal ?? 0)),
       );
       if (saldo <= 0) continue;
-      const fechaBase =
-        o.fechaVencimientoComercial ?? o.fechaFinalizada ?? hoyMid;
-      const dias = Math.floor(
-        (hoyMid.getTime() - fechaBase.getTime()) / MS_DIA,
-      );
+      const fechaBase = o.fechaVencimientoComercial?.toISOString().slice(0, 10) ??
+        claveFechaEnZona(o.fechaFinalizada ?? hoy, rango.zona);
+      const dias = diasEntreClaves(fechaBase, hoyLocal);
       const franja = franjaDe(dias);
       aging[franja] += saldo;
       const key = o.clienteId ?? 'sin-cliente';
