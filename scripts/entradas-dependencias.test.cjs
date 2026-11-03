@@ -35,7 +35,7 @@ test('el analizador JSON termina una entrada comprimida con bytes sobrantes y si
   const contenido = { empresa: 'ficticia' };
   const inicio = Buffer.concat([deflateSync(JSON.stringify(contenido)), Buffer.alloc(1)]);
   const sobrante = Buffer.alloc(128);
-  let cliente, decoderAlFinalizar, procesabaSobrantes;
+  let cliente, decoderAlFinalizar, procesabaSobrantes, cuerpoLeido;
   const server = http.createServer((req, res) => {
     const pipe = req.pipe;
     req.pipe = function (destino, ...opciones) {
@@ -45,7 +45,8 @@ test('el analizador JSON termina una entrada comprimida con bytes sobrantes y si
     json(req, res, err => {
       if (err) { res.writeHead(400).end(); return; }
       procesabaSobrantes = !decoderAlFinalizar.destroyed;
-      req.once('end', () => res.end(JSON.stringify(req.body)));
+      cuerpoLeido = req.body;
+      req.once('end', () => res.writeHead(204).end());
       cliente.end(sobrante);
     });
   });
@@ -53,18 +54,20 @@ test('el analizador JSON termina una entrada comprimida con bytes sobrantes y si
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const port = server.address().port;
-    const dato = await new Promise((resolve, reject) => {
+    const estado = await new Promise((resolve, reject) => {
       cliente = http.request({ host: '127.0.0.1', port, method: 'POST', agent: false,
         headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'deflate',
-          'Content-Length': inicio.length + sobrante.length } }, async res => {
-        try { const trozos = []; for await (const t of res) trozos.push(t); resolve(JSON.parse(Buffer.concat(trozos))); }
-        catch (error) { reject(error); }
+          'Content-Length': inicio.length + sobrante.length } }, res => {
+        res.once('end', () => resolve(res.statusCode));
+        res.once('error', reject);
+        res.resume();
       });
       cliente.once('error', reject);
       cliente.setTimeout(2000, () => cliente.destroy(new Error('La lectura no terminó.')));
       cliente.write(inicio);
     });
-    assert.deepEqual(dato, contenido);
+    assert.equal(estado, 204);
+    assert.deepEqual(cuerpoLeido, contenido);
     assert.equal(procesabaSobrantes, false);
   } finally {
     cliente?.destroy();
