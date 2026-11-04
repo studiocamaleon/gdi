@@ -17,6 +17,7 @@ import {
 } from '@prisma/client';
 import { CurrentAuth } from '../auth/auth.types';
 import { paginatedResponse } from '../common/dto/pagination.dto';
+import { normalizarRut } from '../common/rut';
 import { cuitValido } from '../common/cuit';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClienteContactoDto } from './dto/contacto.dto';
@@ -57,6 +58,10 @@ export class ClientesService {
       // Normalizar antes de paginar conserva todas las coincidencias.
       const contiene = (columna: Prisma.Sql) =>
         contieneSinAcentos(columna, query);
+      const rutBuscado = query.replace(/[.\s-]/g, '').toUpperCase();
+      const porRut = /^[0-9K]+$/.test(rutBuscado)
+        ? Prisma.sql`OR replace(c.rut, '-', '') LIKE ${'%' + rutBuscado + '%'}`
+        : Prisma.empty;
       const filtro = Prisma.sql`c."tenantId" = ${auth.tenantId}::uuid
         ${pagination.incluirInactivos === 'true' ? Prisma.empty : Prisma.sql`AND c.activo = true`}
         AND (${Prisma.join(
@@ -67,11 +72,13 @@ export class ClientesService {
             'telefonoNumero',
             'documentoNumero',
             'cuit',
+            'rut',
           ].map((campo) =>
             contiene(Prisma.sql`c.${Prisma.raw('"' + campo + '"')}`),
           ),
           ' OR ',
         )}
+          ${porRut}
           OR EXISTS (SELECT 1 FROM "ClienteContacto" co WHERE co."clienteId" = c.id AND co."tenantId" = c."tenantId" AND (${contiene(Prisma.sql`co.nombre`)} OR ${contiene(Prisma.sql`co.email`)}))
           OR EXISTS (SELECT 1 FROM "ClienteDireccion" d WHERE d."clienteId" = c.id AND d."tenantId" = c."tenantId" AND ${contiene(Prisma.sql`d.ciudad`)}))`;
       const [ids, conteo] = await this.prisma.$transaction([
@@ -302,6 +309,7 @@ export class ClientesService {
         nombre: normalized.nombre,
         razonSocial: normalized.razonSocial,
         cuit: normalized.cuit,
+        rut: normalized.rut,
         documentoNumero: normalized.documentoNumero,
         condicionFiscal: normalized.condicionFiscal,
         limiteCredito: normalized.limiteCredito,
@@ -374,6 +382,7 @@ export class ClientesService {
             nombre: normalized.nombre,
             razonSocial: normalized.razonSocial,
             cuit: normalized.cuit,
+            rut: normalized.rut,
             documentoNumero: normalized.documentoNumero,
             condicionFiscal: normalized.condicionFiscal,
             limiteCredito: normalized.limiteCredito,
@@ -670,6 +679,17 @@ export class ClientesService {
   }
 
   private normalizePayload(payload: UpsertClienteDto) {
+    const rut =
+      payload.rut === undefined
+        ? undefined
+        : payload.rut?.trim()
+          ? normalizarRut(payload.rut)
+          : null;
+    if (payload.rut?.trim() && !rut) {
+      throw new BadRequestException(
+        'El RUT no es válido. Revisá el número y el dígito verificador.',
+      );
+    }
     const cuit = payload.cuit?.replace(/\D/g, '') || null;
     if (cuit && !cuitValido(cuit)) {
       throw new BadRequestException(
@@ -695,6 +715,7 @@ export class ClientesService {
       nombre: payload.nombre.trim(),
       razonSocial: payload.razonSocial?.trim() || null,
       cuit,
+      rut,
       documentoNumero: payload.documentoNumero?.replace(/\D/g, '') || null,
       condicionFiscal,
       limiteCredito:
@@ -785,6 +806,7 @@ export class ClientesService {
       nombre: cliente.nombre,
       razonSocial: cliente.razonSocial ?? '',
       cuit: cliente.cuit ?? '',
+      rut: cliente.rut ?? '',
       condicionFiscal: cliente.condicionFiscal,
       activo: cliente.activo,
       updatedAt: cliente.updatedAt.toISOString(),
@@ -848,6 +870,9 @@ export class ClientesService {
           : '';
       if (target.includes('documentoNumero')) {
         throw new ConflictException('Ya existe un cliente con ese DNI.');
+      }
+      if (target.includes('rut')) {
+        throw new ConflictException('Ya existe un cliente con ese RUT.');
       }
       if (target.includes('cuit')) {
         throw new ConflictException('Ya existe un cliente con ese CUIT/CUIL.');

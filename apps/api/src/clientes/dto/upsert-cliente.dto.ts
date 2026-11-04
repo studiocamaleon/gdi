@@ -56,6 +56,11 @@ export class UpsertClienteDto {
   @MaxLength(13)
   cuit?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  rut?: string;
+
   /** DNI sin puntos. Va aparte del CUIT: ARCA los declara con tipos
    *  distintos (96 = DNI, 80 = CUIT). */
   @IsOptional()

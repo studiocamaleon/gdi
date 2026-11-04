@@ -75,6 +75,8 @@ export type ClienteDetalle = {
   razonSocial: string;
   /** CUIT sin guiones (11 dígitos) o "" si no está cargado. */
   cuit: string;
+  /** RUT chileno normalizado, disponible desde el soporte regional. */
+  rut?: string;
   condicionFiscal: CondicionFiscal;
   /** Tope de deuda en cta. cte.; null = sin límite definido. */
   limiteCredito: number | null;
@@ -106,6 +108,7 @@ export type ClientePayload = {
   nombre: string;
   razonSocial?: string;
   cuit?: string;
+  rut?: string;
   /** DNI sin puntos. Distinto del CUIT: ARCA los declara aparte. */
   documentoNumero?: string;
   condicionFiscal?: CondicionFiscal;

@@ -28,7 +28,8 @@ export function RegistroClientePublico({
   );
   const [telefonoNumero, setTelefonoNumero] = useState("");
   const [telefonoError, setTelefonoError] = useState<string>();
-  const [tipo, setTipo] = useState("CUIT");
+  const chileno = paisCodigo === "CL";
+  const [tipo, setTipo] = useState(chileno ? "RUT" : "CUIT");
   const [condicion, setCondicion] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [recibida, setRecibida] = useState(false);
@@ -36,7 +37,7 @@ export function RegistroClientePublico({
   async function enviar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (enviando) return;
-    if (!condicion) {
+    if (!chileno && !condicion) {
       setError("Seleccioná tu condición fiscal.");
       return;
     }
@@ -65,7 +66,7 @@ export function RegistroClientePublico({
             ...datos,
             telefono: `+${telefono.telefonoCodigo}${telefono.telefonoNumero}`,
             documentoTipo: tipo,
-            condicionFiscal: condicion,
+            ...(chileno ? {} : { condicionFiscal: condicion }),
           }),
         },
         { auth: false },
@@ -113,7 +114,9 @@ export function RegistroClientePublico({
           ) : (
             <form onSubmit={enviar} className={styles.contenido}>
               <div>
-                <h1>Tus datos para facturar</h1>
+                <h1>
+                  {chileno ? "Tus datos de cliente" : "Tus datos para facturar"}
+                </h1>
                 <p>
                   Completá los datos obligatorios. El equipo revisará la
                   solicitud antes de darte de alta.
@@ -133,47 +136,58 @@ export function RegistroClientePublico({
                 />
               </label>
               <div className={styles.dosColumnas}>
-                <div className={styles.campo}>
-                  <span>Documento</span>
-                  <SelectField
-                    aria-label="Tipo de documento"
-                    value={tipo}
-                    onChange={(v) => {
-                      setTipo(v);
-                      if (v === "DNI") setCondicion("consumidor_final");
-                    }}
-                    disabled={enviando}
-                    options={[
-                      { value: "CUIT", label: "CUIT / CUIL" },
-                      { value: "DNI", label: "DNI" },
-                    ]}
-                  />
-                </div>
+                {!chileno && (
+                  <div className={styles.campo}>
+                    <span>Documento</span>
+                    <SelectField
+                      aria-label="Tipo de documento"
+                      value={tipo}
+                      onChange={(v) => {
+                        setTipo(v);
+                        if (v === "DNI") setCondicion("consumidor_final");
+                      }}
+                      disabled={enviando}
+                      options={[
+                        { value: "CUIT", label: "CUIT / CUIL" },
+                        { value: "DNI", label: "DNI" },
+                      ]}
+                    />
+                  </div>
+                )}
                 <label className={styles.campo} htmlFor="numero-documento">
-                  Número
+                  {chileno ? "RUT" : "Número"}
                   <Input
                     id="numero-documento"
                     name="documentoNumero"
                     required
-                    inputMode="numeric"
-                    minLength={7}
+                    inputMode={chileno ? "text" : "numeric"}
+                    autoCapitalize={chileno ? "characters" : "off"}
+                    minLength={chileno ? 2 : 7}
                     maxLength={15}
-                    placeholder={tipo === "CUIT" ? "11 dígitos" : "Sin puntos"}
+                    placeholder={
+                      chileno
+                        ? "Número y dígito verificador"
+                        : tipo === "CUIT"
+                          ? "11 dígitos"
+                          : "Sin puntos"
+                    }
                     disabled={enviando}
                   />
                 </label>
               </div>
-              <div className={styles.campo}>
-                <span>Condición frente al IVA</span>
-                <SelectField
-                  aria-label="Condición frente al IVA"
-                  value={condicion}
-                  onChange={setCondicion}
-                  required
-                  disabled={enviando || tipo === "DNI"}
-                  options={condicionesAlta}
-                />
-              </div>
+              {!chileno && (
+                <div className={styles.campo}>
+                  <span>Condición frente al IVA</span>
+                  <SelectField
+                    aria-label="Condición frente al IVA"
+                    value={condicion}
+                    onChange={setCondicion}
+                    required
+                    disabled={enviando || tipo === "DNI"}
+                    options={condicionesAlta}
+                  />
+                </div>
+              )}
               <TelefonoField
                 id="telefono-alta"
                 label="Teléfono con código de área"
@@ -190,7 +204,11 @@ export function RegistroClientePublico({
                 error={telefonoError}
               />
               <div className={styles.separador}>
-                <span>Domicilio fiscal · Argentina</span>
+                <span>
+                  {chileno
+                    ? "Domicilio · Chile"
+                    : "Domicilio fiscal · Argentina"}
+                </span>
               </div>
               <label className={styles.campo} htmlFor="direccion-alta">
                 Calle y altura
@@ -206,7 +224,7 @@ export function RegistroClientePublico({
                 />
               </label>
               <label className={styles.campo} htmlFor="ciudad-alta">
-                Localidad
+                {chileno ? "Comuna o ciudad" : "Localidad"}
                 <Input
                   id="ciudad-alta"
                   name="ciudad"

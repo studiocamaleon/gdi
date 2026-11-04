@@ -479,7 +479,7 @@ export function ClientesTable({
               className={`${listPage.searchGroup} ${focus.singleBorder}`}
             >
               <SearchField.SearchIcon />
-              <SearchField.Input placeholder="Nombre, DNI, CUIT, teléfono, email o ciudad" />
+              <SearchField.Input placeholder="Nombre, documento, teléfono, email o ciudad" />
               <SearchField.ClearButton aria-label="Limpiar búsqueda" />
             </SearchField.Group>
           </SearchField>

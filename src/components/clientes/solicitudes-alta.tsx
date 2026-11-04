@@ -366,22 +366,28 @@ export function SolicitudesAlta({
                     <dt>{detalle.documentoTipo}</dt>
                     <dd>{detalle.documentoNumero}</dd>
                   </div>
-                  <div>
-                    <dt>Condición fiscal</dt>
-                    <dd>
-                      {
-                        condicionesAlta.find(
-                          (c) => c.value === detalle.condicionFiscal,
-                        )?.label
-                      }
-                    </dd>
-                  </div>
+                  {detalle.documentoTipo !== "RUT" && (
+                    <div>
+                      <dt>Condición fiscal</dt>
+                      <dd>
+                        {
+                          condicionesAlta.find(
+                            (c) => c.value === detalle.condicionFiscal,
+                          )?.label
+                        }
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt>Teléfono</dt>
                     <dd>{detalle.telefono}</dd>
                   </div>
                   <div>
-                    <dt>Domicilio fiscal</dt>
+                    <dt>
+                      {detalle.documentoTipo === "RUT"
+                        ? "Domicilio"
+                        : "Domicilio fiscal"}
+                    </dt>
                     <dd>
                       {detalle.direccion}
                       <br />

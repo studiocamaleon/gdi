@@ -13,10 +13,11 @@ const texto = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value;
 export class SolicitudAltaDto {
   @Transform(texto) @IsString() @Length(3, 160) nombre!: string;
-  @IsIn(['DNI', 'CUIT']) documentoTipo!: 'DNI' | 'CUIT';
-  @IsString() @Matches(/^[\d .-]{7,15}$/) documentoNumero!: string;
+  @IsIn(['DNI', 'CUIT', 'RUT']) documentoTipo!: 'DNI' | 'CUIT' | 'RUT';
+  @IsString() @Matches(/^[\dkK .-]{2,15}$/) documentoNumero!: string;
+  @IsOptional()
   @IsIn(['consumidor_final', 'RI', 'monotributo', 'exento'])
-  condicionFiscal!: string;
+  condicionFiscal?: string;
   @IsString() @Length(8, 30) @Matches(/^[+\d ()-]+$/) telefono!: string;
   @Transform(texto) @IsString() @Length(3, 200) direccion!: string;
   @Transform(texto) @IsString() @Length(2, 120) ciudad!: string;

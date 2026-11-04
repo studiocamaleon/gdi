@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import { normalizarTelefonoCliente } from '../common/telefono-cliente';
+import { normalizarRut } from '../common/rut';
 import { cuitValido } from '../common/cuit';
 import { SolicitudAltaDto } from './dto/solicitud-alta.dto';
 
@@ -22,18 +23,49 @@ export function telefonoComparable(telefono: string) {
   );
 }
 export function validarSolicitud(dto: SolicitudAltaDto, pais = 'AR') {
-  const documentoNumero = dto.documentoNumero.replace(/\D/g, '');
-  if (
-    dto.documentoTipo === 'CUIT'
-      ? !/^(20|23|24|27|30|33|34)\d{9}$/.test(documentoNumero) ||
-        !cuitValido(documentoNumero)
-      : !/^[1-9]\d{6,8}$/.test(documentoNumero)
-  )
-    throw new BadRequestException('Revisá el DNI o CUIT/CUIL ingresado.');
-  if (dto.documentoTipo === 'DNI' && dto.condicionFiscal !== 'consumidor_final')
+  const chileno = pais === 'CL';
+  if (chileno !== (dto.documentoTipo === 'RUT')) {
     throw new BadRequestException(
-      'Para esa condición fiscal necesitás ingresar CUIT/CUIL.',
+      chileno ? 'Ingresá tu RUT.' : 'Ingresá DNI o CUIT/CUIL.',
     );
+  }
+  const documentoNumero = chileno
+    ? normalizarRut(dto.documentoNumero)
+    : dto.documentoNumero.replace(/\D/g, '');
+  if (!documentoNumero) {
+    throw new BadRequestException(
+      chileno
+        ? 'Revisá el RUT y su dígito verificador.'
+        : 'Revisá el DNI o CUIT/CUIL ingresado.',
+    );
+  }
+  if (!chileno) {
+    if (
+      /[kK]/.test(dto.documentoNumero) ||
+      (dto.documentoTipo === 'CUIT'
+        ? !/^(20|23|24|27|30|33|34)\d{9}$/.test(documentoNumero) ||
+          !cuitValido(documentoNumero)
+        : !/^[1-9]\d{6,8}$/.test(documentoNumero))
+    ) {
+      throw new BadRequestException('Revisá el DNI o CUIT/CUIL ingresado.');
+    }
+    if (
+      !dto.condicionFiscal ||
+      (dto.documentoTipo === 'DNI' &&
+        dto.condicionFiscal !== 'consumidor_final')
+    ) {
+      throw new BadRequestException(
+        'Revisá la condición fiscal y el documento ingresado.',
+      );
+    }
+  } else if (
+    dto.condicionFiscal &&
+    dto.condicionFiscal !== 'consumidor_final'
+  ) {
+    throw new BadRequestException(
+      'La condición fiscal argentina no corresponde a esta solicitud.',
+    );
+  }
   const telefono = normalizarTelefonoCliente('', dto.telefono, pais);
   if (!telefono.ok || !telefono.telefonoNumero)
     throw new BadRequestException(
@@ -43,7 +75,7 @@ export function validarSolicitud(dto: SolicitudAltaDto, pais = 'AR') {
     nombre: dto.nombre,
     documentoTipo: dto.documentoTipo,
     documentoNumero,
-    condicionFiscal: dto.condicionFiscal,
+    condicionFiscal: dto.condicionFiscal ?? 'consumidor_final',
     telefono: `+${telefono.telefonoCodigo}${telefono.telefonoNumero}`,
     direccion: dto.direccion,
     ciudad: dto.ciudad,
