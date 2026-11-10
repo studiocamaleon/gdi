@@ -1,5 +1,11 @@
 # Preparación de staging de Grafoprint
 
+> **Operación vigente: 10/11/2026.** Los cinco servicios de la aplicación funcionan
+> bajo demanda: abrir staging los enciende; 15 minutos sin actividad y sin tareas
+> pendientes permiten apagarlos. El copiador permanece activo. Imágenes, tamaños y
+> versión funcional del 27/10 conservados. [Operación y retención para despliegues](demanda/README.md),
+> [PR #127](https://github.com/studiocamaleon/gdi/pull/127) y [evidencia](VALIDACION.md).
+
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
 > **Estado vigente: 2026-10-27, 22:45 UTC.** API, ambos workers y web ejecutan `0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`, [Backlight #122](https://github.com/studiocamaleon/gdi/pull/122). «PRUEBA · Cartel Backlight» incorpora bastidor 3D, lona, selección de tubos de 60 o 120 cm a 220 V sin fuente, fondo separado y cenefas con nesting conjunto. Cinco cotizaciones y el recorrido visual en Chrome comprobados. Se conserva el ensayo anterior con tira zigzag. 319 migraciones, seis servicios saludables y recursos conservados. La promoción autorizada se registra en [producción](../produccion/VALIDACION.md). Ver [VALIDACION.md](VALIDACION.md).
@@ -42,7 +48,7 @@ El canal de prueba del Inbox se comprobó con texto, PDF, imagen, audio, video y
 | Redis | Redis Cloud Essentials, AWS São Paulo | TCP/TLS y ensayo sintético BullMQ comprobados desde Fly | 1 GB RAM total: 512 MB de datos y 512 MB de réplica en la misma zona |
 | Archivos | R2, bucket exclusivo con jurisdicción US | Bucket privado y URLs firmadas | Consumo |
 
-Hay una máquina activa por servicio; no es alta disponibilidad. Los tamaños deben contrastarse con mediciones antes de ampliar las pruebas. Los workers no se apagan automáticamente: esperan trabajos incluso cuando no hay tráfico web. No configurar escalado automático del worker de geometría sin recalcular el presupuesto compartido del pool.
+Hay una máquina por servicio; no es alta disponibilidad. Los cinco servicios de aplicación se encienden y apagan juntos mediante el controlador de demanda; el respaldo permanece activo. Los tamaños deben contrastarse con mediciones antes de ampliar las pruebas. No configurar autostop de Fly directamente en los workers: el controlador comprueba los trabajos pendientes antes de detenerlos. Tampoco escalar el worker de geometría sin recalcular el presupuesto compartido del pool.
 
 La comprobación de salud de la API consulta PostgreSQL cada 30 segundos y el worker PDF consulta la base cada dos segundos. Presupuestar Neon activo mientras estos servicios estén encendidos. Upstash de precio fijo se evaluó, pero su plan de 1 GB limita cada solicitud a 10 MB, por debajo de algunos resultados que permite el formato actual de geometría. Ver la medición sintética y las alternativas en [PRESUPUESTO.md](./PRESUPUESTO.md).
 
