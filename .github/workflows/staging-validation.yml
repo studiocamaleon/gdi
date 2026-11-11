@@ -66,6 +66,9 @@ jobs:
       - name: Comprobar el contrato de configuración fiscal del worker
         run: node --test deploy/facturacion-worker-config.test.mjs
 
+      - name: Comprobar encendido y apagado aislado de staging
+        run: node --test deploy/staging/demanda/demanda.test.mjs
+
       - name: Preparar datos y claves desechables del ensayo
         run: |
           node deploy/staging/init-local-env.mjs

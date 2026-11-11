@@ -1,5 +1,76 @@
 # Validación de staging — historial
 
+## 2026-11-10, 16:49 UTC — Staging con encendido y reposo automáticos
+
+Lucas autorizó encender staging al abrir su dirección y apagarlo cuando no esté en
+uso, conservando producción y respaldos. Control operativo **`80ab7dde8`**,
+[PR #127](https://github.com/studiocamaleon/gdi/pull/127), desarrollado y probado en
+una carpeta aislada desde `origin/main`. No se integraron otros PR ni se publicó
+ningún cambio de aplicación o configuración en producción.
+
+La web existente ejecuta un controlador que inicia API y Gotenberg, espera su salud
+y después inicia ambos workers. Next escucha en loopback detrás del controlador;
+el proxy conserva métodos, cuerpos, cookies, redirecciones y conexiones SSE. Una
+página de espera permite abrir el entorno durante el arranque. Tras **900 segundos**
+sin solicitudes de usuario ni conexiones abiertas, comprueba Redis y PostgreSQL,
+drena los workers con SIGTERM, vuelve a comprobar los pendientes y apaga los cuatro
+servicios y la propia web. Un error conserva/recupera el entorno; una visita nueva
+cancela el reposo. No se modificaron las colas o datos para conseguir el apagado.
+
+### Recursos y versiones
+
+Los tres archivos de control se entregaron mediante `files` de Fly, sin reconstruir
+ni reemplazar las imágenes funcionales. API sólo agregó el archivo de ocupación;
+web agregó los archivos, comando de inicio, dos variables no secretas y autostart.
+Autostop de Fly sigue desactivado; reinicio `on-failure` (3 reintentos del CLI).
+Los cinco servicios conservan sus tamaños y sus imágenes del despliegue previo:
+
+| Servicio | Digest conservado |
+| --- | --- |
+| Web | `sha256:c490c20224d21f828c9fe5c3c97153929d6088bfc0542fc15ada77d48147b211` |
+| API y ambos workers | `sha256:382b7d01dc63c169578ff16434eb443660357f37efd03aa57faa10f761130d6c` |
+| Gotenberg | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+
+Se configuraron cuatro tokens de despliegue, cada uno exclusivo de una app de
+staging, y un token de ejecución limitado al comando de ocupación. Secretos fuera
+de Git y retirados del entorno del proceso Next. Caducidad a un año; renovación en
+el manual operativo. Los cuatro tokens rechazaron lecturas de producción con 403;
+el token de ocupación rechazó un comando distinto con 403.
+
+### Comprobaciones
+
+- 12 pruebas locales aprobadas: exclusión de producción, fallo cerrado, trabajos
+  pendientes, visitas concurrentes, cancelación durante apagado, conexiones largas,
+  descubrimiento de otras colas, PostgreSQL, proxy HTTP y pantalla de espera. Las
+  mismas 12 pruebas pasaron en el trabajo de contenedores de GitHub Actions.
+- Ambos manifiestos validados por Fly. Consulta real de ocupación: cero pendientes
+  en Redis y PostgreSQL. No hubo seeds, migraciones, borrados ni ensayos fiscales.
+- Ensayo con plazo temporal de 60 segundos: el 10/11 a las 16:43:05 UTC se registró
+  la parada por inactividad; luego se observaron los cinco servicios `stopped` y el
+  copiador de staging `started`.
+- Abrir la URL en Chrome inició el conjunto, mostró la pantalla de espera y pasó
+  automáticamente al formulario de ingreso. Después se fijaron los **900 segundos
+  definitivos** y se comprobó la configuración remota. Salud pública 200 con
+  `ready=true`, login 200 y ruta BFF sin sesión rechazada con 401.
+- Retención temporal de mantenimiento comprobada y liberada. La prueba de estado
+  se hace consultando Fly: sondear la URL pública despertaría staging.
+- Comparación antes/después de las seis máquinas de producción y el copiador de
+  staging: mismos identificadores, instancias, configuraciones e imágenes, todas
+  iniciadas. Los dos workers y PDF de staging conservan exactamente su configuración.
+  No se reinició ni reconfiguró ningún respaldo. Evidencia operativa privada fuera
+  del repositorio.
+
+La validación completa de CI se informa en el PR; ejecutar este control no equivale
+a aprobar las propuestas independientes de dependencias o del piloto chileno. No
+se repitió una restauración de backups en este cambio de operación. Los webhooks y
+tareas programadas de prueba se interrumpen durante el reposo: abrir y mantener
+staging antes de probarlos. Una pestaña con eventos o sondeos cuenta como uso.
+
+**Reversión:** restaurar la configuración previa de la web, iniciar los cuatro
+servicios y verificar salud; luego retirar y revocar sólo los cinco accesos del
+controlador. Las configuraciones previas están bajo custodia privada. No borrar
+apps, volúmenes, datos ni respaldos. [Procedimiento completo](demanda/README.md).
+
 ## 2026-10-27, 22:45 UTC — Backlight con tubos a 220 V comprobado
 
 Revisión funcional **`0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`** del [PR #122](https://github.com/studiocamaleon/gdi/pull/122), desplegada en API, ambos workers y web. Lucas autorizó publicar el Backlight en producción con bastidor de hierro 20 × 20, lona Backlight, tubos de 60 o 120 cm a 220 V sin fuente, fondo y cenefas. Este ensayo comprueba esa configuración antes de promover las mismas imágenes.
