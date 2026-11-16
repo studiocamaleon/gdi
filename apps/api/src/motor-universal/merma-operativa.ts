@@ -52,6 +52,13 @@ export function areaImpresaTrabajoDesdeNestingM2(
   nesting: NestingDispatchResult,
   cantidadSolicitada: number,
 ): number {
+  // Talonarios: original y copias ya incluyen todas las hojas, aunque el
+  // algoritmo siga siendo grid simple y sólo el original publique las pilas.
+  const areaTrabajo = nesting.areaImpresaTrabajoM2;
+  if (areaTrabajo != null && Number.isFinite(areaTrabajo) && areaTrabajo >= 0) {
+    return areaTrabajo;
+  }
+
   if (nesting.demandaRectangular?.length) {
     return (
       nesting.demandaRectangular.reduce(

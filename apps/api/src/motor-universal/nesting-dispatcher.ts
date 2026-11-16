@@ -139,6 +139,9 @@ export interface NestingDispatchResult {
   machineRunLengthMm?: number;
   /** Cantidad de instancias de pieza efectivamente acomodadas. */
   piezasAcomodadas: number;
+  /** Área de todas las hojas del trabajo, por cara, cuando la imposición ya
+   * expandió las repeticiones. No volver a escalarla como plantilla de pliego. */
+  areaImpresaTrabajoM2?: number;
   /**
    * F4.4.1 — demanda física exacta que originó un nesting rectangular.
    * El modo sombra la usa para reagrupar piezas de componentes distintos sin
@@ -4096,6 +4099,7 @@ function buildTalonarioVisualPatch(
   const areaTotalMm2 = grouping.pliegosXCapa * sheet.widthMm * sheet.heightMm;
 
   return {
+    areaImpresaTrabajoM2: areaUtilMm2 / 1_000_000,
     substrates,
     placements,
     piezasAcomodadas: posesUsadas,

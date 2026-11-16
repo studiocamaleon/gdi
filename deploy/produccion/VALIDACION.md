@@ -1,5 +1,30 @@
 # Validación de producción
 
+## 2026-11-16 — Corrección urgente del tóner de talonarios
+
+Lucas autorizó corregir y publicar directamente en producción, **sin pasar por staging**, por la urgencia del cálculo. El [PR #128](https://github.com/studiocamaleon/gdi/pull/128) parte de `main` actualizado. Revisión ejecutada: **`5fdf610f13e0857d2700d29b318de9a31d8c0dc8`**. Compilación remota, pruebas locales y CI previos a la publicación. No se incorporaron las propuestas independientes #123–#127.
+
+**Corrección:** la imposición de talonarios ya contiene el área de todas las hojas. El cálculo de consumibles la interpretaba como el patrón de un solo pliego y volvía a multiplicarla. Ahora original y copias heredadas informan explícitamente el área total; caras y merma se aplican una sola vez. Las posiciones vacías no consumen tóner. Se conserva el aprovechamiento y la cantidad de papel. Las cotizaciones guardadas no cambian automáticamente: requieren recalcular.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:96243ac4f3f29aa1ce643e81c324d34821ab1b6f98377f31b091d77531d73bf8` |
+| Web, conservada | `sha256:c490c20224d21f828c9fe5c3c97153929d6088bfc0542fc15ada77d48147b211` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Pruebas:** 97 pruebas locales en cinco suites, incluidas 18 regresiones del tóner; 16 de las nuevas pruebas reproducían el error antes del cambio. Cubren cantidades 1, 3, 4, 20 y 40; ambos modos de talonario incompleto, copias heredadas, doble faz y merma. [HTTP y permisos](https://github.com/studiocamaleon/gdi/actions/runs/43882197144), [contenedores y tipos](https://github.com/studiocamaleon/gdi/actions/runs/43882197058) y CodeQL aprobados en la revisión ejecutada; cero alertas abiertas para el PR y cero conversaciones pendientes. Se incluye el ajuste compartido de Chromium a `156.0.8078.79-1~deb13u1`, necesario para compilar CI porque la versión anterior ya no está disponible; no se publicó otra imagen del generador PDF ni el resto de #127. Marketing y Grafo3D sin cambios.
+
+**Producción:** cotizaciones completas dentro de una transacción de sólo lectura, con el catálogo real, para talonarios de 10 × 15 cm, 50 hojas, simple faz y blanco y negro. Resultado: 4 unidades = **1,35 g**, 20 = **6,75 g**, 40 = **13,5 g**. Antes, los dos últimos casos calculaban 33,75 g y 135 g. Chrome confirmó el recorrido de 20 unidades y cuatro por hoja, con 250 pliegos y precio recalculado. No se guardaron órdenes ni presupuestos de prueba.
+
+**Operación:** API y base saludables; versión comprobada en API y ambos workers. Configuración de las tres máquinas conservada íntegramente salvo la imagen, incluidos recursos, comandos, reinicios y tiempos de cierre. Colas, lotes fiscales y documentos PDF en proceso: cero antes de actualizar. Configuración fiscal API/worker coincidente. Sin migraciones, cambios de catálogo, seeds ni alteraciones de órdenes existentes. Web y generador PDF conservan sus imágenes anteriores.
+
+**Respaldo:** fuentes de la revisión cifradas y custodiadas; inventario del copiador actualizado con nueve revisiones, conservando las anteriores. Comprobante previo de `2026-11-16T13:13:49.097Z` verificado. El resultado del comprobante posterior se registra en el cierre de #128: verificación de firma, huellas, descifrado del manifiesto y coincidencia de revisión e imágenes. No se repite una restauración SQL completa en esta publicación.
+
+**Reversión:** restituir únicamente API y ambos workers a `registry.fly.io/grafoprint-production-api@sha256:382b7d01dc63c169578ff16434eb443660357f37efd03aa57faa10f761130d6c`, manteniendo configuración y datos. Restituir el inventario privado anterior del copiador. El esquema no cambió; no restaurar la base sobre producción.
+
+**Integración:** el cierre integra #128 con sus commits después de comprobar el CI final del registro documental. Las imágenes siguen correspondiendo a `5fdf610f13e0857d2700d29b318de9a31d8c0dc8`. #127 conserva su alcance independiente de staging; los demás PR pendientes quedan fuera de esta publicación. La evidencia final del merge queda asociada al PR.
+
 ## 2026-10-27, 23:02 UTC — Cartel Backlight completo en producción
 
 Lucas autorizó promover el [PR #122](https://github.com/studiocamaleon/gdi/pull/122) y crear «Cartel Backlight» con hierro 20 × 20, lona Backlight, tubos de 60 o 120 cm a 220 V sin fuente, fondo y cenefas. Revisión funcional **`0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`**, comprobada primero en local y staging. API, ambos workers y web ejecutan esa revisión; imágenes promovidas por digest, sin reconstruirlas entre entornos.
