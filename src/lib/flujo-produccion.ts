@@ -1275,7 +1275,9 @@ export function estimarDemoraNuevos({
       })),
     }));
 
-  const { porItem } = simularFlujo({
+  // Mientras se consulta el material puede no haber ninguna receta estimable.
+  // En ese caso sólo devolvemos sus motivos; simular el taller entero no aporta ETA.
+  const porItem = hipoteticos.length ? simularFlujo({
     items: [...enCola, ...hipoteticos],
     estaciones,
     medianas,
@@ -1283,7 +1285,7 @@ export function estimarDemoraNuevos({
     noLaborables,
     zona,
     tiempoEntrePasosMin,
-  });
+  }).porItem : new Map<string, SimulacionItem>();
   const resultado = new Map<string, SimulacionItem>();
   for (const nuevo of nuevos) {
     const eta = porItem.get(nuevo.id);
