@@ -1,5 +1,9 @@
 # Validación de staging — historial
 
+## 2026-11-16 — Excepción urgente: tóner de talonarios sin staging
+
+El [PR #128](https://github.com/studiocamaleon/gdi/pull/128) se comprobó en local y CI y se publicó directamente en producción por autorización expresa de Lucas. **No se desplegó ni probó esta revisión en staging.** Este registro no cambia el estado de staging ni incorpora el PR #127 de encendido bajo demanda. Evidencia, revisión, imágenes y reversión en [el registro de producción](../produccion/VALIDACION.md).
+
 ## 2026-10-27, 22:45 UTC — Backlight con tubos a 220 V comprobado
 
 Revisión funcional **`0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`** del [PR #122](https://github.com/studiocamaleon/gdi/pull/122), desplegada en API, ambos workers y web. Lucas autorizó publicar el Backlight en producción con bastidor de hierro 20 × 20, lona Backlight, tubos de 60 o 120 cm a 220 V sin fuente, fondo y cenefas. Este ensayo comprueba esa configuración antes de promover las mismas imágenes.
