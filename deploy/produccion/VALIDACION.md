@@ -1,5 +1,28 @@
 # Validación de producción
 
+## 2026-11-16 — Configurar y agregar productos sin bloquear la orden
+
+Lucas autorizó corregir las trabas, comprobar precios/entregas y publicar en producción. [PR #129](https://github.com/studiocamaleon/gdi/pull/129), desde `main` actualizado. Revisión ejecutada **`e01215db942207a84f27bfa5616eca1b29ae6f52`**; el commit posterior sólo documenta el despliegue. Se promovió el manifiesto probado en staging, conservando exactamente su digest, sin recompilar. Los PR independientes permanecen fuera del lote.
+
+**Cambio:** la estimación de entrega simulaba todo el taller durante el render de la ficha y volvía a simularlo al completar las fechas. Ahora el mismo motor corre en un worker del navegador; sólo los cambios de receta, materiales o carga del taller disparan una nueva simulación. Cancela respuestas obsoletas, omite las simulaciones sin recetas estimables y mantiene las fechas manuales. Se puede seguir configurando productos durante el cálculo; guardar o emitir espera el resultado vigente.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| Web, actualizada | `sha256:6d63e8a1b37b649ec2c8fbcc1e8a40b84690e4b1cd4204b9a81c2f4e8977fc38` |
+| API / worker / worker-pdf, conservados | `sha256:96243ac4f3f29aa1ce643e81c324d34821ab1b6f98377f31b091d77531d73bf8` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Pruebas:** 171 casos locales aprobados, lint y tipos del módulo; compilación remota con tipos completos, [HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/43950368932), [contenedores](https://github.com/studiocamaleon/gdi/actions/runs/43950368964), CodeQL y Vercel aprobados en la revisión ejecutada. Cero alertas abiertas de CodeQL. La comparación del worker compilado servido desde staging con el motor anterior conserva exactamente las estimaciones y fechas, incluidos calendarios, abastecimiento y margen. Detalles y límite del ensayo de staging en [su registro](../staging/VALIDACION.md). Marketing y Grafo3D sin cambios.
+
+**Recorrido real en Chrome:** tres agregados locales a una ficha nueva, con talonarios y vinilo, tardaron **373, 401 y 434 ms** desde la acción hasta la lectura de la pantalla. Antes se había medido una pausa de 6–8 segundos al sumar productos; inmediatamente antes de publicar, un nuevo ensayo volvió a superar el plazo de 2,9 segundos del clic. Son mediciones de este recorrido, no una garantía para todas las configuraciones. Cambios rápidos de cantidad conservaron el último valor y su precio. El total del producto de control coincidió antes/después y la suma de las tres líneas fue correcta. Las entregas automáticas se completaron con el margen del taller; una fecha manual posterior permaneció intacta al agregar productos y al renovar la carga del taller. Cero errores de consola. No se guardaron órdenes, presupuestos, cobros ni facturas de ensayo. Capturas, precios e identificadores permanecen en evidencia privada, fuera de Git.
+
+**Operación:** web saludable, revisión ejecutada comprobada, worker compilado accesible y sesión anónima rechazada. Machines API cambió sólo la imagen; configuración, recursos y secretos comparados y conservados. API y workers siguen en `5fdf610f13e0857d2700d29b318de9a31d8c0dc8`, con la corrección del tóner. Sin migraciones, seeds, resets ni cambios de catálogo. Compilación remota; no se reinició Docker ni se modificaron otros proyectos. Staging conserva su encendido bajo demanda y se liberó la retención temporal al terminar las pruebas.
+
+**Respaldo:** copia previa con firma y manifiesto verificados; fuente exacta cifrada bajo custodia. Inventario del copiador actualizado con la combinación real de imágenes y diez fuentes, preservando las anteriores. El [cierre del PR #129](https://github.com/studiocamaleon/gdi/pull/129) registra el comprobante posterior y su verificación de firma, huellas, descifrado, revisión e imágenes, además del CI final sobre el commit documental. No se repite una restauración SQL completa en esta publicación.
+
+**Reversión:** cambiar únicamente la imagen web a `registry.fly.io/grafoprint-production-web@sha256:c490c20224d21f828c9fe5c3c97153929d6088bfc0542fc15ada77d48147b211`, conservar los otros servicios y restituir el inventario previo del copiador. No revertir base ni datos. La reversión recupera las pausas anteriores del cotizador, pero conserva la corrección del tóner en la API.
+
 ## 2026-11-16 — Corrección urgente del tóner de talonarios
 
 Lucas autorizó corregir y publicar directamente en producción, **sin pasar por staging**, por la urgencia del cálculo. El [PR #128](https://github.com/studiocamaleon/gdi/pull/128) parte de `main` actualizado. Revisión ejecutada: **`5fdf610f13e0857d2700d29b318de9a31d8c0dc8`**. Compilación remota, pruebas locales y CI previos a la publicación. No se incorporaron las propuestas independientes #123–#127.

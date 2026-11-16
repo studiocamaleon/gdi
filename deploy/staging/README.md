@@ -2,7 +2,7 @@
 
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
-> **Estado vigente: 2026-10-27, 22:45 UTC.** API, ambos workers y web ejecutan `0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`, [Backlight #122](https://github.com/studiocamaleon/gdi/pull/122). «PRUEBA · Cartel Backlight» incorpora bastidor 3D, lona, selección de tubos de 60 o 120 cm a 220 V sin fuente, fondo separado y cenefas con nesting conjunto. Cinco cotizaciones y el recorrido visual en Chrome comprobados. Se conserva el ensayo anterior con tira zigzag. 319 migraciones, seis servicios saludables y recursos conservados. La promoción autorizada se registra en [producción](../produccion/VALIDACION.md). Ver [VALIDACION.md](VALIDACION.md).
+> **Estado vigente: 2026-11-16.** Web en `e01215db942207a84f27bfa5616eca1b29ae6f52`, [rendimiento del cotizador #129](https://github.com/studiocamaleon/gdi/pull/129). API y ambos workers conservan `0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`. Cálculo compilado y respaldo posterior comprobados; 319 migraciones, sin cambios de recursos. Se conserva el encendido bajo demanda del [PR #127](https://github.com/studiocamaleon/gdi/pull/127), todavía independiente. Mientras ese PR no esté integrado, usar su procedimiento/manifiestos o actualizar sólo la imagen conservando archivos y comando del controlador: los manifiestos antiguos de este directorio no incluyen ese mecanismo. Versiones, pruebas y reversión en [VALIDACION.md](VALIDACION.md).
 
 > **2026-10-15, 02:24 UTC:** tras validar temporalmente el cambio de borradores del #95 y promoverlo a producción, staging volvió al lote #94 (`5a1128328`) y al inventario anterior. Continúa pendiente su aceptación. Ver [VALIDACION.md](VALIDACION.md).
 

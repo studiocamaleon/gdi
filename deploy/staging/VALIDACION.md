@@ -1,5 +1,28 @@
 # Validación de staging — historial
 
+## 2026-11-16 — Cotizador sin bloquear la pantalla al estimar entregas
+
+Revisión **`e01215db942207a84f27bfa5616eca1b29ae6f52`**, [PR #129](https://github.com/studiocamaleon/gdi/pull/129). Lucas autorizó corregir las trabas al configurar/agregar productos, verificar cálculos y fechas y publicar en producción. Rama independiente desde `main`; no incorpora otros PR abiertos.
+
+La simulación usa el mismo motor en un worker del navegador. La receta proyectada evita repetirla cuando sólo cambia una fecha o comentario; una edición nueva cancela el cálculo anterior. Las fichas vacías o sin recetas estimables no simulan todo el taller. Las fechas manuales conservan su protección; guardar o emitir espera el cálculo vigente, sin congelar la edición. No cambian fórmulas de precios, calendario, margen ni prioridades del taller.
+
+| Servicio | Digest vigente |
+| --- | --- |
+| Web, actualizada | `sha256:6d63e8a1b37b649ec2c8fbcc1e8a40b84690e4b1cd4204b9a81c2f4e8977fc38` |
+| API y ambos workers, conservados | `sha256:382b7d01dc63c169578ff16434eb443660357f37efd03aa57faa10f761130d6c` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Validación:** 171 pruebas locales aprobadas de cotización, tóner, materiales, fechas, reservas, permisos, emisión y copiado. Los casos nuevos comprueban ausencia de simulación durante el render, cancelación/respuestas obsoletas, reutilización, errores y conservación de Date/Map/Set. Calendarios de Argentina y Chile, feriados, márgenes y abastecimiento cubiertos. Lint y comprobación de tipos del módulo aprobados; el chequeo global local agotó memoria, y pasó completo en remoto, sin omitir tipos. [HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/43950368932), [contenedores y tipos](https://github.com/studiocamaleon/gdi/actions/runs/43950368964), CodeQL y Vercel aprobados; cero alertas abiertas de CodeQL en el PR. Sin cambios de marketing o Grafo3D.
+
+**Versión instalada:** salud 200, sesión anónima rechazada 401, revisión de ejecución y carga del worker y sus dependencias comprobadas. Se ejecutó el JavaScript compilado servido por staging contra una captura privada del taller, comparándolo con el motor anterior: mismos resultados y fechas para 0, 1, 3 y 5 productos y materiales pendientes. Esa captura permanece fuera de Git. El ingreso interactivo de staging no estuvo disponible; esta validación del artefacto es directa, no un recorrido visual autenticado. El recorrido visual se completa en producción sin guardar órdenes de prueba.
+
+**Operación:** una sola actualización de la imagen web mediante Machines API. Configuración completa comparada antes/después; archivos del controlador, comando de arranque, recursos, servicios, secretos y encendido bajo demanda del [PR #127](https://github.com/studiocamaleon/gdi/pull/127) conservados. Retención temporal de mantenimiento liberada al finalizar el ensayo; vuelve a regir el apagado por inactividad. API/workers mantienen `0849d73dd06fe244c9ebcd8021c0a6504a8a10ff`. Sin migraciones, seeds, resets ni cambios de catálogo.
+
+**Respaldo:** fuentes exactas cifradas bajo custodia e inventario actualizado. Copia posterior completada `2026-11-16T20:50:10.407Z`, con firma, huellas y descifrado del manifiesto comprobados: revisión e imágenes coincidentes, 319 migraciones, 33 archivos y nueve fuentes. No se repitió una restauración SQL completa.
+
+**Reversión:** cambiar sólo la imagen web a `registry.fly.io/grafoprint-staging-web@sha256:c490c20224d21f828c9fe5c3c97153929d6088bfc0542fc15ada77d48147b211`, manteniendo íntegra la configuración bajo demanda, y restituir el inventario anterior del copiador. No revertir datos ni esquema.
+
 ## 2026-11-16 — Excepción urgente: tóner de talonarios sin staging
 
 El [PR #128](https://github.com/studiocamaleon/gdi/pull/128) se comprobó en local y CI y se publicó directamente en producción por autorización expresa de Lucas. **No se desplegó ni probó esta revisión en staging.** Este registro no cambia el estado de staging ni incorpora el PR #127 de encendido bajo demanda. Evidencia, revisión, imágenes y reversión en [el registro de producción](../produccion/VALIDACION.md).
