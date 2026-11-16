@@ -204,10 +204,8 @@ import { MaterialesOrdenTab } from "@/components/comercial/materiales-orden-tab"
 import { BastidorVisor } from "@/components/carteleria/bastidor-visor";
 import { recolectarBastidoresCotizacion } from "@/lib/bastidores-cotizacion";
 import { StepperOt } from "@/components/comercial/stepper-ot";
-import {
-  estimarDemoraNuevos,
-  type SimulacionItem,
-} from "@/lib/flujo-produccion";
+import type { SimulacionItem } from "@/lib/flujo-produccion";
+import { useDemoraCotizacion } from "@/hooks/use-demora-cotizacion";
 import {
   ORDEN_TRABAJO_ESTADOS,
   esCancelable,
@@ -5414,24 +5412,22 @@ function PropuestaFichaContenido({
     };
   }, [conDemoraSistema]);
 
-  /** ETA por item de la ficha, simulada contra las colas reales de HOY. */
-  const demoraPorItem = React.useMemo(() => {
-    if (!conDemoraSistema || !colasTaller || items.length === 0) return null;
-    const nuevos = items.filter(item => !item.listoEnMostrador).map((item) =>
-      condicionarPorMateriales(
-        itemHipoteticoDesdeCotizacion(item.id, item.cotizacion, item.asignacionesPersonal),
-        previsionMateriales.data,
-        previsionMateriales.error,
-      ),
-    );
-    return estimarDemoraNuevos({ nuevos, ...colasTaller });
-  }, [
-    conDemoraSistema,
-    colasTaller,
-    items,
-    previsionMateriales.data,
-    previsionMateriales.error,
-  ]);
+  // Sólo proyecta la receta aquí. La simulación del taller corre en segundo plano.
+  const nuevosParaDemora = React.useMemo(() => items
+    .filter(item => !item.listoEnMostrador)
+    .map(item => condicionarPorMateriales(
+      itemHipoteticoDesdeCotizacion(item.id, item.cotizacion, item.asignacionesPersonal),
+      previsionMateriales.data,
+      previsionMateriales.error,
+    )), [items, previsionMateriales.data, previsionMateriales.error]);
+  const { porItem: demoraPorItem, calculando: calculandoEntrega } = useDemoraCotizacion(
+    nuevosParaDemora, colasTaller, conDemoraSistema,
+  );
+  const validarEntregaCalculada = React.useCallback(() => {
+    if (!calculandoEntrega) return true;
+    toast.info("Esperá a que termine el cálculo de entrega.");
+    return false;
+  }, [calculandoEntrega]);
 
   const margenPorProducto = React.useCallback(
     (productoId?: string) => margenEntregaProducto(
@@ -5496,12 +5492,13 @@ function PropuestaFichaContenido({
   // La fecha de la OT sigue a la última entrega sugerida por producto
   // hasta que el usuario la fija a mano.
   React.useEffect(() => {
-    if (!conDemoraSistema || otFechaTocadaRef.current) return;
+    if (!conDemoraSistema || calculandoEntrega || otFechaTocadaRef.current) return;
     const fecha = demoraOrden?.fechaSugerida ?? null;
     if (items.length > 0)
       setFechaEstimada((prev) => (prev === (fecha ?? "") ? prev : fecha ?? ""));
   }, [
     demoraOrden,
+    calculandoEntrega,
     conDemoraSistema,
     items.length,
   ]);
@@ -6177,6 +6174,7 @@ function PropuestaFichaContenido({
    */
   const guardarEdicion = React.useCallback(
     async (opciones?: { destino?: string }) => {
+    if (!validarEntregaCalculada()) return;
       if (revisionCopiadoEnCurso.current) {
         toast.info("Esperá a que termine la actualización de precios de copiado.");
         return;
@@ -6304,6 +6302,7 @@ function PropuestaFichaContenido({
       }
     },
     [
+      validarEntregaCalculada,
       orden,
       cambioDocumento,
       validarCanalVenta,
@@ -6412,6 +6411,7 @@ function PropuestaFichaContenido({
   const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const emitirBorrador = React.useCallback(
     async (imprimir = false) => {
+    if (!validarEntregaCalculada()) return;
       if (emisionEnCursoRef.current) return;
       if (bloqueoEntregaInmediata) {
         setTab("pagos");
@@ -6504,6 +6504,7 @@ function PropuestaFichaContenido({
       }
     },
     [
+      validarEntregaCalculada,
       conOrdenes,
       orden,
       router,
@@ -6895,6 +6896,7 @@ function PropuestaFichaContenido({
   const emisionPresupuestoEnCursoRef = React.useRef(false);
   const [canalPresupuestoAbierto, setCanalPresupuestoAbierto] = React.useState(false);
   const emitirPresupuestoCb = React.useCallback(async (canal: CanalPresupuesto = "whatsapp") => {
+    if (!validarEntregaCalculada()) return;
     if (revisionCopiadoEnCurso.current) {
       toast.info("Esperá a que termine la actualización de precios de copiado.");
       return;
@@ -6975,6 +6977,7 @@ function PropuestaFichaContenido({
       setEmitiendoPresupuesto(false);
     }
   }, [
+    validarEntregaCalculada,
     presupuestoBase,
     revisionPropuesta,
     conPresupuestos,
@@ -6992,6 +6995,7 @@ function PropuestaFichaContenido({
   ]);
 
   const emitirOrden = React.useCallback(async (imprimir = false) => {
+    if (!validarEntregaCalculada()) return;
     if (emisionEnCursoRef.current) return;
     if (bloqueoEntregaInmediata) {
       setTab("pagos");
@@ -7095,6 +7099,7 @@ function PropuestaFichaContenido({
       emisionEnCursoRef.current = false;
     }
   }, [
+    validarEntregaCalculada,
     conOrdenes,
     conCotizacion,
     items,
@@ -7140,6 +7145,7 @@ function PropuestaFichaContenido({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
+    if (!validarEntregaCalculada()) return;
     if (revisionCopiadoEnCurso.current) {
       toast.info("Esperá a que termine la actualización de precios de copiado.");
       return;
@@ -7235,6 +7241,7 @@ function PropuestaFichaContenido({
       setGuardandoBorrador(false);
     }
   }, [
+    validarEntregaCalculada,
     presupuestoBase,
     conOrdenes,
     conPresupuestos,
@@ -8175,7 +8182,7 @@ function PropuestaFichaContenido({
                   {orden && <FacturarOrdenAccion ordenId={orden.id} numero={orden.numero} total={orden.total} facturado={orden.facturadoTotal} descuentoTotal={orden.descuentoTotal} habilitada={!["borrador", "cancelada"].includes(orden.estado) && !sinComprobante} bloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando} onFacturada={() => { recargarOrden(); setRefrescosComprobantes((n) => n + 1); }} />}
                   {!modoOrden && puedeEditarOrden ? (
                     <OrdenSaveActions
-                      operacionPendiente={cuponValidando || descuentoAplicando || revisandoCopiado}
+                      operacionPendiente={calculandoEntrega || cuponValidando || descuentoAplicando || revisandoCopiado}
                       emitirYEntregar={emitirYEntregar}
                       bloqueoEmision={bloqueoEntregaInmediata}
                       tipo={ordenTipo}
@@ -8214,7 +8221,7 @@ function PropuestaFichaContenido({
                             variant="primary"
                             size="sm"
                             onPress={() => void guardarEdicion()}
-                            isDisabled={guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador || cambiandoTipoBorrador}
+                            isDisabled={calculandoEntrega || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador || cambiandoTipoBorrador}
                           >
                             <CheckIcon />
                             {guardandoEdicion
@@ -8261,7 +8268,7 @@ function PropuestaFichaContenido({
                       {permisoOrdenes && orden.estado === "borrador" && <CambiarTipoBorrador
                         id={orden.id} tipo="orden" version={orden.version}
                         onPendienteChange={setCambiandoTipoBorrador}
-                        disabled={cambiosSinGuardar > 0 || cobrosStaged.length > 0 || guardandoEdicion || precioOrdenPendiente || revisandoCopiado || cuponValidando || descuentoAplicando || togglingFiscal || cancelando || emitiendoBorrador}
+                        disabled={calculandoEntrega || cambiosSinGuardar > 0 || cobrosStaged.length > 0 || guardandoEdicion || precioOrdenPendiente || revisandoCopiado || cuponValidando || descuentoAplicando || togglingFiscal || cancelando || emitiendoBorrador}
                         motivoBloqueo={cobrosStaged.length > 0 ? "Quitá los pagos pendientes antes de cambiar el tipo de borrador." : undefined}
                       />}
                       {puedeEditarOrden && orden.estado === "borrador" ? (
@@ -8564,7 +8571,9 @@ function PropuestaFichaContenido({
                               icon={<FactoryIcon />}
                             >
                               <div className={fechasStyles.valorConsulta}>
-                                {eta?.fechaProduccion ? (
+                                {calculandoEntrega ? (
+                                  <span role="status">Calculando entrega…</span>
+                                ) : eta?.fechaProduccion ? (
                                   <time dateTime={eta?.fechaProduccion}>
                                     {formatFechaOrden(eta?.fechaProduccion)}
                                   </time>
@@ -8580,7 +8589,9 @@ function PropuestaFichaContenido({
                               icon={<PackageCheckIcon />}
                             >
                               <div className={fechasStyles.valorConsulta}>
-                                {eta?.fechaSugerida ? (
+                                {calculandoEntrega ? (
+                                  "Calculando entrega…"
+                                ) : eta?.fechaSugerida ? (
                                   <time dateTime={eta?.fechaSugerida}>
                                     {formatFechaOrden(eta?.fechaSugerida)}
                                   </time>
