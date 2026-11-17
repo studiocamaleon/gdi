@@ -329,6 +329,16 @@ export class AdministracionController {
     return this.comprobantesService.emitir(auth, id);
   }
 
+  @Permiso('administracion.anular')
+  @RequiereVista('administracion.comprobantes.ver')
+  @Post('comprobantes/:id/nota-credito-total')
+  notaCreditoTotal(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.comprobantesService.notaCreditoTotal(auth, id);
+  }
+
   @Permiso("administracion.comprobantes.gestionar", "administracion.anular")
   @Post('comprobantes/:id/consultar-emision')
   consultarEmision(

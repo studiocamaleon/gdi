@@ -2,6 +2,7 @@ import { ApiError, apiRequest } from "@/lib/api";
 import { ClienteDetalle, ClientePayload } from "@/lib/clientes";
 
 type ClientesQuery = {
+  id?: string;
   q?: string;
   page?: number;
   limit?: number;
@@ -24,6 +25,7 @@ export type ClientesListResponse = {
 function buildClientesPath(params: ClientesQuery = {}) {
   const searchParams = new URLSearchParams();
   searchParams.set("limit", String(params.limit ?? 25));
+  if (params.id) searchParams.set("id", params.id);
   if (params.page) searchParams.set("page", String(params.page));
   if (params.q?.trim()) searchParams.set("q", params.q.trim());
   if (params.incluirInactivos) searchParams.set("incluirInactivos", "true");

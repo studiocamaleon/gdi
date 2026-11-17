@@ -371,8 +371,15 @@ export class ComprobantesService {
           },
         },
         correcciones: {
-          where: { tipo: 'nota_credito', estado: 'emitido', anuladoEl: null },
-          select: { id: true },
+          where: {
+            tipo: 'nota_credito',
+            estado: {
+              in: ['borrador', 'en_proceso', 'por_verificar', 'emitido'],
+            },
+            anuladoEl: null,
+          },
+          select: { id: true, estado: true, total: true },
+          orderBy: { createdAt: 'desc' },
         },
         imputaciones: {
           include: {
@@ -389,6 +396,11 @@ export class ComprobantesService {
     if (!c) throw new NotFoundException(`No existe el comprobante ${id}`);
     return {
       ...this.toResponse(c),
+      corregido: c.correcciones.some((nota) => nota.estado === 'emitido'),
+      notasCredito: c.correcciones.map((nota) => ({
+        ...nota,
+        total: Number(nota.total),
+      })),
       emision: c.emisiones[0] ?? null,
       cobrosImputados: c.imputaciones.map((i) => ({
         id: i.id,
@@ -674,6 +686,72 @@ export class ComprobantesService {
       await this.publicar(auth.tenantId, id);
     }
     return this.obtener(auth, id);
+  }
+
+  /** Prepara una reversión completa sin emitir ni contactar al proveedor fiscal. */
+  async notaCreditoTotal(auth: CurrentAuth, id: string) {
+    if (!puedeOperarComprobante(auth, 'nota_credito'))
+      throw new ForbiddenException(
+        'No tenés permiso para crear notas de crédito.',
+      );
+    const origen = await this.prisma.comprobante.findFirst({
+      where: {
+        id,
+        tenantId: auth.tenantId,
+        tipo: 'factura',
+        estado: 'emitido',
+        anuladoEl: null,
+      },
+      include: {
+        ordenes: true,
+        correcciones: {
+          where: {
+            tipo: 'nota_credito',
+            anuladoEl: null,
+            estado: {
+              in: ['borrador', 'en_proceso', 'por_verificar', 'emitido'],
+            },
+          },
+          select: { id: true },
+        },
+      },
+    });
+    if (!origen)
+      throw new NotFoundException(
+        'No se encontró una factura emitida para corregir.',
+      );
+    if (origen.correcciones.length)
+      throw new ConflictException(
+        'La factura ya tiene una nota de crédito. Revisá esa nota antes de preparar otra anulación total.',
+      );
+    const items = origen.itemsJson as unknown as ItemPersistido[];
+    if (
+      Math.abs(
+        calcularTotales(origen.letra as LetraProvider, items).total -
+          Number(origen.total),
+      ) > 0.001
+    )
+      throw new ConflictException(
+        'El detalle histórico no coincide con el total. Revisá el comprobante antes de corregirlo.',
+      );
+    return this.crear(auth, {
+      tipo: 'nota_credito',
+      puntoVentaId: origen.puntoVentaId,
+      clienteId: origen.clienteId ?? undefined,
+      comprobanteOrigenId: origen.id,
+      items,
+      ordenes: origen.ordenes.length
+        ? origen.ordenes.map((v) => ({
+            ordenId: v.ordenId,
+            monto: Number(v.monto),
+          }))
+        : origen.ordenId
+          ? [{ ordenId: origen.ordenId, monto: Number(origen.total) }]
+          : undefined,
+      moneda: origen.moneda as 'ARS' | 'USD',
+      cotizacion: origen.cotizacion ? Number(origen.cotizacion) : undefined,
+      condicionVenta: origen.condicionVenta ?? 'contado',
+    });
   }
 
   async publicarParaLote(tenantId: string, id: string) {
@@ -1476,9 +1554,19 @@ export class ComprobantesService {
       /** "A 0001-00000123" — como lo muestra el diseño. */
       numeroCompleto: nro ? `${c.letra} ${pv}-${nro}` : `${c.letra} ${pv}-—`,
       fecha: c.fecha.toISOString().slice(0, 10),
-      clienteNombre:
-        c.cliente?.nombre ?? texto(snapshot.nombre, 'Consumidor Final'),
-      clienteCuit: c.cliente?.cuit ?? (snapshot.cuit as string | null) ?? null,
+      clienteNombre: texto(
+        snapshot.nombre,
+        c.cliente?.nombre ?? 'Consumidor Final',
+      ),
+      clienteRazonSocial: texto(
+        snapshot.razonSocial,
+        texto(snapshot.nombre, 'Consumidor Final'),
+      ),
+      clienteCondicionFiscal: texto(
+        snapshot.condicionFiscal,
+        'consumidor_final',
+      ),
+      clienteCuit: (snapshot.cuit as string | null) ?? null,
       // Legacy: el primer vínculo (o la columna deprecada en históricos).
       ordenId: c.ordenId ?? c.ordenes[0]?.ordenId ?? null,
       ordenNumero: c.orden?.numero ?? c.ordenes[0]?.orden.numero ?? null,

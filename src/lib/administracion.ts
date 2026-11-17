@@ -378,6 +378,8 @@ export type Comprobante = {
   fecha: string;
   clienteNombre: string;
   clienteCuit: string | null;
+  clienteRazonSocial?: string;
+  clienteCondicionFiscal?: string;
   /** Legacy: el primer vínculo. Preferir `ordenes`. */
   ordenId: string | null;
   ordenNumero: string | null;
@@ -402,6 +404,7 @@ export type Comprobante = {
   comprobanteOrigenId: string | null;
   /** La factura tiene al menos una NC emitida y vigente asociada. */
   corregido?: boolean;
+  notasCredito?: Array<{ id: string; estado: ComprobanteEstado; total: number }>;
 };
 
 export type CobroImputado = {

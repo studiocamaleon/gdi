@@ -96,6 +96,7 @@ jobs:
             src/auth/__tests__/tesoreria-aislamiento-http.integration.spec.ts \
             src/administracion/__tests__/facturacion-permisos-http.integration.spec.ts \
             src/administracion/__tests__/facturacion-detalle.integration.spec.ts \
+            src/administracion/__tests__/correccion-fiscal.integration.spec.ts \
             src/administracion/invoicing/__tests__/items-factura-orden.spec.ts \
             src/ordenes-trabajo/__tests__/cargos-con-origen.spec.ts \
             src/ordenes-trabajo/__tests__/vendedor-detalle.spec.ts \
@@ -185,6 +186,7 @@ jobs:
         run: |
           npm ci --include=dev --no-audit --no-fund
           node node_modules/vitest/vitest.mjs run \
+            src/components/administracion/correccion-fiscal.test.tsx \
             src/components/usuarios/empleado-usuario.test.tsx \
             src/lib/staging-access.test.ts \
             src/lib/request-origin.test.ts \

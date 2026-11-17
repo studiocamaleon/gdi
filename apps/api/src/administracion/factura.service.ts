@@ -125,8 +125,7 @@ export class FacturaService {
       snapshot.condicionFiscal,
       'consumidor_final',
     );
-    const receptorCuit =
-      (snapshot.cuit as string | null) ?? c.cliente?.cuit ?? null;
+    const receptorCuit = (snapshot.cuit as string | null) ?? null;
 
     const conRetencion = c.leyenda === 'OPERACIÓN SUJETA A RETENCIÓN';
     const codigo = codigoComprobante(c.tipo, c.letra, conRetencion);

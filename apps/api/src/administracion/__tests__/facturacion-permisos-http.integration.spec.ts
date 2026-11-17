@@ -132,6 +132,7 @@ describe('Facturación con permisos por vista (HTTP)', () => {
         'administracion.anular',
         'administracion.facturacion.ver',
       ],
+      anuladorComprobantes: ['acceso.por_vista', 'administracion.anular', 'administracion.comprobantes.ver'],
       legado: ['administracion.gestionar'],
       sinAcceso: ['acceso.por_vista'],
     })) {
@@ -540,6 +541,20 @@ describe('Facturación con permisos por vista (HTTP)', () => {
       .expect(403);
     expect(emitir.mock.calls.length).toBe(inicio);
   });
+  it('prepara una NC total por HTTP sin emitir y conserva aislamiento y permiso de anular', async () => {
+    const f = await borrador();
+    await post(`comprobantes/${f.id}/emitir`).send({}).expect(201);
+    const antes = emitir.mock.calls.length;
+    await post(`comprobantes/${f.id}/nota-credito-total`, 'comprobantes').send({}).expect(403);
+    const ajena = await borrador(1);
+    await prisma.comprobante.update({ where: { id: ajena.id }, data: { estado: 'emitido' } });
+    await post(`comprobantes/${ajena.id}/nota-credito-total`, 'anuladorComprobantes').send({}).expect(404);
+    const nc = await post(`comprobantes/${f.id}/nota-credito-total`, 'anuladorComprobantes').send({}).expect(201);
+    expect(nc.body).toMatchObject({ tipo: 'nota_credito', estado: 'borrador', total: 121, comprobanteOrigenId: f.id });
+    expect(emitir.mock.calls.length).toBe(antes);
+    await post(`comprobantes/${f.id}/nota-credito-total`, 'anuladorComprobantes').send({}).expect(409);
+  });
+
   it('el permiso de anular permite una NC contra la factura de la OT', async () => {
     const ot = await orden();
     const factura = await post(`ordenes/${ot.id}/facturar`)

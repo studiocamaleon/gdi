@@ -20,11 +20,13 @@ import {
   CONDICIONES_VENTA,
   CONDICION_VENTA_LABELS,
   letraComprobante,
-  type Comprobante,
-  type ComprobanteTipo,
   type ConfiguracionFiscal,
 } from "@/lib/administracion";
 import { crearComprobante } from "@/lib/administracion-api";
+import { listClientes } from "@/lib/clientes-api";
+import { claveFechaEnZona } from "@/lib/zona";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { ClienteSelectorComprobante } from "./cliente-selector-comprobante";
 import {
   CONDICION_FISCAL_LABELS,
   formatCuit,
@@ -53,6 +55,7 @@ import s from "./comprobante.module.css";
 export type ClienteOpcion = {
   id: string;
   nombre: string;
+  razonSocial?: string;
   cuit: string;
   condicionFiscal: CondicionFiscal;
 };
@@ -83,25 +86,52 @@ export function ComprobanteEmisionView({
   config,
   clientes,
   ordenes,
-  origen,
 }: {
   config: ConfiguracionFiscal;
   clientes: ClienteOpcion[];
   ordenes: OrdenOpcion[];
-  origen: Comprobante | null;
 }) {
   const router = useRouter();
+  const { zonaHoraria } = useConfigRegional();
   const activos = config.puntosVenta.filter((p) => p.activo);
 
-  const [tipo, setTipo] = React.useState<ComprobanteTipo>(
-    origen ? "nota_credito" : "factura",
-  );
-  const [clienteId, setClienteId] = React.useState(
-    origen ? "" : (clientes[0]?.id ?? ""),
-  );
+  const tipo = "factura";
+  const [cliente, setCliente] = React.useState<ClienteOpcion | null>(null);
+  const [cargandoCliente, setCargandoCliente] = React.useState(false);
+  const [errorCliente, setErrorCliente] = React.useState("");
+  const seleccionCliente = React.useRef(0);
+  const clienteId = cliente?.id ?? "";
+  const seleccionarClienteOrden = async (id: string | null) => {
+    const version = ++seleccionCliente.current;
+    setCargandoCliente(true);
+    setErrorCliente("");
+    setCliente(null);
+    try {
+      const res = id
+        ? await listClientes({ id, incluirInactivos: true, limit: 1 }, true)
+        : null;
+      if (version !== seleccionCliente.current) return;
+      if (id && !res?.data[0])
+        throw new Error("No se encontró el cliente de la orden.");
+      setCliente(res?.data[0] ?? null);
+      setCargandoCliente(false);
+    } catch (error) {
+      if (version === seleccionCliente.current) {
+        setCargandoCliente(false);
+        setErrorCliente(
+          "No se pudieron consultar los datos fiscales. Volvé a seleccionar la orden.",
+        );
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo consultar el cliente. Volvé a seleccionar la orden.",
+        );
+      }
+    }
+  };
   const [puntoVentaId, setPuntoVentaId] = React.useState(activos[0]?.id ?? "");
   const [fecha, setFecha] = React.useState(() =>
-    new Date().toISOString().slice(0, 10),
+    claveFechaEnZona(new Date(), zonaHoraria),
   );
   const [ordenId, setOrdenId] = React.useState("");
   const [items, setItems] = React.useState<ItemForm[]>([itemVacio()]);
@@ -114,7 +144,6 @@ export function ComprobanteEmisionView({
   const [guardando, setGuardando] = React.useState(false);
   const [desdeOrden, setDesdeOrden] = React.useState(false);
 
-  const cliente = clientes.find((c) => c.id === clienteId) ?? null;
   const receptor = cliente?.condicionFiscal ?? "consumidor_final";
   const r = letraComprobante(
     config.condicionFiscal,
@@ -160,6 +189,7 @@ export function ComprobanteEmisionView({
   const total = r.letra === "A" ? base + ivaTotal : base;
 
   const submit = async () => {
+    if (cargandoCliente || errorCliente) return;
     if (!puntoVentaId) {
       toast.error("Agregá un punto de venta en Datos fiscales.");
       return;
@@ -196,7 +226,6 @@ export function ComprobanteEmisionView({
         moneda,
         cotizacion: moneda === "USD" ? Number(cotizacion) : undefined,
         condicionVenta,
-        comprobanteOrigenId: origen?.id,
       });
       toast.success("Borrador creado. Revisalo y emitilo.");
       router.push(`/administracion/comprobantes/${creado.id}`);
@@ -236,7 +265,9 @@ export function ComprobanteEmisionView({
           <ActionButton
             onPress={() => void submit()}
             isPending={guardando}
-            isDisabled={guardando || faltaCuit}
+            isDisabled={
+              guardando || cargandoCliente || !!errorCliente || faltaCuit
+            }
           >
             <FileTextIcon aria-hidden />
             {guardando ? "Creando…" : "Crear borrador"}
@@ -259,32 +290,37 @@ export function ComprobanteEmisionView({
               </div>
             </Card.Header>
             <Card.Content className={s.cardBody}>
-              {origen && (
-                <Alert className={s.note}>
-                  <InfoIcon />
-                  <AlertTitle>Corrección de {origen.numeroCompleto}</AlertTitle>
-                  <AlertDescription>{origen.clienteNombre}</AlertDescription>
-                </Alert>
-              )}
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="cmp-cliente">Cliente</FieldLabel>
-                  <SelectField
-                    id="cmp-cliente"
-                    aria-label="Cliente del comprobante"
-                    value={clienteId}
-                    onChange={setClienteId}
-                    disabled={guardando}
-                    options={[
-                      { value: "", label: "Consumidor Final" },
-                      ...clientes.map((c) => ({
-                        value: c.id,
-                        label: `${c.nombre} · ${CONDICION_FISCAL_LABELS[c.condicionFiscal]}`,
-                      })),
-                    ]}
-                  />
-                </Field>
-              </FieldGroup>
+              <ClienteSelectorComprobante
+                iniciales={clientes}
+                value={cliente}
+                disabled={guardando || desdeOrden}
+                onChange={(c) => {
+                  ++seleccionCliente.current;
+                  setCliente(c);
+                  setCargandoCliente(false);
+                  setErrorCliente("");
+                }}
+              />
+              <p role="status">
+                {errorCliente ? (
+                  errorCliente
+                ) : cargandoCliente ? (
+                  "Consultando los datos fiscales del cliente…"
+                ) : (
+                  <>
+                    Razón social:{" "}
+                    <strong>
+                      {cliente?.razonSocial ||
+                        cliente?.nombre ||
+                        "Consumidor Final"}
+                    </strong>
+                    {" · "}CUIT{" "}
+                    {cliente?.cuit ? formatCuit(cliente.cuit) : "sin informar"}
+                    {" · "}
+                    {CONDICION_FISCAL_LABELS[receptor]}
+                  </>
+                )}
+              </p>
               <div className={s.fiscalIdentity}>
                 <span className={s.fiscalLetter}>{r.letra}</span>
                 <div>
@@ -338,13 +374,8 @@ export function ComprobanteEmisionView({
                     id="cmp-tipo"
                     aria-label="Tipo de comprobante"
                     value={tipo}
-                    onChange={(v) => setTipo(v as ComprobanteTipo)}
-                    disabled={guardando || !!origen}
-                    options={[
-                      { value: "factura", label: "Factura" },
-                      { value: "nota_credito", label: "Nota de crédito" },
-                      { value: "nota_debito", label: "Nota de débito" },
-                    ]}
+                    disabled
+                    options={[{ value: "factura", label: "Factura" }]}
                   />
                 </Field>
                 <Field>
@@ -391,7 +422,7 @@ export function ComprobanteEmisionView({
                       setOrdenId(v);
                       setDesdeOrden(!!v);
                       const o = ordenes.find((x) => x.id === v);
-                      if (o?.clienteId) setClienteId(o.clienteId);
+                      void seleccionarClienteOrden(o?.clienteId ?? null);
                     }}
                     options={[
                       {
