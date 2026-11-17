@@ -166,7 +166,7 @@ it("descarta respuestas viejas y bloquea la selección cuando falla una búsqued
   vi.mocked(listClientes).mockResolvedValueOnce(respuesta([ultimo], 1));
   await buscar("ultimo");
   await act(async () => antigua!(respuesta([inicial], 889)));
-  expect(container.textContent).toContain("1 clientes");
+  expect(container.textContent).toContain("1 cliente");
   vi.mocked(listClientes).mockRejectedValueOnce(new Error("sin conexión"));
   await buscar("otra");
   expect(container.textContent).toContain("No se pudieron cargar");

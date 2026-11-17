@@ -128,7 +128,7 @@ export function ComprobanteCorreccionView({ origen }: { origen: Comprobante }) {
             </AlertDescription>
           </Alert>
         </Card.Content>
-        <Card.Footer>
+        <Card.Footer className={s.cardBody}>
           <ActionButton
             onPress={() => void preparar()}
             isPending={guardando}

@@ -109,7 +109,7 @@ export function ClienteSelectorComprobante({
           {error ||
             (loading
               ? "Buscando clientes…"
-              : `${resultado.total} clientes · Página ${page} de ${Math.max(1, resultado.pages)}`)}
+              : `${resultado.total} ${resultado.total === 1 ? "cliente" : "clientes"} · Página ${page} de ${Math.max(1, resultado.pages)}`)}
         </span>
         {error ? (
           <ActionButton

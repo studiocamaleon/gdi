@@ -18,4 +18,6 @@ Referencias oficiales: [ARCA: corrección mediante nota asociada](https://www.af
 
 Base PostgreSQL temporal independiente, con migraciones del proyecto y exclusivamente datos ficticios. No se usaron datos ni credenciales de staging para ejecutar el sistema local, ni se modificaron bases existentes. Sin migraciones nuevas. Tipos de los módulos afectados y lint de interfaz comprobados; la compilación completa se ejecuta en CI remoto.
 
-Pendiente: validación visual final, CI y revisión del PR. No publicado en staging ni producción.
+Validación visual local completada en Chrome: búsqueda y selección de un cliente fuera del límite anterior, datos fiscales y letra resultante, vista de corrección con receptor y total originales. Los fixtures visuales temporales se retiraron.
+
+PR #130. Pendiente: CI y revisión. No publicado en staging ni producción.
