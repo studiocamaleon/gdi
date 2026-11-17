@@ -110,6 +110,35 @@ export class EmisionFiscalService {
           throw new ConflictException(
             'Sólo se puede enviar un borrador sin un envío anterior pendiente de verificar.',
           );
+        // Una NC conserva al receptor original aunque su ficha haya cambiado.
+        // Una factura nueva debe ser revisada de nuevo si su borrador quedó viejo.
+        if (c.tipo === 'factura' && c.clienteId) {
+          const cliente = await tx.cliente.findFirst({
+            where: { id: c.clienteId, tenantId: auth.tenantId },
+            select: {
+              nombre: true,
+              razonSocial: true,
+              cuit: true,
+              condicionFiscal: true,
+            },
+          });
+          const snapshot = objeto(c.receptorSnapshot);
+          const campos = [
+            'nombre',
+            'razonSocial',
+            'cuit',
+            'condicionFiscal',
+          ] as const;
+          if (
+            !cliente ||
+            campos.some(
+              (campo) => texto(snapshot[campo]) !== texto(cliente[campo]),
+            )
+          )
+            throw new ConflictException(
+              'Los datos fiscales del cliente cambiaron después de crear este borrador. Descartalo y creá uno nuevo para revisar los datos actuales antes de emitir.',
+            );
+        }
         const legadoPendiente = await tx.comprobante.findFirst({
           where: {
             tenantId: auth.tenantId,

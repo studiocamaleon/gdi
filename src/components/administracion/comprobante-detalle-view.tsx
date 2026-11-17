@@ -20,6 +20,7 @@ import {
   WalletIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CONDICION_FISCAL_LABELS, type CondicionFiscal } from "@/lib/clientes";
 import {
   COMPROBANTE_TIPO_LABELS,
   CONDICION_VENTA_LABELS,
@@ -31,6 +32,7 @@ import {
   cargarCae,
   emitirComprobante,
   consultarEmisionComprobante,
+  descartarComprobante,
 } from "@/lib/administracion-api";
 import { formatearMonedaDoc, monedaDe } from "@/lib/moneda";
 import {
@@ -215,6 +217,32 @@ export function ComprobanteDetalleView({
           </p>
         </div>
         <div className={s.actions}>
+          {c.estado === "borrador" &&
+            c.numero === null &&
+            (!c.emision || c.emision.estado === "sin_envio") &&
+            puedeAnular && (
+              <ActionButton
+                variant="outline"
+                isDisabled={trabajando}
+                onPress={async () => {
+                  setTrabajando(true);
+                  try {
+                    await descartarComprobante(c.id);
+                    toast.success(
+                      "Borrador descartado. Podés crear uno nuevo con los datos actuales.",
+                    );
+                    router.push("/administracion/comprobantes");
+                  } catch (e) {
+                    toast.error(
+                      e instanceof Error ? e.message : "No se pudo descartar.",
+                    );
+                    setTrabajando(false);
+                  }
+                }}
+              >
+                Descartar borrador
+              </ActionButton>
+            )}
           {emitido && (
             <ActionLink
               variant="outline"
@@ -252,6 +280,27 @@ export function ComprobanteDetalleView({
             )}
         </div>
       </header>
+      {emitido && c.tipo === "nota_credito" && c.ordenes.length > 0 && (
+        <Alert className={s.notice}>
+          <AlertTitle>Nota de crédito emitida</AlertTitle>
+          <AlertDescription>
+            Se liberó el importe facturado y se conservaron los pagos de las
+            órdenes. Revisá la ficha del cliente y volvé a facturar desde la
+            orden con sus datos actuales.
+            <div className="flex flex-wrap gap-3">
+              {c.ordenes.map((o) => (
+                <ActionLink
+                  key={o.ordenId}
+                  variant="outline"
+                  href={`/produccion/ordenes/${o.ordenId}`}
+                >
+                  Abrir {o.numero}
+                </ActionLink>
+              ))}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
       {envioAnteriorSinRegistro && (
         <Alert className={s.notice}>
           <InfoIcon />
@@ -347,8 +396,19 @@ export function ComprobanteDetalleView({
                   <div className={s.receptor}>
                     <ComprobanteLetra comprobante={c} />
                     <div>
-                      <strong>{c.clienteNombre}</strong>
+                      <strong>{c.clienteRazonSocial || c.clienteNombre}</strong>
+                      {c.clienteRazonSocial &&
+                        c.clienteRazonSocial !== c.clienteNombre && (
+                          <small>{c.clienteNombre}</small>
+                        )}
                       <small>CUIT {formatCuitODash(c.clienteCuit)}</small>
+                      {c.clienteCondicionFiscal && (
+                        <small>
+                          {CONDICION_FISCAL_LABELS[
+                            c.clienteCondicionFiscal as CondicionFiscal
+                          ] || c.clienteCondicionFiscal}
+                        </small>
+                      )}
                     </div>
                   </div>
                   <dl className={s.infoGrid}>

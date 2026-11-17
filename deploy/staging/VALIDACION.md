@@ -1,5 +1,28 @@
 # Validación de staging — historial
 
+## 2026-11-17 — Clientes completos y nota de crédito para refacturar
+
+Revisión funcional **`821dd09e5e1d785e5f76a3e3690f056448104267`**, [PR #130](https://github.com/studiocamaleon/gdi/pull/130), desde `main` actualizado. Lucas pidió corregir la lista incompleta de clientes y preparar una nota de crédito para poder refacturar con los datos actuales. Este ensayo se realizó en staging, sin comprobantes reales. Lucas autorizó posteriormente promover el mismo lote a producción; ver [su registro y reversión](../produccion/VALIDACION.md).
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:ad915f6a7d534d549187eb90dfc17c079562539a3e5e101f17953822532e7b74` |
+| Web | `sha256:cfb47440bcfe191cd6861770510f35bbe399c00e911f7b7f5b67cd20a02c9c8b` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Resultado:** búsqueda paginada sobre todos los clientes por nombre, razón social o CUIT; consulta expresa del cliente de una orden aunque quede fuera de la primera página. La corrección total prepara un borrador con receptor, letra, ítems, descuentos, impuestos, moneda y vínculos originales. Una nueva factura utiliza la ficha actual. Si esa ficha cambia después de preparar un borrador, su primer envío se rechaza antes de contactar al proveedor. Detalle y PDF conservan la identidad histórica. Ver [el circuito y sus límites](../../docs/correccion-fiscal-clientes.md).
+
+**Validación local y CI:** 108 pruebas de API y 32 de interfaz, PostgreSQL temporal con datos ficticios, tipos y lint aprobados. Incluyen B pagada → NC B → nueva A, pagos, documentos agrupados, USD, alícuotas, crédito duplicado, permisos HTTP y separación entre empresas. Chrome comprobó la búsqueda fuera del límite anterior, identidad fiscal visible y corrección con datos originales; fixtures visuales retirados. [HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/44164584775), [contenedores/tipos](https://github.com/studiocamaleon/gdi/actions/runs/44164584708), CodeQL aprobados en la revisión funcional; cero alertas abiertas de CodeQL. Sin cambios de marketing ni Grafo3D. Compilaciones de producción realizadas en remoto.
+
+**Ensayo con el backend desplegado:** empresa, cliente y orden ficticios dentro de una única transacción revertida al terminar. Factura B pagada por 121; cambio de razón social, CUIT y condición fiscal; NC B con receptor original; nueva A por 121 con receptor actual. Pago conservado y reimputado una sola vez, saldo cero. Rechazo de borrador desactualizado antes del envío; PDF con receptor histórico; búsqueda fuera del límite anterior, por ID y CUIT con guiones. Se usó exclusivamente el proveedor manual, sin CAE ni avisos externos; se confirmó que no quedó la empresa de ensayo. Esta prueba no equivale a una emisión contra ARCA.
+
+**Operación:** revisión ejecutada comprobada en web, API y ambos workers. Web/API 200, búsqueda anónima 401 y API privada directa 403. Actualizadas sólo las cuatro imágenes mediante Machines API; configuración comparada antes/después. Archivos, arranque, recursos, servicios y encendido bajo demanda del [PR #127](https://github.com/studiocamaleon/gdi/pull/127) conservados. Retención temporal liberada; vuelve a regir el apagado por inactividad. Los seis servicios de producción conservaron configuración, imágenes y recursos y estaban saludables. Sin migraciones nuevas, seeds, resets ni cambios de catálogo.
+
+**Respaldo:** comprobante previo verificado; fuentes exactas cifradas bajo custodia e inventario actualizado. Copia posterior completada **`2026-11-17T20:30:37.061Z`**, con firma, huellas y descifrado del manifiesto comprobados: revisión e imágenes coincidentes, 319 migraciones, 33 archivos y diez fuentes. No se repitió una restauración SQL completa.
+
+**Reversión:** cambiar sólo las imágenes de API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:382b7d01dc63c169578ff16434eb443660357f37efd03aa57faa10f761130d6c` y web a `registry.fly.io/grafoprint-staging-web@sha256:6d63e8a1b37b649ec2c8fbcc1e8a40b84690e4b1cd4204b9a81c2f4e8977fc38`, preservando íntegra la configuración bajo demanda. Restituir el inventario anterior del copiador. No revertir datos ni esquema.
+
 ## 2026-11-16 — Cotizador sin bloquear la pantalla al estimar entregas
 
 Revisión **`e01215db942207a84f27bfa5616eca1b29ae6f52`**, [PR #129](https://github.com/studiocamaleon/gdi/pull/129). Lucas autorizó corregir las trabas al configurar/agregar productos, verificar cálculos y fechas y publicar en producción. Rama independiente desde `main`; no incorpora otros PR abiertos.

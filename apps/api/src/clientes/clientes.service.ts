@@ -47,6 +47,7 @@ export class ClientesService {
     const query = pagination.q?.trim();
     const where: Prisma.ClienteWhereInput = {
       tenantId: auth.tenantId,
+      ...(pagination.id ? { id: pagination.id } : {}),
       // Los inhabilitados quedan afuera salvo que los pidan: es lo que hace
       // que "inhabilitar" signifique algo en el resto del sistema.
       ...(pagination.incluirInactivos === 'true' ? {} : { activo: true }),
@@ -54,10 +55,12 @@ export class ClientesService {
 
     let totalBusqueda: number | undefined;
     if (query) {
+      const cuit = /^[\d .-]+$/.test(query) ? query.replace(/\D/g, '') : '';
       // Normalizar antes de paginar conserva todas las coincidencias.
       const contiene = (columna: Prisma.Sql) =>
         contieneSinAcentos(columna, query);
       const filtro = Prisma.sql`c."tenantId" = ${auth.tenantId}::uuid
+        ${pagination.id ? Prisma.sql`AND c.id = ${pagination.id}::uuid` : Prisma.empty}
         ${pagination.incluirInactivos === 'true' ? Prisma.empty : Prisma.sql`AND c.activo = true`}
         AND (${Prisma.join(
           [
@@ -72,6 +75,7 @@ export class ClientesService {
           ),
           ' OR ',
         )}
+          ${cuit.length === 11 ? Prisma.sql`OR c.cuit = ${cuit}` : Prisma.empty}
           OR EXISTS (SELECT 1 FROM "ClienteContacto" co WHERE co."clienteId" = c.id AND co."tenantId" = c."tenantId" AND (${contiene(Prisma.sql`co.nombre`)} OR ${contiene(Prisma.sql`co.email`)}))
           OR EXISTS (SELECT 1 FROM "ClienteDireccion" d WHERE d."clienteId" = c.id AND d."tenantId" = c."tenantId" AND ${contiene(Prisma.sql`d.ciudad`)}))`;
       const [ids, conteo] = await this.prisma.$transaction([

@@ -2,11 +2,16 @@ import {
   IsBooleanString,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
 } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class ClientesQueryDto extends PaginationDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(120)

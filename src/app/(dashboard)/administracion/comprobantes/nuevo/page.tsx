@@ -9,12 +9,13 @@ import {
   type ClienteOpcion,
   type OrdenOpcion,
 } from "@/components/administracion/comprobante-emision-view";
-import type { Comprobante } from "@/lib/administracion";
 import {
   getComprobante,
   getConfiguracionFiscal,
 } from "@/lib/administracion-api";
 import { getClientes } from "@/lib/clientes-api";
+import { notFound } from "next/navigation";
+import { ComprobanteCorreccionView } from "@/components/administracion/comprobante-correccion-view";
 import { getOrdenesTrabajo } from "@/lib/ordenes-trabajo-api";
 import type { CondicionFiscal } from "@/lib/clientes";
 
@@ -28,16 +29,23 @@ export default async function NuevoComprobantePage({
   const { origen: origenId } = await searchParams;
   if (
     !(await tienePermiso(
-      origenId ? "administracion.anular" : "administracion.comprobantes.gestionar",
+      origenId
+        ? "administracion.anular"
+        : "administracion.comprobantes.gestionar",
     ))
   )
     return <SinPermiso modulo="Emisión de comprobantes" />;
   if (!(await tieneCapacidad("fiscal_argentina"))) return <FuncionNoIncluida />;
 
+  if (origenId) {
+    const factura = await getComprobante(origenId);
+    if (!factura) notFound();
+    return <ComprobanteCorreccionView origen={factura} />;
+  }
+
   const config = await getConfiguracionFiscal();
   let clientes: ClienteOpcion[] = [];
   let ordenes: OrdenOpcion[] = [];
-  let origen: Comprobante | null = null;
 
   if (!config) {
     return (
@@ -59,12 +67,13 @@ export default async function NuevoComprobantePage({
 
   {
     const [cs, os] = await Promise.all([
-      getClientes({ limit: 200 }, true),
+      getClientes({ limit: 30 }, true),
       getOrdenesTrabajo({ limit: 50 }),
     ]);
     clientes = cs.map((c) => ({
       id: c.id,
       nombre: c.nombre,
+      razonSocial: c.razonSocial,
       cuit: c.cuit,
       condicionFiscal: c.condicionFiscal as CondicionFiscal,
     }));
@@ -79,16 +88,11 @@ export default async function NuevoComprobantePage({
       }));
   }
 
-  if (origenId) {
-    origen = await getComprobante(origenId);
-  }
-
   return (
     <ComprobanteEmisionView
       config={config}
       clientes={clientes}
       ordenes={ordenes}
-      origen={origen}
     />
   );
 }

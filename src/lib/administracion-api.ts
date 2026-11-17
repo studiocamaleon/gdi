@@ -206,6 +206,12 @@ export async function emitirComprobante(id: string): Promise<Comprobante> {
   });
 }
 
+export async function crearNotaCreditoTotal(id: string): Promise<Comprobante> {
+  return apiRequest(`/administracion/comprobantes/${id}/nota-credito-total`, {
+    method: "POST",
+  });
+}
+
 export async function consultarEmisionComprobante(id: string): Promise<{
   aplicada: boolean;
   detalle: string | null;
