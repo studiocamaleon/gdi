@@ -20,4 +20,10 @@ Base PostgreSQL temporal independiente, con migraciones del proyecto y exclusiva
 
 Validación visual local completada en Chrome: búsqueda y selección de un cliente fuera del límite anterior, datos fiscales y letra resultante, vista de corrección con receptor y total originales. Los fixtures visuales temporales se retiraron.
 
-PR #130. Pendiente: CI y revisión. No publicado en staging ni producción.
+## Verificación en staging
+
+El [PR #130](https://github.com/studiocamaleon/gdi/pull/130) se publicó en staging con revisión funcional `821dd09e5e1d785e5f76a3e3690f056448104267`. Compilaciones remotas y CI aprobados, sin alertas abiertas de CodeQL. Con el código compilado se repitió el circuito B pagada → NC B → nueva A: total y pago de 121 conservados, saldo cero, identidad original de la nota y rechazo del borrador desactualizado. Se comprobaron búsquedas fuera del límite anterior, por ID y por CUIT con guiones. Todos los datos fueron ficticios, se usó exclusivamente el proveedor manual y la transacción se revirtió por completo; no hubo emisiones fiscales ni avisos externos.
+
+La revisión ejecutada en web, API y ambos workers coincide. Web/API responden 200; la búsqueda anónima responde 401 y la API privada rechaza el acceso directo con 403. Recursos y encendido bajo demanda conservados; retención temporal liberada. Versiones, respaldo y reversión en [el registro de staging](../deploy/staging/VALIDACION.md).
+
+Pendiente: revisión y autorización de publicación/integración en producción. No se modificaron producción ni comprobantes reales. Antes de emitir una nueva factura, el operador debe revisar los datos actuales del cliente.
