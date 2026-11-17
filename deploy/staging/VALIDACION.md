@@ -2,7 +2,7 @@
 
 ## 2026-11-17 — Clientes completos y nota de crédito para refacturar
 
-Revisión funcional **`821dd09e5e1d785e5f76a3e3690f056448104267`**, [PR #130](https://github.com/studiocamaleon/gdi/pull/130), desde `main` actualizado. Lucas pidió corregir la lista incompleta de clientes y preparar una nota de crédito para poder refacturar con los datos actuales. Este registro corresponde a staging; **producción y los comprobantes reales no se modificaron**. Publicación e integración en producción pendientes de autorización.
+Revisión funcional **`821dd09e5e1d785e5f76a3e3690f056448104267`**, [PR #130](https://github.com/studiocamaleon/gdi/pull/130), desde `main` actualizado. Lucas pidió corregir la lista incompleta de clientes y preparar una nota de crédito para poder refacturar con los datos actuales. Este ensayo se realizó en staging, sin comprobantes reales. Lucas autorizó posteriormente promover el mismo lote a producción; ver [su registro y reversión](../produccion/VALIDACION.md).
 
 | Servicio | Digest ejecutado |
 | --- | --- |

@@ -26,4 +26,8 @@ El [PR #130](https://github.com/studiocamaleon/gdi/pull/130) se publicó en stag
 
 La revisión ejecutada en web, API y ambos workers coincide. Web/API responden 200; la búsqueda anónima responde 401 y la API privada rechaza el acceso directo con 403. Recursos y encendido bajo demanda conservados; retención temporal liberada. Versiones, respaldo y reversión en [el registro de staging](../deploy/staging/VALIDACION.md).
 
-Pendiente: revisión y autorización de publicación/integración en producción. No se modificaron producción ni comprobantes reales. Antes de emitir una nueva factura, el operador debe revisar los datos actuales del cliente.
+## Publicación en producción
+
+Lucas autorizó publicar e integrar el cambio y confirmó que deben utilizarse los datos actuales del cliente. Se promovieron las mismas imágenes verificadas, sin reconstruir. Chrome comprobó la búsqueda, la identidad actual y su letra A, y la corrección con identidad, letra e importe originales. La API y el worker fiscal conservaron su configuración, y la consulta de conexión con ARCA de producción fue correcta. La comprobación no creó borradores, notas de crédito ni facturas reales.
+
+La nota se prepara desde **Nota de crédito** en la factura original y se revisa antes de emitirla. Después se abre la orden vinculada y se vuelve a facturar con los datos actuales; el pago se conserva. Antes de emitir, el operador debe revisar la identidad fiscal y los importes del borrador. Ver [el registro de producción y su reversión](../deploy/produccion/VALIDACION.md).

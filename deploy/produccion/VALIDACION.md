@@ -1,5 +1,28 @@
 # Validación de producción
 
+## 2026-11-17 — Clientes completos y corrección fiscal para refacturar
+
+Lucas autorizó publicar e integrar el [PR #130](https://github.com/studiocamaleon/gdi/pull/130), después de su validación local y en staging, y confirmó el uso de los datos actuales del cliente. Revisión ejecutada **`821dd09e5e1d785e5f76a3e3690f056448104267`** en web, API y ambos workers. Se promovieron exactamente los manifiestos verificados en staging, comprobando sus digests, sin reconstruir. Los commits posteriores sólo registran la validación y publicación; los PR independientes quedan fuera del lote.
+
+**Cambio:** la búsqueda de clientes consulta todo el padrón por nombre, razón social o CUIT y permite recorrer páginas. La nota de crédito total prepara un borrador con la identidad, letra, ítems, descuentos, impuestos, moneda y órdenes originales. Al emitirse, libera la facturación de las órdenes y conserva sus pagos para la nueva factura con datos actuales. Un borrador de factura desactualizado se rechaza antes del primer envío y se puede descartar. El detalle y el PDF conservan la identidad fiscal histórica. Ver [el circuito y sus límites](../../docs/correccion-fiscal-clientes.md).
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:ad915f6a7d534d549187eb90dfc17c079562539a3e5e101f17953822532e7b74` |
+| Web | `sha256:cfb47440bcfe191cd6861770510f35bbe399c00e911f7b7f5b67cd20a02c9c8b` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+**Pruebas previas:** 108 pruebas de API y 32 de interfaz, tipos y lint aprobados. Incluyen B pagada → NC B → nueva A, conservación del pago, USD, varias alícuotas, órdenes agrupadas, crédito duplicado, permisos y separación entre empresas. Compilaciones remotas completas y CI aprobados; cero alertas abiertas de CodeQL y conversaciones pendientes antes de publicar. En staging se repitió el circuito con el backend compilado, proveedor manual y datos ficticios revertidos al finalizar. [Registro de staging](../staging/VALIDACION.md). Marketing y Grafo3D sin cambios.
+
+**Producción, sin escrituras fiscales:** transacción de sólo lectura comprobó búsqueda paginada, selección por ID y CUIT con guiones, identidad histórica de la factura, estado emitido y pagado, y condición fiscal actual del cliente. Chrome confirmó la búsqueda fuera del límite anterior, identidad actual y letra A; la pantalla de corrección mostró la letra B, receptor, importe y orden originales. No se crearon borradores, notas de crédito, facturas ni cobros de ensayo. Captura e identificadores permanecen en evidencia privada, fuera de Git.
+
+**Operación fiscal y salud:** cero trabajos activos, emisiones pendientes de verificar, lotes o PDF en proceso antes de actualizar. Configuración fiscal de API y worker coincidente antes y después. Consulta de conexión con ARCA de producción correcta desde el worker, usando el certificado cifrado y sin emitir. Revisión ejecutada comprobada en los cuatro servicios actualizados; seis servicios de producción saludables. Web/API 200, búsqueda anónima 401 y API privada directa 403. Machines API cambió sólo las imágenes; recursos, secretos, arranque y configuración de aplicación preservados. PDF y copiador conservan sus imágenes. 319 migraciones, ninguna nueva; sin seeds, resets ni cambios de catálogo. Los cinco servicios de staging se apagaron por inactividad y su copiador siguió activo, conservando el mecanismo independiente de #127.
+
+**Respaldo:** comprobante previo con firma y manifiesto verificados; fuente exacta cifrada bajo custodia. Inventario del copiador actualizado con las imágenes ejecutadas y diez fuentes. Se rotó una revisión antigua del inventario nuevo, conservando las fuentes vigentes, las de reversión y las de PDF/copiador; el catálogo completo, el archivo cifrado y las copias anteriores no se borraron. El [cierre del PR #130](https://github.com/studiocamaleon/gdi/pull/130) registra el comprobante posterior y la verificación de firma, huellas, descifrado, revisión e imágenes, además del CI final. No se repite una restauración SQL completa en esta publicación.
+
+**Reversión:** cambiar sólo las imágenes de API y ambos workers a `registry.fly.io/grafoprint-production-api@sha256:96243ac4f3f29aa1ce643e81c324d34821ab1b6f98377f31b091d77531d73bf8` y web a `registry.fly.io/grafoprint-production-web@sha256:6d63e8a1b37b649ec2c8fbcc1e8a40b84690e4b1cd4204b9a81c2f4e8977fc38`. Conservar configuración, recursos y los otros servicios; restituir el inventario previo del copiador. No revertir base ni datos. La reversión recupera la lista limitada y la pantalla anterior de corrección fiscal.
+
 ## 2026-11-16 — Configurar y agregar productos sin bloquear la orden
 
 Lucas autorizó corregir las trabas, comprobar precios/entregas y publicar en producción. [PR #129](https://github.com/studiocamaleon/gdi/pull/129), desde `main` actualizado. Revisión ejecutada **`e01215db942207a84f27bfa5616eca1b29ae6f52`**; el commit posterior sólo documenta el despliegue. Se promovió el manifiesto probado en staging, conservando exactamente su digest, sin recompilar. Los PR independientes permanecen fuera del lote.
