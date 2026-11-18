@@ -382,7 +382,9 @@ export class TrabajosMedidaService {
         costoTotal: c.costo,
         costosVariables: c.variables,
         margen: c.margen,
-        estimacionParcial: dto.operaciones.some((o) => o.horas == null),
+        estimacionParcial:
+          dto.costos.modo !== 'TOTAL' &&
+          dto.operaciones.some((o) => o.horas == null),
         contribucion: c.contribucion,
         neto: c.neto,
         impuestos: c.iva,

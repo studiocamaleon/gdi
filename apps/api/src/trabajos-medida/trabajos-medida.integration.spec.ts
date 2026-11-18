@@ -467,6 +467,8 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
       costoTotal: 300000,
       costosVariables: 180000,
       contribucion: 220000,
+      itemsCostoEstimado: 2,
+      itemsCostoParcial: 0,
     });
   });
   it('guarda un presupuesto, crea una revisión sin alterar el original y convierte sin permiso de creación', async () => {
@@ -544,5 +546,116 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
     });
     expect(paso.centroCostoId).toBe(centroId);
     expect(paso.duracionEstimadaMin).toBeNull();
+  });
+  it('el costo total incluye los pasos aún sin horas; sólo queda pendiente el desglose', async () => {
+    const input = entrada();
+    input.operaciones[0].horas = null;
+    input.costos = {
+      modo: 'TOTAL',
+      totalEstimado: 150000,
+      materiales: 0,
+      otros: [],
+    };
+    const g = await guardar(input);
+    expect(g.resumen).toMatchObject({
+      costoTotal: 150000,
+      estimacionParcial: false,
+    });
+  });
+  it('una orden combina trabajos manuales y catálogo sin alterar precios ni cantidades', async () => {
+    const categoria = await db.productoCategoriaComercial.create({
+      data: { codigo: randomUUID(), nombre: 'Catálogo de prueba' },
+    });
+    const subcategoria = await db.productoSubcategoriaComercial.create({
+      data: {
+        categoriaId: categoria.id,
+        codigo: randomUUID(),
+        nombre: 'Productos de prueba',
+        atributosSchemaJson: {},
+      },
+    });
+    const producto = await db.producto.create({
+      data: {
+        tenantId,
+        subcategoriaComercialId: subcategoria.id,
+        codigo: 'PRUEBA',
+        nombre: 'Producto ficticio',
+      },
+    });
+    const g = await guardar();
+    const catalogo = await db.cotizacionItem.create({
+      data: {
+        tenantId,
+        cotizacionId: g.cotizacionId,
+        productoId: producto.id,
+        cantidad: 2,
+        jobContextJson: { cantidad: 2 },
+        snapshotJson: {
+          producto: {
+            id: producto.id,
+            codigo: 'PRUEBA',
+            nombre: 'Producto ficticio',
+          },
+          ejecucion: {
+            cantidadEfectiva: 2,
+            cantidadComercialReal: 2,
+            cantidadComercialPricing: 2,
+          },
+        },
+        costoTotal: 40,
+        costoUnitario: 20,
+        precioNetoTotal: 100,
+        precioNetoUnitario: 50,
+        precioTotal: 121,
+        precioUnitario: 60.5,
+        impuestosPorFueraTotal: 21,
+        trazabilidadJson: { pasos: [] },
+      },
+    });
+    let ordenId: string | undefined;
+    try {
+      const base = payload(g);
+      const o = await ordenes.create(auth, {
+        ...base,
+        items: [
+          ...base.items,
+          {
+            ...base.items[0],
+            cotizacionItemId: catalogo.id,
+            codigo: 'PRUEBA',
+            nombre: 'Producto ficticio',
+            cantidad: 2,
+            subtotal: 100,
+            impuestos: 21,
+            total: 121,
+          },
+        ],
+      });
+      ordenId = o.id;
+      const filas = await db.ordenTrabajoItem.findMany({
+        where: { ordenId: o.id },
+        orderBy: { ordenIndice: 'asc' },
+      });
+      expect(filas.map((i) => [Number(i.cantidad), Number(i.total)])).toEqual([
+        [3, 242000],
+        [2, 121],
+      ]);
+      expect(
+        Number(
+          (await db.ordenTrabajo.findUniqueOrThrow({ where: { id: o.id } }))
+            .total,
+        ),
+      ).toBe(242121);
+    } finally {
+      if (ordenId) await db.ordenTrabajo.delete({ where: { id: ordenId } });
+      await db.cotizacionItem.delete({ where: { id: catalogo.id } });
+      await db.producto.delete({ where: { id: producto.id } });
+      await db.productoSubcategoriaComercial.delete({
+        where: { id: subcategoria.id },
+      });
+      await db.productoCategoriaComercial.delete({
+        where: { id: categoria.id },
+      });
+    }
   });
 });

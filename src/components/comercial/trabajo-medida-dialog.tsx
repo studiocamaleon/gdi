@@ -808,12 +808,13 @@ export function TrabajoMedidaDialog({
                     <dt>Contribución estimada</dt>
                     <dd>{money(calculo.resumen.contribucion)}</dd>
                   </dl>
-                  {calculo.resumen.estimacionParcial && (
+                  {input.operaciones.some((o) => o.horas == null) && (
                     <Alert>
                       <AlertDescription>
-                        Faltan horas por estimar: esos pasos todavía no están
-                        incluidos en el costo. El margen es parcial y la entrega
-                        necesita revisión manual.
+                        {input.costos.modo === "TOTAL"
+                          ? "Faltan horas por desglosar. El costo total está incluido; la contribución considera como variable el costo todavía no asignado a centros."
+                          : "Faltan horas por estimar: esos pasos todavía no están incluidos en el costo. El margen es parcial."}{" "}
+                        La entrega necesita revisión manual.
                       </AlertDescription>
                     </Alert>
                   )}
