@@ -2147,6 +2147,7 @@ export interface CotizarResponse {
     sugerencia?: string;
   }>;
   cotizacion?: {
+    trabajoMedida?: import("./trabajos-medida-api").TrabajoMedidaInput;
     tipoCambio?: TipoCambioSnapshot;
     costosMaterialesMoneda?: CostoMaterialMoneda[];
     productoId: string;
@@ -2230,6 +2231,7 @@ export interface CotizarResponse {
         configPasoId?: string;
         rutaPasoId?: string;
         rutaPasoOrden: number;
+        soloCosto?: boolean;
         familiaCodigo: string;
         nombreVisible?: string | null;
         activado: boolean;
@@ -2369,6 +2371,7 @@ export interface CotizarResponse {
        */
       rutaPasoId?: string;
       rutaPasoOrden: number;
+        soloCosto?: boolean;
       familiaCodigo: string;
       nombreVisible?: string | null;
       contenedorClave?: string | null;

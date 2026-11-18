@@ -168,7 +168,7 @@ export type OrdenTrabajoProductoSpec = { etiqueta: string; valor: string };
  * ejecutados completos {pasos, cargosDirectosCotizacion}.
  */
 export type OrdenTrabajoItemSnapshot = {
-  productoId: string;
+  productoId: string | null;
   rutaAlternativaId: string | null;
   jobContext: unknown;
   resumen: unknown;

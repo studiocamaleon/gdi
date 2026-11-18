@@ -78,6 +78,8 @@ jobs:
         # No requieren seed, cuentas reales ni acceso a proveedores externos.
         run: |
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/trabajos-medida/trabajo-medida.calculo.spec.ts \
+            src/trabajos-medida/trabajos-medida.integration.spec.ts \
             src/pantallas-produccion/pantallas-produccion.integration.spec.ts \
             src/pantallas-produccion/entregas-pantalla.spec.ts \
             src/auth/__tests__/revocacion-multi-instancia.integration.spec.ts \

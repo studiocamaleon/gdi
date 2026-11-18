@@ -1,5 +1,8 @@
 "use client";
 
+import { TrabajoMedidaDialog } from "./trabajo-medida-dialog";
+import { trabajoMedidaDe, persistirTrabajoMedida, calcularTrabajoMedida, itemDesdeTrabajoMedida } from "@/lib/trabajos-medida-api";
+
 import { IluminacionTiraResumen } from "@/components/carteleria/iluminacion-tira-resumen";
 import { IluminacionTubosResumen } from "@/components/carteleria/iluminacion-tubos-resumen";
 import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
@@ -4779,6 +4782,7 @@ function rehidratarOrdenItem(
     Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
 
   const cotizacion = {
+    trabajoMedida: jobContext?.trabajoMedida,
     tipoCambio: resumen?.tipoCambio,
     costosMaterialesMoneda: resumen?.costosMaterialesMoneda,
     productoId: snap?.productoId ?? producto.codigo,
@@ -4892,7 +4896,7 @@ function rehidratarOrdenItem(
       orden: i,
     })),
     cotizacion,
-    pasos: trazabilidad?.pasos ? getCotizacionPasos(cotizacion) : [],
+    pasos: trazabilidad?.pasos ? getCotizacionPasos({ ...cotizacion, pasos: cotizacion.pasos.filter(p => !p.soloCosto) }) : [],
     adicionales: producto.adicionales,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
     jobContext,
@@ -4966,6 +4970,9 @@ function PropuestaFichaContenido({
       .catch(() => {});
   }, [ordenProp?.id]);
   const conCotizacion = useCapacidad("cotizacion");
+  const permisoTrabajoMedida = currentUser?.tenantActual?.permisos?.includes("comercial.trabajos_medida") === true;
+  const [medidaOpen, setMedidaOpen] = React.useState(false);
+  const [medidaItem, setMedidaItem] = React.useState<PropuestaItem | null>(null);
   const permisoOrdenes = usePuede("comercial.ordenes.gestionar");
   const permisoPresupuestos = usePuede("comercial.presupuestos.gestionar");
   const permisoCobrar = usePuede("administracion.cobrar");
@@ -6072,6 +6079,11 @@ function PropuestaFichaContenido({
   const prepararItemOrden = React.useCallback(
     async (item: PropuestaItem) => {
       if (!orden) throw new Error("No se cargó la orden de trabajo.");
+      if (trabajoMedidaDe(item)) {
+        const guardado = await persistirTrabajoMedida(item, {clienteId: clienteId || null});
+        const actualizado = itemDesdeTrabajoMedida(guardado, item);
+        return {item: actualizado, cotizacionItemId: guardado.cotizacionItemId, payload: itemToOrdenItemPayload(actualizado, guardado.cotizacionItemId)};
+      }
       if (!item.motorCodigo || !item.jobContext) {
         throw new Error(
           `"${item.productoNombre}" no tiene datos de cotización para persistir.`,
@@ -6595,7 +6607,10 @@ function PropuestaFichaContenido({
   const abrirEdicion = React.useCallback(
     (item: PropuestaItem) => {
       if (!puedeModificarProductos || motivoBloqueoProducto(item.id)) return;
-      if (esCentroCopiado(item)) {
+      if (trabajoMedidaDe(item)) {
+        if (!permisoTrabajoMedida) return;
+        setMedidaItem(item); setMedidaOpen(true);
+      } else if (esCentroCopiado(item)) {
         const carga = cargaDeItem(item);
         const deLaCarga = carga
           ? items.filter((i) => cargaDeItem(i) === carga)
@@ -6608,7 +6623,7 @@ function PropuestaFichaContenido({
         setAddOpen(true);
       }
     },
-    [puedeModificarProductos, esCentroCopiado, cargaDeItem, items, motivoBloqueoProducto],
+    [puedeModificarProductos, esCentroCopiado, cargaDeItem, items, motivoBloqueoProducto, permisoTrabajoMedida],
   );
 
   /**
@@ -6640,7 +6655,7 @@ function PropuestaFichaContenido({
       }> = [];
       for (const item of items) {
         const previa =
-          !orden && ordenTipo === "orden"
+          !orden && ordenTipo === "orden" && !trabajoMedidaDe(item)
             ? await entregasPrevias.paraGuardar(item)
             : null;
         if (previa) {
@@ -6656,6 +6671,12 @@ function PropuestaFichaContenido({
             item,
             cotizacionItemId: item.cotizacionItemId,
           });
+          continue;
+        }
+        if (trabajoMedidaDe(item)) {
+          const guardado = await persistirTrabajoMedida(item, { cotizacionId, clienteId: clienteId || null });
+          cotizacionId = guardado.cotizacionId ?? cotizacionId;
+          itemsConSnapshot.push({item: itemDesdeTrabajoMedida(guardado, item), cotizacionItemId: guardado.cotizacionItemId});
           continue;
         }
         // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
@@ -7389,6 +7410,12 @@ function PropuestaFichaContenido({
       item: PropuestaItem,
       descuentoInput: DescuentoInput | null,
     ): Promise<PropuestaItem | null> => {
+      const manual = trabajoMedidaDe(item);
+      if (manual) {
+        if (!permisoTrabajoMedida) throw new Error("No tenés permiso para modificar el precio de trabajos a medida.");
+        const calculo = await calcularTrabajoMedida({...manual, clienteId: clienteId || null, descuento: descuentoParaMotor(descuentoInput)});
+        return {...itemDesdeTrabajoMedida(calculo, item), descuentoInput};
+      }
       if (!item.jobContext || !item.motorCodigo) return null;
       const request = {
         rutaAlternativaId: item.rutaAlternativaId ?? null,
@@ -7423,7 +7450,7 @@ function PropuestaFichaContenido({
         cotizacionItemId: response.cotizacionItemId ?? item.cotizacionItemId,
       };
     },
-    [clienteId, cotizar, recotizarCotizacionItem],
+    [clienteId, cotizar, recotizarCotizacionItem, permisoTrabajoMedida],
   );
 
   // Umbral de aprobación por descuento del tenant (F3): se busca una sola vez
@@ -7891,6 +7918,12 @@ function PropuestaFichaContenido({
     const nuevos: PropuestaItem[] = [];
     // Staging completo: si falla una línea, no se modifica ninguna.
     for (const item of anteriores) {
+      const manual = trabajoMedidaDe(item);
+      if (manual) {
+        const calculo = await calcularTrabajoMedida({...manual, tipoCambioId: cambio.id, clienteId: clienteId || null});
+        nuevos.push(itemDesdeTrabajoMedida(calculo, item));
+        continue;
+      }
       if (!item.jobContext || !item.motorCodigo)
         throw new Error(
           `Volvé a configurar "${item.productoNombre}" antes de actualizar el cambio.`,
@@ -8663,6 +8696,7 @@ function PropuestaFichaContenido({
                 expandedIds={openIds}
                 onToggle={toggle}
                 recotizandoIds={recotizandoIds}
+                onTrabajoMedida={puedeModificarProductos && permisoTrabajoMedida ? () => {setMedidaItem(null); setMedidaOpen(true);} : undefined}
                 onAdd={
                   puedeModificarProductos
                     ? () => abrirAgregarProducto()
@@ -8717,14 +8751,14 @@ function PropuestaFichaContenido({
                     margenEtaDias={margenPorProducto(item.motorCodigo)}
                     noLaborables={colasTaller?.noLaborables}
                     onEdit={
-                      item.listoEnMostradorEl || motivoBloqueoProducto(item.id) ? undefined : modoOrden
-                        ? itemsEnEdicion && item.jobContext && item.motorCodigo
+                      item.listoEnMostradorEl || motivoBloqueoProducto(item.id) || (trabajoMedidaDe(item) && !permisoTrabajoMedida) ? undefined : modoOrden
+                        ? itemsEnEdicion && item.jobContext && (item.motorCodigo || trabajoMedidaDe(item))
                           ? () => abrirEdicion(item)
                           : undefined
                         : () => abrirEdicion(item)
                     }
                     onDescuento={
-                      !modoOrden && item.jobContext && item.motorCodigo
+                      !modoOrden && item.jobContext && (item.motorCodigo || (trabajoMedidaDe(item) && permisoTrabajoMedida))
                         ? () =>
                             setDescuentoTarget({
                               scope: "item",
@@ -8765,7 +8799,7 @@ function PropuestaFichaContenido({
                       } : undefined
                     }
                     planificarEntregas={
-                      !item.listoEnMostrador && !!orden &&
+                      !trabajoMedidaDe(item) && !item.listoEnMostrador && !!orden &&
                       puedeEditarOrden && cambiosSinGuardar === 0 &&
                       (orden.estado === "borrador" ||
                         orden.estado === "pendiente") &&
@@ -9123,6 +9157,17 @@ function PropuestaFichaContenido({
           onConfirmar={(motivo) => cancelarOrden(motivo)}
         />
 
+        <TrabajoMedidaDialog
+          open={medidaOpen && puedeModificarProductos && permisoTrabajoMedida}
+          onOpenChange={setMedidaOpen} item={medidaItem} clienteId={clienteId || null} fechaEntrega={fechaEstimada}
+          onGuardar={(item) => {
+            if (!permisoProductosRef.current || !permisoTrabajoMedida) return;
+            setItems(current => medidaItem ? current.map(i => i.id === item.id ? item : i) : [...current, item]);
+            if (item.fechaEntrega) itemFechaTocadaRef.current.add(item.id);
+            if (modoOrden && persistedItemIds.has(item.id)) setEditadosIds(prev => new Set(prev).add(item.id));
+            setMedidaOpen(false); setMedidaItem(null); setOpenIds(new Set([item.id]));
+          }}
+        />
         <AgregarProductoSheet
           ordenTrabajoId={orden?.id}
           contextoMateriales={solicitudPrevisionMateriales(items.filter((i) => i.id !== editingItem?.id)).materiales}
