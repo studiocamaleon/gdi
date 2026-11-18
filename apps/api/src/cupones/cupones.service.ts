@@ -371,10 +371,10 @@ export class CuponesService {
       return {
         key: item.cotizacionItemId,
         productoId: ref?.productoId ?? null,
-        productoCodigo: ref?.producto.codigo ?? item.codigo,
+        productoCodigo: ref?.producto?.codigo ?? item.codigo,
         categoriaCodigo:
-          ref?.producto.subcategoriaComercial.categoria.codigo ?? null,
-        subcategoriaCodigo: ref?.producto.subcategoriaComercial.codigo ?? null,
+          ref?.producto?.subcategoriaComercial.categoria.codigo ?? null,
+        subcategoriaCodigo: ref?.producto?.subcategoriaComercial.codigo ?? null,
         neto: item.subtotal + Number(item.descuentoMonto ?? 0),
       };
     });

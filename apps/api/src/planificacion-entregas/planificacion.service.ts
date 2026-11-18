@@ -183,7 +183,7 @@ export class PlanificacionEntregasService {
       );
     const input: CotizarInput = {
       tenantId,
-      productoId: cotizacion.productoId,
+      productoId: exigirProductoCatalogo(cotizacion.productoId),
       rutaAlternativaId: cotizacion.rutaAlternativaId,
       clienteId: item.orden.clienteId ?? undefined,
       jobContext: {
@@ -251,7 +251,7 @@ export class PlanificacionEntregasService {
       recetaHuella: c.recetaHuella,
       input: {
         tenantId,
-        productoId: c.productoId,
+        productoId: exigirProductoCatalogo(c.productoId),
         rutaAlternativaId: c.rutaAlternativaId,
         clienteId: c.cotizacion.clienteId ?? undefined,
         jobContext: {
@@ -1341,4 +1341,9 @@ export class PlanificacionEntregasService {
       clearInterval(pulso);
     }
   }
+}
+
+function exigirProductoCatalogo(id: string | null): string {
+  if (!id) throw new BadRequestException('Para trabajos a medida definí una fecha de entrega en la orden. La división automática requiere un producto calculable.');
+  return id;
 }

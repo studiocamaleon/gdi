@@ -1,3 +1,4 @@
+import { autorizarSnapshotsMedida, exigirTrabajoMedida, esSnapshotTrabajoMedida } from '../trabajos-medida/trabajo-medida.permiso';
 import { bloqueosEdicionProductos, exigirProductosEditablesTx, retirarComponentesPendientesTx } from './edicion-productos';
 import { validarCopiadoListo, exigirMarcaAntesDeEmision } from './copiado-listo';
 import { cargosConOrigen } from './cargos-con-origen';
@@ -530,6 +531,8 @@ export function pasosVisiblesParaOperario<T extends PasoVisibleParaOperario>(
  * El JSON viene del motor universal (apps/api/src/motor-universal/tipos.ts).
  */
 type PasoTrazabilidad = {
+  recursoManual?: {centroCostoId?: string | null; centroCostoNombre?: string | null; maquinaId?: string | null};
+  soloCosto?: boolean;
   rutaPasoId?: string;
   rutaPasoOrden?: number;
   familiaCodigo?: string;
@@ -604,7 +607,7 @@ function grafoDesdeSnapshotReceta(valor: Prisma.JsonValue | null | undefined) {
 function pasosActivados(trazabilidad: unknown): PasoTrazabilidad[] {
   const pasos = (trazabilidad as { pasos?: unknown } | null | undefined)?.pasos;
   if (!Array.isArray(pasos)) return [];
-  return (pasos as PasoTrazabilidad[]).filter((paso) => paso?.activado);
+  return (pasos as PasoTrazabilidad[]).filter((paso) => paso?.activado && !paso.soloCosto);
 }
 
 type ItemAMaterializar = {
@@ -1856,6 +1859,7 @@ export class OrdenesTrabajoService {
     const decimales =
       regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
     validarMonedaDocumento(encontrados);
+    autorizarSnapshotsMedida(auth, encontrados, new Set(opciones.conversionPresupuesto?.itemIds ?? []));
     const snapshots = new Map(encontrados.map((item) => [item.id, item]));
     let items = payload.items.map((item) => {
       const snapshot = snapshots.get(item.cotizacionItemId);
@@ -2182,7 +2186,7 @@ export class OrdenesTrabajoService {
                 subcategoriaComercial: item.subcategoriaComercial ?? '',
                 cantidad: item.cantidad,
                 cantidadUnidad: item.cantidadUnidad,
-                fechaEntrega: recalcularEntrega ? null : item.fechaEntrega
+                fechaEntrega: recalcularEntrega && !esSnapshotTrabajoMedida(snapshots.get(item.cotizacionItemId)?.snapshotJson) ? null : item.fechaEntrega
                   ? new Date(`${item.fechaEntrega}T00:00:00Z`)
                   : payload.fechaEntrega
                     ? new Date(`${payload.fechaEntrega}T00:00:00Z`)
@@ -2344,7 +2348,7 @@ export class OrdenesTrabajoService {
           await tx.ordenTrabajoEvento.create({ data: {
             tenantId: auth.tenantId, ordenId: orden.id, tipo: 'fecha_entrega',
             descripcion: fecha
-              ? `Entrega recalculada al convertir el presupuesto: ${fecha}. Según la carga, calendario y materiales actuales.`
+              ? `Entrega revisada al convertir el presupuesto: ${fecha}. Se conservan las fechas acordadas de trabajos a medida; los productos de catálogo se recalculan con la disponibilidad actual.`
               : 'OT emitida con entrega por confirmar. Falta confirmar la reposición o las cantidades de materiales.',
             usuarioId: auth.userId, usuarioNombre,
           } });
@@ -2477,6 +2481,7 @@ export class OrdenesTrabajoService {
         'Algún item no existe o no pertenece a esta cotización.',
       );
     }
+    autorizarSnapshotsMedida(auth, encontrados);
     validarMonedaDocumento(encontrados);
     const porId = new Map(encontrados.map((item) => [item.id, item]));
     const decimales =
@@ -2716,6 +2721,7 @@ export class OrdenesTrabajoService {
           )
           .map((item) => item.cotizacionItemId),
       );
+      autorizarSnapshotsMedida(auth, snapshots, new Set(payload.items.filter(i => i.conservar && historicosSinCambio.has(i.cotizacionItemId)).map(i => i.cotizacionItemId)));
       validarMonedaDocumento(
         snapshots.filter(
           (snapshot) =>
@@ -3552,6 +3558,7 @@ export class OrdenesTrabajoService {
         );
         if (!orden.items.length)
           throw new BadRequestException('La orden no tiene productos.');
+        if (orden.items.some(i => esSnapshotTrabajoMedida(i.cotizacionItem?.snapshotJson))) exigirTrabajoMedida(auth);
         if (orden.items.some((i) => !i.cotizacionItem))
           throw new BadRequestException(
             'Algún producto no tiene su cotización histórica. Revisalo antes de cambiar el precio.',
@@ -3569,9 +3576,9 @@ export class OrdenesTrabajoService {
             productoId: i.cotizacionItem!.productoId,
             productoCodigo: i.codigo,
             categoriaCodigo:
-              i.cotizacionItem!.producto.subcategoriaComercial.categoria.codigo,
+              i.cotizacionItem!.producto?.subcategoriaComercial.categoria.codigo ?? null,
             subcategoriaCodigo:
-              i.cotizacionItem!.producto.subcategoriaComercial.codigo,
+              i.cotizacionItem!.producto?.subcategoriaComercial.codigo ?? null,
           })),
         };
         let cupon: Awaited<ReturnType<typeof tx.cupon.findFirst>> = null;
@@ -4021,11 +4028,11 @@ export class OrdenesTrabajoService {
         return {
           key: item.cotizacionItemId,
           productoId: referencia?.productoId ?? null,
-          productoCodigo: referencia?.producto.codigo ?? item.codigo,
+          productoCodigo: referencia?.producto?.codigo ?? item.codigo,
           categoriaCodigo:
-            referencia?.producto.subcategoriaComercial.categoria.codigo ?? null,
+            referencia?.producto?.subcategoriaComercial.categoria.codigo ?? null,
           subcategoriaCodigo:
-            referencia?.producto.subcategoriaComercial.codigo ?? null,
+            referencia?.producto?.subcategoriaComercial.codigo ?? null,
           neto: Number(item.subtotal) + Number(item.descuentoMonto ?? 0),
         };
       }),
@@ -4321,6 +4328,7 @@ export class OrdenesTrabajoService {
         'El item de cotización referenciado no existe.',
       );
     }
+    autorizarSnapshotsMedida(auth, [snapshot]);
     const usado = await this.prisma.ordenTrabajoItem.count({
       where: {
         tenantId: auth.tenantId,
@@ -5831,9 +5839,9 @@ export class OrdenesTrabajoService {
         familiaCodigo,
         categoriaFamilia: familia?.categoria ?? 'operaciones_manuales',
         nombre: paso.nombreVisible?.trim() || familia?.nombre || familiaCodigo,
-        centroCostoId: paso.tiempo?.centroCostoId ?? null,
-        centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
-        maquinaId: paso.tiempo?.maquinaId ?? null,
+        centroCostoId: paso.tiempo?.centroCostoId ?? paso.recursoManual?.centroCostoId ?? null,
+        centroCostoNombre: paso.tiempo?.centroCostoNombre ?? paso.recursoManual?.centroCostoNombre ?? null,
+        maquinaId: paso.tiempo?.maquinaId ?? paso.recursoManual?.maquinaId ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
         demandaHumanaJson:
           (demandaDesdeTiempo(paso.tiempo) as Prisma.InputJsonValue) ??
@@ -9344,7 +9352,7 @@ export class OrdenesTrabajoService {
           const cotItem = (
             item as typeof item & {
               cotizacionItem?: {
-                productoId: string;
+                productoId: string | null;
                 rutaAlternativaId: string | null;
                 jobContextJson: unknown;
                 snapshotJson: unknown;

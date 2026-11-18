@@ -87,6 +87,11 @@ export type ModuloClave = (typeof MODULOS)[number]['clave'];
  */
 export const PERMISOS_TRANSVERSALES = [
   {
+    clave: 'comercial.trabajos_medida',
+    label: 'Crear y configurar trabajos a medida',
+    descripcion: 'Crear, duplicar y modificar trabajos a medida, sus costos estimados, precio y ruta. No es necesario para ejecutar, cobrar o facturar trabajos existentes.',
+  },
+  {
     clave: 'crm.aprobar_altas',
     label: 'Revisar altas de clientes',
     descripcion: 'Compartir el enlace de registro y aprobar, vincular o rechazar solicitudes. Incluye lectura de clientes para comprobar duplicados.',

@@ -17,6 +17,17 @@ export const PASOS_ECONOMICOS_SQL = `
     CASE WHEN jsonb_typeof(nodo->'pasos') = 'array' THEN nodo->'pasos' ELSE '[]'::jsonb END
   ) paso
   WHERE paso->>'activado' IS DISTINCT FROM 'false'
+  UNION ALL
+  SELECT jsonb_build_object('costosVariablesMedida',
+    COALESCE((ci."trazabilidadJson"->'trabajoMedida'->>'costoDirecto')::numeric, 0)
+    + ROUND(COALESCE((SELECT SUM((i->>'porcentaje')::numeric / 100 *
+        CASE WHEN i->>'baseCalculo' = 'BRUTO_COBRADO' THEN ci."precioTotal" ELSE ci."precioNetoTotal" END)
+      FROM jsonb_array_elements(COALESCE(NULLIF(ci."impuestosSnapshotJson", 'null'::jsonb), '[]'::jsonb)) i
+      WHERE i->>'traslado' IS DISTINCT FROM 'POR_FUERA'), 0), COALESCE((ci."trazabilidadJson"->'trabajoMedida'->>'decimales')::int, 2))
+    + ROUND(COALESCE((SELECT SUM((i->>'porcentaje')::numeric / 100 *
+        CASE WHEN i->>'baseCalculo' = 'BRUTO_COBRADO' THEN ci."precioTotal" ELSE ci."precioNetoTotal" END)
+      FROM jsonb_array_elements(COALESCE(NULLIF(ci."comisionesSnapshotJson", 'null'::jsonb), '[]'::jsonb)) i), 0), COALESCE((ci."trazabilidadJson"->'trabajoMedida'->>'decimales')::int, 2)))
+  WHERE ci."origen" = 'TRABAJO_MEDIDA'
 `;
 
 // Las operaciones internas ya están agregadas en los materiales del nodo.
@@ -27,6 +38,7 @@ export const PASOS_ECONOMICOS_SQL = `
 // las operaciones activas compradas son las que no tienen bloque de tiempo
 // interno. Recuperar su costo neto no vuelve a sumar sus materiales.
 export const COSTO_VARIABLE_PASO_SQL = `
+  COALESCE((paso->>'costosVariablesMedida')::numeric, 0) +
   COALESCE((SELECT SUM((mat->>'costoTotal')::numeric)
     FROM jsonb_array_elements(COALESCE(NULLIF(paso->'materiales', 'null'::jsonb), '[]'::jsonb)) mat
     WHERE mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA', 'DESGASTE_MAQUINA')), 0)
