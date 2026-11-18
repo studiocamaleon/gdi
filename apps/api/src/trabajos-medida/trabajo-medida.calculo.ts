@@ -22,7 +22,7 @@ export function calcularTrabajoMedida(
         `Elegí el centro de costo para las horas de «${o.nombre}».`,
       );
     const tarifa = o.centroCostoId ? tarifas.get(o.centroCostoId) : 0;
-    if (o.centroCostoId && tarifa == null)
+    if (o.centroCostoId && tarifa == null && (o.horas ?? 0) > 0)
       throw new BadRequestException(
         `El centro de «${o.nombre}» no tiene una tarifa vigente publicada.`,
       );

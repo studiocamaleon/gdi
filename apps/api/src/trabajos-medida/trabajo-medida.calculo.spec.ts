@@ -200,6 +200,11 @@ describe('Trabajos a medida: precio pactado, costo y contribución', () => {
         2,
       ),
     ).toMatchObject({ neto: 180000, total: 217800, descuento: 20000 }));
+  it('permite asignar un centro sin tarifa mientras sus horas sigan sin estimar', () => {
+    const input = dto();
+    input.operaciones[0].horas = null;
+    expect(calcularTrabajoMedida(input, new Map(), [iva], [], 2).horas).toBe(0);
+  });
   it('no considera gratis un centro sin tarifa', () =>
     expect(() => calcularTrabajoMedida(dto(), new Map(), [iva], [], 2)).toThrow(
       'tarifa vigente',

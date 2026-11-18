@@ -154,6 +154,7 @@ export function TrabajoMedidaDialog({
           previo
             ? {
                 ...previo,
+                periodo: o.periodo,
                 anteriorItemId: item?.cotizacionItemId ?? previo.anteriorItemId,
                 descuento: item?.descuentoInput ?? previo.descuento,
               }
@@ -576,8 +577,9 @@ export function TrabajoMedidaDialog({
                     />
                   )}
                   <FieldDescription>
-                    Las horas se costean una sola vez. Cada fila puede ser un
-                    paso de producción. Si un paso no tiene tiempo estimado, la
+                    Las tarifas corresponden al período {opciones.periodo}. Las
+                    horas se costean una sola vez. Cada fila puede ser un paso
+                    de producción. Si un paso no tiene tiempo estimado, la
                     entrega requiere revisión manual.
                   </FieldDescription>
                   {input.operaciones.map((o, i) => (
