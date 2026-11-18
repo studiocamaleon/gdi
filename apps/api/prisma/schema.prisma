@@ -4114,7 +4114,7 @@ model CotizacionItem {
   updatedAt                         DateTime                @updatedAt
   tenant                            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cotizacion                        Cotizacion              @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-  producto                          Producto?               @relation(fields: [productoId], references: [id])
+  producto                          Producto?               @relation(fields: [productoId], references: [id], onDelete: Restrict)
   recetaRevision                    ProductoRecetaRevision? @relation(fields: [recetaRevisionId], references: [id], onDelete: SetNull)
   ordenTrabajoItems                 OrdenTrabajoItem[]
 
