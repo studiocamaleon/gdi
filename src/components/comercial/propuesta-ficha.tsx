@@ -6566,6 +6566,15 @@ function PropuestaFichaContenido({
     setAddOpen(true);
   }, [puedeModificarProductos]);
 
+  const abrirNuevoTrabajoMedida = puedeModificarProductos && permisoTrabajoMedida
+    ? () => {
+        setAddOpen(false);
+        setEditingItem(null);
+        setMedidaItem(null);
+        setMedidaOpen(true);
+      }
+    : undefined;
+
   const abrirCentroCopiado = React.useCallback(() => {
     if (!puedeModificarProductos || !ccActivo) return;
     setCopiadoEditItems(null);
@@ -8698,7 +8707,7 @@ function PropuestaFichaContenido({
                 expandedIds={openIds}
                 onToggle={toggle}
                 recotizandoIds={recotizandoIds}
-                onTrabajoMedida={puedeModificarProductos && permisoTrabajoMedida ? () => {setMedidaItem(null); setMedidaOpen(true);} : undefined}
+                onTrabajoMedida={abrirNuevoTrabajoMedida}
                 onAdd={
                   puedeModificarProductos
                     ? () => abrirAgregarProducto()
@@ -9171,6 +9180,7 @@ function PropuestaFichaContenido({
           }}
         />
         <AgregarProductoSheet
+          onCrearProductoAMedida={abrirNuevoTrabajoMedida}
           ordenTrabajoId={orden?.id}
           contextoMateriales={solicitudPrevisionMateriales(items.filter((i) => i.id !== editingItem?.id)).materiales}
           open={addOpen && puedeModificarProductos}
