@@ -142,36 +142,37 @@ vi.mock("./tipo-cambio-documento", () => ({
     recotizarCotizacionItem: mocks.recotizar,
   }),
 }));
-vi.mock("./agregar-producto-sheet", () => ({
-  AgregarProductoSheet: ({
-    onAddItem,
-  }: {
-    onAddItem: (item: PropuestaItem) => void;
-  }) => (
-    <button
-      onClick={() =>
-        onAddItem({
-          ...productoDiseno(
-            crypto.randomUUID(),
-            "Tarjetas ficticias",
-            500,
-            50000,
-          ),
-          motorCodigo: "producto-qa",
-          jobContext: {
-            cantidad: 500,
-            ...(mocks.copiado
-              ? { _centroCopiado: { paginas: 500, copias: 1, faz: 1 } }
-              : {}),
-          },
-          fechaEntrega: "2099-01-10",
-        })
-      }
-    >
-      Agregar producto ficticio
-    </button>
-  ),
-}));
+vi.mock("./agregar-producto-sheet", async (original) => {
+  const { AgregarProductoSheet } = await original<typeof import("./agregar-producto-sheet")>();
+  function SheetDePrueba(props: ComponentProps<typeof AgregarProductoSheet>) {
+    if (props.open) return <AgregarProductoSheet {...props} />;
+    return (
+      <button
+        onClick={() =>
+          props.onAddItem({
+            ...productoDiseno(
+              crypto.randomUUID(),
+              "Tarjetas ficticias",
+              500,
+              50000,
+            ),
+            motorCodigo: "producto-qa",
+            jobContext: {
+              cantidad: 500,
+              ...(mocks.copiado
+                ? { _centroCopiado: { paginas: 500, copias: 1, faz: 1 } }
+                : {}),
+            },
+            fechaEntrega: "2099-01-10",
+          })
+        }
+      >
+        Agregar producto ficticio
+      </button>
+    );
+  }
+  return { AgregarProductoSheet: SheetDePrueba };
+});
 vi.mock("./canal-venta-selector", () => ({
   CanalVentaSelector: ({ onChange }: { onChange: (canal: string) => void }) => (
     <>
@@ -351,7 +352,16 @@ it("suspende los atajos de la orden hasta cerrar Trabajo a medida", async () => 
     (tab) => tab.textContent?.includes("Productos"),
   )!;
   await act(async () => productos.click());
-  await click("Trabajo a medida");
+  const tabla = container.querySelector('[aria-label="Productos de la orden"]')!;
+  expect(tabla.textContent).not.toContain("Trabajo a medida");
+  const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  try {
+    await click("Agregar producto");
+  } finally {
+    canvas.mockRestore();
+  }
+  await click("Crear trabajo a medida");
+  expect(container.querySelector('[role="dialog"][aria-labelledby="ap-title"]')).toBeNull();
   const dialog = document.querySelector('[role="dialog"]')!;
   expect(dialog.textContent).toContain("Nuevo trabajo a medida");
   const cancelar = [...dialog.querySelectorAll("button")].find(

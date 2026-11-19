@@ -8707,7 +8707,6 @@ function PropuestaFichaContenido({
                 expandedIds={openIds}
                 onToggle={toggle}
                 recotizandoIds={recotizandoIds}
-                onTrabajoMedida={abrirNuevoTrabajoMedida}
                 onAdd={
                   puedeModificarProductos
                     ? () => abrirAgregarProducto()
@@ -9180,7 +9179,7 @@ function PropuestaFichaContenido({
           }}
         />
         <AgregarProductoSheet
-          onCrearProductoAMedida={abrirNuevoTrabajoMedida}
+          onCrearTrabajoAMedida={abrirNuevoTrabajoMedida}
           ordenTrabajoId={orden?.id}
           contextoMateriales={solicitudPrevisionMateriales(items.filter((i) => i.id !== editingItem?.id)).materiales}
           open={addOpen && puedeModificarProductos}

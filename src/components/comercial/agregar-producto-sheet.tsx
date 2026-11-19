@@ -436,7 +436,7 @@ type AgregarProductoSheetProps = {
   contextoMateriales?: Array<{ varianteId: string; cantidad: number | null; unidad: string | null }>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCrearProductoAMedida?: () => void;
+  onCrearTrabajoAMedida?: () => void;
   productos: ProductoListItem[];
   fechaEntregaDefault: string;
   /** Devuelve false si el formulario ya no admite cambios. */
@@ -9633,7 +9633,7 @@ function ApConfigStep({
 export function AgregarProductoSheet({
   open,
   onOpenChange,
-  onCrearProductoAMedida,
+  onCrearTrabajoAMedida,
   productos,
   fechaEntregaDefault,
   onAddItem,
@@ -10784,16 +10784,16 @@ export function AgregarProductoSheet({
             </>
           ) : (
             <>
-              {onCrearProductoAMedida && (
+              {onCrearTrabajoAMedida && (
                 <span className={catalogStyles.customHint}>
                   ¿Necesitás algo diferente?
                   <button
                     type="button"
                     className={catalogStyles.customLink}
                     aria-haspopup="dialog"
-                    onClick={onCrearProductoAMedida}
+                    onClick={onCrearTrabajoAMedida}
                   >
-                    Crear producto a medida <ArrowUpRightIcon aria-hidden="true" />
+                    Crear trabajo a medida <ArrowUpRightIcon aria-hidden="true" />
                   </button>
                 </span>
               )}

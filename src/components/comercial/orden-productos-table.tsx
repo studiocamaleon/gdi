@@ -43,7 +43,6 @@ type Props = {
   onToggle: (id: string) => void;
   recotizandoIds: Set<string>;
   onAdd?: () => void;
-  onTrabajoMedida?: () => void;
   onPrint?: () => void;
   getTomo: (item: PropuestaItem) => {
     id: string | null;
@@ -66,7 +65,6 @@ export function OrdenProductosTable({
   onToggle,
   recotizandoIds,
   onAdd,
-  onTrabajoMedida,
   onPrint,
   getTomo,
   getActions,
@@ -82,7 +80,7 @@ export function OrdenProductosTable({
   const fmt = (n: number) => formatCurrency(n, moneda);
   return (
     <section className={s.card} aria-label="Productos de la orden">
-      {(onPrint || onAdd || onTrabajoMedida) && (
+      {(onPrint || onAdd) && (
         <header className={s.header}>
           <div className={s.tools}>
             {onPrint && (
@@ -97,7 +95,6 @@ export function OrdenProductosTable({
                 Impresiones rápidas
               </Button>
             )}
-            {onTrabajoMedida && <Button variant="outline" size="md" onPress={onTrabajoMedida}><Plus />Trabajo a medida</Button>}
             {onAdd && (
               <Button
                 variant="primary"
