@@ -1,0 +1,50 @@
+import type { MateriaPrimaStock } from "@/lib/materias-primas";
+export const materialesDePrueba: MateriaPrimaStock[] = [
+  {
+    id: "fuente",
+    codigo: "FUE",
+    nombre: "Fuente de prueba",
+    activo: true,
+    templateId: "fuente_alimentacion_led_v1",
+    unidadUso: "unidad",
+    unidadStock: "unidad",
+    unidadCompra: "unidad",
+    variantes: [
+      {
+        id: "fuente-12v",
+        sku: "FUE-12",
+        nombreVariante: "12 V",
+        unidadStock: null,
+        unidadCompra: null,
+        activo: true,
+        precioReferencia: 100,
+        moneda: "ARS",
+        atributosVariante: {},
+      },
+    ],
+  },
+  {
+    id: "vinilo",
+    codigo: "VIN",
+    nombre: "Vinilo de prueba",
+    activo: true,
+    templateId: "sustrato_rollo_flexible_v1",
+    unidadUso: "metro_lineal",
+    unidadStock: "rollo",
+    unidadCompra: "rollo",
+    variantes: [
+      {
+        id: "vinilo-blanco",
+        sku: "VIN-120",
+        nombreVariante: "Blanco · 1,20 × 50 m",
+        unidadStock: null,
+        unidadCompra: null,
+        activo: true,
+        precioReferencia: 6000,
+        unidadPrecio: "rollo",
+        moneda: "ARS",
+        atributosVariante: { ancho: 1.2, largo: 50 },
+      },
+    ],
+  },
+];

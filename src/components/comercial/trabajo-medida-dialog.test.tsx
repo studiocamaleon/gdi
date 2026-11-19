@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { monedaDe } from "@/lib/monedas";
 import { apiRequest } from "@/lib/api";
 import type { PropuestaItem } from "@/lib/propuestas";
+import { materialesDePrueba } from "@/app/dev/diseno/materiales-a-medida/materiales-de-prueba";
 import { TrabajoMedidaDialog } from "./trabajo-medida-dialog";
 
 vi.mock("@/lib/api", () => ({ apiRequest: vi.fn() }));
@@ -186,4 +187,89 @@ it("reabre con los datos nuevos aunque siga pendiente la consulta del trabajo an
   await terminarCarga(opciones);
   expect(campo("nombre").value).toBe("Nuevo trabajo");
   expect(campo("entrega").value).toBe("2099-04-01");
+});
+
+async function elegir(sku: string) {
+  const busqueda = campo("inventario");
+  await act(async () => busqueda.focus());
+  await editar("inventario", sku);
+  const opcion = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((n) => n.textContent?.includes(sku));
+  expect(opcion).toBeDefined();
+  await act(async () => opcion!.click());
+}
+
+it("suma fuentes por unidad y vinilo por superficie o longitud al importe del trabajo completo", async () => {
+  vi.stubGlobal("CSS", { escape: (value: string) => value });
+  api.mockImplementation(async (url) => {
+    if (url.includes("opciones-stock"))
+      return { data: materialesDePrueba, pages: 1 };
+    if (url.endsWith("/calcular")) return resultado(500);
+    return opciones;
+  });
+  await render();
+  await act(async () => boton("Desglosar costos").click());
+  await editar("materiales", "25");
+
+  await elegir("FUE-12");
+  expect(boton("Revisar cálculo").disabled).toBe(true);
+  await editar("consumo", "3");
+  await act(async () => boton("Sumar material").click());
+  expect(campo("materiales").value).toBe("325");
+
+  await elegir("VIN-120");
+  await editar("consumo", "1.5");
+  await act(async () => boton("Sumar material").click());
+  expect(campo("materiales").value).toBe("505");
+
+  await elegir("VIN-120");
+  await act(async () => campo("unidad-consumo").click());
+  const area = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((n) => n.textContent?.trim() === "m²");
+  expect(area).toBeDefined();
+  await act(async () => area!.click());
+  await editar("consumo", "2.5");
+  await act(async () => boton("Sumar material").click());
+  expect(campo("materiales").value).toBe("755");
+  await revisar();
+  const request = JSON.parse(String(api.mock.lastCall?.[1]?.body));
+  expect(request.costos.materiales).toBe(755);
+  expect(request.costos.detalleMateriales).toMatch(
+    /Fuente de prueba.*3 unidad.*300/,
+  );
+  expect(request.costos.detalleMateriales).toMatch(
+    /Vinilo de prueba.*1,5 m lineal.*180/,
+  );
+  expect(request.costos.detalleMateriales).toMatch(
+    /Vinilo de prueba.*2,5 m².*250/,
+  );
+});
+
+it("impide sumar una variante sin precio y permite continuar con el costo manual", async () => {
+  vi.stubGlobal("CSS", { escape: (value: string) => value });
+  const fuente = materialesDePrueba[0];
+  api.mockImplementation(async (url) =>
+    url.includes("opciones-stock")
+      ? {
+          data: [
+            {
+              ...fuente,
+              variantes: [{ ...fuente.variantes[0], precioReferencia: null }],
+            },
+          ],
+          pages: 1,
+        }
+      : opciones,
+  );
+  await render();
+  await act(async () => boton("Desglosar costos").click());
+  await editar("materiales", "120");
+  await elegir("FUE-12");
+  expect(boton("Sumar material").disabled).toBe(true);
+  expect(document.body.textContent).toContain("no tiene precio de referencia");
+  await act(async () => boton("Descartar selección").click());
+  expect(campo("materiales").value).toBe("120");
+  expect(boton("Revisar cálculo").disabled).toBe(false);
 });

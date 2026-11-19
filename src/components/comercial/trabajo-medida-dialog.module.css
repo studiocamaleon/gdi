@@ -138,6 +138,27 @@
   resize: vertical;
 }
 
+.inventory {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--field-radius);
+}
+
+.inventoryActions,
+.inventoryAmounts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.inventoryAmounts {
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+}
+
 .inlineAction {
   align-self: flex-start;
   width: fit-content;

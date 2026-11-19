@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import s from "./trabajo-medida-dialog.module.css";
+import { MaterialInventarioEstimado } from "./material-inventario-estimado";
 import { useTipoCambioDocumento } from "./tipo-cambio-documento";
 import { formatearMoneda } from "@/lib/moneda";
 import type { PropuestaItem } from "@/lib/propuestas";
@@ -131,6 +132,7 @@ export function TrabajoMedidaDialog({
   const [error, setError] = React.useState("");
   const [cargando, setCargando] = React.useState(false);
   const [calculando, setCalculando] = React.useState(false);
+  const [materialPendiente, setMaterialPendiente] = React.useState(false);
   const [archivos, setArchivos] = React.useState<File[]>([]);
   const [entrega, setEntrega] = React.useState(fechaEntrega);
   const selectorArchivos = React.useRef<HTMLInputElement>(null);
@@ -143,6 +145,7 @@ export function TrabajoMedidaDialog({
     if (!open) return;
     const { item: original, fechaEntrega: fechaInicial } = datosDeApertura();
     let vigente = true;
+    setMaterialPendiente(false);
     setCargando(true);
     setCalculando(false);
     setOpciones(null);
@@ -391,7 +394,8 @@ export function TrabajoMedidaDialog({
                         icon: null,
                       },
                     ]}
-                    onChange={(modo) =>
+                    onChange={(modo) => {
+                      setMaterialPendiente(false);
                       cambiar({
                         costos: {
                           ...input.costos,
@@ -402,8 +406,8 @@ export function TrabajoMedidaDialog({
                             ? input.costos.totalEstimado
                             : undefined,
                         },
-                      })
-                    }
+                      });
+                    }}
                   />
                   {input.costos.modo === "TOTAL" ? (
                     <Field>
@@ -441,6 +445,21 @@ export function TrabajoMedidaDialog({
                     </Field>
                   ) : (
                     <>
+                      <MaterialInventarioEstimado
+                        moneda={opciones.moneda}
+                        costo={input.costos.materiales}
+                        detalle={input.costos.detalleMateriales ?? ""}
+                        onPendiente={setMaterialPendiente}
+                        onAgregar={(materiales, detalleMateriales) =>
+                          cambiar({
+                            costos: {
+                              ...input.costos,
+                              materiales,
+                              detalleMateriales,
+                            },
+                          })
+                        }
+                      />
                       <Field>
                         <FieldLabel htmlFor="medida-materiales">
                           Costo de materiales · {opciones.moneda.codigo}
@@ -480,6 +499,7 @@ export function TrabajoMedidaDialog({
                         <TextArea
                           className={`${s.textarea} ${focus.singleBorder}`}
                           id="medida-materiales-detalle"
+                          maxLength={2000}
                           value={input.costos.detalleMateriales ?? ""}
                           onChange={(e) =>
                             cambiar({
@@ -934,7 +954,7 @@ export function TrabajoMedidaDialog({
           <ActionButton
             className={s.reviewButton}
             variant="outline"
-            isDisabled={cargando || !opciones}
+            isDisabled={cargando || !opciones || materialPendiente}
             isPending={calculando}
             onPress={() => void revisar()}
           >
@@ -946,7 +966,7 @@ export function TrabajoMedidaDialog({
             {calculando ? "Calculando…" : "Revisar cálculo"}
           </ActionButton>
           <ActionButton
-            isDisabled={!calculo || calculando || cargando}
+            isDisabled={!calculo || calculando || cargando || materialPendiente}
             onPress={() => {
               if (calculo)
                 onGuardar({
