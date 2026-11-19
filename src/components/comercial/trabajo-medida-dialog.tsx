@@ -1,38 +1,32 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDownIcon, ArrowUpIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { Card, Input, Spinner, TextArea } from "@heroui/react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CalculatorIcon,
+  LayersIcon,
+  PaperclipIcon,
+  PlusIcon,
+  RouteIcon,
+  Trash2Icon,
+  WalletIcon,
+  XIcon,
+} from "lucide-react";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ActionButton } from "@/components/design-system/action-button";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { SelectField } from "@/components/design-system/select-field";
+import focus from "@/components/design-system/field-focus.module.css";
 import {
   Field,
   FieldGroup,
   FieldLabel,
   FieldDescription,
-  FieldSet,
-  FieldLegend,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-} from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
+import s from "./trabajo-medida-dialog.module.css";
 import { useTipoCambioDocumento } from "./tipo-cambio-documento";
 import { formatearMoneda } from "@/lib/moneda";
 import type { PropuestaItem } from "@/lib/propuestas";
@@ -82,25 +76,37 @@ function Elegir({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Select
+      <SelectField
+        id={id}
+        aria-label={label}
+        className={s.select}
         value={value}
-        onValueChange={(v) => onChange(v ?? "")}
-        items={opciones.map((o) => ({ value: o.id, label: o.nombre }))}
-      >
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {opciones.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.nombre}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+        onChange={onChange}
+        options={opciones.map((o) => ({ value: o.id, label: o.nombre }))}
+      />
     </Field>
+  );
+}
+
+function Seccion({
+  titulo,
+  icono,
+  children,
+}: {
+  titulo: string;
+  icono: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className={s.section}>
+      <Card.Header className={s.sectionHeader}>
+        <span className={s.sectionIcon} aria-hidden="true">
+          {icono}
+        </span>
+        <Card.Title>{titulo}</Card.Title>
+      </Card.Header>
+      <Card.Content className={s.sectionBody}>{children}</Card.Content>
+    </Card>
   );
 }
 
@@ -127,6 +133,8 @@ export function TrabajoMedidaDialog({
   const [calculando, setCalculando] = React.useState(false);
   const [archivos, setArchivos] = React.useState<File[]>([]);
   const [entrega, setEntrega] = React.useState(fechaEntrega);
+  const selectorArchivos = React.useRef<HTMLInputElement>(null);
+  const resumenRef = React.useRef<HTMLElement>(null);
   const cambio = useTipoCambioDocumento();
   const revision = React.useRef(0);
   React.useEffect(() => {
@@ -137,6 +145,7 @@ export function TrabajoMedidaDialog({
     };
     cancelarRevision();
     setCargando(true);
+    setOpciones(null);
     setError("");
     setCalculo(null);
     setArchivos(item?.archivosPendientes ?? []);
@@ -175,6 +184,12 @@ export function TrabajoMedidaDialog({
       cancelarRevision();
     };
   }, [open, item, fechaEntrega]);
+  React.useEffect(() => {
+    if (calculo && window.matchMedia("(max-width: 799px)").matches) {
+      resumenRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [calculo]);
+
   const cambiar = (c: Partial<TrabajoMedidaInput>) => {
     revision.current++;
     setInput((p) => ({ ...p, ...c }));
@@ -195,6 +210,7 @@ export function TrabajoMedidaDialog({
   const money = (n: number) =>
     opciones ? formatearMoneda(n, opciones.moneda) : String(n);
   const revisar = async () => {
+    setCalculo(null);
     setError("");
     setCalculando(true);
     const actual = revision.current;
@@ -216,34 +232,30 @@ export function TrabajoMedidaDialog({
     }
   };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>
-            {item ? "Editar trabajo a medida" : "Nuevo trabajo a medida"}
-          </DialogTitle>
-          <DialogDescription>
-            Cargá el costo estimado y fijá el precio de este proyecto. Los
-            costos y las horas corresponden al trabajo completo.
-          </DialogDescription>
-        </DialogHeader>
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        {cargando ? (
-          <Spinner aria-label="Cargando opciones" />
-        ) : (
-          opciones && (
-            <FieldGroup>
-              <FieldSet>
-                <FieldLegend>El trabajo</FieldLegend>
-                <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                  <Field>
+    <FormDialog
+      isOpen={open}
+      onOpenChange={onOpenChange}
+      title={item ? "Editar trabajo a medida" : "Nuevo trabajo a medida"}
+      description="Estimá el costo y definí el precio y la producción de este trabajo."
+      className={s.dialog}
+    >
+      {cargando ? (
+        <div className={s.loading} role="status">
+          <Spinner size="sm" />
+          Cargando opciones…
+        </div>
+      ) : (
+        opciones && (
+          <div className={s.workspace}>
+            <div className={s.form}>
+              <Seccion titulo="Datos del trabajo" icono={<LayersIcon />}>
+                <FieldGroup className={s.jobFields}>
+                  <Field className={s.fullRow}>
                     <FieldLabel htmlFor="medida-nombre">Nombre</FieldLabel>
                     <Input
+                      className={focus.singleBorder}
                       id="medida-nombre"
+                      placeholder="Ej.: Exhibidor para mostrador"
                       value={input.nombre}
                       maxLength={200}
                       onChange={(e) => cambiar({ nombre: e.target.value })}
@@ -252,6 +264,7 @@ export function TrabajoMedidaDialog({
                   <Field>
                     <FieldLabel htmlFor="medida-cantidad">Cantidad</FieldLabel>
                     <Input
+                      className={focus.singleBorder}
                       id="medida-cantidad"
                       type="number"
                       min="0.01"
@@ -266,7 +279,7 @@ export function TrabajoMedidaDialog({
                     label="Unidad"
                     value={input.unidad}
                     opciones={[
-                      { id: "unidad", nombre: "Unidades / proyectos" },
+                      { id: "unidad", nombre: "Unidades" },
                       { id: "m2", nombre: "m²" },
                       { id: "metro_lineal", nombre: "Metros lineales" },
                       { id: "libros", nombre: "Libros" },
@@ -276,92 +289,115 @@ export function TrabajoMedidaDialog({
                       cambiar({ unidad: v as TrabajoMedidaInput["unidad"] })
                     }
                   />
-                  <Field>
+                  <Field className={s.deliveryField}>
                     <FieldLabel htmlFor="medida-entrega">
                       Entrega comprometida
                     </FieldLabel>
                     <Input
+                      className={focus.singleBorder}
                       id="medida-entrega"
                       type="date"
                       value={entrega}
                       onChange={(e) => setEntrega(e.target.value)}
                     />
-                    <FieldDescription>
-                      Fecha elegida manualmente; los tiempos permiten
-                      contrastarla con la capacidad del taller.
-                    </FieldDescription>
                   </Field>
-                  <Field className="sm:col-span-2">
+                  <Field className={s.fullRow}>
                     <FieldLabel htmlFor="medida-descripcion">
                       Descripción e instrucciones de producción
                     </FieldLabel>
-                    <Textarea
+                    <TextArea
+                      className={`${s.textarea} ${focus.singleBorder}`}
                       id="medida-descripcion"
                       value={input.descripcion}
                       maxLength={4000}
                       onChange={(e) => cambiar({ descripcion: e.target.value })}
                     />
                   </Field>
-                  <Field className="sm:col-span-2">
+                  <Field className={s.fullRow}>
                     <FieldLabel htmlFor="medida-archivos">
                       Archivos y referencias
                     </FieldLabel>
-                    <Input
+                    <input
+                      ref={selectorArchivos}
                       id="medida-archivos"
                       type="file"
                       multiple
-                      onChange={(e) =>
-                        setArchivos([
-                          ...archivos,
-                          ...Array.from(e.target.files ?? []),
-                        ])
-                      }
+                      hidden
+                      onChange={(e) => {
+                        const nuevos = Array.from(e.currentTarget.files ?? []);
+                        setArchivos((previos) => [...previos, ...nuevos]);
+                        e.currentTarget.value = "";
+                      }}
                     />
-                    <FieldDescription>
-                      {archivos.length
-                        ? archivos.map((f) => f.name).join(" · ")
-                        : "Se adjuntan al guardar la orden, igual que en los otros productos."}
-                    </FieldDescription>
+                    <ActionButton
+                      className={s.inlineAction}
+                      variant="outline"
+                      onPress={() => selectorArchivos.current?.click()}
+                    >
+                      <PaperclipIcon aria-hidden />
+                      Adjuntar archivos
+                    </ActionButton>
+                    {archivos.length > 0 && (
+                      <ul
+                        className={s.attachments}
+                        aria-label="Archivos por adjuntar"
+                      >
+                        {archivos.map((archivo, i) => (
+                          <li key={i}>
+                            <span>{archivo.name}</span>
+                            <ActionButton
+                              isIconOnly
+                              variant="ghost"
+                              aria-label={`Quitar ${archivo.name}`}
+                              onPress={() =>
+                                setArchivos((previos) =>
+                                  previos.filter((_, j) => j !== i),
+                                )
+                              }
+                            >
+                              <XIcon aria-hidden />
+                            </ActionButton>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </Field>
                 </FieldGroup>
-              </FieldSet>
-              <FieldSet>
-                <FieldLegend>
-                  Costos estimados · {opciones.moneda.codigo}
-                </FieldLegend>
-                <FieldGroup>
-                  <ToggleGroup
-                    value={[input.costos.modo ?? "DESGLOSADO"]}
-                    variant="outline"
+              </Seccion>
+              <Seccion titulo="Costos estimados" icono={<CalculatorIcon />}>
+                <FieldGroup className={s.fields}>
+                  <SegmentedControl
                     aria-label="Detalle de costos"
-                    onValueChange={(v) => {
-                      if (v.length)
-                        cambiar({
-                          costos: {
-                            ...input.costos,
-                            modo: v[0] as "TOTAL" | "DESGLOSADO",
-                            totalEstimado: Number.isFinite(
-                              input.costos.totalEstimado,
-                            )
-                              ? input.costos.totalEstimado
-                              : undefined,
-                          },
-                        });
-                    }}
-                  >
-                    <ToggleGroupItem value="TOTAL">
-                      Costo total aproximado
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="DESGLOSADO">
-                      Desglosar costos
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                    value={input.costos.modo ?? "DESGLOSADO"}
+                    options={[
+                      { value: "TOTAL", label: "Costo total", icon: null },
+                      {
+                        value: "DESGLOSADO",
+                        label: "Desglosar costos",
+                        icon: null,
+                      },
+                    ]}
+                    onChange={(modo) =>
+                      cambiar({
+                        costos: {
+                          ...input.costos,
+                          modo: modo as "TOTAL" | "DESGLOSADO",
+                          totalEstimado: Number.isFinite(
+                            input.costos.totalEstimado,
+                          )
+                            ? input.costos.totalEstimado
+                            : undefined,
+                        },
+                      })
+                    }
+                  />
                   {input.costos.modo === "TOTAL" ? (
                     <Field>
                       <FieldLabel htmlFor="medida-costo-total">
-                        Costo total aproximado
+                        Costo total aproximado · {opciones.moneda.codigo}
                       </FieldLabel>
                       <Input
+                        className={focus.singleBorder}
                         id="medida-costo-total"
                         type="number"
                         min="0"
@@ -384,19 +420,19 @@ export function TrabajoMedidaDialog({
                         }
                       />
                       <FieldDescription>
-                        Incluí materiales, mano de obra y máquina. Las horas
-                        cargadas abajo ya están dentro de este importe: no se
-                        suman otra vez. Lo que no se desglosa en horas se
-                        considera costo variable estimado para la contribución.
+                        Incluí materiales, mano de obra y máquina. Las horas que
+                        cargues sirven para desglosar el importe y no se suman
+                        al total.
                       </FieldDescription>
                     </Field>
                   ) : (
                     <>
                       <Field>
                         <FieldLabel htmlFor="medida-materiales">
-                          Costo de materiales estimado
+                          Costo de materiales · {opciones.moneda.codigo}
                         </FieldLabel>
                         <Input
+                          className={focus.singleBorder}
                           id="medida-materiales"
                           type="number"
                           min="0"
@@ -419,15 +455,16 @@ export function TrabajoMedidaDialog({
                           }
                         />
                         <FieldDescription>
-                          Un importe total. Esta estimación no descuenta stock
-                          ni registra pagos.
+                          Importe para todo el trabajo. La estimación no
+                          descuenta stock.
                         </FieldDescription>
                       </Field>
                       <Field>
                         <FieldLabel htmlFor="medida-materiales-detalle">
                           Detalle de materiales (opcional)
                         </FieldLabel>
-                        <Textarea
+                        <TextArea
+                          className={`${s.textarea} ${focus.singleBorder}`}
                           id="medida-materiales-detalle"
                           value={input.costos.detalleMateriales ?? ""}
                           onChange={(e) =>
@@ -441,15 +478,13 @@ export function TrabajoMedidaDialog({
                         />
                       </Field>
                       {input.costos.otros.map((g, i) => (
-                        <FieldGroup
-                          key={i}
-                          className="grid grid-cols-[1fr_140px_auto] items-end gap-3"
-                        >
+                        <FieldGroup key={i} className={s.costRow}>
                           <Field>
                             <FieldLabel htmlFor={`gasto-${i}`}>
                               Otro costo directo
                             </FieldLabel>
                             <Input
+                              className={focus.singleBorder}
                               id={`gasto-${i}`}
                               value={g.nombre}
                               placeholder="Ej.: flete o tercerizado"
@@ -472,6 +507,7 @@ export function TrabajoMedidaDialog({
                               Importe
                             </FieldLabel>
                             <Input
+                              className={focus.singleBorder}
                               id={`importe-${i}`}
                               type="number"
                               min="0"
@@ -494,11 +530,11 @@ export function TrabajoMedidaDialog({
                               }
                             />
                           </Field>
-                          <Button
+                          <ActionButton
                             variant="ghost"
-                            size="icon"
+                            isIconOnly
                             aria-label={`Quitar costo ${i + 1}`}
-                            onClick={() =>
+                            onPress={() =>
                               cambiar({
                                 costos: {
                                   ...input.costos,
@@ -510,12 +546,13 @@ export function TrabajoMedidaDialog({
                             }
                           >
                             <Trash2Icon />
-                          </Button>
+                          </ActionButton>
                         </FieldGroup>
                       ))}
-                      <Button
+                      <ActionButton
+                        className={s.inlineAction}
                         variant="outline"
-                        onClick={() =>
+                        onPress={() =>
                           cambiar({
                             costos: {
                               ...input.costos,
@@ -527,31 +564,24 @@ export function TrabajoMedidaDialog({
                           })
                         }
                       >
-                        <PlusIcon data-icon="inline-start" />
+                        <PlusIcon aria-hidden />
                         Agregar otro costo
-                      </Button>
+                      </ActionButton>
                     </>
                   )}
                 </FieldGroup>
-              </FieldSet>
-              <FieldSet>
-                <FieldLegend>Horas del taller y producción</FieldLegend>
-                <FieldGroup>
-                  <ToggleGroup
-                    value={[input.produccion ? "SI" : "NO"]}
-                    onValueChange={(v) => {
-                      if (v.length) cambiar({ produccion: v[0] === "SI" });
-                    }}
-                    variant="outline"
+              </Seccion>
+              <Seccion titulo="Producción y horas" icono={<RouteIcon />}>
+                <FieldGroup className={s.fields}>
+                  <SegmentedControl
                     aria-label="Seguimiento de producción"
-                  >
-                    <ToggleGroupItem value="SI">
-                      Con ruta de producción
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="NO">
-                      Sin seguimiento
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                    value={input.produccion ? "SI" : "NO"}
+                    options={[
+                      { value: "SI", label: "Con ruta", icon: null },
+                      { value: "NO", label: "Sin seguimiento", icon: null },
+                    ]}
+                    onChange={(v) => cambiar({ produccion: v === "SI" })}
+                  />
                   {input.produccion && (
                     <Elegir
                       label="Usar una ruta como base"
@@ -577,22 +607,21 @@ export function TrabajoMedidaDialog({
                     />
                   )}
                   <FieldDescription>
-                    Las tarifas corresponden al período {opciones.periodo}. Las
-                    horas se costean una sola vez. Cada fila puede ser un paso
-                    de producción. Si un paso no tiene tiempo estimado, la
-                    entrega requiere revisión manual.
+                    Horas para el trabajo completo. Tarifas publicadas de{" "}
+                    {opciones.periodo}.
                   </FieldDescription>
                   {input.operaciones.map((o, i) => (
-                    <FieldSet key={o.clave}>
-                      <FieldLegend variant="label">
+                    <fieldset key={o.clave} className={s.operation}>
+                      <legend>
                         {input.produccion ? `Paso ${i + 1}` : `Centro ${i + 1}`}
-                      </FieldLegend>
-                      <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                      </legend>
+                      <FieldGroup className={s.twoFields}>
                         <Field>
                           <FieldLabel htmlFor={`operacion-${o.clave}`}>
                             Operación
                           </FieldLabel>
                           <Input
+                            className={focus.singleBorder}
                             id={`operacion-${o.clave}`}
                             value={o.nombre}
                             onChange={(e) =>
@@ -619,9 +648,10 @@ export function TrabajoMedidaDialog({
                         />
                         <Field>
                           <FieldLabel htmlFor={`horas-${o.clave}`}>
-                            Horas estimadas del trabajo completo
+                            Horas estimadas
                           </FieldLabel>
                           <Input
+                            className={focus.singleBorder}
                             id={`horas-${o.clave}`}
                             type="number"
                             min="0"
@@ -653,30 +683,30 @@ export function TrabajoMedidaDialog({
                           }
                         />
                       </FieldGroup>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="icon"
+                      <div className={s.operationActions}>
+                        <ActionButton
+                          isIconOnly
                           variant="ghost"
-                          disabled={i === 0}
+                          isDisabled={i === 0}
                           aria-label={`Subir paso ${i + 1}`}
-                          onClick={() => mover(i, -1)}
+                          onPress={() => mover(i, -1)}
                         >
                           <ArrowUpIcon />
-                        </Button>
-                        <Button
-                          size="icon"
+                        </ActionButton>
+                        <ActionButton
+                          isIconOnly
                           variant="ghost"
-                          disabled={i === input.operaciones.length - 1}
+                          isDisabled={i === input.operaciones.length - 1}
                           aria-label={`Bajar paso ${i + 1}`}
-                          onClick={() => mover(i, 1)}
+                          onPress={() => mover(i, 1)}
                         >
                           <ArrowDownIcon />
-                        </Button>
-                        <Button
-                          size="icon"
+                        </ActionButton>
+                        <ActionButton
+                          isIconOnly
                           variant="ghost"
                           aria-label={`Quitar paso ${i + 1}`}
-                          onClick={() =>
+                          onPress={() =>
                             cambiar({
                               operaciones: input.operaciones.filter(
                                 (v) => v.clave !== o.clave,
@@ -685,13 +715,14 @@ export function TrabajoMedidaDialog({
                           }
                         >
                           <Trash2Icon />
-                        </Button>
+                        </ActionButton>
                       </div>
-                    </FieldSet>
+                    </fieldset>
                   ))}
-                  <Button
+                  <ActionButton
+                    className={s.inlineAction}
                     variant="outline"
-                    onClick={() =>
+                    onPress={() =>
                       cambiar({
                         operaciones: [
                           ...input.operaciones,
@@ -706,21 +737,21 @@ export function TrabajoMedidaDialog({
                       })
                     }
                   >
-                    <PlusIcon data-icon="inline-start" />
+                    <PlusIcon aria-hidden />
                     Agregar {input.produccion ? "paso" : "horas de un centro"}
-                  </Button>
+                  </ActionButton>
                 </FieldGroup>
-              </FieldSet>
-              <FieldSet>
-                <FieldLegend>
-                  Precio de venta · {opciones.moneda.codigo}
-                </FieldLegend>
-                <FieldGroup>
+              </Seccion>
+            </div>
+            <div className={s.aside}>
+              <Seccion titulo="Precio de venta" icono={<WalletIcon />}>
+                <FieldGroup className={s.fields}>
                   <Field>
                     <FieldLabel htmlFor="medida-precio">
-                      Precio acordado
+                      Precio acordado · {opciones.moneda.codigo}
                     </FieldLabel>
                     <Input
+                      className={focus.singleBorder}
                       id="medida-precio"
                       type="number"
                       min="0"
@@ -736,38 +767,52 @@ export function TrabajoMedidaDialog({
                       }
                     />
                   </Field>
-                  <ToggleGroup
-                    value={[input.basePrecio]}
-                    onValueChange={(v) => {
-                      if (v.length)
-                        cambiar({ basePrecio: v[0] as "TOTAL" | "UNITARIO" });
-                    }}
-                    variant="outline"
-                    aria-label="Base del precio"
-                  >
-                    <ToggleGroupItem value="TOTAL">
-                      Por el trabajo completo
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="UNITARIO">
-                      Por unidad
-                    </ToggleGroupItem>
-                  </ToggleGroup>
-                  <ToggleGroup
-                    value={[input.tipoPrecio]}
-                    onValueChange={(v) => {
-                      if (v.length)
-                        cambiar({ tipoPrecio: v[0] as "FINAL" | "NETO" });
-                    }}
-                    variant="outline"
-                    aria-label="Impuestos del precio"
-                  >
-                    <ToggleGroupItem value="FINAL">
-                      Final, impuestos incluidos
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="NETO">
-                      Neto, agregar impuestos
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                  <FieldGroup className={s.fields}>
+                    <Field>
+                      <FieldLabel id="medida-base-precio">
+                        Precio por
+                      </FieldLabel>
+                      <SegmentedControl
+                        aria-labelledby="medida-base-precio"
+                        value={input.basePrecio}
+                        options={[
+                          {
+                            value: "TOTAL",
+                            label: "Trabajo completo",
+                            icon: null,
+                          },
+                          { value: "UNITARIO", label: "Unidad", icon: null },
+                        ]}
+                        onChange={(basePrecio) =>
+                          cambiar({
+                            basePrecio:
+                              basePrecio as TrabajoMedidaInput["basePrecio"],
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel id="medida-tipo-precio">Impuestos</FieldLabel>
+                      <SegmentedControl
+                        aria-labelledby="medida-tipo-precio"
+                        value={input.tipoPrecio}
+                        options={[
+                          { value: "FINAL", label: "Incluidos", icon: null },
+                          {
+                            value: "NETO",
+                            label: "Agregar al neto",
+                            icon: null,
+                          },
+                        ]}
+                        onChange={(tipoPrecio) =>
+                          cambiar({
+                            tipoPrecio:
+                              tipoPrecio as TrabajoMedidaInput["tipoPrecio"],
+                          })
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
                   <Elegir
                     label="Categoría fiscal"
                     value={input.categoriaFiscal}
@@ -783,75 +828,108 @@ export function TrabajoMedidaDialog({
                       })
                     }
                   />
-                  <FieldDescription>
-                    Se aplica la configuración fiscal de la empresa. Los
-                    impuestos internos y comisiones reducen el margen; no
-                    aumentan el precio final que fijaste.
-                  </FieldDescription>
                 </FieldGroup>
-              </FieldSet>
-              {calculo && (
-                <FieldSet>
-                  <FieldLegend>
-                    Revisión del trabajo{" "}
-                    <Badge variant="secondary">Costos estimados</Badge>
-                  </FieldLegend>
-                  <dl className="grid grid-cols-2 gap-3">
-                    <dt>Venta neta</dt>
-                    <dd>{money(calculo.resumen.neto)}</dd>
-                    <dt>Impuestos al cliente</dt>
-                    <dd>{money(calculo.resumen.impuestos)}</dd>
-                    <dt>Total al cliente</dt>
-                    <dd>{money(calculo.resumen.total)}</dd>
-                    <dt>Costo total estimado</dt>
-                    <dd>{money(calculo.resumen.costoTotal)}</dd>
-                    <dt>Margen estimado</dt>
-                    <dd>{money(calculo.resumen.margen)}</dd>
-                    <dt>Contribución estimada</dt>
-                    <dd>{money(calculo.resumen.contribucion)}</dd>
-                  </dl>
-                  {input.operaciones.some((o) => o.horas == null) && (
-                    <Alert>
-                      <AlertDescription>
-                        {input.costos.modo === "TOTAL"
-                          ? "Faltan horas por desglosar. El costo total está incluido; la contribución considera como variable el costo todavía no asignado a centros."
-                          : "Faltan horas por estimar: esos pasos todavía no están incluidos en el costo. El margen es parcial."}{" "}
-                        La entrega necesita revisión manual.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  <FieldDescription>
-                    La contribución descuenta materiales, otros costos directos,
-                    impuestos internos y comisiones. El margen también descuenta
-                    las horas de los centros.
-                  </FieldDescription>
-                  {calculo.resumen.margen < 0 && (
-                    <Alert>
-                      <AlertDescription>
-                        El precio no cubre todos los costos estimados de este
-                        trabajo.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </FieldSet>
-              )}
-            </FieldGroup>
-          )
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
+              </Seccion>
+              <aside
+                ref={resumenRef}
+                aria-label="Resumen del trabajo"
+                className={s.summaryRegion}
+              >
+                <Card className={s.summary}>
+                  <Card.Header className={s.summaryHeader}>
+                    <Card.Title>Resumen del trabajo</Card.Title>
+                    <span className={s.currency}>{opciones.moneda.codigo}</span>
+                  </Card.Header>
+                  <Card.Content className={s.summaryBody} aria-live="polite">
+                    {calculo ? (
+                      <dl className={s.amounts}>
+                        <div>
+                          <dt>Venta neta</dt>
+                          <dd>{money(calculo.resumen.neto)}</dd>
+                        </div>
+                        <div>
+                          <dt>Impuestos al cliente</dt>
+                          <dd>{money(calculo.resumen.impuestos)}</dd>
+                        </div>
+                        <div className={s.total}>
+                          <dt>Total al cliente</dt>
+                          <dd>{money(calculo.resumen.total)}</dd>
+                        </div>
+                        <div className={s.costTotal}>
+                          <dt>Costo estimado</dt>
+                          <dd>{money(calculo.resumen.costoTotal)}</dd>
+                        </div>
+                        <div>
+                          <dt>Margen estimado</dt>
+                          <dd>{money(calculo.resumen.margen)}</dd>
+                        </div>
+                        <div>
+                          <dt>Contribución estimada</dt>
+                          <dd>{money(calculo.resumen.contribucion)}</dd>
+                        </div>
+                      </dl>
+                    ) : (
+                      <p>
+                        {calculando
+                          ? "Calculando importes…"
+                          : "Revisá el cálculo para ver los importes."}
+                      </p>
+                    )}
+                  </Card.Content>
+                </Card>
+                {calculo && input.operaciones.some((o) => o.horas == null) && (
+                  <Alert className={s.notice}>
+                    <AlertDescription>
+                      {input.costos.modo === "TOTAL"
+                        ? "Hay horas sin desglosar. El total se conserva y el costo sin asignar a centros se considera variable."
+                        : "Hay pasos sin horas estimadas. El margen todavía es parcial."}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {calculo && calculo.resumen.margen < 0 && (
+                  <Alert className={s.notice}>
+                    <AlertDescription>
+                      El precio no cubre los costos estimados de este trabajo.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {calculo && (
+                  <p className={s.summaryHelp}>
+                    La contribución resta los costos variables. El margen
+                    también resta las horas de los centros.
+                  </p>
+                )}
+              </aside>
+            </div>
+          </div>
+        )
+      )}
+      {error && (
+        <Alert variant="destructive" className={s.error}>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <footer className={s.footer}>
+        <ActionButton variant="ghost" onPress={() => onOpenChange(false)}>
+          Cancelar
+        </ActionButton>
+        <div className={s.footerActions}>
+          <ActionButton
+            className={s.reviewButton}
             variant="outline"
-            disabled={cargando || calculando || !opciones}
-            onClick={() => void revisar()}
+            isDisabled={cargando || calculando || !opciones}
+            onPress={() => void revisar()}
           >
-            {calculando && <Spinner data-icon="inline-start" />}Revisar cálculo
-          </Button>
-          <Button
-            disabled={!calculo || calculando || cargando}
-            onClick={() => {
+            {calculando ? (
+              <Spinner size="sm" />
+            ) : (
+              <CalculatorIcon aria-hidden />
+            )}
+            {calculando ? "Calculando…" : "Revisar cálculo"}
+          </ActionButton>
+          <ActionButton
+            isDisabled={!calculo || calculando || cargando}
+            onPress={() => {
               if (calculo)
                 onGuardar({
                   ...itemDesdeTrabajoMedida(calculo, item),
@@ -861,9 +939,9 @@ export function TrabajoMedidaDialog({
             }}
           >
             {item ? "Guardar trabajo" : "Agregar trabajo"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </ActionButton>
+        </div>
+      </footer>
+    </FormDialog>
   );
 }
