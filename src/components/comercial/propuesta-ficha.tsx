@@ -5041,7 +5041,7 @@ function PropuestaFichaContenido({
   // botón. Se ignora mientras se escribe (input/textarea/select/editable) y con
   // modificadoras (no pisar Ctrl/Cmd+X).
   React.useEffect(() => {
-    if (!puedeToggleFiscal) return;
+    if (!puedeToggleFiscal || medidaOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "x" && e.key !== "X") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -5060,7 +5060,7 @@ function PropuestaFichaContenido({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [puedeToggleFiscal, togglingFiscal, toggleTratamientoFiscal]);
+  }, [puedeToggleFiscal, togglingFiscal, toggleTratamientoFiscal, medidaOpen]);
   // null hasta que el tab de Archivos se abre y los cuenta: la pestaña no
   // muestra badge mientras no sepa el número real.
   const [archivosCount, setArchivosCount] = React.useState<number | null>(null);
@@ -7779,6 +7779,7 @@ function PropuestaFichaContenido({
       !cuponValidando &&
       !descuentoAplicando &&
       !addOpen &&
+      !medidaOpen &&
       !copiadoOpen &&
       !cargoOpen &&
       !panelEditor,
@@ -7803,7 +7804,7 @@ function PropuestaFichaContenido({
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!puedeModificarProductos || !permiteAtajoDePagina(event))
+      if (!puedeModificarProductos || medidaOpen || !permiteAtajoDePagina(event))
         return;
       const key = event.key.toLowerCase();
       // P = agregar producto · C = centro de copiado (si el módulo está activo).
@@ -7822,6 +7823,7 @@ function PropuestaFichaContenido({
     abrirAgregarProducto,
     abrirCentroCopiado,
     addOpen,
+    medidaOpen,
     cargoOpen,
     panelEditor,
     copiadoOpen,

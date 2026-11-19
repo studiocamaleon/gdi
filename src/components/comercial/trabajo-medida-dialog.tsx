@@ -137,24 +137,24 @@ export function TrabajoMedidaDialog({
   const resumenRef = React.useRef<HTMLElement>(null);
   const cambio = useTipoCambioDocumento();
   const revision = React.useRef(0);
-  React.useEffect(() => {
+  const itemId = item?.id;
+  const datosDeApertura = React.useEffectEvent(() => ({ item, fechaEntrega }));
+  React.useLayoutEffect(() => {
     if (!open) return;
+    const { item: original, fechaEntrega: fechaInicial } = datosDeApertura();
     let vigente = true;
-    const cancelarRevision = () => {
-      revision.current++;
-    };
-    cancelarRevision();
     setCargando(true);
+    setCalculando(false);
     setOpciones(null);
     setError("");
     setCalculo(null);
-    setArchivos(item?.archivosPendientes ?? []);
-    setEntrega(item?.fechaEntrega ?? fechaEntrega);
+    setArchivos(original?.archivosPendientes ?? []);
+    setEntrega(original?.fechaEntrega ?? fechaInicial);
     Promise.all([
       opcionesTrabajoMedida(),
-      item?.cotizacionItemId
-        ? obtenerTrabajoMedida(item.cotizacionItemId)
-        : Promise.resolve(item ? trabajoMedidaDe(item) : null),
+      original?.cotizacionItemId
+        ? obtenerTrabajoMedida(original.cotizacionItemId)
+        : Promise.resolve(original ? trabajoMedidaDe(original) : null),
     ])
       .then(([o, previo]) => {
         if (!vigente) return;
@@ -164,8 +164,9 @@ export function TrabajoMedidaDialog({
             ? {
                 ...previo,
                 periodo: o.periodo,
-                anteriorItemId: item?.cotizacionItemId ?? previo.anteriorItemId,
-                descuento: item?.descuentoInput ?? previo.descuento,
+                anteriorItemId:
+                  original?.cotizacionItemId ?? previo.anteriorItemId,
+                descuento: original?.descuentoInput ?? previo.descuento,
               }
             : inicial(),
         );
@@ -181,9 +182,15 @@ export function TrabajoMedidaDialog({
       });
     return () => {
       vigente = false;
-      cancelarRevision();
+      revision.current += 1;
     };
-  }, [open, item, fechaEntrega]);
+  }, [open, itemId]);
+  React.useLayoutEffect(() => {
+    // El cliente influye en los importes, pero no en la carga del formulario.
+    revision.current++;
+    setCalculo(null);
+    setCalculando(false);
+  }, [clienteId]);
   React.useEffect(() => {
     if (calculo && window.matchMedia("(max-width: 799px)").matches) {
       resumenRef.current?.scrollIntoView({ block: "nearest" });
@@ -192,6 +199,7 @@ export function TrabajoMedidaDialog({
 
   const cambiar = (c: Partial<TrabajoMedidaInput>) => {
     revision.current++;
+    setCalculando(false);
     setInput((p) => ({ ...p, ...c }));
     setCalculo(null);
     setError("");
@@ -209,15 +217,17 @@ export function TrabajoMedidaDialog({
   };
   const money = (n: number) =>
     opciones ? formatearMoneda(n, opciones.moneda) : String(n);
+  const importeResumen = (importe: number | undefined) =>
+    importe === undefined ? "—" : money(importe);
   const revisar = async () => {
-    setCalculo(null);
     setError("");
     setCalculando(true);
-    const actual = revision.current;
+    const actual = ++revision.current;
     try {
       const tipoCambioId = cambio
         ? (await cambio.resolver()).id
         : input.tipoCambioId;
+      if (revision.current !== actual) return;
       const resultado = await calcularTrabajoMedida({
         ...input,
         clienteId,
@@ -225,10 +235,12 @@ export function TrabajoMedidaDialog({
       });
       if (revision.current === actual) setCalculo(resultado);
     } catch (e) {
-      if (revision.current === actual)
+      if (revision.current === actual) {
+        setCalculo(null);
         setError(e instanceof Error ? e.message : "No se pudo calcular.");
+      }
     } finally {
-      setCalculando(false);
+      if (revision.current === actual) setCalculando(false);
     }
   };
   return (
@@ -269,9 +281,11 @@ export function TrabajoMedidaDialog({
                       type="number"
                       min="0.01"
                       step="0.01"
-                      value={input.cantidad}
+                      value={
+                        Number.isFinite(input.cantidad) ? input.cantidad : ""
+                      }
                       onChange={(e) =>
-                        cambiar({ cantidad: Number(e.target.value) })
+                        cambiar({ cantidad: e.target.valueAsNumber })
                       }
                     />
                   </Field>
@@ -512,7 +526,7 @@ export function TrabajoMedidaDialog({
                               type="number"
                               min="0"
                               step="any"
-                              value={g.costo}
+                              value={Number.isFinite(g.costo) ? g.costo : ""}
                               onChange={(e) =>
                                 cambiar({
                                   costos: {
@@ -521,7 +535,7 @@ export function TrabajoMedidaDialog({
                                       j === i
                                         ? {
                                             ...v,
-                                            costo: Number(e.target.value),
+                                            costo: e.target.valueAsNumber,
                                           }
                                         : v,
                                     ),
@@ -840,35 +854,38 @@ export function TrabajoMedidaDialog({
                     <Card.Title>Resumen del trabajo</Card.Title>
                     <span className={s.currency}>{opciones.moneda.codigo}</span>
                   </Card.Header>
-                  <Card.Content className={s.summaryBody} aria-live="polite">
-                    {calculo ? (
-                      <dl className={s.amounts}>
-                        <div>
-                          <dt>Venta neta</dt>
-                          <dd>{money(calculo.resumen.neto)}</dd>
-                        </div>
-                        <div>
-                          <dt>Impuestos al cliente</dt>
-                          <dd>{money(calculo.resumen.impuestos)}</dd>
-                        </div>
-                        <div className={s.total}>
-                          <dt>Total al cliente</dt>
-                          <dd>{money(calculo.resumen.total)}</dd>
-                        </div>
-                        <div className={s.costTotal}>
-                          <dt>Costo estimado</dt>
-                          <dd>{money(calculo.resumen.costoTotal)}</dd>
-                        </div>
-                        <div>
-                          <dt>Margen estimado</dt>
-                          <dd>{money(calculo.resumen.margen)}</dd>
-                        </div>
-                        <div>
-                          <dt>Contribución estimada</dt>
-                          <dd>{money(calculo.resumen.contribucion)}</dd>
-                        </div>
-                      </dl>
-                    ) : (
+                  <Card.Content
+                    className={s.summaryBody}
+                    aria-live="polite"
+                    aria-busy={calculando}
+                  >
+                    <dl className={s.amounts}>
+                      <div>
+                        <dt>Venta neta</dt>
+                        <dd>{importeResumen(calculo?.resumen.neto)}</dd>
+                      </div>
+                      <div>
+                        <dt>Impuestos al cliente</dt>
+                        <dd>{importeResumen(calculo?.resumen.impuestos)}</dd>
+                      </div>
+                      <div className={s.total}>
+                        <dt>Total al cliente</dt>
+                        <dd>{importeResumen(calculo?.resumen.total)}</dd>
+                      </div>
+                      <div className={s.costTotal}>
+                        <dt>Costo estimado</dt>
+                        <dd>{importeResumen(calculo?.resumen.costoTotal)}</dd>
+                      </div>
+                      <div>
+                        <dt>Margen estimado</dt>
+                        <dd>{importeResumen(calculo?.resumen.margen)}</dd>
+                      </div>
+                      <div>
+                        <dt>Contribución estimada</dt>
+                        <dd>{importeResumen(calculo?.resumen.contribucion)}</dd>
+                      </div>
+                    </dl>
+                    {!calculo && (
                       <p>
                         {calculando
                           ? "Calculando importes…"
@@ -917,7 +934,8 @@ export function TrabajoMedidaDialog({
           <ActionButton
             className={s.reviewButton}
             variant="outline"
-            isDisabled={cargando || calculando || !opciones}
+            isDisabled={cargando || !opciones}
+            isPending={calculando}
             onPress={() => void revisar()}
           >
             {calculando ? (

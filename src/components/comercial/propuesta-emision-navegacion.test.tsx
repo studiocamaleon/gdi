@@ -302,7 +302,10 @@ async function verDatos() {
   expect(tab).toBeDefined();
   await act(async () => tab.click());
 }
-async function montar(orden?: ComponentProps<typeof PropuestaFicha>["orden"]) {
+async function montar(
+  orden?: ComponentProps<typeof PropuestaFicha>["orden"],
+  currentUser?: ComponentProps<typeof PropuestaFicha>["currentUser"],
+) {
   await act(async () =>
     root.render(
       <CapacidadesProvider
@@ -324,12 +327,46 @@ async function montar(orden?: ComponentProps<typeof PropuestaFicha>["orden"]) {
             ...(mocks.puedeEntregar ? ["produccion.tablero.gestionar"] : []),
           ]}
         >
-          <PropuestaFicha orden={orden} />
+          <PropuestaFicha orden={orden} currentUser={currentUser} />
         </PermisosProvider>
       </CapacidadesProvider>,
     ),
   );
 }
+
+it("suspende los atajos de la orden hasta cerrar Trabajo a medida", async () => {
+  await montar(undefined, {
+    id: "persona-ficticia",
+    email: "prueba@example.test",
+    tenantActual: {
+      id: "empresa-ficticia",
+      nombre: "Empresa de prueba",
+      slug: "prueba",
+      rol: "operador",
+      permisos: ["comercial.trabajos_medida"],
+    },
+    tenants: [],
+  });
+  const productos = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+    (tab) => tab.textContent?.includes("Productos"),
+  )!;
+  await act(async () => productos.click());
+  await click("Trabajo a medida");
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain("Nuevo trabajo a medida");
+  const cancelar = [...dialog.querySelectorAll("button")].find(
+    (b) => b.textContent === "Cancelar",
+  )!;
+  await act(async () => cancelar.focus());
+  const enviarTecla = async (key: string) => {
+    const evento = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    await act(async () => window.dispatchEvent(evento));
+    return evento.defaultPrevented;
+  };
+  for (const tecla of ["x", "p", "c"]) expect(await enviarTecla(tecla)).toBe(false);
+  await act(async () => cancelar.click());
+  expect(await enviarTecla("x")).toBe(true);
+});
 
 it("al reabrir una tanda conserva materiales y producción en el detalle de costos", async () => {
   const base = getMockOrdenDetalle("mock-0184")!;
