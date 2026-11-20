@@ -73,12 +73,18 @@ function etiquetaUnidad(unidad: string, cantidad = 1) {
   return unidad;
 }
 
+export type ConfirmarMaterial = () => {
+  materiales: number;
+  detalleMateriales: string;
+} | null;
+
 type EstimacionProps = {
   moneda: Moneda;
   costo: number;
   detalle: string;
   onAgregar: (costo: number, detalle: string) => void;
   onPendiente?: (pendiente: boolean) => void;
+  confirmarRef?: React.Ref<ConfirmarMaterial>;
 };
 
 export function MaterialInventarioEstimado(props: EstimacionProps) {
@@ -138,6 +144,7 @@ export function SelectorMaterialEstimado({
   detalle,
   onAgregar,
   onPendiente,
+  confirmarRef,
 }: EstimacionProps & { catalogo: MateriaPrimaStock[] }) {
   const scope = useDesignScope();
   const theme = useDesignTheme();
@@ -254,6 +261,14 @@ export function SelectorMaterialEstimado({
     return "";
   }
   const problema = problemaDeSeleccion();
+  const confirmar: ConfirmarMaterial = () => {
+    if (!elegida) return null;
+    if (problema || !nuevoCosto || !linea)
+      throw new Error(problema || "Revisá el costo del material seleccionado.");
+    limpiar();
+    return { materiales: nuevoCosto.toNumber(), detalleMateriales: nuevoDetalle };
+  };
+  React.useImperativeHandle(confirmarRef, () => confirmar);
   return (
     <div className={s.inventory}>
       <Field>
@@ -378,10 +393,8 @@ export function SelectorMaterialEstimado({
               variant="outline"
               isDisabled={!nuevoCosto || !linea || Boolean(problema)}
               onPress={() => {
-                if (nuevoCosto && linea && !problema) {
-                  onAgregar(nuevoCosto.toNumber(), nuevoDetalle);
-                  limpiar();
-                }
+                const suma = confirmar();
+                if (suma) onAgregar(suma.materiales, suma.detalleMateriales);
               }}
             >
               <PlusIcon aria-hidden /> Sumar material

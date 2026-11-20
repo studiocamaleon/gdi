@@ -231,7 +231,7 @@ it("desglosa materiales por unidad, superficie y longitud y admite costos manual
   await agregarCostoManual("Flete", "25");
 
   await elegir("FUE-12");
-  expect(boton("Revisar cálculo").disabled).toBe(true);
+  expect(boton("Revisar cálculo").disabled).toBe(false);
   await editar("consumo", "3");
   await act(async () => boton("Sumar material").click());
   expect(materialesAgregados()?.textContent).toContain("$ 300,00");
@@ -249,9 +249,10 @@ it("desglosa materiales por unidad, superficie y longitud y admite costos manual
   expect(area).toBeDefined();
   await act(async () => area!.click());
   await editar("consumo", "2.5");
-  await act(async () => boton("Sumar material").click());
-  expect(materialesAgregados()?.textContent).toContain("$ 730,00");
   await revisar();
+  expect(materialesAgregados()?.textContent).toContain("$ 730,00");
+  expect(boton("Sumar material")).toBeUndefined();
+  expect(boton("Agregar trabajo").disabled).toBe(false);
   const request = JSON.parse(String(api.mock.lastCall?.[1]?.body));
   expect(request.costos.materiales).toBe(730);
   expect(request.costos.otros).toEqual([{ nombre: "Flete", costo: 25 }]);
@@ -263,6 +264,10 @@ it("desglosa materiales por unidad, superficie y longitud y admite costos manual
   );
   expect(request.costos.detalleMateriales).toMatch(
     /Vinilo de prueba.*2,5 m².*250/,
+  );
+  await revisar();
+  expect(JSON.parse(String(api.mock.lastCall?.[1]?.body)).costos).toEqual(
+    request.costos,
   );
 });
 
@@ -288,12 +293,47 @@ it("impide sumar una variante sin precio y permite continuar con el costo manual
   await elegir("FUE-12");
   expect(boton("Sumar material").disabled).toBe(true);
   expect(document.body.textContent).toContain("no tiene precio de referencia");
+  await revisar();
+  expect(api.mock.calls.some(([url]) => url.endsWith("/calcular"))).toBe(false);
+  expect(boton("Agregar trabajo").disabled).toBe(true);
   await act(async () => boton("Descartar selección").click());
   expect(materialesAgregados()).toBeNull();
   expect(document.querySelector<HTMLInputElement>("#importe-0")?.value).toBe(
     "120",
   );
   expect(boton("Revisar cálculo").disabled).toBe(false);
+});
+
+it("permite corregir la cantidad y reintentar un cálculo fallido sin duplicar el material", async () => {
+  vi.stubGlobal("CSS", { escape: (value: string) => value });
+  api.mockImplementation(async (url) => {
+    if (url.includes("opciones-stock"))
+      return { data: materialesDePrueba, pages: 1 };
+    if (url.endsWith("/calcular")) return resultado(500);
+    return opciones;
+  });
+  await render();
+  await act(async () => boton("Desglosar costos").click());
+  await elegir("FUE-12");
+  await editar("consumo", "0");
+  await revisar();
+  expect(api.mock.calls.some(([url]) => url.endsWith("/calcular"))).toBe(false);
+  expect(document.body.textContent).toContain("Ingresá una cantidad mayor que cero.");
+  expect(materialesAgregados()).toBeNull();
+
+  await editar("consumo", "3");
+  api.mockRejectedValueOnce(new Error("Cálculo interrumpido"));
+  await revisar();
+  expect(document.body.textContent).toContain("Cálculo interrumpido");
+  expect(boton("Agregar trabajo").disabled).toBe(true);
+  await revisar();
+  const intentos = api.mock.calls
+    .filter(([url]) => url.endsWith("/calcular"))
+    .map(([, init]) => JSON.parse(String(init?.body)).costos);
+  expect(intentos).toHaveLength(2);
+  expect(intentos[0]).toEqual(intentos[1]);
+  expect(intentos[1].materiales).toBe(300);
+  expect(boton("Agregar trabajo").disabled).toBe(false);
 });
 
 it("conserva los materiales de un trabajo anterior y permite volver del costo total al desglose", async () => {

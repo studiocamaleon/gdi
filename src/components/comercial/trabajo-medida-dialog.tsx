@@ -27,7 +27,10 @@ import {
 } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import s from "./trabajo-medida-dialog.module.css";
-import { MaterialInventarioEstimado } from "./material-inventario-estimado";
+import {
+  MaterialInventarioEstimado,
+  type ConfirmarMaterial,
+} from "./material-inventario-estimado";
 import { useTipoCambioDocumento } from "./tipo-cambio-documento";
 import { formatearMoneda } from "@/lib/moneda";
 import type { PropuestaItem } from "@/lib/propuestas";
@@ -133,6 +136,7 @@ export function TrabajoMedidaDialog({
   const [cargando, setCargando] = React.useState(false);
   const [calculando, setCalculando] = React.useState(false);
   const [materialPendiente, setMaterialPendiente] = React.useState(false);
+  const confirmarMaterial = React.useRef<ConfirmarMaterial>(null);
   const [archivos, setArchivos] = React.useState<File[]>([]);
   const [entrega, setEntrega] = React.useState(fechaEntrega);
   const selectorArchivos = React.useRef<HTMLInputElement>(null);
@@ -227,6 +231,9 @@ export function TrabajoMedidaDialog({
     setCalculando(true);
     const actual = ++revision.current;
     try {
+      const material = confirmarMaterial.current?.();
+      const desglose = { ...input.costos, ...material };
+      if (material) setInput((previo) => ({ ...previo, costos: desglose }));
       const tipoCambioId = cambio
         ? (await cambio.resolver()).id
         : input.tipoCambioId;
@@ -240,7 +247,7 @@ export function TrabajoMedidaDialog({
               materiales: 0,
               otros: [],
             }
-          : { ...input.costos, totalEstimado: undefined };
+          : { ...desglose, totalEstimado: undefined };
       const resultado = await calcularTrabajoMedida({
         ...input,
         costos,
@@ -460,6 +467,7 @@ export function TrabajoMedidaDialog({
                         moneda={opciones.moneda}
                         costo={input.costos.materiales}
                         detalle={input.costos.detalleMateriales ?? ""}
+                        confirmarRef={confirmarMaterial}
                         onPendiente={setMaterialPendiente}
                         onAgregar={(materiales, detalleMateriales) =>
                           cambiar({
@@ -947,7 +955,7 @@ export function TrabajoMedidaDialog({
           <ActionButton
             className={s.reviewButton}
             variant="outline"
-            isDisabled={cargando || !opciones || materialPendiente}
+            isDisabled={cargando || !opciones}
             isPending={calculando}
             onPress={() => void revisar()}
           >
