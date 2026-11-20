@@ -85,7 +85,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { NotaProduccion } from "@/components/produccion/nota-produccion";
 import {
   Card,
   CardHeader,
@@ -140,7 +140,6 @@ import {
   PlusIcon,
   LinkIcon,
   SaveIcon,
-  TriangleAlertIcon,
   UserIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -2391,28 +2390,24 @@ function ProduccionItemSinLotesView({
   calculoPendiente,
   onExpand,
 }: FabricacionItemProps) {
+  const nota = <NotaProduccion texto={item.notaProduccion} />;
   if (calculoPendiente)
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>Producción pendiente de cotización</EmptyTitle>
-          <EmptyDescription>
-            Cotizá el producto para ver sus operaciones y tiempos.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <div className={itemStyles.production}>
+        {nota}
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Producción pendiente de cotización</EmptyTitle>
+            <EmptyDescription>
+              Cotizá el producto para ver sus operaciones y tiempos.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
     );
   return (
     <div className={itemStyles.production}>
-      {item.notaProduccion ? (
-        <Alert>
-          <TriangleAlertIcon />
-          <AlertTitle>Nota para producción</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">
-            {item.notaProduccion}
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      {nota}
       <Card size="sm" className={itemStyles.technicalCard}>
         <CardHeader>
           <CardTitle className={itemStyles.sectionTitle}>
@@ -5130,6 +5125,7 @@ function PropuestaFichaContenido({
   const puedeEntregar = permisoEntregaProduccion || permisoEntregaComercial;
   const puedeAbrirEntrega = orden?.estado === "finalizada" && puedeEntregar;
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
+  const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const [cancelando, setCancelando] = React.useState(false);
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
@@ -5711,6 +5707,15 @@ function PropuestaFichaContenido({
     : 0;
   const cambiosSinGuardar =
     cambiosCreacion + cambiosItems.total + Object.keys(cambiosFields).length + Number(cambiosCargos);
+  const ordenDisponible = !!orden && orden.estado !== "cancelada" &&
+    !guardandoEdicion && !precioOrdenPendiente && !cambiandoTipoBorrador &&
+    !cancelando && !emitiendoBorrador;
+  const puedeCobrarOrden = ordenDisponible && orden.estado !== "borrador" &&
+    puedeVerOrdenes && puedeRegistrarCobros && !togglingFiscal && cambiosSinGuardar === 0 &&
+    orden.total > (orden.cobradoTotal ?? 0) && (conCobros || orden.cobrosHabilitadosEmision !== false);
+  const puedeAdjuntarArchivos = ordenDisponible && (permisoOrdenes ||
+    (puedeVerProduccion && (puedeEjecutarProduccion || puedeAsignarPersonal)));
+
   // La confirmación del servidor protege esta revisión concreta. No vaciamos
   // el formulario: si la navegación tarda y se edita de nuevo, vuelve el aviso.
   const revisionPropuesta = React.useMemo(
@@ -6420,7 +6425,6 @@ function PropuestaFichaContenido({
     [cobrosStaged, clienteId, moneda, emitirYEntregar],
   );
 
-  const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const emitirBorrador = React.useCallback(
     async (imprimir = false) => {
     if (!validarEntregaCalculada()) return;
@@ -8915,8 +8919,7 @@ function PropuestaFichaContenido({
                     pago={orden.pago}
                     total={orden.total}
                     ordenId={orden.id}
-                    puedeCobrar={puedeRegistrarCobros && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
-                    soloLectura={!puedeEditarOrden}
+                    puedeCobrar={puedeCobrarOrden}
                     sinComprobante={
                       orden.tratamientoFiscal === "SIN_COMPROBANTE"
                     }
@@ -8954,6 +8957,7 @@ function PropuestaFichaContenido({
                   facturacionBloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando}
                   onFacturada={recargarOrden}
                   soloLectura={!puedeEditarOrden}
+                  puedeCobrar={puedeCobrarOrden}
                   recargarToken={refrescosComprobantes}
                 />
               </div>
@@ -8968,6 +8972,7 @@ function PropuestaFichaContenido({
                     metaCentroCopiado(p.snapshot?.jobContext as Record<string, unknown> | undefined),
                   ]))}
                   soloLectura={!puedeEditarOrden}
+                  puedeSubir={puedeAdjuntarArchivos}
                   onTotalCambio={setArchivosCount}
                 />
               ) : (

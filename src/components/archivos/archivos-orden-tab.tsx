@@ -133,6 +133,7 @@ function PapeleraOrden({
 export function ArchivosOrdenTab({
   ordenId,
   soloLectura = false,
+  puedeSubir = !soloLectura,
   onTotalCambio,
   estadoDocumental,
   tomos = {},
@@ -141,6 +142,7 @@ export function ArchivosOrdenTab({
   tomos?: Record<string, ReturnType<typeof metaCentroCopiado>>;
   estadoDocumental?: EstadoDocumentalOrden | null;
   soloLectura?: boolean;
+  puedeSubir?: boolean;
   /** Para que la pestaña muestre el contador real. */
   onTotalCambio?: (total: number) => void;
 }) {
@@ -251,6 +253,7 @@ export function ArchivosOrdenTab({
               archivos={data.documento}
               onCambio={setDocumento}
               soloLectura={soloLectura}
+              puedeSubir={puedeSubir}
               permitirPublico
               calcularHash={conArte}
               titulo="Arrastrá archivos de la orden"
@@ -305,6 +308,7 @@ export function ArchivosOrdenTab({
                   archivos={item.archivos}
                   onCambio={(a) => setItem(item.itemId, a)}
                   soloLectura={soloLectura}
+                  puedeSubir={puedeSubir}
                   permitirPublico
                   calcularHash={conArte}
                   titulo="Arrastrá el arte de este producto"

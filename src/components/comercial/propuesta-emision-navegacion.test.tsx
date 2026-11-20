@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
+import * as archivosApi from "@/lib/archivos-api";
+import type { Archivo } from "@/lib/archivos";
 import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
 import type { PropuestaItem } from "@/lib/propuestas";
 import { productoDiseno } from "./__fixtures__/orden-diseno";
@@ -46,6 +48,7 @@ vi.mock("@/lib/ordenes-trabajo-api", async (original) => ({
 vi.mock("@/lib/administracion-api", async (original) => ({
   ...(await original<typeof import("@/lib/administracion-api")>()),
   crearCobro: mocks.cobrar,
+  getCobros: vi.fn(async () => []),
 }));
 vi.mock("@/lib/entrega-api", async (original) => ({
   ...(await original<typeof import("@/lib/entrega-api")>()),
@@ -306,6 +309,12 @@ async function verDatos() {
 async function montar(
   orden?: ComponentProps<typeof PropuestaFicha>["orden"],
   currentUser?: ComponentProps<typeof PropuestaFicha>["currentUser"],
+  permisos = [
+    "comercial.gestionar",
+    "finanzas.ver_margenes",
+    "administracion.cobrar",
+    ...(mocks.puedeEntregar ? ["produccion.tablero.gestionar"] : []),
+  ],
 ) {
   await act(async () =>
     root.render(
@@ -320,14 +329,7 @@ async function montar(
           },
         }}
       >
-        <PermisosProvider
-          permisos={[
-            "comercial.gestionar",
-            "finanzas.ver_margenes",
-            "administracion.cobrar",
-            ...(mocks.puedeEntregar ? ["produccion.tablero.gestionar"] : []),
-          ]}
-        >
+        <PermisosProvider permisos={permisos}>
           <PropuestaFicha orden={orden} currentUser={currentUser} />
         </PermisosProvider>
       </CapacidadesProvider>,
@@ -1057,13 +1059,63 @@ it("no borra la fecha de copiado cuando ETA todavía no puede estimar el trabajo
   expect(fecha.value).toBe("2099-01-10");
 });
 
-async function verPagos() {
+async function verTab(nombre: string) {
   const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
-    (t) => t.getAttribute("aria-label")?.startsWith("Pagos"),
+    (t) => t.getAttribute("aria-label")?.startsWith(nombre),
   )!;
   expect(tab).toBeDefined();
   await act(async () => tab.click());
 }
+const verPagos = () => verTab("Pagos");
+
+it.each([
+  { estado: "produccion", cobrar: true, adjuntar: true, permisos: ["administracion.cobrar", "comercial.ordenes.gestionar"] },
+  { estado: "entregada", cobrar: true, adjuntar: false, permisos: ["administracion.cobrar.gestionar"] },
+  { estado: "produccion", cobrar: false, adjuntar: true, permisos: ["produccion.tablero.ver", "produccion.ejecutar"] },
+  { estado: "produccion", cobrar: false, adjuntar: false, permisos: [] },
+  { estado: "cancelada", cobrar: false, adjuntar: false, permisos: ["administracion.cobrar", "comercial.ordenes.gestionar"] },
+] as const)("acciones directas en $estado con $permisos", async ({ estado, cobrar, adjuntar, permisos }) => {
+  const orden = { ...getMockOrdenDetalle("mock-0184")!, estado, total: 1000, cobradoTotal: 0 };
+  const arte: Archivo = {
+    id: "arte-ficticio", scope: "ORDEN_ITEM", nombre: "Arte final.pdf",
+    mimeType: "application/pdf", bytes: 120, publico: false,
+    descripcion: null, autogeneradoPor: null, esImagen: false,
+    createdAt: "2026-10-10", subidoPor: null,
+  };
+  const datos = vi.spyOn(archivosApi, "getArchivosDeOrden").mockResolvedValue({
+    documento: [],
+    items: [{ itemId: "item-ficticio", nombre: "Cartel", archivos: [arte] }],
+  });
+  const subir = vi.spyOn(archivosApi, "subirArchivo").mockResolvedValue({ ...arte, id: "adjunto-ficticio", nombre: "Nuevo.pdf" });
+  try {
+    await montar(orden, undefined, ["acceso.por_vista", "comercial.ordenes.ver", "administracion.comprobantes.ver", ...permisos]);
+    const destino = 'a[href="/administracion/cobros/nuevo?ordenId=' + orden.id + '"]';
+    await verPagos();
+    expect(Boolean(container.querySelector(destino))).toBe(cobrar);
+    await verTab("Comprobantes");
+    expect(Boolean(container.querySelector(destino))).toBe(cobrar);
+    await verTab("Archivos");
+    const controles = container.querySelectorAll<HTMLInputElement>('input[type="file"]');
+    expect(controles).toHaveLength(adjuntar ? 2 : 0);
+    expect(container.querySelector('button[title="Eliminar"]')).toBeNull();
+    if (adjuntar) {
+      for (const [index, input] of Array.from(controles).entries()) {
+        const file = new File(["PDF ficticio"], "Nuevo.pdf", { type: "application/pdf" });
+        Object.defineProperty(input, "files", { value: [file] });
+        await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+        expect(subir).toHaveBeenCalledWith(file, expect.objectContaining(
+          index === 0 ? { scope: "ORDEN", entidadId: orden.id } : { scope: "ORDEN_ITEM", entidadId: "item-ficticio" },
+        ), expect.any(Function), expect.any(AbortSignal));
+      }
+      expect(container.textContent).toContain("Nuevo.pdf");
+      expect(mocks.editarOrden).not.toHaveBeenCalled();
+    }
+  } finally {
+    datos.mockRestore();
+    subir.mockRestore();
+  }
+});
+
 async function prepararCopiadoFinalizado() {
   mocks.finalizado = true;
   mocks.revisarCopiado.mockImplementation(async ({ items }) =>

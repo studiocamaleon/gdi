@@ -134,6 +134,8 @@
 }
 
 .textarea {
+  background: var(--color-yellow-100);
+  color: var(--color-yellow-950);
   min-height: 62px;
   resize: vertical;
 }
