@@ -1,5 +1,47 @@
 # Validación de staging — historial
 
+## 2026-11-20 — Trabajo a medida, pagos, archivos y notas
+
+Publicado **sólo en [staging](https://staging.grafoprint.com.ar)** por pedido expreso de Lucas. Revisión de aplicación **`b4118ccfc952b3fcd36bd4157334b6e0ba9ed64d`**, comprobada dentro de web, API y ambos workers. Se verificó e importó el bundle entregado: 12 commits sobre `565f4e24f96ff68f45c56ff0c9b05bdfb835430c`, dependiente del [PR #131](https://github.com/studiocamaleon/gdi/pull/131). Se usó un worktree aislado; el checkout y los procesos locales originales se conservaron. No se fusionaron PR ni se publicó en producción. La consulta final confirmó que #131 y #127 continúan abiertos e independientes; ninguno se cerró ni se actualizó con estos commits. Este registro posterior no cambia la revisión ejecutada.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:9b66843c8bed87b90da0d1673767bf62526a673d3b23694fe6d933bfff12cb0e` |
+| Web | `sha256:01b6b5ab7f32662038fe95e14d4719036c8ee48cd0d9bd5e3a614ba5dc2ea5be` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+### Trabajo a medida — aprobado
+
+Recorrido autenticado por navegador: nueva orden → Agregar producto → Crear trabajo a medida → emitir OT. Empresa independiente de ensayo, cliente ficticio y trabajo «QA b4118ccfc · Exhibidor a medida», dos unidades. Costo total ARS 4.000, neto 10.000, IVA 2.100 y total 12.100. La orden `OT-2026-0001` conserva la identificación de trabajo a medida y el costo estimado. En Operación diaria aparece en Armado QA, con ruta de un paso, dos unidades y una hora estimada. No se inició ni completó el paso de producción.
+
+### Registro de pago desde la orden — aprobado
+
+Desde Pagos → Registrar pago parcial o total, **sin entrar en «Editar orden»**, se registró un cobro ficticio en efectivo por ARS 2.100 en la caja exclusiva del ensayo. La confirmación devolvió a la misma orden: un cobro, 17 % cobrado y saldo de ARS 10.000. Recibo `REC-2026-0001`. No se usaron proveedores de cobro ni se movió dinero real.
+
+### Carga de archivo desde la orden — aprobado
+
+Desde Archivos de la orden, **sin entrar en «Editar orden»**, se cargó `QA-b4118ccfc.svg`, gráfico ficticio de 315 bytes. La vista mostró el archivo guardado, tamaño y autor. Al abrir después el sheet desde Operación diaria, apareció también en Archivos generales. La descarga no forma parte del resultado aprobado: la espera automatizada del evento de descarga agotó su tiempo, sin impedir la carga solicitada.
+
+### Fondo amarillo de las notas — aprobado
+
+La misma nota ficticia aparece dentro de un bloque amarillo en Productos → Ver detalle → Flujo de producción de la orden y en el sheet de Operación diaria. Ambas vistas se inspeccionaron visualmente; el elemento «Nota de producción» utiliza `bg-yellow-100`, borde amarillo y fondo calculado `oklch(0.973 0.071 103.193)` en ambas. Capturas de pago, archivo y las dos notas conservadas fuera de Git.
+
+### Validación técnica y operación
+
+- **147 pruebas locales aprobadas:** 110 de web, 25 unitarias de API y 12 de integración de Trabajo a medida. Integración sobre una base local nueva y exclusiva, con las 321 migraciones; sin seeds ni resets. No se copiaron credenciales de staging a desarrollo ni se activaron tareas externas locales.
+- API y web compiladas en remoto, con sus comprobaciones completas de TypeScript. No se compiló la web de producción ni contenedores en la Mac; no se reinició Docker ni se cambiaron recursos. El SHA importado no tiene una ejecución de CI de GitHub acreditada por este ensayo; no se publicó la rama ni se confundió el CI de la base con el de esta revisión.
+- Aplicadas en staging `20261118120000_trabajos_a_medida` y `20261120120000_estacion_paso_a_medida`: 319 → 321 migraciones, sin pendientes y con checksums históricos intactos. Antes/después de migrar, iguales cantidades y huellas de identificadores en Tenant, User, Producto, MateriaPrima, MateriaPrimaVariante, OrdenTrabajo y Archivo. Los datos sintéticos de las pruebas de navegador se agregaron después.
+- Actualizadas sólo las imágenes de los cuatro procesos mediante Machines API, conservando servicios, recursos, archivos y comandos del controlador del [PR #127](https://github.com/studiocamaleon/gdi/pull/127). El constructor remoto usado terminó suspendido y sin máquinas activas. Web/API respondieron 200; API protegida directa 403 y BFF anónimo 401. Los seis servicios de producción conservaron configuración e imágenes.
+- Al despertar staging se detectó un problema previo al despliegue: Chromium de Gotenberg agotaba su espera de arranque de 20 segundos. Sólo en staging se fijó `CHROMIUM_START_TIMEOUT=60s`, manteniendo imagen, memoria, CPU, red privada y bloqueos de acceso. Gotenberg arrancó y pasó salud. El manifiesto refleja el ajuste; ver [configuración de Gotenberg](https://gotenberg.dev/docs/8.x/configuration).
+- Empresa, orden, cobro y archivo ficticios conservados como evidencia. El usuario temporal y su única membresía quedaron inactivos; su sesión fue revocada. No se alteraron empresas existentes. La retención temporal de mantenimiento quedó liberada y vuelve a regir el encendido/apagado por demanda.
+
+### Respaldo y reversión
+
+Comprobante previo `b78c7c57-e480-4735-bbfa-1e6c8087b422` verificado. Fuentes exactas cifradas bajo custodia e inventario del copiador actualizado. Copia posterior **`3fe72a35-8913-49d7-b537-d65258bd93c4`**, completada **`2026-11-20T22:56:40.452Z`**, con firma, huellas y manifiesto descifrado comprobados: revisión e imágenes coincidentes, 321 migraciones y 33 archivos. Esta copia precede a la carga del archivo de ensayo del navegador. No se repitió una restauración SQL completa; la comprobación del recibo no equivale a una restauración.
+
+Revisión anterior: `821dd09e5e1d785e5f76a3e3690f056448104267`. Imágenes de reversión: API y ambos workers `registry.fly.io/grafoprint-staging-api@sha256:ad915f6a7d534d549187eb90dfc17c079562539a3e5e101f17953822532e7b74`; web `registry.fly.io/grafoprint-staging-web@sha256:cfb47440bcfe191cd6861770510f35bbe399c00e911f7b7f5b67cd20a02c9c8b`. Antes de volver, evaluar compatibilidad con los trabajos a medida creados: la versión anterior no implementa ese modelo. Preservar las migraciones aditivas y los datos, no ejecutar resets. Conservar íntegra la configuración bajo demanda y actualizar el inventario del copiador al estado realmente ejecutado.
+
 ## 2026-11-17 — Clientes completos y nota de crédito para refacturar
 
 Revisión funcional **`821dd09e5e1d785e5f76a3e3690f056448104267`**, [PR #130](https://github.com/studiocamaleon/gdi/pull/130), desde `main` actualizado. Lucas pidió corregir la lista incompleta de clientes y preparar una nota de crédito para poder refacturar con los datos actuales. Este ensayo se realizó en staging, sin comprobantes reales. Lucas autorizó posteriormente promover el mismo lote a producción; ver [su registro y reversión](../produccion/VALIDACION.md).
