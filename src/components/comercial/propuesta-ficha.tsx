@@ -5873,6 +5873,10 @@ function PropuestaFichaContenido({
         if (!producto.cotizacionItemId) continue;
         const item = porCotizacion.get(producto.cotizacionItemId);
         if (!item?.archivosPendientes?.length) continue;
+        if (!producto.id) {
+          fallidos.push(item.productoNombre);
+          continue;
+        }
         try {
           await subirArchivosPendientesDeItem(producto.id, item, item.archivosPendientes);
         } catch (error) {
