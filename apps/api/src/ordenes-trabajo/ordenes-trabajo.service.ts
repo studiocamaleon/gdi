@@ -533,6 +533,7 @@ export function pasosVisiblesParaOperario<T extends PasoVisibleParaOperario>(
 type PasoTrazabilidad = {
   recursoManual?: {centroCostoId?: string | null; centroCostoNombre?: string | null; maquinaId?: string | null};
   soloCosto?: boolean;
+  estacionManualId?: string | null;
   rutaPasoId?: string;
   rutaPasoOrden?: number;
   familiaCodigo?: string;
@@ -5839,6 +5840,7 @@ export class OrdenesTrabajoService {
         familiaCodigo,
         categoriaFamilia: familia?.categoria ?? 'operaciones_manuales',
         nombre: paso.nombreVisible?.trim() || familia?.nombre || familiaCodigo,
+        estacionManualId: paso.estacionManualId ?? null,
         centroCostoId: paso.tiempo?.centroCostoId ?? paso.recursoManual?.centroCostoId ?? null,
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? paso.recursoManual?.centroCostoNombre ?? null,
         maquinaId: paso.tiempo?.maquinaId ?? paso.recursoManual?.maquinaId ?? null,
@@ -7476,7 +7478,7 @@ export class OrdenesTrabajoService {
    */
   private async validarEjecucionEnEstacion(
     auth: CurrentAuth,
-    paso: { familiaCodigo: string; maquinaId: string | null },
+    paso: { familiaCodigo: string; maquinaId: string | null; estacionManualId?: string | null },
     db: Prisma.TransactionClient = this.prisma,
   ) {
     if (!(auth.permisos?.has('produccion.ejecutar') ?? false)) {
@@ -7537,6 +7539,7 @@ export class OrdenesTrabajoService {
       })),
       {
         familiaCodigo: paso.familiaCodigo,
+        estacionManualId: paso.estacionManualId,
         plantillaCodigo: familia?.plantillaCodigo ?? null,
         centroCostoId: null,
         maquinaId: paso.maquinaId,
@@ -7548,6 +7551,7 @@ export class OrdenesTrabajoService {
       throw new ForbiddenException(
         motivoSinEstacion([], {
           familiaCodigo: paso.familiaCodigo,
+          estacionManualId: paso.estacionManualId,
           centroCostoId: null,
           maquinaId: paso.maquinaId,
           requiereMaquina: !admitePasoSinMaquina(paso.familiaCodigo),
@@ -7573,6 +7577,7 @@ export class OrdenesTrabajoService {
         asignacionPersonalJson: true,
         asignacionManualJson: true,
         familiaCodigo: true,
+        estacionManualId: true,
         maquinaId: true,
       },
     });
@@ -7858,6 +7863,7 @@ export class OrdenesTrabajoService {
           nombre: true,
           estado: true,
           familiaCodigo: true,
+          estacionManualId: true,
           maquinaId: true,
           tipoEjecucion: true,
           motivoBloqueo: true,
@@ -8974,6 +8980,7 @@ export class OrdenesTrabajoService {
         rutaPasoId: string | null;
         nombre: string;
         familiaCodigo: string;
+        estacionManualId?: string | null;
         categoriaFamilia: string;
         centroCostoId: string | null;
         centroCostoNombre: string | null;
@@ -9124,6 +9131,7 @@ export class OrdenesTrabajoService {
         rutaPasoId: paso.rutaPasoId,
         nombre: paso.nombre,
         familiaCodigo: paso.familiaCodigo,
+        estacionManualId: paso.estacionManualId,
         // [E2 pasos-tenant] Un paso del tenant tiene por código un UUID que
         // ningún mapa de UI ni regla de estación conoce. Se deriva —no se
         // guarda— la plantilla de la que hereda, para caer ahí.

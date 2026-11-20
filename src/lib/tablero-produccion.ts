@@ -93,6 +93,7 @@ export type TableroPasoData = {
   rutaPasoId: string | null;
   nombre: string;
   familiaCodigo: string;
+  estacionManualId?: string | null;
   /** Si el paso es una INSTANCIA del tenant, de qué plantilla del catálogo
    *  hereda. Los mapas de UI y el ruteo a estaciones caen acá cuando el
    *  código propio (un UUID) no matchea. docs/pasos-tenant-por-plantilla */
@@ -621,7 +622,7 @@ type EstacionRuteo = {
 };
 
 type PasoRuteo = Pick<TableroPasoData,
-  "familiaCodigo" | "plantillaCodigo" | "centroCostoId" | "maquinaId" | "tecnologia" | "requiereMaquina"
+  "estacionManualId" | "familiaCodigo" | "plantillaCodigo" | "centroCostoId" | "maquinaId" | "tecnologia" | "requiereMaquina"
 > & Partial<Pick<TableroPasoData, "tipoEjecucion">>;
 
 /** Una máquina sólo se ejecuta donde está asignada. Las reglas de pasos se
@@ -633,6 +634,11 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
 ): T | null {
   if (paso.tipoEjecucion === "tercerizado") return null;
   const activas = estaciones.filter((e) => e.activo);
+  if (paso.estacionManualId) {
+    const elegida = activas.find((e) => e.id === paso.estacionManualId);
+    if (paso.maquinaId && !elegida?.maquinas.some((m) => m.id === paso.maquinaId && m.activo !== false)) return null;
+    return elegida ?? null;
+  }
   if (paso.maquinaId) {
     const candidatas = activas.filter((e) => e.maquinas.some(
       (m) => m.id === paso.maquinaId && m.activo !== false,
@@ -656,6 +662,7 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
 
 export function motivoSinEstacion(estaciones: EstacionRuteo[], paso: PasoRuteo): string | null {
   if (paso.tipoEjecucion === "tercerizado" || resolverEstacionDePaso(estaciones, paso)) return null;
+  if (paso.estacionManualId) return "Revisá que la estación elegida para este paso esté activa y conserve la máquina asignada.";
   if (paso.maquinaId) return "Asigná la máquina cotizada a una estación activa y verificá que la máquina esté habilitada.";
   if (paso.requiereMaquina || paso.tecnologia) return "Este paso requiere máquina, pero la orden no identifica cuál. Revisá su configuración de origen.";
   return "Asigná este paso sin máquina a una única estación activa; revisá si falta la asignación o está repetida.";

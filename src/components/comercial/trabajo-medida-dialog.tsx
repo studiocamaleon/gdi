@@ -65,6 +65,29 @@ const inicial = (): TrabajoMedidaInput => ({
   operaciones: [],
 });
 
+function recuperarPasosDeRuta(
+  previo: TrabajoMedidaInput,
+  opciones: OpcionesMedida,
+) {
+  const pasos = opciones.rutas.find(
+    (ruta) => ruta.id === previo.rutaOrigenId,
+  )?.pasos;
+  // Los primeros borradores generaban claves nuevas al copiar una ruta completa.
+  const coincide =
+    pasos?.length === previo.operaciones.length &&
+    pasos?.every((p, i) => {
+      const o = previo.operaciones[i];
+      return (
+        !o.estacionId &&
+        o.familiaCodigo === p.familiaCodigo &&
+        o.nombre === p.nombre
+      );
+    });
+  return coincide
+    ? previo.operaciones.map((o, i) => ({ ...o, clave: pasos![i].id }))
+    : previo.operaciones;
+}
+
 function Elegir({
   label,
   value,
@@ -170,6 +193,8 @@ export function TrabajoMedidaDialog({
           previo
             ? {
                 ...previo,
+                produccion: true,
+                operaciones: recuperarPasosDeRuta(previo, o),
                 periodo: o.periodo,
                 anteriorItemId:
                   original?.cotizacionItemId ?? previo.anteriorItemId,
@@ -226,11 +251,25 @@ export function TrabajoMedidaDialog({
     opciones ? formatearMoneda(n, opciones.moneda) : String(n);
   const importeResumen = (importe: number | undefined) =>
     importe === undefined ? "—" : money(importe);
+  const rutaElegida = opciones?.rutas.find((r) => r.id === input.rutaOrigenId);
+  const esPasoDeRuta = (o: OperacionMedida) =>
+    rutaElegida?.pasos.some(
+      (p) => p.id === o.clave && p.familiaCodigo === o.familiaCodigo,
+    );
+  const sinEstacion = input.operaciones.findIndex(
+    (o) => !esPasoDeRuta(o) && !o.estacionId,
+  );
+  const problemaRuta = !input.operaciones.length
+    ? "Elegí una ruta de producción o agregá al menos un paso manual con estación."
+    : sinEstacion >= 0
+      ? `Elegí la estación del paso ${sinEstacion + 1}.`
+      : "";
   const revisar = async () => {
     setError("");
     setCalculando(true);
     const actual = ++revision.current;
     try {
+      if (problemaRuta) throw new Error(problemaRuta);
       const material = confirmarMaterial.current?.();
       const desglose = { ...input.costos, ...material };
       if (material) setInput((previo) => ({ ...previo, costos: desglose }));
@@ -608,48 +647,36 @@ export function TrabajoMedidaDialog({
               </Seccion>
               <Seccion titulo="Producción y horas" icono={<RouteIcon />}>
                 <FieldGroup className={s.fields}>
-                  <SegmentedControl
-                    aria-label="Seguimiento de producción"
-                    value={input.produccion ? "SI" : "NO"}
-                    options={[
-                      { value: "SI", label: "Con ruta", icon: null },
-                      { value: "NO", label: "Sin seguimiento", icon: null },
+                  <Elegir
+                    label="Ruta de producción"
+                    value={input.rutaOrigenId ?? ""}
+                    opciones={[
+                      { id: "", nombre: "Armar los pasos de este trabajo" },
+                      ...opciones.rutas.filter((r) => r.pasos.length),
                     ]}
-                    onChange={(v) => cambiar({ produccion: v === "SI" })}
+                    onChange={(id) => {
+                      const ruta = opciones.rutas.find((r) => r.id === id);
+                      cambiar({
+                        rutaOrigenId: id || null,
+                        operaciones: ruta
+                          ? ruta.pasos.map((p) => ({
+                              nombre: p.nombre,
+                              familiaCodigo: p.familiaCodigo,
+                              clave: p.id,
+                              horas: null,
+                              centroCostoId: null,
+                            }))
+                          : input.operaciones,
+                      });
+                    }}
                   />
-                  {input.produccion && (
-                    <Elegir
-                      label="Usar una ruta como base"
-                      value={input.rutaOrigenId ?? ""}
-                      opciones={[
-                        { id: "", nombre: "Armar los pasos de este trabajo" },
-                        ...opciones.rutas,
-                      ]}
-                      onChange={(id) => {
-                        const ruta = opciones.rutas.find((r) => r.id === id);
-                        cambiar({
-                          rutaOrigenId: id || null,
-                          operaciones: ruta
-                            ? ruta.pasos.map((p) => ({
-                                ...p,
-                                clave: crypto.randomUUID(),
-                                horas: null,
-                                centroCostoId: null,
-                              }))
-                            : input.operaciones,
-                        });
-                      }}
-                    />
-                  )}
                   <FieldDescription>
                     Horas para el trabajo completo. Tarifas publicadas de{" "}
                     {opciones.periodo}.
                   </FieldDescription>
                   {input.operaciones.map((o, i) => (
                     <fieldset key={o.clave} className={s.operation}>
-                      <legend>
-                        {input.produccion ? `Paso ${i + 1}` : `Centro ${i + 1}`}
-                      </legend>
+                      <legend>Paso {i + 1}</legend>
                       <FieldGroup className={s.twoFields}>
                         <Field>
                           <FieldLabel htmlFor={`operacion-${o.clave}`}>
@@ -664,6 +691,27 @@ export function TrabajoMedidaDialog({
                             }
                           />
                         </Field>
+                        {!esPasoDeRuta(o) && (
+                          <Elegir
+                            label="Estación"
+                            value={o.estacionId ?? ""}
+                            opciones={[
+                              { id: "", nombre: "Elegí una estación" },
+                              ...(opciones.estaciones ?? []),
+                            ]}
+                            onChange={(id) =>
+                              operacion(o.clave, {
+                                estacionId: id || null,
+                                maquinaId:
+                                  opciones.maquinas.find(
+                                    (m) => m.id === o.maquinaId,
+                                  )?.estacionId === id
+                                    ? o.maquinaId
+                                    : null,
+                              })
+                            }
+                          />
+                        )}
                         <Elegir
                           label="Centro de costo"
                           value={o.centroCostoId ?? ""}
@@ -710,7 +758,9 @@ export function TrabajoMedidaDialog({
                             { id: "", nombre: "Sin máquina" },
                             ...opciones.maquinas.filter(
                               (m) =>
-                                m.centroCostoPrincipalId === o.centroCostoId,
+                                m.centroCostoPrincipalId === o.centroCostoId &&
+                                (!o.estacionId ||
+                                  m.estacionId === o.estacionId),
                             ),
                           ]}
                           onChange={(id) =>
@@ -773,8 +823,11 @@ export function TrabajoMedidaDialog({
                     }
                   >
                     <PlusIcon aria-hidden />
-                    Agregar {input.produccion ? "paso" : "horas de un centro"}
+                    Agregar paso
                   </ActionButton>
+                  {problemaRuta && (
+                    <FieldDescription>{problemaRuta}</FieldDescription>
+                  )}
                 </FieldGroup>
               </Seccion>
             </div>
@@ -808,6 +861,7 @@ export function TrabajoMedidaDialog({
                         Precio por
                       </FieldLabel>
                       <SegmentedControl
+                        fullWidth
                         aria-labelledby="medida-base-precio"
                         value={input.basePrecio}
                         options={[
@@ -829,6 +883,7 @@ export function TrabajoMedidaDialog({
                     <Field>
                       <FieldLabel id="medida-tipo-precio">Impuestos</FieldLabel>
                       <SegmentedControl
+                        fullWidth
                         aria-labelledby="medida-tipo-precio"
                         value={input.tipoPrecio}
                         options={[
@@ -967,7 +1022,13 @@ export function TrabajoMedidaDialog({
             {calculando ? "Calculando…" : "Revisar cálculo"}
           </ActionButton>
           <ActionButton
-            isDisabled={!calculo || calculando || cargando || materialPendiente}
+            isDisabled={
+              !calculo ||
+              calculando ||
+              cargando ||
+              materialPendiente ||
+              Boolean(problemaRuta)
+            }
             onPress={() => {
               if (calculo)
                 onGuardar({

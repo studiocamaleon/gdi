@@ -38,6 +38,7 @@ export class CostosTrabajoDto {
 
 export class OperacionMedidaDto {
   @IsUUID() clave!: string;
+  @IsOptional() @IsUUID() estacionId?: string | null;
   @IsString() @MinLength(1) @MaxLength(160) nombre!: string;
   @IsString() @MaxLength(100) familiaCodigo!: string;
   @IsOptional() @IsUUID() centroCostoId?: string | null;

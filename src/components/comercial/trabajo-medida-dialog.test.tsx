@@ -15,7 +15,20 @@ const opciones = {
   periodo: "2099-01",
   centros: [],
   maquinas: [],
-  rutas: [],
+  estaciones: [{ id: "estacion-taller", nombre: "Taller de prueba" }],
+  rutas: [
+    {
+      id: "ruta-prueba",
+      nombre: "Ruta de prueba",
+      pasos: [
+        {
+          id: "paso-ruta",
+          nombre: "Diseño de prueba",
+          familiaCodigo: "trabajo_manual",
+        },
+      ],
+    },
+  ],
 };
 const fechaEntrega = "2099-01-10";
 const api = vi.mocked(apiRequest);
@@ -33,6 +46,7 @@ let el: HTMLDivElement;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("PointerEvent", MouseEvent);
+  vi.stubGlobal("CSS", { escape: (value: string) => value });
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -92,6 +106,19 @@ async function agregarCostoManual(nombre: string, importe: string) {
     importe,
   );
 }
+async function seleccionar(campo: string, opcion: string) {
+  const label = [...document.querySelectorAll("label")].find(
+    (l) => l.textContent === campo,
+  )!;
+  const control = document.getElementById(label.htmlFor)!;
+  await act(async () => control.click());
+  const fila = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((o) => o.textContent === opcion);
+  expect(fila).toBeDefined();
+  await act(async () => fila!.click());
+}
+const elegirRuta = () => seleccionar("Ruta de producción", "Ruta de prueba");
 const revisar = () => act(async () => boton("Revisar cálculo").click());
 const resultado = (total: number) => ({
   resumen: {
@@ -130,6 +157,7 @@ it("mantiene el campo, el foco y la entrega elegida al actualizarse la ficha del
 
 it("mantiene el resumen al recalcular y descarta importes si la revisión falla", async () => {
   await render();
+  await elegirRuta();
   api.mockResolvedValueOnce(resultado(120));
   await revisar();
   const total = document.querySelectorAll("dd")[2];
@@ -156,6 +184,7 @@ it("mantiene el resumen al recalcular y descarta importes si la revisión falla"
 
 it("permite corregir la cantidad mientras calcula y sólo habilita el resultado vigente", async () => {
   await render();
+  await elegirRuta();
   const anterior = pendiente();
   await revisar();
   await editar("cantidad", "");
@@ -173,6 +202,7 @@ it("permite corregir la cantidad mientras calcula y sólo habilita el resultado 
 
 it("conserva el borrador y exige recalcular si cambia el cliente durante la revisión", async () => {
   await render();
+  await elegirRuta();
   await editar("nombre", "Cartel de prueba");
   await editar("precio", "120");
   const terminar = pendiente();
@@ -224,6 +254,7 @@ it("desglosa materiales por unidad, superficie y longitud y admite costos manual
     return opciones;
   });
   await render();
+  await elegirRuta();
   await act(async () => boton("Desglosar costos").click());
   expect(campo("costo-total")).toBeNull();
   expect(campo("materiales")).toBeNull();
@@ -288,6 +319,7 @@ it("impide sumar una variante sin precio y permite continuar con el costo manual
       : opciones,
   );
   await render();
+  await elegirRuta();
   await act(async () => boton("Desglosar costos").click());
   await agregarCostoManual("Instalación", "120");
   await elegir("FUE-12");
@@ -313,12 +345,15 @@ it("permite corregir la cantidad y reintentar un cálculo fallido sin duplicar e
     return opciones;
   });
   await render();
+  await elegirRuta();
   await act(async () => boton("Desglosar costos").click());
   await elegir("FUE-12");
   await editar("consumo", "0");
   await revisar();
   expect(api.mock.calls.some(([url]) => url.endsWith("/calcular"))).toBe(false);
-  expect(document.body.textContent).toContain("Ingresá una cantidad mayor que cero.");
+  expect(document.body.textContent).toContain(
+    "Ingresá una cantidad mayor que cero.",
+  );
   expect(materialesAgregados()).toBeNull();
 
   await editar("consumo", "3");
@@ -364,6 +399,7 @@ it("conserva los materiales de un trabajo anterior y permite volver del costo to
   await render({
     item: { id: "local", cotizacionItemId: "guardado" } as PropuestaItem,
   });
+  await elegirRuta();
   expect(materialesAgregados()?.textContent).toContain("PVC de prueba");
   expect(materialesAgregados()?.textContent).toContain("$ 150,00");
   expect(campo("materiales")).toBeNull();
@@ -394,4 +430,34 @@ it("conserva los materiales de un trabajo anterior y permite volver del costo to
     detalleMateriales: "",
     otros: costos.otros,
   });
+});
+
+it("pide estación sólo en los pasos agregados manualmente y exige ruta antes de calcular", async () => {
+  await render();
+  expect(document.body.textContent).not.toContain("Sin seguimiento");
+  await revisar();
+  expect(document.body.textContent).toContain(
+    "al menos un paso manual con estación",
+  );
+  expect(api.mock.calls.some(([url]) => url.endsWith("/calcular"))).toBe(false);
+  await elegirRuta();
+  expect(
+    [...document.querySelectorAll("label")].some(
+      (l) => l.textContent === "Estación",
+    ),
+  ).toBe(false);
+  await act(async () => boton("Agregar paso").click());
+  await revisar();
+  expect(document.body.textContent).toContain("Elegí la estación del paso 2.");
+  expect(api.mock.calls.some(([url]) => url.endsWith("/calcular"))).toBe(false);
+  await seleccionar("Estación", "Taller de prueba");
+  api.mockResolvedValueOnce(resultado(120));
+  await revisar();
+  const request = JSON.parse(String(api.mock.lastCall?.[1]?.body));
+  expect(request.produccion).toBe(true);
+  expect(request.operaciones[0]).toMatchObject({ clave: "paso-ruta" });
+  expect(request.operaciones[1]).toMatchObject({
+    estacionId: "estacion-taller",
+  });
+  expect(boton("Agregar trabajo").disabled).toBe(false);
 });

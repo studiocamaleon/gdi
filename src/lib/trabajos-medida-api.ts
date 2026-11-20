@@ -5,6 +5,7 @@ import type { Moneda } from "./moneda";
 
 export type OperacionMedida = {
   clave: string;
+  estacionId?: string | null;
   nombre: string;
   familiaCodigo: string;
   centroCostoId?: string | null;
@@ -46,11 +47,13 @@ export type OpcionesMedida = {
     id: string;
     nombre: string;
     centroCostoPrincipalId: string | null;
+    estacionId: string | null;
   }>;
+  estaciones: Array<{ id: string; nombre: string }>;
   rutas: Array<{
     id: string;
     nombre: string;
-    pasos: Array<{ nombre: string; familiaCodigo: string }>;
+    pasos: Array<{ id: string; nombre: string; familiaCodigo: string }>;
   }>;
 };
 export type CalculoMedida = {

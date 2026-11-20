@@ -12,6 +12,8 @@ import { regionalDelTenant } from '../common/regional';
 import { TipoCambioService } from '../cotizaciones/tipo-cambio.service';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
+import { resolverEstacionDePaso } from '../eta/motor/tablero-tipos';
+import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
 import { resolverFamilia } from '../productos-servicios/pasos/familias';
 import type {
   ImpuestoSnapshot,
@@ -45,7 +47,7 @@ export class TrabajosMedidaService {
     await this.capacidades.exigir(auth.tenantId, 'cotizacion');
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const periodo = periodoActual(regional.zonaHoraria);
-    const [centros, tarifas, rutas, maquinas] = await Promise.all([
+    const [centros, tarifas, rutas, maquinas, estaciones] = await Promise.all([
       this.prisma.centroCosto.findMany({
         where: { tenantId: auth.tenantId, activo: true },
         select: { id: true, nombre: true },
@@ -61,18 +63,34 @@ export class TrabajosMedidaService {
           pasos: {
             where: { activo: true },
             orderBy: { orden: 'asc' },
-            select: { version: true, nombreVisible: true, familiaCodigo: true },
+            select: {
+              id: true,
+              version: true,
+              nombreVisible: true,
+              familiaCodigo: true,
+            },
           },
         },
         orderBy: { nombre: 'asc' },
       }),
       this.prisma.maquina.findMany({
         where: { tenantId: auth.tenantId, activo: true },
-        select: { id: true, nombre: true, centroCostoPrincipalId: true },
+        select: {
+          id: true,
+          nombre: true,
+          centroCostoPrincipalId: true,
+          estacionId: true,
+        },
+        orderBy: { nombre: 'asc' },
+      }),
+      this.prisma.estacion.findMany({
+        where: { tenantId: auth.tenantId, activo: true },
+        select: { id: true, nombre: true },
         orderBy: { nombre: 'asc' },
       }),
     ]);
     return {
+      estaciones,
       moneda: regional.moneda,
       periodo,
       centros: centros.map((c) => ({
@@ -88,6 +106,7 @@ export class TrabajosMedidaService {
         pasos: r.pasos
           .filter((p) => p.version === r.versionActual)
           .map((p) => ({
+            id: p.id,
             nombre:
               p.nombreVisible ||
               resolverFamilia(p.familiaCodigo)?.nombre ||
@@ -115,9 +134,9 @@ export class TrabajosMedidaService {
     const tenantId = auth.tenantId;
     if (!dto.nombre.trim())
       throw new BadRequestException('Ingresá el nombre del trabajo.');
-    if (dto.produccion && !dto.operaciones.length)
+    if (!dto.produccion || !dto.operaciones.length)
       throw new BadRequestException(
-        'Agregá al menos un paso para hacer seguimiento de producción.',
+        'Elegí una ruta de producción o agregá al menos un paso manual con estación.',
       );
     const regional = await regionalDelTenant(this.prisma, tenantId);
     const periodo = dto.periodo ?? periodoActual(regional.zonaHoraria);
@@ -133,7 +152,14 @@ export class TrabajosMedidaService {
         dto.operaciones.flatMap((o) => (o.maquinaId ? [o.maquinaId] : [])),
       ),
     ];
+    const estacionesIds = [
+      ...new Set(
+        dto.operaciones.flatMap((o) => (o.estacionId ? [o.estacionId] : [])),
+      ),
+    ];
     const [
+      estaciones,
+      ruta,
       centros,
       tarifasRaw,
       maquinas,
@@ -142,6 +168,39 @@ export class TrabajosMedidaService {
       fiscal,
       cambio,
     ] = await Promise.all([
+      this.prisma.estacion.findMany({
+        where: {
+          tenantId,
+          activo: true,
+          ...(dto.rutaOrigenId ? {} : { id: { in: estacionesIds } }),
+        },
+        select: {
+          id: true,
+          activo: true,
+          reglas: {
+            where: { tipo: { in: ['paso', 'familia'] } },
+            select: { tipo: true, valor: true },
+          },
+          maquinas: {
+            where: { id: { in: maquinasIds }, activo: true },
+            select: { id: true, centroCostoPrincipalId: true },
+          },
+        },
+      }),
+      dto.rutaOrigenId
+        ? this.prisma.ruta.findFirst({
+            where: {
+              id: dto.rutaOrigenId,
+              tenantId,
+              activo: true,
+              sistemaCodigo: null,
+            },
+            select: {
+              nombre: true,
+              pasos: { select: { id: true, familiaCodigo: true } },
+            },
+          })
+        : null,
       this.prisma.centroCosto.findMany({
         where: { tenantId, activo: true, id: { in: ids } },
         select: { id: true, nombre: true },
@@ -153,7 +212,7 @@ export class TrabajosMedidaService {
       }),
       this.prisma.maquina.findMany({
         where: { tenantId, activo: true, id: { in: maquinasIds } },
-        select: { id: true, centroCostoPrincipalId: true },
+        select: { id: true, centroCostoPrincipalId: true, estacionId: true },
       }),
       this.prisma.productoImpuestoCatalogo.findMany({
         where: { tenantId, activo: true },
@@ -175,18 +234,11 @@ export class TrabajosMedidaService {
       throw new BadRequestException(
         'Algún recurso no existe, está inactivo o no pertenece a esta empresa.',
       );
-    if (
-      dto.rutaOrigenId &&
-      !(await this.prisma.ruta.findFirst({
-        where: {
-          id: dto.rutaOrigenId,
-          tenantId,
-          activo: true,
-          sistemaCodigo: null,
-        },
-        select: { id: true },
-      }))
-    )
+    if (estacionesIds.some((id) => !estaciones.some((e) => e.id === id)))
+      throw new BadRequestException(
+        'Elegí una estación activa de esta empresa.',
+      );
+    if (dto.rutaOrigenId && !ruta)
       throw new BadRequestException(
         'La ruta no está disponible en esta empresa.',
       );
@@ -208,7 +260,50 @@ export class TrabajosMedidaService {
       }))
     )
       throw new NotFoundException('No se encontró el cliente.');
+    const estacionesDeRuta = estaciones.map((e) => ({
+      ...e,
+      familias: e.reglas
+        .filter((r) => r.tipo === 'familia')
+        .map((r) => r.valor),
+      maquinas: e.maquinas.map((m) => ({
+        id: m.id,
+        centroCostoId: m.centroCostoPrincipalId,
+      })),
+    }));
     for (const o of dto.operaciones) {
+      const pasoBase = ruta?.pasos.find(
+        (p) => p.id === o.clave && p.familiaCodigo === o.familiaCodigo,
+      );
+      if (
+        pasoBase &&
+        !resolverEstacionDePaso(estacionesDeRuta, {
+          familiaCodigo: o.familiaCodigo,
+          plantillaCodigo: resolverFamilia(o.familiaCodigo)?.plantillaCodigo,
+          requiereMaquina: !admitePasoSinMaquina(o.familiaCodigo),
+          maquinaId: o.maquinaId,
+          centroCostoId: o.centroCostoId ?? null,
+        })
+      ) {
+        throw new BadRequestException(
+          `La ruta no tiene una estación activa para «${o.nombre}». Revisá la asignación del paso o su máquina en producción.`,
+        );
+      }
+      if (pasoBase && o.estacionId)
+        throw new BadRequestException(
+          `«${o.nombre}» usa la estación de la ruta seleccionada.`,
+        );
+      if (!pasoBase && !o.estacionId)
+        throw new BadRequestException(
+          `Elegí la estación del paso «${o.nombre || 'Sin nombre'}».`,
+        );
+      if (
+        o.estacionId &&
+        o.maquinaId &&
+        maquinas.find((m) => m.id === o.maquinaId)?.estacionId !== o.estacionId
+      )
+        throw new BadRequestException(
+          `La máquina de «${o.nombre}» debe pertenecer a la estación elegida.`,
+        );
       if (!o.nombre.trim())
         throw new BadRequestException('Ingresá el nombre de cada operación.');
       if (!resolverFamilia(o.familiaCodigo))
@@ -297,7 +392,8 @@ export class TrabajosMedidaService {
       familiaCodigo: o.familiaCodigo,
       nombreVisible: o.nombre.trim(),
       activado: true,
-      soloCosto: !dto.produccion,
+      soloCosto: false,
+      estacionManualId: o.estacionId ?? undefined,
       recursoManual:
         o.horas == null
           ? {
@@ -356,9 +452,7 @@ export class TrabajosMedidaService {
       tipoCambio: cambio,
       productoId: '',
       productoNombre: dto.nombre.trim(),
-      rutaNombre: dto.produccion
-        ? 'Ruta del trabajo a medida'
-        : 'Sin seguimiento de producción',
+      rutaNombre: ruta?.nombre ?? 'Ruta del trabajo a medida',
       cantidadEfectiva: cantidad,
       cantidadPedida: cantidad,
       cantidadComercialReal: cantidad,

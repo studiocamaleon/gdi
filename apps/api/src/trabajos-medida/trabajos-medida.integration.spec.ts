@@ -76,6 +76,7 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
       })) as never,
   );
   let app: INestApplication<Server>,
+    estacionId: string,
     centroId: string,
     clienteId: string,
     tipoCambioId: string,
@@ -134,6 +135,7 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
       {
         clave: randomUUID(),
         nombre: 'Diseño',
+        estacionId,
         familiaCodigo: 'trabajo_manual',
         centroCostoId: centroId,
         horas: 1,
@@ -141,6 +143,7 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
       {
         clave: randomUUID(),
         nombre: 'Armado',
+        estacionId,
         familiaCodigo: 'trabajo_manual',
         centroCostoId: centroId,
         horas: 2,
@@ -263,6 +266,17 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
     tipoCambioId = (
       await cambio.crear(tenantId, userId, { modo: 'manual', tasa: 1000 })
     ).id;
+    estacionId = (
+      await db.estacion.create({
+        data: {
+          tenantId,
+          nombre: 'Taller de prueba',
+          reglas: {
+            create: { tenantId, tipo: 'paso', valor: 'trabajo_manual' },
+          },
+        },
+      })
+    ).id;
     rutaId = (
       await db.ruta.create({
         data: {
@@ -322,7 +336,33 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
     expect(opciones.body.centros).toEqual([
       expect.objectContaining({ id: centroId, tarifaHora: 20000 }),
     ]);
-    expect(opciones.body.rutas[0].pasos[0].nombre).toBe('Armado');
+    expect(opciones.body.estaciones).toEqual([
+      { id: estacionId, nombre: 'Taller de prueba' },
+    ]);
+    const heredado = opciones.body.rutas[0].pasos[0];
+    expect(heredado.nombre).toBe('Armado');
+    await expect(
+      service.calcular(auth, {
+        ...entrada(),
+        operaciones: [
+          { ...entrada().operaciones[0], clave: heredado.id, estacionId: null },
+        ],
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      service.calcular(auth, {
+        ...entrada(),
+        operaciones: [{ ...entrada().operaciones[0], estacionId: null }],
+      }),
+    ).rejects.toThrow('estación');
+    await expect(
+      service.calcular(auth, {
+        ...entrada(),
+        operaciones: [
+          { ...entrada().operaciones[0], estacionId: randomUUID() },
+        ],
+      }),
+    ).rejects.toThrow('estación');
     const r = await request(app.getHttpServer())
       .post('/trabajos-medida/calcular')
       .set('Authorization', `Bearer ${tokens.admin}`)
@@ -421,6 +461,10 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
       ['Diseño', 60],
       ['Armado', 120],
     ]);
+    expect(item.pasos.map((p) => p.estacionManualId)).toEqual([
+      estacionId,
+      estacionId,
+    ]);
     expect(Number(item.total)).toBe(242000);
     expect(item.fechaEntrega?.toISOString().slice(0, 10)).toBe('2099-12-20');
     expect(await db.necesidadMaterialOt.count({ where: { tenantId } })).toBe(0);
@@ -440,8 +484,14 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
       ),
     ).rejects.toThrow('permiso');
   });
-  it('sin seguimiento conserva costos y no crea pasos; puede facturarse con su precio pactado', async () => {
-    const g = await guardar({ ...entrada(), produccion: false });
+  it('exige pasos de producción y conserva el precio pactado al facturar', async () => {
+    await expect(
+      service.guardar(auth, { ...entrada(), produccion: false }),
+    ).rejects.toThrow('ruta de producción');
+    await expect(
+      service.calcular(auth, { ...entrada(), operaciones: [] }),
+    ).rejects.toThrow('ruta de producción');
+    const g = await guardar();
     const o = await ordenes.create(auth, payload(g));
     const orden = await db.ordenTrabajo.findUniqueOrThrow({
       where: { id: o.id },
@@ -449,7 +499,7 @@ describe('Trabajos a medida: HTTP, órdenes, producción y economía en base ais
     });
     expect(
       await db.ordenTrabajoItemPaso.count({ where: { ordenId: o.id } }),
-    ).toBe(0);
+    ).toBe(2);
     for (const letra of ['A', 'B'] as const) {
       const lineas = renglonesFacturaOrden(orden, letra, 242000, 'items');
       expect(calcularTotales(letra, lineas).total).toBe(242000);

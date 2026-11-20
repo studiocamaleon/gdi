@@ -4653,6 +4653,8 @@ model OrdenTrabajoItemPaso {
   categoriaFamilia                     String
   /// Nombre operativo visible ("Impresión digital frente").
   nombre                               String
+  /// Estación elegida explícitamente para un paso creado en el trabajo a medida.
+  estacionManualId                     String?                       @db.Uuid
   /// Centro de costo que tarifó el paso — proxy de "estación" en fase 1.
   centroCostoId                        String?                       @db.Uuid
   centroCostoNombre                    String?
