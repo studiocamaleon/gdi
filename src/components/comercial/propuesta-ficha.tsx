@@ -320,6 +320,7 @@ import {
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { TandasCopiadoPanel } from "./tandas-copiado-panel";
+import { subirArchivosPendientesDeItem } from "@/lib/archivos-pendientes-item";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { ProduccionEntregas } from "./produccion-entregas";
@@ -5861,74 +5862,29 @@ function PropuestaFichaContenido({
     [],
   );
 
-  /**
-   * Sube a R2 los PDF originales del centro de copiado, colgándolos del ítem de
-   * la OT (scope ORDEN_ITEM), igual que los sellos suben sus artes. Los archivos
-   * viajan en memoria en `item.archivosPendientes` y acá se matchean por
-   * `cotizacionItemId` con el producto ya persistido. Nunca lanza: la orden ya
-   * está guardada. Reemplaza sólo lo autogenerado por el centro de copiado.
-   */
-  const subirArchivosCentroCopiado = React.useCallback(
+  const publicarAdjuntosDeItems = React.useCallback(
     async (
       productos: OrdenTrabajoProducto[],
-      filesPorCotItem: Map<string, File[]>,
+      preparados: Array<{ item: PropuestaItem; cotizacionItemId?: string }>,
     ) => {
-      if (filesPorCotItem.size === 0) return;
-      const MARCA = "centro-copiado";
+      const porCotizacion = new Map(preparados.map((p) => [p.cotizacionItemId, p.item]));
       const fallidos: string[] = [];
-      for (const p of productos) {
-        const files = p.cotizacionItemId
-          ? filesPorCotItem.get(p.cotizacionItemId)
-          : undefined;
-        if (!files?.length) continue;
+      for (const producto of productos) {
+        if (!producto.cotizacionItemId) continue;
+        const item = porCotizacion.get(producto.cotizacionItemId);
+        if (!item?.archivosPendientes?.length) continue;
         try {
-          const previos = await listarArchivos("ORDEN_ITEM", p.id);
-          for (const file of files) {
-            // Reemplaza sólo el mismo original. En una edición parcial de un
-            // tomo no debe borrar los PDF de los demás documentos heredados.
-            for (const a of previos) {
-              if (a.autogeneradoPor === MARCA && a.nombre === file.name) {
-                await eliminarArchivo(a.id);
-              }
-            }
-            await subirArchivo(file, {
-              scope: "ORDEN_ITEM",
-              entidadId: p.id,
-              descripcion: `Documento · ${file.name}`,
-              autogeneradoPor: MARCA,
-            });
-          }
+          await subirArchivosPendientesDeItem(producto.id, item, item.archivosPendientes);
         } catch (error) {
-          fallidos.push(
-            error instanceof Error ? error.message : "no se pudo subir",
-          );
+          fallidos.push(error instanceof Error ? error.message : item.productoNombre);
         }
       }
-      if (fallidos.length > 0) {
+      if (fallidos.length) {
         toast.warning(
-          `${fallidos.length} archivo(s) del centro de copiado no se pudieron guardar (${fallidos.join(" · ")}). Podés subirlos a mano desde la pestaña Archivos del ítem.`,
+          `Quedaron adjuntos pendientes. Revisá la pestaña Archivos de la orden. ${fallidos.join(" · ")}`,
           { duration: 10000 },
         );
       }
-    },
-    [],
-  );
-
-  /** Mapea cotizacionItemId → archivos pendientes, para el matcheo con la OT. */
-  const mapaArchivosCC = React.useCallback(
-    (
-      itemsConSnapshot: Array<{
-        item: PropuestaItem;
-        cotizacionItemId?: string;
-      }>,
-    ): Map<string, File[]> => {
-      const m = new Map<string, File[]>();
-      for (const { item, cotizacionItemId } of itemsConSnapshot) {
-        if (cotizacionItemId && item.archivosPendientes?.length) {
-          m.set(cotizacionItemId, item.archivosPendientes);
-        }
-      }
-      return m;
     },
     [],
   );
@@ -6266,10 +6222,7 @@ function PropuestaFichaContenido({
               producto.cotizacionItemId === preparado.cotizacionItemId,
           );
           await publicarArtes(productos);
-          await subirArchivosCentroCopiado(
-            productos,
-            mapaArchivosCC([preparado]),
-          );
+          await publicarAdjuntosDeItems(productos, [preparado]);
           await subirArchivosBriefDiseno(
             productos,
             mapaArchivosBrief([preparado]),
@@ -6333,8 +6286,7 @@ function PropuestaFichaContenido({
       persistedItemIds,
       editadosIds,
       publicarArtes,
-      subirArchivosCentroCopiado,
-      mapaArchivosCC,
+      publicarAdjuntosDeItems,
       subirArchivosBriefDiseno,
       mapaArchivosBrief,
       router,
@@ -7101,10 +7053,7 @@ function PropuestaFichaContenido({
       // convertir una emisión exitosa en un falso error reintentable.
       const adjuntos = await Promise.allSettled([
         publicarArtes(orden.productos),
-        subirArchivosCentroCopiado(
-          orden.productos,
-          mapaArchivosCC(itemsConSnapshot),
-        ),
+        publicarAdjuntosDeItems(orden.productos, itemsConSnapshot),
         subirArchivosBriefDiseno(
           orden.productos,
           mapaArchivosBrief(itemsConSnapshot),
@@ -7150,8 +7099,7 @@ function PropuestaFichaContenido({
     fechaEntregaOrden,
     zonaHoraria,
     publicarArtes,
-    subirArchivosCentroCopiado,
-    mapaArchivosCC,
+    publicarAdjuntosDeItems,
     subirArchivosBriefDiseno,
     mapaArchivosBrief,
     publicarPlanosDeOrden,
@@ -7242,10 +7190,7 @@ function PropuestaFichaContenido({
       });
       const adjuntos = await Promise.allSettled([
         publicarArtes(orden.productos),
-        subirArchivosCentroCopiado(
-          orden.productos,
-          mapaArchivosCC(itemsConSnapshot),
-        ),
+        publicarAdjuntosDeItems(orden.productos, itemsConSnapshot),
         subirArchivosBriefDiseno(
           orden.productos,
           mapaArchivosBrief(itemsConSnapshot),
@@ -7291,8 +7236,7 @@ function PropuestaFichaContenido({
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
-    subirArchivosCentroCopiado,
-    mapaArchivosCC,
+    publicarAdjuntosDeItems,
     subirArchivosBriefDiseno,
     mapaArchivosBrief,
     publicarPlanosDeOrden,
