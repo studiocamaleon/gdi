@@ -1,5 +1,49 @@
 # Validación de producción
 
+## 2026-11-20 — Trabajo a medida, pagos, archivos y notas
+
+Lucas autorizó aplicar en producción el lote previamente verificado en staging. [PR integrador #132](https://github.com/studiocamaleon/gdi/pull/132), que conserva los commits de Trabajo a medida del [PR #131](https://github.com/studiocamaleon/gdi/pull/131) y los 12 commits entregados mediante bundle. Revisión ejecutada **`b4118ccfc952b3fcd36bd4157334b6e0ba9ed64d`**, confirmada dentro de web, API y ambos workers. Los commits posteriores registran la operación, sin modificar el código de aplicación publicado.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:9b66843c8bed87b90da0d1673767bf62526a673d3b23694fe6d933bfff12cb0e` |
+| Web | `sha256:01b6b5ab7f32662038fe95e14d4719036c8ee48cd0d9bd5e3a614ba5dc2ea5be` |
+| PDF, conservado | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+| Copiador, conservado | `sha256:124697d47f9c585bfe4091736108b225790bf046c8e419ec90205461a4f3718f` |
+
+Las imágenes se copiaron a los registros `grafoprint-production-api` y `grafoprint-production-web`, comprobando que los manifiestos conservan exactamente los digests de staging. Sin reconstrucción. Marketing, Grafo3D, dependencias y configuración de Vercel no cambian.
+
+### Trabajo a medida
+
+Chrome, con la sesión existente de producción, comprobó Nueva orden → Productos → Agregar producto → Crear trabajo a medida. El formulario cargó las rutas, estaciones y tarifas del taller. Una transacción de sólo lectura sobre el backend publicado comprobó el permiso administrativo, las capacidades reales de la empresa, diez centros, 41 rutas, siete estaciones y la integridad del catálogo. No se agregó el trabajo ni se guardó una orden de prueba.
+
+### Pagos desde la orden
+
+En una orden existente, sin entrar en «Editar orden», se comprobó el acceso «Registrar pago parcial o total» con el vínculo a esa orden. No se registraron cobros ni comprobantes de ensayo en producción. El registro completo de un pago ficticio de ARS 2.100, con retorno a la orden y saldo correcto, ya se había probado sobre las mismas imágenes en staging.
+
+### Archivos desde la orden
+
+La vista de consulta mostró los cuatro adjuntos existentes del producto y el control habilitado «Arrastrá archivos de la orden». No se subieron ni borraron archivos de clientes. La carga completa de un SVG ficticio y su aparición posterior en el sheet se había comprobado en staging.
+
+### Notas de producción
+
+La nota existente de un producto apareció con fondo amarillo en el flujo de la orden y en su sheet de Operación diaria. Verificación visual y estilo calculado coincidente: `bg-yellow-100`, `oklch(0.973 0.071 103.193)`. No se alteraron notas, estados ni asignaciones del taller. Cero errores de consola en el recorrido; capturas e identificadores quedan fuera de Git.
+
+### Migraciones, operación y controles
+
+- **321 migraciones**, sin pendientes: se aplicaron `20261118120000_trabajos_a_medida` y `20261120120000_estacion_paso_a_medida`. Historial y checksums previos intactos; cantidades y huellas de identificadores iguales antes/después en siete tablas principales. Sin seeds, resets ni cambios de catálogo. El permiso nuevo se asignó sólo a roles Administrador del sistema, según la migración verificada.
+- Antes de actualizar: cero trabajos activos en colas, emisiones pendientes de verificación, lotes fiscales o PDF en proceso. Machines API cambió únicamente la imagen de los cuatro servicios. Recursos, red, secretos, comandos, servicios, reinicios y configuración de cada máquina conservados. PDF mantiene su configuración de producción; el ajuste de espera de Chromium a 60 segundos continúa siendo exclusivo de staging.
+- Salud web/API 200, API protegida directa 403 y BFF anónimo 401. Configuración fiscal de API/worker coincidente antes y después. Consulta de conexión/delegación con ARCA desde el worker correcta, con certificado cifrado y **cero emisiones**.
+- **147 pruebas locales** y compilaciones remotas completas aprobadas antes de staging. CI del candidato `4005f52a4`: [HTTP/permisos](https://github.com/studiocamaleon/gdi/actions/runs/44837584403), [contenedores y tipos](https://github.com/studiocamaleon/gdi/actions/runs/44837584319), los tres análisis y el check CodeQL aprobados; cero alertas abiertas del PR. El cierre de #132 registra también el CI del commit documental final y las conversaciones resueltas.
+
+### Respaldo, integración y reversión
+
+Comprobante previo `9c097eda-8957-47e2-a14d-c579e54dab84`, completado `2026-11-20T23:20:08.512Z`, con firma, huellas y manifiesto descifrado verificados. Fuente exacta cifrada bajo custodia de producción. Inventario del copiador actualizado con las imágenes ejecutadas y diez fuentes, conservando las de reversión, PDF y copiador. La fuente histórica retirada del inventario activo continúa en el catálogo privado y almacenamiento cifrado; no se borró ningún archivo custodiado. El [cierre de #132](https://github.com/studiocamaleon/gdi/pull/132) registra el comprobante posterior, su revisión, imágenes y verificación. No se repite una restauración SQL completa.
+
+Integración mediante merge que conserva los commits; #131 queda incluido por ascendencia y su cierre se comprueba al terminar. #127 y todos los PR independientes permanecen fuera del lote. La revisión del merge y su relación con la revisión ejecutada se registran en #132.
+
+Reversión de imágenes: API y ambos workers a `registry.fly.io/grafoprint-production-api@sha256:ad915f6a7d534d549187eb90dfc17c079562539a3e5e101f17953822532e7b74`; web a `registry.fly.io/grafoprint-production-web@sha256:cfb47440bcfe191cd6861770510f35bbe399c00e911f7b7f5b67cd20a02c9c8b`, revisión anterior `821dd09e5e1d785e5f76a3e3690f056448104267`. Antes de volver, comprobar los trabajos a medida que se hayan creado: la versión anterior no implementa ese modelo. Conservar esquema aditivo y datos, sin resets ni restauración sobre la base existente. Preservar la configuración de producción y restituir el inventario del copiador al estado realmente ejecutado.
+
 ## 2026-11-17 — Clientes completos y corrección fiscal para refacturar
 
 Lucas autorizó publicar e integrar el [PR #130](https://github.com/studiocamaleon/gdi/pull/130), después de su validación local y en staging, y confirmó el uso de los datos actuales del cliente. Revisión ejecutada **`821dd09e5e1d785e5f76a3e3690f056448104267`** en web, API y ambos workers. Se promovieron exactamente los manifiestos verificados en staging, comprobando sus digests, sin reconstruir. Los commits posteriores sólo registran la validación y publicación; los PR independientes quedan fuera del lote.

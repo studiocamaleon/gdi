@@ -2,7 +2,7 @@
 
 ## 2026-11-20 — Trabajo a medida, pagos, archivos y notas
 
-Publicado **sólo en [staging](https://staging.grafoprint.com.ar)** por pedido expreso de Lucas. Revisión de aplicación **`b4118ccfc952b3fcd36bd4157334b6e0ba9ed64d`**, comprobada dentro de web, API y ambos workers. Se verificó e importó el bundle entregado: 12 commits sobre `565f4e24f96ff68f45c56ff0c9b05bdfb835430c`, dependiente del [PR #131](https://github.com/studiocamaleon/gdi/pull/131). Se usó un worktree aislado; el checkout y los procesos locales originales se conservaron. No se fusionaron PR ni se publicó en producción. La consulta final confirmó que #131 y #127 continúan abiertos e independientes; ninguno se cerró ni se actualizó con estos commits. Este registro posterior no cambia la revisión ejecutada.
+Publicado **sólo en [staging](https://staging.grafoprint.com.ar)** por pedido expreso de Lucas. Revisión de aplicación **`b4118ccfc952b3fcd36bd4157334b6e0ba9ed64d`**, comprobada dentro de web, API y ambos workers. Se verificó e importó el bundle entregado: 12 commits sobre `565f4e24f96ff68f45c56ff0c9b05bdfb835430c`, dependiente del [PR #131](https://github.com/studiocamaleon/gdi/pull/131). Se usó un worktree aislado; el checkout y los procesos locales originales se conservaron. No se fusionaron PR ni se publicó en producción. La consulta final confirmó que #131 y #127 continúan abiertos e independientes; ninguno se cerró ni se actualizó con estos commits. Este registro posterior no cambia la revisión ejecutada. Lucas autorizó posteriormente promover estas mismas imágenes a producción e integrar el lote mediante #132; ver [el registro de producción](../produccion/VALIDACION.md).
 
 | Servicio | Digest ejecutado |
 | --- | --- |
