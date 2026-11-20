@@ -248,7 +248,7 @@ export function SelectorMaterialEstimado({
     }
     if (!subtotal) return "Ingresá una cantidad mayor que cero.";
     if (nuevoDetalle.length > 2000)
-      return "El detalle supera los 2000 caracteres. Acortá las notas para agregar el material.";
+      return "El detalle de materiales admite hasta 2000 caracteres.";
     if (nuevoCosto?.gt(1e10))
       return "El costo de materiales supera el máximo permitido.";
     return "";

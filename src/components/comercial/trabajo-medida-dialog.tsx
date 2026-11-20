@@ -231,8 +231,19 @@ export function TrabajoMedidaDialog({
         ? (await cambio.resolver()).id
         : input.tipoCambioId;
       if (revision.current !== actual) return;
+      // Al alternar, el formulario conserva el borrador. Sólo se cotiza la opción elegida.
+      const costos =
+        input.costos.modo === "TOTAL"
+          ? {
+              modo: input.costos.modo,
+              totalEstimado: input.costos.totalEstimado,
+              materiales: 0,
+              otros: [],
+            }
+          : { ...input.costos, totalEstimado: undefined };
       const resultado = await calcularTrabajoMedida({
         ...input,
+        costos,
         clienteId,
         tipoCambioId,
       });
@@ -460,62 +471,44 @@ export function TrabajoMedidaDialog({
                           })
                         }
                       />
-                      <Field>
-                        <FieldLabel htmlFor="medida-materiales">
-                          Costo de materiales · {opciones.moneda.codigo}
-                        </FieldLabel>
-                        <Input
-                          className={focus.singleBorder}
-                          id="medida-materiales"
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={
-                            Number.isFinite(input.costos.materiales)
-                              ? input.costos.materiales
-                              : ""
-                          }
-                          onChange={(e) =>
-                            cambiar({
-                              costos: {
-                                ...input.costos,
-                                materiales:
-                                  e.target.value === ""
-                                    ? Number.NaN
-                                    : Number(e.target.value),
-                              },
-                            })
-                          }
-                        />
-                        <FieldDescription>
-                          Importe para todo el trabajo. La estimación no
-                          descuenta stock.
-                        </FieldDescription>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="medida-materiales-detalle">
-                          Detalle de materiales (opcional)
-                        </FieldLabel>
-                        <TextArea
-                          className={`${s.textarea} ${focus.singleBorder}`}
-                          id="medida-materiales-detalle"
-                          maxLength={2000}
-                          value={input.costos.detalleMateriales ?? ""}
-                          onChange={(e) =>
-                            cambiar({
-                              costos: {
-                                ...input.costos,
-                                detalleMateriales: e.target.value,
-                              },
-                            })
-                          }
-                        />
-                      </Field>
+                      {(input.costos.materiales > 0 ||
+                        input.costos.detalleMateriales) && (
+                        <section
+                          className={s.inventory}
+                          aria-label="Materiales agregados"
+                        >
+                          <div className={s.inventoryAmounts}>
+                            <span>Subtotal de materiales</span>
+                            <strong>{money(input.costos.materiales)}</strong>
+                          </div>
+                          {input.costos.detalleMateriales && (
+                            <p className="whitespace-pre-line break-words text-sm">
+                              {input.costos.detalleMateriales}
+                            </p>
+                          )}
+                          <ActionButton
+                            className={s.inlineAction}
+                            variant="ghost"
+                            onPress={() =>
+                              cambiar({
+                                costos: {
+                                  ...input.costos,
+                                  materiales: 0,
+                                  detalleMateriales: "",
+                                },
+                              })
+                            }
+                          >
+                            <Trash2Icon aria-hidden />
+                            Quitar materiales
+                          </ActionButton>
+                        </section>
+                      )}
                       {input.costos.otros.map((g, i) => (
                         <FieldGroup key={i} className={s.costRow}>
                           <Field>
                             <FieldLabel htmlFor={`gasto-${i}`}>
-                              Otro costo directo
+                              Costo manual
                             </FieldLabel>
                             <Input
                               className={focus.singleBorder}
@@ -538,7 +531,7 @@ export function TrabajoMedidaDialog({
                           </Field>
                           <Field>
                             <FieldLabel htmlFor={`importe-${i}`}>
-                              Importe
+                              Importe · {opciones.moneda.codigo}
                             </FieldLabel>
                             <Input
                               className={focus.singleBorder}

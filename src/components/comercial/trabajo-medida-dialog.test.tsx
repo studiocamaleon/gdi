@@ -68,15 +68,30 @@ const boton = (texto: string) =>
   [...document.querySelectorAll("button")].find(
     (b) => b.textContent?.trim() === texto,
   )!;
-const editar = (id: string, valor: string) =>
+const editarInput = (input: HTMLInputElement, valor: string) =>
   act(async () => {
-    const input = campo(id);
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value",
     )!.set!.call(input, valor);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
+const editar = (id: string, valor: string) => editarInput(campo(id), valor);
+const materialesAgregados = () =>
+  document.querySelector<HTMLElement>(
+    'section[aria-label="Materiales agregados"]',
+  );
+async function agregarCostoManual(nombre: string, importe: string) {
+  await act(async () => boton("Agregar otro costo").click());
+  await editarInput(
+    document.querySelector<HTMLInputElement>("#gasto-0")!,
+    nombre,
+  );
+  await editarInput(
+    document.querySelector<HTMLInputElement>("#importe-0")!,
+    importe,
+  );
+}
 const revisar = () => act(async () => boton("Revisar cálculo").click());
 const resultado = (total: number) => ({
   resumen: {
@@ -200,7 +215,7 @@ async function elegir(sku: string) {
   await act(async () => opcion!.click());
 }
 
-it("suma fuentes por unidad y vinilo por superficie o longitud al importe del trabajo completo", async () => {
+it("desglosa materiales por unidad, superficie y longitud y admite costos manuales por separado", async () => {
   vi.stubGlobal("CSS", { escape: (value: string) => value });
   api.mockImplementation(async (url) => {
     if (url.includes("opciones-stock"))
@@ -210,18 +225,21 @@ it("suma fuentes por unidad y vinilo por superficie o longitud al importe del tr
   });
   await render();
   await act(async () => boton("Desglosar costos").click());
-  await editar("materiales", "25");
+  expect(campo("costo-total")).toBeNull();
+  expect(campo("materiales")).toBeNull();
+  expect(materialesAgregados()).toBeNull();
+  await agregarCostoManual("Flete", "25");
 
   await elegir("FUE-12");
   expect(boton("Revisar cálculo").disabled).toBe(true);
   await editar("consumo", "3");
   await act(async () => boton("Sumar material").click());
-  expect(campo("materiales").value).toBe("325");
+  expect(materialesAgregados()?.textContent).toContain("$ 300,00");
 
   await elegir("VIN-120");
   await editar("consumo", "1.5");
   await act(async () => boton("Sumar material").click());
-  expect(campo("materiales").value).toBe("505");
+  expect(materialesAgregados()?.textContent).toContain("$ 480,00");
 
   await elegir("VIN-120");
   await act(async () => campo("unidad-consumo").click());
@@ -232,10 +250,11 @@ it("suma fuentes por unidad y vinilo por superficie o longitud al importe del tr
   await act(async () => area!.click());
   await editar("consumo", "2.5");
   await act(async () => boton("Sumar material").click());
-  expect(campo("materiales").value).toBe("755");
+  expect(materialesAgregados()?.textContent).toContain("$ 730,00");
   await revisar();
   const request = JSON.parse(String(api.mock.lastCall?.[1]?.body));
-  expect(request.costos.materiales).toBe(755);
+  expect(request.costos.materiales).toBe(730);
+  expect(request.costos.otros).toEqual([{ nombre: "Flete", costo: 25 }]);
   expect(request.costos.detalleMateriales).toMatch(
     /Fuente de prueba.*3 unidad.*300/,
   );
@@ -265,11 +284,74 @@ it("impide sumar una variante sin precio y permite continuar con el costo manual
   );
   await render();
   await act(async () => boton("Desglosar costos").click());
-  await editar("materiales", "120");
+  await agregarCostoManual("Instalación", "120");
   await elegir("FUE-12");
   expect(boton("Sumar material").disabled).toBe(true);
   expect(document.body.textContent).toContain("no tiene precio de referencia");
   await act(async () => boton("Descartar selección").click());
-  expect(campo("materiales").value).toBe("120");
+  expect(materialesAgregados()).toBeNull();
+  expect(document.querySelector<HTMLInputElement>("#importe-0")?.value).toBe(
+    "120",
+  );
   expect(boton("Revisar cálculo").disabled).toBe(false);
+});
+
+it("conserva los materiales de un trabajo anterior y permite volver del costo total al desglose", async () => {
+  const costos = {
+    materiales: 150,
+    detalleMateriales: "PVC de prueba",
+    otros: [{ nombre: "Flete", costo: 20 }],
+  };
+  api.mockImplementation(async (url) => {
+    if (url.endsWith("/guardado"))
+      return {
+        nombre: "Cartel de prueba",
+        descripcion: "",
+        cantidad: 1,
+        unidad: "unidad",
+        precio: 500,
+        basePrecio: "TOTAL",
+        tipoPrecio: "FINAL",
+        categoriaFiscal: "general",
+        costos,
+        produccion: false,
+        operaciones: [],
+      };
+    if (url.includes("opciones-stock")) return { data: [], pages: 1 };
+    if (url.endsWith("/calcular")) return resultado(500);
+    return opciones;
+  });
+  await render({
+    item: { id: "local", cotizacionItemId: "guardado" } as PropuestaItem,
+  });
+  expect(materialesAgregados()?.textContent).toContain("PVC de prueba");
+  expect(materialesAgregados()?.textContent).toContain("$ 150,00");
+  expect(campo("materiales")).toBeNull();
+  await revisar();
+  expect(JSON.parse(String(api.mock.lastCall?.[1]?.body)).costos).toEqual(
+    costos,
+  );
+
+  await act(async () => boton("Costo total").click());
+  await editar("costo-total", "480");
+  expect(boton("Agregar otro costo")).toBeUndefined();
+  expect(materialesAgregados()).toBeNull();
+  await revisar();
+  expect(JSON.parse(String(api.mock.lastCall?.[1]?.body)).costos).toEqual({
+    modo: "TOTAL",
+    totalEstimado: 480,
+    materiales: 0,
+    otros: [],
+  });
+  await act(async () => boton("Desglosar costos").click());
+  expect(materialesAgregados()?.textContent).toContain("PVC de prueba");
+  await act(async () => boton("Quitar materiales").click());
+  expect(materialesAgregados()).toBeNull();
+  await revisar();
+  expect(JSON.parse(String(api.mock.lastCall?.[1]?.body)).costos).toEqual({
+    modo: "DESGLOSADO",
+    materiales: 0,
+    detalleMateriales: "",
+    otros: costos.otros,
+  });
 });
