@@ -10,6 +10,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { PermisosGuard } from '../auth/permisos.guard';
 import { todosLosPermisos, expandir } from '../auth/permisos';
 import { TenantContextInterceptor } from '../common/interceptors/tenant-context.interceptor';
+import { CotizacionesService } from '../cotizaciones/cotizaciones.service';
 import { TipoCambioService } from '../cotizaciones/tipo-cambio.service';
 import { TrabajosMedidaService } from './trabajos-medida.service';
 import { TrabajosMedidaController } from './trabajos-medida.controller';
@@ -30,7 +31,9 @@ import type { CrearOrdenTrabajoDto } from '../ordenes-trabajo/dto/crear-orden-tr
 describe('Trabajos a medida: HTTP, órdenes, producción y economía en base aislada', () => {
   const db = new PrismaService();
   const capacidades = capacidadesDePrueba();
-  const cambio = new TipoCambioService(db, capacidades);
+  const cotizaciones = new CotizacionesService(db);
+  jest.spyOn(cotizaciones, 'dolar').mockRejectedValue(new Error('Esta prueba usa una tasa manual.'));
+  const cambio = new TipoCambioService(db, cotizaciones, capacidades);
   const service = new TrabajosMedidaService(db, cambio, capacidades);
   const tenantId = randomUUID(),
     ajenoId = randomUUID(),
