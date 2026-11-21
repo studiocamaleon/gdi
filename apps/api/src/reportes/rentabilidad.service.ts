@@ -31,6 +31,8 @@ export type RentabilidadPeriodo = {
   avancePct: number | null;
   gastoPorCategoria: CategoriaGasto[];
   itemsSinCosto: number;
+  itemsCostoEstimado?: number;
+  itemsCostoParcial?: number;
 };
 
 @Injectable()
@@ -44,12 +46,14 @@ export class RentabilidadService {
     const [ventasCosto, variables, gastosFijos] = await Promise.all([
       // Ventas (neto del OT item) + costo (snapshot de cotización).
       this.prisma.$queryRaw<
-        Array<{ ventas: number; ventasConIva: number; costo: number; items_sin_costo: number }>
+        Array<{ ventas: number; ventasConIva: number; costo: number; items_sin_costo: number; estimados: number; parciales: number }>
       >`
         SELECT COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
                COALESCE(SUM(${Prisma.raw(PRODUCTO_CON_IVA_SQL)}), 0)::float8 AS "ventasConIva",
                COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo,
-               COUNT(*) FILTER (WHERE ci.id IS NULL)::int AS items_sin_costo
+               COUNT(*) FILTER (WHERE ci.id IS NULL)::int AS items_sin_costo,
+               COUNT(*) FILTER (WHERE ci."origen" = 'TRABAJO_MEDIDA')::int AS estimados,
+               COUNT(*) FILTER (WHERE ci."trazabilidadJson"->'trabajoMedida'->>'estimacionParcial' = 'true')::int AS parciales
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
@@ -140,6 +144,8 @@ export class RentabilidadService {
       avancePct: avancePct !== null ? r2(avancePct) : null,
       gastoPorCategoria,
       itemsSinCosto,
+      itemsCostoEstimado: ventasCosto[0]?.estimados ?? 0,
+      itemsCostoParcial: ventasCosto[0]?.parciales ?? 0,
     };
   }
 
@@ -169,6 +175,8 @@ export class RentabilidadService {
   /** Límites honestos para la meta del reporte, según lo que pasó. */
   limites(p: RentabilidadPeriodo): string[] {
     const l: string[] = [];
+    if (p.itemsCostoEstimado) l.push(`${p.itemsCostoEstimado} trabajo(s) a medida con costos estimados.`);
+    if (p.itemsCostoParcial) l.push(`${p.itemsCostoParcial} trabajo(s) a medida tienen horas sin estimar: el margen incluye costos parciales.`);
     if (p.itemsSinCosto > 0) {
       l.push(
         `${p.itemsSinCosto} item(s) sin snapshot de costo, excluidos del costo.`,

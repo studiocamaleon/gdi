@@ -107,7 +107,7 @@ export class CentroCopiadoEmisionService {
       include: { producto: { select: { codigo: true } } },
     });
     const items = todos
-      .filter((i) => esCopiado(i) || i.producto.codigo === 'SYS-IMPRESION-DOC')
+      .filter((i) => esCopiado(i) || i.producto?.codigo === 'SYS-IMPRESION-DOC')
       .map(({ producto: _p, ...i }) => {
         void _p;
         return i;

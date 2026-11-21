@@ -48,7 +48,7 @@ export function itemHipoteticoDesdeCotizacion(
       profundidad < 10,
       "La composición supera la profundidad admitida para estimar fechas.",
     );
-    const pasos = lista(a.pasos),
+    const pasos = lista(a.pasos).filter(p => p.soloCosto !== true),
       hijos = lista(a.componentesFabricados ?? a.componentes);
     const grafo = registro(a.grafoProduccion),
       publicados = lista(grafo.nodos);
@@ -96,7 +96,7 @@ export function itemHipoteticoDesdeCotizacion(
         "Una operación no tiene un nodo inequívoco en la receta.",
       );
       const k = clave(opciones[0]),
-        t = registro(p.tiempo);
+        t = registro(p.tiempo ?? p.recursoManual);
       exigir(!activos.has(k), "Hay operaciones duplicadas en la receta.");
       const familia = texto(p.familiaCodigo) ?? "trabajo_manual";
       const claveEleccion = texto(p.rutaPasoId) ? opciones[0] : `paso:${indiceActivo + 1}:${familia}`;

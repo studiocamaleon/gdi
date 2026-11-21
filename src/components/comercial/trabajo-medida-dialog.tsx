@@ -1,0 +1,1047 @@
+"use client";
+
+import * as React from "react";
+import { Card, Input, Spinner, TextArea } from "@heroui/react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CalculatorIcon,
+  LayersIcon,
+  PaperclipIcon,
+  PlusIcon,
+  RouteIcon,
+  Trash2Icon,
+  WalletIcon,
+  XIcon,
+} from "lucide-react";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ActionButton } from "@/components/design-system/action-button";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { SelectField } from "@/components/design-system/select-field";
+import focus from "@/components/design-system/field-focus.module.css";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+} from "@/components/ui/field";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import s from "./trabajo-medida-dialog.module.css";
+import {
+  MaterialInventarioEstimado,
+  type ConfirmarMaterial,
+} from "./material-inventario-estimado";
+import { useTipoCambioDocumento } from "./tipo-cambio-documento";
+import { formatearMoneda } from "@/lib/moneda";
+import type { PropuestaItem } from "@/lib/propuestas";
+import {
+  opcionesTrabajoMedida,
+  obtenerTrabajoMedida,
+  calcularTrabajoMedida,
+  itemDesdeTrabajoMedida,
+  trabajoMedidaDe,
+  type TrabajoMedidaInput,
+  type OpcionesMedida,
+  type CalculoMedida,
+  type OperacionMedida,
+} from "@/lib/trabajos-medida-api";
+
+const inicial = (): TrabajoMedidaInput => ({
+  nombre: "",
+  descripcion: "",
+  cantidad: 1,
+  unidad: "unidad",
+  precio: Number.NaN,
+  basePrecio: "TOTAL",
+  tipoPrecio: "FINAL",
+  categoriaFiscal: "general",
+  costos: {
+    modo: "TOTAL",
+    totalEstimado: Number.NaN,
+    materiales: 0,
+    otros: [],
+  },
+  produccion: true,
+  operaciones: [],
+});
+
+function recuperarPasosDeRuta(
+  previo: TrabajoMedidaInput,
+  opciones: OpcionesMedida,
+) {
+  const pasos = opciones.rutas.find(
+    (ruta) => ruta.id === previo.rutaOrigenId,
+  )?.pasos;
+  // Los primeros borradores generaban claves nuevas al copiar una ruta completa.
+  const coincide =
+    pasos?.length === previo.operaciones.length &&
+    pasos?.every((p, i) => {
+      const o = previo.operaciones[i];
+      return (
+        !o.estacionId &&
+        o.familiaCodigo === p.familiaCodigo &&
+        o.nombre === p.nombre
+      );
+    });
+  return coincide
+    ? previo.operaciones.map((o, i) => ({ ...o, clave: pasos![i].id }))
+    : previo.operaciones;
+}
+
+function Elegir({
+  label,
+  value,
+  opciones,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  opciones: Array<{ id: string; nombre: string }>;
+  onChange: (v: string) => void;
+}) {
+  const id = React.useId();
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <SelectField
+        id={id}
+        aria-label={label}
+        className={s.select}
+        value={value}
+        onChange={onChange}
+        options={opciones.map((o) => ({ value: o.id, label: o.nombre }))}
+      />
+    </Field>
+  );
+}
+
+function Seccion({
+  titulo,
+  icono,
+  children,
+}: {
+  titulo: string;
+  icono: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className={s.section}>
+      <Card.Header className={s.sectionHeader}>
+        <span className={s.sectionIcon} aria-hidden="true">
+          {icono}
+        </span>
+        <Card.Title>{titulo}</Card.Title>
+      </Card.Header>
+      <Card.Content className={s.sectionBody}>{children}</Card.Content>
+    </Card>
+  );
+}
+
+export function TrabajoMedidaDialog({
+  open,
+  onOpenChange,
+  item,
+  clienteId,
+  fechaEntrega,
+  onGuardar,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  item: PropuestaItem | null;
+  clienteId: string | null;
+  fechaEntrega: string;
+  onGuardar: (item: PropuestaItem) => void;
+}) {
+  const [input, setInput] = React.useState<TrabajoMedidaInput>(inicial);
+  const [opciones, setOpciones] = React.useState<OpcionesMedida | null>(null);
+  const [calculo, setCalculo] = React.useState<CalculoMedida | null>(null);
+  const [error, setError] = React.useState("");
+  const [cargando, setCargando] = React.useState(false);
+  const [calculando, setCalculando] = React.useState(false);
+  const [materialPendiente, setMaterialPendiente] = React.useState(false);
+  const confirmarMaterial = React.useRef<ConfirmarMaterial>(null);
+  const [archivos, setArchivos] = React.useState<File[]>([]);
+  const [entrega, setEntrega] = React.useState(fechaEntrega);
+  const selectorArchivos = React.useRef<HTMLInputElement>(null);
+  const resumenRef = React.useRef<HTMLElement>(null);
+  const cambio = useTipoCambioDocumento();
+  const revision = React.useRef(0);
+  const itemId = item?.id;
+  const datosDeApertura = React.useEffectEvent(() => ({ item, fechaEntrega }));
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const { item: original, fechaEntrega: fechaInicial } = datosDeApertura();
+    let vigente = true;
+    setMaterialPendiente(false);
+    setCargando(true);
+    setCalculando(false);
+    setOpciones(null);
+    setError("");
+    setCalculo(null);
+    setArchivos(original?.archivosPendientes ?? []);
+    setEntrega(original?.fechaEntrega ?? fechaInicial);
+    Promise.all([
+      opcionesTrabajoMedida(),
+      original?.cotizacionItemId
+        ? obtenerTrabajoMedida(original.cotizacionItemId)
+        : Promise.resolve(original ? trabajoMedidaDe(original) : null),
+    ])
+      .then(([o, previo]) => {
+        if (!vigente) return;
+        setOpciones(o);
+        setInput(
+          previo
+            ? {
+                ...previo,
+                produccion: true,
+                operaciones: recuperarPasosDeRuta(previo, o),
+                periodo: o.periodo,
+                anteriorItemId:
+                  original?.cotizacionItemId ?? previo.anteriorItemId,
+                descuento: original?.descuentoInput ?? previo.descuento,
+              }
+            : inicial(),
+        );
+      })
+      .catch((e) => {
+        if (vigente)
+          setError(
+            e instanceof Error ? e.message : "No se pudo abrir el trabajo.",
+          );
+      })
+      .finally(() => {
+        if (vigente) setCargando(false);
+      });
+    return () => {
+      vigente = false;
+      revision.current += 1;
+    };
+  }, [open, itemId]);
+  React.useLayoutEffect(() => {
+    // El cliente influye en los importes, pero no en la carga del formulario.
+    revision.current++;
+    setCalculo(null);
+    setCalculando(false);
+  }, [clienteId]);
+  React.useEffect(() => {
+    if (calculo && window.matchMedia("(max-width: 799px)").matches) {
+      resumenRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [calculo]);
+
+  const cambiar = (c: Partial<TrabajoMedidaInput>) => {
+    revision.current++;
+    setCalculando(false);
+    setInput((p) => ({ ...p, ...c }));
+    setCalculo(null);
+    setError("");
+  };
+  const operacion = (id: string, c: Partial<OperacionMedida>) =>
+    cambiar({
+      operaciones: input.operaciones.map((o) =>
+        o.clave === id ? { ...o, ...c } : o,
+      ),
+    });
+  const mover = (i: number, delta: number) => {
+    const lista = [...input.operaciones];
+    [lista[i], lista[i + delta]] = [lista[i + delta], lista[i]];
+    cambiar({ operaciones: lista });
+  };
+  const money = (n: number) =>
+    opciones ? formatearMoneda(n, opciones.moneda) : String(n);
+  const importeResumen = (importe: number | undefined) =>
+    importe === undefined ? "—" : money(importe);
+  const rutaElegida = opciones?.rutas.find((r) => r.id === input.rutaOrigenId);
+  const esPasoDeRuta = (o: OperacionMedida) =>
+    rutaElegida?.pasos.some(
+      (p) => p.id === o.clave && p.familiaCodigo === o.familiaCodigo,
+    );
+  const sinEstacion = input.operaciones.findIndex(
+    (o) => !esPasoDeRuta(o) && !o.estacionId,
+  );
+  const problemaRuta = !input.operaciones.length
+    ? "Elegí una ruta de producción o agregá al menos un paso manual con estación."
+    : sinEstacion >= 0
+      ? `Elegí la estación del paso ${sinEstacion + 1}.`
+      : "";
+  const revisar = async () => {
+    setError("");
+    setCalculando(true);
+    const actual = ++revision.current;
+    try {
+      if (problemaRuta) throw new Error(problemaRuta);
+      const material = confirmarMaterial.current?.();
+      const desglose = { ...input.costos, ...material };
+      if (material) setInput((previo) => ({ ...previo, costos: desglose }));
+      const tipoCambioId = cambio
+        ? (await cambio.resolver()).id
+        : input.tipoCambioId;
+      if (revision.current !== actual) return;
+      // Al alternar, el formulario conserva el borrador. Sólo se cotiza la opción elegida.
+      const costos =
+        input.costos.modo === "TOTAL"
+          ? {
+              modo: input.costos.modo,
+              totalEstimado: input.costos.totalEstimado,
+              materiales: 0,
+              otros: [],
+            }
+          : { ...desglose, totalEstimado: undefined };
+      const resultado = await calcularTrabajoMedida({
+        ...input,
+        costos,
+        clienteId,
+        tipoCambioId,
+      });
+      if (revision.current === actual) setCalculo(resultado);
+    } catch (e) {
+      if (revision.current === actual) {
+        setCalculo(null);
+        setError(e instanceof Error ? e.message : "No se pudo calcular.");
+      }
+    } finally {
+      if (revision.current === actual) setCalculando(false);
+    }
+  };
+  return (
+    <FormDialog
+      isOpen={open}
+      onOpenChange={onOpenChange}
+      title={item ? "Editar trabajo a medida" : "Nuevo trabajo a medida"}
+      description="Estimá el costo y definí el precio y la producción de este trabajo."
+      className={s.dialog}
+    >
+      {cargando ? (
+        <div className={s.loading} role="status">
+          <Spinner size="sm" />
+          Cargando opciones…
+        </div>
+      ) : (
+        opciones && (
+          <div className={s.workspace}>
+            <div className={s.form}>
+              <Seccion titulo="Datos del trabajo" icono={<LayersIcon />}>
+                <FieldGroup className={s.jobFields}>
+                  <Field className={s.fullRow}>
+                    <FieldLabel htmlFor="medida-nombre">Nombre</FieldLabel>
+                    <Input
+                      className={focus.singleBorder}
+                      id="medida-nombre"
+                      placeholder="Ej.: Exhibidor para mostrador"
+                      value={input.nombre}
+                      maxLength={200}
+                      onChange={(e) => cambiar({ nombre: e.target.value })}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="medida-cantidad">Cantidad</FieldLabel>
+                    <Input
+                      className={focus.singleBorder}
+                      id="medida-cantidad"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={
+                        Number.isFinite(input.cantidad) ? input.cantidad : ""
+                      }
+                      onChange={(e) =>
+                        cambiar({ cantidad: e.target.valueAsNumber })
+                      }
+                    />
+                  </Field>
+                  <Elegir
+                    label="Unidad"
+                    value={input.unidad}
+                    opciones={[
+                      { id: "unidad", nombre: "Unidades" },
+                      { id: "m2", nombre: "m²" },
+                      { id: "metro_lineal", nombre: "Metros lineales" },
+                      { id: "libros", nombre: "Libros" },
+                      { id: "hojas", nombre: "Hojas" },
+                    ]}
+                    onChange={(v) =>
+                      cambiar({ unidad: v as TrabajoMedidaInput["unidad"] })
+                    }
+                  />
+                  <Field className={s.deliveryField}>
+                    <FieldLabel htmlFor="medida-entrega">
+                      Entrega comprometida
+                    </FieldLabel>
+                    <Input
+                      className={focus.singleBorder}
+                      id="medida-entrega"
+                      type="date"
+                      value={entrega}
+                      onChange={(e) => setEntrega(e.target.value)}
+                    />
+                  </Field>
+                  <Field className={s.fullRow}>
+                    <FieldLabel htmlFor="medida-descripcion">
+                      Descripción e instrucciones de producción
+                    </FieldLabel>
+                    <TextArea
+                      className={`${s.textarea} ${focus.singleBorder}`}
+                      id="medida-descripcion"
+                      value={input.descripcion}
+                      maxLength={4000}
+                      onChange={(e) => cambiar({ descripcion: e.target.value })}
+                    />
+                  </Field>
+                  <Field className={s.fullRow}>
+                    <FieldLabel htmlFor="medida-archivos">
+                      Archivos y referencias
+                    </FieldLabel>
+                    <input
+                      ref={selectorArchivos}
+                      id="medida-archivos"
+                      type="file"
+                      multiple
+                      hidden
+                      onChange={(e) => {
+                        const nuevos = Array.from(e.currentTarget.files ?? []);
+                        setArchivos((previos) => [...previos, ...nuevos]);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                    <ActionButton
+                      className={s.inlineAction}
+                      variant="outline"
+                      onPress={() => selectorArchivos.current?.click()}
+                    >
+                      <PaperclipIcon aria-hidden />
+                      Adjuntar archivos
+                    </ActionButton>
+                    {archivos.length > 0 && (
+                      <ul
+                        className={s.attachments}
+                        aria-label="Archivos por adjuntar"
+                      >
+                        {archivos.map((archivo, i) => (
+                          <li key={i}>
+                            <span>{archivo.name}</span>
+                            <ActionButton
+                              isIconOnly
+                              variant="ghost"
+                              aria-label={`Quitar ${archivo.name}`}
+                              onPress={() =>
+                                setArchivos((previos) =>
+                                  previos.filter((_, j) => j !== i),
+                                )
+                              }
+                            >
+                              <XIcon aria-hidden />
+                            </ActionButton>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </Field>
+                </FieldGroup>
+              </Seccion>
+              <Seccion titulo="Costos estimados" icono={<CalculatorIcon />}>
+                <FieldGroup className={s.fields}>
+                  <SegmentedControl
+                    aria-label="Detalle de costos"
+                    value={input.costos.modo ?? "DESGLOSADO"}
+                    options={[
+                      { value: "TOTAL", label: "Costo total", icon: null },
+                      {
+                        value: "DESGLOSADO",
+                        label: "Desglosar costos",
+                        icon: null,
+                      },
+                    ]}
+                    onChange={(modo) => {
+                      setMaterialPendiente(false);
+                      cambiar({
+                        costos: {
+                          ...input.costos,
+                          modo: modo as "TOTAL" | "DESGLOSADO",
+                          totalEstimado: Number.isFinite(
+                            input.costos.totalEstimado,
+                          )
+                            ? input.costos.totalEstimado
+                            : undefined,
+                        },
+                      });
+                    }}
+                  />
+                  {input.costos.modo === "TOTAL" ? (
+                    <Field>
+                      <FieldLabel htmlFor="medida-costo-total">
+                        Costo total aproximado · {opciones.moneda.codigo}
+                      </FieldLabel>
+                      <Input
+                        className={focus.singleBorder}
+                        id="medida-costo-total"
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={
+                          Number.isFinite(input.costos.totalEstimado)
+                            ? input.costos.totalEstimado
+                            : ""
+                        }
+                        onChange={(e) =>
+                          cambiar({
+                            costos: {
+                              ...input.costos,
+                              totalEstimado:
+                                e.target.value === ""
+                                  ? undefined
+                                  : Number(e.target.value),
+                            },
+                          })
+                        }
+                      />
+                      <FieldDescription>
+                        Incluí materiales, mano de obra y máquina. Las horas que
+                        cargues sirven para desglosar el importe y no se suman
+                        al total.
+                      </FieldDescription>
+                    </Field>
+                  ) : (
+                    <>
+                      <MaterialInventarioEstimado
+                        moneda={opciones.moneda}
+                        costo={input.costos.materiales}
+                        detalle={input.costos.detalleMateriales ?? ""}
+                        confirmarRef={confirmarMaterial}
+                        onPendiente={setMaterialPendiente}
+                        onAgregar={(materiales, detalleMateriales) =>
+                          cambiar({
+                            costos: {
+                              ...input.costos,
+                              materiales,
+                              detalleMateriales,
+                            },
+                          })
+                        }
+                      />
+                      {(input.costos.materiales > 0 ||
+                        input.costos.detalleMateriales) && (
+                        <section
+                          className={s.inventory}
+                          aria-label="Materiales agregados"
+                        >
+                          <div className={s.inventoryAmounts}>
+                            <span>Subtotal de materiales</span>
+                            <strong>{money(input.costos.materiales)}</strong>
+                          </div>
+                          {input.costos.detalleMateriales && (
+                            <p className="whitespace-pre-line break-words text-sm">
+                              {input.costos.detalleMateriales}
+                            </p>
+                          )}
+                          <ActionButton
+                            className={s.inlineAction}
+                            variant="ghost"
+                            onPress={() =>
+                              cambiar({
+                                costos: {
+                                  ...input.costos,
+                                  materiales: 0,
+                                  detalleMateriales: "",
+                                },
+                              })
+                            }
+                          >
+                            <Trash2Icon aria-hidden />
+                            Quitar materiales
+                          </ActionButton>
+                        </section>
+                      )}
+                      {input.costos.otros.map((g, i) => (
+                        <FieldGroup key={i} className={s.costRow}>
+                          <Field>
+                            <FieldLabel htmlFor={`gasto-${i}`}>
+                              Costo manual
+                            </FieldLabel>
+                            <Input
+                              className={focus.singleBorder}
+                              id={`gasto-${i}`}
+                              value={g.nombre}
+                              placeholder="Ej.: flete o tercerizado"
+                              onChange={(e) =>
+                                cambiar({
+                                  costos: {
+                                    ...input.costos,
+                                    otros: input.costos.otros.map((v, j) =>
+                                      j === i
+                                        ? { ...v, nombre: e.target.value }
+                                        : v,
+                                    ),
+                                  },
+                                })
+                              }
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor={`importe-${i}`}>
+                              Importe · {opciones.moneda.codigo}
+                            </FieldLabel>
+                            <Input
+                              className={focus.singleBorder}
+                              id={`importe-${i}`}
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={Number.isFinite(g.costo) ? g.costo : ""}
+                              onChange={(e) =>
+                                cambiar({
+                                  costos: {
+                                    ...input.costos,
+                                    otros: input.costos.otros.map((v, j) =>
+                                      j === i
+                                        ? {
+                                            ...v,
+                                            costo: e.target.valueAsNumber,
+                                          }
+                                        : v,
+                                    ),
+                                  },
+                                })
+                              }
+                            />
+                          </Field>
+                          <ActionButton
+                            variant="ghost"
+                            isIconOnly
+                            aria-label={`Quitar costo ${i + 1}`}
+                            onPress={() =>
+                              cambiar({
+                                costos: {
+                                  ...input.costos,
+                                  otros: input.costos.otros.filter(
+                                    (_, j) => j !== i,
+                                  ),
+                                },
+                              })
+                            }
+                          >
+                            <Trash2Icon />
+                          </ActionButton>
+                        </FieldGroup>
+                      ))}
+                      <ActionButton
+                        className={s.inlineAction}
+                        variant="outline"
+                        onPress={() =>
+                          cambiar({
+                            costos: {
+                              ...input.costos,
+                              otros: [
+                                ...input.costos.otros,
+                                { nombre: "", costo: 0 },
+                              ],
+                            },
+                          })
+                        }
+                      >
+                        <PlusIcon aria-hidden />
+                        Agregar otro costo
+                      </ActionButton>
+                    </>
+                  )}
+                </FieldGroup>
+              </Seccion>
+              <Seccion titulo="Producción y horas" icono={<RouteIcon />}>
+                <FieldGroup className={s.fields}>
+                  <Elegir
+                    label="Ruta de producción"
+                    value={input.rutaOrigenId ?? ""}
+                    opciones={[
+                      { id: "", nombre: "Armar los pasos de este trabajo" },
+                      ...opciones.rutas.filter((r) => r.pasos.length),
+                    ]}
+                    onChange={(id) => {
+                      const ruta = opciones.rutas.find((r) => r.id === id);
+                      cambiar({
+                        rutaOrigenId: id || null,
+                        operaciones: ruta
+                          ? ruta.pasos.map((p) => ({
+                              nombre: p.nombre,
+                              familiaCodigo: p.familiaCodigo,
+                              clave: p.id,
+                              horas: null,
+                              centroCostoId: null,
+                            }))
+                          : input.operaciones,
+                      });
+                    }}
+                  />
+                  <FieldDescription>
+                    Horas para el trabajo completo. Tarifas publicadas de{" "}
+                    {opciones.periodo}.
+                  </FieldDescription>
+                  {input.operaciones.map((o, i) => (
+                    <fieldset key={o.clave} className={s.operation}>
+                      <legend>Paso {i + 1}</legend>
+                      <FieldGroup className={s.twoFields}>
+                        <Field>
+                          <FieldLabel htmlFor={`operacion-${o.clave}`}>
+                            Operación
+                          </FieldLabel>
+                          <Input
+                            className={focus.singleBorder}
+                            id={`operacion-${o.clave}`}
+                            value={o.nombre}
+                            onChange={(e) =>
+                              operacion(o.clave, { nombre: e.target.value })
+                            }
+                          />
+                        </Field>
+                        {!esPasoDeRuta(o) && (
+                          <Elegir
+                            label="Estación"
+                            value={o.estacionId ?? ""}
+                            opciones={[
+                              { id: "", nombre: "Elegí una estación" },
+                              ...(opciones.estaciones ?? []),
+                            ]}
+                            onChange={(id) =>
+                              operacion(o.clave, {
+                                estacionId: id || null,
+                                maquinaId:
+                                  opciones.maquinas.find(
+                                    (m) => m.id === o.maquinaId,
+                                  )?.estacionId === id
+                                    ? o.maquinaId
+                                    : null,
+                              })
+                            }
+                          />
+                        )}
+                        <Elegir
+                          label="Centro de costo"
+                          value={o.centroCostoId ?? ""}
+                          opciones={[
+                            { id: "", nombre: "Sin centro asignado" },
+                            ...opciones.centros.map((c) => ({
+                              id: c.id,
+                              nombre: `${c.nombre} · ${c.tarifaHora == null ? "Sin tarifa vigente" : money(c.tarifaHora) + "/h"}`,
+                            })),
+                          ]}
+                          onChange={(id) =>
+                            operacion(o.clave, {
+                              centroCostoId: id || null,
+                              maquinaId: null,
+                            })
+                          }
+                        />
+                        <Field>
+                          <FieldLabel htmlFor={`horas-${o.clave}`}>
+                            Horas estimadas
+                          </FieldLabel>
+                          <Input
+                            className={focus.singleBorder}
+                            id={`horas-${o.clave}`}
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={o.horas ?? ""}
+                            placeholder="Sin estimar"
+                            onChange={(e) =>
+                              operacion(o.clave, {
+                                horas:
+                                  e.target.value === ""
+                                    ? null
+                                    : Number(e.target.value),
+                              })
+                            }
+                          />
+                        </Field>
+                        <Elegir
+                          label="Máquina (opcional)"
+                          value={o.maquinaId ?? ""}
+                          opciones={[
+                            { id: "", nombre: "Sin máquina" },
+                            ...opciones.maquinas.filter(
+                              (m) =>
+                                m.centroCostoPrincipalId === o.centroCostoId &&
+                                (!o.estacionId ||
+                                  m.estacionId === o.estacionId),
+                            ),
+                          ]}
+                          onChange={(id) =>
+                            operacion(o.clave, { maquinaId: id || null })
+                          }
+                        />
+                      </FieldGroup>
+                      <div className={s.operationActions}>
+                        <ActionButton
+                          isIconOnly
+                          variant="ghost"
+                          isDisabled={i === 0}
+                          aria-label={`Subir paso ${i + 1}`}
+                          onPress={() => mover(i, -1)}
+                        >
+                          <ArrowUpIcon />
+                        </ActionButton>
+                        <ActionButton
+                          isIconOnly
+                          variant="ghost"
+                          isDisabled={i === input.operaciones.length - 1}
+                          aria-label={`Bajar paso ${i + 1}`}
+                          onPress={() => mover(i, 1)}
+                        >
+                          <ArrowDownIcon />
+                        </ActionButton>
+                        <ActionButton
+                          isIconOnly
+                          variant="ghost"
+                          aria-label={`Quitar paso ${i + 1}`}
+                          onPress={() =>
+                            cambiar({
+                              operaciones: input.operaciones.filter(
+                                (v) => v.clave !== o.clave,
+                              ),
+                            })
+                          }
+                        >
+                          <Trash2Icon />
+                        </ActionButton>
+                      </div>
+                    </fieldset>
+                  ))}
+                  <ActionButton
+                    className={s.inlineAction}
+                    variant="outline"
+                    onPress={() =>
+                      cambiar({
+                        operaciones: [
+                          ...input.operaciones,
+                          {
+                            clave: crypto.randomUUID(),
+                            nombre: "",
+                            familiaCodigo: "trabajo_manual",
+                            horas: null,
+                            centroCostoId: null,
+                          },
+                        ],
+                      })
+                    }
+                  >
+                    <PlusIcon aria-hidden />
+                    Agregar paso
+                  </ActionButton>
+                  {problemaRuta && (
+                    <FieldDescription>{problemaRuta}</FieldDescription>
+                  )}
+                </FieldGroup>
+              </Seccion>
+            </div>
+            <div className={s.aside}>
+              <Seccion titulo="Precio de venta" icono={<WalletIcon />}>
+                <FieldGroup className={s.fields}>
+                  <Field>
+                    <FieldLabel htmlFor="medida-precio">
+                      Precio acordado · {opciones.moneda.codigo}
+                    </FieldLabel>
+                    <Input
+                      className={focus.singleBorder}
+                      id="medida-precio"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={Number.isFinite(input.precio) ? input.precio : ""}
+                      onChange={(e) =>
+                        cambiar({
+                          precio:
+                            e.target.value === ""
+                              ? Number.NaN
+                              : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                  <FieldGroup className={s.fields}>
+                    <Field>
+                      <FieldLabel id="medida-base-precio">
+                        Precio por
+                      </FieldLabel>
+                      <SegmentedControl
+                        fullWidth
+                        aria-labelledby="medida-base-precio"
+                        value={input.basePrecio}
+                        options={[
+                          {
+                            value: "TOTAL",
+                            label: "Trabajo completo",
+                            icon: null,
+                          },
+                          { value: "UNITARIO", label: "Unidad", icon: null },
+                        ]}
+                        onChange={(basePrecio) =>
+                          cambiar({
+                            basePrecio:
+                              basePrecio as TrabajoMedidaInput["basePrecio"],
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel id="medida-tipo-precio">Impuestos</FieldLabel>
+                      <SegmentedControl
+                        fullWidth
+                        aria-labelledby="medida-tipo-precio"
+                        value={input.tipoPrecio}
+                        options={[
+                          { value: "FINAL", label: "Incluidos", icon: null },
+                          {
+                            value: "NETO",
+                            label: "Agregar al neto",
+                            icon: null,
+                          },
+                        ]}
+                        onChange={(tipoPrecio) =>
+                          cambiar({
+                            tipoPrecio:
+                              tipoPrecio as TrabajoMedidaInput["tipoPrecio"],
+                          })
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                  <Elegir
+                    label="Categoría fiscal"
+                    value={input.categoriaFiscal}
+                    opciones={[
+                      { id: "general", nombre: "General" },
+                      { id: "reducida", nombre: "Reducida" },
+                      { id: "exento", nombre: "Exento" },
+                    ]}
+                    onChange={(v) =>
+                      cambiar({
+                        categoriaFiscal:
+                          v as TrabajoMedidaInput["categoriaFiscal"],
+                      })
+                    }
+                  />
+                </FieldGroup>
+              </Seccion>
+              <aside
+                ref={resumenRef}
+                aria-label="Resumen del trabajo"
+                className={s.summaryRegion}
+              >
+                <Card className={s.summary}>
+                  <Card.Header className={s.summaryHeader}>
+                    <Card.Title>Resumen del trabajo</Card.Title>
+                    <span className={s.currency}>{opciones.moneda.codigo}</span>
+                  </Card.Header>
+                  <Card.Content
+                    className={s.summaryBody}
+                    aria-live="polite"
+                    aria-busy={calculando}
+                  >
+                    <dl className={s.amounts}>
+                      <div>
+                        <dt>Venta neta</dt>
+                        <dd>{importeResumen(calculo?.resumen.neto)}</dd>
+                      </div>
+                      <div>
+                        <dt>Impuestos al cliente</dt>
+                        <dd>{importeResumen(calculo?.resumen.impuestos)}</dd>
+                      </div>
+                      <div className={s.total}>
+                        <dt>Total al cliente</dt>
+                        <dd>{importeResumen(calculo?.resumen.total)}</dd>
+                      </div>
+                      <div className={s.costTotal}>
+                        <dt>Costo estimado</dt>
+                        <dd>{importeResumen(calculo?.resumen.costoTotal)}</dd>
+                      </div>
+                      <div>
+                        <dt>Margen estimado</dt>
+                        <dd>{importeResumen(calculo?.resumen.margen)}</dd>
+                      </div>
+                      <div>
+                        <dt>Contribución estimada</dt>
+                        <dd>{importeResumen(calculo?.resumen.contribucion)}</dd>
+                      </div>
+                    </dl>
+                    {!calculo && (
+                      <p>
+                        {calculando
+                          ? "Calculando importes…"
+                          : "Revisá el cálculo para ver los importes."}
+                      </p>
+                    )}
+                  </Card.Content>
+                </Card>
+                {calculo && input.operaciones.some((o) => o.horas == null) && (
+                  <Alert className={s.notice}>
+                    <AlertDescription>
+                      {input.costos.modo === "TOTAL"
+                        ? "Hay horas sin desglosar. El total se conserva y el costo sin asignar a centros se considera variable."
+                        : "Hay pasos sin horas estimadas. El margen todavía es parcial."}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {calculo && calculo.resumen.margen < 0 && (
+                  <Alert className={s.notice}>
+                    <AlertDescription>
+                      El precio no cubre los costos estimados de este trabajo.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {calculo && (
+                  <p className={s.summaryHelp}>
+                    La contribución resta los costos variables. El margen
+                    también resta las horas de los centros.
+                  </p>
+                )}
+              </aside>
+            </div>
+          </div>
+        )
+      )}
+      {error && (
+        <Alert variant="destructive" className={s.error}>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <footer className={s.footer}>
+        <ActionButton variant="ghost" onPress={() => onOpenChange(false)}>
+          Cancelar
+        </ActionButton>
+        <div className={s.footerActions}>
+          <ActionButton
+            className={s.reviewButton}
+            variant="outline"
+            isDisabled={cargando || !opciones}
+            isPending={calculando}
+            onPress={() => void revisar()}
+          >
+            {calculando ? (
+              <Spinner size="sm" />
+            ) : (
+              <CalculatorIcon aria-hidden />
+            )}
+            {calculando ? "Calculando…" : "Revisar cálculo"}
+          </ActionButton>
+          <ActionButton
+            isDisabled={
+              !calculo ||
+              calculando ||
+              cargando ||
+              materialPendiente ||
+              Boolean(problemaRuta)
+            }
+            onPress={() => {
+              if (calculo)
+                onGuardar({
+                  ...itemDesdeTrabajoMedida(calculo, item),
+                  fechaEntrega: entrega || undefined,
+                  archivosPendientes: archivos,
+                });
+            }}
+          >
+            {item ? "Guardar trabajo" : "Agregar trabajo"}
+          </ActionButton>
+        </div>
+      </footer>
+    </FormDialog>
+  );
+}

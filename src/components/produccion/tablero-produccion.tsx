@@ -8,6 +8,7 @@ import { modoTableroEnUrl, urlTableroEstacion } from "@/lib/tablero-navegacion";
 import { TableroFiltros } from "./tablero-filtros";
 import { useDesignScope, useDesignTheme, useLegacyDesignScope } from "@/components/design-system/appearance";
 import { ActionButton } from "@/components/design-system/action-button";
+import { NotaProduccion } from "./nota-produccion";
 import brandStyles from "./tablero-brand.module.css";
 import toolbar from "./tablero-toolbar.module.css";
 import { agruparTrabajos, type GrupoTableroKey } from "@/lib/tablero-lista";
@@ -902,10 +903,9 @@ export function ItemDetailSheet({
             </section>
           ) : null}
 
-          {notaProduccion ? (
-            <div className="item-nota-produccion">
-              <div className="lbl">Nota de producción</div>
-              <div className="txt">{notaProduccion}</div>
+          {notaProduccion?.trim() ? (
+            <div className={brandStyles.notaProduccion}>
+              <NotaProduccion texto={notaProduccion} />
             </div>
           ) : null}
 

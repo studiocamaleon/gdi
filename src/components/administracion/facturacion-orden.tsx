@@ -425,6 +425,7 @@ export function ComprobantesOrdenTab({
   facturadoInicial,
   cobradoInicial,
   puedeFacturar,
+  puedeCobrar,
   recargarToken = 0,
   soloLectura = false,
   facturacionBloqueada = false,
@@ -437,6 +438,7 @@ export function ComprobantesOrdenTab({
   cobradoInicial: number;
   /** false en borradores (se emite la OT primero). */
   puedeFacturar: boolean;
+  puedeCobrar: boolean;
   /**
    * Cambia cuando algo de afuera facturó (ej. el botón "Facturar" del header de
    * la OT, que monta su propio modal): fuerza recargar comprobantes y cobros.
@@ -630,7 +632,7 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Cobros <span className="ct">{listaCobros.length}</span>
           </span>
-          {!soloLectura && puedeFacturar ? (
+          {puedeCobrar && cobros !== null && !errorCobros && total > cobrado ? (
             <Link
               className="btn sm"
               href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}

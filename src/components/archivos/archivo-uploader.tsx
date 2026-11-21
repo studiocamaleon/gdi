@@ -54,6 +54,8 @@ export type ArchivoUploaderProps = {
   titulo?: string;
   ayuda?: string;
   soloLectura?: boolean;
+  /** Permite adjuntar en consulta sin habilitar el borrado ni la publicación. */
+  puedeSubir?: boolean;
   /** Oculta la lista: para cuando el consumidor pinta su propia vista. */
   sinLista?: boolean;
   /**
@@ -88,6 +90,7 @@ export function ArchivoUploader({
   titulo = "Arrastrá archivos o hacé click para elegirlos",
   ayuda,
   soloLectura = false,
+  puedeSubir = !soloLectura,
   sinLista = false,
   permitirPublico = false,
   calcularHash = false,
@@ -110,20 +113,26 @@ export function ArchivoUploader({
   const soloLecturaRef = React.useRef(soloLectura);
   React.useLayoutEffect(() => {
     soloLecturaRef.current = soloLectura;
-    if (!soloLectura) return;
-    enCursoRef.current.forEach((s) => s.abort.abort());
-    setABorrar(null);
-    setDentro(false);
+    if (soloLectura) setABorrar(null);
   }, [soloLectura]);
+
+  const puedeSubirRef = React.useRef(puedeSubir);
+  React.useLayoutEffect(() => {
+    puedeSubirRef.current = puedeSubir;
+    if (!puedeSubir) {
+      enCursoRef.current.forEach((s) => s.abort.abort());
+      setDentro(false);
+    }
+  }, [puedeSubir]);
 
   const procesar = React.useCallback(
     async (files: File[]) => {
-      if (soloLecturaRef.current) return;
+      if (!puedeSubirRef.current) return;
       const elegidos = unico ? files.slice(0, 1) : files;
       let acumulados = archivos;
 
       for (const original of elegidos) {
-        if (soloLecturaRef.current) break;
+        if (!puedeSubirRef.current) break;
         // Se valida el ORIGINAL: es lo que el usuario eligió y sobre lo que
         // tiene que leer el error si no sirve.
         const invalido = validarArchivo(original, { extensiones });
@@ -133,7 +142,7 @@ export function ArchivoUploader({
         }
 
         const file = transformar ? await transformar(original) : original;
-        if (soloLecturaRef.current) break;
+        if (!puedeSubirRef.current) break;
 
         const clave = `${file.name}-${file.size}-${Date.now()}`;
         const abort = new AbortController();
@@ -220,7 +229,7 @@ export function ArchivoUploader({
 
   return (
     <>
-      {!soloLectura ? (
+      {puedeSubir ? (
         <div
           className={`arch-drop${dentro ? " dentro" : ""}${enCurso.length > 0 ? " ocupado" : ""}`}
           role="button"

@@ -192,6 +192,15 @@ const maquina = (id: string, activo = true) => ({ id, activo, centroCostoId: "cc
 // El mismo contrato protege tablero, ETA y permisos de ejecución backend.
 for (const [nombre, resolver] of [["tablero", resolverEstacionDePaso], ["ETA backend", resolverBackend]] as const) {
   describe(`asignación de estaciones — ${nombre}`, () => {
+    it("ubica el paso manual en su estación elegida aunque otra tenga la familia", () => {
+      const a = est("Diseño", { familias: ["trabajo_manual"] });
+      const b = est("Armado", { maquinas: [maquina("M")] });
+      const manual = { ...paso({ familiaCodigo: "trabajo_manual" }), estacionManualId: b.id };
+      expect(resolver([a, b], manual)?.id).toBe(b.id);
+      expect(resolver([a], manual)).toBeNull();
+      expect(resolver([a, b], { ...manual, maquinaId: "M" })?.id).toBe(b.id);
+      expect(resolver([a, b], { ...manual, maquinaId: "otra" })).toBeNull();
+    });
     it("distingue dos máquinas de la misma tecnología y centro de costo", () => {
       const estaciones = [est("Digital A", { maquinas: [maquina("A")] }), est("Digital B", { maquinas: [maquina("B")] })];
       expect(resolver(estaciones, paso({ maquinaId: "B", tecnologia: "laser" }))?.id).toBe("Digital B");

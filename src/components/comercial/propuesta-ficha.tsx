@@ -1,5 +1,8 @@
 "use client";
 
+import { TrabajoMedidaDialog } from "./trabajo-medida-dialog";
+import { trabajoMedidaDe, persistirTrabajoMedida, calcularTrabajoMedida, itemDesdeTrabajoMedida } from "@/lib/trabajos-medida-api";
+
 import { IluminacionTiraResumen } from "@/components/carteleria/iluminacion-tira-resumen";
 import { IluminacionTubosResumen } from "@/components/carteleria/iluminacion-tubos-resumen";
 import { CentroCopiadoPedidoPrecios } from "./centro-copiado-pedido-precios";
@@ -82,7 +85,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { NotaProduccion } from "@/components/produccion/nota-produccion";
 import {
   Card,
   CardHeader,
@@ -137,7 +140,6 @@ import {
   PlusIcon,
   LinkIcon,
   SaveIcon,
-  TriangleAlertIcon,
   UserIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -318,6 +320,7 @@ import {
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { TandasCopiadoPanel } from "./tandas-copiado-panel";
+import { subirArchivosPendientesDeItem } from "@/lib/archivos-pendientes-item";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { ProduccionEntregas } from "./produccion-entregas";
@@ -2388,28 +2391,24 @@ function ProduccionItemSinLotesView({
   calculoPendiente,
   onExpand,
 }: FabricacionItemProps) {
+  const nota = <NotaProduccion texto={item.notaProduccion} />;
   if (calculoPendiente)
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>Producción pendiente de cotización</EmptyTitle>
-          <EmptyDescription>
-            Cotizá el producto para ver sus operaciones y tiempos.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <div className={itemStyles.production}>
+        {nota}
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Producción pendiente de cotización</EmptyTitle>
+            <EmptyDescription>
+              Cotizá el producto para ver sus operaciones y tiempos.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
     );
   return (
     <div className={itemStyles.production}>
-      {item.notaProduccion ? (
-        <Alert>
-          <TriangleAlertIcon />
-          <AlertTitle>Nota para producción</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">
-            {item.notaProduccion}
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      {nota}
       <Card size="sm" className={itemStyles.technicalCard}>
         <CardHeader>
           <CardTitle className={itemStyles.sectionTitle}>
@@ -4779,6 +4778,7 @@ function rehidratarOrdenItem(
     Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
 
   const cotizacion = {
+    trabajoMedida: jobContext?.trabajoMedida,
     tipoCambio: resumen?.tipoCambio,
     costosMaterialesMoneda: resumen?.costosMaterialesMoneda,
     productoId: snap?.productoId ?? producto.codigo,
@@ -4892,7 +4892,7 @@ function rehidratarOrdenItem(
       orden: i,
     })),
     cotizacion,
-    pasos: trazabilidad?.pasos ? getCotizacionPasos(cotizacion) : [],
+    pasos: trazabilidad?.pasos ? getCotizacionPasos({ ...cotizacion, pasos: cotizacion.pasos.filter(p => !p.soloCosto) }) : [],
     adicionales: producto.adicionales,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
     jobContext,
@@ -4966,6 +4966,9 @@ function PropuestaFichaContenido({
       .catch(() => {});
   }, [ordenProp?.id]);
   const conCotizacion = useCapacidad("cotizacion");
+  const permisoTrabajoMedida = currentUser?.tenantActual?.permisos?.includes("comercial.trabajos_medida") === true;
+  const [medidaOpen, setMedidaOpen] = React.useState(false);
+  const [medidaItem, setMedidaItem] = React.useState<PropuestaItem | null>(null);
   const permisoOrdenes = usePuede("comercial.ordenes.gestionar");
   const permisoPresupuestos = usePuede("comercial.presupuestos.gestionar");
   const permisoCobrar = usePuede("administracion.cobrar");
@@ -5034,7 +5037,7 @@ function PropuestaFichaContenido({
   // botón. Se ignora mientras se escribe (input/textarea/select/editable) y con
   // modificadoras (no pisar Ctrl/Cmd+X).
   React.useEffect(() => {
-    if (!puedeToggleFiscal) return;
+    if (!puedeToggleFiscal || medidaOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "x" && e.key !== "X") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -5053,7 +5056,7 @@ function PropuestaFichaContenido({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [puedeToggleFiscal, togglingFiscal, toggleTratamientoFiscal]);
+  }, [puedeToggleFiscal, togglingFiscal, toggleTratamientoFiscal, medidaOpen]);
   // null hasta que el tab de Archivos se abre y los cuenta: la pestaña no
   // muestra badge mientras no sepa el número real.
   const [archivosCount, setArchivosCount] = React.useState<number | null>(null);
@@ -5123,6 +5126,7 @@ function PropuestaFichaContenido({
   const puedeEntregar = permisoEntregaProduccion || permisoEntregaComercial;
   const puedeAbrirEntrega = orden?.estado === "finalizada" && puedeEntregar;
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
+  const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const [cancelando, setCancelando] = React.useState(false);
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
@@ -5704,6 +5708,15 @@ function PropuestaFichaContenido({
     : 0;
   const cambiosSinGuardar =
     cambiosCreacion + cambiosItems.total + Object.keys(cambiosFields).length + Number(cambiosCargos);
+  const ordenDisponible = !!orden && orden.estado !== "cancelada" &&
+    !guardandoEdicion && !precioOrdenPendiente && !cambiandoTipoBorrador &&
+    !cancelando && !emitiendoBorrador;
+  const puedeCobrarOrden = ordenDisponible && orden.estado !== "borrador" &&
+    puedeVerOrdenes && puedeRegistrarCobros && !togglingFiscal && cambiosSinGuardar === 0 &&
+    orden.total > (orden.cobradoTotal ?? 0) && (conCobros || orden.cobrosHabilitadosEmision !== false);
+  const puedeAdjuntarArchivos = ordenDisponible && (permisoOrdenes ||
+    (puedeVerProduccion && (puedeEjecutarProduccion || puedeAsignarPersonal)));
+
   // La confirmación del servidor protege esta revisión concreta. No vaciamos
   // el formulario: si la navegación tarda y se edita de nuevo, vuelve el aviso.
   const revisionPropuesta = React.useMemo(
@@ -5849,74 +5862,33 @@ function PropuestaFichaContenido({
     [],
   );
 
-  /**
-   * Sube a R2 los PDF originales del centro de copiado, colgándolos del ítem de
-   * la OT (scope ORDEN_ITEM), igual que los sellos suben sus artes. Los archivos
-   * viajan en memoria en `item.archivosPendientes` y acá se matchean por
-   * `cotizacionItemId` con el producto ya persistido. Nunca lanza: la orden ya
-   * está guardada. Reemplaza sólo lo autogenerado por el centro de copiado.
-   */
-  const subirArchivosCentroCopiado = React.useCallback(
+  const publicarAdjuntosDeItems = React.useCallback(
     async (
       productos: OrdenTrabajoProducto[],
-      filesPorCotItem: Map<string, File[]>,
+      preparados: Array<{ item: PropuestaItem; cotizacionItemId?: string }>,
     ) => {
-      if (filesPorCotItem.size === 0) return;
-      const MARCA = "centro-copiado";
+      const porCotizacion = new Map(preparados.map((p) => [p.cotizacionItemId, p.item]));
       const fallidos: string[] = [];
-      for (const p of productos) {
-        const files = p.cotizacionItemId
-          ? filesPorCotItem.get(p.cotizacionItemId)
-          : undefined;
-        if (!files?.length) continue;
+      for (const producto of productos) {
+        if (!producto.cotizacionItemId) continue;
+        const item = porCotizacion.get(producto.cotizacionItemId);
+        if (!item?.archivosPendientes?.length) continue;
+        if (!producto.id) {
+          fallidos.push(item.productoNombre);
+          continue;
+        }
         try {
-          const previos = await listarArchivos("ORDEN_ITEM", p.id);
-          for (const file of files) {
-            // Reemplaza sólo el mismo original. En una edición parcial de un
-            // tomo no debe borrar los PDF de los demás documentos heredados.
-            for (const a of previos) {
-              if (a.autogeneradoPor === MARCA && a.nombre === file.name) {
-                await eliminarArchivo(a.id);
-              }
-            }
-            await subirArchivo(file, {
-              scope: "ORDEN_ITEM",
-              entidadId: p.id,
-              descripcion: `Documento · ${file.name}`,
-              autogeneradoPor: MARCA,
-            });
-          }
+          await subirArchivosPendientesDeItem(producto.id, item, item.archivosPendientes);
         } catch (error) {
-          fallidos.push(
-            error instanceof Error ? error.message : "no se pudo subir",
-          );
+          fallidos.push(error instanceof Error ? error.message : item.productoNombre);
         }
       }
-      if (fallidos.length > 0) {
+      if (fallidos.length) {
         toast.warning(
-          `${fallidos.length} archivo(s) del centro de copiado no se pudieron guardar (${fallidos.join(" · ")}). Podés subirlos a mano desde la pestaña Archivos del ítem.`,
+          `Quedaron adjuntos pendientes. Revisá la pestaña Archivos de la orden. ${fallidos.join(" · ")}`,
           { duration: 10000 },
         );
       }
-    },
-    [],
-  );
-
-  /** Mapea cotizacionItemId → archivos pendientes, para el matcheo con la OT. */
-  const mapaArchivosCC = React.useCallback(
-    (
-      itemsConSnapshot: Array<{
-        item: PropuestaItem;
-        cotizacionItemId?: string;
-      }>,
-    ): Map<string, File[]> => {
-      const m = new Map<string, File[]>();
-      for (const { item, cotizacionItemId } of itemsConSnapshot) {
-        if (cotizacionItemId && item.archivosPendientes?.length) {
-          m.set(cotizacionItemId, item.archivosPendientes);
-        }
-      }
-      return m;
     },
     [],
   );
@@ -6072,6 +6044,11 @@ function PropuestaFichaContenido({
   const prepararItemOrden = React.useCallback(
     async (item: PropuestaItem) => {
       if (!orden) throw new Error("No se cargó la orden de trabajo.");
+      if (trabajoMedidaDe(item)) {
+        const guardado = await persistirTrabajoMedida(item, {clienteId: clienteId || null});
+        const actualizado = itemDesdeTrabajoMedida(guardado, item);
+        return {item: actualizado, cotizacionItemId: guardado.cotizacionItemId, payload: itemToOrdenItemPayload(actualizado, guardado.cotizacionItemId)};
+      }
       if (!item.motorCodigo || !item.jobContext) {
         throw new Error(
           `"${item.productoNombre}" no tiene datos de cotización para persistir.`,
@@ -6249,10 +6226,7 @@ function PropuestaFichaContenido({
               producto.cotizacionItemId === preparado.cotizacionItemId,
           );
           await publicarArtes(productos);
-          await subirArchivosCentroCopiado(
-            productos,
-            mapaArchivosCC([preparado]),
-          );
+          await publicarAdjuntosDeItems(productos, [preparado]);
           await subirArchivosBriefDiseno(
             productos,
             mapaArchivosBrief([preparado]),
@@ -6316,8 +6290,7 @@ function PropuestaFichaContenido({
       persistedItemIds,
       editadosIds,
       publicarArtes,
-      subirArchivosCentroCopiado,
-      mapaArchivosCC,
+      publicarAdjuntosDeItems,
       subirArchivosBriefDiseno,
       mapaArchivosBrief,
       router,
@@ -6408,7 +6381,6 @@ function PropuestaFichaContenido({
     [cobrosStaged, clienteId, moneda, emitirYEntregar],
   );
 
-  const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const emitirBorrador = React.useCallback(
     async (imprimir = false) => {
     if (!validarEntregaCalculada()) return;
@@ -6554,6 +6526,15 @@ function PropuestaFichaContenido({
     setAddOpen(true);
   }, [puedeModificarProductos]);
 
+  const abrirNuevoTrabajoMedida = puedeModificarProductos && permisoTrabajoMedida
+    ? () => {
+        setAddOpen(false);
+        setEditingItem(null);
+        setMedidaItem(null);
+        setMedidaOpen(true);
+      }
+    : undefined;
+
   const abrirCentroCopiado = React.useCallback(() => {
     if (!puedeModificarProductos || !ccActivo) return;
     setCopiadoEditItems(null);
@@ -6595,7 +6576,10 @@ function PropuestaFichaContenido({
   const abrirEdicion = React.useCallback(
     (item: PropuestaItem) => {
       if (!puedeModificarProductos || motivoBloqueoProducto(item.id)) return;
-      if (esCentroCopiado(item)) {
+      if (trabajoMedidaDe(item)) {
+        if (!permisoTrabajoMedida) return;
+        setMedidaItem(item); setMedidaOpen(true);
+      } else if (esCentroCopiado(item)) {
         const carga = cargaDeItem(item);
         const deLaCarga = carga
           ? items.filter((i) => cargaDeItem(i) === carga)
@@ -6608,7 +6592,7 @@ function PropuestaFichaContenido({
         setAddOpen(true);
       }
     },
-    [puedeModificarProductos, esCentroCopiado, cargaDeItem, items, motivoBloqueoProducto],
+    [puedeModificarProductos, esCentroCopiado, cargaDeItem, items, motivoBloqueoProducto, permisoTrabajoMedida],
   );
 
   /**
@@ -6640,7 +6624,7 @@ function PropuestaFichaContenido({
       }> = [];
       for (const item of items) {
         const previa =
-          !orden && ordenTipo === "orden"
+          !orden && ordenTipo === "orden" && !trabajoMedidaDe(item)
             ? await entregasPrevias.paraGuardar(item)
             : null;
         if (previa) {
@@ -6656,6 +6640,12 @@ function PropuestaFichaContenido({
             item,
             cotizacionItemId: item.cotizacionItemId,
           });
+          continue;
+        }
+        if (trabajoMedidaDe(item)) {
+          const guardado = await persistirTrabajoMedida(item, { cotizacionId, clienteId: clienteId || null });
+          cotizacionId = guardado.cotizacionId ?? cotizacionId;
+          itemsConSnapshot.push({item: itemDesdeTrabajoMedida(guardado, item), cotizacionItemId: guardado.cotizacionItemId});
           continue;
         }
         // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
@@ -7067,10 +7057,7 @@ function PropuestaFichaContenido({
       // convertir una emisión exitosa en un falso error reintentable.
       const adjuntos = await Promise.allSettled([
         publicarArtes(orden.productos),
-        subirArchivosCentroCopiado(
-          orden.productos,
-          mapaArchivosCC(itemsConSnapshot),
-        ),
+        publicarAdjuntosDeItems(orden.productos, itemsConSnapshot),
         subirArchivosBriefDiseno(
           orden.productos,
           mapaArchivosBrief(itemsConSnapshot),
@@ -7116,8 +7103,7 @@ function PropuestaFichaContenido({
     fechaEntregaOrden,
     zonaHoraria,
     publicarArtes,
-    subirArchivosCentroCopiado,
-    mapaArchivosCC,
+    publicarAdjuntosDeItems,
     subirArchivosBriefDiseno,
     mapaArchivosBrief,
     publicarPlanosDeOrden,
@@ -7208,10 +7194,7 @@ function PropuestaFichaContenido({
       });
       const adjuntos = await Promise.allSettled([
         publicarArtes(orden.productos),
-        subirArchivosCentroCopiado(
-          orden.productos,
-          mapaArchivosCC(itemsConSnapshot),
-        ),
+        publicarAdjuntosDeItems(orden.productos, itemsConSnapshot),
         subirArchivosBriefDiseno(
           orden.productos,
           mapaArchivosBrief(itemsConSnapshot),
@@ -7257,8 +7240,7 @@ function PropuestaFichaContenido({
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
-    subirArchivosCentroCopiado,
-    mapaArchivosCC,
+    publicarAdjuntosDeItems,
     subirArchivosBriefDiseno,
     mapaArchivosBrief,
     publicarPlanosDeOrden,
@@ -7389,6 +7371,12 @@ function PropuestaFichaContenido({
       item: PropuestaItem,
       descuentoInput: DescuentoInput | null,
     ): Promise<PropuestaItem | null> => {
+      const manual = trabajoMedidaDe(item);
+      if (manual) {
+        if (!permisoTrabajoMedida) throw new Error("No tenés permiso para modificar el precio de trabajos a medida.");
+        const calculo = await calcularTrabajoMedida({...manual, clienteId: clienteId || null, descuento: descuentoParaMotor(descuentoInput)});
+        return {...itemDesdeTrabajoMedida(calculo, item), descuentoInput};
+      }
       if (!item.jobContext || !item.motorCodigo) return null;
       const request = {
         rutaAlternativaId: item.rutaAlternativaId ?? null,
@@ -7423,7 +7411,7 @@ function PropuestaFichaContenido({
         cotizacionItemId: response.cotizacionItemId ?? item.cotizacionItemId,
       };
     },
-    [clienteId, cotizar, recotizarCotizacionItem],
+    [clienteId, cotizar, recotizarCotizacionItem, permisoTrabajoMedida],
   );
 
   // Umbral de aprobación por descuento del tenant (F3): se busca una sola vez
@@ -7752,6 +7740,7 @@ function PropuestaFichaContenido({
       !cuponValidando &&
       !descuentoAplicando &&
       !addOpen &&
+      !medidaOpen &&
       !copiadoOpen &&
       !cargoOpen &&
       !panelEditor,
@@ -7776,7 +7765,7 @@ function PropuestaFichaContenido({
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!puedeModificarProductos || !permiteAtajoDePagina(event))
+      if (!puedeModificarProductos || medidaOpen || !permiteAtajoDePagina(event))
         return;
       const key = event.key.toLowerCase();
       // P = agregar producto · C = centro de copiado (si el módulo está activo).
@@ -7795,6 +7784,7 @@ function PropuestaFichaContenido({
     abrirAgregarProducto,
     abrirCentroCopiado,
     addOpen,
+    medidaOpen,
     cargoOpen,
     panelEditor,
     copiadoOpen,
@@ -7891,6 +7881,12 @@ function PropuestaFichaContenido({
     const nuevos: PropuestaItem[] = [];
     // Staging completo: si falla una línea, no se modifica ninguna.
     for (const item of anteriores) {
+      const manual = trabajoMedidaDe(item);
+      if (manual) {
+        const calculo = await calcularTrabajoMedida({...manual, tipoCambioId: cambio.id, clienteId: clienteId || null});
+        nuevos.push(itemDesdeTrabajoMedida(calculo, item));
+        continue;
+      }
       if (!item.jobContext || !item.motorCodigo)
         throw new Error(
           `Volvé a configurar "${item.productoNombre}" antes de actualizar el cambio.`,
@@ -8717,14 +8713,14 @@ function PropuestaFichaContenido({
                     margenEtaDias={margenPorProducto(item.motorCodigo)}
                     noLaborables={colasTaller?.noLaborables}
                     onEdit={
-                      item.listoEnMostradorEl || motivoBloqueoProducto(item.id) ? undefined : modoOrden
-                        ? itemsEnEdicion && item.jobContext && item.motorCodigo
+                      item.listoEnMostradorEl || motivoBloqueoProducto(item.id) || (trabajoMedidaDe(item) && !permisoTrabajoMedida) ? undefined : modoOrden
+                        ? itemsEnEdicion && item.jobContext && (item.motorCodigo || trabajoMedidaDe(item))
                           ? () => abrirEdicion(item)
                           : undefined
                         : () => abrirEdicion(item)
                     }
                     onDescuento={
-                      !modoOrden && item.jobContext && item.motorCodigo
+                      !modoOrden && item.jobContext && (item.motorCodigo || (trabajoMedidaDe(item) && permisoTrabajoMedida))
                         ? () =>
                             setDescuentoTarget({
                               scope: "item",
@@ -8765,7 +8761,7 @@ function PropuestaFichaContenido({
                       } : undefined
                     }
                     planificarEntregas={
-                      !item.listoEnMostrador && !!orden &&
+                      !trabajoMedidaDe(item) && !item.listoEnMostrador && !!orden &&
                       puedeEditarOrden && cambiosSinGuardar === 0 &&
                       (orden.estado === "borrador" ||
                         orden.estado === "pendiente") &&
@@ -8871,8 +8867,7 @@ function PropuestaFichaContenido({
                     pago={orden.pago}
                     total={orden.total}
                     ordenId={orden.id}
-                    puedeCobrar={puedeRegistrarCobros && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
-                    soloLectura={!puedeEditarOrden}
+                    puedeCobrar={puedeCobrarOrden}
                     sinComprobante={
                       orden.tratamientoFiscal === "SIN_COMPROBANTE"
                     }
@@ -8910,6 +8905,7 @@ function PropuestaFichaContenido({
                   facturacionBloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando}
                   onFacturada={recargarOrden}
                   soloLectura={!puedeEditarOrden}
+                  puedeCobrar={puedeCobrarOrden}
                   recargarToken={refrescosComprobantes}
                 />
               </div>
@@ -8924,6 +8920,7 @@ function PropuestaFichaContenido({
                     metaCentroCopiado(p.snapshot?.jobContext as Record<string, unknown> | undefined),
                   ]))}
                   soloLectura={!puedeEditarOrden}
+                  puedeSubir={puedeAdjuntarArchivos}
                   onTotalCambio={setArchivosCount}
                 />
               ) : (
@@ -9123,7 +9120,19 @@ function PropuestaFichaContenido({
           onConfirmar={(motivo) => cancelarOrden(motivo)}
         />
 
+        <TrabajoMedidaDialog
+          open={medidaOpen && puedeModificarProductos && permisoTrabajoMedida}
+          onOpenChange={setMedidaOpen} item={medidaItem} clienteId={clienteId || null} fechaEntrega={fechaEstimada}
+          onGuardar={(item) => {
+            if (!permisoProductosRef.current || !permisoTrabajoMedida) return;
+            setItems(current => medidaItem ? current.map(i => i.id === item.id ? item : i) : [...current, item]);
+            if (item.fechaEntrega) itemFechaTocadaRef.current.add(item.id);
+            if (modoOrden && persistedItemIds.has(item.id)) setEditadosIds(prev => new Set(prev).add(item.id));
+            setMedidaOpen(false); setMedidaItem(null); setOpenIds(new Set([item.id]));
+          }}
+        />
         <AgregarProductoSheet
+          onCrearTrabajoAMedida={abrirNuevoTrabajoMedida}
           ordenTrabajoId={orden?.id}
           contextoMateriales={solicitudPrevisionMateriales(items.filter((i) => i.id !== editingItem?.id)).materiales}
           open={addOpen && puedeModificarProductos}

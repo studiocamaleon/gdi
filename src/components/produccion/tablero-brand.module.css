@@ -83,8 +83,11 @@
 .board.board :global(.ds-nm) { font-weight: 500; }
 .board.board :global(.detail-tbl) { width: 100%; }
 .board.board :global(.detail-tbl th) { font: 10px / 1.4 var(--brand-mono); }
-.board.board :global(.item-nota-produccion) { border-color: color-mix(in srgb, var(--warning) 25%, var(--border)); }
-.board.board :global(.item-nota-produccion .lbl) { color: var(--warning); }
+.notaProduccion {
+  max-height: 20dvh;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
 .board.board :global(.sheet-foot) { flex-shrink: 0; }
 .board.board :global(.sheet-foot-hint) { color: var(--muted-text); font-size: 11px; line-height: 1.5; }
 .board.board :global(.sheet-foot .btn) { white-space: nowrap; border-radius: 7px; font-size: 12px; }

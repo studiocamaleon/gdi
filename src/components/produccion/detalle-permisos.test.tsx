@@ -105,7 +105,10 @@ it("alcance completo del taller no autoriza Ver OT ni descarga su ficha comercia
   ).toBeNull();
   expect(getOrdenTrabajo).not.toHaveBeenCalled();
   expect(getDetalleItemTablero).toHaveBeenCalledWith("trabajo-1");
+  const nota = () => contenedor.querySelector('[role="note"][aria-label="Nota de producción"]');
+  expect(nota()?.textContent).toContain("Imprimir a dos caras");
   await tab("Materiales");
+  expect(nota()?.textContent).toContain("Imprimir a dos caras");
   expect(contenedor.textContent).toContain("Papel de trabajo-1");
   await tab("Actividad");
   expect(contenedor.textContent).toContain("Impresión iniciada");

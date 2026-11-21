@@ -2742,6 +2742,10 @@ export class MotorUniversalService {
     if (!item) {
       throw new NotFoundException('No se encontró el item de cotización.');
     }
+    if (!item.productoId || item.origen === 'TRABAJO_MEDIDA') {
+      throw new BadRequestException('Los trabajos a medida se editan desde su configurador manual.');
+    }
+    const productoId = item.productoId;
     if (item.cotizacion.estado !== 'borrador' || item.cotizacion.numero) {
       throw new BadRequestException(
         'Para editar un presupuesto guardado, creá una nueva versión. Sólo se recotizan directamente las cotizaciones sin formalizar.',
@@ -2768,7 +2772,7 @@ export class MotorUniversalService {
     try {
       producto = await this.cargarProductoYRuta(
         input.tenantId,
-        item.productoId,
+        productoId,
         rutaAlternativaId,
       );
     } catch {
@@ -2778,7 +2782,7 @@ export class MotorUniversalService {
       producto && this.recetasProducto
         ? await this.recetasProducto.resolverPublicadaParaCotizar(
             input.tenantId,
-            item.productoId,
+            productoId,
             producto.rutaAlternativaId,
           )
         : null;
@@ -2825,7 +2829,7 @@ export class MotorUniversalService {
       await this.exigirGuardadoCotizacion(
         tx,
         input.tenantId,
-        item.productoId,
+        productoId,
         solicitud.jobContext,
         Boolean(result.cotizacion?.desglosePrecio?.precioEspecialCliente),
       );

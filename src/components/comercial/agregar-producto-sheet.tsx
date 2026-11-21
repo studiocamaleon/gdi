@@ -40,7 +40,6 @@ import {
 } from "@/lib/nombres-piezas-cotizacion";
 import { useRecetaCotizacion } from "@/hooks/use-receta-cotizacion";
 import { PlanLotesCotizacion } from "@/components/nesting/plan-lotes-cotizacion";
-import Link from "next/link";
 import {
   ArrowLeftIcon,
   BoxesIcon,
@@ -437,6 +436,7 @@ type AgregarProductoSheetProps = {
   contextoMateriales?: Array<{ varianteId: string; cantidad: number | null; unidad: string | null }>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCrearTrabajoAMedida?: () => void;
   productos: ProductoListItem[];
   fechaEntregaDefault: string;
   /** Devuelve false si el formulario ya no admite cambios. */
@@ -9633,6 +9633,7 @@ function ApConfigStep({
 export function AgregarProductoSheet({
   open,
   onOpenChange,
+  onCrearTrabajoAMedida,
   productos,
   fechaEntregaDefault,
   onAddItem,
@@ -10783,12 +10784,19 @@ export function AgregarProductoSheet({
             </>
           ) : (
             <>
-              <span className={catalogStyles.customHint}>
-                ¿Necesitás algo diferente?{" "}
-                <Link href="/productos-servicios/nuevo" className={catalogStyles.customLink}>
-                  Crear producto custom <ArrowUpRightIcon aria-hidden="true" />
-                </Link>
-              </span>
+              {onCrearTrabajoAMedida && (
+                <span className={catalogStyles.customHint}>
+                  ¿Necesitás algo diferente?
+                  <button
+                    type="button"
+                    className={catalogStyles.customLink}
+                    aria-haspopup="dialog"
+                    onClick={onCrearTrabajoAMedida}
+                  >
+                    Crear trabajo a medida <ArrowUpRightIcon aria-hidden="true" />
+                  </button>
+                </span>
+              )}
               <span className="ap-foot-spacer" />
               <ActionButton variant="outline" onPress={close}>
                 Cancelar

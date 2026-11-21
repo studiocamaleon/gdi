@@ -4067,7 +4067,9 @@ model CotizacionItem {
   id                                String                  @id @default(uuid()) @db.Uuid
   tenantId                          String                  @db.Uuid
   cotizacionId                      String                  @db.Uuid
-  productoId                        String                  @db.Uuid
+  productoId                        String?                 @db.Uuid
+  /// CATALOGO o TRABAJO_MEDIDA: el segundo no necesita un producto de catálogo.
+  origen                            String                  @default("CATALOGO")
   rutaAlternativaId                 String?                 @db.Uuid
   /// Revisión de receta publicada usada para este cálculo. Null conserva el
   /// flujo legacy de productos todavía no adoptados por Fase 3.
@@ -4112,7 +4114,7 @@ model CotizacionItem {
   updatedAt                         DateTime                @updatedAt
   tenant                            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cotizacion                        Cotizacion              @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-  producto                          Producto                @relation(fields: [productoId], references: [id])
+  producto                          Producto?               @relation(fields: [productoId], references: [id], onDelete: Restrict)
   recetaRevision                    ProductoRecetaRevision? @relation(fields: [recetaRevisionId], references: [id], onDelete: SetNull)
   ordenTrabajoItems                 OrdenTrabajoItem[]
 
@@ -4651,6 +4653,8 @@ model OrdenTrabajoItemPaso {
   categoriaFamilia                     String
   /// Nombre operativo visible ("Impresión digital frente").
   nombre                               String
+  /// Estación elegida explícitamente para un paso creado en el trabajo a medida.
+  estacionManualId                     String?                       @db.Uuid
   /// Centro de costo que tarifó el paso — proxy de "estación" en fase 1.
   centroCostoId                        String?                       @db.Uuid
   centroCostoNombre                    String?

@@ -312,7 +312,7 @@ export function PagosTab({
   pago,
   total,
   ordenId,
-  puedeCobrar = true,
+  puedeCobrar = false,
   sinComprobante = false,
   soloLectura = false,
 }: {
@@ -320,7 +320,7 @@ export function PagosTab({
   total: number;
   /** Con ordenId la pestaña usa cobros persistidos (módulo Administración). */
   ordenId?: string | null;
-  /** false en borradores: un borrador no puede recibir plata (se emite primero). */
+  /** Habilita el cobro real para el estado, plan y permisos de esta OT. */
   puedeCobrar?: boolean;
   /** Orden sin comprobante fiscal: el total es neto (§6). */
   sinComprobante?: boolean;
@@ -406,7 +406,7 @@ export function PagosTab({
     const saldoReal = Math.max(0, total - cobradoReal);
     const pctReal =
       total > 0 ? Math.min(100, Math.round((cobradoReal / total) * 100)) : 0;
-    const saldadoReal = total > 0 && saldoReal <= 0;
+    const saldadoReal = saldoReal <= 0;
 
     return (
       <div className="pagos-tab">
@@ -539,7 +539,7 @@ export function PagosTab({
                   </Link>
                 ) : (
                   <div className="mov-empty" style={{ padding: "10px 0" }}>
-                    {soloLectura ? "Activá Editar orden para registrar cobros." : "La orden es un borrador: emitila para poder registrar cobros."}
+                    El registro de cobros no está disponible para esta orden.
                   </div>
                 )}
                 <div className="prc-methods">

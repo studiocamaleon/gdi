@@ -185,6 +185,7 @@ export class EtaService {
                 esTerminal: true,
                 nombre: true,
                 familiaCodigo: true,
+                estacionManualId: true,
                 centroCostoId: true,
                 maquinaId: true,
                 duracionEstimadaMin: true,
@@ -286,6 +287,7 @@ export class EtaService {
             ),
             nombre: paso.nombre,
             familiaCodigo: paso.familiaCodigo,
+            estacionManualId: paso.estacionManualId,
             plantillaCodigo:
               resolverFamilia(paso.familiaCodigo)?.plantillaCodigo ?? null,
             centroCostoId: paso.centroCostoId,

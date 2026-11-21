@@ -22,7 +22,7 @@ export function SegmentedControl({
   onChange,
   tone = "default",
   ...props
-}: ChoiceProps & { tone?: "default" | "graphite" }) {
+}: ChoiceProps & { tone?: "default" | "graphite"; fullWidth?: boolean }) {
   return (
     <ToggleButtonGroup
       {...props}

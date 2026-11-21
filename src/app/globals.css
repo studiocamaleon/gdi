@@ -10310,31 +10310,6 @@ body {
   margin-top: 14px;
 }
 
-/* Nota de producción del item, debajo del banner de estado. */
-.tablero-produccion .item-nota-produccion {
-  margin-bottom: 14px;
-  padding: 10px 14px;
-  border: 1px solid #efe1a8;
-  border-radius: var(--r-3);
-  background: var(--warn-bg, #fef9c3);
-}
-
-.tablero-produccion .item-nota-produccion .lbl {
-  margin-bottom: 2px;
-  color: #8a6d1f;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.tablero-produccion .item-nota-produccion .txt {
-  color: var(--ink);
-  font-size: 12.5px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
 /* En el diseño las páginas viven dentro de .content (padding 28px 32px
    40px + scroll); el shell de la app no envuelve así: el canvas va acá.
    (touch — Turbopack) */

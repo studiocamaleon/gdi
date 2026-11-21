@@ -16,6 +16,9 @@
 const COSTOS = [
   'costosMaterialesMoneda',
   'costo',
+  'costoDirecto',
+  'costoInterno',
+  'tarifaHora',
   'costos',
   'costoTotal',
   'costoUnitario',

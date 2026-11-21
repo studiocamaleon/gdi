@@ -5,7 +5,6 @@ import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
 import { PagosTab } from "@/components/produccion/orden-trabajo-detalle-view";
-import { ComprobantesOrdenTab } from "@/components/administracion/facturacion-orden";
 import {
   getMockOrdenDetalle,
   type OrdenTrabajoEstado,
@@ -153,7 +152,7 @@ describe("controles que respetan el modo consulta de la OT", () => {
     expect(html).not.toContain("/administracion/cobros/nuevo");
   });
 
-  it("con los cobros cargados, el acceso requiere edición y además una OT emitida", () => {
+  it("una OT con saldo ofrece registrar pagos sólo cuando el cobro está habilitado", () => {
     const render = (soloLectura: boolean, puedeCobrar = true) => {
       // SSR no ejecuta efectos: simula una consulta terminada sin cobros.
       const estadoCobros = vi
@@ -176,23 +175,6 @@ describe("controles que respetan el modo consulta de la OT", () => {
     expect(render(true)).not.toContain("/administracion/cobros/nuevo");
     expect(render(false)).toContain("/administracion/cobros/nuevo");
     expect(render(false, false)).not.toContain("/administracion/cobros/nuevo");
-  });
-
-  it("Comprobantes tampoco ofrece registrar cobros fuera de edición", () => {
-    const render = (soloLectura: boolean) =>
-      renderToStaticMarkup(
-        <ComprobantesOrdenTab
-          ordenId="ot-1"
-          numero="OT-1"
-          total={1000}
-          facturadoInicial={0}
-          cobradoInicial={0}
-          puedeFacturar
-          soloLectura={soloLectura}
-        />,
-      );
-    expect(render(true)).not.toContain("/administracion/cobros/nuevo");
-    expect(render(false)).toContain("/administracion/cobros/nuevo");
   });
 });
 

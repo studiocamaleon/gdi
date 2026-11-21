@@ -18,6 +18,29 @@ export async function recalcularFechasConversion(
   eta: EtaService,
   prevision: PrevisionMaterialesService,
 ) {
+  const items = await tx.ordenTrabajoItem.findMany({
+    where: { tenantId, ordenId },
+    select: {
+      id: true,
+      nombre: true,
+      parentItemId: true,
+      fechaEntrega: true,
+      cotizacionItem: { select: { origen: true } },
+    },
+  });
+  const manuales = items.filter(
+    (i) => i.cotizacionItem?.origen === 'TRABAJO_MEDIDA',
+  );
+  if (manuales.some((i) => !i.fechaEntrega))
+    throw new BadRequestException(
+      'Indicá la fecha de entrega acordada para cada trabajo a medida antes de convertir el presupuesto.',
+    );
+  const fechas = new Map(
+    manuales.map((i) => [i.id, i.fechaEntrega!.toISOString().slice(0, 10)]),
+  );
+  // Una promesa manual no se reemplaza por una fecha calculada al convertir.
+  if (items.length && manuales.length === items.length)
+    return [...fechas.values()].sort().at(-1)!;
   const contexto = await eta.contextoSimulacion(tenantId, tx);
   const { materiales } = await leerMaterialesOrden(tx, tenantId, ordenId);
   await bloquearVariantesStock(
@@ -31,7 +54,9 @@ export async function recalcularFechasConversion(
     contexto.ahora,
     tx,
   );
-  const trabajos = contexto.items.filter((i) => i.ordenId === ordenId);
+  const trabajos = contexto.items.filter(
+    (i) => i.ordenId === ordenId && !fechas.has(i.id),
+  );
   for (const item of trabajos)
     for (const paso of item.pasos) {
       const motivo = motivoSinEstacion(contexto.estaciones, paso);
@@ -59,13 +84,9 @@ export async function recalcularFechasConversion(
       }
   }
   const { porItem } = simularFlujo(contexto);
-  const items = await tx.ordenTrabajoItem.findMany({
-    where: { tenantId, ordenId },
-    select: { id: true, nombre: true, parentItemId: true },
-  });
-  const fechas = new Map<string, string>();
   const pendientes: string[] = [];
   for (const item of items) {
+    if (fechas.has(item.id)) continue;
     const resultado = porItem.get(item.id);
     if (resultado?.sinEstimar) {
       pendientes.push(item.nombre);

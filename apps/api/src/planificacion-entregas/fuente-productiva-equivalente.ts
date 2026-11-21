@@ -8,7 +8,7 @@ const objeto = (v: unknown): Record<string, unknown> =>
 /** Sólo excluye datos comerciales y metadatos del cálculo. Ante cualquier
  * diferencia productiva se exige recalcular, incluso con el mismo producto. */
 export function huellaFuenteProductiva(c: {
-  productoId: string;
+  productoId: string | null;
   rutaAlternativaId: string | null;
   cantidad: unknown;
   recetaRevisionId: string | null;

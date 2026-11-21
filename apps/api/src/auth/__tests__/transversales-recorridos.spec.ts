@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { TrabajosMedidaController } from '../../trabajos-medida/trabajos-medida.controller';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { lastValueFrom, of } from 'rxjs';
@@ -19,6 +20,10 @@ import { SolicitudesAltaController } from '../../clientes/solicitudes-alta.contr
 type Controlador = { prototype: object };
 type Caso = { vista?: string; rutas: [Controlador, string][] };
 const recorridos: Record<string, Caso> = {
+  'comercial.trabajos_medida': {
+    vista: 'comercial.ordenes.gestionar',
+    rutas: ['opciones', 'obtener', 'calcular', 'guardar'].map((m) => [TrabajosMedidaController, m]),
+  },
   'crm.aprobar_altas': {
     rutas: ['enlace', 'habilitar', 'renovar', 'deshabilitar', 'listar', 'detalle', 'decidir'].map((m) => [SolicitudesAltaController, m]),
   },
