@@ -154,6 +154,7 @@ jobs:
             src/ordenes-trabajo/__tests__/completar-cola.integration.spec.ts \
             src/productos-servicios/precio/__tests__/precio-fijo-opcionales.spec.ts \
             src/motor-universal/__tests__/precio-fijo-opcionales.spec.ts \
+            src/motor-universal/__tests__/contexto-materiales-transporte.spec.ts \
             src/enlaces-publicos/__tests__/enlaces-publicos.http.integration.spec.ts \
             src/produccion/__tests__/produccion-aislamiento-http.integration.spec.ts \
             src/productos-servicios/__tests__/productos-aislamiento-http.integration.spec.ts \
