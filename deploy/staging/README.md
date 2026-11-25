@@ -1,5 +1,11 @@
 # Preparación de staging de Grafoprint
 
+> **Operación vigente: 10/11/2026.** Los cinco servicios de la aplicación funcionan
+> bajo demanda: abrir staging los enciende; 15 minutos sin actividad y sin tareas
+> pendientes permiten apagarlos. El copiador permanece activo. Imágenes, tamaños y
+> versión funcional del 27/10 conservados. [Operación y retención para despliegues](demanda/README.md),
+> [PR #127](https://github.com/studiocamaleon/gdi/pull/127) y [evidencia](VALIDACION.md).
+
 > El procedimiento de PR y la activación actual de CI se explican en [flujo de trabajo](../../docs/flujo-pull-requests.md).
 
 > **Estado vigente: 2026-11-20.** Web, API y ambos workers ejecutan exactamente `b4118ccfc952b3fcd36bd4157334b6e0ba9ed64d`, importado del bundle entregado por Lucas y comprobado primero en staging. Con una autorización posterior se promovieron las mismas imágenes a producción; ver [su registro](../produccion/VALIDACION.md). Trabajo a medida, pago y archivo desde la orden sin entrar en edición, y notas amarillas en la orden y el sheet de producción comprobados mediante navegador con datos ficticios. 147 pruebas locales y compilaciones remotas aprobadas; 321 migraciones aplicadas y comprobante posterior de respaldo verificado. La promoción conservó la configuración y los recursos propios de producción. Gotenberg mantiene imagen y recursos, con espera de arranque de Chromium ampliada a 60 segundos. Se conserva el encendido bajo demanda del [PR #127](https://github.com/studiocamaleon/gdi/pull/127), todavía independiente. Mientras ese PR no esté integrado, usar su procedimiento/manifiestos o actualizar sólo la imagen conservando archivos y comando del controlador: los manifiestos antiguos de este directorio no incluyen ese mecanismo. Versiones, pruebas, límites y reversión en [VALIDACION.md](VALIDACION.md).
@@ -44,7 +50,7 @@ El canal de prueba del Inbox se comprobó con texto, PDF, imagen, audio, video y
 | Redis | Redis Cloud Essentials, AWS São Paulo | TCP/TLS y ensayo sintético BullMQ comprobados desde Fly | 1 GB RAM total: 512 MB de datos y 512 MB de réplica en la misma zona |
 | Archivos | R2, bucket exclusivo con jurisdicción US | Bucket privado y URLs firmadas | Consumo |
 
-Hay una máquina activa por servicio; no es alta disponibilidad. Los tamaños deben contrastarse con mediciones antes de ampliar las pruebas. Los workers no se apagan automáticamente: esperan trabajos incluso cuando no hay tráfico web. No configurar escalado automático del worker de geometría sin recalcular el presupuesto compartido del pool.
+Hay una máquina por servicio; no es alta disponibilidad. Los cinco servicios de aplicación se encienden y apagan juntos mediante el controlador de demanda; el respaldo permanece activo. Los tamaños deben contrastarse con mediciones antes de ampliar las pruebas. No configurar autostop de Fly directamente en los workers: el controlador comprueba los trabajos pendientes antes de detenerlos. Tampoco escalar el worker de geometría sin recalcular el presupuesto compartido del pool.
 
 La comprobación de salud de la API consulta PostgreSQL cada 30 segundos y el worker PDF consulta la base cada dos segundos. Presupuestar Neon activo mientras estos servicios estén encendidos. Upstash de precio fijo se evaluó, pero su plan de 1 GB limita cada solicitud a 10 MB, por debajo de algunos resultados que permite el formato actual de geometría. Ver la medición sintética y las alternativas en [PRESUPUESTO.md](./PRESUPUESTO.md).
 
