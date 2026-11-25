@@ -78,6 +78,8 @@ jobs:
         # No requieren seed, cuentas reales ni acceso a proveedores externos.
         run: |
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/common/codigos-seguridad.spec.ts \
+            src/webhooks-whatsapp/__tests__/webhooks-whatsapp.http.spec.ts \
             src/trabajos-medida/trabajo-medida.calculo.spec.ts \
             src/trabajos-medida/trabajos-medida.integration.spec.ts \
             src/pantallas-produccion/pantallas-produccion.integration.spec.ts \
@@ -190,7 +192,7 @@ jobs:
       - name: Comprobar editor de tarifarios y canales
         run: |
           npm ci --include=dev --no-audit --no-fund
-          node --test scripts/entradas-dependencias.test.cjs
+          node --test scripts/entradas-dependencias.test.cjs scripts/migrar-familia-css.test.mjs
           node node_modules/vitest/vitest.mjs run \
             src/components/administracion/correccion-fiscal.test.tsx \
             src/components/usuarios/empleado-usuario.test.tsx \
@@ -300,3 +302,22 @@ jobs:
         run: |
           npm run prisma:migrate:deploy
           node node_modules/jest/bin/jest.js --runInBand --runTestsByPath src/plataforma/__tests__/fiscal-arca.integration.spec.ts
+
+  forma-studio:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/forma-studio
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.21.0'
+          package-manager-cache: false
+      - run: npm ci --include=dev --no-audit --no-fund
+      - run: npm test -- --maxWorkers=1
+      - run: npm run build

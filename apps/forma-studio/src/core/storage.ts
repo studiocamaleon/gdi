@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { artworkBlob } from "./artwork";
 import { newProject, STYLES, styleDefaults } from "./project";
 import { DEFAULT_LIGHTBOX, LIGHTBOX_LAYERS, validateLightbox } from "./lightbox";
 import type { Project, Parameters, Production, JointParameters } from "./types";
@@ -126,8 +127,7 @@ export function parseProject(input: unknown): Project {
   }
   validateLightbox(result.lightbox);
   for (const image of Object.values(result.faceArtwork || {}))
-    if(image && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image))
-      throw new Error("La gráfica debe ser una imagen PNG, JPEG o WebP incorporada al proyecto.");
+    if (image) artworkBlob(image);
   if (!("lipEnabled" in p.params))
     result.params.lipEnabled = Number(p.params.lip || 0) > 0;
   if (!["Round", "Miter", "Bevel"].includes(result.params.corner))

@@ -1,3 +1,4 @@
+import "./svg-test-dom";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import Module, { type ManifoldToplevel } from "manifold-3d";
 import { readFile } from "node:fs/promises";
@@ -20,7 +21,6 @@ import {
 import { contoursFromSource } from "../src/core/source";
 import type { Contours, FitBaseType, Part, Project } from "../src/core/types";
 import { unzipSync } from "fflate";
-import { DOMParser } from "linkedom";
 
 let wasm: ManifoldToplevel, R: Contours[];
 const wide: Contours[] = [
@@ -42,15 +42,6 @@ const wide: Contours[] = [
 beforeAll(async () => {
   wasm = await Module();
   wasm.setup();
-  vi.stubGlobal("DOMParser", DOMParser);
-  vi.stubGlobal(
-    "XMLSerializer",
-    class {
-      serializeToString(doc: Document) {
-        return doc.toString();
-      }
-    },
-  );
   const font = await readFile(
     new URL("../public/fonts/BebasNeue.ttf", import.meta.url),
   );
