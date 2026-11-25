@@ -317,3 +317,15 @@ describe('simularFlujo', () => {
     expect(r.porItem.get('a')?.finEstimado).toEqual(jul(20, 10, 30));
   });
 });
+
+it("conserva las fechas y las llegadas cuando la emisión omite la traza de planificación", () => {
+  const entrada = {
+    items: ["A", "B", "C"].map((id) => item(id, [
+      interno(1, "impresion", 40), interno(2, "impresion", 15),
+    ])),
+    estaciones: TALLER, ahora: AHORA, medianas: new Map<string, number>(),
+  };
+  const completa = simularFlujo(entrada);
+  expect(completa.traza).toHaveLength(6);
+  expect(simularFlujo({ ...entrada, incluirTraza: false })).toEqual({ ...completa, traza: [] });
+});

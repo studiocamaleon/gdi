@@ -89,8 +89,8 @@ export class EtaService {
   // ── Ensamblado de entradas + corrida del motor ─────────────────────────
 
   /** Arma las 5 entradas desde la DB y corre la simulación de todo el taller. */
-  async correr(tenantId: string): Promise<ResultadoSimulacion> {
-    const resultado = simularFlujo(await this.contextoSimulacion(tenantId));
+  async correr(tenantId: string, incluirTraza = true): Promise<ResultadoSimulacion> {
+    const resultado = simularFlujo({ ...(await this.contextoSimulacion(tenantId)), incluirTraza });
     const arbol = await this.prisma.ordenTrabajoItem.findMany({
       where: {
         tenantId,
@@ -397,7 +397,7 @@ export class EtaService {
 
     let porItem: ResultadoSimulacion['porItem'] | null = null;
     try {
-      porItem = (await this.correr(auth.tenantId)).porItem;
+      porItem = (await this.correr(auth.tenantId, false)).porItem;
     } catch (error) {
       if (this.esRetiradaEta(error)) return;
       this.logger.error(

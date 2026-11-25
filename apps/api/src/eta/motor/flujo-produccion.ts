@@ -307,6 +307,7 @@ function calendarioVacio(calendario: CalendarioEstacion | null): boolean {
 export function simularFlujo({
   items,
   tandas = [],
+  incluirTraza = true,
   estaciones,
   medianas,
   ahora = new Date(),
@@ -317,6 +318,8 @@ export function simularFlujo({
   items: TableroItemData[];
   /** Sólo escenarios internos de preparación; no publica cambios. */
   tandas?: TandaSimulada[];
+  /** La promesa comercial sólo necesita las fechas finales de los items. */
+  incluirTraza?: boolean;
   estaciones: Estacion[];
   medianas: Map<string, number>;
   ahora?: Date;
@@ -675,12 +678,15 @@ export function simularFlujo({
     ]),
   );
   // Duración, atención pendiente y ruteo son constantes durante esta simulación.
+  const listoPorPaso = new Map<string, Date>();
   const preparados = new Map<
     string,
     {
       est: EstacionSim;
       demanda: ReturnType<typeof recortarDemanda>;
       claveDemanda: string;
+      claveColocacion: string | null;
+      minutos: number;
     }
   >();
   const esMejor = (a: Candidato, b: Candidato) => {
@@ -724,21 +730,26 @@ export function simularFlujo({
         itemsSinVentana.has(nodo.item.id)
       )
         continue;
-      const previos = predecesores.get(pasoId) ?? [];
-      if (!previos.every((id) => programados.has(id))) continue;
-      const inicioLote = nodo.paso.planificadoDesde
-        ? new Date(nodo.paso.planificadoDesde)
-        : ahora;
-      const baseInicio =
-        Number.isFinite(inicioLote.getTime()) &&
-        inicioLote > ahora &&
-        nodo.paso.estado !== 'en_curso'
-          ? inicioLote
+      // Al programar un predecesor su fecha queda fija durante esta corrida.
+      let listo = listoPorPaso.get(pasoId);
+      if (!listo) {
+        const previos = predecesores.get(pasoId) ?? [];
+        if (!previos.every((id) => programados.has(id))) continue;
+        const inicioLote = nodo.paso.planificadoDesde
+          ? new Date(nodo.paso.planificadoDesde)
           : ahora;
-      const listo = previos.reduce((max, id) => {
-        const fecha = disponibleDesde.get(id) ?? ahora;
-        return fecha > max ? fecha : max;
-      }, new Date(baseInicio));
+        const baseInicio =
+          Number.isFinite(inicioLote.getTime()) &&
+          inicioLote > ahora &&
+          nodo.paso.estado !== 'en_curso'
+            ? inicioLote
+            : ahora;
+        listo = previos.reduce((max, id) => {
+          const fecha = disponibleDesde.get(id) ?? ahora;
+          return fecha > max ? fecha : max;
+        }, baseInicio);
+        listoPorPaso.set(pasoId, listo);
+      }
 
       if (esTercerizado(nodo.paso)) {
         if (
@@ -806,21 +817,20 @@ export function simularFlujo({
               ],
             };
         }
+        const claveDemanda = JSON.stringify([demanda, nodo.paso.personalFijo]);
         preparado = {
           est,
           demanda,
-          claveDemanda: JSON.stringify([demanda, nodo.paso.personalFijo]),
+          claveDemanda,
+          minutos: demanda.fases.reduce((s, f) => s + f.minutos, 0),
+          // Con agenda publicada el paso debe excluir su propia reserva.
+          claveColocacion: reservasPorEstacion.size || enCurso
+            ? null
+            : `${est.key}|${nodo.paso.maquinaId ?? ''}|${listo.getTime()}|${claveDemanda}`,
         };
         preparados.set(pasoId, preparado);
       }
-      const { est, demanda } = preparado;
-      const duracion = demanda.fases.reduce((s, f) => s + f.minutos, 0);
-      // Sin reservas publicadas, misma máquina/estación, llegada y demanda
-      // producen la misma ventana. Sólo cambia la identidad y prioridad del paso.
-      const claveColocacion =
-        reservasPorEstacion.size || enCurso
-          ? null
-          : `${est.key}|${nodo.paso.maquinaId ?? ''}|${listo.getTime()}|${preparado.claveDemanda}`;
+      const { est, demanda, minutos: duracion, claveColocacion } = preparado;
       const equivalente =
         claveColocacion === null
           ? null
@@ -889,7 +899,7 @@ export function simularFlujo({
         // comparte esa evaluación. El cache se descarta al elegir cada paso.
         const claveAtencion = agendaHumana.length
           ? null
-          : `${est.key}|${inicio.getTime()}|${JSON.stringify([demanda, nodo.paso.personalFijo])}`;
+          : `${est.key}|${inicio.getTime()}|${preparado.claveDemanda}`;
         if (
           claveAtencion !== null &&
           atencionesEquivalentes.has(claveAtencion)
@@ -1022,43 +1032,45 @@ export function simularFlujo({
     pendientes.delete(paso.id);
     finTrabajo.set(paso.id, fin);
     disponibleDesde.set(paso.id, finSeparado);
-    anotar({
-      itemId: item.id,
-      pasoId: paso.id,
-      pasoIndice: paso.indice,
-      predecesorPasoIds: [...(predecesores.get(paso.id) ?? [])],
-      estacionKey: esTercerizado(paso) ? PROVEEDOR_KEY : est!.key,
-      inicio,
-      fin,
-      duracionMin: duracion,
-      preparacionMin,
-      plazoDias: esTercerizado(paso) ? paso.plazoProveedorDias : null,
-      esperaMin: Math.max(
-        0,
-        Math.round((inicio.getTime() - listo.getTime()) / 60000),
-      ),
-      parcial: esTercerizado(paso)
-        ? false
-        : est!.parcial || !!mejor.atencion?.parcial,
-      equipoProduccionId: est?.equipo?.id ?? null,
-      atencionPlanificada:
-        mejor.atencion && paso.estado === 'pendiente'
-          ? guardarAtencion(
-              mejor.atencion,
-              contextoDeAtencion(
-                paso,
-                estacionDe(paso),
-                duracionDePaso(paso, medianas)!,
-              ),
-            )
-          : undefined,
-      reservasHumanas: mejor.atencion?.reservas ?? [],
-      tramosOperacion: mejor.atencion?.tramos ?? [],
-      faseEnCursoEstimada: paso.estado === 'en_curso',
-      tercerizado: esTercerizado(paso),
-      enCurso: paso.estado === 'en_curso',
-      candidatos,
-    });
+    if (incluirTraza) {
+      anotar({
+        itemId: item.id,
+        pasoId: paso.id,
+        pasoIndice: paso.indice,
+        predecesorPasoIds: [...(predecesores.get(paso.id) ?? [])],
+        estacionKey: esTercerizado(paso) ? PROVEEDOR_KEY : est!.key,
+        inicio,
+        fin,
+        duracionMin: duracion,
+        preparacionMin,
+        plazoDias: esTercerizado(paso) ? paso.plazoProveedorDias : null,
+        esperaMin: Math.max(
+          0,
+          Math.round((inicio.getTime() - listo.getTime()) / 60000),
+        ),
+        parcial: esTercerizado(paso)
+          ? false
+          : est!.parcial || !!mejor.atencion?.parcial,
+        equipoProduccionId: est?.equipo?.id ?? null,
+        atencionPlanificada:
+          mejor.atencion && paso.estado === 'pendiente'
+            ? guardarAtencion(
+                mejor.atencion,
+                contextoDeAtencion(
+                  paso,
+                  estacionDe(paso),
+                  duracionDePaso(paso, medianas)!,
+                ),
+              )
+            : undefined,
+        reservasHumanas: mejor.atencion?.reservas ?? [],
+        tramosOperacion: mejor.atencion?.tramos ?? [],
+        faseEnCursoEstimada: paso.estado === 'en_curso',
+        tercerizado: esTercerizado(paso),
+        enCurso: paso.estado === 'en_curso',
+        candidatos,
+      });
+    }
     if (!esTercerizado(paso) && listo > ahora) {
       const lista = llegadasPorEstacion.get(est!.key) ?? [];
       lista.push({
