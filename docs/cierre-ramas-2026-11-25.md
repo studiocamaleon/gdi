@@ -1,6 +1,6 @@
 # Cierre de PR y ramas — noviembre de 2026
 
-Lucas autorizó revisar e integrar los PR pendientes, publicar el conjunto y alinear producción, GitHub y local. Incluyó después los avances locales de Chile y el plan/prototipo de GrafoCommerce. El lote se revisa en [PR #133](https://github.com/studiocamaleon/gdi/pull/133).
+Lucas autorizó revisar e integrar los PR pendientes, publicar el conjunto y alinear producción, GitHub y local. Incluyó después los avances locales de Chile y el plan/prototipo de GrafoCommerce. El lote queda documentado en [PR #133](https://github.com/studiocamaleon/gdi/pull/133).
 
 ## Trabajo incorporado
 
@@ -33,4 +33,6 @@ Antes de retirar referencias se guardó un bundle privado de todas las ramas y s
 
 ## Publicación
 
-Revisión funcional candidata: `101ed93273837bfbbb96a60497f3d9f33f9c4563`. Los merges de regularización posteriores sólo conservan historial/documentación. Las imágenes y resultados definitivos se registran en [staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md).
+Revisión funcional publicada en staging y producción: `101ed93273837bfbbb96a60497f3d9f33f9c4563`. Los merges de regularización posteriores conservan historial/documentación. El commit operativo `7eec79add` agrega la espera de arranque PDF de 60 segundos. La aplicación y sus dependencias ejecutadas corresponden a la revisión funcional; la configuración operativa y sus fuentes también están bajo custodia. Las imágenes y resultados definitivos se registran en [staging](../deploy/staging/VALIDACION.md) y [producción](../deploy/produccion/VALIDACION.md).
+
+La preview de Vercel pasó la revisión de portada, Grafo3D, preparación de producción y exportación de un STL válido. El merge y el estado final de los doce PR incluidos se verifican en #133, con CI y conversaciones resueltas. Al retirar ramas se exige que su SHA no haya cambiado desde el inventario revisado y que sea ancestro de `main`; las carpetas y los archivos ignorados se conservan.

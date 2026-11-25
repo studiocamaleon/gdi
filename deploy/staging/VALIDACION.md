@@ -35,7 +35,7 @@ Alta pública reconoce Chile, rechaza un RUT de verificador inválido y acepta/n
 
 ### Dependencias, producción y recuperación
 
-CI aprobado en `3298d071f`: HTTP con base efímera, contenedores, auditoría npm y análisis CodeQL; sin alertas abiertas en el PR. Las regresiones de respuesta JSON y Effect fueron reproducidas antes de corregirlas. La auditoría de ejecución no encontró alertas altas ni críticas; conserva avisos menores. [Comprobaciones del PR](https://github.com/studiocamaleon/gdi/pull/133/checks).
+CI aprobado en `7eec79add`: HTTP con base efímera, contenedores, auditoría npm y análisis CodeQL; sin alertas abiertas en el PR. Las regresiones de respuesta JSON y Effect fueron reproducidas antes de corregirlas. La auditoría de ejecución no encontró alertas altas ni críticas; conserva avisos menores. [Comprobaciones del PR](https://github.com/studiocamaleon/gdi/pull/133/checks).
 
 En el worker desplegado, OpenNest procesó tres veces la muestra ficticia de ocho piezas en dos placas; DXF y medios se comprobaron en CI. Gotenberg con Chromium `156.0.8078.108` produjo un PDF válido de 15.304 bytes en 2,5 segundos. Las pruebas de condiciones/orden de pasos, teléfono, cotización, facturación y permisos están incluidas en las suites del lote.
 
@@ -47,7 +47,7 @@ Comprobante `aee09d84-6526-4927-965c-f5e22f336062`, terminado el 25/11 a las 20:
 
 ### Promoción y reversión
 
-La promoción autorizada usa estos mismos digests, sin reconstrucción, y configuración propia de producción. Su resultado se registra en [producción](../produccion/VALIDACION.md). Las imágenes b411 del registro anterior se conservan para volver atrás; las dos migraciones son aditivas. Revertir imágenes no borra columnas ni revierte datos. La revisión visual de la preview de Vercel requiere completar el inicio de sesión de GitHub; su compilación y despliegue están aprobados.
+La promoción autorizada usa estos mismos digests, sin reconstrucción, y configuración propia de producción. Su resultado se registra en [producción](../produccion/VALIDACION.md). Las imágenes b411 del registro anterior se conservan para volver atrás; las dos migraciones son aditivas. Revertir imágenes no borra columnas ni revierte datos. La preview de Vercel quedó comprobada tras el ingreso autorizado: portada y navegación correctas; Grafo3D generó diez componentes del ejemplo GRAFO, preparó su mesa de producción y descargó un STL binario válido de 1.197.084 bytes y 23.940 triángulos. El acceso comercial continúa en «Próximamente».
 
 ## 2026-11-20 — Trabajo a medida, pagos, archivos y notas
 
