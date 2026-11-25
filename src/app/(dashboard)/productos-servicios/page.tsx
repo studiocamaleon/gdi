@@ -5,8 +5,7 @@ import { Suspense } from "react";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { ProductosServiciosTable } from "@/components/productos-servicios/productos-table";
 import {
-  getCatalogoComercial,
-  getProductos,
+  getCatalogoComercialConConteos,
   listProductos,
 } from "@/lib/productos-servicios-api";
 
@@ -41,7 +40,7 @@ async function ProductosServiciosPageContent({
   const categoriaGrupo = first(params.categoriaGrupo)?.trim() ?? "";
   const vista = first(params.vista) === "categorias" ? "categorias" : "tabla";
   const composicion = normalizarComposicion(first(params.composicion));
-  const [res, catalogo, todosLosProductos, canManage] = await Promise.all([
+  const [res, catalogo, canManage] = await Promise.all([
     listProductos({
       page,
       limit: PAGE_SIZE,
@@ -54,8 +53,7 @@ async function ProductosServiciosPageContent({
       orden,
       composicion: composicion || undefined,
     }),
-    getCatalogoComercial(),
-    getProductos(),
+    getCatalogoComercialConConteos(),
     puedeConfigurar("productos", "costos.catalogo.gestionar"),
   ]);
   return (
@@ -82,18 +80,12 @@ async function ProductosServiciosPageContent({
           nombre: grupo.nombre,
           descripcion: grupo.descripcion,
           subcategorias: grupo.subcategorias.length,
-          productos: todosLosProductos.filter(
-            (producto) =>
-              producto.subcategoriaComercial.categoria.codigo === grupo.codigo,
-          ).length,
+          productos: grupo.productos,
           items: grupo.subcategorias.map((subcategoria) => ({
             codigo: subcategoria.codigo,
             nombre: subcategoria.nombre,
             descripcion: subcategoria.descripcion,
-            productos: todosLosProductos.filter(
-              (producto) =>
-                producto.subcategoriaComercial.codigo === subcategoria.codigo,
-            ).length,
+            productos: subcategoria.productos,
           })),
         }))}
         subcategorias={catalogo.flatMap((grupo) =>

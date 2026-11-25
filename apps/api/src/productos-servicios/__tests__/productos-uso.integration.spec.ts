@@ -137,4 +137,20 @@ describe('Frecuencia por producto y empresa (PostgreSQL)', () => {
     }>;
     expect(publico.find((p) => p.id === ids[0])?.usosEnOrdenes).toBe(4);
   });
+  it('cuenta por empresa, incluye productos inactivos y excluye las plantillas del sistema', async () => {
+    const service = Object.assign(Object.create(ProductosService.prototype), { prisma: db }) as ProductosService;
+    await db.producto.createMany({ data: [
+      { tenantId: tenants[0], subcategoriaComercialId: subcategoriaId, codigo: 'HISTORICO', nombre: 'Histórico ficticio', activo: false },
+      { tenantId: tenants[0], subcategoriaComercialId: subcategoriaId, codigo: 'INTERNO', nombre: 'Plantilla ficticia', sistemaCodigo: 'FICTICIO' },
+    ] });
+    for (const [i, total] of [3, 2].entries()) {
+      const grupos = await service.listarCatalogoComercial(tenants[i]);
+      expect(grupos.find((g) => g.id === categoriaId)).toMatchObject({
+        productos: total, subcategorias: [{ id: subcategoriaId, productos: total }],
+      });
+    }
+    const global = await service.listarCatalogoComercial();
+    expect(global.find((g) => g.id === categoriaId)).not.toHaveProperty('productos');
+  });
+
 });

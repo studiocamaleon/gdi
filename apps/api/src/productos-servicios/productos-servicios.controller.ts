@@ -158,8 +158,11 @@ export class ProductosServiciosController {
   }
 
   @Get('catalogo-comercial')
-  listarCatalogoComercial() {
-    return this.service.listarCatalogoComercial();
+  listarCatalogoComercial(
+    @CurrentSession() auth: CurrentAuth,
+    @Query('conteos') conteos?: string,
+  ) {
+    return this.service.listarCatalogoComercial(conteos === '1' ? auth.tenantId : undefined);
   }
 
   @Get('productos')
