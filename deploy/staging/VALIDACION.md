@@ -1,5 +1,54 @@
 # Validación de staging — historial
 
+## 2026-11-25 — Cierre integrado de PR y avances locales
+
+[PR #133](https://github.com/studiocamaleon/gdi/pull/133), autorizado para integrar, publicar y cerrar el lote. Incluye #63, #64, #71, #72, #73, #105, #116, #123, #124, #125, #126 y #127, los avances locales de Chile y el plan/prototipo de GrafoCommerce. La revisión de ramas históricas queda en [el registro de cierre](../../docs/cierre-ramas-2026-11-25.md).
+
+Revisión funcional **`101ed93273837bfbbb96a60497f3d9f33f9c4563`**, confirmada dentro de web, API y ambos workers, con Node 24.21.0. Los commits posteriores conservan historial y documentación. Compilaciones de producción realizadas en remoto. 323 migraciones: se agregaron únicamente piloto desde invitación y RUT de clientes; recuentos previos conservados, sin seed ni reset. Se preservaron tamaños, configuración, secretos propios y encendido bajo demanda.
+
+| Servicio | Digest verificado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:26b9b76b74650bfbd1d8e5ede96efcbbb68fb720207df551aee738c1d153126f` |
+| Web | `sha256:c7b317564907cdeee05cb193db163ca0c8a853e4561a71451d4b29c167311452` |
+| PDF | `sha256:c0fa0448556408845ed177f395e8b054c488b96e024c4420e55b5182cfff03fd` |
+| Copiador | `sha256:d7fea1e72a9742a8f33df5296983be41ac30012dafbd878361b9fd737a8ef258` |
+
+### Trabajo a medida — aprobado
+
+Recorrido por navegador con la empresa independiente «QA Cierre Chile 25/11» y el cliente aprobado desde alta pública. Se emitió `OT-2026-0001`, trabajo «QA cierre: cartel a medida», una unidad y un paso manual en «Terminación QA ficticia». Costo total CLP 6.000; venta neta mostrada 8.403, impuesto 1.597 y total CLP 10.000. El formulario rechazó configuración incompleta de estación, alícuota y horas sin centro de costo. El ensayo final usa costo total y no asigna horas. No se inició ni completó producción.
+
+### Pago desde la orden — aprobado
+
+Pagos → Registrar pago parcial o total, **sin entrar en «Editar orden»**. Cobro ficticio de CLP 2.500 en efectivo a Caja mostrador, recibo `REC-2026-0001`. Regresó a la orden y mostró un cobro, 25 % cobrado y saldo CLP 7.500. La caja inicial usa CLP; el catálogo chileno ofrece efectivo y transferencia. No hubo transferencia de dinero ni cobro externo.
+
+### Archivo desde la orden — aprobado
+
+Archivos → cargar referencia, **sin entrar en «Editar orden»**. `qa-archivo-orden.csv`, 59 bytes, quedó guardado con su autor y enlace de descarga. La descarga autenticada coincide byte a byte con el original ficticio. TXT no forma parte de los formatos admitidos; se usó CSV, contemplado en la lista permitida.
+
+### Notas de producción — aprobado
+
+La misma nota aparece en Productos → Flujo de producción de la orden y en el sheet de Operación diaria. En ambas vistas se comprobó el elemento «Nota de producción» y su estilo efectivo: fondo amarillo `oklch(0.973 0.071 103.193)`, borde `oklch(0.852 0.199 91.936)`.
+
+### Chile y pilotos — aprobado con límites explícitos
+
+Alta pública reconoce Chile, rechaza un RUT de verificador inválido y acepta/normaliza el válido. Reenviar la solicitud no crea un duplicado; su aprobación creó un cliente chileno con RUT canónico. Suites de API y web comprueban búsqueda por RUT/CUIT, paginación, aislamiento de empresa, permisos, invitación y comienzo del piloto al aceptar. La configuración pública de Paddle se comprueba por entorno; no se activaron ventas ni webhooks de cobros reales.
+
+### Dependencias, producción y recuperación
+
+CI aprobado en `3298d071f`: HTTP con base efímera, contenedores, auditoría npm y análisis CodeQL; sin alertas abiertas en el PR. Las regresiones de respuesta JSON y Effect fueron reproducidas antes de corregirlas. La auditoría de ejecución no encontró alertas altas ni críticas; conserva avisos menores. [Comprobaciones del PR](https://github.com/studiocamaleon/gdi/pull/133/checks).
+
+En el worker desplegado, OpenNest procesó tres veces la muestra ficticia de ocho piezas en dos placas; DXF y medios se comprobaron en CI. Gotenberg con Chromium `156.0.8078.108` produjo un PDF válido de 15.304 bytes en 2,5 segundos. Las pruebas de condiciones/orden de pasos, teléfono, cotización, facturación y permisos están incluidas en las suites del lote.
+
+El copiador actualizado completó una copia real y los reintentos 503 están cubiertos por pruebas. Pasaron además las dos pruebas optativas de PostgreSQL en un cluster aislado: lector sin escritura, dos empresas ficticias, cuatro archivos y restauración cifrada; B2 simulado. GrafoCommerce conserva plan y prototipo, con recorridos simulados de tarjeta y transferencia; no es una tienda publicada.
+
+### Respaldo posterior — verificado
+
+Comprobante `aee09d84-6526-4927-965c-f5e22f336062`, terminado el 25/11 a las 20:06 UTC: firma, huellas y manifiesto descifrado correctos; 323 migraciones, 37 archivos y fuentes de `101ed93273837bfbbb96a60497f3d9f33f9c4563`, con los cuatro digests de esta tabla. Esta verificación no repitió una restauración de la base de staging.
+
+### Promoción y reversión
+
+La promoción autorizada usa estos mismos digests, sin reconstrucción, y configuración propia de producción. Su resultado se registra en [producción](../produccion/VALIDACION.md). Las imágenes b411 del registro anterior se conservan para volver atrás; las dos migraciones son aditivas. Revertir imágenes no borra columnas ni revierte datos. La revisión visual de la preview de Vercel requiere completar el inicio de sesión de GitHub; su compilación y despliegue están aprobados.
+
 ## 2026-11-20 — Trabajo a medida, pagos, archivos y notas
 
 Publicado **sólo en [staging](https://staging.grafoprint.com.ar)** por pedido expreso de Lucas. Revisión de aplicación **`b4118ccfc952b3fcd36bd4157334b6e0ba9ed64d`**, comprobada dentro de web, API y ambos workers. Se verificó e importó el bundle entregado: 12 commits sobre `565f4e24f96ff68f45c56ff0c9b05bdfb835430c`, dependiente del [PR #131](https://github.com/studiocamaleon/gdi/pull/131). Se usó un worktree aislado; el checkout y los procesos locales originales se conservaron. No se fusionaron PR ni se publicó en producción. La consulta final confirmó que #131 y #127 continúan abiertos e independientes; ninguno se cerró ni se actualizó con estos commits. Este registro posterior no cambia la revisión ejecutada. Lucas autorizó posteriormente promover estas mismas imágenes a producción e integrar el lote mediante #132; ver [el registro de producción](../produccion/VALIDACION.md).
