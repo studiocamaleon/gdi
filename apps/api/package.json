@@ -137,7 +137,8 @@
   },
   "overrides": {
     "@prisma/config@6.19.3": {
-      "deepmerge-ts": "8.0.0"
+      "deepmerge-ts": "8.0.0",
+      "effect": "3.22.1"
     },
     "@nestjs/platform-express": {
       "multer": "2.5.0"

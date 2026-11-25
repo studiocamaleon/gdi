@@ -89,6 +89,30 @@ jobs:
       - name: Comprobar tipografía de etiquetas en el contenedor final
         run: docker run --rm grafoprint-staging-api:local node scripts/deploy/verify-label.cjs
 
+      - name: Comprobar DXF y geometría nativa con las dependencias finales
+        run: |
+          docker run --rm --network none \
+            -v "$PWD/apps/api/src/productos-servicios/geometrias/python:/pruebas:ro" -w /pruebas \
+            grafoprint-staging-api:local /opt/grafoprint-python/bin/python -m unittest -v test_dxf_fabricacion
+          docker run --rm -i --network none \
+            -v "$PWD/apps/api/src/workers/geometria/fixtures:/fixtures:ro" \
+            grafoprint-staging-api:local node <<'NODE'
+          const assert = require('node:assert/strict');
+          const { OpenNestService } = require('./dist/src/workers/geometria/opennest.service');
+          const { entrada } = require('/fixtures/puma-200cm.json');
+          (async () => {
+            for (let repeticion = 1; repeticion <= 3; repeticion++) {
+              const inicio = performance.now();
+              const resultado = await new OpenNestService().resolver({ ...entrada, timeoutMs: 120000 });
+              assert.equal(resultado.placasUsadas, 2);
+              assert.equal(resultado.cantidadColocada, 8);
+              assert.equal(resultado.busqueda?.motivoFin, 'MINIMO_PLACAS');
+              console.log(JSON.stringify({ repeticion, placas: resultado.placasUsadas,
+                piezas: resultado.cantidadColocada, milisegundos: Math.round(performance.now() - inicio) }));
+            }
+          })().catch(error => { console.error(error); process.exitCode = 1; });
+          NODE
+
       - name: Compilar aplicación Next Linux amd64 con chequeo de tipos
         run: docker build --platform linux/amd64 --target web -f deploy/Dockerfile -t grafoprint-staging-web:local .
 

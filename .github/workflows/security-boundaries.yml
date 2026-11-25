@@ -72,8 +72,6 @@ jobs:
           npm run test:dependencias
           npm run prisma:generate
           npm run prisma:migrate:deploy
-      - name: Comprobar entradas y dependencias web/API con datos ficticios
-        run: node --test scripts/entradas-dependencias.test.cjs
       - name: Comprobar permisos, referencias ajenas y enlaces públicos por HTTP
         working-directory: apps/api
         # Lista explícita: estas suites crean y retiran sus propios fixtures.
@@ -189,6 +187,7 @@ jobs:
       - name: Comprobar editor de tarifarios y canales
         run: |
           npm ci --include=dev --no-audit --no-fund
+          node --test scripts/entradas-dependencias.test.cjs
           node node_modules/vitest/vitest.mjs run \
             src/components/administracion/correccion-fiscal.test.tsx \
             src/components/usuarios/empleado-usuario.test.tsx \

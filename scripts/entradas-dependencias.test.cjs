@@ -32,7 +32,7 @@ test('el saneamiento quita una plantilla dividida entre nodos de un shadow root'
 
 test('el analizador JSON termina una entrada comprimida con bytes sobrantes y sigue atendiendo', { timeout: 5000 }, async () => {
   const json = api('express').json();
-  const contenido = { empresa: 'ficticia' };
+  const contenido = { empresa: '<script>throw new Error("ensayo-ficticio")</script>' };
   const inicio = Buffer.concat([deflateSync(JSON.stringify(contenido)), Buffer.alloc(1)]);
   const sobrante = Buffer.alloc(128);
   let cliente, decoderAlFinalizar, procesabaSobrantes;
@@ -45,6 +45,8 @@ test('el analizador JSON termina una entrada comprimida con bytes sobrantes y si
     json(req, res, err => {
       if (err) { res.writeHead(400).end(); return; }
       procesabaSobrantes = !decoderAlFinalizar.destroyed;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       req.once('end', () => res.end(JSON.stringify(req.body)));
       cliente.end(sobrante);
     });
@@ -57,7 +59,11 @@ test('el analizador JSON termina una entrada comprimida con bytes sobrantes y si
       cliente = http.request({ host: '127.0.0.1', port, method: 'POST', agent: false,
         headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'deflate',
           'Content-Length': inicio.length + sobrante.length } }, async res => {
-        try { const trozos = []; for await (const t of res) trozos.push(t); resolve(JSON.parse(Buffer.concat(trozos))); }
+        try {
+          assert.match(res.headers['content-type'] ?? '', /^application\/json\b/);
+          assert.equal(res.headers['x-content-type-options'], 'nosniff');
+          const trozos = []; for await (const t of res) trozos.push(t); resolve(JSON.parse(Buffer.concat(trozos)));
+        }
         catch (error) { reject(error); }
       });
       cliente.once('error', reject);
