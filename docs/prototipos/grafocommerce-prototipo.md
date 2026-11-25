@@ -1,10 +1,10 @@
 # GrafoCommerce — Prototipo de experiencia
 
-Fecha: 22/09/2026. Rama: `codex/grafocommerce`.
+Prototipo original: 22/09/2026. Conservado en el lote de cierre de noviembre de 2026, con una empresa y comprador ficticios.
 
 ## Alcance
 
-La [fuente de la propuesta](grafocommerce-prototipo.html) es un fragmento interactivo para revisar en la conversación. Usa la identidad visual de Grafo y una tienda de ejemplo de Gráfica Corporearte.
+La [fuente de la propuesta](grafocommerce-prototipo.html) es un fragmento interactivo para revisar en la conversación. Usa la identidad visual de Grafo y una tienda de ejemplo de Gráfica Muestra.
 
 Recorridos incluidos:
 

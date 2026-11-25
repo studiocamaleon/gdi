@@ -143,6 +143,7 @@ jobs:
             src/centro-copiado/pedidos/__tests__/pedidos.integration.spec.ts \
             src/archivos/__tests__/permisos-http.integration.spec.ts \
             src/clientes/__tests__/solicitudes-alta.http.integration.spec.ts \
+            src/clientes/__tests__/busqueda-acentos.integration.spec.ts \
             src/common/rut.spec.ts \
             src/eventos-sistema/eventos-sistema-lecturas.integration.spec.ts \
             src/eventos-sistema/eventos-sistema.service.spec.ts \

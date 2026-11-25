@@ -2,7 +2,7 @@
 
 **Última actualización:** 22 de septiembre de 2026
 
-**Rama de desarrollo:** `codex/grafocommerce`
+**Conservación:** incorporado al lote de cierre de PR de noviembre de 2026; la implementación futura parte de `main` actualizado.
 
 **Estado:** desarrollo pausado por decisión del usuario; se prioriza el onboarding de empresas. Investigación y prototipo conservados para retomar.
 
@@ -12,7 +12,7 @@
 
 ### Conservación y reanudación
 
-La rama `codex/grafocommerce` conserva este plan, el prototipo y su verificación en un commit local. No se elimina ni se fusiona con `main` en esta etapa. Su conservación remota requiere un push posterior. Para retomar, revisar este documento y GC-01 antes de escribir integraciones; la aprobación del prototipo no confirma todavía todas las decisiones operativas.
+El cierre autorizado incorpora este plan, el prototipo y su verificación al repositorio común. Es documentación de una propuesta: no habilita una tienda, un checkout real ni el procesamiento de pedidos. Para retomar, revisar este documento y GC-01 antes de escribir integraciones; la aprobación del prototipo no confirma todavía todas las decisiones operativas.
 
 GrafoCommerce será un add-on para que cada empresa tenga una tienda web-to-print administrada desde Grafo. El cliente podrá configurar un trabajo, conocer su precio, adjuntar archivos y realizar un pedido que continúe dentro de la operación de esa empresa.
 
@@ -24,7 +24,7 @@ GrafoCommerce será un add-on para que cada empresa tenga una tienda web-to-prin
 - Integración de los pedidos con las órdenes de trabajo.
 - Una plantilla inicial, con posibilidad de incorporar otras en el futuro.
 - Estética moderna y minimalista basada en la web actual de Grafo.
-- Subdominio de Grafo, por ejemplo `corporearte.grafoprint.com.ar`, y posibilidad de conectar un dominio propio.
+- Subdominio de Grafo, por ejemplo `grafica-muestra.grafoprint.com.ar`, y posibilidad de conectar un dominio propio.
 - Investigar referencias, empezando por Pixartprinting, y mantener este documento durante el desarrollo.
 
 ### Cómo leer este documento

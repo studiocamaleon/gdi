@@ -42,6 +42,9 @@ describe('Búsqueda de clientes sin acentos y paginada (PostgreSQL)', () => {
         { tenantId, nombre: 'María inactiva', activo: false },
         { tenantId: ajeno, nombre: 'María ajena' },
         { tenantId, nombre: 'Oferta 100%_real' },
+        { tenantId, nombre: 'Empresa argentina ficticia', cuit: '20123456786' },
+        { tenantId, nombre: 'Empresa chilena ficticia', rut: '12345678-5' },
+        { tenantId: ajeno, nombre: 'Documento ajeno ficticio', cuit: '20123456786', rut: '12345678-5' },
       ].map((c) => ({
         ...c,
         telefonoCodigo: '+1',
@@ -118,5 +121,16 @@ describe('Búsqueda de clientes sin acentos y paginada (PostgreSQL)', () => {
     const r = await buscar('maria', { incluirInactivos: 'true', limit: 100 });
     expect(r.total).toBe(3);
     expect(r.data.some((c) => c.nombre.includes('ajena'))).toBe(false);
+  });
+  it.each([
+    ['20-12345678-6', 'Empresa argentina ficticia'],
+    ['12.345.678-5', 'Empresa chilena ficticia'],
+  ])('conserva la búsqueda de %s junto con el filtro de empresa e ID', async (q, nombre) => {
+    const resultado = await buscar(q);
+    expect(resultado.total).toBe(1);
+    expect(resultado.data[0].nombre).toBe(nombre);
+    expect((await buscar(q, { id: resultado.data[0].id })).total).toBe(1);
+    const clienteAjeno = await db.cliente.findFirstOrThrow({ where: { tenantId: ajeno, cuit: '20123456786' } });
+    expect((await buscar(q, { id: clienteAjeno.id })).data).toEqual([]);
   });
 });
