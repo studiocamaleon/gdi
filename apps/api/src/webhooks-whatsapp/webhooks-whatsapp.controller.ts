@@ -58,7 +58,11 @@ export class WebhooksWhatsappController {
       mode === 'subscribe' &&
       typeof token === 'string' &&
       typeof challenge === 'string' &&
-      challenge &&
+      // Meta documenta hub.challenge como un entero. Conservar el texto evita
+      // redondear números grandes o quitar ceros, pero nunca se refleja HTML.
+      challenge.length <= 128 &&
+      /^[0-9]+$/.test(challenge) &&
+      challenge.trim() === challenge &&
       timingSafeEqual(
         createHash('sha256').update(token).digest(),
         createHash('sha256').update(esperado).digest(),
