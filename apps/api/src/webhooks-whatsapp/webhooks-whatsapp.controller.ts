@@ -64,7 +64,11 @@ export class WebhooksWhatsappController {
         createHash('sha256').update(esperado).digest(),
       )
     ) {
-      res.status(200).type('text/plain').send(challenge);
+      res
+        .status(200)
+        .set('Content-Type', 'text/plain; charset=utf-8')
+        .set('X-Content-Type-Options', 'nosniff')
+        .send(challenge);
       return;
     }
     res.status(403).send();

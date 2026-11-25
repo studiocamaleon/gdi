@@ -331,7 +331,8 @@ export class EgresosService {
         .normalize('NFD')
         .replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '')
+        // La sustitución anterior ya dejó un único separador en cada extremo.
+        .replace(/^_|_$/g, '')
         .slice(0, 40);
       let codigo = base || 'categoria';
       let intento = 1;
