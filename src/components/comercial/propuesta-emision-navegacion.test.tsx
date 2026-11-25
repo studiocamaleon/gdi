@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn(),
   emitir: vi.fn(),
   replace: vi.fn(),
+  push: vi.fn(),
   confirmar: null as null | ((canal: CanalPresupuesto) => void),
 }));
 vi.mock("@/lib/centro-copiado-pedidos-api", async (original) => ({
@@ -117,7 +118,7 @@ vi.mock("@/lib/eta-api", async (original) => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     replace: mocks.replace,
-    push: vi.fn(),
+    push: mocks.push,
     refresh: vi.fn(),
   }),
 }));
@@ -1041,6 +1042,34 @@ it("si cambia el cliente durante la revisión descarta el cálculo anterior y ap
   expect(mocks.recotizar).not.toHaveBeenCalled();
   expect(container.textContent).toContain("121,00");
 });
+it("espera la ETA automática y permite emitir en cuanto el vendedor fija la fecha del producto", async () => {
+  mocks.eta = true;
+  vi.stubGlobal("Worker", class {
+    postMessage() {}
+    terminate() {}
+  });
+  await montar();
+  await click("Canal de prueba");
+  await seleccionarCliente("cliente-ficticio");
+  await click("Agregar producto ficticio");
+  const emitir = () => [...container.querySelectorAll<HTMLButtonElement>("button")]
+    .find((b) => b.textContent === "Emitir OT")!;
+  expect(emitir().disabled).toBe(true);
+  expect(container.textContent).toContain("Calculando la fecha de entrega…");
+  await verTab("Productos");
+  const expandir = container.querySelector<HTMLButtonElement>('[aria-label="Ver detalle de Tarjetas ficticias"]')!;
+  await act(async () => expandir.click());
+  const fecha = container.querySelector<HTMLInputElement>('[aria-label="Entrega prevista de Tarjetas ficticias"]')!;
+  await act(async () => {
+    fecha.value = "2099-10-15";
+    fecha.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(emitir().disabled, emitir().title + ", fecha " + fecha.value).toBe(false);
+  await act(async () => emitir().click());
+  expect(mocks.crearOrden).toHaveBeenCalledWith(expect.objectContaining({ fechaEntrega: "2099-10-15" }));
+  expect(mocks.push).toHaveBeenCalledWith("/produccion/ordenes/orden-emitida?emitida=1");
+});
+
 it("no borra la fecha de copiado cuando ETA todavía no puede estimar el trabajo", async () => {
   mocks.eta = true;
   mocks.revisarCopiado.mockImplementation(async ({ items }) =>
@@ -1151,6 +1180,7 @@ it("emite, registra pago y entrega en ese orden; evita doble clic", async () => 
     boton.click();
     boton.click();
   });
+  expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/produccion/ordenes/orden-emitida?emitida=1");
   expect(mocks.crearOrden).toHaveBeenCalledOnce();
   expect(mocks.crearOrden).toHaveBeenCalledWith(
     expect.objectContaining({

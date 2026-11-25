@@ -9743,9 +9743,13 @@ export function AgregarProductoSheet({
   const cotizacionSeqRef = React.useRef(0);
   const cotizacionAbortRef = React.useRef<AbortController | null>(null);
   const cotizacionScopeRef = React.useRef(crypto.randomUUID());
+  const [edicionPreparada, setEdicionPreparada] = React.useState<PropuestaItem | null>(null);
+  const [errorEdicion, setErrorEdicion] = React.useState<PropuestaItem | null>(null);
+  const preparandoEdicion = editingItem != null && editingItem !== edicionPreparada;
+  const mostrarCatalogo = open && step === "select" && !preparandoEdicion;
   const catalogProducts = React.useMemo(
-    () => [...productos].sort(compararProductosPorUso).map(mapProductoReal),
-    [productos],
+    () => mostrarCatalogo ? [...productos].sort(compararProductosPorUso).map(mapProductoReal) : [],
+    [mostrarCatalogo, productos],
   );
   const geometriasComerciales = React.useMemo(
     () =>
@@ -9833,37 +9837,22 @@ export function AgregarProductoSheet({
     const itemToEdit = editingItem;
 
     async function hydrateEdit() {
-      const baseProduct =
-        catalogProducts.find(
-          (candidate) =>
-            candidate.id === itemToEdit.motorCodigo ||
-            candidate.code === itemToEdit.productoCodigo,
-        ) ?? null;
-      let nextProduct: CatalogProduct | null = baseProduct;
-      let detalle: ProductoDetalle | null = null;
-
-      if (baseProduct?.real && baseProduct.id) {
-        setLoadingProductId(baseProduct.id);
-        try {
-          detalle = augmentDetalleConPasosExtras(
-            await getProductoById(baseProduct.id, true),
-          );
-          nextProduct = mapProductoReal(detalle);
-        } catch {
-          toast.error("No pude cargar el producto para editarlo.");
-        } finally {
-          setLoadingProductId(null);
-        }
-      }
-
-      if (!nextProduct) {
-        toast.error(
-          "No pude encontrar el producto original para editar este item.",
-        );
+      const original = productos.find((p) => p.id === itemToEdit.motorCodigo)
+        ?? productos.find((p) => p.codigo === itemToEdit.productoCodigo);
+      const id = original?.id;
+      if (!id) {
+        if (!cancelled) setErrorEdicion(itemToEdit);
         return;
       }
-
+      let detalle: ProductoDetalle;
+      try {
+        detalle = augmentDetalleConPasosExtras(await getProductoById(id, true));
+      } catch {
+        if (!cancelled) setErrorEdicion(itemToEdit);
+        return;
+      }
       if (cancelled) return;
+      const nextProduct = mapProductoReal(detalle);
       suppressNextCotizacionClear.current = true;
       const nextMotorConfig = motorConfigFromItem(itemToEdit);
       const rutaEditada = getRutaSeleccionada(
@@ -9914,13 +9903,14 @@ export function AgregarProductoSheet({
       setCotizacionError(null);
       setCotizando(false);
       setStep("config");
+      setEdicionPreparada(itemToEdit);
     }
 
     void hydrateEdit();
     return () => {
       cancelled = true;
     };
-  }, [catalogProducts, editingItem, open]);
+  }, [productos, editingItem, open]);
 
   const close = React.useCallback(() => onOpenChange(false), [onOpenChange]);
   const back = React.useCallback(() => setStep("select"), []);
@@ -10533,6 +10523,8 @@ export function AgregarProductoSheet({
       cotizacionAbortRef.current = null;
       setStep("select");
       setProduct(null);
+      setEdicionPreparada(null);
+      setErrorEdicion(null);
       setProductoDetalle(null);
       setQuery("");
       setFamily("Todos");
@@ -10639,13 +10631,22 @@ export function AgregarProductoSheet({
       <div
         ref={dialogRef}
         data-plan-abierto={planOpen || undefined}
-        data-product-step={step}
+        data-product-step={preparandoEdicion ? "edit" : step}
         className={`sheet sheet-ap${esCarteleriaFull ? ` ${cartS.sheetFull}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="ap-title"
       >
-        {step === "select" ? (
+        {preparandoEdicion ? (
+          <ProductoSheetHeaderConstelacion
+            stage="config"
+            titleId="ap-title"
+            name={editingItem.productoNombre}
+            eyebrow="Editar producto"
+            desc=""
+            onClose={close}
+          />
+        ) : step === "select" ? (
           <ProductoSheetHeaderConstelacion
             stage="select"
             titleId="ap-title"
@@ -10660,7 +10661,21 @@ export function AgregarProductoSheet({
           ref={bodyRef}
           className={`sheet-body ap-body${esCarteleriaFull ? ` ${cartS.sheetBodyFull}` : ""}`}
         >
-          {step === "select" ? (
+          {preparandoEdicion ? (
+            errorEdicion === editingItem
+              ? (
+                <>
+                  <p role="alert">No se pudo cargar el producto. Podés elegir otro del catálogo o volver a abrir la ficha para reintentar.</p>
+                  <ActionButton variant="outline" onPress={() => {
+                    setEdicionPreparada(editingItem);
+                    back();
+                  }}>
+                    Elegir otro producto
+                  </ActionButton>
+                </>
+              )
+              : <p role="status">Cargando configuración del producto…</p>
+          ) : step === "select" ? (
             <ApSelectStep
               query={query}
               setQuery={setQuery}
@@ -10707,7 +10722,7 @@ export function AgregarProductoSheet({
         </div>
 
         <div className="sheet-foot ap-foot">
-          {step === "config" && product && totals ? (
+          {!preparandoEdicion && step === "config" && product && totals ? (
             <>
               <ActionButton
                 variant="outline"
@@ -10784,7 +10799,7 @@ export function AgregarProductoSheet({
             </>
           ) : (
             <>
-              {onCrearTrabajoAMedida && (
+              {!preparandoEdicion && onCrearTrabajoAMedida && (
                 <span className={catalogStyles.customHint}>
                   ¿Necesitás algo diferente?
                   <button
