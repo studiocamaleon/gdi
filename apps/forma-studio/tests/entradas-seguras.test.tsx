@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseSvg, physicalHeight } from "../src/core/source";
+import { svgDocument } from "../src/core/svg-document";
 import { newProject } from "../src/core/project";
 import { parseProject } from "../src/core/storage";
 import { LightboxEditor } from "../src/components/LightboxEditor";
@@ -22,6 +23,7 @@ describe("SVG no confiable", () => {
     '<g style="fill:url(https://example.invalid/recurso)"/>',
     '<g filter="url(https://example.invalid/filtro)"/>',
     '<style>@import "https://example.invalid/externo.css";</style>',
+    "<style>.figura { fill: url(https://example.invalid/recurso); }</style>",
     '<script xmlns="http://www.w3.org/1999/xhtml">alert(1)</script>',
   ])("rechaza contenido activo o recursos externos: %s", (payload) => {
     expect(() => parseSvg(wrap(payload))).toThrow();
@@ -44,6 +46,24 @@ describe("SVG no confiable", () => {
       '<defs><linearGradient id="grad"><stop stop-color="#000"/></linearGradient></defs><rect width="3" height="4" fill="url(#grad)"/>',
     );
     expect(parseSvg(svg)).toHaveLength(2);
+  });
+  it("acepta estilos vectoriales locales de los programas de diseño", () => {
+    const svg = wrap(
+      '<style>.figura { fill: #000; stroke: none; }</style><rect class="figura" width="3" height="4"/>',
+    );
+    expect(svgDocument(svg).querySelector("style")?.textContent).toContain(
+      ".figura",
+    );
+    expect(parseSvg(svg)).toHaveLength(2);
+  });
+  it("avisa si hay referencias use en vez de eliminarlas y cambiar el dibujo", () => {
+    expect(() =>
+      parseSvg(
+        wrap(
+          '<defs><path id="figura" d="M0 0H3V4H0Z"/></defs><use href="#figura"/>',
+        ),
+      ),
+    ).toThrow(/referencias/);
   });
 });
 describe("Gráficas de banderola", () => {

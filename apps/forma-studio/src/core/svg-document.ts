@@ -9,12 +9,16 @@ const rejectedTags = new Set([
   "iframe",
   "object",
   "embed",
-  "style",
   "animate",
   "animatemotion",
   "animatetransform",
   "set",
 ]);
+
+function hasExternalCss(value: string): boolean {
+  const local = value.replace(/url\(\s*(['"]?)#[\w:.-]+\1\s*\)/gi, "");
+  return /url\s*\(|expression\s*\(|[\\@]/i.test(local);
+}
 
 /** Sólo el SVG saneado llega al parser que consume la geometría. */
 export function svgDocument(svg: string): Document {
@@ -27,8 +31,17 @@ export function svgDocument(svg: string): Document {
       "El SVG contiene declaraciones de documento o entidades no admitidas.",
     );
   if (!hooksReady) {
-    DOMPurify.addHook("uponSanitizeElement", (_node, data) => {
-      if (rejectedTags.has(data.tagName.toLowerCase()))
+    DOMPurify.addHook("uponSanitizeElement", (node, data) => {
+      const tag = data.tagName.toLowerCase();
+      if (tag === "use")
+        throw new Error(
+          "Expandí las referencias SVG a curvas antes de importar el dibujo.",
+        );
+      if (tag === "style" && hasExternalCss(node.textContent || ""))
+        throw new Error(
+          "El SVG contiene estilos con referencias externas o código activo.",
+        );
+      if (rejectedTags.has(tag))
         throw new Error(
           "Convertí textos e imágenes a curvas. Se admiten sólo vectores SVG sin código activo.",
         );
