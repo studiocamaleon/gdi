@@ -14,6 +14,13 @@ import {
   type PlanCatalogo,
   type ResultadoInvitacionEmpresa,
 } from "@/lib/plataforma-api";
+import {
+  latamCountries,
+  monedaSugeridaDe,
+  PAIS_DEFAULT,
+  ZONAS_HORARIAS,
+  zonaHorariaDe,
+} from "@/lib/paises";
 import { InvitacionEmpresaPanel } from "./invitacion-empresa-panel";
 import theme from "@/components/design-system/brand-workspace-theme.module.css";
 import platform from "./plataforma.module.css";
@@ -30,6 +37,9 @@ export function CrearEmpresaDialog({
   const [slug, setSlug] = useState("");
   const [email, setEmail] = useState("");
   const [planId, setPlanId] = useState("");
+  const [pais, setPais] = useState(PAIS_DEFAULT);
+  const [zona, setZona] = useState(zonaHorariaDe(PAIS_DEFAULT));
+  const [piloto, setPiloto] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState("");
   const [resultado, setResultado] = useState<ResultadoInvitacionEmpresa>();
@@ -50,6 +60,9 @@ export function CrearEmpresaDialog({
         slug,
         planId,
         adminEmail: email.trim(),
+        paisCodigo: pais,
+        zonaHoraria: zona,
+        piloto30Dias: piloto,
       });
       setResultado(r);
       if (r.invitacion.correoEstado === "enviado")
@@ -123,6 +136,35 @@ export function CrearEmpresaDialog({
               />
             </Field>
             <Field>
+              <FieldLabel htmlFor="empresa-pais">País del taller</FieldLabel>
+              <SelectField
+                id="empresa-pais"
+                aria-label="País del taller"
+                value={pais}
+                onChange={(codigo) => {
+                  setPais(codigo);
+                  setZona(zonaHorariaDe(codigo));
+                }}
+                options={latamCountries.map((p) => ({
+                  value: p.code,
+                  label: p.name,
+                }))}
+              />
+              <small>Moneda inicial del taller: {monedaSugeridaDe(pais)}</small>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="empresa-zona">
+                Zona horaria del taller
+              </FieldLabel>
+              <SelectField
+                id="empresa-zona"
+                aria-label="Zona horaria del taller"
+                value={zona}
+                onChange={setZona}
+                options={ZONAS_HORARIAS.map((z) => ({ value: z, label: z }))}
+              />
+            </Field>
+            <Field>
               <FieldLabel htmlFor="empresa-plan">Plan</FieldLabel>
               <SelectField
                 id="empresa-plan"
@@ -134,6 +176,31 @@ export function CrearEmpresaDialog({
                   ...planes.map((p) => ({ value: p.id, label: p.nombre })),
                 ]}
               />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="empresa-condiciones">
+                Condiciones del alta
+              </FieldLabel>
+              <SelectField
+                id="empresa-condiciones"
+                aria-label="Condiciones del alta"
+                value={piloto ? "piloto" : "plan"}
+                onChange={(v) => setPiloto(v === "piloto")}
+                options={[
+                  { value: "plan", label: "Según el plan elegido" },
+                  {
+                    value: "piloto",
+                    label: "Tester · 30 días gratis e implementación sin cargo",
+                  },
+                ]}
+              />
+              {piloto && (
+                <small>
+                  La prueba empieza cuando el administrador acepta la
+                  invitación. Al vencer, el administrador debe activar la
+                  suscripción para seguir operando.
+                </small>
+              )}
             </Field>
           </FieldGroup>
         )}

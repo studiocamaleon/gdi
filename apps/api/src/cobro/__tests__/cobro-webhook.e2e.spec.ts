@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { INestApplication } from '@nestjs/common';
 import { json } from 'express';
+import { configurarEntradaStaging } from '../../common/staging-ingress';
 import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomUUID } from 'node:crypto';
@@ -21,9 +22,12 @@ import { PrismaModule } from '../../prisma/prisma.module';
  */
 
 const SECRET = 'pdl_ntfset_e2e_secret';
-process.env.PADDLE_API_KEY = 'pdl_sdbx_apikey_de_prueba';
+process.env.PADDLE_API_KEY = 'pdl_live_apikey_ficticia';
 process.env.PADDLE_WEBHOOK_SECRET = SECRET;
-process.env.PADDLE_ENV = 'sandbox';
+process.env.PADDLE_ENV = 'production';
+process.env.GRAFO_DEPLOY_ENV = 'production';
+process.env.WEB_API_TOKEN = 'token-interno-ficticio-de-produccion-paddle';
+process.env.PADDLE_WEBHOOK_ENABLED = 'true';
 
 const prisma = new PrismaClient();
 
@@ -32,7 +36,7 @@ function firmar(body: string, ts = Math.floor(Date.now() / 1000)): string {
   return `ts=${ts};h1=${h1}`;
 }
 
-describe('POST /webhooks/paddle (HTTP real)', () => {
+describe('POST /api/webhooks/paddle (entrada de producción simulada)', () => {
   let app: INestApplication<Server>;
   let tenantId: string;
   let planId: string;
@@ -54,6 +58,8 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
       .compile();
 
     app = mod.createNestApplication();
+    app.setGlobalPrefix('api');
+    configurarEntradaStaging(app.getHttpAdapter().getInstance());
     // MISMA configuración que main.ts: si esto cambia allá y no acá, el test
     // deja de representar la realidad.
     app.use(
@@ -63,7 +69,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
           _res,
           buf: Buffer,
         ) => {
-          if (req.url?.startsWith('/webhooks/')) req.rawBody = buf;
+          if (req.url?.startsWith('/api/webhooks/')) req.rawBody = buf;
         },
       }),
     );
@@ -119,7 +125,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
 
   it('rechaza sin firma', async () => {
     await request(app.getHttpServer())
-      .post('/webhooks/paddle')
+      .post('/api/webhooks/paddle')
       .set('content-type', 'application/json')
       .send(cuerpo('active', `evt_nofirma_${randomUUID().slice(0, 8)}`))
       .expect(401);
@@ -128,7 +134,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
   it('rechaza una firma que no corresponde al cuerpo', async () => {
     const body = cuerpo('active', `evt_mala_${randomUUID().slice(0, 8)}`);
     await request(app.getHttpServer())
-      .post('/webhooks/paddle')
+      .post('/api/webhooks/paddle')
       .set('content-type', 'application/json')
       .set('paddle-signature', firmar('{"otra":"cosa"}'))
       .send(body)
@@ -153,7 +159,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
     });
     try {
       const respuesta = await request(app.getHttpServer())
-        .post('/webhooks/paddle')
+        .post('/api/webhooks/paddle')
         .set('content-type', 'application/json')
         .set('paddle-signature', firmar(body))
         .send(body)
@@ -179,7 +185,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
   it('acepta el evento firmado y sincroniza la suscripción', async () => {
     const body = cuerpo('active', `evt_ok_${randomUUID().slice(0, 8)}`);
     const res = await request(app.getHttpServer())
-      .post('/webhooks/paddle')
+      .post('/api/webhooks/paddle')
       .set('content-type', 'application/json')
       .set('paddle-signature', firmar(body))
       .send(body)
@@ -198,7 +204,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
     const firma = firmar(body);
 
     const primera = await request(app.getHttpServer())
-      .post('/webhooks/paddle')
+      .post('/api/webhooks/paddle')
       .set('content-type', 'application/json')
       .set('paddle-signature', firma)
       .send(body)
@@ -206,7 +212,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
     expect((primera.body as { repetido?: boolean }).repetido).toBeUndefined();
 
     const segunda = await request(app.getHttpServer())
-      .post('/webhooks/paddle')
+      .post('/api/webhooks/paddle')
       .set('content-type', 'application/json')
       .set('paddle-signature', firma)
       .send(body)
@@ -242,7 +248,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
       } as never);
     const enviar = () =>
       request(app.getHttpServer())
-        .post('/webhooks/paddle')
+        .post('/api/webhooks/paddle')
         .set('content-type', 'application/json')
         .set('paddle-signature', firmar(body))
         .send(body);

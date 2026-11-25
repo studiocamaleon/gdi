@@ -777,7 +777,15 @@ export class PlataformaService {
    */
   async crearTenant(
     staffUserId: string,
-    dto: { nombre: string; slug: string; planId: string; adminEmail: string },
+    dto: {
+      nombre: string;
+      slug: string;
+      planId: string;
+      adminEmail: string;
+      paisCodigo?: string;
+      zonaHoraria?: string;
+      piloto30Dias?: boolean;
+    },
   ) {
     const slug = dto.slug.trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(slug)) {
@@ -807,6 +815,9 @@ export class PlataformaService {
         slug,
         plan: { id: plan.id, trialDias: plan.trialDias },
         origen: 'plataforma',
+        paisCodigo: dto.paisCodigo,
+        zonaHoraria: dto.zonaHoraria,
+        piloto30Dias: dto.piloto30Dias,
         emailEmpresa: email,
       });
       const creado = {
@@ -833,7 +844,11 @@ export class PlataformaService {
           tipo: 'tenant_creado',
           tenantAfectadoId: creado.id,
           descripcion: `Creó ${creado.nombre} (${slug}) en plan ${plan.nombre}; invitó a ${email}.`,
-          datosJson: { planCodigo: plan.codigo, adminEmail: email },
+          datosJson: {
+            planCodigo: plan.codigo,
+            adminEmail: email,
+            piloto30Dias: dto.piloto30Dias === true,
+          },
         },
       });
       return { ...creado, invitacionId: invitacion.id };

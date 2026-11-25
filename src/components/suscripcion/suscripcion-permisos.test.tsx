@@ -22,7 +22,6 @@ let container: HTMLDivElement, root: Root;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.stubEnv("NEXT_PUBLIC_PADDLE_CLIENT_TOKEN", "test_publico_ficticio");
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -63,7 +62,10 @@ it("lectura de Suscripción no consulta contrataciones restringidas ni ofrece ac
       <PermisosProvider
         permisos={["acceso.por_vista", "configuracion.suscripcion.ver"]}
       >
-        <SuscripcionView inicial={inicial} />
+        <SuscripcionView
+          inicial={inicial}
+          checkoutWeb={{ entorno: "sandbox", token: "test_publico_ficticio" }}
+        />
       </PermisosProvider>,
     ),
   );
@@ -86,7 +88,10 @@ it("gestión de Suscripción conserva la consulta de contrataciones pendientes",
       <PermisosProvider
         permisos={["acceso.por_vista", "configuracion.suscripcion.gestionar"]}
       >
-        <SuscripcionView inicial={inicial} />
+        <SuscripcionView
+          inicial={inicial}
+          checkoutWeb={{ entorno: "sandbox", token: "test_publico_ficticio" }}
+        />
       </PermisosProvider>,
     ),
   );

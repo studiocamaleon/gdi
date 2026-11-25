@@ -60,6 +60,8 @@ export const ZONAS_HORARIAS: string[] = [
   ...new Set([
     ...latamCountries.map((p) => p.zonaHoraria),
     "America/Punta_Arenas",
+    "America/Coyhaique",
+    "Pacific/Easter",
     "America/Tijuana",
     "America/Cancun",
     "America/Manaus",

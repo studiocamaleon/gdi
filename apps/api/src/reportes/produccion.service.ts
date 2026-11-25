@@ -1,3 +1,5 @@
+import { claveFechaEnZona } from '../common/zona';
+import { diasEntreClaves } from './periodo';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { finExclusivo, fraccionMesEnRango, mesesDelRango, type Rango } from './periodo';
@@ -12,16 +14,9 @@ import { etiquetaMotivoFin } from '../ordenes-trabajo/ordenes-trabajo.types';
  */
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-const MS_DIA = 86_400_000;
 
 function nombreFamilia(codigo: string): string {
   return resolverFamilia(codigo)?.nombre ?? codigo;
-}
-
-/** "YYYY-MM" del mes actual (para la capacidad vigente). */
-function mesActual(): string {
-  const hoy = new Date();
-  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
 }
 
 type OtdRow = {
@@ -48,7 +43,7 @@ export class ReporteProduccionService {
     const [otd, util, carga] = await Promise.all([
       this.otd(tenantId, rango),
       this.utilizacion(tenantId, rango),
-      this.carga(tenantId),
+      this.carga(tenantId, rango.zona),
     ]);
     return { otdPct: otd.otdPct, utilizacionPct: util.promedioPct, ...carga };
   }
@@ -61,7 +56,7 @@ export class ReporteProduccionService {
         this.utilizacion(tenantId, rango),
         this.throughput(tenantId, rango),
         this.bloqueos(tenantId),
-        this.carga(tenantId),
+        this.carga(tenantId, rango.zona),
         this.registroTiempos(tenantId, rango),
         this.ahorros(tenantId, rango),
       ]);
@@ -91,7 +86,7 @@ export class ReporteProduccionService {
    * convertido a DÍAS de carga contra la capacidad diaria de los centros
    * (capacidadPractica del mes / días por mes). Foto operativa, no del rango.
    */
-  private async carga(tenantId: string) {
+  private async carga(tenantId: string, zona: string) {
     const [colaRows, capRows] = await Promise.all([
       this.prisma.$queryRaw<Array<{ trabajos: number; minutos: number }>>`
         SELECT COUNT(*)::int AS trabajos,
@@ -102,7 +97,7 @@ export class ReporteProduccionService {
           AND ot.estado IN ('pendiente', 'produccion')
       `,
       this.prisma.centroCostoCapacidadPeriodo.findMany({
-        where: { tenantId, periodo: mesActual() },
+        where: { tenantId, periodo: claveFechaEnZona(new Date(), zona).slice(0, 7) },
         select: { horasProductivas: true },
       }),
     ]);
@@ -136,8 +131,8 @@ export class ReporteProduccionService {
       WHERE ot."tenantId" = ${tenantId}::uuid
         AND ot.estado IN ('finalizada', 'entregada')
       GROUP BY ot.id, ot.numero, c.nombre, ot."fechaEntrega", ot."fechaEmision"
-      HAVING MAX(p."completadoEl") >= ${rango.desde}
-         AND MAX(p."completadoEl") < ${finExclusivo(rango)}
+      HAVING MAX(p."completadoEl") >= ${rango.desde.toISOString()}::timestamp
+         AND MAX(p."completadoEl") < ${finExclusivo(rango).toISOString()}::timestamp
     `;
 
     let aTiempo = 0;
@@ -150,18 +145,18 @@ export class ReporteProduccionService {
 
     for (const o of rows) {
       if (!o.fin) continue;
-      const finDia = new Date(o.fin.getFullYear(), o.fin.getMonth(), o.fin.getDate());
+      const finDia = claveFechaEnZona(o.fin, rango.zona);
       if (o.fechaEmision) {
-        const emi = new Date(o.fechaEmision.getFullYear(), o.fechaEmision.getMonth(), o.fechaEmision.getDate());
-        sumaLead += Math.max(0, Math.round((finDia.getTime() - emi.getTime()) / MS_DIA));
+        const emi = claveFechaEnZona(o.fechaEmision, rango.zona);
+        sumaLead += Math.max(0, diasEntreClaves(emi, finDia));
         leadN += 1;
       }
       if (!o.fechaEntrega) {
         sinFecha += 1;
         continue;
       }
-      const entrega = new Date(o.fechaEntrega.getFullYear(), o.fechaEntrega.getMonth(), o.fechaEntrega.getDate());
-      const diasAtraso = Math.round((finDia.getTime() - entrega.getTime()) / MS_DIA);
+      const entrega = o.fechaEntrega.toISOString().slice(0, 10); // columna DATE del taller
+      const diasAtraso = diasEntreClaves(entrega, finDia);
       if (diasAtraso <= 0) {
         aTiempo += 1;
       } else {
@@ -170,7 +165,7 @@ export class ReporteProduccionService {
         atrasadas.push({
           numero: o.numero,
           cliente: o.cliente ?? 'Sin cliente',
-          fechaEntrega: entrega.toISOString().slice(0, 10),
+          fechaEntrega: entrega,
           diasAtraso,
         });
       }

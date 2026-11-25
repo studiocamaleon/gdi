@@ -62,7 +62,7 @@ function esUltimoDiaDeMes(clave: string): boolean {
 }
 
 /** Días de a → b (claves), con signo. Aritmética pura, sin zona. */
-function diasEntreClaves(a: string, b: string): number {
+export function diasEntreClaves(a: string, b: string): number {
   const [ya, ma, da] = a.split('-').map(Number);
   const [yb, mb, db] = b.split('-').map(Number);
   return Math.round((Date.UTC(yb, mb - 1, db) - Date.UTC(ya, ma - 1, da)) / MS_DIA);

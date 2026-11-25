@@ -40,6 +40,7 @@ export type ProvisionarTenantArgs = {
   emailEmpresa?: string;
   slug?: string;
   iniciaTrial?: boolean;
+  piloto30Dias?: boolean;
 };
 
 export type TenantProvisionado = {
@@ -125,6 +126,8 @@ export class TenantProvisioningService {
       },
     });
 
+    const piloto = args.origen === 'plataforma' && args.piloto30Dias === true;
+    const dias = oferta ? oferta.trialDias : args.plan.trialDias;
     await tx.suscripcion.create({
       data: {
         tenantId: tenant.id,
@@ -134,10 +137,13 @@ export class TenantProvisioningService {
         revisionContrato: oferta || args.plan.versionId ? 1 : 0,
         estado: 'activa',
         proveedor: 'manual',
+        piloto30Dias: piloto,
         trialHasta:
-          args.iniciaTrial === false
-            ? null
-            : finDePrueba(oferta ? oferta.trialDias : args.plan.trialDias),
+          piloto || args.iniciaTrial === false ? null : finDePrueba(dias),
+        ...(piloto && {
+          implementacionResueltaEl: new Date(),
+          implementacionImporte: 0,
+        }),
       },
     });
 

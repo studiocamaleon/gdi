@@ -1,3 +1,5 @@
+import { ReporteProduccionService } from '../reportes/produccion.service';
+import { CobranzaService } from '../reportes/cobranza.service';
 import { randomUUID } from 'node:crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { TenantProvisioningService } from './tenant-provisioning.service';
@@ -22,6 +24,11 @@ import { CostosValidacionesService } from '../costos/costos-validaciones.service
 import { CostosTarifasService } from '../costos/costos-tarifas.service';
 import { CostosRepartoService } from '../costos/costos-reparto.service';
 import { TipoCentroCostoDto } from '../costos/dto/upsert-centro-costo.dto';
+import { CobrosService } from '../administracion/cobros.service';
+import { FacturacionOrdenesService } from '../administracion/facturacion-ordenes.service';
+import { RecibosService } from '../administracion/recibos.service';
+import { ReciboPdfService } from '../administracion/recibo-pdf.service';
+import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { EntregaService } from '../ordenes-trabajo/entrega.service';
 import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
 import { MaquinariaService } from '../maquinaria/maquinaria.service';
@@ -783,6 +790,87 @@ it.each(['digital', 'gran-formato', 'mixto'] as const)(
         (await c.tx.ordenTrabajo.findUniqueOrThrow({ where: { id: orden.id } }))
           .estado,
       ).toBe('entregada');
+      if (tipo === 'digital') {
+        const db = c.prisma as never;
+        const caja = await c.tx.cuentaFondos.create({
+          data: {
+            tenantId: c.tenantId,
+            nombre: 'Caja del taller',
+            tipo: 'caja',
+            moneda: 'CLP',
+          },
+        });
+        const medio = await c.tx.metodoPago.create({
+          data: {
+            tenantId: c.tenantId,
+            nombre: 'Efectivo',
+            codigo: 'EFECTIVO',
+            tipo: 'efectivo',
+            cuentaDestinoId: caja.id,
+            plazoAcreditacionDias: 0,
+          },
+        });
+        const pdf = new ReciboPdfService();
+        const recibos = new RecibosService(
+          db,
+          { logoDataUri: async () => null } as never,
+          c.enlaces,
+          pdf,
+          new DatosEmpresaService(db),
+        );
+        // El archivo se renderiza abajo, sin subirlo ni enviar avisos externos.
+        jest
+          .spyOn(recibos, 'materializarPdfEnSegundoPlano')
+          .mockImplementation(() => undefined);
+        const cobros = new CobrosService(
+          db,
+          new FacturacionOrdenesService(db),
+          recibos,
+          { avisar: async () => undefined } as never,
+          new FidelizacionService(db),
+        );
+        const importe = Number(orden.total);
+        expect(importe).toBeGreaterThan(0);
+        expect(Number.isInteger(importe)).toBe(true);
+        // En Santiago todavía es 3/11. La entrega y el vencimiento son DATE;
+        // la finalización es un instante y ya es 4/11 en el servidor UTC.
+        const cierre = new Date('2026-11-04T02:30:00Z');
+        const fechaPactada = new Date('2026-11-03');
+        await c.tx.ordenTrabajo.update({ where: { id: orden.id }, data: {
+          fechaEmision: new Date('2026-11-03T12:00:00Z'), fechaFinalizada: cierre,
+          fechaEntrega: fechaPactada, fechaVencimientoComercial: fechaPactada,
+        } });
+        await c.tx.ordenTrabajoItemPaso.updateMany({ where: { ordenId: orden.id }, data: { completadoEl: cierre } });
+        const rango = { desde: new Date('2026-11-03T03:00:00Z'), hasta: new Date('2026-11-03T03:00:00Z'), zona: 'America/Santiago' };
+        expect((await new ReporteProduccionService(db).resumenKpis(c.tenantId, rango)).otdPct).toBe(100);
+        const deuda = await new CobranzaService(db).finanzas(c.auth, rango, cierre);
+        expect(deuda.aging.find(f => f.franja === 'A vencer')?.monto).toBe(importe);
+        const cobro = await cobros.create(c.auth, {
+          ordenId: orden.id,
+          clienteId: cliente.id,
+          metodoPagoId: medio.id,
+          cuentaDestinoId: caja.id,
+          montoBruto: importe,
+          fecha: '2026-11-03',
+          comisionPctAplicada: 0,
+          idempotencyKey: randomUUID(),
+        });
+        const recibo = await recibos.documento(cobro.id, c.tenantId);
+        expect(recibo).toMatchObject({
+          monto: importe,
+          fecha: '2026-11-03',
+          empresa: { moneda: { codigo: 'CLP' } },
+          orden: { saldoPendiente: 0 },
+        });
+        expect(recibo.montoEnLetras).not.toContain('/100');
+        expect(pdf.generar(recibo).subarray(0, 5).toString()).toBe('%PDF-');
+        expect(
+          await c.tx.movimientoFondos.findFirstOrThrow({
+            where: { cobroId: cobro.id },
+            include: { cuenta: true },
+          }),
+        ).toMatchObject({ cuenta: { id: caja.id, moneda: 'CLP' } });
+      }
       expect(
         await c.tx.stockMateriaPrimaVariante.count({
           where: { tenantId: c.tenantId },

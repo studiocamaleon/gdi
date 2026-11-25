@@ -1,3 +1,4 @@
+import { claveFechaEnZona } from '../common/zona';
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
@@ -6,7 +7,7 @@ import {
   RentabilidadService,
   type RentabilidadPeriodo,
 } from './rentabilidad.service';
-import { diasDelRango, finExclusivo, type Rango } from './periodo';
+import { diasEntreClaves, diasDelRango, finExclusivo, type Rango } from './periodo';
 import type { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
 import { formatearMoneda } from '../common/moneda';
 import { regionalDelTenant } from '../common/regional';
@@ -22,7 +23,6 @@ import { regionalDelTenant } from '../common/regional';
  * (eficiencia/utilización) llegan cuando esos datos maduren.
  */
 
-const MS_DIA = 86_400_000;
 
 export type Severidad = 'critico' | 'atencion' | 'info';
 const ORDEN: Record<Severidad, number> = { critico: 0, atencion: 1, info: 2 };
@@ -119,16 +119,17 @@ export class AlertasService {
     incluirRentabilidad = true,
   ): Promise<Alerta[]> {
     const umbrales = await this.getUmbrales(tenantId);
+    const hoyLocal = claveFechaEnZona(hoy, rango.zona);
     const grupos = await Promise.all([
-      this.deudaVencida(tenantId, rango, umbrales),
-      this.clientesDormidos(tenantId, umbrales, hoy),
+      this.deudaVencida(tenantId, rango, umbrales, hoyLocal),
+      this.clientesDormidos(tenantId, umbrales, hoyLocal, rango.zona),
       this.concentracion(tenantId, rango, umbrales),
       // La poda por nombre de campo no puede eliminar importes interpolados
       // en texto. No calcular ni devolver esta alerta sin acceso a márgenes.
       incluirRentabilidad
-        ? this.puntoEquilibrio(tenantId, rango, hoy, rentabilidadCalculada)
+        ? this.puntoEquilibrio(tenantId, rango, hoyLocal, rentabilidadCalculada)
         : Promise.resolve([]),
-      this.tarifasViejas(tenantId, umbrales, hoy),
+      this.tarifasViejas(tenantId, umbrales, hoyLocal),
     ]);
     return grupos
       .flat()
@@ -142,6 +143,7 @@ export class AlertasService {
     tenantId: string,
     rango: Rango,
     u: Umbrales,
+    hoyLocal: string,
   ): Promise<Alerta[]> {
     const [row] = await this.prisma.$queryRaw<
       Array<{ vencido: number; facturado: number }>
@@ -150,8 +152,8 @@ export class AlertasService {
         (SELECT COALESCE(SUM(GREATEST(0, total - "cobradoTotal")), 0)::float8 FROM "OrdenTrabajo"
           WHERE "tenantId" = ${tenantId}::uuid
             AND estado IN ('finalizada', 'entregada')
-            AND COALESCE("fechaVencimientoComercial", "fechaFinalizada"::date)
-                < (CURRENT_DATE - 30)) AS vencido,
+            AND COALESCE("fechaVencimientoComercial", ("fechaFinalizada" AT TIME ZONE 'UTC' AT TIME ZONE ${rango.zona})::date)
+                < (${hoyLocal}::date - 30)) AS vencido,
         (SELECT COALESCE(SUM(total), 0)::float8 FROM "OrdenTrabajo"
           WHERE "tenantId" = ${tenantId}::uuid
             AND estado IN ('finalizada', 'entregada')
@@ -181,7 +183,8 @@ export class AlertasService {
   private async clientesDormidos(
     tenantId: string,
     u: Umbrales,
-    hoy: Date,
+    hoyLocal: string,
+    zona: string,
   ): Promise<Alerta[]> {
     const rows = await this.prisma.$queryRaw<
       Array<{ ordenes: number; ultima: Date }>
@@ -192,11 +195,10 @@ export class AlertasService {
         AND ot."clienteId" IS NOT NULL AND ot."fechaEmision" IS NOT NULL
       GROUP BY ot."clienteId"
     `;
-    const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
     const dormidos = rows.filter(
       (r) =>
         r.ordenes >= 2 &&
-        Math.floor((hoyMid.getTime() - r.ultima.getTime()) / MS_DIA) >
+        diasEntreClaves(claveFechaEnZona(r.ultima, zona), hoyLocal) >
           u.diasClienteDormido,
     ).length;
     if (dormidos === 0) return [];
@@ -246,7 +248,7 @@ export class AlertasService {
   private async puntoEquilibrio(
     tenantId: string,
     rango: Rango,
-    hoy: Date,
+    hoyLocal: string,
     rentabilidadCalculada?: RentabilidadPeriodo | Promise<RentabilidadPeriodo>,
   ): Promise<Alerta[]> {
     const p = rentabilidadCalculada
@@ -254,15 +256,10 @@ export class AlertasService {
       : await this.rentabilidad.periodo(tenantId, rango);
     if (p.puntoEquilibrio === null || p.avancePct === null) return [];
     // Progreso esperado: fracción del período ya transcurrida (100% si es pasado).
-    const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
     const total = diasDelRango(rango);
-    const transcurridos =
-      hoyMid >= rango.hasta
-        ? total
-        : Math.max(
-            0,
-            Math.round((hoyMid.getTime() - rango.desde.getTime()) / MS_DIA) + 1,
-          );
+    const transcurridos = Math.min(total, Math.max(0,
+      diasEntreClaves(claveFechaEnZona(rango.desde, rango.zona), hoyLocal) + 1,
+    ));
     const esperadoPct =
       total > 0 ? Math.min(100, (transcurridos / total) * 100) : 100;
     if (p.avancePct >= esperadoPct) return [];
@@ -282,7 +279,7 @@ export class AlertasService {
   private async tarifasViejas(
     tenantId: string,
     u: Umbrales,
-    hoy: Date,
+    hoyLocal: string,
   ): Promise<Alerta[]> {
     const rows = await this.prisma.$queryRaw<
       Array<{ centro: string; ultimo: string }>
@@ -293,7 +290,8 @@ export class AlertasService {
       WHERE t."tenantId" = ${tenantId}::uuid
       GROUP BY cc.nombre
     `;
-    const mesActual = hoy.getFullYear() * 12 + hoy.getMonth();
+    const [anio, mes] = hoyLocal.split('-').map(Number);
+    const mesActual = anio * 12 + mes - 1;
     const viejos = rows.filter((r) => {
       const [y, m] = r.ultimo.split('-').map(Number);
       return mesActual - (y * 12 + (m - 1)) > u.mesesTarifaVieja;

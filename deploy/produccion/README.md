@@ -46,7 +46,7 @@ API y Next llevan `GRAFO_DEPLOY_ENV=production` y una credencial nueva `WEB_API_
 
 Next requiere además `WEB_ORIGIN=https://app.grafoprint.com.ar` para aceptar escrituras y crear sesiones desde ese origen exacto. Sin la variable responde 503; un origen distinto recibe 403. Durante la emisión inicial de TLS se habilitó temporalmente sólo el dominio propio de Fly, con HTTPS válido, para el alta del administrador. Al terminar, aplicar el origen definitivo del manifiesto y comprobar ambos rechazos. No agregar comodines ni aceptar cualquier Host.
 
-Sólo `GET/HEAD /api` es público en la API durante este primer lanzamiento. Webhooks Meta y Paddle están cerrados; abrirlos requiere una implementación opt-in con firmas verificadas y sus pruebas. No agregar `TRUST_PROXY` para saltarse el canal. La web pública debe recibir tráfico directamente de Fly, como se validó; si cambia el proxy del dominio, revisar la IP antes.
+Sólo `GET/HEAD /api` es público en la API durante este primer lanzamiento. En la revisión desplegada los webhooks Meta y Paddle están cerrados. Para activar Paddle al publicar la versión de pilotos, seguir [la guía de alta y cobro](../../docs/onboarding/piloto-chile.md), incluida la verificación de firma en el destino exclusivo. No agregar `TRUST_PROXY` para saltarse el canal. La web pública debe recibir tráfico directamente de Fly, como se validó; si cambia el proxy del dominio, revisar la IP antes.
 
 ## Comprobación fiscal del worker antes de habilitar lotes
 
