@@ -1621,6 +1621,8 @@ model Cliente {
   // === Datos fiscales (módulo Administración) ===
   /// CUIT/CUIL sin guiones (11 dígitos) o null si no lo tenemos todavía.
   cuit                     String?                           @db.VarChar(11)
+  /// RUT chileno normalizado, sin puntos y con guion y verificador en mayúscula.
+  rut                      String?                           @db.VarChar(10)
   /// 'RI' | 'monotributo' | 'exento' | 'consumidor_final' | 'exterior'.
   /// Define la letra del comprobante junto con la condición del emisor.
   condicionFiscal          String                            @default("consumidor_final")
@@ -1661,6 +1663,7 @@ model Cliente {
   @@unique([tenantId, nombre])
   @@unique([tenantId, documentoNumero])
   @@unique([tenantId, cuit])
+  @@unique([tenantId, rut])
   @@index([tenantId, nombre])
   /// El listado sano esconde a los inhabilitados, así que filtra por activo
   /// en toda consulta.

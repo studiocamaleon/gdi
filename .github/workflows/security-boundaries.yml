@@ -143,6 +143,7 @@ jobs:
             src/centro-copiado/pedidos/__tests__/pedidos.integration.spec.ts \
             src/archivos/__tests__/permisos-http.integration.spec.ts \
             src/clientes/__tests__/solicitudes-alta.http.integration.spec.ts \
+            src/common/rut.spec.ts \
             src/eventos-sistema/eventos-sistema-lecturas.integration.spec.ts \
             src/eventos-sistema/eventos-sistema.service.spec.ts \
             src/eta/asignacion-automatica.integration.spec.ts \
@@ -191,6 +192,9 @@ jobs:
           node node_modules/vitest/vitest.mjs run \
             src/components/administracion/correccion-fiscal.test.tsx \
             src/components/usuarios/empleado-usuario.test.tsx \
+            src/components/clientes/registro-cliente-publico.test.tsx \
+            src/components/clientes/registro-cliente-chile.test.tsx \
+            src/components/clientes/cliente-rut.test.tsx \
             src/lib/staging-access.test.ts \
             src/lib/request-origin.test.ts \
             'src/app/api/session/route.test.ts' \
