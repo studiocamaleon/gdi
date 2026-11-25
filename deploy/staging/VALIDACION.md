@@ -1,5 +1,20 @@
 # Validación de staging — historial
 
+## 2026-11-25 — Rendimiento de las órdenes de trabajo
+
+[PR #135](https://github.com/studiocamaleon/gdi/pull/135), revisión funcional `9264c668b1a9937a18b2530bd9ddc821239b37f9`. La web, la API y ambos workers ejecutan esa revisión en staging. Cada máquina conservó su configuración y recursos. El índice parcial de medianas por empresa está listo y válido. Staging pasó de 323 a 324 migraciones aplicadas y conservó los recuentos de control. Gotenberg respondió y generó el PDF ficticio.
+
+| Componente | Imagen activa |
+| --- | --- |
+| Web | `sha256:f41799bfadb76483fab137c873c2fd7f98eb508c52f1f01bc8a840d0596dbb8d` |
+| API y dos workers | `sha256:9e7a9e2f23ff0ba194c88c8edd6219ade86eccd69dad65d6d22f886152d191a0` |
+
+En Chrome se compararon tres emisiones por versión, con el mismo producto, cliente de prueba y fecha manual. La mediana del clic en Emitir OT al detalle visible pasó de 4,60 s a 2,06 s. Al editar el renglón, el catálogo apareció en las tres repeticiones anteriores. La nueva versión abrió directamente la configuración en las tres. Con el cálculo de taller retenido en el navegador, la fecha automática mantuvo deshabilitado el botón y la fecha manual lo habilitó en 27 ms. La fecha siguió siendo la elegida al liberar el cálculo.
+
+Se hizo una emisión adicional por versión mientras dos empresas ficticias consultaban sus listados y tableros. Cada versión completó 80 lecturas. Las ocho OT se verificaron por API con número único, producto y fecha correctos, visibles en el listado de la empresa que las emitió. La ficha administrativa abrió el producto elegido y sus conteos por categoría coincidieron con los 5 productos del listado. Las mediciones de capacidad con 20 empresas, el costo del cálculo de fechas y el efecto sobre otras sesiones están en el [informe de rendimiento](../../docs/rendimiento-ordenes-2026-11-25.md).
+
+La copia anterior tiene firma válida y manifiesto descifrado. La custodia de las fuentes de esta revisión y el comprobante posterior están pendientes. Para volver a la aplicación anterior, usar las imágenes de la revisión `101ed9327` del registro siguiente, conservando el índice aditivo. Alcance de esta publicación limitado a staging.
+
 ## 2026-11-25 — Cierre integrado de PR y avances locales
 
 [PR #133](https://github.com/studiocamaleon/gdi/pull/133), autorizado para integrar, publicar y cerrar el lote. Incluye #63, #64, #71, #72, #73, #105, #116, #123, #124, #125, #126 y #127, los avances locales de Chile y el plan/prototipo de GrafoCommerce. La revisión de ramas históricas queda en [el registro de cierre](../../docs/cierre-ramas-2026-11-25.md).

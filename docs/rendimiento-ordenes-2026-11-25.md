@@ -48,6 +48,22 @@ La prueba concurrente usó 2.000 consultas por versión, con empresas elegidas a
 
 **Cobertura de las pruebas.** Los recorridos siguientes miden la emisión en el navegador y la API bajo distintas concurrencias. Para extender el ensayo a órdenes más complejas, queda combinar varios renglones, cobros, reservas y archivos durante una carga sostenida y conciliar sus efectos al finalizar.
 
+## Pruebas en staging
+
+Se compararon `101ed9327` y `9264c668b` con Chrome, servicios despiertos, el mismo producto y cliente ficticio y una sola línea por OT. El tiempo de emisión termina al ver el número de la OT en el detalle. Son tres observaciones por revisión en cada recorrido sin lectores adicionales. La tabla muestra sus medianas.
+
+| Recorrido medido en el navegador | Antes | PR #135 |
+| --- | ---: | ---: |
+| Agregar el renglón hasta que el botón Emitir OT queda habilitado con fecha automática | 612 ms | 601 ms |
+| Editar el renglón hasta disponer de su configuración | 234 ms | 216 ms |
+| Apariciones del catálogo al editar | 3 de 3 | 0 de 3 |
+| Crear la OT en la API desde el navegador | 1007 ms | 824 ms |
+| Clic en Emitir OT hasta ver el detalle | 4,60 s | 2,06 s |
+
+En un control independiente se retuvo la tarea de cálculo del taller dentro del navegador. La fecha automática esperó en las dos versiones. En la versión anterior, la fecha ingresada a mano siguió esperando el cálculo durante toda la observación de 1,8 s. En la rama, el botón quedó habilitado en 27 ms con el cálculo aún pendiente. Al liberarlo, la fecha elegida se conservó.
+
+En la ronda con lectores simultáneos se hizo una emisión adicional por versión. El clic al detalle pasó de 4.496 ms a 2.045 ms. En la candidata se completaron 40 lecturas de tablero (p95 de 234 ms) y 40 de listado (p95 de 216 ms) entre dos empresas. En total se conciliaron ocho OT de staging con sus números, empresas, renglones y fechas. [Registro de publicación](../deploy/staging/VALIDACION.md).
+
 ## Emisión simultánea con 20 empresas
 
 El ensayo local del 25 de noviembre usó la API de la revisión `9264c668b`, PostgreSQL 16 con ocho conexiones de aplicación y Valkey en una Mac de 8 GB. Se cargaron 20 empresas ficticias con el generador `f6-saas-seed.cjs`. Diecinueve tenían 100 pasos de taller y una tenía 1.000 al inicio. Se prepararon un cliente, un producto y cotizaciones de una línea por empresa antes de medir. La API autenticó las identidades de prueba. Las tareas programadas y las integraciones externas estuvieron desactivadas.
