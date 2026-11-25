@@ -1,5 +1,42 @@
 # Validación de producción
 
+## 2026-11-25 — Publicación del cierre de PR y ramas
+
+Lucas autorizó revisar e integrar los doce PR pendientes, publicar el lote e incluir los avances locales de Chile y el plan/prototipo de GrafoCommerce. [PR integrador #133](https://github.com/studiocamaleon/gdi/pull/133), con historial conservado. Alcance y equivalencias de ramas en [el registro de cierre](../../docs/cierre-ramas-2026-11-25.md).
+
+Revisión de aplicación **`101ed93273837bfbbb96a60497f3d9f33f9c4563`**, confirmada dentro de web, API y ambos workers con Node 24.21.0. Se promovieron las cuatro imágenes comprobadas en staging por digest, **sin reconstrucción**. Las fuentes operativas `7eec79adda42779b56736e816ff69b9b45917a76` incluyen el ajuste de espera PDF y su registro; también quedaron cifradas bajo custodia. Los commits documentales posteriores no cambian la aplicación ejecutada.
+
+| Servicio | Digest ejecutado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:26b9b76b74650bfbd1d8e5ede96efcbbb68fb720207df551aee738c1d153126f` |
+| Web | `sha256:c7b317564907cdeee05cb193db163ca0c8a853e4561a71451d4b29c167311452` |
+| PDF | `sha256:c0fa0448556408845ed177f395e8b054c488b96e024c4420e55b5182cfff03fd` |
+| Copiador | `sha256:d7fea1e72a9742a8f33df5296983be41ac30012dafbd878361b9fd737a8ef258` |
+
+### Publicación y salud
+
+Antes de actualizar la aplicación se verificaron configuración, salud, respaldo reciente y ausencia de emisiones, lotes, PDFs o trabajos BullMQ activos. Se aplicaron sólo `20261103200000_piloto_desde_invitacion` y `20261103220000_clientes_rut_chile`: 321 → 323 migraciones, recuentos conservados y sin seed/reset. No se copiaron credenciales entre entornos.
+
+Se conservaron las máquinas, tamaños, redes, dominios y accesos. Único ajuste adicional: `CHROMIUM_START_TIMEOUT=60s` en PDF, igual que staging. El valor predeterminado de 20 segundos agotaba el arranque del Chromium actualizado; se detuvo el avance del lote, se corrigió la espera y se inició la máquina con esa configuración antes de continuar. Tras quedar saludable se actualizaron API, ambos workers y web. Se verificó la versión real por servicio, base disponible y generación de PDF válida con Chromium `156.0.8078.108`.
+
+### Recorridos comprobados
+
+Trabajo a medida, pago parcial, archivo desde la orden sin «Editar orden» y notas amarillas en ambas vistas están aprobados sobre estas mismas imágenes en [staging](../staging/VALIDACION.md#2026-11-25--cierre-integrado-de-pr-y-avances-locales). También están comprobados RUT, alta pública, caja CLP, aislamiento de empresa, pilotos/invitaciones, geometría y recuperación aislada. En producción se comprobó la pantalla Operación diaria, con sus columnas y sin alertas de error. API y worker conservan la misma configuración fiscal; esa comparación no emite ni consulta comprobantes ante ARCA. Se usaron comprobaciones de salud y lectura, sin pagos ficticios ni facturas reales. GrafoCommerce sigue siendo un plan/prototipo con pagos simulados. No se habilitaron ventas Paddle ni integraciones externas nuevas.
+
+### Respaldos — incidente recuperado y copia posterior verificada
+
+El control previo detectó que los intentos posteriores al 24/11 a las 12:17 UTC fallaban en B2 con HTTP 503 `service_unavailable` durante `b2_upload_file`. El copiador de #124 renueva el destino y reabre el archivo en hasta tres intentos acotados; sus pruebas y una copia real en staging pasaron. Se promovió primero su mismo digest, conservando la aplicación b411 y las 321 migraciones hasta obtener una copia previa válida.
+
+Copia previa `552264b9-f51e-4be6-ae0d-58654f503084`, 25/11 20:03 UTC, 2.354 archivos y 321 migraciones: firma y manifiesto verificados. Su inventario de aplicación corresponde a b411; el reemplazo del copiador está registrado separadamente en esta publicación.
+
+Copia posterior **`f629f32d-3e08-455a-ba5a-0a24ceab441d`**, terminada **2026-11-25T20:43:27.161Z**: firma, huellas y manifiesto descifrado correctos; **323 migraciones**, **2359 archivos**, revisión `101ed93273837bfbbb96a60497f3d9f33f9c4563` y los cuatro digests de esta tabla. Incluye las fuentes de aplicación y la configuración operativa `7eec79adda42779b56736e816ff69b9b45917a76`. El inventario activo conserva hasta diez revisiones; las fuentes antiguas retiradas de ese índice siguen guardadas en el almacenamiento privado y en los comprobantes previos. No se eliminaron objetos de respaldo ni se desactivó el monitor.
+
+Esta verificación del comprobante no repitió la restauración de producción. Las pruebas aisladas de recuperación del lote usan identidades ficticias, lector de sólo lectura y servicios externos simulados.
+
+### Reversión y cierre
+
+La revisión anterior b411 y sus digests están en el registro del 20/11. Las dos migraciones son aditivas y permiten volver a las imágenes de aplicación anteriores sin borrar datos. Se conserva la espera de 60 segundos para PDF; revertir una imagen no revierte el esquema ni restaura datos. Los detalles de CI, merge y cierre de los PR absorbidos se completan en #133; antes de iniciar trabajo nuevo se debe comprobar que `main`, GitHub y local estén alineados.
+
 ## 2026-11-20 — Trabajo a medida, pagos, archivos y notas
 
 Lucas autorizó aplicar en producción el lote previamente verificado en staging. [PR integrador #132](https://github.com/studiocamaleon/gdi/pull/132), que conserva los commits de Trabajo a medida del [PR #131](https://github.com/studiocamaleon/gdi/pull/131) y los 12 commits entregados mediante bundle. Revisión ejecutada **`b4118ccfc952b3fcd36bd4157334b6e0ba9ed64d`**, confirmada dentro de web, API y ambos workers. Los commits posteriores registran la operación, sin modificar el código de aplicación publicado.

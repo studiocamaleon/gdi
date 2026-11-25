@@ -1,4 +1,5 @@
 import { Readable } from 'node:stream';
+import { setTimeout as pausa } from 'node:timers/promises';
 import { createReadStream, exigir } from './seguro.mjs';
 import { validarConfiguracion, validarPermisos, validarDeposito, CAPACIDADES_LECTOR } from '../validar-destino.mjs';
 
@@ -60,19 +61,29 @@ export class DestinoB2 {
   async subir(path, nombre, huella, hasta) {
     exigir(!this.soloLectura, 'El restaurador no puede escribir respaldos.');
     exigir(nombre.startsWith(this.config.prefijo) && /^[a-z0-9/._-]+$/.test(nombre), 'Nombre de respaldo no permitido.');
-    const target = await this.call('b2_get_upload_url', { bucketId: this.config.bucketId });
-    exigir(target.bucketId === this.config.bucketId && typeof target.authorizationToken === 'string', 'Destino de subida inválido.');
-    const stream = createReadStream(path);
     let info;
-    try {
-      info = await json(await this.request(urlProveedor(target.uploadUrl, 'upload'), {
-        method: 'POST', duplex: 'half', body: stream,
-        headers: { Authorization: target.authorizationToken, 'Content-Type': 'application/octet-stream',
-          'Content-Length': String(huella.bytes), 'X-Bz-File-Name': encodeURIComponent(nombre),
-          'X-Bz-Content-Sha1': huella.sha1, 'X-Bz-File-Retention-Mode': 'compliance',
-          'X-Bz-File-Retention-Retain-Until-Timestamp': String(hasta) },
-      }, 15 * 60_000));
-    } finally { stream.destroy(); }
+    for (let intento = 1; intento <= 3; intento++) {
+      const target = await this.call('b2_get_upload_url', { bucketId: this.config.bucketId });
+      exigir(target.bucketId === this.config.bucketId && typeof target.authorizationToken === 'string', 'Destino de subida inválido.');
+      const url = urlProveedor(target.uploadUrl, 'upload');
+      const stream = createReadStream(path);
+      try {
+        const respuesta = await this.request(url, {
+          method: 'POST', duplex: 'half', body: stream,
+          headers: { Authorization: target.authorizationToken, 'Content-Type': 'application/octet-stream',
+            'Content-Length': String(huella.bytes), 'X-Bz-File-Name': encodeURIComponent(nombre),
+            'X-Bz-Content-Sha1': huella.sha1, 'X-Bz-File-Retention-Mode': 'compliance',
+            'X-Bz-File-Retention-Retain-Until-Timestamp': String(hasta) },
+        }, 15 * 60_000);
+        if (respuesta.status !== 503 || intento === 3) {
+          info = await json(respuesta);
+          break;
+        }
+        // B2 pide un destino nuevo para b2_upload_file tras un 503.
+        await respuesta.body?.cancel();
+      } finally { stream.destroy(); }
+      await pausa(intento * 1000, undefined, { signal: this.signal });
+    }
     exigir(typeof info.fileId === 'string' && info.fileId.length > 0, 'B2 no devolvió una versión válida.');
     const ref = { ...huella, fileId: info.fileId, fileName: nombre };
     this.comprobarInfo(info, ref, hasta);

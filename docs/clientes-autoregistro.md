@@ -6,13 +6,15 @@ Rama `codex/clientes-autoregistro`, dependiente de la base de aplicación y perm
 
 En **CRM → Clientes → Solicitudes de alta**, una persona con `crm.aprobar_altas` habilita y copia el enlace propio de su empresa. Se puede desactivar o renovar; las solicitudes anteriores se conservan. El administrador predefinido recibe este permiso mediante la migración; los demás roles deben recibirlo explícitamente. El permiso incluye lectura de clientes para comparar fichas, pero no edición general.
 
-El formulario público `/alta-cliente/<token>` está preparado para datos fiscales de Argentina. Pide nombre completo o razón social, DNI o CUIT/CUIL, condición frente al IVA, teléfono con código de área, calle y altura, y localidad. DNI se admite para Consumidor final; las demás condiciones requieren CUIT/CUIL con verificador válido. El teléfono se valida y normaliza internacionalmente. No pide contraseña, contactos adicionales ni datos de cuenta corriente, y no concede consentimiento de WhatsApp por defecto.
+El formulario público `/alta-cliente/<token>` usa la región de la empresa identificada por el enlace. En Argentina pide nombre completo o razón social, DNI o CUIT/CUIL, condición frente al IVA, teléfono con código de área, calle y altura, y localidad. DNI se admite para Consumidor final; las demás condiciones requieren CUIT/CUIL con verificador válido. El teléfono se valida y normaliza internacionalmente. No pide contraseña, contactos adicionales ni datos de cuenta corriente, y no concede consentimiento de WhatsApp por defecto.
+
+Para Chile pide RUT, nombre o razón social, teléfono y domicilio. Acepta RUT con o sin puntos y guion, comprueba módulo 11 y normaliza K en mayúscula. Al aprobar se guarda en el campo RUT del cliente, con país y domicilio chilenos. La ficha manual, la API de importación y el buscador también admiten RUT. El dígito verificador se comprueba localmente. La revisión de identidad y la facturación electrónica chilena se realizan fuera de Grafoprint.
 
 Enviar crea una **solicitud pendiente**, nunca un cliente ni un acceso. La condición fiscal y el domicilio son declarados por el solicitante: esta versión no consulta ARCA ni afirma que esos datos estén verificados. El equipo puede aprobar, rechazar con un motivo interno o vincular a un cliente coincidente. Vincular no reemplaza su ficha. La resolución conserva actor, fecha, decisión y referencia al cliente, incluso si más adelante se borra al usuario o al cliente.
 
 ## Duplicados y protección
 
-- El documento se normaliza. Los CUIT/CUIL personales se comparan también por DNI; un documento existente impide crear otra ficha. Las fichas inhabilitadas también se consideran.
+- El documento se normaliza. El RUT es único por empresa y también se compara con clientes inactivos. Enviar dos formatos del mismo RUT conserva una sola solicitud pendiente. Los CUIT/CUIL personales se comparan también por DNI; un documento existente impide crear otra ficha. Las fichas inhabilitadas también se consideran.
 - Nombre y teléfono coincidentes exigen revisión explícita. Un teléfono compartido no prohíbe registrar a otra persona. La restricción existente de nombre único del catálogo sigue vigente.
 - Los envíos repetidos de un documento pendiente no reemplazan los datos recibidos. La respuesta pública no revela si el cliente existe.
 - La aprobación vuelve a comprobar coincidencias dentro de la transacción; resoluciones concurrentes no crean dos clientes. Los índices únicos existentes de clientes son la última defensa ante altas simultáneas de otros recorridos.
@@ -21,6 +23,8 @@ Enviar crea una **solicitud pendiente**, nunca un cliente ni un acceso. La condi
 - La API exige el permiso para listar, ver, resolver y administrar enlaces. La interfaz confirma ese permiso antes de consultar datos. La ruta pública no abre rutas privadas con prefijos similares.
 
 ## Comprobación local
+
+El soporte chileno agrega la migración `20261103220000_clientes_rut_chile`, con una columna opcional y un índice único por empresa. Las fichas anteriores quedan sin RUT. Una actualización que omite el campo conserva el identificador ya guardado.
 
 Migración aditiva `20261007210000_clientes_autoregistro`, aplicada únicamente a la base local de pruebas. Sin seed ni cambios sobre datos de usuarios. Probar antes del despliegue la habilitación del permiso en roles existentes y aplicar la migración antes de iniciar la versión nueva.
 

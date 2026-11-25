@@ -43,3 +43,7 @@ kill_timeout = 120
   cpu_kind = "shared"
   cpus = 1
   memory = "2gb"
+
+[[files]]
+  guest_path = "/app/staging-demanda/ocupacion.cjs"
+  local_path = "demanda/ocupacion.cjs"

@@ -24,6 +24,8 @@ import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { vencimientoInicial } from './sesion-vida';
+import { finDePrueba } from '../suscripciones/trial';
+import { resolverAccesoEmpresa } from '../suscripciones/acceso-empresa';
 import { estadoDeCiclo } from '../suscripciones/ciclo';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CambiarPasswordDto } from './dto/cambiar-password.dto';
@@ -784,6 +786,7 @@ export class AuthService {
       // Consumo atómico de la invitación (single-use). Si otra request en
       // paralelo ya la aceptó, este updateMany afecta 0 filas y abortamos,
       // evitando crear membership/sesión duplicadas por doble submit o replay.
+      const aceptadaEl = new Date();
       const claimed = await tx.invitation.updateMany({
         where: {
           id: invitation.id,
@@ -791,10 +794,27 @@ export class AuthService {
           revokedAt: null,
           expiresAt: { gt: new Date() },
         },
-        data: { acceptedAt: new Date() },
+        data: { acceptedAt: aceptadaEl },
       });
       if (claimed.count === 0) {
         throw new BadRequestException('La invitacion ya fue utilizada.');
+      }
+
+      if (
+        invitation.invitedByMembershipId === null &&
+        invitation.rol === 'ADMINISTRADOR'
+      ) {
+        await tx.suscripcion.updateMany({
+          where: {
+            tenantId: invitation.tenantId,
+            piloto30Dias: true,
+            trialHasta: null,
+            estado: 'activa',
+            proveedor: 'manual',
+            referenciaExterna: null,
+          },
+          data: { trialHasta: finDePrueba(30, aceptadaEl) },
+        });
       }
 
       let user = await tx.user.findUnique({
@@ -1311,6 +1331,7 @@ export class AuthService {
       memberships,
       token,
       rolPlataforma,
+      db,
     );
   }
 
@@ -1326,8 +1347,11 @@ export class AuthService {
    * sin plan asignado, y la card cae a su texto neutro. Ese fue el bug de
    * origen —mostraba "Plan diamante · 14/30 días" a todo el mundo.
    */
-  private async resumenSuscripcion(tenantId: string) {
-    const suscripcion = await this.prisma.suscripcion.findFirst({
+  private async resumenSuscripcion(
+    tenantId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    const suscripcion = await db.suscripcion.findFirst({
       where: { tenantId },
       select: {
         estado: true,
@@ -1336,6 +1360,8 @@ export class AuthService {
         graciaHasta: true,
         ultimaSyncProveedorEl: true,
         trialHasta: true,
+        piloto30Dias: true,
+        proveedor: true,
         periodoDesde: true,
         proximoCobro: true,
         plan: { select: { nombre: true, trialDias: true, featuresJson: true } },
@@ -1363,10 +1389,14 @@ export class AuthService {
             ),
           )
         : null,
-      soloLectura: suscripcion.estado !== 'activa',
+      soloLectura:
+        resolverAccesoEmpresa(true, suscripcion).modo !== 'operativo',
       ultimaSyncProveedorEl:
         suscripcion.ultimaSyncProveedorEl?.toISOString() ?? null,
-      ...estadoDeCiclo(suscripcion, suscripcion.plan.trialDias),
+      ...estadoDeCiclo(
+        suscripcion,
+        suscripcion.piloto30Dias ? 30 : suscripcion.plan.trialDias,
+      ),
     };
   }
 
@@ -1415,16 +1445,17 @@ export class AuthService {
     memberships: MembershipWithTenant[],
     accessToken: string | null,
     rolPlataforma: RolPlataforma | null = null,
+    db: Prisma.TransactionClient = this.prisma,
   ) {
     const [suscripcion, rolDelTenant, usuario, regional] = await Promise.all([
-      this.resumenSuscripcion(currentMembership.tenant.id),
+      this.resumenSuscripcion(currentMembership.tenant.id, db),
       currentMembership.rolId
-        ? this.prisma.rol.findUnique({
+        ? db.rol.findUnique({
             where: { id: currentMembership.rolId },
             select: { nombre: true, permisos: true },
           })
         : Promise.resolve(null),
-      this.prisma.user.findUnique({
+      db.user.findUnique({
         where: { id: userId },
         select: { debeCambiarPassword: true, fotoPerfilVersion: true },
       }),

@@ -143,6 +143,8 @@ jobs:
             src/centro-copiado/pedidos/__tests__/pedidos.integration.spec.ts \
             src/archivos/__tests__/permisos-http.integration.spec.ts \
             src/clientes/__tests__/solicitudes-alta.http.integration.spec.ts \
+            src/clientes/__tests__/busqueda-acentos.integration.spec.ts \
+            src/common/rut.spec.ts \
             src/eventos-sistema/eventos-sistema-lecturas.integration.spec.ts \
             src/eventos-sistema/eventos-sistema.service.spec.ts \
             src/eta/asignacion-automatica.integration.spec.ts \
@@ -152,6 +154,7 @@ jobs:
             src/ordenes-trabajo/__tests__/completar-cola.integration.spec.ts \
             src/productos-servicios/precio/__tests__/precio-fijo-opcionales.spec.ts \
             src/motor-universal/__tests__/precio-fijo-opcionales.spec.ts \
+            src/motor-universal/__tests__/contexto-materiales-transporte.spec.ts \
             src/enlaces-publicos/__tests__/enlaces-publicos.http.integration.spec.ts \
             src/produccion/__tests__/produccion-aislamiento-http.integration.spec.ts \
             src/productos-servicios/__tests__/productos-aislamiento-http.integration.spec.ts \
@@ -187,9 +190,13 @@ jobs:
       - name: Comprobar editor de tarifarios y canales
         run: |
           npm ci --include=dev --no-audit --no-fund
+          node --test scripts/entradas-dependencias.test.cjs
           node node_modules/vitest/vitest.mjs run \
             src/components/administracion/correccion-fiscal.test.tsx \
             src/components/usuarios/empleado-usuario.test.tsx \
+            src/components/clientes/registro-cliente-publico.test.tsx \
+            src/components/clientes/registro-cliente-chile.test.tsx \
+            src/components/clientes/cliente-rut.test.tsx \
             src/lib/staging-access.test.ts \
             src/lib/request-origin.test.ts \
             'src/app/api/session/route.test.ts' \
@@ -233,6 +240,16 @@ jobs:
             src/productos-servicios/__tests__/pasos-extra-estado.spec.ts \
             src/productos-servicios/__tests__/cargos-directos-producto.spec.ts \
             src/productos-servicios/__tests__/productos-catalogo.spec.ts
+      - name: Comprobar alta asistida, trial y cobro de testers
+        run: |
+          node node_modules/vitest/vitest.mjs run --maxWorkers=1 src/lib/paddle-web.test.ts src/components/plataforma/crear-empresa-dialog.test.tsx src/components/suscripcion/suscripcion-permisos.test.tsx
+          cd apps/api
+          node node_modules/jest/bin/jest.js --runInBand --runTestsByPath \
+            src/plataforma/__tests__/invitaciones-empresa.spec.ts \
+            src/plataforma/__tests__/planes-paddle.spec.ts \
+            src/cobro/__tests__/cobro-webhook.e2e.spec.ts \
+            src/provisionamiento/onboarding-recorrido.integration.spec.ts \
+            src/cobro/__tests__/cobro.spec.ts
       - name: Comprobar editor de condiciones de pasos
         run: node node_modules/vitest/vitest.mjs run src/components/productos-servicios/condiciones-pasos-extra.test.tsx src/lib/rule-builder.test.ts src/lib/editor-paso/schema.test.ts src/lib/estado-pasos-cotizador.test.ts src/lib/cantidad-manual-paso.test.ts src/components/comercial/cantidad-manual-cotizador.test.tsx --maxWorkers=1
       - name: Comprobar cálculos y contrato de tarifarios de Centro de copiado

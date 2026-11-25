@@ -35,6 +35,7 @@ const plataforma = new PlataformaService(
 );
 let staffId: string, planId: string;
 const tenants: string[] = [];
+const usuariosPiloto: string[] = [];
 beforeAll(async () => {
   staffId = (
     await prisma.user.create({
@@ -61,6 +62,7 @@ afterAll(async () => {
   await prisma.plataformaEvento.deleteMany({ where: { staffUserId: staffId } });
   await prisma.tenant.deleteMany({ where: { id: { in: tenants } } });
   await prisma.plan.delete({ where: { id: planId } });
+  await prisma.user.deleteMany({ where: { id: { in: usuariosPiloto } } });
   await prisma.user.delete({ where: { id: staffId } });
   await prisma.$disconnect();
 });
@@ -75,6 +77,90 @@ async function crear(email = ' Invitada@example.com ') {
   tenants.push(r.tenantId);
   return r;
 }
+it('alta asistida de tester chileno sobre un plan sin prueba ni pasarela', async () => {
+  await prisma.plan.update({
+    where: { id: planId },
+    data: { trialDias: null },
+  });
+  try {
+    const r = await plataforma.crearTenant(staffId, {
+      nombre: 'Taller ficticio',
+      slug: `piloto-${randomUUID().slice(0, 8)}`,
+      planId,
+      adminEmail: `piloto-${randomUUID()}@example.test`,
+      paisCodigo: 'CL',
+      zonaHoraria: 'America/Santiago',
+      piloto30Dias: true,
+    });
+    tenants.push(r.tenantId);
+    const s = await prisma.suscripcion.findUniqueOrThrow({
+      where: { tenantId: r.tenantId },
+    });
+    expect(s.trialHasta).toBeNull();
+    expect(s.piloto30Dias).toBe(true);
+    expect(s.proveedor).toBe('manual');
+    expect(s.implementacionResueltaEl).not.toBeNull();
+    expect(s.implementacionImporte?.toString()).toBe('0');
+    expect(
+      await prisma.datosEmpresa.findUniqueOrThrow({
+        where: { tenantId: r.tenantId },
+      }),
+    ).toMatchObject({
+      paisCodigo: 'CL',
+      monedaCodigo: 'CLP',
+      zonaHoraria: 'America/Santiago',
+    });
+    expect(enviar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        implementacion: 0,
+        mensual: null,
+        zonaHoraria: 'America/Santiago',
+        trialHasta: null,
+        pilotoPendiente: true,
+      }),
+      expect.any(Object),
+    );
+    const token = new URL(r.invitacionUrl!).searchParams.get('token')!;
+    await expect(auth.acceptInvitation(token, {})).rejects.toThrow();
+    expect(
+      (
+        await prisma.suscripcion.findUniqueOrThrow({
+          where: { tenantId: r.tenantId },
+        })
+      ).trialHasta,
+    ).toBeNull();
+    const sesion = await auth.acceptInvitation(token, {
+      password: 'clave-ficticia-larga',
+    });
+    expect(sesion).toMatchObject({
+      currentUser: {
+        tenantActual: {
+          suscripcion: { enPrueba: true, diasTotales: 30, diasRestantes: 30 },
+        },
+      },
+    });
+    const i = await prisma.invitation.findUniqueOrThrow({
+      where: { id: r.invitacion.id },
+    });
+    usuariosPiloto.push(i.userId!);
+    const fin = i.acceptedAt!.getTime() + 30 * 86400000;
+    await expect(
+      auth.acceptInvitation(token, { password: 'clave-ficticia-larga' }),
+    ).rejects.toThrow();
+    expect(
+      (
+        await prisma.suscripcion.findUniqueOrThrow({
+          where: { tenantId: r.tenantId },
+        })
+      ).trialHasta?.getTime(),
+    ).toBe(fin);
+  } finally {
+    await prisma.plan.update({
+      where: { id: planId },
+      data: { trialDias: 30 },
+    });
+  }
+});
 async function habilitarReenvio(id: string) {
   await prisma.invitation.update({
     where: { id },

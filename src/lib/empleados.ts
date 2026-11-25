@@ -135,11 +135,11 @@ export const comisionTypeItems: Array<{ label: string; value: TipoComision }> = 
   { label: "Monto fijo", value: "fijo" },
 ];
 
-export function createEmptyDireccion(): EmpleadoDireccion {
+export function createEmptyDireccion(pais = PAIS_DEFAULT): EmpleadoDireccion {
   return {
     id: crypto.randomUUID(),
     descripcion: "",
-    pais: "AR",
+    pais,
     codigoPostal: "",
     direccion: "",
     numero: "",
@@ -158,12 +158,12 @@ export function createEmptyComision(): EmpleadoComision {
   };
 }
 
-export function createEmptyEmpleado(): EmpleadoDetalle {
+export function createEmptyEmpleado(pais = PAIS_DEFAULT): EmpleadoDetalle {
   return {
     id: "",
     nombreCompleto: "",
     email: "",
-    telefonoCodigo: phoneCodeDe(PAIS_DEFAULT),
+    telefonoCodigo: phoneCodeDe(pais),
     telefonoNumero: "",
     sector: "",
     ocupacion: "",
@@ -180,7 +180,7 @@ export function createEmptyEmpleado(): EmpleadoDetalle {
     comisionesVisibles: true,
     comisionesHabilitadas: false,
     ciudad: "",
-    direcciones: [createEmptyDireccion()],
+    direcciones: [createEmptyDireccion(pais)],
     comisiones: [],
     eventos: [],
   };

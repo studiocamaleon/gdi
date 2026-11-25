@@ -10,6 +10,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuthGuard } from '../../auth/auth.guard';
 import { PermisosGuard } from '../../auth/permisos.guard';
 import { TenantContextInterceptor } from '../../common/interceptors/tenant-context.interceptor';
+import { ClientesService } from '../clientes.service';
+import { ClientesController } from '../clientes.controller';
 import { SolicitudesAltaService } from '../solicitudes-alta.service';
 import {
   RegistroClientesPublicoController,
@@ -23,7 +25,7 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
   const capacidades = capacidadesDePrueba();
   const servicio = new SolicitudesAltaService(prisma, capacidades);
   const jwt = new JwtService({ secret: randomUUID() });
-  const tenants = [randomUUID(), randomUUID()];
+  const tenants = [randomUUID(), randomUUID(), randomUUID()];
   const users: string[] = [];
   const tokens: Record<string, string> = {};
   const enlaces: string[] = [];
@@ -80,7 +82,12 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
       ['aprobador', ['crm.aprobar_altas', 'acceso.por_vista']],
       ['lector', ['crm.clientes.ver']],
       ['gestor', ['crm.clientes.gestionar']],
+      [
+        'chileno',
+        ['crm.aprobar_altas', 'crm.clientes.gestionar', 'crm.clientes.ver'],
+      ],
     ] as const) {
+      const tenantId = nombre === 'chileno' ? tenants[2] : tenants[0];
       const user = await prisma.user.create({
         data: {
           nombreCompleto: 'Revisor ficticio',
@@ -89,12 +96,12 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
       });
       users.push(user.id);
       const rol = await prisma.rol.create({
-        data: { tenantId: tenants[0], nombre, permisos: [...permisos] },
+        data: { tenantId, nombre, permisos: [...permisos] },
       });
       const m = await prisma.membership.create({
         data: {
           userId: user.id,
-          tenantId: tenants[0],
+          tenantId,
           rolId: rol.id,
           rol: 'OPERADOR',
         },
@@ -102,7 +109,7 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
       const s = await prisma.authSession.create({
         data: {
           userId: user.id,
-          currentTenantId: tenants[0],
+          currentTenantId: tenantId,
           currentMembershipId: m.id,
           expiresAt: new Date(Date.now() + 3600000),
         },
@@ -111,17 +118,24 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
         sub: user.id,
         email: user.email,
         sessionId: s.id,
-        tenantId: tenants[0],
+        tenantId,
         membershipId: m.id,
         role: 'OPERADOR',
       });
     }
     const module = await Test.createTestingModule({
       controllers: [
+        ClientesController,
         SolicitudesAltaController,
         RegistroClientesPublicoController,
       ],
-      providers: [{ provide: SolicitudesAltaService, useValue: servicio }],
+      providers: [
+        { provide: SolicitudesAltaService, useValue: servicio },
+        {
+          provide: ClientesService,
+          useValue: new ClientesService(prisma, capacidades),
+        },
+      ],
     }).compile();
     app = module.createNestApplication<INestApplication<Server>>();
     app.useLogger(false);
@@ -139,6 +153,9 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
       }),
     );
     await app.init();
+    await prisma.datosEmpresa.create({
+      data: { tenantId: tenants[2], paisCodigo: 'CL' },
+    });
     for (const t of tenants) enlaces.push((await servicio.habilitar(t)).token);
   });
   it('notifica una sola vez a quienes aprueban, con enlace a solicitudes, sin avisar al resto', async () => {
@@ -496,5 +513,203 @@ describe('Autoregistro: HTTP, aprobación y aislamiento con PostgreSQL real', ()
         where: { tenantId: tenants[1] },
       }),
     ).toBe(100);
+  });
+  describe('Clientes chilenos por RUT', () => {
+    let cuerpo = 99000000;
+    function rutFicticio() {
+      const base = String(++cuerpo);
+      const suma = [3, 2, 7, 6, 5, 4, 3, 2].reduce(
+        (suma, peso, i) => suma + peso * Number(base[i]),
+        0,
+      );
+      return base + '-' + '0123456789K'[(11 - (suma % 11)) % 11];
+    }
+    const datosRut = (rut: string) => ({
+      nombre: 'Solicitante chileno ficticio ' + randomUUID(),
+      documentoTipo: 'RUT',
+      documentoNumero: rut,
+      telefono: '+1 202 555 0199',
+      direccion: 'Calle ficticia 123',
+      ciudad: 'Comuna de prueba',
+    });
+    const manual = (rut: string) => ({
+      nombre: 'Cliente manual ficticio ' + randomUUID(),
+      rut,
+      pais: 'CL',
+      email: '',
+      telefonoCodigo: '1',
+      telefonoNumero: '2025550199',
+      contactos: [],
+      direcciones: [],
+    });
+    const apiCliente = (
+      method: 'get' | 'post' | 'put',
+      path = '',
+      actor = 'chileno',
+    ) =>
+      request(app.getHttpServer())
+        [method]('/clientes' + path)
+        .auth(tokens[actor], { type: 'bearer' });
+    async function solicitarRut(rut: string) {
+      await publica(datosRut(rut), enlaces[2]).expect(201);
+      return prisma.solicitudAltaCliente.findFirstOrThrow({
+        where: {
+          tenantId: tenants[2],
+          documentoNumero: rut,
+          estado: 'PENDIENTE',
+        },
+      });
+    }
+    it('normaliza formato y k, repite sin reemplazar datos y aprueba con domicilio chileno', async () => {
+      const original = {
+        ...datosRut('1.000.005-k'),
+        telefono: '+56 9 8765 4321',
+      };
+      await publica(original, enlaces[2]).expect(201, { recibida: true });
+      await publica(
+        {
+          ...original,
+          nombre: 'Otro nombre ficticio',
+          documentoNumero: '1000005K',
+        },
+        enlaces[2],
+      ).expect(201, { recibida: true });
+      const solicitudes = await prisma.solicitudAltaCliente.findMany({
+        where: { tenantId: tenants[2], documentoNumero: '1000005-K' },
+      });
+      expect(solicitudes).toHaveLength(1);
+      expect(solicitudes[0].nombre).toBe(original.nombre);
+      const id = solicitudes[0].id;
+      await get('/' + id).expect(404);
+      await post('/' + id + '/decision', { accion: 'aprobar' }).expect(404);
+      const r = await post(
+        '/' + id + '/decision',
+        { accion: 'aprobar' },
+        'chileno',
+      ).expect(201);
+      const ficha = await apiCliente('get', '/' + r.body.clienteId).expect(200);
+      expect(ficha.body).toMatchObject({
+        rut: '1000005-K',
+        pais: 'CL',
+        documentoNumero: null,
+        cuit: '',
+        telefonoCodigo: '56',
+        telefonoNumero: '987654321',
+      });
+      expect(ficha.body.direcciones[0]).toMatchObject({
+        pais: 'CL',
+        ciudad: original.ciudad,
+      });
+      expect(ficha.body.aceptaWhatsapp).not.toBe(true);
+    });
+    it('rechaza un RUT inválido, documentos de otra región y campos administrativos', async () => {
+      await publica(datosRut('12345678-9'), enlaces[2]).expect(400);
+      await publica(datos(), enlaces[2]).expect(400);
+      await publica(datosRut('12345678-5'), enlaces[0]).expect(400);
+      for (const extra of [
+        { tenantId: tenants[0] },
+        { paisCodigo: 'AR' },
+        { condicionFiscal: 'RI' },
+      ]) {
+        await publica(
+          { ...datosRut('12345678-5'), ...extra },
+          enlaces[2],
+        ).expect(400);
+      }
+      await apiCliente('post').send(manual('12345678-9')).expect(400);
+    });
+    it('la carga manual y la aprobación reconocen el mismo RUT, incluso en un cliente inactivo', async () => {
+      const rut = rutFicticio();
+      const creado = await apiCliente('post').send(manual(rut)).expect(201);
+      const s = await solicitarRut(rut);
+      const detalle = await get('/' + s.id, 'chileno').expect(200);
+      expect(detalle.body.coincidencias).toContainEqual(
+        expect.objectContaining({ id: creado.body.id, documento: true }),
+      );
+      await post(
+        '/' + s.id + '/decision',
+        { accion: 'aprobar', confirmarCoincidencias: true },
+        'chileno',
+      ).expect(409);
+      await post(
+        '/' + s.id + '/decision',
+        { accion: 'vincular', clienteId: creado.body.id },
+        'chileno',
+      ).expect(201);
+      await apiCliente('post')
+        .send(manual(rut.replace('-', '')))
+        .expect(409);
+      await prisma.cliente.update({
+        where: { id: creado.body.id },
+        data: { activo: false },
+      });
+      const otro = await solicitarRut(rut);
+      await post(
+        '/' + otro.id + '/decision',
+        { accion: 'aprobar', confirmarCoincidencias: true },
+        'chileno',
+      ).expect(409);
+      expect(
+        (
+          await prisma.cliente.findUniqueOrThrow({
+            where: { id: creado.body.id },
+          })
+        ).nombre,
+      ).toBe(creado.body.nombre);
+    });
+    it('busca el RUT formateado y conserva el identificador cuando un cliente anterior de la API lo omite', async () => {
+      const rut = rutFicticio();
+      const payload = manual(rut);
+      const creado = await apiCliente('post').send(payload).expect(201);
+      const formateado = rut.replace(/^(..)(...)(...)/, '$1.$2.$3');
+      const encontrado = await apiCliente(
+        'get',
+        '?q=' + encodeURIComponent(formateado),
+      ).expect(200);
+      expect(encontrado.body.data.map((c: { id: string }) => c.id)).toEqual([
+        creado.body.id,
+      ]);
+      const { rut: omitido, ...anterior } = payload;
+      const editado = await apiCliente('put', '/' + creado.body.id)
+        .send({
+          ...anterior,
+          nombre: payload.nombre + ' editado',
+          updatedAt: creado.body.updatedAt,
+        })
+        .expect(200);
+      expect(editado.body.rut).toBe(rut);
+      const otroTenant = await apiCliente('post', '', 'gestor')
+        .send(manual(rut))
+        .expect(201);
+      expect(otroTenant.body.rut).toBe(rut);
+      const importado = await apiCliente('post', '/importar')
+        .send({ clientes: [manual(rut)] })
+        .expect(409);
+      expect(importado.body.message).toContain('RUT');
+    });
+    it('protege altas manuales simultáneas y dos aprobaciones de la misma solicitud', async () => {
+      const rut = rutFicticio();
+      const altas = await Promise.all([
+        apiCliente('post').send(manual(rut)),
+        apiCliente('post').send(manual(rut)),
+      ]);
+      expect(altas.map((r) => r.status).sort()).toEqual([201, 409]);
+      const s = await solicitarRut(rutFicticio());
+      const aprobaciones = await Promise.all(
+        [1, 2].map(() =>
+          post(
+            '/' + s.id + '/decision',
+            { accion: 'aprobar', confirmarCoincidencias: true },
+            'chileno',
+          ),
+        ),
+      );
+      expect(aprobaciones.map((r) => r.status).sort()).toEqual([201, 409]);
+      expect(
+        await prisma.cliente.count({
+          where: { tenantId: tenants[2], rut: s.documentoNumero },
+        }),
+      ).toBe(1);
+    });
   });
 });

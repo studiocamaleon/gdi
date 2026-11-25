@@ -38,6 +38,26 @@ describe("Formulario público de cliente", () => {
     expect(html).toContain("Uruguay");
     expect(html).toContain("+598");
   });
+  it("pide RUT y domicilio chileno con teclado que admite K", () => {
+    const html = renderToStaticMarkup(
+      <RegistroClientePublico
+        token="ficticio"
+        empresa="Taller ficticio"
+        paisCodigo="CL"
+      />,
+    );
+    expect(html).toContain("RUT");
+    expect(html).toContain("Domicilio · Chile");
+    expect(html).toContain("Comuna o ciudad");
+    expect(html).toContain("+56");
+    expect(
+      html.match(/<input[^>]*name="documentoNumero"[^>]*>/)?.[0],
+    ).toContain('inputMode="text"');
+    expect(html).not.toContain("CUIT");
+    expect(html).not.toContain("DNI");
+    expect(html).not.toContain("Condición frente al IVA");
+    expect(html).not.toContain("Domicilio fiscal · Argentina");
+  });
   it("un enlace desactivado no ofrece el formulario ni el botón de envío", () => {
     const html = renderToStaticMarkup(
       <RegistroClientePublico

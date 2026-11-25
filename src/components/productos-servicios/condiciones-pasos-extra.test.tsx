@@ -17,7 +17,7 @@ vi.mock("./rule-builder", () => ({
 beforeEach(() => {
   observado.reglas.length = 0;
 });
-it("el editor ofrece los pasos agregados al producto y respeta el orden y los nombres visibles", () => {
+function escenario() {
   const familia = {
     codigo: "trabajo_manual",
     nombre: "Trabajo manual",
@@ -90,6 +90,13 @@ it("el editor ofrece los pasos agregados al producto y respeta el orden y los no
       },
     ],
   };
+  return { familia, ruta };
+}
+
+function renderEditor(
+  modeloProductivo?: React.ComponentProps<typeof ConfigPasosEditorView>["modeloProductivo"],
+) {
+  const { familia, ruta } = escenario();
   renderToStaticMarkup(
     <ConfigPasosEditorView
       producto={
@@ -102,8 +109,13 @@ it("el editor ofrece los pasos agregados al producto y respeta el orden y los no
       rutaAlternativa={ruta as never}
       catalogoFamilias={{ familias: [familia] } as never}
       lookups={{ materiasPrimas: [], maquinas: [], centrosCosto: [] } as never}
+      modeloProductivo={modeloProductivo}
     />,
   );
+}
+
+it("el editor ofrece los pasos agregados al producto y respeta el orden y los nombres visibles", () => {
+  renderEditor();
   expect(observado.reglas.length).toBeGreaterThan(0);
   const regla = observado.reglas.find((p) => p.pasoActualId === "base")!;
   expect(regla).toBeDefined();
@@ -115,4 +127,65 @@ it("el editor ofrece los pasos agregados al producto y respeta el orden y los no
       { value: "extra-troquelado", label: "Paso 4 · Troquelado" },
     ],
   );
+});
+
+it("las condiciones siguen las conexiones de la ruta aunque difieran del orden de alta", () => {
+  renderEditor({
+    active: false,
+    estructura: "SIMPLE",
+    componentes: [],
+    etapas: [],
+    nodoSeleccionado: "paso:ruta:base",
+    aristas: [
+      { desdeClave: "extra:extra-refilado", haciaClave: "extra:extra-diseno" },
+      { desdeClave: "extra:extra-diseno", haciaClave: "extra:extra-troquelado" },
+      { desdeClave: "extra:extra-troquelado", haciaClave: "ruta:base" },
+    ],
+    panel: null,
+    onOpen: vi.fn(),
+    onClose: vi.fn(),
+  });
+  const regla = observado.reglas.find((p) => p.pasoActualId === "base")!;
+  expect(regla).toBeDefined();
+  expect(regla.extraFields.find((f) => f.key === "pasoActivo_")?.pasos).toEqual([
+    { value: "extra-refilado", label: "Paso 1 · Refilado" },
+    { value: "extra-diseno", label: "Paso 2 · Diseño gráfico" },
+    { value: "extra-troquelado", label: "Paso 3 · Troquelado" },
+    { value: "base", label: "Paso 4 · Impresión" },
+  ]);
+  for (const key of ["tecnologia_", "quienHace_"]) {
+    expect(regla.extraFields.find((f) => f.key === key)?.pasos).toEqual([
+      { value: "config-base", label: "Paso 4 · Impresión" },
+    ]);
+  }
+});
+
+it("respeta el orden del lienzo en ramas paralelas y a través de componentes", () => {
+  renderEditor({
+    active: false,
+    estructura: "COMPUESTO",
+    componentes: [{
+      codigo: "componente-ficticio",
+      nombre: "Componente ficticio",
+      nodosPredecesoresClaves: ["extra:extra-troquelado", "extra:extra-diseno"],
+      nodoIncorporacionClave: "ruta:base",
+    }],
+    etapas: [],
+    nodoSeleccionado: "paso:ruta:base",
+    aristas: [
+      { desdeClave: "extra:extra-refilado", haciaClave: "extra:extra-diseno" },
+      { desdeClave: "extra:extra-refilado", haciaClave: "extra:extra-troquelado" },
+    ],
+    panel: null,
+    onOpen: vi.fn(),
+    onClose: vi.fn(),
+  });
+  const regla = observado.reglas.find((p) => p.pasoActualId === "base")!;
+  expect(regla).toBeDefined();
+  expect(regla.extraFields.find((f) => f.key === "pasoActivo_")?.pasos).toEqual([
+    { value: "extra-refilado", label: "Paso 1 · Refilado" },
+    { value: "extra-troquelado", label: "Paso 2 · Troquelado" },
+    { value: "extra-diseno", label: "Paso 3 · Diseño gráfico" },
+    { value: "base", label: "Paso 4 · Impresión" },
+  ]);
 });

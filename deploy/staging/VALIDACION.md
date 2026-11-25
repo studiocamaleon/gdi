@@ -1,5 +1,54 @@
 # Validación de staging — historial
 
+## 2026-11-25 — Cierre integrado de PR y avances locales
+
+[PR #133](https://github.com/studiocamaleon/gdi/pull/133), autorizado para integrar, publicar y cerrar el lote. Incluye #63, #64, #71, #72, #73, #105, #116, #123, #124, #125, #126 y #127, los avances locales de Chile y el plan/prototipo de GrafoCommerce. La revisión de ramas históricas queda en [el registro de cierre](../../docs/cierre-ramas-2026-11-25.md).
+
+Revisión funcional **`101ed93273837bfbbb96a60497f3d9f33f9c4563`**, confirmada dentro de web, API y ambos workers, con Node 24.21.0. Los commits posteriores conservan historial y documentación. Compilaciones de producción realizadas en remoto. 323 migraciones: se agregaron únicamente piloto desde invitación y RUT de clientes; recuentos previos conservados, sin seed ni reset. Se preservaron tamaños, configuración, secretos propios y encendido bajo demanda.
+
+| Servicio | Digest verificado |
+| --- | --- |
+| API / worker / worker-pdf | `sha256:26b9b76b74650bfbd1d8e5ede96efcbbb68fb720207df551aee738c1d153126f` |
+| Web | `sha256:c7b317564907cdeee05cb193db163ca0c8a853e4561a71451d4b29c167311452` |
+| PDF | `sha256:c0fa0448556408845ed177f395e8b054c488b96e024c4420e55b5182cfff03fd` |
+| Copiador | `sha256:d7fea1e72a9742a8f33df5296983be41ac30012dafbd878361b9fd737a8ef258` |
+
+### Trabajo a medida — aprobado
+
+Recorrido por navegador con la empresa independiente «QA Cierre Chile 25/11» y el cliente aprobado desde alta pública. Se emitió `OT-2026-0001`, trabajo «QA cierre: cartel a medida», una unidad y un paso manual en «Terminación QA ficticia». Costo total CLP 6.000; venta neta mostrada 8.403, impuesto 1.597 y total CLP 10.000. El formulario rechazó configuración incompleta de estación, alícuota y horas sin centro de costo. El ensayo final usa costo total y no asigna horas. No se inició ni completó producción.
+
+### Pago desde la orden — aprobado
+
+Pagos → Registrar pago parcial o total, **sin entrar en «Editar orden»**. Cobro ficticio de CLP 2.500 en efectivo a Caja mostrador, recibo `REC-2026-0001`. Regresó a la orden y mostró un cobro, 25 % cobrado y saldo CLP 7.500. La caja inicial usa CLP; el catálogo chileno ofrece efectivo y transferencia. No hubo transferencia de dinero ni cobro externo.
+
+### Archivo desde la orden — aprobado
+
+Archivos → cargar referencia, **sin entrar en «Editar orden»**. `qa-archivo-orden.csv`, 59 bytes, quedó guardado con su autor y enlace de descarga. La descarga autenticada coincide byte a byte con el original ficticio. TXT no forma parte de los formatos admitidos; se usó CSV, contemplado en la lista permitida.
+
+### Notas de producción — aprobado
+
+La misma nota aparece en Productos → Flujo de producción de la orden y en el sheet de Operación diaria. En ambas vistas se comprobó el elemento «Nota de producción» y su estilo efectivo: fondo amarillo `oklch(0.973 0.071 103.193)`, borde `oklch(0.852 0.199 91.936)`.
+
+### Chile y pilotos — aprobado con límites explícitos
+
+Alta pública reconoce Chile, rechaza un RUT de verificador inválido y acepta/normaliza el válido. Reenviar la solicitud no crea un duplicado; su aprobación creó un cliente chileno con RUT canónico. Suites de API y web comprueban búsqueda por RUT/CUIT, paginación, aislamiento de empresa, permisos, invitación y comienzo del piloto al aceptar. La configuración pública de Paddle se comprueba por entorno; no se activaron ventas ni webhooks de cobros reales.
+
+### Dependencias, producción y recuperación
+
+CI aprobado en `7eec79add`: HTTP con base efímera, contenedores, auditoría npm y análisis CodeQL; sin alertas abiertas en el PR. Las regresiones de respuesta JSON y Effect fueron reproducidas antes de corregirlas. La auditoría de ejecución no encontró alertas altas ni críticas; conserva avisos menores. [Comprobaciones del PR](https://github.com/studiocamaleon/gdi/pull/133/checks).
+
+En el worker desplegado, OpenNest procesó tres veces la muestra ficticia de ocho piezas en dos placas; DXF y medios se comprobaron en CI. Gotenberg con Chromium `156.0.8078.108` produjo un PDF válido de 15.304 bytes en 2,5 segundos. Las pruebas de condiciones/orden de pasos, teléfono, cotización, facturación y permisos están incluidas en las suites del lote.
+
+El copiador actualizado completó una copia real y los reintentos 503 están cubiertos por pruebas. Pasaron además las dos pruebas optativas de PostgreSQL en un cluster aislado: lector sin escritura, dos empresas ficticias, cuatro archivos y restauración cifrada; B2 simulado. GrafoCommerce conserva plan y prototipo, con recorridos simulados de tarjeta y transferencia; no es una tienda publicada.
+
+### Respaldo posterior — verificado
+
+Comprobante `aee09d84-6526-4927-965c-f5e22f336062`, terminado el 25/11 a las 20:06 UTC: firma, huellas y manifiesto descifrado correctos; 323 migraciones, 37 archivos y fuentes de `101ed93273837bfbbb96a60497f3d9f33f9c4563`, con los cuatro digests de esta tabla. Esta verificación no repitió una restauración de la base de staging.
+
+### Promoción y reversión
+
+La promoción autorizada usa estos mismos digests, sin reconstrucción, y configuración propia de producción. Su resultado se registra en [producción](../produccion/VALIDACION.md). Las imágenes b411 del registro anterior se conservan para volver atrás; las dos migraciones son aditivas. Revertir imágenes no borra columnas ni revierte datos. La preview de Vercel quedó comprobada tras el ingreso autorizado: portada y navegación correctas; Grafo3D generó diez componentes del ejemplo GRAFO, preparó su mesa de producción y descargó un STL binario válido de 1.197.084 bytes y 23.940 triángulos. El acceso comercial continúa en «Próximamente».
+
 ## 2026-11-20 — Trabajo a medida, pagos, archivos y notas
 
 Publicado **sólo en [staging](https://staging.grafoprint.com.ar)** por pedido expreso de Lucas. Revisión de aplicación **`b4118ccfc952b3fcd36bd4157334b6e0ba9ed64d`**, comprobada dentro de web, API y ambos workers. Se verificó e importó el bundle entregado: 12 commits sobre `565f4e24f96ff68f45c56ff0c9b05bdfb835430c`, dependiente del [PR #131](https://github.com/studiocamaleon/gdi/pull/131). Se usó un worktree aislado; el checkout y los procesos locales originales se conservaron. No se fusionaron PR ni se publicó en producción. La consulta final confirmó que #131 y #127 continúan abiertos e independientes; ninguno se cerró ni se actualizó con estos commits. Este registro posterior no cambia la revisión ejecutada. Lucas autorizó posteriormente promover estas mismas imágenes a producción e integrar el lote mediante #132; ver [el registro de producción](../produccion/VALIDACION.md).
@@ -91,6 +140,76 @@ La simulación usa el mismo motor en un worker del navegador. La receta proyecta
 ## 2026-11-16 — Excepción urgente: tóner de talonarios sin staging
 
 El [PR #128](https://github.com/studiocamaleon/gdi/pull/128) se comprobó en local y CI y se publicó directamente en producción por autorización expresa de Lucas. **No se desplegó ni probó esta revisión en staging.** Este registro no cambia el estado de staging ni incorpora el PR #127 de encendido bajo demanda. Evidencia, revisión, imágenes y reversión en [el registro de producción](../produccion/VALIDACION.md).
+## 2026-11-10, 16:49 UTC — Staging con encendido y reposo automáticos
+
+Lucas autorizó encender staging al abrir su dirección y apagarlo cuando no esté en
+uso, conservando producción y respaldos. Control operativo **`80ab7dde8`**,
+[PR #127](https://github.com/studiocamaleon/gdi/pull/127), desarrollado y probado en
+una carpeta aislada desde `origin/main`. No se integraron otros PR ni se publicó
+ningún cambio de aplicación o configuración en producción.
+
+La web existente ejecuta un controlador que inicia API y Gotenberg, espera su salud
+y después inicia ambos workers. Next escucha en loopback detrás del controlador;
+el proxy conserva métodos, cuerpos, cookies, redirecciones y conexiones SSE. Una
+página de espera permite abrir el entorno durante el arranque. Tras **900 segundos**
+sin solicitudes de usuario ni conexiones abiertas, comprueba Redis y PostgreSQL,
+drena los workers con SIGTERM, vuelve a comprobar los pendientes y apaga los cuatro
+servicios y la propia web. Un error conserva/recupera el entorno; una visita nueva
+cancela el reposo. No se modificaron las colas o datos para conseguir el apagado.
+
+### Recursos y versiones
+
+Los tres archivos de control se entregaron mediante `files` de Fly, sin reconstruir
+ni reemplazar las imágenes funcionales. API sólo agregó el archivo de ocupación;
+web agregó los archivos, comando de inicio, dos variables no secretas y autostart.
+Autostop de Fly sigue desactivado; reinicio `on-failure` (3 reintentos del CLI).
+Los cinco servicios conservan sus tamaños y sus imágenes del despliegue previo:
+
+| Servicio | Digest conservado |
+| --- | --- |
+| Web | `sha256:c490c20224d21f828c9fe5c3c97153929d6088bfc0542fc15ada77d48147b211` |
+| API y ambos workers | `sha256:382b7d01dc63c169578ff16434eb443660357f37efd03aa57faa10f761130d6c` |
+| Gotenberg | `sha256:bdf9ac68ff4e2f440eadaad2da500f15b66640487ea51be3933c5cc73e870194` |
+
+Se configuraron cuatro tokens de despliegue, cada uno exclusivo de una app de
+staging, y un token de ejecución limitado al comando de ocupación. Secretos fuera
+de Git y retirados del entorno del proceso Next. Caducidad a un año; renovación en
+el manual operativo. Los cuatro tokens rechazaron lecturas de producción con 403;
+el token de ocupación rechazó un comando distinto con 403.
+
+### Comprobaciones
+
+- 12 pruebas locales aprobadas: exclusión de producción, fallo cerrado, trabajos
+  pendientes, visitas concurrentes, cancelación durante apagado, conexiones largas,
+  descubrimiento de otras colas, PostgreSQL, proxy HTTP y pantalla de espera. Las
+  mismas 12 pruebas pasaron en el trabajo de contenedores de GitHub Actions.
+- Ambos manifiestos validados por Fly. Consulta real de ocupación: cero pendientes
+  en Redis y PostgreSQL. No hubo seeds, migraciones, borrados ni ensayos fiscales.
+- Ensayo con plazo temporal de 60 segundos: el 10/11 a las 16:43:05 UTC se registró
+  la parada por inactividad; luego se observaron los cinco servicios `stopped` y el
+  copiador de staging `started`.
+- Abrir la URL en Chrome inició el conjunto, mostró la pantalla de espera y pasó
+  automáticamente al formulario de ingreso. Después se fijaron los **900 segundos
+  definitivos** y se comprobó la configuración remota. Salud pública 200 con
+  `ready=true`, login 200 y ruta BFF sin sesión rechazada con 401.
+- Retención temporal de mantenimiento comprobada y liberada. La prueba de estado
+  se hace consultando Fly: sondear la URL pública despertaría staging.
+- Comparación antes/después de las seis máquinas de producción y el copiador de
+  staging: mismos identificadores, instancias, configuraciones e imágenes, todas
+  iniciadas. Los dos workers y PDF de staging conservan exactamente su configuración.
+  No se reinició ni reconfiguró ningún respaldo. Evidencia operativa privada fuera
+  del repositorio.
+
+La validación completa de CI se informa en el PR; ejecutar este control no equivale
+a aprobar las propuestas independientes de dependencias o del piloto chileno. No
+se repitió una restauración de backups en este cambio de operación. Los webhooks y
+tareas programadas de prueba se interrumpen durante el reposo: abrir y mantener
+staging antes de probarlos. Una pestaña con eventos o sondeos cuenta como uso.
+
+**Reversión:** restaurar la configuración previa de la web, iniciar los cuatro
+servicios y verificar salud; luego retirar y revocar sólo los cinco accesos del
+controlador. Las configuraciones previas están bajo custodia privada. No borrar
+apps, volúmenes, datos ni respaldos. [Procedimiento completo](demanda/README.md).
 
 ## 2026-10-27, 22:45 UTC — Backlight con tubos a 220 V comprobado
 
@@ -349,6 +468,31 @@ Los importes son del centro ficticio del ensayo, no tarifas reales. No se crearo
 **Respaldo:** fuentes cifradas custodiadas e inventario actualizado. Copia posterior completada `2026-10-20T23:12:18.317Z`, con firma, huellas y descifrado del manifiesto comprobados; revisión, fuentes e imágenes coincidentes, 318 migraciones y 31 archivos. Ante cortes de conexión B2 desde la Mac, la descarga cifrada y custodia se hicieron mediante el copiador existente; la firma y el descifrado se comprobaron localmente con las claves bajo custodia, sin transferirlas al servidor. No se cambiaron permisos, retención ni cifrado. **No se repitió una restauración SQL completa.** Evidencia detallada, accesos e identificadores privados fuera de Git.
 
 **Reversión:** API y ambos workers a `registry.fly.io/grafoprint-staging-api@sha256:a5b602b6d201b19824a49a2ecf8f1a878231d1b90b9da0c44e458fe037d61e30`; web a `registry.fly.io/grafoprint-staging-web@sha256:c48f6b7fe2776537f7443ee1c780166ce83cc79a2d5a2067e1373b9bd7582732` (revisión `e5244c3c7`, #115). Restituir el inventario del copiador; no revertir esquema ni borrar datos. La reversión vuelve a ocultar los extras en el selector y puede impedir guardar condiciones que ya los referencien.
+## 2026-10-20, 22:00 UTC — Vuelta a sandbox sin conectar un número propio
+
+El titular decidió no usar un número propio para el ensayo. La lectura previa comprobó dos intentos `COEXISTENCIA` en estado `CANCELADA`, sin verificación ni token retenido, y cero vínculos, altas, conversaciones, mensajes y envíos en la empresa usada para preparar la conexión. No fue necesario borrar registros ni revocar un número.
+
+API y worker restauraron `META_CONEXION_MODO=sandbox` y la lista privada original de la empresa del ensayo del 17/10. Se conservan la revisión funcional `e5244c3c756b93382c14e2a82538b6165e37aeae`, las imágenes, los recursos y las demás variables. Coexistencia queda deshabilitada. Las cinco suscripciones de la app al callback de staging permanecen configuradas; no implican por sí solas una autorización de un número real. No se modificaron producción ni el canal independiente de prueba.
+
+El sandbox permite repetir autorización, retorno y verificación, pero su número no intercambia mensajes. El número de prueba de Cloud API es una alternativa distinta para mensajería y requiere un destinatario real autorizado; no conecta ese destinatario a Grafo ni importa su historial. Ese canal necesita renovar su credencial antes de otro ensayo. Si no se utiliza ningún teléfono real, las pruebas de conversaciones deben ser simuladas y no acreditan mensajería real ni coexistencia. No se realizó un nuevo intercambio de mensajes ni se pidió al titular conectar su teléfono.
+
+Referencias verificadas en la documentación oficial: [limitaciones del sandbox](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview#sandbox-account-limitations) y [prueba de Cloud API](https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started).
+
+## 2026-10-20, 20:28 UTC — Preparación del ensayo real de coexistencia de WhatsApp
+
+El titular pidió retomar Embedded Signup en staging y confirmó que el teléfono de prueba ya usa WhatsApp Business. Se habilitó el modo `coexistencia` exclusivamente para una empresa ficticia existente, con notificaciones automáticas pausadas. La autorización sandbox del 17/10 se conserva como antecedente; no demuestra intercambio de mensajes ni importación de un número real.
+
+**Configuración comprobada:** API y worker principal cambiaron sólo `META_CONEXION_MODO` y la lista privada `META_CONEXION_TENANT_IDS`. Recepción, lectura, envíos y configuración del canal independiente de prueba mantienen sus valores anteriores. La empresa inició con cero vínculos, autorizaciones, altas, conversaciones, mensajes y envíos de Inbox. Los recuentos de otras empresas no cambiaron durante la preparación. Credenciales e identificadores privados permanecen fuera de Git.
+
+La suscripción de la app Meta conservó el callback `https://api-staging.grafoprint.com.ar/api/webhooks/whatsapp` y el campo `messages`. Se incorporaron `account_update`, `history`, `smb_app_state_sync` y `smb_message_echoes`; una lectura posterior de Graph confirmó la suscripción activa y los cinco campos. No se suscribió todavía una WABA real ni se concedieron permisos sobre un número por esta operación.
+
+**Versión conservada:** API y worker ejecutan `e5244c3c756b93382c14e2a82538b6165e37aeae`, imagen `sha256:a5b602b6d201b19824a49a2ecf8f1a878231d1b90b9da0c44e458fe037d61e30`. Sin builds, migraciones, seeds, resets ni cambios de recursos. Salud HTTPS de API 200; configuración de ambos procesos verificada. Web, worker PDF, Gotenberg, copiador y producción no se modificaron.
+
+**Recorrido y límite actual:** Chrome mostró «Conectar WhatsApp» habilitado para la empresa de ensayo. Se preparó el intento y «Continuar con Meta» abrió el popup. La política de seguridad del navegador impidió al agente leer esa ventana; se solicitó al titular completar allí el registro. Al cierre de esta preparación todavía no están comprobados el retorno, la creación del vínculo, las solicitudes de contactos/historial, los eventos de coexistencia ni un intercambio de mensajes. No presentar esta preparación como una integración terminada. El historial sólo debe compartirse mediante la elección del titular en Meta.
+
+**Reversión:** antes de una autorización real completada, restaurar en API y worker el modo `sandbox` y su lista privada anterior, conservando todos los registros. Para detener nuevas altas y el avance del worker de alta, vaciar modo y lista en ambos servicios. Esto no revoca permisos en Meta ni desconecta por sí solo un vínculo ya autorizado. Si el titular completó el alta, comprobar primero su estado y acordar el cierre del canal; no borrar datos ni retirar suscripciones que ya use otra cuenta. El callback y el inventario anterior de suscripciones están custodiados fuera de Git. No se realizó una nueva restauración ni comprobación de respaldos en esta preparación.
+
+Referencia: [incorporación de usuarios de WhatsApp Business](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users), consultada el 20/10/2026; [recorrido y límites de Grafo](../../docs/meta-conexion-empresas.md).
 
 ## 2026-10-20, 19:19 UTC — Panel y TV: una misma prioridad de trabajo pendiente
 
@@ -2416,3 +2560,18 @@ Fuentes exactas cifradas y protegidas 31 días; copiador actualizado. Copia post
 La revisión anterior de producción era `15014c464`: API/workers `sha256:c769f370c500ba40706b110a543c51691886f9b5b6cdaa143ab95fd519e6cc5f`, web `sha256:e6aaaebc6c7194bc81d24303bac0da7185633a2325e41f9df087bca80a6272d0`. En staging la web anterior era `53ba3fc53`, digest `sha256:5e847ce622cca4eba049457adac608685f334e19c7513a6ca210998d4cfbf521`; backend igual a producción anterior. Revertir imágenes conserva la base y vuelve a introducir los límites/comportamientos previos; no revertir migraciones ni borrar archivos.
 
 El cierre de la cadena y su evidencia de inclusión se registran en [regularización de PR](../../docs/regularizacion-prs-2026-10-10.md) y en #59. No confundir los merges del historial con PR cerrados por equivalencia.
+
+## Migración de configuración local a empresa demo— 03/10/2026
+
+Aplicada a staging a las 14:13 UTC por pedido del titular, con el mismo alcance y las once exclusiones de productos acordadas para la migración anterior. Operación de datos: código desplegado `b030b6ab7a471bf41e55ff6f460a928c4b808b63`, 305 migraciones de esquema y tamaños sin cambios. No se desplegó código ni se modificaron local o producción.
+
+- **Lote:** 65 productos (incluida la plantilla interna de copiado), 19 máquinas con perfiles/consumibles/desgaste, 10 centros de costo con líneas/capacidades/tarifas y revisiones, 88 materiales/234 variantes, 32 rutas con sus pasos/versiones, recetas y dependencias, 10 gastos fijos, seis estaciones, cuatro equipos y seis fichas necesarias con horarios. Se importó la configuración del Centro de copiado. No se crearon usuarios ni accesos; las fichas usan correos ficticios y no incluyen teléfonos o fechas de nacimiento locales.
+- **Conciliación:** conservación íntegra de los registros previos. Una planta, cuatro materiales y nueve variantes importados recibieron prefijo `LOCAL_` en código/SKU por colisión con pruebas existentes de distinta configuración. Se adaptaron referencias compartidas y snapshots de recetas, recalculando sus huellas y las de sus componentes. Staging no tenía catálogo de impuestos/comisiones: se copiaron los parámetros de cálculo del origen, sin datos fiscales ni credenciales.
+- **Exclusiones:** stock, movimientos, reservas, consumos, órdenes, cotizaciones, clientes, cobros/caja, facturas, compras, proveedores DEMO, archivos de ensayos y destinos de impresión de la red local. Los datos anteriores de staging permanecieron. La empresa tuvo actividad de prueba concurrente; los conteos operativos posteriores pueden crecer por esa actividad.
+- **Seguridad de la carga:** respaldo privado previo restaurado en una base aislada. Transacción aditiva, restricciones activas, controles de empresa/identidades/columnas y comparación de todos los registros previos del catálogo, usuarios y 137 tablas protegidas. Dos intentos SERIALIZABLE fueron revertidos completos por conflictos con actividad concurrente. El procedimiento final, ensayado nuevamente, usó REPEATABLE READ, sin sobrescribir registros existentes. Se insertaron 2.660 filas en una única confirmación.
+- **Validación:** comparación de los 65 productos sin diferencias funcionales frente al origen; diez cotizaciones exitosas con costos y precios idénticos, incluyendo rígido UV con láser. Centro de copiado OPERATIVO. Lectura posterior de todas las filas importadas y comprobación en Chrome de catálogo, máquinas y centros. La copia local usada para comparar cotizaciones se actualizó al esquema vigente exclusivamente dentro del ensayo aislado.
+- **Resultado en la base:** 66 productos contando la plantilla interna y el producto de prueba previo, 21 máquinas, 12 centros, 92 materiales/243 variantes y diez gastos fijos. Stock sin importar. La lista comercial oculta la plantilla interna y muestra 65 productos.
+- **Respaldo posterior:** copia iniciada a las 14:14 UTC y completada a las 14:15 UTC; firma, descifrado y huellas verificados. Base restaurada nuevamente en aislamiento y quince archivos recuperados con sus huellas correctas. Catálogo y relaciones presentes en la restauración; no se iniciaron servicios externos.
+- **Límites del origen:** se conservaron las cuarenta variantes sin precio y los estados de publicación existentes. Los períodos de centros importados llegan hasta septiembre de 2026; octubre todavía requiere preparar su período, igual que en local. No se inventaron valores ni se publicaron recetas incompletas.
+
+Lote, scripts, mapas, respaldos, resultados y capturas permanecen fuera de Git, en una carpeta privada con permisos restrictivos. Los identificadores privados y el contenido de las bases no forman parte de este registro. No se fusionaron PR pendientes.

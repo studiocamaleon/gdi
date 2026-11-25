@@ -9,6 +9,7 @@ kill_timeout = 30
   build-target = "web"
 
 [env]
+  PADDLE_ENV = "production"
   GRAFO_DEPLOY_ENV = "production"
   WEB_ORIGIN = "https://app.grafoprint.com.ar"
   PORT = "3000"

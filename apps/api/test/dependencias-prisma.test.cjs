@@ -4,16 +4,31 @@ const { createRequire } = require('node:module');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { test } = require('node:test');
+const { spawnSync } = require('node:child_process');
 
 // Resolver la dependencia que usa Prisma, incluso si npm deja varias versiones.
 // El override puntual de @prisma/config evita GHSA-ggr8-5vv4-36mx sin cambiar
 // de versión mayor de Prisma. Repetir estos casos y el ensayo de migraciones
 // cuando Prisma incorpore la corrección y se pueda retirar el override.
+// Effect 3.22.1 corrige GHSA-7589-6fvf-x4pw; el subproceso acota la regresión.
 const prismaRequire = createRequire(require.resolve('prisma/package.json'));
 const configPath = prismaRequire.resolve('@prisma/config');
 const configRequire = createRequire(configPath);
 const { deepmerge, deepmergeInto } = configRequire('deepmerge-ts');
 const { loadConfigFromFile } = require(configPath);
+
+test('una plantilla de Effect rechaza texto ambiguo sin bloquear el proceso', () => {
+  const result = spawnSync(process.execPath, ['-e', `
+    const assert = require('node:assert/strict');
+    const { createRequire } = require('node:module');
+    const S = createRequire(process.argv[1])('effect/Schema');
+    const acepta = S.is(S.TemplateLiteral(S.String, ':', S.String, ':', S.String, 'X'));
+    assert.equal(acepta('empresa:ficticia:pruebaX'), true);
+    assert.equal(acepta(':'.repeat(5000)), false);
+  `, configPath], { timeout: 3000, encoding: 'utf8' });
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+});
 
 test('la mezcla de configuración admite ciclos sin agotar la pila', () => {
   const left = { left: true };

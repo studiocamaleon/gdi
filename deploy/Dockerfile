@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 # Compilar JavaScript en la arquitectura del builder evita emular TypeScript
 # en las Mac ARM. Las dependencias finales se instalan para TARGETPLATFORM.
-FROM --platform=$BUILDPLATFORM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build-base
+FROM --platform=$BUILDPLATFORM node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS build-base
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
-FROM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS base
+FROM node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS base
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
@@ -71,7 +71,7 @@ RUN curl --fail --location --proto '=https' https://ffmpeg.org/releases/ffmpeg-9
        --enable-filter=abuffer,abuffersink,aformat,anull,aresample,atrim,asetpts \
     && make -j2 && make install
 
-FROM python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS backend
+FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS backend
 # compas_nest publica su wheel Linux para Python >= 3.12 (x86_64).
 COPY --from=base /usr/local/bin/node /usr/local/bin/node
 # Sharp rasteriza los textos de las etiquetas mediante las fuentes del sistema.

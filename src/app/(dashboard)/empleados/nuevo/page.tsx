@@ -1,3 +1,4 @@
+import { getCurrentUserCached } from "@/lib/auth-server";
 import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { puedeConfigurar, tieneCapacidad } from "@/lib/capacidades-server";
 import dynamicImport from "next/dynamic";
@@ -24,9 +25,10 @@ export default async function NuevoEmpleadoPage() {
     tienePermiso("registros.ver_comisiones"),
   ]);
   if (!canManage) return <SinPermiso modulo="Empleados" />;
+  const { currentUser } = await getCurrentUserCached();
   return (
     <EmpleadoFicha
-      empleado={createEmptyEmpleado()}
+      empleado={createEmptyEmpleado(currentUser.tenantActual?.regional?.paisCodigo)}
       mode="create"
       canManage
       canViewCommissions={canViewCommissions}

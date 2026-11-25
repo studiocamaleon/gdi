@@ -323,3 +323,18 @@ describe('Cobro · normalización a nuestra suscripción', () => {
     expect(r.aplicado).toBe(false);
   });
 });
+
+it('la factura de Paddle conserva los pesos chilenos enteros y convierte los centavos de USD', async () => {
+  const paddle = new PaddleService();
+  jest.spyOn(paddle.sdk!.transactions, 'list').mockReturnValue({
+    next: async () =>
+      ['CLP', 'USD'].map((currencyCode) => ({
+        currencyCode,
+        details: { totals: { total: '12900' } },
+      })),
+  } as never);
+  expect(await paddle.listarFacturas('ctm_ficticio')).toMatchObject([
+    { total: 12900, moneda: 'CLP' },
+    { total: 129, moneda: 'USD' },
+  ]);
+});

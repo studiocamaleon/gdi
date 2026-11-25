@@ -75,6 +75,7 @@ import styles from "./clientes.module.css";
 import { toast } from "sonner";
 
 import { TelefonoField } from "./telefono-field";
+import { normalizarRut } from "@/lib/rut";
 import { normalizarTelefonoCliente } from "@/lib/telefono-cliente";
 
 type ClienteFichaProps = {
@@ -86,6 +87,7 @@ type DatosGeneralesState = {
   nombre: string;
   razonSocial: string;
   cuit: string;
+  rut: string;
   documentoNumero: string;
   condicionFiscal: CondicionFiscal;
   plazoCuentaCorrienteDias: string;
@@ -131,6 +133,7 @@ function buildPayload(
   return {
     nombre: datosGenerales.nombre.trim(),
     razonSocial: datosGenerales.razonSocial.trim() || undefined,
+    rut: datosGenerales.rut.trim(),
     cuit: datosGenerales.cuit.replace(/\D/g, "") || undefined,
     documentoNumero:
       datosGenerales.documentoNumero.replace(/\D/g, "") || undefined,
@@ -175,6 +178,7 @@ type FieldErrors = Partial<
     | "email"
     | "telefonoNumero"
     | "cuit"
+    | "rut"
     | "documentoNumero"
     | "plazoCuentaCorrienteDias"
     | "limiteCredito",
@@ -193,6 +197,9 @@ function validatePayload(payload: ClientePayload) {
   if (!payload.nombre) fields.nombre = "Ingresá el nombre del cliente.";
   if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
     fields.email = "Ingresá un correo válido.";
+  }
+  if (payload.rut && !normalizarRut(payload.rut)) {
+    fields.rut = "Revisá el RUT y su dígito verificador.";
   }
   if (payload.cuit && payload.cuit.replace(/\D/g, "").length !== 11) {
     fields.cuit = "El CUIT/CUIL debe tener 11 dígitos.";
@@ -326,6 +333,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       nombre: cliente.nombre,
       razonSocial: cliente.razonSocial,
       cuit: cliente.cuit,
+      rut: cliente.rut ?? "",
       documentoNumero: cliente.documentoNumero ?? "",
       condicionFiscal: cliente.condicionFiscal,
       plazoCuentaCorrienteDias:
@@ -565,6 +573,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         email: "cliente-email",
         telefonoNumero: "telefono-numero",
         cuit: "cliente-cuit",
+        rut: "cliente-rut",
         documentoNumero: "cliente-documento",
         plazoCuentaCorrienteDias: "cliente-condicion-pago",
         limiteCredito: "cliente-limite-credito",
@@ -889,87 +898,120 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                       <p>Información fiscal y condiciones de pago.</p>
                     </div>
                     <div className={styles.formGrid}>
-                      <Field>
-                        <FieldLabel htmlFor="cliente-condicion-fiscal">
-                          Condición fiscal
-                        </FieldLabel>
-                        <SelectField
-                          options={condicionFiscalItems}
-                          value={datosGenerales.condicionFiscal}
-                          onChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
+                      {paisCodigo !== "CL" && (
+                        <Field>
+                          <FieldLabel htmlFor="cliente-condicion-fiscal">
+                            Condición fiscal
+                          </FieldLabel>
+                          <SelectField
+                            options={condicionFiscalItems}
+                            value={datosGenerales.condicionFiscal}
+                            onChange={(value) => {
+                              if (!value) {
+                                return;
+                              }
 
-                            setDatosGenerales((current) => ({
-                              ...current,
-                              condicionFiscal: value as CondicionFiscal,
-                            }));
-                          }}
-                          id="cliente-condicion-fiscal"
-                          aria-label="Condición fiscal"
-                          disabled={readOnly}
-                        />
-                        <FieldDescription>
-                          Define la letra del comprobante al facturarle.
-                        </FieldDescription>
-                      </Field>
-                      <Field data-invalid={Boolean(fieldErrors.cuit)}>
-                        <FieldLabel htmlFor="cliente-cuit">
-                          CUIT{" "}
-                          {requiereCuit(datosGenerales.condicionFiscal)
-                            ? ""
-                            : "(opcional)"}
-                        </FieldLabel>
-                        <Input
-                          className={focus.singleBorder}
-                          id="cliente-cuit"
-                          aria-invalid={Boolean(fieldErrors.cuit)}
-                          inputMode="numeric"
-                          value={datosGenerales.cuit}
-                          onChange={(event) =>
-                            setDatosGenerales((current) => ({
-                              ...current,
-                              cuit: event.target.value,
-                            }))
-                          }
-                          placeholder="30-71234567-8"
-                        />
-                        <FieldDescription>
-                          {fieldErrors.cuit ??
-                            (requiereCuit(datosGenerales.condicionFiscal)
-                              ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
-                              : "Con o sin guiones. Se valida el dígito verificador.")}
-                        </FieldDescription>
-                      </Field>
-                      <Field
-                        data-invalid={Boolean(fieldErrors.documentoNumero)}
-                      >
-                        <FieldLabel htmlFor="cliente-documento">
-                          DNI (opcional)
-                        </FieldLabel>
-                        <Input
-                          className={focus.singleBorder}
-                          id="cliente-documento"
-                          aria-invalid={Boolean(fieldErrors.documentoNumero)}
-                          inputMode="numeric"
-                          value={datosGenerales.documentoNumero}
-                          onChange={(event) =>
-                            setDatosGenerales((current) => ({
-                              ...current,
-                              documentoNumero: event.target.value.replace(
-                                /\D/g,
-                                "",
-                              ),
-                            }))
-                          }
-                          placeholder="12345678"
-                        />
-                        <FieldDescription>
-                          {fieldErrors.documentoNumero ??
-                            "Sirve para identificar al cliente en la factura sin CUIT."}
-                        </FieldDescription>
-                      </Field>
+                              setDatosGenerales((current) => ({
+                                ...current,
+                                condicionFiscal: value as CondicionFiscal,
+                              }));
+                            }}
+                            id="cliente-condicion-fiscal"
+                            aria-label="Condición fiscal"
+                            disabled={readOnly}
+                          />
+                          <FieldDescription>
+                            Define la letra del comprobante al facturarle.
+                          </FieldDescription>
+                        </Field>
+                      )}
+                      {datosGenerales.pais === "CL" || datosGenerales.rut ? (
+                        <Field data-invalid={Boolean(fieldErrors.rut)}>
+                          <FieldLabel htmlFor="cliente-rut">RUT</FieldLabel>
+                          <Input
+                            className={focus.singleBorder}
+                            id="cliente-rut"
+                            aria-invalid={Boolean(fieldErrors.rut)}
+                            inputMode="text"
+                            autoCapitalize="characters"
+                            maxLength={16}
+                            value={datosGenerales.rut}
+                            onChange={(event) =>
+                              setDatosGenerales((current) => ({
+                                ...current,
+                                rut: event.target.value,
+                              }))
+                            }
+                            placeholder="Número y dígito verificador"
+                            disabled={readOnly}
+                          />
+                          <FieldDescription>
+                            {fieldErrors.rut ??
+                              "Con o sin puntos y guion. Incluí el dígito verificador."}
+                          </FieldDescription>
+                        </Field>
+                      ) : (
+                        <>
+                          <Field data-invalid={Boolean(fieldErrors.cuit)}>
+                            <FieldLabel htmlFor="cliente-cuit">
+                              CUIT{" "}
+                              {requiereCuit(datosGenerales.condicionFiscal)
+                                ? ""
+                                : "(opcional)"}
+                            </FieldLabel>
+                            <Input
+                              className={focus.singleBorder}
+                              id="cliente-cuit"
+                              aria-invalid={Boolean(fieldErrors.cuit)}
+                              inputMode="numeric"
+                              value={datosGenerales.cuit}
+                              onChange={(event) =>
+                                setDatosGenerales((current) => ({
+                                  ...current,
+                                  cuit: event.target.value,
+                                }))
+                              }
+                              placeholder="30-71234567-8"
+                            />
+                            <FieldDescription>
+                              {fieldErrors.cuit ??
+                                (requiereCuit(datosGenerales.condicionFiscal)
+                                  ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
+                                  : "Con o sin guiones. Se valida el dígito verificador.")}
+                            </FieldDescription>
+                          </Field>
+                          <Field
+                            data-invalid={Boolean(fieldErrors.documentoNumero)}
+                          >
+                            <FieldLabel htmlFor="cliente-documento">
+                              DNI (opcional)
+                            </FieldLabel>
+                            <Input
+                              className={focus.singleBorder}
+                              id="cliente-documento"
+                              aria-invalid={Boolean(
+                                fieldErrors.documentoNumero,
+                              )}
+                              inputMode="numeric"
+                              value={datosGenerales.documentoNumero}
+                              onChange={(event) =>
+                                setDatosGenerales((current) => ({
+                                  ...current,
+                                  documentoNumero: event.target.value.replace(
+                                    /\D/g,
+                                    "",
+                                  ),
+                                }))
+                              }
+                              placeholder="12345678"
+                            />
+                            <FieldDescription>
+                              {fieldErrors.documentoNumero ??
+                                "Sirve para identificar al cliente en la factura sin CUIT."}
+                            </FieldDescription>
+                          </Field>
+                        </>
+                      )}
                       <Field
                         data-invalid={Boolean(
                           fieldErrors.plazoCuentaCorrienteDias,

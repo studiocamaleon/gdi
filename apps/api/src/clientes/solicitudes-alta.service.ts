@@ -209,7 +209,9 @@ export class SolicitudesAltaService {
     const dni =
       solicitud.documentoTipo === 'DNI'
         ? solicitud.documentoNumero
-        : dniDeCuit(solicitud.documentoNumero);
+        : solicitud.documentoTipo === 'CUIT'
+          ? dniDeCuit(solicitud.documentoNumero)
+          : null;
     // Sólo identificación, no saldos ni actividad. Incluye inactivos: tampoco se duplican.
     const clientes = await db.cliente.findMany({
       where: { tenantId: solicitud.tenantId },
@@ -218,6 +220,7 @@ export class SolicitudesAltaService {
         nombre: true,
         razonSocial: true,
         cuit: true,
+        rut: true,
         documentoNumero: true,
         telefonoCodigo: true,
         telefonoNumero: true,
@@ -226,6 +229,8 @@ export class SolicitudesAltaService {
     });
     return clientes.flatMap((cliente) => {
       const documento =
+        (solicitud.documentoTipo === 'RUT' &&
+          cliente.rut === solicitud.documentoNumero) ||
         (solicitud.documentoTipo === 'CUIT' &&
           cliente.cuit === solicitud.documentoNumero) ||
         !!(
@@ -314,11 +319,16 @@ export class SolicitudesAltaService {
                 'Revisá las coincidencias y confirmá que se trata de otra persona.',
               );
             const telefono = parsePhoneNumberFromString(solicitud.telefono)!;
+            const paisCodigo = solicitud.documentoTipo === 'RUT' ? 'CL' : 'AR';
             const cliente = await db.cliente.create({
               data: {
                 tenantId: auth.tenantId,
                 nombre: solicitud.nombre,
                 razonSocial: solicitud.nombre,
+                rut:
+                  solicitud.documentoTipo === 'RUT'
+                    ? solicitud.documentoNumero
+                    : null,
                 cuit:
                   solicitud.documentoTipo === 'CUIT'
                     ? solicitud.documentoNumero
@@ -326,9 +336,11 @@ export class SolicitudesAltaService {
                 documentoNumero:
                   solicitud.documentoTipo === 'DNI'
                     ? solicitud.documentoNumero
-                    : dniDeCuit(solicitud.documentoNumero),
+                    : solicitud.documentoTipo === 'CUIT'
+                      ? dniDeCuit(solicitud.documentoNumero)
+                      : null,
                 condicionFiscal: solicitud.condicionFiscal,
-                paisCodigo: 'AR',
+                paisCodigo,
                 telefonoCodigo: telefono.countryCallingCode,
                 telefonoNumero: String(telefono.nationalNumber),
                 origenAlta: 'autoregistro',
@@ -336,7 +348,7 @@ export class SolicitudesAltaService {
                   create: {
                     tenantId: auth.tenantId,
                     descripcion: 'Domicilio fiscal',
-                    paisCodigo: 'AR',
+                    paisCodigo,
                     direccion: solicitud.direccion,
                     ciudad: solicitud.ciudad,
                     tipo: 'FACTURACION',

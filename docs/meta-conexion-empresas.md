@@ -2,11 +2,11 @@
 
 26/09/2026 · Rama `codex/meta-alta-sincronizacion` · Desarrollo local.
 
-**Actualización 17/10/2026:** el registro insertado real con sandbox se completó en staging. Un único intento quedó `VERIFICADA`, con token retirado y confirmación visible en el Inbox de una empresa ficticia separada. La configuración de sandbox está limitada a esa empresa en API y worker; las conexiones reales de coexistencia continúan deshabilitadas. Ver [evidencia y reversión](../deploy/staging/VALIDACION.md). Los resultados locales del 26/09 se conservan abajo como antecedente.
+**Actualización 20/10/2026:** el titular decidió continuar sin conectar un número propio. Se restauró el modo sandbox y su empresa de ensayo original en API y worker de staging; coexistencia queda deshabilitada. Los dos intentos reales quedaron cancelados, sin token, vínculo, alta, conversaciones ni mensajes. El sandbox del 17/10 conserva su autorización verificada y el token retirado. Las cinco suscripciones de la app y el canal independiente de prueba se conservan. **No se acreditó coexistencia ni importación de historial.** Ver [evidencia y reversión](../deploy/staging/VALIDACION.md). Los resultados locales del 26/09 se conservan abajo como antecedente.
 
 ## Estado actual
 
-El recorrido de autorización ya tiene pantalla, endpoints protegidos y trabajo persistente en el servidor. **La autorización sandbox está comprobada en staging; las conexiones reales de coexistencia siguen deshabilitadas.** Producción conserva su configuración anterior.
+El recorrido de autorización ya tiene pantalla, endpoints protegidos y trabajo persistente en el servidor. **La autorización sandbox está comprobada; las conexiones reales de coexistencia están deshabilitadas.** El ensayo real queda diferido por decisión del titular. Producción conserva su configuración anterior.
 
 Hay dos modos de ensayo, elegidos por el servidor y limitados a empresas específicas:
 

@@ -464,6 +464,9 @@ export async function crearTenantPlataforma(dto: {
   slug: string;
   planId: string;
   adminEmail: string;
+  paisCodigo: string;
+  zonaHoraria: string;
+  piloto30Dias: boolean;
 }): Promise<ResultadoInvitacionEmpresa> {
   return apiRequest("/plataforma/tenants", {
     method: "POST",
