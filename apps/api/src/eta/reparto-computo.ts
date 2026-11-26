@@ -18,9 +18,13 @@ export async function simularRepartoProgramado(entrada: Entrada) {
   if (entrada.items.reduce((n, item) => n + item.pasos.length, 0) <= 200)
     return simularFlujo(entrada);
 
+  const fuenteTs = __filename.endsWith('.ts');
   const worker = new Worker(__filename, {
     workerData: { tipo: 'reparto', entrada },
-    execArgv: __filename.endsWith('.ts')
+    env: fuenteTs
+      ? { ...process.env, TS_NODE_PROJECT: require.resolve('../../tsconfig.json') }
+      : undefined,
+    execArgv: fuenteTs
       ? ['-r', require.resolve('ts-node/register/transpile-only')]
       : [],
     resourceLimits: { maxOldGenerationSizeMb: 256 },

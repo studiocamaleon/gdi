@@ -212,6 +212,27 @@ describe('sumarDiasHabiles', () => {
   });
 });
 
+it('el reparto programado de un taller grande conserva las fechas, estaciones y traza del motor', async () => {
+  const entrada = {
+    items: Array.from({ length: 201 }, (_, i) =>
+      item(String(i), [interno(0, 'corte', 5)]),
+    ),
+    estaciones: [estacion({ id: 'corte', familias: ['corte'] })],
+    ahora: AHORA,
+    zona: 'America/Argentina/Buenos_Aires',
+    medianas: new Map<string, number>(),
+    noLaborables: new Set(['2026-07-21']),
+  };
+  const esperado = simularFlujo(entrada);
+  expect(esperado.traza).toHaveLength(201);
+  const resultado = await simularRepartoProgramado(entrada);
+  expect([...resultado.porItem]).toEqual([...esperado.porItem]);
+  expect([...resultado.llegadasPorEstacion]).toEqual([
+    ...esperado.llegadasPorEstacion,
+  ]);
+  expect(resultado.traza).toEqual(esperado.traza);
+});
+
 describe('simularFlujo', () => {
   it('programa un paso simple contra el calendario', () => {
     const r = correr([item('a', [interno(0, 'impresion', 120)])]);
@@ -317,25 +338,4 @@ describe('simularFlujo', () => {
     // p0: 8→9, +30 sep, p1: 9:30→10:30.
     expect(r.porItem.get('a')?.finEstimado).toEqual(jul(20, 10, 30));
   });
-});
-
-it('el reparto programado de un taller grande conserva las fechas, estaciones y traza del motor', async () => {
-  const entrada = {
-    items: Array.from({ length: 201 }, (_, i) =>
-      item(String(i), [interno(0, 'corte', 5)]),
-    ),
-    estaciones: [estacion({ id: 'corte', familias: ['corte'] })],
-    ahora: AHORA,
-    zona: 'America/Argentina/Buenos_Aires',
-    medianas: new Map<string, number>(),
-    noLaborables: new Set(['2026-07-21']),
-  };
-  const esperado = simularFlujo(entrada);
-  expect(esperado.traza).toHaveLength(201);
-  const resultado = await simularRepartoProgramado(entrada);
-  expect([...resultado.porItem]).toEqual([...esperado.porItem]);
-  expect([...resultado.llegadasPorEstacion]).toEqual([
-    ...esperado.llegadasPorEstacion,
-  ]);
-  expect(resultado.traza).toEqual(esperado.traza);
 });
