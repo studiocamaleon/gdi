@@ -7118,7 +7118,7 @@ function PropuestaFichaContenido({
       emisionEnCursoRef.current = false;
     }
   }, [
-    validarEntregaCalculada, validarDespacho, despacho,
+    validarEntregaCalculada,
     conOrdenes,
     conCotizacion,
     items,
@@ -7127,6 +7127,8 @@ function PropuestaFichaContenido({
     proyectoCampanaId,
     fidelizacionCanjePuntos,
     canalVenta,
+    despacho,
+    validarDespacho,
     validarCanalVenta,
     bloqueoEntregaInmediata,
     emitirYEntregar,
