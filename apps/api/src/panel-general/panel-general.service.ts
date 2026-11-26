@@ -586,7 +586,7 @@ export class PanelGeneralService {
         },
         {
           id: 'listos-retiro',
-          etiqueta: 'Listos para retirar',
+          etiqueta: 'Listos para entregar',
           valor: prod.listosRetiro,
           formato: 'cantidad',
           tono: prod.listosRetiro ? 'atencion' : 'ok',
@@ -727,7 +727,7 @@ export class PanelGeneralService {
               id: 'listos-retiro',
               dominio: 'produccion',
               severidad: 'info',
-              titulo: 'Trabajos listos para retirar',
+              titulo: 'Trabajos listos para entregar',
               detalle: 'Están terminados y todavía no fueron entregados.',
               cantidad: input.prod.listosRetiro,
               href: '/produccion/ordenes?estado=finalizada',

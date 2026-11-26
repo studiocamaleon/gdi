@@ -227,6 +227,12 @@ describe("contratos de las vistas públicas", () => {
       expect(renderTracking({ estado })).not.toContain("qr-retiro.png");
     },
   );
+  it("informa el despacho pendiente sin indicar retiro en mostrador", () => {
+    const html = renderTracking({ estado: "finalizada", requiereDespacho: true });
+    expect(html).toContain("listo para despachar");
+    expect(html).not.toContain("qr-retiro.png");
+    expect(html).not.toContain("Ya podés retirarlo");
+  });
   it("ofrece el QR autorizado por token sólo cuando está finalizada", () => {
     expect(renderTracking({ estado: "finalizada" })).toContain(
       "/api/backend/ordenes-trabajo/track/prueba/qr-retiro.png",

@@ -123,6 +123,7 @@ export class NotificacionesOrdenesService {
         fechaEntrega: true,
         total: true,
         cobradoTotal: true,
+        despachoJson: true,
         publicToken: true,
         clienteId: true,
         cliente: { select: { razonSocial: true, nombre: true } },
@@ -146,6 +147,7 @@ export class NotificacionesOrdenesService {
                 select: { evento: true, activo: true },
               }),
             ),
+            Boolean(orden.despachoJson),
           )
         : EVENTO_POR_ESTADO[orden.estado];
     if (!evento) return;

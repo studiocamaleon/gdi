@@ -15,7 +15,7 @@ export type ClienteOpcion = Pick<
   "id" | "nombre" | "razonSocial" | "email"
 > &
   Partial<
-    Pick<ClienteDetalle, "contacto" | "telefonoCodigo" | "telefonoNumero">
+    Pick<ClienteDetalle, "contacto" | "telefonoCodigo" | "telefonoNumero" | "direcciones">
   >;
 
 /** Vista accesible reutilizable; no conoce APIs ni permisos comerciales. */

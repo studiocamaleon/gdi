@@ -243,6 +243,7 @@ export function imprimirOrden(
   config: ImpresoraPuesto,
   copias: number,
   onProgreso: (enviadas: number, total: number) => void,
+  tipo: import("./impresion-api").TipoEtiqueta = "interna",
 ) {
   return exclusivo(async () => {
     const qz = await conectar(config.host, tenantId);
@@ -255,6 +256,7 @@ export function imprimirOrden(
           config.impresora,
           copias,
           enviadas,
+          tipo,
         );
         total = trabajo.totalPaginas;
         firmaActual = trabajo;

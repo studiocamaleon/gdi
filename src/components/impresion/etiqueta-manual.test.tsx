@@ -71,7 +71,7 @@ it("descarga la etiqueta sin consultar certificados, cargar QZ ni pedir una impr
       </CapacidadesProvider>,
     ),
   );
-  expect(mocks.vista).toHaveBeenCalledWith("ot");
+  expect(mocks.vista).toHaveBeenCalledWith("ot", "interna");
   expect(mocks.configuracion).not.toHaveBeenCalled();
   expect(mocks.qz).not.toHaveBeenCalled();
   expect(el.textContent).not.toContain("Imprimir etiqueta");
@@ -96,4 +96,22 @@ it("no ofrece descarga ni consulta la vista previa cuando ambas capacidades estÃ
   expect(mocks.configuracion).not.toHaveBeenCalled();
   expect(el.textContent).not.toContain("Descargar PDF");
   expect(el.textContent).not.toContain("Imprimir etiqueta");
+});
+
+it("abre la etiqueta de envÃ­o y permite alternar a la etiqueta interna", async () => {
+  el = document.createElement("div");
+  document.body.append(el);
+  root = createRoot(el);
+  mocks.vista.mockImplementation(async (_id, tipo) => ({ numero: "OT-0070", tipo, paginas: ["data:image/png;base64,AA=="] }));
+  await act(async () => root.render(
+    <CapacidadesProvider capacidades={{ impresionDirecta: false }}>
+      <EtiquetaOrdenDialog ordenId="ot" conEnvio onClose={() => {}} />
+    </CapacidadesProvider>,
+  ));
+  expect(mocks.vista).toHaveBeenCalledWith("ot", "envio");
+  expect(el.querySelector("img")?.dataset.horizontal).toBe("true");
+  const alternar = [...el.querySelectorAll("button")].find(b => b.textContent === "Ver etiqueta interna")!;
+  await act(async () => alternar.click());
+  expect(mocks.vista).toHaveBeenLastCalledWith("ot", "interna");
+  expect(el.querySelector("img")?.dataset.horizontal).toBe("false");
 });

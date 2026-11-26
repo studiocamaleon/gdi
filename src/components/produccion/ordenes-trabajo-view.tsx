@@ -1,5 +1,6 @@
 "use client";
 
+import { DistintivoDespacho } from "./distintivo-despacho";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -527,6 +528,7 @@ function OrdenesTrabajoContent({
                             {o.numero}
                             <ArrowUpRight aria-hidden />
                           </Link>
+                          <DistintivoDespacho localidad={o.despachoLocalidad} />
                           {esNueva(o) && (
                             <Chip size="sm" className={s.newTag}>
                               Nueva

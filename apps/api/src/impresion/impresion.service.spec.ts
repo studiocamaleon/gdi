@@ -96,6 +96,26 @@ describe('etiquetas por tenant', () => {
       );
     },
   );
+  it('genera una página horizontal de envío y la rota para el rollo térmico', async () => {
+    const envio = { ...orden, despachoJson: { localidad: 'El Calafate', direccion: 'Sucursal QA' } };
+    findFirst.mockResolvedValue(envio);
+    const vista = await service().vistaPrevia(auth, 'ot-a', 'envio');
+    expect(vista).toMatchObject({ tipo: 'envio', anchoMm: 150, altoMm: 100 });
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'ot-a', tenantId: auth.tenantId } }));
+    expect(vista.paginas).toHaveLength(1);
+    const png = Buffer.from(vista.paginas[0].split(',')[1], 'base64');
+    expect(await sharp(png).metadata()).toMatchObject({ width: 1200, height: 800 });
+    const tspl = await etiquetaTspl(png, 3, true);
+    const rotada = await sharp(png).rotate(90).png().toBuffer();
+    expect(tspl.equals(await etiquetaTspl(rotada, 3))).toBe(true);
+    const pdf = await service().descargarPdf(auth, 'ot-a', 'envio');
+    expect(pdf.toString('latin1')).toMatch(/\/MediaBox \[0 0 425\.[\d]+ 283\.[\d]+\]/);
+  });
+  it('rechaza el envío de una OT sin destino o de otra empresa', async () => {
+    await expect(service().vistaPrevia(auth, 'ot-a', 'envio')).rejects.toThrow('con despacho');
+    findFirst.mockResolvedValue(null);
+    await expect(service().descargarPdf(auth, 'otra', 'envio')).rejects.toThrow('Orden no encontrada');
+  });
   it('sin certificado informa la indisponibilidad, nunca firma', () => {
     expect(service().configuracion(auth).firmaDisponible).toBe(false);
     expect(() => service().buscarImpresoras()).toThrow('certificado');

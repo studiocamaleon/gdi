@@ -129,7 +129,7 @@ it("recupera la etiqueta completa desde cualquier ítem sin consultar la ficha c
       contenedor.querySelector('a[href^="/produccion/ordenes/"]'),
     ).toBeNull();
     await pulsar("Descargar etiqueta");
-    expect(getVistaEtiqueta).toHaveBeenLastCalledWith("ot-a");
+    expect(getVistaEtiqueta).toHaveBeenLastCalledWith("ot-a", "interna");
     expect(
       document.querySelector('img[alt="Etiqueta 1 de 1 para OT-QA-001"]'),
     ).not.toBeNull();
@@ -164,9 +164,9 @@ it("no arrastra una etiqueta al cerrar el sheet o cambiar de orden", async () =>
   await pulsar("Descargar etiqueta");
   await montar({ id: "item-otra", ordenId: "ot-otra" });
   expect(boton("Descargar PDF")).toBeUndefined();
-  expect(getVistaEtiqueta).not.toHaveBeenCalledWith("ot-otra");
+  expect(getVistaEtiqueta).not.toHaveBeenCalledWith("ot-otra", "interna");
   await pulsar("Descargar etiqueta");
-  expect(getVistaEtiqueta).toHaveBeenLastCalledWith("ot-otra");
+  expect(getVistaEtiqueta).toHaveBeenLastCalledWith("ot-otra", "interna");
 });
 it.each(["produccion", "pendiente", "borrador", "cancelada"])(
   "no etiqueta una OT %s aunque el ítem no tenga pasos pendientes",
