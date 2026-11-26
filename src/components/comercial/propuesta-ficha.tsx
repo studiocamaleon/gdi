@@ -325,6 +325,7 @@ import {
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { TandasCopiadoPanel } from "./tandas-copiado-panel";
+import { useAmbitoCargasOt } from "@/components/archivos/cargas-ot-provider";
 import { encolarAdjuntos, prepararAdjuntos } from "@/lib/archivos-emision";
 import { subirArchivosPendientesDeItem } from "@/lib/archivos-pendientes-item";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
@@ -4923,6 +4924,7 @@ function PropuestaFichaContenido({
       .catch(() => {});
   }, [ordenProp?.id]);
   const conCotizacion = useCapacidad("cotizacion");
+  const ambitoCargas = useAmbitoCargasOt();
   const permisoTrabajoMedida = currentUser?.tenantActual?.permisos?.includes("comercial.trabajos_medida") === true;
   const [medidaOpen, setMedidaOpen] = React.useState(false);
   const [medidaItem, setMedidaItem] = React.useState<PropuestaItem | null>(null);
@@ -7084,10 +7086,9 @@ function PropuestaFichaContenido({
       // La OT ya existe: los adjuntos son tareas posteriores y un fallo no puede
       // convertir una emisión exitosa en un falso error reintentable.
       setEtapaEmision("archivos");
-      const ambito = currentUser?.tenantActual?.id ? `${currentUser.tenantActual.id}/${currentUser.id}` : "";
       let encolados = false;
       try {
-        encolados = await encolarAdjuntos(ambito, prepararAdjuntos(orden, itemsConSnapshot));
+        encolados = await encolarAdjuntos(ambitoCargas, prepararAdjuntos(orden, itemsConSnapshot));
       } catch {
         // La OT ya existe. Si el navegador no admite la copia local, completar aquí.
       }
@@ -7149,7 +7150,7 @@ function PropuestaFichaContenido({
     validarCanalVenta,
     bloqueoEntregaInmediata,
     emitirYEntregar,
-    currentUser,
+    ambitoCargas,
     completarCobrosYEntrega,
     persistirSnapshotsItems,
     fechaEntregaOrden,
@@ -8964,7 +8965,6 @@ function PropuestaFichaContenido({
                 <ArchivosOrdenTab
                   key={orden.id}
                   ordenId={orden.id}
-                  ambitoCargas={currentUser?.tenantActual?.id ? `${currentUser.tenantActual.id}/${currentUser.id}` : undefined}
                   estadoDocumental={initialDocumentos}
                   tomos={Object.fromEntries(orden.productos.map((p) => [
                     p.id,

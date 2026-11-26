@@ -14,6 +14,7 @@ import { DesarrolloDocumentalOrden } from "@/components/comercial/desarrollo-doc
 import { ArchivosProduccionPanel } from "./archivos-produccion-panel";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { contarArchivosDeOrden } from "@/lib/archivos-presentacion";
+import { useAmbitoCargasOt } from "./cargas-ot-provider";
 import { estadoAdjuntos, observarAdjuntos, procesarAdjuntos } from "@/lib/archivos-emision";
 import { Button } from "@/components/ui/button";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
@@ -134,7 +135,6 @@ function PapeleraOrden({
  */
 export function ArchivosOrdenTab({
   ordenId,
-  ambitoCargas,
   soloLectura = false,
   puedeSubir = !soloLectura,
   onTotalCambio,
@@ -142,7 +142,6 @@ export function ArchivosOrdenTab({
   tomos = {},
 }: {
   ordenId: string;
-  ambitoCargas?: string;
   tomos?: Record<string, ReturnType<typeof metaCentroCopiado>>;
   estadoDocumental?: EstadoDocumentalOrden | null;
   soloLectura?: boolean;
@@ -150,6 +149,7 @@ export function ArchivosOrdenTab({
   /** Para que la pestaña muestre el contador real. */
   onTotalCambio?: (total: number) => void;
 }) {
+  const ambitoCargas = useAmbitoCargasOt();
   const conArte = useCapacidad("aprobacion_arte");
   const [data, setData] = React.useState<ArchivosDeOrden | null>(null);
   const [documentalActual, setDocumentalActual] =

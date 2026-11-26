@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
+import { CargasOtProvider } from "@/components/archivos/cargas-ot-provider";
 import * as cargasEmision from "@/lib/archivos-emision";
 import * as archivosApi from "@/lib/archivos-api";
 import type { Archivo } from "@/lib/archivos";
@@ -336,7 +337,9 @@ async function montar(
         }}
       >
         <PermisosProvider permisos={permisos}>
-          <PropuestaFicha orden={orden} currentUser={currentUser} />
+          <CargasOtProvider ambito="taller-ficticio/persona-ficticia">
+            <PropuestaFicha orden={orden} currentUser={currentUser} />
+          </CargasOtProvider>
         </PermisosProvider>
       </CapacidadesProvider>,
     ),
@@ -1243,6 +1246,7 @@ it("abre la ficha con el pago confirmado y los bytes del archivo en la cola loca
     await click("Pago parcial ficticio");
     await click("Emitir OT");
     expect(mocks.cobrar).toHaveBeenCalledOnce();
+    expect(encolar.mock.calls[0][0]).toBe("taller-ficticio/persona-ficticia");
     expect(encolar.mock.calls[0][1]).toEqual([expect.objectContaining({
       ordenId: "ot-qa", itemId: "item-qa", fuente: { file: mocks.adjunto },
     })]);
