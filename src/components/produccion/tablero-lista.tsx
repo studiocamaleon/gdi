@@ -313,9 +313,8 @@ function FilaTrabajo({
             className={s.code}
             title={`${item.otCode} · ${item.customer}${item.data.fechaEntrega ? ` · Entrega comercial: ${item.data.fechaEntrega.slice(0, 10).split("-").reverse().join("/")}` : ""}`}
           >
-            {item.code} · {item.customer}
+            <span className="inline-flex items-center gap-1 align-middle">{item.code}<DistintivoDespacho soloIcono localidad={item.data.despachoLocalidad} /></span> · {item.customer}
           </span>
-          <DistintivoDespacho localidad={item.data.despachoLocalidad} />
           {(lote || item.data.componenteDe) && (
             <span className={s.context}>
               <Layers size={12} />

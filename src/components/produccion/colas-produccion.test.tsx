@@ -26,9 +26,11 @@ describe('cola por máquina', () => {
   });
   it('muestra el material una vez y conserva ancho, color y perfil en cada fila', () => {
     const a = item('a'), b = item('b', 'CMYK+W', 1520);
+    a.despachoLocalidad = 'Puerto Deseado';
     a.configuracion.perfilNombre = 'CMYK - 4 pass';
     b.configuracion.perfilNombre = 'CMYK + blanco - 6 pass';
     const html = renderToStaticMarkup(<TablaCola datos={{ items: [a, b], pages: 1 } as DatosCola} />);
+    expect((html.match(/aria-label="Para despachar a Puerto Deseado"/g) ?? []).length).toBe(1);
     expect((html.match(/Vinilo blanco/g) ?? []).length).toBe(1);
     for (const texto of ['>Sustrato</th>', 'Rollo · 1,37 m', 'Rollo · 1,52 m', 'CMYK + blanco', 'Perfil: 4 pass', 'Perfil: 6 pass']) expect(html).toContain(texto);
   });

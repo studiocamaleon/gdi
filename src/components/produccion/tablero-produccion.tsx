@@ -809,8 +809,10 @@ export function ItemDetailSheet({
             <div className="sheet-title-copy">
               <div className="sheet-codes">
                 <span className="item-code">{item.code}</span>
-                <DistintivoDespacho localidad={item.data.despachoLocalidad} />
-                <span className="ot-badge">{item.otCode}</span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="ot-badge">{item.otCode}</span>
+                  <DistintivoDespacho soloIcono localidad={item.data.despachoLocalidad} />
+                </span>
                 {item.data.loteEntrega ? <EtiquetaLote item={item.data} /> : item.data.componenteDe ? (
                   <span
                     className="ot-badge"
@@ -1082,8 +1084,10 @@ const KanbanCard = React.memo(function KanbanCard({
       onClick={() => onOpen(item.id)}
     >
       <div className={`kan-card-top ${loteStyles.cabecera}`}>
-        <span className="item-code">{item.code}</span>
-        <DistintivoDespacho localidad={item.data.despachoLocalidad} />
+        <span className="inline-flex items-center gap-1">
+          <span className="item-code">{item.code}</span>
+          <DistintivoDespacho soloIcono localidad={item.data.despachoLocalidad} />
+        </span>
         {item.data.loteEntrega ? <EtiquetaLote item={item.data} /> : item.data.componenteDe ? (
           <span
             className="ot-badge"

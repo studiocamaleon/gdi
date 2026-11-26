@@ -526,9 +526,9 @@ function OrdenesTrabajoContent({
                             className={s.number}
                           >
                             {o.numero}
+                            <DistintivoDespacho soloIcono localidad={o.despachoLocalidad} />
                             <ArrowUpRight aria-hidden />
                           </Link>
-                          <DistintivoDespacho localidad={o.despachoLocalidad} />
                           {esNueva(o) && (
                             <Chip size="sm" className={s.newTag}>
                               Nueva

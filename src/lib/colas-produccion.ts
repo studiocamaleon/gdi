@@ -22,7 +22,7 @@ export type ResumenColas = {
 };
 export type EstadoCola = 'todos' | 'listos' | 'en_curso' | 'pausados' | 'en_espera' | 'bloqueados';
 export type TrabajoCola = {
-  id: string; itemId: string; ordenId: string; ordenNumero: string; nombre: string;
+  id: string; itemId: string; ordenId: string; ordenNumero: string; despachoLocalidad?: string | null; nombre: string;
   producto: string; componenteDe: string | null; cliente: string;
   lote: { id: string; nombre: string; cantidad: number; unidad: string; productoNombre: string; esProductoDelLote: boolean } | null;
   cantidad: number; unidad: string; fechaEntrega: string | null;

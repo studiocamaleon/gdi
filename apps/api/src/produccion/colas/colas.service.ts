@@ -1,3 +1,4 @@
+import { leerDespacho } from '../../ordenes-trabajo/despacho';
 import { gateOperativoCumplido } from '../../ordenes-trabajo/gate-operativo-cumplido';
 import {
   leerAsignacionPersonal,
@@ -109,6 +110,7 @@ export const pasoColaSelect = {
   orden: {
     select: {
       numero: true,
+      despachoJson: true,
       fechaEntrega: true,
       cliente: { select: { nombre: true } },
     },
@@ -309,6 +311,7 @@ export class ColasProduccionService {
           itemId: p.itemId,
           ordenId: p.ordenId,
           ordenNumero: p.orden.numero,
+          despachoLocalidad: leerDespacho(p.orden.despachoJson)?.localidad ?? null,
           nombre: p.nombre,
           producto: lote?.esProductoDelLote
             ? lote.productoNombre
