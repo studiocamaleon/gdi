@@ -1069,7 +1069,8 @@ export class ProductosService {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^A-Za-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+      // La sustitución anterior ya dejó un único separador en cada extremo.
+      .replace(/^-|-$/g, '')
       .replace(/-{2,}/g, '-')
       .toUpperCase();
     return codigo || fallback;

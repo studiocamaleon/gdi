@@ -1,5 +1,5 @@
-import { beforeAll, afterEach, describe, expect, it, vi } from "vitest";
-import { DOMParser } from "linkedom";
+import "./svg-test-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import {
   parseSvg,
@@ -9,17 +9,6 @@ import {
 } from "../src/core/source";
 import { newProject } from "../src/core/project";
 import { parseProject, parseJoint } from "../src/core/storage";
-beforeAll(() => {
-  vi.stubGlobal("DOMParser", DOMParser);
-  vi.stubGlobal(
-    "XMLSerializer",
-    class {
-      serializeToString(doc: Document) {
-        return doc.toString();
-      }
-    },
-  );
-});
 afterEach(() => vi.restoreAllMocks());
 const svg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100"><path fill-rule="evenodd" d="M10 20H190V80H10Z M60 40H80V60H60Z"/></svg>';

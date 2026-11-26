@@ -73,6 +73,8 @@ it('verifica challenge crudo y rechaza token incorrecto', async () => {
     })
     .expect(200);
   expect(r.text).toBe('12345');
+  expect(r.headers['content-type']).toBe('text/plain; charset=utf-8');
+  expect(r.headers['x-content-type-options']).toBe('nosniff');
   await request(app.getHttpServer())
     .get('/api/webhooks/whatsapp')
     .query({
@@ -81,6 +83,39 @@ it('verifica challenge crudo y rechaza token incorrecto', async () => {
       'hub.challenge': '12345',
     })
     .expect(403);
+});
+it.each([
+  '<img src=x onerror=alert(1)>',
+  '1<script>alert(1)</script>',
+  '1e10',
+  '-12',
+  '12\n',
+  '1'.repeat(129),
+])(
+  'rechaza un challenge ajeno al entero de verificación de Meta: %#',
+  async (challenge) => {
+    const r = await request(app.getHttpServer())
+      .get('/api/webhooks/whatsapp')
+      .query({
+        'hub.mode': 'subscribe',
+        'hub.verify_token': 'verify-sintetico',
+        'hub.challenge': challenge,
+      })
+      .expect(403);
+    expect(r.text).toBe('');
+  },
+);
+it('conserva los dígitos exactos del challenge sin redondearlo ni quitar ceros', async () => {
+  const challenge = '00123456789012345678901234567890';
+  const r = await request(app.getHttpServer())
+    .get('/api/webhooks/whatsapp')
+    .query({
+      'hub.mode': 'subscribe',
+      'hub.verify_token': 'verify-sintetico',
+      'hub.challenge': challenge,
+    })
+    .expect(200);
+  expect(r.text).toBe(challenge);
 });
 it('la excepción de staging no permite POST sin firma ni abre otras rutas o métodos', async () => {
   await request(app.getHttpServer())

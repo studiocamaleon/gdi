@@ -1,6 +1,6 @@
+import "./svg-test-dom";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import Module, { type ManifoldToplevel } from "manifold-3d";
-import { DOMParser } from "linkedom";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { buildModel } from "../src/core/engine";
 import { chooseStyle, newProject, STYLES } from "../src/core/project";
@@ -38,15 +38,6 @@ const profiles = [
 beforeAll(async () => {
   wasm = await Module();
   wasm.setup();
-  vi.stubGlobal("DOMParser", DOMParser);
-  vi.stubGlobal(
-    "XMLSerializer",
-    class {
-      serializeToString(doc: Document) {
-        return doc.toString();
-      }
-    },
-  );
   const font = await readFile(
     new URL("../public/fonts/BebasNeue.ttf", import.meta.url),
   );

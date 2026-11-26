@@ -1,5 +1,7 @@
 import { ArrowRight, Circle, Eye, EyeOff, Upload, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { readArtwork } from "../core/artwork";
+import { ArtworkPreview } from "./ArtworkPreview";
 import { Button } from "./ui/button";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { Badge } from "./ui/badge";
@@ -40,11 +42,10 @@ export function LightboxEditor({project:p,onChange,component,onComponentChange,i
   const face=component==="faceA"?"a":"b";
   const graphic=async(file:File|undefined)=>{
     if(!file)return;
-    if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>2_000_000){toast.error("Elegí PNG, JPEG o WebP de hasta 2 MB.");return;}
     try{
-      const image=await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=reject;r.readAsDataURL(file);});
+      const image=await readArtwork(file);
       onChange({...p,faceArtwork:{a:p.faceArtwork?.a||"",b:p.faceArtwork?.b||"",[face]:image}});
-    }catch{toast.error("No se pudo leer la gráfica.");}
+    }catch{toast.error("Elegí una imagen PNG, JPEG o WebP válida de hasta 2 MB.");}
   };
   return <div className="component-editor">
     <Choice label="Componente de la banderola" value={component} options={Object.entries(LIGHTBOX_LAYERS).map(([value,label])=>({value,label}))} onChange={s=>onComponentChange(s as Layer)}/>
@@ -82,7 +83,7 @@ export function LightboxEditor({project:p,onChange,component,onComponentChange,i
         {n("acrylicClearance","Holgura radial de ambos acrílicos",.2,Math.min(3,v.seatWidth-4,v.rimWidth-v.wall-4),.1)}
       </FieldGroup><p className="section-caption">Placa entera, extraíble hacia su propia cara. Validá holgura de dilatación y apoyo para el diámetro y material elegidos.</p></Section>
       <Section title={`Gráfica de la cara ${face.toUpperCase()}`}><FieldGroup><Field><FieldLabel htmlFor={`box-art-${face}`}>Imagen PNG, JPEG o WebP</FieldLabel><Input id={`box-art-${face}`} type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>void graphic(e.target.files?.[0])}/></Field></FieldGroup>
-        {p.faceArtwork?.[face]&&<><img src={p.faceArtwork[face]} alt={`Gráfica ${face.toUpperCase()}`} className="w-full max-h-32 object-contain"/><Button variant="ghost" size="sm" onClick={()=>onChange({...p,faceArtwork:{a:p.faceArtwork?.a||"",b:p.faceArtwork?.b||"",[face]:""}})}>Quitar gráfica</Button></>}
+        {p.faceArtwork?.[face]&&<><ArtworkPreview source={p.faceArtwork[face]} alt={`Gráfica ${face.toUpperCase()}`}/><Button variant="ghost" size="sm" onClick={()=>onChange({...p,faceArtwork:{a:p.faceArtwork?.a||"",b:p.faceArtwork?.b||"",[face]:""}})}>Quitar gráfica</Button></>}
         <p className="section-caption">Se ajusta sin deformar y se recorta al área visible. La cara B se lee desde su exterior. La gráfica no modifica el archivo de corte.</p>
       </Section>
     </>}
