@@ -1,3 +1,6 @@
+.despachoDialog.despachoDialog {
+  max-width: 28rem;
+}
 .body {
   min-height: 0;
   display: flex;
