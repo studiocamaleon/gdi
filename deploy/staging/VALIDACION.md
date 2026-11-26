@@ -13,7 +13,11 @@ En Chrome se compararon tres emisiones por versión, con el mismo producto, clie
 
 Se hizo una emisión adicional por versión mientras dos empresas ficticias consultaban sus listados y tableros. Cada versión completó 80 lecturas. Las ocho OT se verificaron por API con número único, producto y fecha correctos, visibles en el listado de la empresa que las emitió. La ficha administrativa abrió el producto elegido y sus conteos por categoría coincidieron con los 5 productos del listado. Las mediciones de capacidad con 20 empresas, el costo del cálculo de fechas y el efecto sobre otras sesiones están en el [informe de rendimiento](../../docs/rendimiento-ordenes-2026-11-25.md).
 
-La copia anterior tiene firma válida y manifiesto descifrado. La custodia de las fuentes de esta revisión y el comprobante posterior están pendientes. Para volver a la aplicación anterior, usar las imágenes de la revisión `101ed9327` del registro siguiente, conservando el índice aditivo. Alcance de esta publicación limitado a staging.
+La copia posterior se completó el 25/11 a las 21:33 (Argentina). Se verificó el comprobante firmado con la clave pública del kit de custodia y se cotejaron las imágenes del manifiesto con las desplegadas. Tras recuperar y descifrar la fuente de `9264c668b` desde B2, su tamaño y SHA-256 coincidieron con los del archivo generado por Git.
+
+La base se restauró con PostgreSQL 16.16 en una instancia temporal aislada. El primer intento con 16.13 se detuvo al encontrar el atributo de columna `pg_attver`. La restauración con 16.16 usó el dump original. Coincidieron las 324 migraciones y sus huellas, el índice de medianas y las ocho OT de prueba con sus productos y fechas. Se recuperaron 37 archivos con sus huellas y las 6 versiones de código del manifiesto. Las claves de custodia descifraron los datos protegidos de MFA e integraciones. Sólo se inició PostgreSQL en el entorno de restauración.
+
+Para volver a la aplicación anterior, usar las imágenes de la revisión `101ed9327` del registro siguiente, conservando el índice aditivo. Alcance de esta publicación limitado a staging.
 
 ## 2026-11-25 — Cierre integrado de PR y avances locales
 
