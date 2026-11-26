@@ -1,3 +1,4 @@
+import { ReintentosCobro } from '../fondos-ledger';
 import { exigirCuentaOperable } from '../acceso-cuentas';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
@@ -534,4 +535,28 @@ describe('Cobros de OT: saldo e idempotencia (base aislada)', () => {
       }
     },
   );
+});
+
+it('un reintento fallido libera su turno para el próximo cobro', async () => {
+  const cola = new ReintentosCobro();
+  const ejecutados: string[] = [];
+  let liberar!: () => void;
+  const espera = new Promise<void>((resolve) => { liberar = resolve; });
+
+  const primero = cola.enTurno(async () => {
+    ejecutados.push('primero');
+    await espera;
+    throw new Error('conflicto');
+  });
+  const segundo = cola.enTurno(async () => {
+    ejecutados.push('segundo');
+    return 'confirmado';
+  });
+
+  await Promise.resolve();
+  expect(ejecutados).toEqual(['primero']);
+  liberar();
+  await expect(primero).rejects.toThrow('conflicto');
+  await expect(segundo).resolves.toBe('confirmado');
+  expect(ejecutados).toEqual(['primero', 'segundo']);
 });

@@ -103,6 +103,22 @@ it("una versión recuperada también exige revisar si cambian los importes", asy
   await expect(persistirTrabajoMedida(item, {})).rejects.toThrow("cambió");
   expect(apiRequest).toHaveBeenCalledTimes(1);
 });
+it("un borrador sin huella y con importes vigentes obtiene su revisión antes de guardar", async () => {
+  const resultado = calculo();
+  const item = { ...itemDesdeTrabajoMedida(resultado), trabajoMedidaHuella: undefined };
+  vi.mocked(apiRequest).mockResolvedValue(resultado);
+
+  await persistirTrabajoMedida(item, {});
+
+  expect(vi.mocked(apiRequest).mock.calls.map(([url]) => url)).toEqual([
+    "/trabajos-medida/calcular",
+    "/trabajos-medida/guardar",
+  ]);
+  expect(JSON.parse(vi.mocked(apiRequest).mock.calls[1][1]!.body as string)).toMatchObject({
+    huellaCalculo: resultado.huellaCalculo,
+    tipoCambioId: "cambio",
+  });
+});
 it("encadena cotización, cliente y la revisión verificada al guardar", async () => {
   vi.mocked(apiRequest).mockResolvedValue(calculo());
   await persistirTrabajoMedida(itemDesdeTrabajoMedida(calculo()), {
