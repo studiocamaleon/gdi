@@ -1,5 +1,29 @@
 # Validación de staging — historial
 
+## 2026-11-26 — Emisión de OT y cálculo de fechas en segundo plano
+
+Web, API y los dos workers ejecutan `c96ba2fe4bb335e6d439f10faf457c6553218f6b` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). La migración aditiva `20261126190000_trabajo_emision_ot` llevó el historial a 326. Se verificaron los permisos de las tablas nuevas y la lectura de OT.
+
+| Servicio | Digest |
+| --- | --- |
+| API y ambos workers | `sha256:40c4fa0e2f5edc84d4dcc29f2c036f2d0f25367b8453ba2ab93ff400cab6de5c` |
+| Web | `sha256:aa3844ec14d5f11d90468d7811ffb0b94637093113f7a06a30d921f4a5f9bfc4` |
+
+Se midieron tres emisiones por escenario y por versión, con Chromium sobre el dominio de staging ya despierto. El reloj arrancó al hacer clic en **Emitir OT**. Se detuvo al seleccionar **Datos** en la ficha emitida y ver **Punto de entrega**. Cada OT contenía un trabajo a medida con un paso manual. El cobro ficticio fue de ARS 100. Para los adjuntos se usó un PNG de 1.080.993 bytes. Se verificaron la asociación del cobro con la OT, el importe, la asociación del archivo con el ítem y el SHA-256 de la descarga.
+
+| Emisión | Anterior, mediana | Candidata, mediana | Candidata, mínimo–máximo |
+| --- | ---: | ---: | ---: |
+| Solo OT | 1,37 s | 1,11 s | 1,06 s–1,15 s |
+| Con cobro | 1,68 s | 1,37 s | 1,33 s–1,48 s |
+| Con archivo | 3,81 s | 4,52 s | 3,29 s–4,85 s |
+| Con cobro y archivo | 3,70 s | 4,79 s | 3,93 s–5,01 s |
+
+**Producción en espera.** La versión redujo la mediana de las emisiones simples y con cobro. En ambos escenarios con adjuntos, la mediana subió respecto de la referencia y superó cuatro segundos. La traza de red muestra que la ficha espera la transferencia al almacenamiento y su confirmación antes de navegar. La petición que creó la OT bajó de 666 a 351 ms de mediana en las doce muestras de cada versión. Desde iniciar la carga hasta confirmar el archivo pasaron 2,29 s de mediana en la versión anterior y 3,42 s en la candidata, con variación en el tiempo de transferencia. Las doce OT de la candidata conservaron su fecha y el procesador terminó el trabajo de las doce. La muestra corresponde a una empresa de QA con el entorno despierto.
+
+La publicación conservó los recursos de las máquinas. Se verificaron la firma y el manifiesto descifrado del comprobante posterior `85c18ac1-3b52-4433-8945-1ba96a4ecf65` del 2026-11-26T18:26:25.646Z, junto con las fuentes y las imágenes desplegadas. La restauración integral corresponde al ensayo anterior.
+
+Para volver a la versión anterior se debe drenar el trabajo de emisión pendiente, conservar las dos tablas y usar la web `sha256:1365485109290971eae955fceb37aedf7ae5218e5fba19e2b005f94c8547fa1b` y el backend `sha256:dbfd74f4e0aba840152c2ffc43f80444ed182ed55313432b29eaad0376677a55` en este entorno. La API de staging recibió también la nueva versión del control de ocupación que consulta la cola durable.
+
 ## 2026-11-26 — Punto de entrega y despacho por localidad
 
 La web, la API y ambos workers ejecutan `ddcb0a8399932b1aa78ceb4711822650337ad19f` del [PR #139](https://github.com/studiocamaleon/gdi/pull/139). El cambio usa el campo de despacho que ya tenían las OT y la misma serie de 325 migraciones. Las máquinas conservaron sus recursos.
