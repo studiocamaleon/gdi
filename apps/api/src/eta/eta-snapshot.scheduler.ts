@@ -4,6 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import { conLockDeCron } from '../common/cron-lock';
 import { PrismaService } from '../prisma/prisma.service';
 import { EtaService } from './eta.service';
+import { simularRepartoProgramado } from './reparto-computo';
 
 /**
  * Foto diaria del ETA (F2). Corre después del barrido de acreditaciones
@@ -35,7 +36,10 @@ export class EtaSnapshotScheduler {
     try {
       for (const tenantId of await this.eta.tenantsConActividad()) {
         try {
-          await this.eta.sincronizarAsignaciones(tenantId);
+          await this.eta.sincronizarAsignaciones(
+            tenantId,
+            simularRepartoProgramado,
+          );
         } catch (error) {
           this.logger.error(
             `No se pudo actualizar la asignación de producción del tenant ${tenantId}.`,

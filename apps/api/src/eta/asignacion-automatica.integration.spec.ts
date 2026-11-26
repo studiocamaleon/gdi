@@ -427,7 +427,7 @@ it('una persona del equipo ejecuta la previsión de otra y la agenda conserva al
   // Ejecutar sólo el ciclo de este taller ficticio, con el motor real.
   jest.spyOn(eta, 'tenantsConActividad').mockResolvedValue([tenantId]);
   await new EtaSnapshotScheduler(eta, db).asignarPersonal();
-  expect(reparto).toHaveBeenCalledWith(tenantId);
+  expect(reparto).toHaveBeenCalledWith(tenantId, expect.any(Function));
   const actualizado = await leer(siguiente);
   expect(actualizado.franjas.length).toBeGreaterThan(0);
   expect(Date.parse(actualizado.franjas[0].inicio)).toBeGreaterThanOrEqual(

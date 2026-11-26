@@ -109,7 +109,8 @@ Al completar uno o varios pasos, el taller confirma el avance, los tiempos y, si
 el cierre de la OT en la respuesta. El personal previsto se recalcula en la siguiente pasada
 del reconciliador. Este se activa cada 30 segundos y también cubre cambios de horarios, personal,
 configuración, edición/cancelación de órdenes y procesos externos, incluso sin
-navegadores abiertos. La caché de contexto evita repetir la simulación dentro
+navegadores abiertos. Por encima de 200 pasos, el cálculo periódico usa otro hilo
+de la API y permite atender en paralelo a los operarios. La caché de contexto evita repetir la simulación dentro
 del mismo minuto si los datos no cambiaron; los GET de Lista no publican planes.
 
 El resultado se guarda en `OrdenTrabajoItemPaso.asignacionPersonalJson`, separado
