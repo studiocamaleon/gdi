@@ -52,6 +52,7 @@ export class PrevisionMaterialesService {
     dto: PrevisionMaterialesDto,
     ahora = new Date(),
     db?: Prisma.TransactionClient,
+    reservasPropiasDe?: string,
   ) {
     const calcular = async (tx: Prisma.TransactionClient) => {
       const incluida = await this.capacidades.incluida(
@@ -129,7 +130,7 @@ export class PrevisionMaterialesService {
             ubicacion: { activo: true, almacen: { activo: true } },
           },
         }),
-        reservasPorSaldo(tx, tenantId, ids),
+        reservasPorSaldo(tx, tenantId, ids, reservasPropiasDe),
         tx.lineaOrdenCompra.findMany({
           where: {
             tenantId,
@@ -166,7 +167,7 @@ export class PrevisionMaterialesService {
         ),
       ]);
       const demanda = await tx.necesidadMaterialOt.findMany({
-        where: { tenantId, id: { in: [...comprometidas.keys()] } },
+        where: { tenantId, id: { in: [...comprometidas.keys()] }, ...(reservasPropiasDe && { ordenId: { not: reservasPropiasDe } }) },
         select: { id: true, varianteId: true },
       });
       const asignado = new Map<string, Prisma.Decimal>();

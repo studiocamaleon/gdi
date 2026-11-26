@@ -96,8 +96,9 @@ export class EtaService {
   // ── Ensamblado de entradas + corrida del motor ─────────────────────────
 
   /** Arma las 5 entradas desde la DB y corre la simulación de todo el taller. */
-  async correr(tenantId: string, incluirTraza = true): Promise<ResultadoSimulacion> {
-    const resultado = simularFlujo({ ...(await this.contextoSimulacion(tenantId)), incluirTraza });
+  async correr(tenantId: string, incluirTraza = true, contexto?: Awaited<ReturnType<EtaService['contextoSimulacion']>>,
+    simular: SimuladorAsignacion = simularFlujo): Promise<ResultadoSimulacion> {
+    const resultado = await simular({ ...(contexto ?? await this.contextoSimulacion(tenantId)), incluirTraza });
     const arbol = await this.prisma.ordenTrabajoItem.findMany({
       where: {
         tenantId,
@@ -385,7 +386,7 @@ export class EtaService {
    * emisión NUNCA se bloquea ni falla por esto (se llama post-commit). Un
    * fallo del motor deja una fila con `sinEstimar` para no perder cobertura.
    */
-  async capturarEmision(auth: CurrentAuth, ordenId: string): Promise<void> {
+  async capturarEmision(auth: Pick<CurrentAuth, 'tenantId'>, ordenId: string, lote?: ResultadoSimulacion['porItem']): Promise<void> {
     if (!(await this.capacidades.puedeOperar(auth.tenantId, 'eta_capacidad')))
       return;
     const items = await this.prisma.ordenTrabajoItem.findMany({
@@ -404,7 +405,7 @@ export class EtaService {
 
     let porItem: ResultadoSimulacion['porItem'] | null = null;
     try {
-      porItem = (await this.correr(auth.tenantId, false)).porItem;
+      porItem = lote ?? (await this.correr(auth.tenantId, false)).porItem;
     } catch (error) {
       if (this.esRetiradaEta(error)) return;
       this.logger.error(

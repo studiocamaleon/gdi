@@ -14,7 +14,7 @@ type Entrada = Parameters<typeof simularFlujo>[0];
 /** El reconciliador espera a cada empresa antes de pasar a la siguiente.
  * Sólo mueve el cálculo a otro hilo. La lectura y la publicación siguen en
  * la misma transacción serializable. */
-export async function simularRepartoProgramado(entrada: Entrada) {
+export async function simularRepartoProgramado(entrada: Entrada, limiteMs = 30_000) {
   if (entrada.items.reduce((n, item) => n + item.pasos.length, 0) <= 200)
     return simularFlujo(entrada);
 
@@ -34,7 +34,7 @@ export async function simularRepartoProgramado(entrada: Entrada) {
     return await new Promise<ResultadoSimulacion>((resolve, reject) => {
       timer = setTimeout(
         () => reject(new Error('Se agotó el tiempo del reparto de personal.')),
-        30_000,
+        limiteMs,
       );
       worker.once('message', resolve);
       worker.once('error', reject);

@@ -260,6 +260,12 @@ export class OrdenesTrabajoController {
   }
 
   @Permiso("comercial.ordenes.gestionar")
+  @Post('emitir')
+  emitir(@CurrentSession() auth: CurrentAuth, @Body() payload: CrearOrdenTrabajoDto) {
+    return this.ordenesTrabajoService.emitir(auth, payload);
+  }
+
+  @Permiso("comercial.ordenes.gestionar")
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,

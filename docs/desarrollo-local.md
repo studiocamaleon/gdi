@@ -8,6 +8,8 @@ En la Mac de desarrollo, el lanzador privado `Abrir-Grafoprint-local.command` ar
 
 Antes del próximo cambio: comprobar el árbol y los procesos que usan la carpeta, actualizar `origin/main` y crear una rama `codex/…` desde esa base. Si la carpeta está en uso, utilizar un worktree aislado; no cambiar debajo de servidores ajenos. Cada mejora independiente abre su PR hacia `main`, siguiendo [el flujo de PR](flujo-pull-requests.md). Las carpetas históricas se conservan para recuperar archivos ignorados o configuración privada, pero no son la base del trabajo nuevo.
 
+Para probar la asignación de fechas después de emitir una OT, desde `apps/api` se puede ejecutar `npm run worker:emision:dev` con la misma base local migrada y el entorno de desarrollo. Procesa fechas y recorridos y deja los avisos en la cola de la base. El envío queda a cargo del despachador habitual de la API. El lanzador local mantiene las tareas programadas y los envíos externos desactivados.
+
 ## Lote local: pantalla TV, cobros y edición de OT — 19/10/2026
 
 Estado local actual: web en `localhost:3000` y API en `127.0.0.1:3001` desde el worktree `lote-local-produccion`, rama `codex/lote-local-produccion`. Reúne localmente el PR #106 (pantalla TV, `d75750a03`) y el PR #107 (cobros bancarios y edición de OT, `c73cefbb1`) en `8030e1c95`. Los PR mantienen su base en `main`; esta rama de prueba no se publica ni modifica `main`.

@@ -23,6 +23,6 @@ export async function asignarNumeroOrden(
     update: { ultimo: { increment: 1 } },
   });
   const numero = `OT-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
-  await tx.ordenTrabajo.update({ where: { id: ordenId }, data: { numero } });
+  await tx.ordenTrabajo.update({ where: { id: ordenId, tenantId }, data: { numero }, select: { id: true } });
   return numero;
 }
