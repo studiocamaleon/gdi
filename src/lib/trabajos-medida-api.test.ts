@@ -88,10 +88,7 @@ it("editar invalida el snapshot anterior pero conserva fecha y adjuntos", () => 
 });
 it("rechaza una tarifa cambiada antes de guardar", async () => {
   const item = itemDesdeTrabajoMedida(calculo());
-  vi.mocked(apiRequest).mockResolvedValue({
-    ...calculo(),
-    huellaCalculo: "otra-revision",
-  });
+  vi.mocked(apiRequest).mockRejectedValue(new Error("Los datos, tarifas o impuestos cambiaron."));
   await expect(persistirTrabajoMedida(item, {})).rejects.toThrow("cambiaron");
   expect(apiRequest).toHaveBeenCalledTimes(1);
 });
@@ -116,8 +113,9 @@ it("encadena cotización, cliente y la revisión verificada al guardar", async (
     "/trabajos-medida/guardar",
     expect.objectContaining({ method: "POST", body: expect.any(String) }),
   );
+  expect(apiRequest).toHaveBeenCalledTimes(1);
   const body = JSON.parse(
-    vi.mocked(apiRequest).mock.calls[1][1]!.body as string,
+    vi.mocked(apiRequest).mock.calls[0][1]!.body as string,
   );
   expect(body).toMatchObject({
     cotizacionId: "documento",

@@ -83,32 +83,32 @@ export class FacturacionOrdenesService {
     tenantId: string,
     ordenId: string,
   ): Promise<number> {
-    const [aplicado, directosSinAplicacion] = await Promise.all([
-      tx.cobroOrden.aggregate({
-        where: { tenantId, ordenId, cobro: { anuladoEl: null } },
-        _sum: { monto: true },
-      }),
-      // Compatibilidad defensiva para datos creados antes de la migración o
-      // fixtures que todavía construyen el cobro directo a mano.
-      tx.cobro.aggregate({
-        where: {
-          tenantId,
-          ordenId,
-          anuladoEl: null,
-          aplicacionesOrden: { none: { ordenId } },
-        },
-        _sum: { montoBruto: true },
-      }),
-    ]);
-    const cobrado = r2(
-      Number(aplicado._sum.monto ?? 0) +
-        Number(directosSinAplicacion._sum.montoBruto ?? 0),
-    );
+    const cobrado = await this.totalCobrado(tx, tenantId, ordenId);
     await tx.ordenTrabajo.update({
       where: { id: ordenId },
       data: { cobradoTotal: cobrado },
     });
     return cobrado;
+  }
+
+  /** Aplicaciones vigentes más cobros históricos que aún no tienen aplicación en esta OT. */
+  async totalCobrado(tx: Prisma.TransactionClient, tenantId: string, ordenId: string) {
+    const [fila] = await tx.$queryRaw<Array<{ total: Prisma.Decimal }>>`
+      SELECT COALESCE((
+        SELECT SUM(a."monto")
+        FROM "CobroOrden" a JOIN "Cobro" c ON c."id" = a."cobroId"
+        WHERE a."tenantId" = ${tenantId}::uuid AND a."ordenId" = ${ordenId}::uuid
+          AND c."tenantId" = a."tenantId" AND c."anuladoEl" IS NULL
+      ), 0) + COALESCE((
+        SELECT SUM(c."montoBruto") FROM "Cobro" c
+        WHERE c."tenantId" = ${tenantId}::uuid AND c."ordenId" = ${ordenId}::uuid
+          AND c."anuladoEl" IS NULL AND NOT EXISTS (
+            SELECT 1 FROM "CobroOrden" a WHERE a."cobroId" = c."id"
+              AND a."tenantId" = c."tenantId" AND a."ordenId" = c."ordenId"
+          )
+      ), 0) AS total
+    `;
+    return Number(fila.total);
   }
 
   /**

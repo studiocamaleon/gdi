@@ -42,6 +42,7 @@ import { formatearMoneda } from '../common/moneda';
 import { regionalDelTenant } from '../common/regional';
 import {
   ejecutarTransaccionFondos,
+  ReintentosCobro,
   fechaNegocio,
   registrarMovimientoFondos,
   resolverActorFondos,
@@ -62,6 +63,8 @@ import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
  */
 @Injectable()
 export class CobrosService {
+  private readonly reintentos = new ReintentosCobro();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly facturacionOrdenes: FacturacionOrdenesService,
@@ -459,6 +462,7 @@ export class CobrosService {
           // Un reintento exitoso sigue siendo válido aunque haya saldado la OT.
           if (yaRegistrado) return { id: yaRegistrado.id, nuevo: false };
         }
+        let cobradoAnterior = 0;
         if (orden) {
           if (!pendiente)
             throw new NotFoundException('No se encontró la orden.');
@@ -470,12 +474,12 @@ export class CobrosService {
             throw new BadRequestException(
               'Sin la función de cobros sólo se puede cancelar el saldo pendiente de una orden emitida previamente.',
             );
-          const cobrado = await this.facturacionOrdenes.recalcularCobrado(
+          cobradoAnterior = await this.facturacionOrdenes.totalCobrado(
             tx,
             auth.tenantId,
             orden.id,
           );
-          const saldo = redondearDinero(Number(pendiente.total ?? 0) - cobrado);
+          const saldo = redondearDinero(Number(pendiente.total ?? 0) - cobradoAnterior);
           if (saldo <= 0)
             throw new BadRequestException(
               'La orden ya está saldada. No se pueden agregar más cobros.',
@@ -624,12 +628,22 @@ export class CobrosService {
 
         // Eje comercial: un cobro desde cuenta corriente puede cancelar varias
         // órdenes FIFO. El eje fiscal se matchea aparte contra facturas.
-        const aplicaciones =
-          await this.facturacionOrdenes.aplicarCobroComercial(
-            tx,
-            auth.tenantId,
-            cobro.id,
-          );
+        let aplicaciones: Array<{ ordenId: string; monto: number }>;
+        if (orden) {
+          // La OT sigue bloqueada y el cobro acaba de crearse en esta transacción.
+          const monto = Number(cobro.montoBruto);
+          await tx.ordenTrabajo.update({
+            where: { id: orden.id, tenantId: auth.tenantId },
+            data: {
+              cobradoTotal: redondearDinero(cobradoAnterior + monto),
+              aplicacionesCobro: { create: { tenantId: auth.tenantId, cobroId: cobro.id, monto } },
+            },
+            select: { id: true },
+          });
+          aplicaciones = [{ ordenId: orden.id, monto }];
+        } else {
+          aplicaciones = await this.facturacionOrdenes.aplicarCobroComercial(tx, auth.tenantId, cobro.id);
+        }
         await this.facturacionOrdenes.matchearCobro(
           tx,
           auth.tenantId,
@@ -690,7 +704,7 @@ export class CobrosService {
         await this.recibos.emitirEnlace(tx, auth.tenantId, cobro.id);
 
         return { id: cobro.id, nuevo: true };
-      });
+      }, { reintentos: this.reintentos, maxWait: 8000 });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
