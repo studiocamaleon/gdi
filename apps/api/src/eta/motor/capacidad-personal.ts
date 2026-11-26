@@ -2,6 +2,8 @@ import type { CalendarioEstacion, PersonaProduccion } from './estaciones-tipos';
 import type { ReservaHumana } from './capacidad-humana';
 import { milisegundosDeMinutos } from './demanda-humana';
 
+export const MINUTOS_VENTANA_PERSONAL = 480;
+
 type Ventana = { inicio: number; fin: number };
 type Proyectar = (
   c: CalendarioEstacion,
@@ -27,7 +29,7 @@ export function seleccionarDotacionPersonal(
   args: Omit<ParametrosPersonal, 'minutos'>,
 ): string[] | null {
   return (
-    programarPersonal({ ...args, minutos: 480 }, true)?.[0]?.empleadoIds ?? null
+    programarPersonal({ ...args, minutos: MINUTOS_VENTANA_PERSONAL }, true)?.[0]?.empleadoIds ?? null
   );
 }
 
@@ -75,9 +77,15 @@ function programarPersonal(
   if (!coincide) return null;
   // Minutos-persona ya comprometidos, compartidos entre todas las estaciones.
   const carga = new Map<string, number>();
-  for (const r of args.reservas)
-    for (const id of new Set(r.empleadoIds ?? []))
-      carga.set(id, (carga.get(id) ?? 0) + Math.max(0, r.fin - r.inicio));
+  const idsDelPuesto = new Set(empleados.map((e) => e.id));
+  const reservasDelPuesto = args.reservas.filter((r) =>
+    r.empleadoIds?.some((id) => idsDelPuesto.has(id)),
+  );
+  if (empleados.length > args.personas) {
+    for (const r of reservasDelPuesto)
+      for (const id of new Set(r.empleadoIds))
+        carga.set(id, (carga.get(id) ?? 0) + Math.max(0, r.fin - r.inicio));
+  }
   // Date y las ventanas usan milisegundos enteros. Redondear una sola vez
   // hacia arriba evita residuos submilisegundo y nunca acorta la atención.
   // La demanda cotizada conserva sus minutos originales.
@@ -93,7 +101,7 @@ function programarPersonal(
           new Date(t),
           // Una fase diminuta no debe avanzar milisegundo a milisegundo
           // hasta que coincidan personas con horarios de entrada diferentes.
-          480,
+          MINUTOS_VENTANA_PERSONAL,
         ) ?? []
       ).map((v) => ({ ...v, id: e.id })),
     );
@@ -108,7 +116,7 @@ function programarPersonal(
       limite,
     );
     if (hasta <= t) return null;
-    const reservas = args.reservas.filter((r) => r.inicio < hasta && r.fin > t);
+    const reservas = reservasDelPuesto.filter((r) => r.inicio < hasta && r.fin > t);
     const puntos = [
       ...new Set([
         t,

@@ -1,3 +1,4 @@
+import { MINUTOS_VENTANA_PERSONAL } from "./capacidad-personal";
 import { precedenciasTanda, type TandaSimulada } from "./precedencias-tanda";
 import {
   contextoAtencion,
@@ -480,8 +481,25 @@ export function simularFlujo({
     reservas.push({ paso, inicio, fin });
     reservasPorEstacion.set(est.key, reservas);
   }
-  const proyectar = (c: CalendarioEstacion, d: Date, m: number) =>
-    tramosLaborales(c, d, m, noLaborables, zona);
+  // La búsqueda de personal vuelve a consultar la misma jornada al comparar
+  // pasos. Dentro de esta simulación también son fijos la zona y los feriados.
+  const jornadas = new Map<string, ReturnType<typeof tramosLaborales>>();
+  const proyectar = (
+    calendario: CalendarioEstacion,
+    desde: Date,
+    minutos: number,
+  ) => {
+    if (minutos !== MINUTOS_VENTANA_PERSONAL)
+      return tramosLaborales(calendario, desde, minutos, noLaborables, zona);
+
+    const clave = `${desde.getTime()}|${JSON.stringify(calendario.dias)}`;
+    const guardada = jornadas.get(clave);
+    if (guardada !== undefined) return guardada;
+    const tramos = tramosLaborales(calendario, desde, minutos, noLaborables, zona);
+    if (jornadas.size >= 512) jornadas.clear();
+    jornadas.set(clave, tramos);
+    return tramos;
+  };
   // Puente conservador mientras se configura cada estación del antiguo equipo.
   // Una reserva anónima anterior bloquea a sus miembros ya identificados;
   // una reserva personal descuenta esos mismos cupos de los equipos anteriores.
