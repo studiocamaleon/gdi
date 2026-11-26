@@ -22,6 +22,18 @@ export type ActorFondos = {
   nombre: string;
 };
 
+/** Los cobros que PostgreSQL abortó esperan su reintento fuera del pool.
+ * Las primeras escrituras de todas las empresas siguen en paralelo. */
+export class ReintentosCobro {
+  private ultimo: Promise<void> = Promise.resolve();
+
+  enTurno<T>(operacion: () => Promise<T>): Promise<T> {
+    const resultado = this.ultimo.then(operacion);
+    this.ultimo = resultado.then(() => undefined, () => undefined);
+    return resultado;
+  }
+}
+
 /**
  * Ejecuta una operación monetaria con aislamiento serializable y reintenta
  * los conflictos que PostgreSQL detecta cuando dos usuarios operan la misma
@@ -31,14 +43,17 @@ export type ActorFondos = {
 export async function ejecutarTransaccionFondos<T>(
   prisma: PrismaService,
   trabajo: (tx: Prisma.TransactionClient) => Promise<T>,
-  opciones?: { timeout: number },
+  opciones: { timeout?: number; maxWait?: number; reintentos?: ReintentosCobro } = {},
 ): Promise<T> {
-  for (let intento = 1; intento <= 3; intento += 1) {
+  const { reintentos, ...transaccion } = opciones;
+  const intentos = reintentos ? 6 : 3;
+  const ejecutar = () => prisma.$transaction(trabajo, {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    ...transaccion,
+  });
+  for (let intento = 1; intento <= intentos; intento += 1) {
     try {
-      return await prisma.$transaction(trabajo, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        ...opciones,
-      });
+      return await (intento > 1 && reintentos ? reintentos.enTurno(ejecutar) : ejecutar());
     } catch (error) {
       const reintentable =
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -48,7 +63,15 @@ export async function ejecutarTransaccionFondos<T>(
           // sólo sus escrituras locales, nunca un envío externo incierto.
           (error.code === 'P2010' &&
             ['40001', '40P01'].includes(String(error.meta?.code))));
-      if (reintentable && intento < 3) continue;
+      if (reintentable && intento < intentos) {
+        // La transacción ya terminó. Espaciar los reintentos evita que las
+        // mismas cajas vuelvan a competir a la vez, sin ocupar una conexión.
+        if (reintentos && intento > 1) {
+          const ventana = Math.min(1000, 50 * 2 ** (intento - 1));
+          await new Promise((resolve) => setTimeout(resolve, Math.random() * ventana));
+        }
+        continue;
+      }
       if (reintentable) {
         throw new ConflictException(
           'La cuenta cambió mientras se procesaba la operación. Revisá el saldo e intentá nuevamente.',
@@ -221,39 +244,32 @@ export async function registrarMovimientoFondos(
     },
   });
 
-  await recalcularSaldoCorrido(tx, input.cuentaId, input.fecha);
+  await recalcularSaldoCorrido(tx, input.tenantId, input.cuentaId, input.fecha);
   return movimiento;
 }
 
 /** Recompone el extracto desde una fecha sin alterar el saldo actual. */
 export async function recalcularSaldoCorrido(
   tx: Prisma.TransactionClient,
+  tenantId: string,
   cuentaId: string,
   desde: Date,
 ) {
-  const [ancla, posteriores] = await Promise.all([
-    tx.movimientoFondos.findFirst({
-      where: { cuentaId, fecha: { lt: desde } },
-      orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
-      select: { saldoPosterior: true },
-    }),
-    tx.movimientoFondos.findMany({
-      where: { cuentaId, fecha: { gte: desde } },
-      orderBy: [{ fecha: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, tipo: true, monto: true, saldoPosterior: true },
-    }),
-  ]);
-
-  let saldo = Number(ancla?.saldoPosterior ?? 0);
-  for (const movimiento of posteriores) {
-    saldo = redondearFondos(
-      saldo +
-        (movimiento.tipo === 'entrada' ? 1 : -1) * Number(movimiento.monto),
-    );
-    if (Number(movimiento.saldoPosterior) === saldo) continue;
-    await tx.movimientoFondos.update({
-      where: { id: movimiento.id },
-      data: { saldoPosterior: saldo },
-    });
-  }
+  // Mismo orden que el extracto, incluso para movimientos con la misma hora.
+  // PostgreSQL conserva los centavos y sólo escribe filas cuyo saldo cambió.
+  await tx.$executeRaw`
+    WITH ancla AS (
+      SELECT "saldoPosterior" FROM "MovimientoFondos"
+      WHERE "tenantId" = ${tenantId}::uuid AND "cuentaId" = ${cuentaId}::uuid AND "fecha" < ${desde}
+      ORDER BY "fecha" DESC, "createdAt" DESC, "id" DESC LIMIT 1
+    ), extracto AS (
+      SELECT "id", COALESCE((SELECT "saldoPosterior" FROM ancla), 0) +
+        SUM(CASE WHEN "tipo" = 'entrada' THEN "monto" ELSE -"monto" END)
+        OVER (ORDER BY "fecha", "createdAt", "id" ROWS UNBOUNDED PRECEDING) AS saldo
+      FROM "MovimientoFondos"
+      WHERE "tenantId" = ${tenantId}::uuid AND "cuentaId" = ${cuentaId}::uuid AND "fecha" >= ${desde}
+    )
+    UPDATE "MovimientoFondos" m SET "saldoPosterior" = e.saldo
+    FROM extracto e WHERE m."id" = e."id" AND m."saldoPosterior" <> e.saldo
+  `;
 }

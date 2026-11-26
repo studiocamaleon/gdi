@@ -161,21 +161,21 @@ export async function persistirTrabajoMedida(
   const input = trabajoMedidaDe(item);
   if (!input) throw new Error("Faltan los datos del trabajo a medida.");
   const request = { ...input, ...contexto };
+  // Guardar vuelve a calcular en el servidor y rechaza una huella vencida.
+  if (item.trabajoMedidaHuella)
+    return guardarTrabajoMedida({
+      ...request,
+      tipoCambioId: input.tipoCambioId ?? item.cotizacion?.tipoCambio?.id,
+      huellaCalculo: item.trabajoMedidaHuella,
+    });
+
+  // Los borradores anteriores a la huella sólo conservan sus importes.
   const calculo = await calcularTrabajoMedida(request);
   if (
-    item.trabajoMedidaHuella &&
-    calculo.huellaCalculo !== item.trabajoMedidaHuella
-  )
-    throw new Error(
-      `Las tarifas o impuestos de «${item.productoNombre}» cambiaron. Abrí el trabajo y revisá su cálculo.`,
-    );
-  if (
-    !item.trabajoMedidaHuella &&
-    (Math.abs(calculo.resumen.total - item.total) > 0.005 ||
-      Math.abs(calculo.resumen.neto - item.subtotal) > 0.005 ||
-      (item.cotizacion?.costos?.total != null &&
-        Math.abs(calculo.resumen.costoTotal - item.cotizacion.costos.total) >
-          0.005))
+    Math.abs(calculo.resumen.total - item.total) > 0.005 ||
+    Math.abs(calculo.resumen.neto - item.subtotal) > 0.005 ||
+    (item.cotizacion?.costos?.total != null &&
+      Math.abs(calculo.resumen.costoTotal - item.cotizacion.costos.total) > 0.005)
   )
     throw new Error(
       `El cálculo de «${item.productoNombre}» cambió. Abrí el trabajo y revisá los importes antes de guardar.`,
