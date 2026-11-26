@@ -140,6 +140,10 @@ it.each(['Esencial', 'Pro', 'Avanzado'])(
         expect(
           (await s.colas.maquinas(c.tenantId)).maquinas.map((m) => m.id),
         ).toContain(s.maquina.id);
+        await c.db.ordenTrabajo.update({
+          where: { id: s.orden.id },
+          data: { despachoJson: { localidad: 'Puerto Deseado', direccion: 'Sucursal QA' } },
+        });
         const resultado = await s.ordenes.completarTrabajosCola(
           c.auth,
           s.maquina.id,
@@ -147,6 +151,7 @@ it.each(['Esencial', 'Pro', 'Avanzado'])(
           [{ pasoId: s.paso.id, sinTiempoConfirmado: true }],
         );
         expect(resultado.completados).toBe(1);
+        expect(resultado.avisosDespacho).toMatchObject([{ ordenId: s.orden.id, despachoLocalidad: 'Puerto Deseado' }]);
         expect(
           (
             await c.db.ordenTrabajo.findUniqueOrThrow({
@@ -237,7 +242,8 @@ it('HTTP exige P07 y permiso personal en ambas acciones de la cola', async () =>
       ],
     }).compile();
     const app = modulo.createNestApplication();
-    let auth = c.auth;
+    const supervisor = { ...c.auth, permisos: new Set([...(c.auth.permisos ?? []), 'produccion.colas.ver']) };
+    let auth = supervisor;
     app.use((req: { auth: typeof auth }, _res: unknown, next: () => void) => {
       req.auth = auth;
       next();
@@ -256,16 +262,23 @@ it('HTTP exige P07 y permiso personal en ambas acciones de la cola', async () =>
         .send({ pasoIds: [s.paso.id] })
         .expect(403);
       await c.asignar(c.versiones[2].id);
-      auth = { ...c.auth, permisos: new Set(['produccion.ver']) };
+      auth = { ...c.auth, permisos: new Set(['produccion.colas.ver']) };
       await http
         .post(`${base}/pasos/${s.paso.id}/accion`)
         .send(completar)
         .expect(403);
-      auth = c.auth;
+      auth = supervisor;
+      await c.db.ordenTrabajo.update({
+        where: { id: s.orden.id },
+        data: { despachoJson: { localidad: 'El Calafate', direccion: 'Sucursal QA' } },
+      });
       await http
         .post(`${base}/pasos/${s.paso.id}/accion`)
         .send(completar)
-        .expect(200);
+        .expect(200)
+        .expect(r => expect(r.body.avisosDespacho).toMatchObject([
+          { ordenId: s.orden.id, despachoLocalidad: 'El Calafate' },
+        ]));
     } finally {
       await app.close();
     }

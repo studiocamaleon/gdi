@@ -4133,6 +4133,8 @@ model CotizacionItem {
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
 model OrdenTrabajo {
+  /// Destino confirmado para transporte. Null para retiro y órdenes anteriores.
+  despachoJson Json?
   /// Modo operativo elegido al emitir. Las órdenes históricas conservan producción.
   produccionControlada Boolean @default(true)
   /// Permite terminar de cobrar una OT emitida con F01 aunque luego se retire el plan.

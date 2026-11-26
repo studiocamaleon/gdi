@@ -1,3 +1,5 @@
+import { leerDespacho } from '../ordenes-trabajo/despacho';
+import { renderizarEtiquetaEnvio } from './etiqueta-envio';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { jsPDF } from 'jspdf';
 import {
@@ -179,7 +181,35 @@ export class ImpresionService {
     return { ...this.firmar('print', params), params, totalPaginas: 2 };
   }
 
-  private async paginas(auth: CurrentAuth, id: string, pagina?: number) {
+  private async paginas(auth: CurrentAuth, id: string, pagina?: number, tipo: 'interna' | 'envio' = 'interna') {
+    if (tipo === 'envio') {
+      const orden = await this.prisma.ordenTrabajo.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        select: {
+          numero: true, estado: true, despachoJson: true,
+          cliente: { select: { nombre: true, telefonoCodigo: true, telefonoNumero: true } },
+          tenant: { select: { nombre: true, datosEmpresa: { select: {
+            domicilioComercial: true, localidad: true, provincia: true, telefonoCodigo: true, telefonoNumero: true,
+          } } } },
+        },
+      });
+      if (!orden) throw new NotFoundException('Orden no encontrada.');
+      const destino = leerDespacho(orden.despachoJson);
+      if (!destino || ['borrador', 'cancelada'].includes(orden.estado))
+        throw new BadRequestException('La etiqueta de envío requiere una OT emitida con despacho.');
+      if (pagina !== undefined && pagina !== 0)
+        throw new BadRequestException('Página de etiqueta inválida.');
+      const empresa = orden.tenant.datosEmpresa;
+      const telefono = (datos: { telefonoCodigo: string | null; telefonoNumero: string | null } | null) =>
+        datos?.telefonoNumero ? [datos.telefonoCodigo, datos.telefonoNumero].filter(Boolean).join(' ') : '';
+      const png = await renderizarEtiquetaEnvio({
+        ...destino, numero: orden.numero, cliente: orden.cliente?.nombre ?? 'Consumidor final',
+        telefonoCliente: telefono(orden.cliente), empresa: orden.tenant.nombre,
+        domicilioEmpresa: [empresa?.domicilioComercial, empresa?.localidad, empresa?.provincia].filter(Boolean).join(' · '),
+        telefonoEmpresa: telefono(empresa),
+      });
+      return { numero: orden.numero, paginas: [png], totalPaginas: 1 };
+    }
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id, tenantId: auth.tenantId },
       select: {
@@ -224,34 +254,37 @@ export class ImpresionService {
     return { numero: orden.numero, paginas, totalPaginas };
   }
 
-  async vistaPrevia(auth: CurrentAuth, id: string) {
+  async vistaPrevia(auth: CurrentAuth, id: string, tipo: 'envio' | 'interna' = 'interna') {
     await this.capacidades.exigirAlguna(auth.tenantId, [
       'etiquetas_pdf',
       'impresion_directa',
     ]);
-    const { numero, paginas } = await this.paginas(auth, id);
+    const { numero, paginas } = await this.paginas(auth, id, undefined, tipo);
     return {
       numero,
-      anchoMm: 100,
-      altoMm: 150,
+      ...(tipo === 'envio' ? { tipo } : {}),
+      anchoMm: tipo === 'envio' ? 150 : 100,
+      altoMm: tipo === 'envio' ? 100 : 150,
       paginas: paginas.map(
         (png) => `data:image/png;base64,${png.toString('base64')}`,
       ),
     };
   }
 
-  async descargarPdf(auth: CurrentAuth, id: string) {
+  async descargarPdf(auth: CurrentAuth, id: string, tipo: 'envio' | 'interna' = 'interna') {
     await this.capacidades.exigir(auth.tenantId, 'etiquetas_pdf');
-    const { paginas } = await this.paginas(auth, id);
+    const { paginas } = await this.paginas(auth, id, undefined, tipo);
+    const formato: [number, number] = tipo === 'envio' ? [150, 100] : [100, 150];
+    const orientacion = tipo === 'envio' ? 'landscape' : 'portrait';
     const pdf = new jsPDF({
       unit: 'mm',
-      format: [100, 150],
-      orientation: 'portrait',
+      format: formato,
+      orientation: orientacion,
       compress: true,
     });
     paginas.forEach((pagina, i) => {
-      if (i) pdf.addPage([100, 150], 'portrait');
-      pdf.addImage(new Uint8Array(pagina), 'PNG', 0, 0, 100, 150);
+      if (i) pdf.addPage(formato, orientacion);
+      pdf.addImage(new Uint8Array(pagina), 'PNG', 0, 0, ...formato);
     });
     return Buffer.from(pdf.output('arraybuffer'));
   }
@@ -262,15 +295,16 @@ export class ImpresionService {
     impresora: string,
     copias: number,
     pagina: number,
+    tipo: 'envio' | 'interna' = 'interna',
   ) {
     await this.capacidades.exigir(auth.tenantId, 'impresion_directa');
     this.claves();
     const { numero, paginas, totalPaginas } = await this.paginas(
       auth,
       id,
-      pagina,
+      pagina, tipo,
     );
-    const raw = await etiquetaTspl(paginas[0], copias);
+    const raw = await etiquetaTspl(paginas[0], copias, tipo === 'envio');
     const params = {
       printer: { name: impresora },
       options: {

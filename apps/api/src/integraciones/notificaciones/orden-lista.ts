@@ -11,6 +11,7 @@ export const EVENTOS_ORDEN_LISTA: EventoNotificacion[] = [
 export function eventoOrdenLista(
   saldo: number,
   configurados: Array<{ evento: string; activo: boolean }>,
+  requiereDespacho = false,
 ): EventoNotificacion | undefined {
   const explicitos = new Map(configurados.map((e) => [e.evento, e.activo]));
   const opciones: EventoNotificacion[] =
@@ -21,8 +22,7 @@ export function eventoOrdenLista(
   // jamás se generan dos mensajes ni se ignora un apagado explícito.
   return opciones.find(
     (evento) =>
-      explicitos.get(evento) ??
-      POR_EVENTO.get(evento)?.activoPorDefecto ??
-      false,
+      !(requiereDespacho && evento.endsWith('_qr')) &&
+      (explicitos.get(evento) ?? POR_EVENTO.get(evento)?.activoPorDefecto ?? false),
   );
 }

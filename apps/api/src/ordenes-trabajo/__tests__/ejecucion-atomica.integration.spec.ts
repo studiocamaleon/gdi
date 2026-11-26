@@ -590,6 +590,10 @@ it('el aviso se entrega sólo al completar la OT entera, con todos sus productos
       mesaUsuarioId: actorId,
     },
   });
+  await db.ordenTrabajo.update({
+    where: { id: a.ordenId },
+    data: { despachoJson: { localidad: 'Puerto Deseado', direccion: 'Sucursal de prueba' } },
+  });
   const parcial = await ordenes.accionPaso(
     auth,
     a.ordenId,
@@ -605,6 +609,7 @@ it('el aviso se entrega sólo al completar la OT entera, con todos sus productos
   expect(final.ordenEstado).toBe('finalizada');
   expect(final.avisoFinalizacion).toMatchObject({
     ordenId: a.ordenId,
+    despachoLocalidad: 'Puerto Deseado',
     clienteNombre: 'Sin cliente',
     fechaEntrega: '2026-09-25',
     trabajos: [

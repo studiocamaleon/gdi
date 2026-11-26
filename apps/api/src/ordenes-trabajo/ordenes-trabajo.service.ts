@@ -1,3 +1,4 @@
+import { leerDespacho } from './despacho';
 import { autorizarSnapshotsMedida, exigirTrabajoMedida, esSnapshotTrabajoMedida } from '../trabajos-medida/trabajo-medida.permiso';
 import { bloqueosEdicionProductos, exigirProductosEditablesTx, retirarComponentesPendientesTx } from './edicion-productos';
 import { validarCopiadoListo, exigirMarcaAntesDeEmision } from './copiado-listo';
@@ -2154,6 +2155,7 @@ export class OrdenesTrabajoService {
             fechaEntrega: !recalcularEntrega && payload.fechaEntrega
               ? new Date(payload.fechaEntrega)
               : null,
+            despachoJson: leerDespacho(payload.despacho) ?? Prisma.DbNull,
             canalVenta: payload.canalVenta ?? null,
             observaciones: payload.observaciones ?? null,
             subtotal,
@@ -2566,6 +2568,7 @@ export class OrdenesTrabajoService {
         'clienteId',
         'vendedorEmpleadoId',
         'canalVenta',
+        'despacho',
         'fechaEntrega',
         'observaciones',
       ] as const
@@ -2810,6 +2813,9 @@ export class OrdenesTrabajoService {
             : {}),
           ...(payload.vendedorEmpleadoId !== undefined
             ? { vendedorEmpleadoId: payload.vendedorEmpleadoId }
+            : {}),
+          ...(payload.despacho !== undefined || (payload.clienteId !== undefined && payload.clienteId !== orden.clienteId)
+            ? { despachoJson: leerDespacho(payload.despacho) ?? Prisma.DbNull }
             : {}),
           ...(payload.canalVenta !== undefined
             ? { canalVenta: payload.canalVenta }
@@ -3116,8 +3122,7 @@ export class OrdenesTrabajoService {
   /**
    * Qué campos admiten edición según el estado. Regla acordada 2026-07-16:
    * borrador/pendiente = datos comerciales completos; produccion = sólo
-   * fecha y observaciones (el taller ya arrancó); finalizada/entregada =
-   * nada (sólo lectura; notas y pagos van por sus propios flujos).
+   * fecha, observaciones y despacho. Finalizada admite ajustar el despacho hasta la entrega.
    */
   camposEditables(estado: OrdenTrabajoEstado): ReadonlySet<string> {
     switch (estado) {
@@ -3127,12 +3132,14 @@ export class OrdenesTrabajoService {
           'clienteId',
           'vendedorEmpleadoId',
           'canalVenta',
+          'despacho',
           'fechaEntrega',
           'observaciones',
         ]);
       case 'produccion':
-        return new Set(['fechaEntrega', 'observaciones']);
+        return new Set(['fechaEntrega', 'observaciones', 'despacho']);
       case 'finalizada':
+        return new Set(['despacho']);
       case 'entregada':
       // Cancelada es de sólo lectura como las cerradas: es el registro de algo
       // que no va a pasar, y editarlo después sería reescribir la historia.
@@ -3180,6 +3187,7 @@ export class OrdenesTrabajoService {
         'clienteId',
         'vendedorEmpleadoId',
         'canalVenta',
+        'despacho',
         'fechaEntrega',
         'observaciones',
       ] as const
@@ -3261,6 +3269,16 @@ export class OrdenesTrabajoService {
         descripcion: `Vendedor: ${orden.vendedor?.nombreCompleto ?? '—'} → ${vendedorNuevo!.nombreCompleto}`,
         data: { vendedorEmpleadoId: payload.vendedorEmpleadoId },
       });
+    }
+    if (payload.despacho !== undefined || (payload.clienteId !== undefined && payload.clienteId !== orden.clienteId)) {
+      const antes = leerDespacho(orden.despachoJson);
+      const despues = leerDespacho(payload.despacho);
+      if (JSON.stringify(antes) !== JSON.stringify(despues))
+        cambios.push({
+          campo: 'despacho', antes: antes?.localidad ?? null, despues: despues?.localidad ?? null,
+          descripcion: despues ? 'Se actualizó el destino del despacho.' : 'Se quitó el despacho.',
+          data: { despachoJson: despues ?? Prisma.DbNull },
+        });
     }
     if (payload.canalVenta && payload.canalVenta !== ordenCanal) {
       cambios.push({
@@ -7685,7 +7703,7 @@ export class OrdenesTrabajoService {
       throw new NotFoundException(
         'El trabajo ya no está en esta máquina. Actualizá la cola.',
       );
-    await this.accionesPasos(auth, [
+    const [resultado] = await this.accionesPasos(auth, [
       {
         ordenId: paso.ordenId,
         itemId: paso.itemId,
@@ -7694,7 +7712,9 @@ export class OrdenesTrabajoService {
         interno: { accionEnCola: { maquinaId } },
       },
     ]);
-    return { pasoId };
+    return resultado.avisoFinalizacion?.despachoLocalidad
+      ? { pasoId, avisosDespacho: [resultado.avisoFinalizacion] }
+      : { pasoId };
   }
 
   /** Completar varias operaciones es un atajo de registro, no una tanda productiva. */
@@ -7741,7 +7761,7 @@ export class OrdenesTrabajoService {
       );
     const porId = new Map(pasos.map((p) => [p.id, p]));
     const tiemposPorId = new Map(tiempos.map((t) => [t.pasoId, t]));
-    await this.accionesPasos(
+    const resultados = await this.accionesPasos(
       auth,
       pasoIds.map((id) => {
         const p = porId.get(id)!;
@@ -7758,7 +7778,10 @@ export class OrdenesTrabajoService {
         };
       }),
     );
-    return { completados: pasoIds.length, pasoIds };
+    const avisosDespacho = resultados.flatMap(r =>
+      r.avisoFinalizacion?.despachoLocalidad ? [r.avisoFinalizacion] : [],
+    );
+    return { completados: pasoIds.length, pasoIds, ...(avisosDespacho.length ? { avisosDespacho } : {}) };
   }
 
   /** Núcleo interno: todas las operaciones se confirman juntas o se revierten.
@@ -8482,6 +8505,7 @@ export class OrdenesTrabajoService {
       select: {
         id: true,
         numero: true,
+        despachoJson: true,
         fechaEntrega: true,
         cliente: { select: { nombre: true } },
         items: {
@@ -8496,7 +8520,9 @@ export class OrdenesTrabajoService {
         },
       },
     });
+    const destino = leerDespacho(orden.despachoJson);
     return {
+      ...(destino ? { despachoLocalidad: destino.localidad } : {}),
       ordenId: orden.id,
       ordenNumero: orden.numero,
       clienteNombre: orden.cliente?.nombre ?? 'Sin cliente',
@@ -8937,6 +8963,7 @@ export class OrdenesTrabajoService {
       id: string;
       _count?: { archivos: number };
       numero: string;
+      despachoJson?: Prisma.JsonValue;
       estado: string;
       fechaEntrega: Date | null;
       cliente: { nombre: string } | null;
@@ -9071,6 +9098,7 @@ export class OrdenesTrabajoService {
         : null,
       ordenId: orden.id,
       ordenNumero: orden.numero,
+      despachoLocalidad: leerDespacho(orden.despachoJson)?.localidad ?? null,
       ordenEstado: orden.estado,
       itemIndice: item.ordenIndice,
       codigo: item.codigo,
@@ -9253,6 +9281,7 @@ export class OrdenesTrabajoService {
     return {
       id: orden.id,
       numero: numeroOrdenVisible(orden.numero),
+      despachoLocalidad: leerDespacho(orden.despachoJson)?.localidad ?? null,
       clienteId: orden.clienteId,
       clienteNombre: orden.cliente?.nombre ?? 'Sin cliente',
       vendedorEmpleadoId: orden.vendedorEmpleadoId,
@@ -9291,6 +9320,7 @@ export class OrdenesTrabajoService {
       produccionControlada: orden.produccionControlada !== false,
       cobrosHabilitadosEmision: orden.cobrosHabilitadosEmision !== false,
       cotizacionId: orden.cotizacionId,
+      despacho: leerDespacho(orden.despachoJson),
       observaciones: orden.observaciones,
       canalVenta: (orden as { canalVenta?: string | null }).canalVenta ?? null,
       cargosDirectos: Number(orden.cargosDirectos ?? 0),
@@ -9491,6 +9521,7 @@ export class OrdenesTrabajoService {
       select: {
         numero: true,
         estado: true,
+        despachoJson: true,
         createdAt: true,
         fechaEntrega: true,
         cliente: { select: { nombre: true } },
@@ -9628,6 +9659,7 @@ export class OrdenesTrabajoService {
     return {
       numero: orden.numero,
       estado: orden.estado,
+      requiereDespacho: Boolean(leerDespacho(orden.despachoJson)),
       creadaEl: orden.createdAt.toISOString(),
       fechaEntrega: orden.fechaEntrega
         ? orden.fechaEntrega.toISOString().slice(0, 10)
