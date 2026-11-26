@@ -5112,8 +5112,8 @@ function PropuestaFichaContenido({
     if (orden && !editandoOrden) setDespacho(orden.despacho ?? null);
   }, [orden, editandoOrden]);
   const validarDespacho = React.useCallback(() => {
-    if (ordenTipo !== "orden" || !despacho || (despacho.localidad.trim() && despacho.direccion.trim())) return true;
-    toast.error("Completá la localidad y el domicilio o sucursal del despacho.");
+    if (ordenTipo !== "orden" || !despacho || despacho.localidad.trim()) return true;
+    toast.error("Completá la localidad de destino del despacho.");
     setTab("datos");
     return false;
   }, [ordenTipo, despacho]);
@@ -8543,7 +8543,8 @@ function PropuestaFichaContenido({
                         <DespachoOrdenCampo
                           valor={campoEditable("despacho") ? despacho : orden?.despacho ?? null}
                           editable={campoEditable("despacho")}
-                          direcciones={clienteSeleccionado?.direcciones}
+                          key={clienteId}
+                          cliente={clienteSeleccionado}
                           onChange={setDespacho}
                         />
                       )}

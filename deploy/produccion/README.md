@@ -1,6 +1,8 @@
 # Producción de Grafoprint
 
-> **Estado vigente al 26/11/2026.** La aplicación ejecuta `aa75cf6248ffc7205376fe4015b48c07f82767b1`, publicada en el [PR #138](https://github.com/studiocamaleon/gdi/pull/138). Incluye las mejoras de emisión y ejecución de OT, despachos por transporte, etiqueta horizontal y las correcciones de CodeQL. Se verificaron los servicios, las 325 migraciones y el inventario del copiador. [Pruebas, imágenes y reversión](VALIDACION.md).
+> **Estado vigente al 26/11/2026.** Web, API y ambos workers ejecutan `ddcb0a8399932b1aa78ceb4711822650337ad19f` del [PR #139](https://github.com/studiocamaleon/gdi/pull/139). Las OT permiten elegir retiro en el local o despacho indicando solo la localidad. [Pruebas, imágenes, respaldo y reversión](VALIDACION.md).
+
+> **Publicación anterior del 26/11/2026.** La aplicación ejecuta `aa75cf6248ffc7205376fe4015b48c07f82767b1`, publicada en el [PR #138](https://github.com/studiocamaleon/gdi/pull/138). Incluye las mejoras de emisión y ejecución de OT, despachos por transporte, etiqueta horizontal y las correcciones de CodeQL. Se verificaron los servicios, las 325 migraciones y el inventario del copiador. [Pruebas, imágenes y reversión](VALIDACION.md).
 
 > **Publicación anterior: 2026-11-25.** Lote integrador #133, aplicación `101ed93273837bfbbb96a60497f3d9f33f9c4563`, con las mismas imágenes verificadas en staging. 323 migraciones; API, web, workers, PDF y copiador actualizados, salud y conversión PDF comprobadas. Respaldos recuperados tras errores 503 de B2 y comprobante posterior verificado con imágenes y fuentes exactas. Se conservan los recursos; PDF usa espera de arranque de Chromium de 60 segundos. Chile/RUT/CLP y avances locales incluidos; GrafoCommerce conserva alcance de prototipo. Ver [VALIDACION.md](VALIDACION.md).
 

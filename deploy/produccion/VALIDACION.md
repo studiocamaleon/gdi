@@ -1,5 +1,26 @@
 # Validación de producción
 
+## 2026-11-26 — Punto de entrega y despacho por localidad
+
+La web, la API y ambos workers ejecutan `ddcb0a8399932b1aa78ceb4711822650337ad19f` del [PR #139](https://github.com/studiocamaleon/gdi/pull/139). El cambio usa el campo de despacho que ya tenían las OT y la misma serie de 325 migraciones. Las máquinas conservaron sus recursos.
+
+| Servicio | Digest verificado |
+| --- | --- |
+| API y ambos workers | `sha256:dbfd74f4e0aba840152c2ffc43f80444ed182ed55313432b29eaad0376677a55` |
+| Web | `sha256:1365485109290971eae955fceb37aedf7ae5218e5fba19e2b005f94c8547fa1b` |
+| Generador PDF | `sha256:c0fa0448556408845ed177f395e8b054c488b96e024c4420e55b5182cfff03fd` |
+| Copiador | `sha256:d7fea1e72a9742a8f33df5296983be41ac30012dafbd878361b9fd737a8ef258` |
+
+### Verificación en producción
+
+Se promovieron por digest las dos imágenes probadas en staging. Se comprobó la revisión dentro de los cuatro procesos y se comparó la configuración de cada máquina con la anterior. La página de ingreso respondió HTTP 200 y el control de salud de la web respondió correctamente. La API leyó una OT y su campo de despacho en una transacción de solo lectura. El generador PDF convirtió una página de prueba.
+
+### Respaldo y reversión
+
+Las fuentes de la versión quedaron cifradas bajo custodia y se actualizó el inventario del copiador con las imágenes publicadas. Consultar el identificador, la fecha del comprobante posterior y el resultado de la verificación de firma, manifiesto e imágenes en el [registro de cierre del PR #139](https://github.com/studiocamaleon/gdi/pull/139). La restauración integral corresponde al ensayo anterior.
+
+Para revertir esta publicación, volver a la web `sha256:5403118e6634e4be845020b67536aba3c0ecc8242114e1a3d5a84580a5e54c43` y a API/ambos workers `sha256:a5fa71bbdcf7ac43093301863a3bf9704cdb004229f3800f4e9555c21fcf0ec5` en el registro de este entorno. Conservar el esquema y los destinos ya cargados. La versión anterior exige domicilio al editar un despacho.
+
 ## 2026-11-26 — Rendimiento de OT, producción y despachos
 
 [PR integrador #138](https://github.com/studiocamaleon/gdi/pull/138), con los PR #134, #135, #136 y #137. Web, API y ambos workers ejecutan `aa75cf6248ffc7205376fe4015b48c07f82767b1`. La API consultó la base y el servicio PDF convirtió una página ficticia. El historial pasó de 323 a 325 migraciones y se conservaron los recuentos de control.

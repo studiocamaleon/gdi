@@ -1,5 +1,30 @@
 # Validación de staging — historial
 
+## 2026-11-26 — Punto de entrega y despacho por localidad
+
+La web, la API y ambos workers ejecutan `ddcb0a8399932b1aa78ceb4711822650337ad19f` del [PR #139](https://github.com/studiocamaleon/gdi/pull/139). El cambio usa el campo de despacho que ya tenían las OT y la misma serie de 325 migraciones. Las máquinas conservaron sus recursos.
+
+| Servicio | Digest verificado |
+| --- | --- |
+| API y ambos workers | `sha256:dbfd74f4e0aba840152c2ffc43f80444ed182ed55313432b29eaad0376677a55` |
+| Web | `sha256:1365485109290971eae955fceb37aedf7ae5218e5fba19e2b005f94c8547fa1b` |
+| Generador PDF | `sha256:c0fa0448556408845ed177f395e8b054c488b96e024c4420e55b5182cfff03fd` |
+| Copiador | `sha256:d7fea1e72a9742a8f33df5296983be41ac30012dafbd878361b9fd737a8ef258` |
+
+### Retiro en el local
+
+En la OT ficticia `OT-2026-0011`, el comercio apareció seleccionado por defecto. Abrir el camión y cancelar conservó el retiro. La API devolvió la orden sin despacho. La OT figuró como retiro tanto en el listado como en el panel de producción, sin el icono de camión.
+
+### Despacho
+
+En la OT ficticia `OT-2026-0012`, el camión abrió el modal con la localidad del cliente, Río Gallegos. Se cambió a Puerto Deseado y se guardó con domicilio y transporte vacíos. Al volver a abrir la OT se conservó el destino. El camión apareció junto al número en el listado y el panel de producción. El servicio de impresión generó la etiqueta horizontal de 150 × 100 mm.
+
+### Respaldo y reversión
+
+La API respondió con la base disponible y el generador PDF convirtió el documento de prueba. Las fuentes están cifradas bajo custodia. Se verificaron la firma, el manifiesto descifrado, la revisión y las imágenes del comprobante `800c7b91-dd75-462a-a54c-f648bbdfb33c`, completado el 2026-11-26T14:06:42.799Z. La restauración integral corresponde al ensayo anterior.
+
+Para revertir esta publicación, volver a la web `sha256:5403118e6634e4be845020b67536aba3c0ecc8242114e1a3d5a84580a5e54c43` y a API/ambos workers `sha256:a5fa71bbdcf7ac43093301863a3bf9704cdb004229f3800f4e9555c21fcf0ec5` en el registro de este entorno. Conservar el esquema y los destinos ya cargados. La versión anterior exige domicilio al editar un despacho.
+
 ## 2026-11-26 — Rendimiento de OT, producción y despachos
 
 [PR integrador #138](https://github.com/studiocamaleon/gdi/pull/138), con los PR #134, #135, #136 y #137. Web, API y ambos workers ejecutan `aa75cf6248ffc7205376fe4015b48c07f82767b1`. La API consultó la base y el servicio PDF convirtió una página ficticia. El historial pasó de 324 a 325 migraciones y se conservaron los recuentos de control.

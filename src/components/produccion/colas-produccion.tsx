@@ -1,5 +1,6 @@
 'use client';
 
+import { DistintivoDespacho } from './distintivo-despacho';
 import { OrdenFinalizadaDialog } from "./orden-finalizada-dialog";
 import type { AvisoFinalizacionOrden } from "@/lib/ordenes-trabajo-api";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
@@ -100,7 +101,7 @@ function FilaTrabajo({ item, seleccion, onAlternar, onAccion, onTomarMesa, ocupa
               aria-label={`Seleccionar ${item.ordenNumero} · ${item.producto}${item.lote ? ` · ${item.lote.nombre}` : ''}`}
               onChange={() => onAlternar(item)}><Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control></Checkbox.Content></Checkbox>
           </span>}
-        <strong>{item.ordenNumero}</strong>{item.lote && <Chip size="sm" variant="soft" className={s.chip}>{item.lote.nombre}</Chip>}
+        <strong className="inline-flex items-center gap-1">{item.ordenNumero}<DistintivoDespacho soloIcono localidad={item.despachoLocalidad} /></strong>{item.lote && <Chip size="sm" variant="soft" className={s.chip}>{item.lote.nombre}</Chip>}
         <ActionLink variant="ghost" className={s.workLink} title="Ver trabajo"
           aria-label={`Ver trabajo ${item.ordenNumero} · ${item.producto}${item.lote ? ` · ${item.lote.nombre}` : ''}`}
           href={`/produccion/tablero?item=${encodeURIComponent(item.itemId)}`}>

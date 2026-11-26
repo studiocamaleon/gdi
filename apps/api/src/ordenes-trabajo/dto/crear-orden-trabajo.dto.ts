@@ -210,10 +210,10 @@ export class DespachoOrdenDto {
   @MaxLength(80)
   localidad: string;
 
+  @IsOptional()
   @IsString()
-  @Matches(/\S/, { message: 'Ingresá el domicilio o sucursal de destino.' })
   @MaxLength(160)
-  direccion: string;
+  direccion?: string;
 
   @IsOptional()
   @IsString()
