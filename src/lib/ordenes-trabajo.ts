@@ -100,6 +100,7 @@ export const ORDEN_TRABAJO_ESTADOS: Record<
  * Fechas: ISO date (`YYYY-MM-DD`) o datetime ISO completo; la vista formatea.
  */
 export type OrdenTrabajoListItem = {
+  despachoLocalidad?: string | null;
   borradorDescartado?: boolean;
   id: string;
   /** Número visible, p.ej. "OT-2026-0184". Lo asigna el backend al emitir. */
@@ -257,7 +258,9 @@ export type OrdenTrabajoPago = {
  * Detalle de una OT (vista individual). Los productos con sus specs salen
  * del snapshot de `CotizacionItem` referenciado.
  */
+export type { DespachoOrden } from "../../apps/api/src/ordenes-trabajo/despacho";
 export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
+  despacho?: import("../../apps/api/src/ordenes-trabajo/despacho").DespachoOrden | null;
   clienteTelefono?: string | null;
   /** Incluye solicitudes aún no enviadas; independiente del plan vigente. */
   tieneHistorialImpresion?: boolean;

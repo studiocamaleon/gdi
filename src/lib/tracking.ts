@@ -49,6 +49,7 @@ export type TrackingItem = {
 };
 
 export type TrackingPublico = {
+  requiereDespacho?: boolean;
   numero: string;
   estado: string;
   creadaEl: string;
@@ -219,14 +220,14 @@ export function copyDePaso({
 // ── Derivados de presentación ────────────────────────────────────────────
 
 /** "en producción" / "listo para retirar" / etc. para el saludo del hero. */
-export function estadoNarrativo(estado: string): string {
+export function estadoNarrativo(estado: string, requiereDespacho = false): string {
   switch (estado) {
     case "pendiente":
       return "en camino a producción";
     case "produccion":
       return "en producción";
     case "finalizada":
-      return "listo para retirar";
+      return requiereDespacho ? "listo para despachar" : "listo para retirar";
     case "entregada":
       return "entregado";
     default:
@@ -237,14 +238,15 @@ export function estadoNarrativo(estado: string): string {
 /** Bajada del estado global: no debe prometer un retiro que ya ocurrió. */
 export function resumenEstadoTracking(
   estado: string,
+  requiereDespacho = false,
 ): string {
   if (estado === "entregada") {
     return "Pedido entregado. Gracias por confiar en nosotros.";
   }
   if (estado === "finalizada") {
-    return "Ya podés retirarlo.";
+    return requiereDespacho ? "Tu pedido terminó producción y está pendiente de envío." : "Ya podés retirarlo.";
   }
-  return "Te avisaremos ni bien esté listo para retirar.";
+  return requiereDespacho ? "La entrega está prevista por transporte." : "Te avisaremos ni bien esté listo para retirar.";
 }
 
 export function estadoPill(estado: string): {

@@ -48,6 +48,7 @@ export type CrearOrdenTrabajoItemPayload = {
 };
 
 export type CrearOrdenTrabajoPayload = {
+  despacho?: import("./ordenes-trabajo").DespachoOrden | null;
   /** UUID estable durante los reintentos de una misma creación. */
   idempotencyKey?: string;
   clienteId?: string;
@@ -137,6 +138,7 @@ export async function crearOrdenTrabajo(
 }
 
 export type EditarOrdenTrabajoPayload = {
+  despacho?: import("./ordenes-trabajo").DespachoOrden | null;
   clienteId?: string;
   vendedorEmpleadoId?: string;
   canalVenta?: string;

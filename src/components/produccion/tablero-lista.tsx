@@ -1,5 +1,6 @@
 "use client";
 
+import { DistintivoDespacho } from "./distintivo-despacho";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Tooltip } from "@heroui/react";
 import { Focusable } from "react-aria-components/Focusable";
@@ -314,6 +315,7 @@ function FilaTrabajo({
           >
             {item.code} · {item.customer}
           </span>
+          <DistintivoDespacho localidad={item.data.despachoLocalidad} />
           {(lote || item.data.componenteDe) && (
             <span className={s.context}>
               <Layers size={12} />

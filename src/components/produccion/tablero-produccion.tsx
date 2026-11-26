@@ -1,4 +1,5 @@
 "use client";
+import { DistintivoDespacho } from "./distintivo-despacho";
 import { DescargarArchivosButton } from "@/components/archivos/descargar-archivos-button";
 import { useCapacidad, useImpresionDirecta } from "@/components/navigation/capacidades-provider";
 import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
@@ -811,6 +812,7 @@ export function ItemDetailSheet({
             <div className="sheet-title-copy">
               <div className="sheet-codes">
                 <span className="item-code">{item.code}</span>
+                <DistintivoDespacho localidad={item.data.despachoLocalidad} />
                 <span className="ot-badge">{item.otCode}</span>
                 {item.data.loteEntrega ? <EtiquetaLote item={item.data} /> : item.data.componenteDe ? (
                   <span
@@ -1042,6 +1044,7 @@ export function ItemDetailSheet({
       {etiquetaAbierta ? (
         <EtiquetaOrdenDialog
           ordenId={item.data.ordenId}
+          conEnvio={!!item.data.despachoLocalidad}
           onClose={() => setEtiquetaItemId(null)}
         />
       ) : null}
@@ -1083,6 +1086,7 @@ const KanbanCard = React.memo(function KanbanCard({
     >
       <div className={`kan-card-top ${loteStyles.cabecera}`}>
         <span className="item-code">{item.code}</span>
+        <DistintivoDespacho localidad={item.data.despachoLocalidad} />
         {item.data.loteEntrega ? <EtiquetaLote item={item.data} /> : item.data.componenteDe ? (
           <span
             className="ot-badge"

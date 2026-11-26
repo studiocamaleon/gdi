@@ -164,6 +164,7 @@ export type TableroPasoData = {
 };
 
 export type TableroItemData = {
+  despachoLocalidad?: string | null;
   productoId?: string | null;
   /** Sólo escenarios internos; no se acepta desde la API. */
   prioridadPlanificacion?: number;

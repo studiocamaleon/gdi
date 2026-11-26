@@ -8,6 +8,9 @@
  * sin respuesta en 5 minutos, pausa automáticamente.
  */
 
+import { OrdenFinalizadaDialog } from "./orden-finalizada-dialog";
+import type { AvisoFinalizacionOrden } from "@/lib/ordenes-trabajo-api";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -164,6 +167,8 @@ function useWidgetArrastrable() {
 }
 
 export function PasosEnCursoWidget() {
+  const [avisoDespacho, setAvisoDespacho] = React.useState<AvisoFinalizacionOrden | null>(null);
+  const puedeVerOrden = usePuede("comercial.ordenes.ver");
   const [tramos, setTramos] = React.useState<Tramo[]>([]);
   const [expanded, setExpanded] = React.useState(false);
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -266,7 +271,8 @@ export function PasosEnCursoWidget() {
   ) => {
     setBusyId(tramo.pasoId);
     try {
-      await accionPasoProduccion(tramo.ordenId, tramo.itemId, tramo.pasoId, payload);
+      const { avisoFinalizacion } = await accionPasoProduccion(tramo.ordenId, tramo.itemId, tramo.pasoId, payload);
+      if (avisoFinalizacion?.despachoLocalidad) setAvisoDespacho(avisoFinalizacion);
       if (payload.accion === "completar") {
         toast.success(`"${tramo.pasoNombre}" completado.`);
       }
@@ -295,6 +301,7 @@ export function PasosEnCursoWidget() {
     setPrompt(null);
   };
 
+  if (avisoDespacho) return <OrdenFinalizadaDialog aviso={avisoDespacho} puedeVerOrden={puedeVerOrden} onClose={() => setAvisoDespacho(null)} />;
   if (tramos.length === 0) return null;
 
   const masViejo = tramos[0];

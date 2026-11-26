@@ -3,7 +3,7 @@ import { useCapacidad, useImpresionDirecta } from "@/components/navigation/capac
 
 import { useState } from "react";
 import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
-import { ArrowUpRight, CalendarDays, CircleCheck, Printer } from "lucide-react";
+import { ArrowUpRight, CalendarDays, CircleCheck, Printer, Truck } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
@@ -30,6 +30,7 @@ export function OrdenFinalizadaDialog({
     return (
       <EtiquetaOrdenDialog
         ordenId={aviso.ordenId}
+        conEnvio={!!aviso.despachoLocalidad}
         onClose={() => setImprimir(false)}
       />
     );
@@ -42,11 +43,13 @@ export function OrdenFinalizadaDialog({
         }}
         title={
           <span className={s.title}>
-            <CircleCheck aria-hidden="true" />
-            Producción finalizada
+            {aviso.despachoLocalidad ? <Truck aria-hidden="true" /> : <CircleCheck aria-hidden="true" />}
+            {aviso.despachoLocalidad ? "OT terminada · Para despachar" : "Producción finalizada"}
           </span>
         }
-        description="Todos los trabajos de esta orden están terminados. Ya podés preparar la entrega."
+        description={aviso.despachoLocalidad
+          ? `Prepará el envío a ${aviso.despachoLocalidad} y colocá una etiqueta en cada bulto.`
+          : "Todos los trabajos de esta orden están terminados. Ya podés preparar la entrega."}
         className={s.dialog}
       >
         <div className={s.body}>
@@ -92,7 +95,7 @@ export function OrdenFinalizadaDialog({
         <div className={s.footer}>
           {(impresionDirecta || conDescarga) && <ActionButton variant="outline" onPress={() => setImprimir(true)}>
             <Printer aria-hidden="true" />
-            {impresionDirecta ? "Imprimir etiqueta" : "Descargar etiqueta"}
+            {impresionDirecta ? "Imprimir etiqueta" : "Descargar etiqueta"}{aviso.despachoLocalidad ? " de envío" : ""}
           </ActionButton>}
           {puedeVerOrden && (
             <ActionLink

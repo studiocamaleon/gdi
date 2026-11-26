@@ -11,6 +11,7 @@ import {
   getVistaEtiqueta,
   type ConfiguracionImpresion,
   type VistaEtiqueta,
+  type TipoEtiqueta,
 } from "@/lib/impresion-api";
 import { leerImpresora, type ImpresoraPuesto } from "@/lib/impresora-puesto";
 import dynamic from "next/dynamic";
@@ -21,12 +22,21 @@ const ImpresoraPuestoForm = dynamic(() =>
 );
 import s from "./impresion.module.css";
 
-export function EtiquetaOrdenDialog({
-  ordenId,
-  onClose,
-}: {
+export function EtiquetaOrdenDialog({ ordenId, conEnvio = false, onClose }: {
   ordenId: string;
+  conEnvio?: boolean;
   onClose: () => void;
+}) {
+  const [tipo, setTipo] = useState<TipoEtiqueta>(conEnvio ? "envio" : "interna");
+  return <ContenidoEtiqueta key={tipo} ordenId={ordenId} tipo={tipo} onClose={onClose}
+    onAlternar={conEnvio ? () => setTipo(tipo === "envio" ? "interna" : "envio") : undefined} />;
+}
+
+function ContenidoEtiqueta({ ordenId, tipo, onClose, onAlternar }: {
+  ordenId: string;
+  tipo: TipoEtiqueta;
+  onClose: () => void;
+  onAlternar?: () => void;
 }) {
   const impresionDirecta = useImpresionDirecta();
   const conDescarga = useCapacidad("etiquetas_pdf");
@@ -52,7 +62,7 @@ export function EtiquetaOrdenDialog({
     }
     let cancelado = false;
     Promise.all([
-      getVistaEtiqueta(ordenId),
+      getVistaEtiqueta(ordenId, tipo),
       impresionDirecta ? getConfiguracionImpresion() : Promise.resolve(null),
     ])
       .then(([v, i]) => {
@@ -79,7 +89,7 @@ export function EtiquetaOrdenDialog({
     return () => {
       cancelado = true;
     };
-  }, [ordenId, revision, impresionDirecta, disponible]);
+  }, [ordenId, tipo, revision, impresionDirecta, disponible]);
   const cantidad = Number(copias);
   const cantidadValida =
     Number.isInteger(cantidad) && cantidad >= 1 && cantidad <= 20;
@@ -105,6 +115,7 @@ export function EtiquetaOrdenDialog({
         cantidad,
         (enviadas, total) =>
           setMensaje(`Enviadas ${enviadas} de ${total} páginas.`),
+        tipo,
       );
       setMensaje(
         `Etiqueta${cantidad > 1 ? "s" : ""} enviada${cantidad > 1 ? "s" : ""} a ${config.impresora}.`,
@@ -127,21 +138,25 @@ export function EtiquetaOrdenDialog({
           if (!open && !enviando.current) onClose();
         }}
         isDismissable={!imprimiendo}
-        title={impresionDirecta ? "Imprimir etiqueta" : "Etiqueta de la orden"}
+        title={tipo === "envio" ? "Etiqueta de envío" : impresionDirecta ? "Imprimir etiqueta" : "Etiqueta de la orden"}
         description={
           vista
-            ? `${vista.numero} · 100 × 150 mm · QR de entrega`
+            ? `${vista.numero} · ${vista.anchoMm} × ${vista.altoMm} mm · ${tipo === "envio" ? "Completar el bulto a mano" : "QR de entrega"}`
             : "Preparando la etiqueta de la orden…"
         }
         className={s.dialog}
       >
         <div className={s.body}>
+          {onAlternar && disponible && <ActionButton variant="tertiary" isDisabled={imprimiendo} onPress={onAlternar}>
+            {tipo === "envio" ? "Ver etiqueta interna" : "Ver etiqueta de envío"}
+          </ActionButton>}
           {vista && (
             <div className={s.preview}>
               {/* La imagen es el mismo raster monocromo enviado a la impresora. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={vista.paginas[pagina]}
+                data-horizontal={tipo === "envio"}
                 alt={`Etiqueta ${pagina + 1} de ${vista.paginas.length} para ${vista.numero}`}
               />
               {vista.paginas.length > 1 && (

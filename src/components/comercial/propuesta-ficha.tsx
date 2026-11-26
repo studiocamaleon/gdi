@@ -185,6 +185,10 @@ import {
 } from "@/components/comercial/cupon-aviso";
 import { useImpresionDocumentos } from "@/components/impresion/documentos-impresion-contexto";
 import { EmisionDocumentosDialog } from "@/components/impresion/emision-documentos-dialog";
+import { DistintivoDespacho } from "@/components/produccion/distintivo-despacho";
+import { DespachoOrdenCampo } from "./despacho-orden";
+import type { DespachoOrden } from "@/lib/ordenes-trabajo";
+import type { EditarOrdenTrabajoPayload } from "@/lib/ordenes-trabajo-api";
 import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
 import { HistorialImpresionDialog } from "@/components/impresion/historial-impresion-dialog";
 import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
@@ -4623,11 +4627,14 @@ function camposEditablesOrden(
         "clienteId",
         "vendedorEmpleadoId",
         "canalVenta",
+        "despacho",
         "fechaEntrega",
         "observaciones",
       ]);
     case "produccion":
-      return new Set(["fechaEntrega", "observaciones"]);
+      return new Set(["fechaEntrega", "observaciones", "despacho"]);
+    case "finalizada":
+      return new Set(["despacho"]);
     default:
       return new Set();
   }
@@ -5154,7 +5161,18 @@ function PropuestaFichaContenido({
     0,
     totalPropuestaAntesCanje - fidelizacionCanjeMonto,
   );
+  const [despacho, setDespacho] = React.useState<DespachoOrden | null>(orden?.despacho ?? null);
+  React.useEffect(() => {
+    if (orden && !editandoOrden) setDespacho(orden.despacho ?? null);
+  }, [orden, editandoOrden]);
+  const validarDespacho = React.useCallback(() => {
+    if (ordenTipo !== "orden" || !despacho || (despacho.localidad.trim() && despacho.direccion.trim())) return true;
+    toast.error("Completá la localidad y el domicilio o sucursal del despacho.");
+    setTab("datos");
+    return false;
+  }, [ordenTipo, despacho]);
   const emitirYEntregar =
+    !despacho &&
     (!orden || orden.estado === "borrador") &&
     ordenTipo === "orden" &&
     items.length > 0 &&
@@ -5235,6 +5253,13 @@ function PropuestaFichaContenido({
   } | null>(null);
   const [panelSaving, setPanelSaving] = React.useState(false);
   const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? presupuestoBase?.clienteId ?? "");
+  const clienteDespachoRef = React.useRef(clienteId);
+  React.useEffect(() => {
+    if (clienteDespachoRef.current !== clienteId) {
+      clienteDespachoRef.current = clienteId;
+      if (!orden || editandoOrden) setDespacho(null);
+    }
+  }, [clienteId, orden, editandoOrden]);
   const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
     orden?.proyectoCampana?.id ?? presupuestoBase?.proyectoCampanaId ?? "",
   );
@@ -5683,8 +5708,12 @@ function PropuestaFichaContenido({
 
   /** Cambios de datos comerciales (field-cards) sin guardar. */
   const cambiosFields = React.useMemo(() => {
-    if (!orden || !editandoOrden) return {} as Record<string, string>;
-    const payload: Record<string, string> = {};
+    if (!orden || !editandoOrden) return {} as EditarOrdenTrabajoPayload;
+    const payload: EditarOrdenTrabajoPayload = {};
+    const previo = orden.despacho;
+    if ((despacho?.localidad ?? null) !== (previo?.localidad ?? null) ||
+        despacho?.direccion !== previo?.direccion || despacho?.transporte !== previo?.transporte)
+      payload.despacho = despacho;
     if (clienteId && clienteId !== (orden.clienteId ?? "")) {
       payload.clienteId = clienteId;
     }
@@ -5695,13 +5724,14 @@ function PropuestaFichaContenido({
       payload.fechaEntrega = fechaFinalVisible;
     }
     return payload;
-  }, [orden, editandoOrden, clienteId, canalVenta, fechaFinalVisible, emitirYEntregar]);
+  }, [orden, editandoOrden, clienteId, canalVenta, fechaFinalVisible, emitirYEntregar, despacho]);
 
   const cambiosCreacion = !orden
     ? items.length +
       cargosOrden.length +
       cobrosStaged.length +
       Number(Boolean(clienteId)) +
+      Number(ordenTipo === "orden" && Boolean(despacho)) +
       Number(canalVenta !== creacionDefaultsRef.current.canalVenta) +
       Number(fechaEstimada !== creacionDefaultsRef.current.fechaEstimada) +
       Number(sinComprobante)
@@ -5722,10 +5752,10 @@ function PropuestaFichaContenido({
   const revisionPropuesta = React.useMemo(
     () => ({
       items, cargosOrden, cobrosStaged, clienteId, proyectoCampanaId, canalVenta,
-      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo,
+      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo, despacho,
     }),
     [items, cargosOrden, cobrosStaged, clienteId, proyectoCampanaId, canalVenta,
-      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo],
+      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo, despacho],
   );
   const presupuestoGuardadoRef = React.useRef<{
     revision: typeof revisionPropuesta;
@@ -6121,6 +6151,7 @@ function PropuestaFichaContenido({
     if (!orden || togglingFiscal || cancelando || precioOrdenPendiente) return;
     // Descarta TODO el staging: field-cards e items vuelven a lo persistido.
     setClienteId(orden.clienteId ?? "");
+    setDespacho(orden.despacho ?? null);
     setCanalVenta(orden.canalVenta ?? "");
     setErrorCanalVenta(false);
     setFechaEstimada(orden.fechaEntrega ?? orden.creadaEl.slice(0, 10));
@@ -6151,7 +6182,7 @@ function PropuestaFichaContenido({
    */
   const guardarEdicion = React.useCallback(
     async (opciones?: { destino?: string }) => {
-    if (!validarEntregaCalculada()) return;
+    if (!validarEntregaCalculada() || !validarDespacho()) return;
       if (revisionCopiadoEnCurso.current) {
         toast.info("Esperá a que termine la actualización de precios de copiado.");
         return;
@@ -6276,7 +6307,7 @@ function PropuestaFichaContenido({
       }
     },
     [
-      validarEntregaCalculada,
+      validarEntregaCalculada, validarDespacho,
       orden,
       cambioDocumento,
       validarCanalVenta,
@@ -6985,7 +7016,7 @@ function PropuestaFichaContenido({
   ]);
 
   const emitirOrden = React.useCallback(async (imprimir = false) => {
-    if (!validarEntregaCalculada()) return;
+    if (!validarEntregaCalculada() || !validarDespacho()) return;
     if (emisionEnCursoRef.current) return;
     if (bloqueoEntregaInmediata) {
       setTab("pagos");
@@ -7040,6 +7071,7 @@ function PropuestaFichaContenido({
         proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         estado: "pendiente",
+        despacho,
         fechaEntrega,
         canalVenta,
         cargos: cargosOrden.map(cargoToOrdenInput),
@@ -7086,7 +7118,7 @@ function PropuestaFichaContenido({
       emisionEnCursoRef.current = false;
     }
   }, [
-    validarEntregaCalculada,
+    validarEntregaCalculada, validarDespacho, despacho,
     conOrdenes,
     conCotizacion,
     items,
@@ -7131,7 +7163,7 @@ function PropuestaFichaContenido({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
-    if (!validarEntregaCalculada()) return;
+    if (!validarEntregaCalculada() || !validarDespacho()) return;
     if (revisionCopiadoEnCurso.current) {
       toast.info("Esperá a que termine la actualización de precios de copiado.");
       return;
@@ -7184,6 +7216,7 @@ function PropuestaFichaContenido({
         proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         estado: "borrador",
+        despacho,
         fechaEntrega: fechaEntrega || undefined,
         canalVenta,
         cargos: cargosOrden.map(cargoToOrdenInput),
@@ -7224,7 +7257,7 @@ function PropuestaFichaContenido({
       setGuardandoBorrador(false);
     }
   }, [
-    validarEntregaCalculada,
+    validarEntregaCalculada, validarDespacho, despacho,
     presupuestoBase,
     conOrdenes,
     conPresupuestos,
@@ -8026,6 +8059,7 @@ function PropuestaFichaContenido({
                 }
                 onShowData={puedeEditarOrden ? () => setTab("datos") : undefined}
               >
+                <DistintivoDespacho localidad={orden?.despachoLocalidad} />
                 <TipoCambioPanel
                   editable={puedeModificarProductos}
                   onAplicar={aplicarTipoCambio}
@@ -8550,6 +8584,14 @@ function PropuestaFichaContenido({
                           </div>
                         )}
                       </FieldCard>
+                      {ordenTipo === "orden" && (
+                        <DespachoOrdenCampo
+                          valor={campoEditable("despacho") ? despacho : orden?.despacho ?? null}
+                          editable={campoEditable("despacho")}
+                          direcciones={clienteSeleccionado?.direcciones}
+                          onChange={setDespacho}
+                        />
+                      )}
                       {(() => {
                         if (!conEta) return null;
                         const porProducto = items.some((i) =>
@@ -9310,7 +9352,7 @@ function PropuestaFichaContenido({
           <HistorialImpresionDialog key={orden.id} ordenId={orden.id} onClose={() => setHistorialImpresionOpen(false)} />
         )}
         {etiquetaOpen && orden && (
-          <EtiquetaOrdenDialog ordenId={orden.id} onClose={() => setEtiquetaOpen(false)} />
+          <EtiquetaOrdenDialog ordenId={orden.id} conEnvio={!!orden.despacho} onClose={() => setEtiquetaOpen(false)} />
         )}
         {qrRetiroOpen && orden ? (
           <QrRetiroModal
