@@ -90,13 +90,13 @@ export class NotificacionesService {
    * hacer nada con eso más que, si quiere, loguearlo: el flujo de negocio
    * sigue igual.
    */
-  async encolar(ctx: ContextoNotificacion): Promise<ResultadoEncolar> {
+  async encolar(ctx: ContextoNotificacion, desdeWorker = false): Promise<ResultadoEncolar> {
     try {
       const resultado = await this.prisma.$transaction((tx) =>
         this.intentarEncolar(ctx, tx),
       );
       // El envío sólo puede comenzar después de confirmar la fila de la cola.
-      if (resultado.encolada)
+      if (resultado.encolada && !desdeWorker)
         void this.despacho.despachar(resultado.id).catch(() => undefined);
       return resultado;
     } catch (error) {
@@ -110,6 +110,7 @@ export class NotificacionesService {
         error.code === 'P2002'
       )
         return { encolada: false, motivo: 'Ya se había notificado.' };
+      if (desdeWorker) throw error;
       // Última red de D4: ni siquiera un error inesperado acá puede tumbar la
       // transición de estado que disparó la notificación.
       this.logger.error(

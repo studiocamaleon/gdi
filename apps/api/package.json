@@ -17,6 +17,7 @@
     "start:debug": "nest start --debug --watch --watchAssets",
     "start:prod": "node -r dotenv/config dist/src/main.js",
     "worker:start": "nest start --entryFile workers/worker-main",
+    "worker:emision:dev": "ts-node --transpile-only src/ordenes-trabajo/emision-main.ts",
     "worker:dev": "nest start --entryFile workers/worker-main --watch --watchAssets",
     "worker:prod": "node dist/src/workers/worker-main.js",
     "worker:pdf:dev": "ts-node --transpile-only src/documentos-pdf/documentos-worker-main.ts",

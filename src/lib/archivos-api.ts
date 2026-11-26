@@ -119,6 +119,7 @@ export async function subirArchivo(
   },
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
+  alReservar?: (archivoId: string) => Promise<void>,
 ): Promise<Archivo> {
   signal?.throwIfAborted();
   const hash = destino.calcularHash ? await sha256Archivo(file) : undefined;
@@ -138,6 +139,7 @@ export async function subirArchivo(
   });
 
   try {
+    await alReservar?.(inicio.archivoId);
     signal?.throwIfAborted();
     const partes = inicio.multipart
       ? await subirEnPartes(inicio.multipart, file, onProgress, signal)

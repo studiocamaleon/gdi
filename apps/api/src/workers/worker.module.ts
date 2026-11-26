@@ -1,3 +1,4 @@
+import { EmisionModule } from '../ordenes-trabajo/emision.module';
 import { FacturacionCoreModule } from '../administracion/facturacion-core.module';
 import { FacturacionLotesWorker } from '../administracion/facturacion-lotes.worker';
 import { MetaAdjuntosWorker } from '../integraciones/meta/inbox/meta-adjuntos.worker';
@@ -27,6 +28,7 @@ import { MetaInboxWorker } from '../integraciones/meta/inbox/meta-inbox.worker';
  */
 @Module({
   imports: [
+    EmisionModule,
     FacturacionCoreModule,
     MetaAdjuntosModule,
     MetaAltaModule,

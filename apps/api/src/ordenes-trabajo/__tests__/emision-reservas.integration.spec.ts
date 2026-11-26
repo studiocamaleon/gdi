@@ -1,3 +1,7 @@
+import { EventosSistemaService } from '../../eventos-sistema/eventos-sistema.service';
+import { EmisionWorker } from '../emision.worker';
+import { reclamarEmisiones } from '../trabajos-emision';
+import { NotificacionesOrdenesService } from '../../integraciones/notificaciones/notificaciones-ordenes.service';
 import { ReporteProduccionService } from '../../reportes/produccion.service';
 import { FacturacionOrdenesService } from '../../administracion/facturacion-ordenes.service';
 import { itemActivoTablero, itemTerminadoTablero } from '../tablero-consultas';
@@ -79,11 +83,13 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     ...(await contextoOriginal(...args)),
     ahora: new Date('2099-09-21T12:00:00Z'),
   }));
+  const capturarEmision = jest.fn();
+  const sincronizarAsignaciones = jest.fn();
   const ordenes = new OrdenesTrabajoService(
     db,
     {
-      capturarEmision: jest.fn(),
-      sincronizarAsignaciones: jest.fn(),
+      capturarEmision,
+      sincronizarAsignaciones,
       contextoSimulacion: (
         ...args: Parameters<EtaService['contextoSimulacion']>
       ) => eta.contextoSimulacion(...args),
@@ -120,6 +126,8 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
   );
 
   beforeEach(async () => {
+    capturarEmision.mockClear();
+    sincronizarAsignaciones.mockClear();
     contratoSimulado = null;
     const tenantId = randomUUID(),
       userId = randomUUID();
@@ -330,6 +338,8 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
         include: { items: true, pasos: { orderBy: { indice: 'asc' } } },
       });
       expect(ot.estado).toBe('finalizada');
+      expect(sincronizarAsignaciones).not.toHaveBeenCalled();
+      expect(capturarEmision).not.toHaveBeenCalled();
       expect(ot.progresoPct).toBe(100);
       expect(ot.fechaFinalizada).not.toBeNull();
       expect(ot.fechaEntregada).toBeNull();
@@ -416,6 +426,10 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     });
     const ot = await ordenes.create(auth, payload);
     expect(ot.estado).toBe('pendiente');
+    expect(sincronizarAsignaciones).not.toHaveBeenCalled();
+    expect(capturarEmision).not.toHaveBeenCalled();
+    expect(await db.$queryRaw`SELECT planificar FROM "TrabajoEmisionOt" WHERE "ordenId" = ${ot.id}::uuid`)
+      .toEqual([{ planificar: true }]);
     const items = await db.ordenTrabajoItem.findMany({
       where: { ordenId: ot.id },
       include: { pasos: true },
@@ -699,6 +713,80 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
       },
     };
   };
+
+  it('confirma e identifica la OT antes del ETA, recupera un turno perdido y reintenta el aviso con fecha', async () => {
+    await prepararConversion(1);
+    delete payload.fechaEntrega;
+    payload.diferirFechaEntrega = true;
+    const recibo = await ordenes.emitir(auth, payload);
+    expect(recibo.productos).toHaveLength(1);
+    expect(recibo.numero).toMatch(/OT/);
+    expect(await ordenes.emitir(auth, payload)).toEqual(recibo);
+    const leer = () => db.ordenTrabajo.findUniqueOrThrow({ where: { id: recibo.id } });
+    expect((await leer()).fechaEntrega).toBeNull();
+    const encolar = jest.fn().mockResolvedValue(undefined);
+    const avisos = new NotificacionesOrdenesService(db, { encolar } as never);
+    await avisos.encolarSegunEstado(recibo.id);
+    expect(encolar).not.toHaveBeenCalled();
+    const turno = await reclamarEmisiones(db, auth.tenantId);
+    expect(turno.map((t) => t.ordenId)).toEqual([recibo.id]);
+    expect(await reclamarEmisiones(db, auth.tenantId)).toEqual([]);
+    const habilitar = () => db.$executeRaw`UPDATE "TrabajoEmisionOt" SET "disponibleEl" = now() WHERE "ordenId" = ${recibo.id}::uuid`;
+    await habilitar();
+    const worker = new EmisionWorker(db, eta, capacidades, prevision, avisos, { asegurarParaItem: jest.fn() } as never, new EventosSistemaService(db));
+    const notificar = jest.spyOn(avisos, 'encolarSegunEstado').mockRejectedValueOnce(new Error('reintento simulado'));
+    expect(await worker.procesarSiguiente(auth.tenantId)).toBe(true);
+    expect((await leer()).fechaEntrega).toBeInstanceOf(Date);
+    const promesas = await db.etaPromesa.count({ where: { ordenId: recibo.id } });
+    expect(promesas).toBe(1);
+    await habilitar();
+    await worker.procesarSiguiente(auth.tenantId);
+    expect(notificar).toHaveBeenCalledTimes(2);
+    expect(encolar).toHaveBeenCalledTimes(1);
+    expect(encolar.mock.calls[0][0].parametros[2]).toMatch(/^\d{2}\/\d{2}\/2099$/);
+    expect(await db.etaPromesa.count({ where: { ordenId: recibo.id } })).toBe(promesas);
+    expect(await reclamarEmisiones(db, auth.tenantId)).toEqual([]);
+  });
+
+  it('comparte una simulación entre dos OT y conserva la fecha acordada en una de ellas', async () => {
+    await prepararConversion(2);
+    const [automatica, manual] = payload.items;
+    const comunes = { ...payload, fechaEntrega: undefined, diferirFechaEntrega: true };
+    const a = await ordenes.emitir(auth, { ...comunes, items: [automatica] });
+    const b = await ordenes.emitir(auth, { ...comunes, idempotencyKey: randomUUID(), fechaEntrega: '2099-12-01', items: [manual] });
+    const simular = jest.spyOn(eta, 'correr');
+    const worker = new EmisionWorker(db, eta, capacidades, prevision,
+      new NotificacionesOrdenesService(db, { encolar: jest.fn() } as never),
+      { asegurarParaItem: jest.fn() } as never, new EventosSistemaService(db));
+    try {
+      await worker.procesarSiguiente(auth.tenantId);
+      expect(simular).toHaveBeenCalledTimes(1);
+      const fechas = await db.ordenTrabajo.findMany({ where: { tenantId: auth.tenantId, id: { in: [a.id, b.id] } } });
+      expect(fechas.find((o) => o.id === a.id)?.fechaEntrega).toBeInstanceOf(Date);
+      expect(fechas.find((o) => o.id === b.id)?.fechaEntrega).toEqual(new Date('2099-12-01T00:00:00Z'));
+      expect(await db.eventoSistema.count({ where: { tenantId: auth.tenantId, tipo: 'produccion.fecha_entrega' } })).toBe(1);
+    } finally { simular.mockRestore(); }
+  });
+
+  it('mantiene la OT utilizable si faltan materiales y respeta una fecha pactada mientras espera', async () => {
+    simularPlan(2);
+    delete payload.fechaEntrega;
+    payload.diferirFechaEntrega = true;
+    const recibo = await ordenes.emitir(auth, payload);
+    const encolar = jest.fn();
+    const avisos = new NotificacionesOrdenesService(db, { encolar } as never);
+    const worker = new EmisionWorker(db, eta, capacidades, prevision, avisos, { asegurarParaItem: jest.fn() } as never, new EventosSistemaService(db));
+    await worker.procesarSiguiente(auth.tenantId);
+    expect(encolar).not.toHaveBeenCalled();
+    expect((await db.ordenTrabajo.findUniqueOrThrow({ where: { id: recibo.id } })).fechaEntrega).toBeNull();
+    const pactada = new Date('2099-11-16T00:00:00Z');
+    await db.ordenTrabajo.update({ where: { id: recibo.id }, data: { fechaEntrega: pactada } });
+    await db.$executeRaw`UPDATE "TrabajoEmisionOt" SET "disponibleEl" = now() WHERE "ordenId" = ${recibo.id}::uuid`;
+    await worker.procesarSiguiente(auth.tenantId);
+    expect(encolar).toHaveBeenCalledTimes(1);
+    expect(encolar.mock.calls[0][0].parametros[2]).toBe('16/11/2099');
+    expect((await db.ordenTrabajo.findUniqueOrThrow({ where: { id: recibo.id } })).fechaEntrega).toEqual(pactada);
+  });
 
   it('convierte y emite todos los ítems juntos, recalcula con cola actual y cierra el presupuesto atómicamente', async () => {
     const opciones = await prepararConversion();

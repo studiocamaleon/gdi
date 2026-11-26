@@ -48,6 +48,7 @@ export type CrearOrdenTrabajoItemPayload = {
 };
 
 export type CrearOrdenTrabajoPayload = {
+  diferirFechaEntrega?: boolean;
   despacho?: import("./ordenes-trabajo").DespachoOrden | null;
   /** UUID estable durante los reintentos de una misma creación. */
   idempotencyKey?: string;
@@ -126,6 +127,18 @@ export async function getDetalleItemTablero(itemId: string) {
   return apiRequest<import("../../apps/api/src/ordenes-trabajo/detalle-operativo").DetalleOperativoItem>(
     `/ordenes-trabajo/tablero/items/${itemId}/detalle`,
   );
+}
+
+export type ComprobanteEmisionOt = {
+  id: string;
+  numero: string;
+  productos: Array<{ id: string; cotizacionItemId: string | null }>;
+};
+
+export function emitirOrdenTrabajo(payload: CrearOrdenTrabajoPayload) {
+  return apiRequest<ComprobanteEmisionOt>("/ordenes-trabajo/emitir", {
+    method: "POST", body: JSON.stringify(payload),
+  });
 }
 
 export async function crearOrdenTrabajo(
@@ -398,6 +411,7 @@ export async function cambiarEstadoOrdenTrabajo(
   payload: {
     estado: "pendiente" | "produccion" | "finalizada" | "entregada";
     progresoPct?: number;
+    diferirFechaEntrega?: boolean;
   },
 ): Promise<OrdenTrabajoDetalle> {
   return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}/estado`, {

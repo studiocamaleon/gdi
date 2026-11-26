@@ -223,6 +223,10 @@ export class DespachoOrdenDto {
 
 export class CrearOrdenTrabajoDto {
   @IsOptional()
+  @IsBoolean()
+  diferirFechaEntrega?: boolean;
+
+  @IsOptional()
   @IsObject()
   @ValidateNested()
   @Type(() => DespachoOrdenDto)
@@ -426,6 +430,10 @@ export class CancelarOrdenTrabajoDto {
 }
 
 export class CambiarEstadoOrdenTrabajoDto {
+  @IsOptional()
+  @IsBoolean()
+  diferirFechaEntrega?: boolean;
+
   @IsIn(['pendiente', 'produccion', 'finalizada', 'entregada'])
   estado: 'pendiente' | 'produccion' | 'finalizada' | 'entregada';
 

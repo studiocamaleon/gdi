@@ -2,11 +2,13 @@
 
 ## Base de trabajo después del cierre de noviembre de 2026
 
-La carpeta principal es la base habitual de desarrollo. El [PR #139](https://github.com/studiocamaleon/gdi/pull/139) integró el selector de punto de entrega. La aplicación publicada ejecuta `ddcb0a8399932b1aa78ceb4711822650337ad19f`. El registro operativo del mismo PR documenta la promoción de las imágenes a producción.
+La carpeta principal es la base habitual de desarrollo. La aplicación publicada ejecuta `573428967301ada397310dfa057175be5fec341e` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). [Registro de producción](../deploy/produccion/VALIDACION.md).
 
 En la Mac de desarrollo, el lanzador privado `Abrir-Grafoprint-local.command` arranca la rama actual de la carpeta principal: web en `localhost:3000`, API en `127.0.0.1:3001`, base habitual `gdi_saas` en el puerto 5436. Comprueba las conexiones locales, conserva los datos y sólo aplica migraciones revisadas. No copia accesos de staging o producción. Usa Node 24, límites de memoria, tareas programadas y envíos externos desactivados; no inicia workers. Los servicios existentes de Docker mantienen sus recursos.
 
 Antes del próximo cambio: comprobar el árbol y los procesos que usan la carpeta, actualizar `origin/main` y crear una rama `codex/…` desde esa base. Si la carpeta está en uso, utilizar un worktree aislado; no cambiar debajo de servidores ajenos. Cada mejora independiente abre su PR hacia `main`, siguiendo [el flujo de PR](flujo-pull-requests.md). Las carpetas históricas se conservan para recuperar archivos ignorados o configuración privada, pero no son la base del trabajo nuevo.
+
+Para probar la asignación de fechas después de emitir una OT, desde `apps/api` se puede ejecutar `npm run worker:emision:dev` con la misma base local migrada y el entorno de desarrollo. Procesa fechas y recorridos y deja los avisos en la cola de la base. El envío queda a cargo del despachador habitual de la API. El lanzador local mantiene las tareas programadas y los envíos externos desactivados.
 
 ## Lote local: pantalla TV, cobros y edición de OT — 19/10/2026
 

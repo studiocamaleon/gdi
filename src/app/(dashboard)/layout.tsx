@@ -1,3 +1,4 @@
+import { CargasOtProvider } from "@/components/archivos/cargas-ot-provider";
 import { AccesoPorVista } from "@/components/navigation/acceso-por-vista";
 import { redirect } from "next/navigation";
 
@@ -60,45 +61,47 @@ export default async function DashboardLayout({
   const capacidades = await consultarCapacidadesCached();
 
   return (
-    <PermisosProvider permisos={currentUser.tenantActual?.permisos}>
-      <ConfigRegionalProvider regional={currentUser.tenantActual?.regional}>
-        <NavigationFeedbackProvider>
-          <NotificacionesProvider>
-            <CapacidadesProvider
-              capacidades={{
-                ...currentUser.tenantActual?.suscripcion?.capacidades,
-                ...capacidades,
-              }}
-            >
-              <ImpresionDisponibleProvider
-                key={currentUser.tenantActual?.id}
-                tenantId={currentUser.tenantActual?.id ?? ""}
+    <CargasOtProvider ambito={currentUser.tenantActual ? `${currentUser.tenantActual.id}/${currentUser.id}` : ""}>
+      <PermisosProvider permisos={currentUser.tenantActual?.permisos}>
+        <ConfigRegionalProvider regional={currentUser.tenantActual?.regional}>
+          <NavigationFeedbackProvider>
+            <NotificacionesProvider>
+              <CapacidadesProvider
+                capacidades={{
+                  ...currentUser.tenantActual?.suscripcion?.capacidades,
+                  ...capacidades,
+                }}
               >
-                <ImpersonacionBanner currentUser={currentUser} />
-                <DashboardFrame>
-                  <AppSidebar currentUser={currentUser} />
-                  <SidebarInset className="main" style={{ minHeight: 0 }}>
-                    <DashboardTopbar />
+                <ImpresionDisponibleProvider
+                  key={currentUser.tenantActual?.id}
+                  tenantId={currentUser.tenantActual?.id ?? ""}
+                >
+                  <ImpersonacionBanner currentUser={currentUser} />
+                  <DashboardFrame>
+                    <AppSidebar currentUser={currentUser} />
+                    <SidebarInset className="main" style={{ minHeight: 0 }}>
+                      <DashboardTopbar />
 
-                    <SuscripcionGlobalBanner currentUser={currentUser} />
+                      <SuscripcionGlobalBanner currentUser={currentUser} />
 
-                    <main
-                      className="gp-main flex flex-1"
-                      style={{ minHeight: 0, overflowY: "auto" }}
-                    >
-                      <AccesoPorPlan><AccesoPorVista>{children}</AccesoPorVista></AccesoPorPlan>
-                    </main>
-                  </SidebarInset>
-                  <PasosEnCursoWidget />
-                  {/* Escanear el QR del cliente abre la entrega desde cualquier
-              pantalla. */}
-                  <EntregaEscaneoWatcher />
-                </DashboardFrame>
-              </ImpresionDisponibleProvider>
-            </CapacidadesProvider>
-          </NotificacionesProvider>
-        </NavigationFeedbackProvider>
-      </ConfigRegionalProvider>
-    </PermisosProvider>
+                      <main
+                        className="gp-main flex flex-1"
+                        style={{ minHeight: 0, overflowY: "auto" }}
+                      >
+                        <AccesoPorPlan><AccesoPorVista>{children}</AccesoPorVista></AccesoPorPlan>
+                      </main>
+                    </SidebarInset>
+                    <PasosEnCursoWidget />
+                    {/* Escanear el QR del cliente abre la entrega desde cualquier
+                pantalla. */}
+                    <EntregaEscaneoWatcher />
+                  </DashboardFrame>
+                </ImpresionDisponibleProvider>
+              </CapacidadesProvider>
+            </NotificacionesProvider>
+          </NavigationFeedbackProvider>
+        </ConfigRegionalProvider>
+      </PermisosProvider>
+    </CargasOtProvider>
   );
 }

@@ -1,3 +1,4 @@
+import { getProductos, getCargosDirectosCatalogo } from "@/lib/productos-servicios-api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/permisos-server", () => ({ tienePermiso: vi.fn() }));
 vi.mock("@/lib/ordenes-trabajo-api", () => ({
@@ -67,6 +68,17 @@ describe("acceso directo a la ficha comercial de OT", () => {
       expect(getEstadoDocumentalOrden).not.toHaveBeenCalled();
     },
   );
+  it("abre la OT recién emitida sin recorrer los catálogos de edición", async () => {
+    vi.mocked(tienePermiso).mockResolvedValue(true);
+    vi.mocked(getOrdenTrabajo).mockResolvedValue({ id: "ot-ficticia", numero: "OT-1" } as Awaited<ReturnType<typeof getOrdenTrabajo>>);
+    const vista = await DetallePage({
+      params: Promise.resolve({ ordenId: "ot-ficticia" }), searchParams: Promise.resolve({ emitida: "1" }),
+    });
+    expect(vista.props.recienEmitida).toBe(true);
+    expect(getProductos).not.toHaveBeenCalled();
+    expect(getCargosDirectosCatalogo).not.toHaveBeenCalled();
+    expect(getClientes).not.toHaveBeenCalled();
+  });
   it("la vista comercial autorizada conserva el detalle", async () => {
     vi.mocked(tienePermiso).mockResolvedValue(true);
     vi.mocked(getOrdenTrabajo).mockResolvedValue({

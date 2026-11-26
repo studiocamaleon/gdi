@@ -164,17 +164,19 @@ export function programarAtencion(args: {
   if (seleccion === null) return null;
   // El mismo núcleo atiende todas las fases. Si una fase exige más personas,
   // se suman los integrantes restantes de la dotación elegida para este paso.
-  const carga = new Map<string, number>();
-  for (const r of args.reservas)
-    for (const id of new Set(r.empleadoIds ?? []))
-      carga.set(id, (carga.get(id) ?? 0) + Math.max(0, r.fin - r.inicio));
-  seleccion?.sort(
-    (a, b) =>
-      Number(b === args.obligatorioId) - Number(a === args.obligatorioId) ||
-      Number(b === args.preferidoId) - Number(a === args.preferidoId) ||
-      (carga.get(a) ?? 0) - (carga.get(b) ?? 0) ||
-      a.localeCompare(b),
-  );
+  if (seleccion && seleccion.length > 1) {
+    const carga = new Map<string, number>();
+    for (const r of args.reservas)
+      for (const id of new Set(r.empleadoIds ?? []))
+        carga.set(id, (carga.get(id) ?? 0) + Math.max(0, r.fin - r.inicio));
+    seleccion.sort(
+      (a, b) =>
+        Number(b === args.obligatorioId) - Number(a === args.obligatorioId) ||
+        Number(b === args.preferidoId) - Number(a === args.preferidoId) ||
+        (carga.get(a) ?? 0) - (carga.get(b) ?? 0) ||
+        a.localeCompare(b),
+    );
+  }
   for (let indice = 0; indice < fases.length; indice++) {
     const fase = fases[indice];
     if (fase.minutos <= 0) continue;

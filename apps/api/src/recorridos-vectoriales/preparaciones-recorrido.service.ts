@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type { CurrentAuth } from '../auth/auth.types';
+type ActorPreparacion = Pick<CurrentAuth, 'userId' | 'tenantId' | 'email' | 'impersonacion'>;
 import { PrismaService } from '../prisma/prisma.service';
 import { RecorridosVectorialesService } from './recorridos-vectoriales.service';
 import type { PerfilMaquinaCorte } from './recorridos-vectoriales.types';
@@ -61,7 +62,7 @@ export class PreparacionesRecorridoService {
   ) {}
 
   async consultarGuardados(
-    auth: CurrentAuth,
+    auth: ActorPreparacion,
     itemId: string,
     seleccion: SeleccionRecorrido = {},
   ) {
@@ -84,7 +85,7 @@ export class PreparacionesRecorridoService {
   }
 
   async asegurarParaItem(
-    auth: CurrentAuth,
+    auth: ActorPreparacion,
     itemId: string,
     forzar = false,
     seleccion: SeleccionRecorrido = {},
@@ -346,7 +347,7 @@ export class PreparacionesRecorridoService {
   }
 
   private async asegurarRevision(args: {
-    auth: CurrentAuth;
+    auth: ActorPreparacion;
     itemId: string;
     itemName: string;
     plateIndex: number;
@@ -426,7 +427,7 @@ export class PreparacionesRecorridoService {
   }
 
   private async leerItem(
-    auth: CurrentAuth,
+    auth: ActorPreparacion,
     itemId: string,
     seleccion: SeleccionRecorrido,
   ) {

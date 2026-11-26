@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TipoEnlacePublico } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotificacionesService } from './notificaciones.service';
+import { NotificacionesService, type ContextoNotificacion } from './notificaciones.service';
 import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
 import { urlEnlacePublico } from '../../enlaces-publicos/enlaces-publicos.urls';
@@ -53,7 +53,7 @@ export class NotificacionesOrdenesService {
    */
   async sincronizar(ordenId: string): Promise<void> {
     try {
-      await this.intentar(ordenId);
+      await this.encolarSegunEstado(ordenId);
     } catch (error) {
       this.logger.error(
         `Falló al sincronizar avisos de la orden ${ordenId}.`,
@@ -112,7 +112,7 @@ export class NotificacionesOrdenesService {
     }
   }
 
-  private async intentar(ordenId: string): Promise<void> {
+  async encolarSegunEstado(ordenId: string, reintentar = false): Promise<void> {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId },
       select: {
@@ -151,6 +151,8 @@ export class NotificacionesOrdenesService {
           )
         : EVENTO_POR_ESTADO[orden.estado];
     if (!evento) return;
+
+    if (!orden.fechaEntrega && (evento === 'orden_recibida' || evento === 'orden_en_produccion')) return;
 
     // El link de seguimiento sale del token público, que se genera al emitir
     // la orden. Sin token no hay nada que mostrarle al cliente, así que el
@@ -194,14 +196,10 @@ export class NotificacionesOrdenesService {
     if (!parametros) return;
 
     // Igual que en presupuestos: puede venir de una ruta pública sin contexto.
-    await enContextoDe(orden.tenantId, () =>
-      this.notificaciones.encolar({
-        evento,
-        entidadId: orden.id,
-        ...comun,
-        parametros,
-      }),
-    );
+    const aviso: ContextoNotificacion = { evento, entidadId: orden.id, ...comun, parametros };
+    await enContextoDe(orden.tenantId, () => reintentar
+      ? this.notificaciones.encolar(aviso, true)
+      : this.notificaciones.encolar(aviso));
   }
 }
 

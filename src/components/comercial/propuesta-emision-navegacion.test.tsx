@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
+import { CargasOtProvider } from "@/components/archivos/cargas-ot-provider";
+import * as cargasEmision from "@/lib/archivos-emision";
 import * as archivosApi from "@/lib/archivos-api";
 import type { Archivo } from "@/lib/archivos";
 import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
@@ -20,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   editarOrden: vi.fn(),
   revisarCopiado: vi.fn(),
   copiado: false,
+  adjunto: null as File | null,
   eta: false,
   cotizar: vi.fn(),
   recotizar: vi.fn(),
@@ -43,7 +46,8 @@ vi.mock("@/lib/centro-copiado-pedidos-api", async (original) => ({
 vi.mock("@/lib/ordenes-trabajo-api", async (original) => ({
   ...(await original<typeof import("@/lib/ordenes-trabajo-api")>()),
   editarOrdenTrabajoLote: mocks.editarOrden,
-  crearOrdenTrabajo: mocks.crearOrden,
+  crearOrdenTrabajo: vi.fn(),
+  emitirOrdenTrabajo: mocks.crearOrden,
   cambiarEstadoOrdenTrabajo: mocks.cambiarEstado,
 }));
 vi.mock("@/lib/administracion-api", async (original) => ({
@@ -161,6 +165,7 @@ vi.mock("./agregar-producto-sheet", async (original) => {
               50000,
             ),
             motorCodigo: "producto-qa",
+            archivosPendientes: mocks.adjunto ? [mocks.adjunto] : [],
             jobContext: {
               cantidad: 500,
               ...(mocks.copiado
@@ -245,6 +250,7 @@ beforeEach(() => {
   mocks.confirmar = null;
   mocks.cambiarTipo.mockReset();
   mocks.copiado = false;
+  mocks.adjunto = null;
   mocks.eta = false;
   mocks.finalizado = false;
   mocks.puedeEntregar = true;
@@ -331,7 +337,9 @@ async function montar(
         }}
       >
         <PermisosProvider permisos={permisos}>
-          <PropuestaFicha orden={orden} currentUser={currentUser} />
+          <CargasOtProvider ambito="taller-ficticio/persona-ficticia">
+            <PropuestaFicha orden={orden} currentUser={currentUser} />
+          </CargasOtProvider>
         </PermisosProvider>
       </CapacidadesProvider>,
     ),
@@ -1042,7 +1050,7 @@ it("si cambia el cliente durante la revisión descarta el cálculo anterior y ap
   expect(mocks.recotizar).not.toHaveBeenCalled();
   expect(container.textContent).toContain("121,00");
 });
-it("espera la ETA automática y permite emitir en cuanto el vendedor fija la fecha del producto", async () => {
+it.each([false, true])("emite con el cálculo detenido y respeta la fecha manual si el vendedor la fija (%s)", async (pactada) => {
   mocks.eta = true;
   vi.stubGlobal("Worker", class {
     postMessage() {}
@@ -1054,8 +1062,15 @@ it("espera la ETA automática y permite emitir en cuanto el vendedor fija la fec
   await click("Agregar producto ficticio");
   const emitir = () => [...container.querySelectorAll<HTMLButtonElement>("button")]
     .find((b) => b.textContent === "Emitir OT")!;
-  expect(emitir().disabled).toBe(true);
-  expect(container.textContent).toContain("Calculando la fecha de entrega…");
+  expect(emitir().disabled).toBe(false);
+  if (!pactada) {
+    await act(async () => emitir().click());
+    expect(mocks.crearOrden).toHaveBeenCalledWith(expect.objectContaining({
+      diferirFechaEntrega: true, fechaEntrega: undefined, items: [expect.objectContaining({ fechaEntrega: undefined })],
+    }));
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/produccion/ordenes/orden-emitida?emitida=1");
+    return;
+  }
   await verTab("Productos");
   const expandir = container.querySelector<HTMLButtonElement>('[aria-label="Ver detalle de Tarjetas ficticias"]')!;
   await act(async () => expandir.click());
@@ -1212,6 +1227,53 @@ it("emite, registra pago y entrega en ese orden; evita doble clic", async () => 
     mocks.entregar.mock.invocationCallOrder[0],
   );
 });
+it("abre la ficha con el pago confirmado y los bytes del archivo en la cola local", async () => {
+  mocks.adjunto = new File(["referencia ficticia"], "muestra.pdf");
+  mocks.crearOrden.mockResolvedValueOnce({
+    id: "ot-qa", numero: "OT-QA", productos: [{ id: "item-qa", cotizacionItemId: "snapshot-qa" }],
+  });
+  let guardar!: (ok: boolean) => void;
+  const encolar = vi.spyOn(cargasEmision, "encolarAdjuntos").mockImplementationOnce(
+    () => new Promise(resolve => { guardar = resolve; }),
+  );
+  const subir = vi.spyOn(archivosApi, "subirArchivo");
+  try {
+    await montar();
+    await click("Canal de prueba");
+    await seleccionarCliente("cliente-ficticio");
+    await click("Agregar producto ficticio");
+    await verPagos();
+    await click("Pago parcial ficticio");
+    await click("Emitir OT");
+    expect(mocks.cobrar).toHaveBeenCalledOnce();
+    expect(encolar.mock.calls[0][0]).toBe("taller-ficticio/persona-ficticia");
+    expect(encolar.mock.calls[0][1]).toEqual([expect.objectContaining({
+      ordenId: "ot-qa", itemId: "item-qa", fuente: { file: mocks.adjunto },
+    })]);
+    expect(mocks.push).not.toHaveBeenCalled();
+    await act(async () => guardar(true));
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/produccion/ordenes/ot-qa?emitida=1");
+    expect(subir).not.toHaveBeenCalled();
+  } finally {
+    encolar.mockRestore();
+    subir.mockRestore();
+  }
+});
+
+it("muestra el número de OT antes de que termine un cobro", async () => {
+  let completar!: () => void;
+  mocks.cobrar.mockImplementationOnce(() => new Promise<void>((resolve) => { completar = resolve; }));
+  await prepararCopiadoFinalizado();
+  await verPagos();
+  await click("Pago completo ficticio");
+  await click("Emitir y entregar");
+  expect(container.textContent).toContain("OT-FICTICIA");
+  expect(container.textContent).toContain("Confirmando cobros y entrega");
+  expect(mocks.entregar).not.toHaveBeenCalled();
+  await act(async () => completar());
+  expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/produccion/ordenes/orden-emitida?emitida=1");
+});
+
 it("si falla un pago deja la OT emitida pendiente de entrega, sin reemitir ni entregar", async () => {
   mocks.cobrar.mockRejectedValueOnce(new Error("Cobro rechazado ficticio"));
   await prepararCopiadoFinalizado();

@@ -30,6 +30,7 @@ async function medir(redis, db) {
   }
   // También hay trabajos durables en PostgreSQL, fuera de BullMQ.
   const filas = await db.$queryRawUnsafe(`SELECT (
+    (SELECT count(*) FROM "TrabajoEmisionOt") +
     (SELECT count(*) FROM "DocumentoPdf" WHERE estado IN ('PENDIENTE','PROCESANDO')) +
     (SELECT count(*) FROM "FacturacionLote" WHERE estado IN ('pendiente','procesando','esperando_envios')) +
     (SELECT count(*) FROM "InboxTrabajoEvento" WHERE estado = 'PENDIENTE') +

@@ -698,6 +698,7 @@ model NotificacionWhatsapp {
 }
 
 model Tenant {
+  turnoEmision TurnoEmisionOt?
   pantallasProduccion PantallaProduccion[]
   facturacionLotes FacturacionLote[]
   facturacionLoteItems FacturacionLoteItem[]
@@ -4132,7 +4133,31 @@ model CotizacionItem {
 // completo vía cotizacionItemId y persiste sólo la proyección visible.
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
+model TurnoEmisionOt {
+  tenantId String @id @db.Uuid
+  atendidoEl DateTime @db.Timestamptz(6)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model TrabajoEmisionOt {
+  ordenId       String @id @db.Uuid
+  tenantId      String @db.Uuid
+  usuarioId     String @db.Uuid
+  usuarioNombre String
+  planificar    Boolean
+  preparar      Boolean
+  fechasDiferidas Boolean
+  disponibleEl  DateTime @default(now()) @db.Timestamptz(6)
+  turno         String? @db.Uuid
+  intentos      Int @default(0)
+  orden         OrdenTrabajo @relation(fields: [tenantId, ordenId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([disponibleEl])
+  @@index([tenantId, disponibleEl])
+}
+
 model OrdenTrabajo {
+  trabajosEmision TrabajoEmisionOt[]
   /// Destino confirmado para transporte. Null para retiro y órdenes anteriores.
   despachoJson Json?
   /// Modo operativo elegido al emitir. Las órdenes históricas conservan producción.

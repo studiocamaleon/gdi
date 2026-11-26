@@ -1,3 +1,4 @@
+import { encolarEmision } from './trabajos-emision';
 import { leerDespacho } from './despacho';
 import { autorizarSnapshotsMedida, exigirTrabajoMedida, esSnapshotTrabajoMedida } from '../trabajos-medida/trabajo-medida.permiso';
 import { bloqueosEdicionProductos, exigirProductosEditablesTx, retirarComponentesPendientesTx } from './edicion-productos';
@@ -1317,18 +1318,6 @@ export class OrdenesTrabajoService {
     }
   }
 
-  private async capturarEtaEmision(auth: CurrentAuth, ordenId: string) {
-    await this.actualizarAsignaciones(auth.tenantId);
-    try {
-      await this.eta.capturarEmision(auth, ordenId);
-    } catch (error) {
-      this.logger.error(
-        `Falló la captura de promesa de ETA (orden ${ordenId}).`,
-        textoErrorLog(error),
-      );
-    }
-  }
-
   private async capturarEtaCierre(tenantId: string, ordenId: string) {
     try {
       await this.eta.capturarCierre(tenantId, ordenId);
@@ -1705,15 +1694,33 @@ export class OrdenesTrabajoService {
   // ── Crear ────────────────────────────────────────────────────────────
 
   async create(auth: CurrentAuth, payload: CrearOrdenTrabajoDto, opciones: { conversionPresupuesto?: { itemIds: string[] } } = {}) {
+    const recibo = await this.persistirOrden(auth, payload, opciones);
+    return this.findOne(auth, recibo.id);
+  }
+
+  emitir(auth: CurrentAuth, payload: CrearOrdenTrabajoDto) {
+    return this.persistirOrden(auth, { ...payload, estado: 'pendiente' });
+  }
+
+  private async persistirOrden(auth: CurrentAuth, payload: CrearOrdenTrabajoDto, opciones: { conversionPresupuesto?: { itemIds: string[] } } = {}) {
+    const seleccionar = {
+      id: true, numero: true, clienteId: true,
+      items: { where: { parentItemId: null }, orderBy: { ordenIndice: 'asc' },
+        select: { id: true, ordenId: true, cotizacionItemId: true } },
+    } as const;
+    const recibo = (orden: Prisma.OrdenTrabajoGetPayload<{ select: typeof seleccionar }>) => ({
+      id: orden.id, numero: orden.numero,
+      productos: orden.items.map(({ id, cotizacionItemId }) => ({ id, cotizacionItemId })),
+    });
     if (payload.idempotencyKey) {
       const existente = await this.prisma.ordenTrabajo.findFirst({
         where: {
           tenantId: auth.tenantId,
           idempotencyKey: payload.idempotencyKey,
         },
-        select: { id: true },
+        select: seleccionar,
       });
-      if (existente) return this.findOne(auth, existente.id);
+      if (existente) return recibo(existente);
     }
 
     await this.capacidades.exigir(auth.tenantId, 'ordenes');
@@ -1725,7 +1732,9 @@ export class OrdenesTrabajoService {
     const recalcularEntrega = conversion && await this.capacidades.puedeOperar(auth.tenantId, 'eta_capacidad');
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     this.validarEmision(estadoInicial, payload.clienteId ?? null);
-    if (!recalcularEntrega) this.validarFechaEntregaEmision(
+    const diferirFecha = emitida && !conversion && !payload.fechaEntrega && payload.diferirFechaEntrega === true
+      && await this.capacidades.puedeOperar(auth.tenantId, 'eta_capacidad');
+    if (!recalcularEntrega && !diferirFecha) this.validarFechaEntregaEmision(
       estadoInicial,
       payload.fechaEntrega ?? null,
       regional.zonaHoraria,
@@ -1800,6 +1809,7 @@ export class OrdenesTrabajoService {
         select: {
           id: true,
           cotizacionId: true,
+          origen: true,
           cantidad: true,
           snapshotJson: true,
           jobContextJson: true,
@@ -1863,6 +1873,13 @@ export class OrdenesTrabajoService {
     validarMonedaDocumento(encontrados);
     autorizarSnapshotsMedida(auth, encontrados, new Set(opciones.conversionPresupuesto?.itemIds ?? []));
     const snapshots = new Map(encontrados.map((item) => [item.id, item]));
+    if (diferirFecha) {
+      for (const item of payload.items) {
+        if (item.fechaEntrega) this.validarFechaEntregaEmision(estadoInicial, item.fechaEntrega, regional.zonaHoraria);
+        else if (item.listoEnMostrador || snapshots.get(item.cotizacionItemId)?.origen === 'TRABAJO_MEDIDA' || esSnapshotTrabajoMedida(snapshots.get(item.cotizacionItemId)?.snapshotJson))
+          throw new BadRequestException('Indicá la fecha acordada del trabajo a medida o del producto listo en mostrador.');
+      }
+    }
     let items = payload.items.map((item) => {
       const snapshot = snapshots.get(item.cotizacionItemId);
       if (!snapshot)
@@ -2080,7 +2097,7 @@ export class OrdenesTrabajoService {
     const tienePlanEntrega = items.some((i) => i.planEntrega);
     if (tienePlanEntrega)
       await this.capacidades.exigir(auth.tenantId, 'planificacion_avanzada');
-    let creada: { id: string };
+    let creada: ReturnType<typeof recibo>;
     try {
       creada = await this.prisma.$transaction(async (tx) => {
         if (emitida && !conversion) await this.exigirCopiadoEmitibleTx(tx, auth, {
@@ -2139,6 +2156,7 @@ export class OrdenesTrabajoService {
             : undefined,
         );
         const orden = await tx.ordenTrabajo.create({
+          select: seleccionar,
           data: {
             tenantId: auth.tenantId,
             idempotencyKey: payload.idempotencyKey ?? null,
@@ -2235,11 +2253,7 @@ export class OrdenesTrabajoService {
           await this.sincronizarLotesEntrega(tx, auth.tenantId, i.id);
         }
         if (emitida) {
-          const itemsCreados = await tx.ordenTrabajoItem.findMany({
-            where: { ordenId: orden.id, parentItemId: null },
-            select: { id: true, ordenId: true, cotizacionItemId: true },
-          });
-          await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
+          await this.materializarPasosItems(tx, auth.tenantId, orden.items);
         }
 
         // La secuencia comercial se consume únicamente al emitir.
@@ -2356,7 +2370,7 @@ export class OrdenesTrabajoService {
             usuarioId: auth.userId, usuarioNombre,
           } });
         }
-        const fechaFinal = await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
+        const fechaFinal = diferirFecha ? null : await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
         await vincularEntregasAlCrear(
           tx,
           auth.tenantId,
@@ -2371,7 +2385,8 @@ export class OrdenesTrabajoService {
             { alEmitir: true, auth },
           );
         }
-        if (emitida) await this.registrarCopiadoFinalizadoTx(tx, auth, orden.id, usuarioNombre);
+        const finalizadaEnMostrador = emitida && items.some((i) => i.listoEnMostrador) &&
+          await this.registrarCopiadoFinalizadoTx(tx, auth, orden.id, usuarioNombre);
         if (opciones.conversionPresupuesto) {
           const todos = opciones.conversionPresupuesto.itemIds;
           const convertidos = await tx.ordenTrabajoItem.findMany({
@@ -2390,7 +2405,10 @@ export class OrdenesTrabajoService {
             datosJson: { ordenId: orden.id, parcial: items.length < todos.length, completa: pendientes === 0, fechaEntrega: fechaFinal, entregaRecalculada: recalcularEntrega },
           } });
         }
-        return orden;
+        if (emitida) await encolarEmision(tx, auth, orden.id, {
+          planificar: !finalizadaEnMostrador, preparar: !finalizadaEnMostrador, fechasDiferidas: Boolean(diferirFecha || (recalcularEntrega && !fechaFinal)),
+        });
+        return recibo(orden);
       }, conversion ? { timeout: 30_000 } : undefined);
     } catch (error) {
       // Dos requests con la misma llave pueden pasar el lookup inicial a la
@@ -2408,30 +2426,18 @@ export class OrdenesTrabajoService {
             tenantId: auth.tenantId,
             idempotencyKey: payload.idempotencyKey,
           },
-          select: { id: true },
+          select: seleccionar,
         });
-        if (existente) return this.findOne(auth, existente.id);
+        if (existente) return recibo(existente);
       }
       throw error;
     }
 
-    // Emitida directo al taller: congela la promesa de ETA (post-commit).
-    if (emitida) {
-      await this.capturarEtaEmision(auth, creada.id);
+    if (!emitida) {
+      await this.prepararRecorridosDeItems(auth, creada.productos.map((item) => item.id));
     }
 
-    this.avisarAlCliente(creada.id);
-
-    const itemsCreados = await this.prisma.ordenTrabajoItem.findMany({
-      where: { tenantId: auth.tenantId, ordenId: creada.id },
-      select: { id: true },
-    });
-    await this.prepararRecorridosDeItems(
-      auth,
-      itemsCreados.map((item) => item.id),
-    );
-
-    return this.findOne(auth, creada.id);
+    return creada;
   }
 
   /**
@@ -4788,10 +4794,24 @@ export class OrdenesTrabajoService {
       await this.capacidades.exigir(auth.tenantId, 'ordenes');
     // Salir de borrador (a cualquier estado) es emitir: exige cliente y
     // fecha de entrega vigente, igual que la emisión directa.
+    const diferirFecha = desde === 'borrador' && hacia === 'pendiente' && !orden.fechaEntrega
+      && payload.diferirFechaEntrega === true && await this.capacidades.puedeOperar(auth.tenantId, 'eta_capacidad');
     if (desde === 'borrador') {
       exigirCanalVenta(orden.canalVenta, orden.canalVenta);
       this.validarEmision(hacia, orden.clienteId);
-      this.validarFechaEntregaEmision(
+      if (diferirFecha) {
+        const sinFechaAcordada = await this.prisma.ordenTrabajoItem.count({
+          where: {
+            tenantId: auth.tenantId, ordenId: orden.id,
+            OR: [
+              { fechaEntrega: null, OR: [{ listoEnMostrador: true }, { cotizacionItem: { origen: 'TRABAJO_MEDIDA' } }] },
+              { fechaEntrega: { lt: new Date(claveFechaEnZona(new Date(), regional.zonaHoraria) + 'T00:00:00Z') } },
+            ],
+          },
+        });
+        if (sinFechaAcordada) throw new BadRequestException('Revisá la fecha acordada de los productos antes de emitir el borrador.');
+      }
+      if (!diferirFecha) this.validarFechaEntregaEmision(
         hacia,
         orden.fechaEntrega
           ? orden.fechaEntrega.toISOString().slice(0, 10)
@@ -4960,7 +4980,9 @@ export class OrdenesTrabajoService {
           { alEmitir: true, auth },
         );
       }
-      if (desde === 'borrador') await this.registrarCopiadoFinalizadoTx(tx, auth, orden.id, firmaActor(auth, actor?.nombreCompleto ?? auth.email));
+      const listaEnMostrador = desde === 'borrador' && await this.registrarCopiadoFinalizadoTx(
+        tx, auth, orden.id, firmaActor(auth, actor?.nombreCompleto ?? auth.email),
+      );
       if (hacia === 'produccion')
         await this.desarrolloDocumental.exigirGatesCumplidos(orden.id, undefined, undefined, tx);
       await tx.ordenTrabajoEvento.create({
@@ -4987,16 +5009,15 @@ export class OrdenesTrabajoService {
         },
       });
       await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, orden.id);
+      if (desde === 'borrador') await encolarEmision(tx, auth, orden.id, {
+        planificar: !listaEnMostrador, preparar: false, fechasDiferidas: Boolean(diferirFecha),
+      });
     });
 
-    // Salir de borrador es emitir → congela la promesa; finalizar → cierra.
-    if (desde === 'borrador') {
-      await this.capturarEtaEmision(auth, orden.id);
-    }
     if (hacia === 'finalizada' && desde !== 'finalizada') {
       await this.capturarEtaCierre(auth.tenantId, orden.id);
     }
-    this.avisarAlCliente(orden.id);
+    if (desde !== 'borrador') this.avisarAlCliente(orden.id);
 
     return this.findOne(auth, orden.id);
   }
@@ -5235,13 +5256,13 @@ export class OrdenesTrabajoService {
     return this.findOne(auth, orden.id);
   }
 
-  /** Registra operaciones ya terminadas, sin crear cola, gates ni asignaciones. */
+  /** Registra las operaciones de mostrador e indica si la OT quedó finalizada. */
   private async registrarCopiadoFinalizadoTx(
     tx: Prisma.TransactionClient,
     auth: CurrentAuth,
     ordenId: string,
     usuarioNombre: string,
-  ) {
+  ): Promise<boolean> {
     const listos = await tx.ordenTrabajoItem.findMany({
       where: { tenantId: auth.tenantId, ordenId, listoEnMostrador: true },
       select: {
@@ -5250,7 +5271,7 @@ export class OrdenesTrabajoService {
         cotizacionItem: { select: { trazabilidadJson: true } },
       },
     });
-    if (!listos.length) return;
+    if (!listos.length) return false;
     const ahora = new Date();
     for (const item of listos) {
       const filas = this.pasosDesdeTrazabilidad(
@@ -5277,7 +5298,7 @@ export class OrdenesTrabajoService {
       });
     }
     const nuevos = listos.filter(i => !i.listoEnMostradorEl);
-    if (!nuevos.length) return;
+    if (!nuevos.length) return false;
     await tx.ordenTrabajoItem.updateMany({
       where: { tenantId: auth.tenantId, ordenId, id: { in: nuevos.map(i => i.id) } },
       data: { listoEnMostradorEl: ahora, listoEnMostradorPorNombre: usuarioNombre },
@@ -5303,7 +5324,9 @@ export class OrdenesTrabajoService {
         usuarioId: auth.userId, usuarioNombre,
         datosJson: { antes: 'pendiente', despues: 'finalizada' },
       } });
+      return true;
     }
+    return false;
   }
 
   /**

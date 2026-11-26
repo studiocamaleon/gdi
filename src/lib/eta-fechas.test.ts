@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describirEta, describirEtaOrden, fechaRecomendadaEta } from "./eta-fechas";
+import { describirEta, describirEtaOrden, fechaConfirmadaDeOrden, fechaRecomendadaEta } from "./eta-fechas";
 import { margenEntregaProducto } from "./margen-entrega-producto";
 import {
   etiquetaEta,
@@ -146,4 +146,10 @@ describe("fechas de producción y entrega", () => {
       expect(prioridad("2030-01-01", simulacion, "UTC")).toBe("urgent");
     }
   });
+});
+
+it("espera todas las entregas antes de anunciar la fecha de una OT mixta", () => {
+  expect(fechaConfirmadaDeOrden(["2099-12-01", undefined])).toBeUndefined();
+  expect(fechaConfirmadaDeOrden([])).toBeUndefined();
+  expect(fechaConfirmadaDeOrden(["2099-12-05", "2099-12-01"])).toBe("2099-12-05");
 });
