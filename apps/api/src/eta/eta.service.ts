@@ -1,6 +1,9 @@
 import { textoErrorLog } from '../common/log-seguro';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
-import { sincronizarAsignaciones } from './asignacion-automatica';
+import {
+  sincronizarAsignaciones,
+  type SimuladorAsignacion,
+} from './asignacion-automatica';
 import { personalFijoDelPaso } from '../produccion/asignacion-personal';
 import { recuperarDemandasHistoricas } from './demanda-historica';
 import {
@@ -72,7 +75,10 @@ export class EtaService {
     ),
   ) {}
 
-  async sincronizarAsignaciones(tenantId: string) {
+  async sincronizarAsignaciones(
+    tenantId: string,
+    simular?: SimuladorAsignacion,
+  ) {
     if (
       !(await this.capacidades.puedeOperar(tenantId, 'asignacion_automatica'))
     )
@@ -83,6 +89,7 @@ export class EtaService {
       (db) =>
         this.contextoSimulacion(tenantId, db, false, 'asignacion_automatica'),
       this.capacidades,
+      simular,
     );
   }
 

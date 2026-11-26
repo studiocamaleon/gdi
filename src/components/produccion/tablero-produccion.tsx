@@ -76,10 +76,7 @@ import {
   type Estacion,
 } from "@/lib/estaciones";
 import type { DiaNoLaborable, DuracionFamilia } from "@/lib/estaciones-api";
-import {
-  simularFlujo,
-  type ResultadoSimulacion,
-} from "@/lib/flujo-produccion";
+import { SIMULACION_VACIA, useSimulacionProduccion } from "./use-simulacion-produccion";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { SimulacionView } from "@/components/produccion/simulacion-view";
 import { formatBytes, urlDeArchivo, type Archivo } from "@/lib/archivos";
@@ -1360,28 +1357,20 @@ export function TableroProduccion({
 
   const conEta = useCapacidad("eta_capacidad");
   /** Simulación de flujo (fase 2b): ETA por item + llegadas por estación. */
-  const sim = React.useMemo<ResultadoSimulacion>(
-    () => conEta ?
-      simularFlujo({
-        items,
-        estaciones,
-        medianas,
-        noLaborables,
-        tiempoEntrePasosMin,
-        zona: zonaHoraria,
-        ahora: ahoraVista,
-      }) : { porItem: new Map(), llegadasPorEstacion: new Map(), traza: [] },
-    [
-      conEta,
-      items,
-      estaciones,
-      medianas,
-      noLaborables,
-      tiempoEntrePasosMin,
-      zonaHoraria,
-      ahoraVista,
-    ],
+  const consulta = React.useMemo(
+    () => ({
+      entrada: {
+        items, estaciones, medianas, noLaborables, tiempoEntrePasosMin,
+        zona: zonaHoraria, ahora: ahoraVista,
+      },
+    }),
+    [items, estaciones, medianas, noLaborables, tiempoEntrePasosMin, zonaHoraria, ahoraVista],
   );
+  const proyeccion = useSimulacionProduccion(
+    consulta,
+    conEta && (modoPlanificacion || mode === "items"),
+  );
+  const sim = proyeccion.actual ?? SIMULACION_VACIA;
 
   const tabEntries: Array<{ mode: Mode; label: string; count?: number }> = [
     { mode: "items", label: BOARD_MODE_LABELS.items, count: views.length },
@@ -1453,6 +1442,12 @@ export function TableroProduccion({
             <AlertDescription>{initialPartialWarning}</AlertDescription>
           </Alert>
         ) : null}
+        {proyeccion.error && (
+          <Alert variant="destructive">
+            <AlertDescription>{proyeccion.error}</AlertDescription>
+          </Alert>
+        )}
+        {proyeccion.calculando && <p role="status">Calculando tiempos previstos…</p>}
         {syncError ? (
           <Alert variant="destructive">
             <AlertTitle>El tablero no se está actualizando</AlertTitle>
@@ -1639,9 +1634,11 @@ export function TableroProduccion({
         estacionIdsEjecutables={meta.estacionIdsEjecutables}
         alcance={meta.alcance}
         onAccion={async (...args) => {
-          await handleAccion(...args);
-          setRevisionHistorico(n => n + 1);
-          if (selectedId) void getItemTablero(selectedId).then(setItemConsultado).catch(() => setErrorConsulta("El cambio se guardó, pero no se pudo actualizar el detalle."));
+          const actualizado = await handleAccion(...args);
+          if (actualizado) {
+            setItemConsultado(actualizado);
+            setRevisionHistorico(n => n + 1);
+          }
         }}
         onGate={handleGate}
         onClose={() => setSelectedId(null)}

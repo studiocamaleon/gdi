@@ -7826,7 +7826,11 @@ export class OrdenesTrabajoService {
       { timeout: 15_000 },
     );
 
-    await this.actualizarAsignaciones(auth.tenantId);
+    // El progreso y las dependencias ya se confirmaron. El reparto previsto
+    // tras completar lo actualiza el reconciliador periódico del taller.
+    if (acciones.some(({ payload }) => payload.accion !== 'completar')) {
+      await this.actualizarAsignaciones(auth.tenantId);
+    }
     // Efectos fuera de la transacción, una vez por OT y sólo tras confirmar.
     const porOrden = new Map(resultados.map((r) => [r.ordenId, r]));
     for (const r of porOrden.values()) {

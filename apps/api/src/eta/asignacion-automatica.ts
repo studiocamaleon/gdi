@@ -16,6 +16,9 @@ import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 
 type Entrada = Parameters<typeof simularFlujo>[0];
+export type SimuladorAsignacion = (
+  entrada: Entrada,
+) => ReturnType<typeof simularFlujo> | Promise<ReturnType<typeof simularFlujo>>;
 type Persona = { id: string; nombreCompleto: string; userId: string | null };
 type Paso = {
   estado: string;
@@ -89,6 +92,7 @@ export async function sincronizarAsignaciones(
   tenantId: string,
   leerEntrada: (db: Prisma.TransactionClient) => Promise<Entrada>,
   capacidades = new CapacidadesEmpresaService(prisma),
+  simular: SimuladorAsignacion = simularFlujo,
 ) {
   for (let intento = 0; ; intento++) {
     try {
@@ -151,7 +155,7 @@ export async function sincronizarAsignaciones(
             )
             .digest('hex');
           if (contextos.get(tenantId) === firma) return { firma, cambios: 0 };
-          const sim = simularFlujo(entrada);
+          const sim = await simular(entrada);
           const planes = new Map(sim.traza.map((p) => [p.pasoId, p]));
           const referencias = new Map(
             entrada.items.flatMap((i) =>

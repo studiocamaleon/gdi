@@ -104,10 +104,13 @@ Conviene completar juntas las estaciones que compartían personas.
 ## Publicación automática del reparto
 
 `EtaService.sincronizarAsignaciones` corre el mismo motor en la API. Se invoca
-post-commit al emitir una OT, ejecutar pasos o modificar un reclamo manual.
-Una reconciliación cada 30 segundos cubre cambios de horarios, personal,
+al emitir una OT, modificar un reclamo manual o ejecutar acciones como iniciar y pausar.
+Al completar uno o varios pasos, el taller confirma el avance, los tiempos y, si era el último paso,
+el cierre de la OT en la respuesta. El personal previsto se recalcula en la siguiente pasada
+del reconciliador. Este se activa cada 30 segundos y también cubre cambios de horarios, personal,
 configuración, edición/cancelación de órdenes y procesos externos, incluso sin
-navegadores abiertos. La caché de contexto evita repetir la simulación dentro
+navegadores abiertos. Por encima de 200 pasos, el cálculo periódico usa otro hilo
+de la API y permite atender en paralelo a los operarios. La caché de contexto evita repetir la simulación dentro
 del mismo minuto si los datos no cambiaron; los GET de Lista no publican planes.
 
 El resultado se guarda en `OrdenTrabajoItemPaso.asignacionPersonalJson`, separado
