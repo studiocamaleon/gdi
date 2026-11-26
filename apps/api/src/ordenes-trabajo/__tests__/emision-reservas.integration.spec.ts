@@ -79,11 +79,13 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     ...(await contextoOriginal(...args)),
     ahora: new Date('2099-09-21T12:00:00Z'),
   }));
+  const capturarEmision = jest.fn();
+  const sincronizarAsignaciones = jest.fn();
   const ordenes = new OrdenesTrabajoService(
     db,
     {
-      capturarEmision: jest.fn(),
-      sincronizarAsignaciones: jest.fn(),
+      capturarEmision,
+      sincronizarAsignaciones,
       contextoSimulacion: (
         ...args: Parameters<EtaService['contextoSimulacion']>
       ) => eta.contextoSimulacion(...args),
@@ -120,6 +122,8 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
   );
 
   beforeEach(async () => {
+    capturarEmision.mockClear();
+    sincronizarAsignaciones.mockClear();
     contratoSimulado = null;
     const tenantId = randomUUID(),
       userId = randomUUID();
@@ -330,6 +334,8 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
         include: { items: true, pasos: { orderBy: { indice: 'asc' } } },
       });
       expect(ot.estado).toBe('finalizada');
+      expect(sincronizarAsignaciones).not.toHaveBeenCalled();
+      expect(capturarEmision).not.toHaveBeenCalled();
       expect(ot.progresoPct).toBe(100);
       expect(ot.fechaFinalizada).not.toBeNull();
       expect(ot.fechaEntregada).toBeNull();
@@ -416,6 +422,8 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     });
     const ot = await ordenes.create(auth, payload);
     expect(ot.estado).toBe('pendiente');
+    expect(sincronizarAsignaciones).toHaveBeenCalledWith(auth.tenantId);
+    expect(capturarEmision).toHaveBeenCalledWith(auth, ot.id);
     const items = await db.ordenTrabajoItem.findMany({
       where: { ordenId: ot.id },
       include: { pasos: true },
