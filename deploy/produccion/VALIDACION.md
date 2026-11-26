@@ -1,5 +1,26 @@
 # Validación de producción
 
+## 2026-11-26 — Rendimiento de OT, producción y despachos
+
+[PR integrador #138](https://github.com/studiocamaleon/gdi/pull/138), con los PR #134, #135, #136 y #137. Web, API y ambos workers ejecutan `aa75cf6248ffc7205376fe4015b48c07f82767b1`. La API consultó la base y el servicio PDF convirtió una página ficticia. El historial pasó de 323 a 325 migraciones y se conservaron los recuentos de control.
+
+| Servicio | Digest vigente |
+| --- | --- |
+| API y ambos workers | `sha256:a5fa71bbdcf7ac43093301863a3bf9704cdb004229f3800f4e9555c21fcf0ec5` |
+| Web | `sha256:5403118e6634e4be845020b67536aba3c0ecc8242114e1a3d5a84580a5e54c43` |
+| PDF | `sha256:c0fa0448556408845ed177f395e8b054c488b96e024c4420e55b5182cfff03fd` |
+| Copiador | `sha256:d7fea1e72a9742a8f33df5296983be41ac30012dafbd878361b9fd737a8ef258` |
+
+### Comprobación de producción
+
+Se promovieron por digest las imágenes de staging. El índice de medianas quedó válido y se leyó una OT con el esquema de despachos en una transacción de solo lectura. El renderizador generó en memoria una etiqueta ficticia de 1200 × 800 px. Tanto el acceso de la aplicación como la API pública respondieron HTTP 200. La sesión autenticada de producción abrió el listado de órdenes y mostró «Despachar por transporte» en el formulario de creación. El worker fiscal y la API pasaron el control de configuración. El recorrido que emitió y completó una orden está documentado en la [validación de staging](../staging/VALIDACION.md).
+
+### Respaldo y reversión
+
+Antes de migrar se verificaron dentro de producción la firma y la huella del comprobante `f2f533a1-e3c0-4c20-a9cb-7eb67dd787b8`, completado el 2026-11-26T05:46:45.568Z (UTC). Después de publicar se actualizaron la fuente cifrada y el inventario del copiador con las imágenes activas. El [registro de cierre del PR #138](https://github.com/studiocamaleon/gdi/pull/138) referencia el comprobante posterior, su fecha y los controles de firma, huella y revisión. La restauración integral corresponde a un ensayo anterior.
+
+Para volver a la aplicación anterior, restablecer web `sha256:c7b317564907cdeee05cb193db163ca0c8a853e4561a71451d4b29c167311452` y API/ambos workers `sha256:26b9b76b74650bfbd1d8e5ede96efcbbb68fb720207df551aee738c1d153126f` en los registros propios del entorno. El índice y el campo opcional son aditivos. Conservar los datos de despacho capturados y el esquema al revertir el código.
+
 ## 2026-11-25 — Publicación del cierre de PR y ramas
 
 Lucas autorizó revisar e integrar los doce PR pendientes, publicar el lote e incluir los avances locales de Chile y el plan/prototipo de GrafoCommerce. [PR integrador #133](https://github.com/studiocamaleon/gdi/pull/133), con historial conservado. Alcance y equivalencias de ramas en [el registro de cierre](../../docs/cierre-ramas-2026-11-25.md).

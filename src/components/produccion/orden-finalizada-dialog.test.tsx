@@ -57,6 +57,14 @@ describe("aviso de finalización de una OT", () => {
     expect(html).not.toContain("Mar 22");
     expect(html).not.toContain("Marcar como entregada");
   });
+  it("avisa al operario el destino y ofrece la etiqueta de envío", () => {
+    const html = renderToStaticMarkup(
+      <OrdenFinalizadaDialog aviso={{ ...aviso, despachoLocalidad: "Puerto Deseado" }} puedeVerOrden={false} onClose={() => {}} />,
+    );
+    expect(html).toContain("OT terminada · Para despachar");
+    expect(html).toContain("Prepará el envío a Puerto Deseado");
+    expect(html).toContain("Descargar etiqueta de envío");
+  });
   it("omite fecha ausente y acceso a la OT sin permiso", () => {
     const html = renderToStaticMarkup(
       <OrdenFinalizadaDialog

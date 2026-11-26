@@ -204,7 +204,30 @@ export class CrearOrdenTrabajoCargoDto {
   nota?: string;
 }
 
+export class DespachoOrdenDto {
+  @IsString()
+  @Matches(/\S/, { message: 'Ingresá la localidad de destino.' })
+  @MaxLength(80)
+  localidad: string;
+
+  @IsString()
+  @Matches(/\S/, { message: 'Ingresá el domicilio o sucursal de destino.' })
+  @MaxLength(160)
+  direccion: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  transporte?: string;
+}
+
 export class CrearOrdenTrabajoDto {
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => DespachoOrdenDto)
+  despacho?: DespachoOrdenDto | null;
+
   /** Identificador estable del intento para que un retry no duplique la OT. */
   @IsOptional()
   @IsUUID()
@@ -288,6 +311,12 @@ export class CrearOrdenTrabajoDto {
  * de auditoría con diff.
  */
 export class EditarOrdenTrabajoDto {
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => DespachoOrdenDto)
+  despacho?: DespachoOrdenDto | null;
+
   @IsOptional()
   @IsUUID()
   clienteId?: string;

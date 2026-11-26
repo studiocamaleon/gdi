@@ -1,5 +1,61 @@
 # Validación de staging — historial
 
+## 2026-11-26 — Rendimiento de OT, producción y despachos
+
+[PR integrador #138](https://github.com/studiocamaleon/gdi/pull/138), con los PR #134, #135, #136 y #137. Web, API y ambos workers ejecutan `aa75cf6248ffc7205376fe4015b48c07f82767b1`. La API consultó la base y el servicio PDF convirtió una página ficticia. El historial pasó de 324 a 325 migraciones y se conservaron los recuentos de control.
+
+| Servicio | Digest vigente |
+| --- | --- |
+| API y ambos workers | `sha256:a5fa71bbdcf7ac43093301863a3bf9704cdb004229f3800f4e9555c21fcf0ec5` |
+| Web | `sha256:5403118e6634e4be845020b67536aba3c0ecc8242114e1a3d5a84580a5e54c43` |
+| PDF | `sha256:c0fa0448556408845ed177f395e8b054c488b96e024c4420e55b5182cfff03fd` |
+| Copiador | `sha256:d7fea1e72a9742a8f33df5296983be41ac30012dafbd878361b9fd737a8ef258` |
+
+### Emisión y edición de producto
+
+En Chrome se emitió la orden ficticia `OT-2026-0010`. Desde agregar el producto hasta habilitar **Emitir OT** transcurrieron 0,66 s. El clic en emitir abrió el detalle en 2,12 s. La edición abrió directamente las especificaciones en 0,32 s. Son mediciones de una emisión. [Comparación con tres emisiones por versión y carga multiempresa](../../docs/rendimiento-ordenes-2026-11-25.md).
+
+### Fecha de entrega
+
+Con el cálculo automático retenido, una fecha manual habilitó la emisión en 25 ms. Al liberar el cálculo se conservó la fecha elegida.
+
+### Producción y despacho
+
+La orden indicaba despacho por Expreso QA a Puerto Deseado. La petición que completó el paso tardó 675 ms. Al completar el último paso apareció «OT terminada · Para despachar», con el destino y la opción de etiqueta. Se descargó y revisó una etiqueta horizontal de 150 × 100 mm, con remitente, destinatario, sucursal y campos manuscritos para los bultos. Se verificó el PDF en pantalla.
+
+### Trabajo a medida, pagos, archivos y notas
+
+La orden ficticia chilena `OT-2026-0001` conservó el trabajo a medida de CLP 10000, su cobro de CLP 2500 y el archivo original de 59 bytes. La nota tuvo el mismo fondo amarillo en el detalle de la orden y en el panel de producción. En la nueva OT de despacho se registró otro pago ficticio en efectivo y se adjuntó un CSV desde la orden, sin entrar en «Editar orden». Al descargar el archivo se comprobaron sus 44 bytes contra el original.
+
+### Controles locales y de GitHub
+
+844 pruebas locales aprobadas. Los controles del candidato incluyeron permisos HTTP, contenedores, CodeQL y Grafo3D. La preview de Vercel permitió preparar un modelo para exportar.
+
+### Respaldo y reversión
+
+Comprobante posterior `c55cad39-3aa5-4853-acd9-cdd9200d1e08`, completado el 2026-11-26T05:44:13.997Z (UTC). Se verificaron la firma y el manifiesto descifrado, incluida la revisión y las imágenes. La última restauración integral corresponde a un ensayo anterior.
+
+Para volver a la aplicación anterior, restablecer web `sha256:f41799bfadb76483fab137c873c2fd7f98eb508c52f1f01bc8a840d0596dbb8d` y API/ambos workers `sha256:9e7a9e2f23ff0ba194c88c8edd6219ade86eccd69dad65d6d22f886152d191a0` en los registros propios del entorno. El índice y el campo opcional son aditivos. Conservar los datos de despacho capturados y el esquema al revertir el código.
+
+## 2026-11-25 — Rendimiento de las órdenes de trabajo
+
+[PR #135](https://github.com/studiocamaleon/gdi/pull/135), revisión funcional `9264c668b1a9937a18b2530bd9ddc821239b37f9`. La web, la API y ambos workers ejecutan esa revisión en staging. Cada máquina conservó su configuración y recursos. El índice parcial de medianas por empresa está listo y válido. Staging pasó de 323 a 324 migraciones aplicadas y conservó los recuentos de control. Gotenberg respondió y generó el PDF ficticio.
+
+| Componente | Imagen activa |
+| --- | --- |
+| Web | `sha256:f41799bfadb76483fab137c873c2fd7f98eb508c52f1f01bc8a840d0596dbb8d` |
+| API y dos workers | `sha256:9e7a9e2f23ff0ba194c88c8edd6219ade86eccd69dad65d6d22f886152d191a0` |
+
+En Chrome se compararon tres emisiones por versión, con el mismo producto, cliente de prueba y fecha manual. La mediana del clic en Emitir OT al detalle visible pasó de 4,60 s a 2,06 s. Al editar el renglón, el catálogo apareció en las tres repeticiones anteriores. La nueva versión abrió directamente la configuración en las tres. Con el cálculo de taller retenido en el navegador, la fecha automática mantuvo deshabilitado el botón y la fecha manual lo habilitó en 27 ms. La fecha siguió siendo la elegida al liberar el cálculo.
+
+Se hizo una emisión adicional por versión mientras dos empresas ficticias consultaban sus listados y tableros. Cada versión completó 80 lecturas. Las ocho OT se verificaron por API con número único, producto y fecha correctos, visibles en el listado de la empresa que las emitió. La ficha administrativa abrió el producto elegido y sus conteos por categoría coincidieron con los 5 productos del listado. Las mediciones de capacidad con 20 empresas, el costo del cálculo de fechas y el efecto sobre otras sesiones están en el [informe de rendimiento](../../docs/rendimiento-ordenes-2026-11-25.md).
+
+La copia posterior se completó el 25/11 a las 21:33 (Argentina). Se verificó el comprobante firmado con la clave pública del kit de custodia y se cotejaron las imágenes del manifiesto con las desplegadas. Tras recuperar y descifrar la fuente de `9264c668b` desde B2, su tamaño y SHA-256 coincidieron con los del archivo generado por Git.
+
+La base se restauró con PostgreSQL 16.16 en una instancia temporal aislada. El primer intento con 16.13 se detuvo al encontrar el atributo de columna `pg_attver`. La restauración con 16.16 usó el dump original. Coincidieron las 324 migraciones y sus huellas, el índice de medianas y las ocho OT de prueba con sus productos y fechas. Se recuperaron 37 archivos con sus huellas y las 6 versiones de código del manifiesto. Las claves de custodia descifraron los datos protegidos de MFA e integraciones. Sólo se inició PostgreSQL en el entorno de restauración.
+
+Para volver a la aplicación anterior, usar las imágenes de la revisión `101ed9327` del registro siguiente, conservando el índice aditivo. Alcance de esta publicación limitado a staging.
+
 ## 2026-11-25 — Cierre integrado de PR y avances locales
 
 [PR #133](https://github.com/studiocamaleon/gdi/pull/133), autorizado para integrar, publicar y cerrar el lote. Incluye #63, #64, #71, #72, #73, #105, #116, #123, #124, #125, #126 y #127, los avances locales de Chile y el plan/prototipo de GrafoCommerce. La revisión de ramas históricas queda en [el registro de cierre](../../docs/cierre-ramas-2026-11-25.md).

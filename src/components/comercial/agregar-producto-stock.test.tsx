@@ -6,6 +6,8 @@ import type { ProductoDetalle } from "@/lib/productos-servicios";
 import type { CotizarResponse } from "@/lib/productos-servicios-api";
 import { AgregarProductoSheet } from "./agregar-producto-sheet";
 
+import { productoDiseno } from "./__fixtures__/orden-diseno";
+
 const api = vi.hoisted(() => ({ cotizar: vi.fn(), producto: vi.fn() }));
 vi.mock("./tipo-cambio-documento", () => ({
   useMotorConTipoCambio: () => ({ cotizar: api.cotizar, cotizarEnSegundoPlano: api.cotizar }),
@@ -150,4 +152,43 @@ it("agrega la cotización sin costos que recibe un vendedor y conserva el precio
   expect(item.total).toBe(150);
   expect(item.cotizacion).not.toHaveProperty("costos");
   expect(el.textContent).not.toContain("NaN");
+});
+
+
+it("abre la edición directamente, espera el detalle y permite volver al catálogo", async () => {
+  const p = producto("PREFERIR_DISPONIBLES");
+  const item = { ...productoDiseno("linea", p.nombre, 100, 1000), motorCodigo: p.id };
+  let cargar!: (detalle: ProductoDetalle) => void;
+  api.producto.mockImplementationOnce(() => new Promise<ProductoDetalle>((r) => { cargar = r; }));
+  await act(async () => root.render(
+    <AgregarProductoSheet open editingItem={item} onOpenChange={vi.fn()} productos={[p]}
+      fechaEntregaDefault="2099-01-01" onAddItem={vi.fn()} />,
+  ));
+  expect(el.querySelector('[role="status"]')?.textContent).toContain("Cargando configuración");
+  expect(el.querySelector('[role="option"]')).toBeNull();
+  expect(boton("Guardar cambios")).toBeUndefined();
+  await act(async () => cargar(p));
+  expect(api.producto).toHaveBeenCalledExactlyOnceWith(p.id, true);
+  expect(boton("Guardar cambios")).toBeDefined();
+  await act(async () => boton("Volver").click());
+  expect(el.querySelector('[role="option"]')).not.toBeNull();
+});
+
+it("muestra un error recuperable cuando falla el detalle y conserva la línea original", async () => {
+  const p = producto("PREFERIR_DISPONIBLES");
+  const item = { ...productoDiseno("linea", p.nombre, 100, 1000), motorCodigo: p.id };
+  api.producto.mockRejectedValueOnce(new Error("Error ficticio"));
+  const guardar = vi.fn();
+  const cerrar = vi.fn();
+  await act(async () => root.render(
+    <AgregarProductoSheet open editingItem={item} onOpenChange={cerrar} productos={[p]}
+      fechaEntregaDefault="2099-01-01" onAddItem={vi.fn()} onSaveItem={guardar} />,
+  ));
+  expect(el.querySelector('[role="alert"]')?.textContent).toContain("No se pudo cargar");
+  expect(el.querySelector('[role="option"]')).toBeNull();
+  await act(async () => boton("Elegir otro producto").click());
+  expect(el.querySelector('[role="option"]')).not.toBeNull();
+  await act(async () => boton("Cancelar").click());
+  expect(cerrar).toHaveBeenCalledWith(false);
+  expect(guardar).not.toHaveBeenCalled();
 });

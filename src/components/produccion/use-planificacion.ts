@@ -10,19 +10,13 @@ import {
   getDuracionesFamilias,
   getEstaciones,
 } from "@/lib/estaciones-api";
-import { simularFlujo, type ResultadoSimulacion } from "@/lib/flujo-produccion";
+import { SIMULACION_VACIA, useSimulacionProduccion } from "./use-simulacion-produccion";
 import { crearOperacionesPlan } from "@/lib/planificacion-vista";
 import type { cargarDatosTableroProduccion } from "@/lib/tablero-produccion-server";
 
 export type DatosPlanificacion = Awaited<
   ReturnType<typeof cargarDatosTableroProduccion>
 > & { consultadoEl: string };
-const SIMULACION_VACIA: ResultadoSimulacion = {
-  porItem: new Map(),
-  llegadasPorEstacion: new Map(),
-  traza: [],
-};
-
 export function usePlanificacion(inicial: DatosPlanificacion) {
   const { zonaHoraria: zona } = useConfigRegional();
   const [datos, setDatos] = useState(inicial);
@@ -119,65 +113,13 @@ export function usePlanificacion(inicial: DatosPlanificacion) {
     }),
     [datos, zona],
   );
-  const enSegundoPlano =
-    datos.initialItems.reduce((n, item) => n + item.pasos.length, 0) > 200;
-  const directa = useMemo(
-    () => (enSegundoPlano ? null : simularFlujo(entrada)),
-    [entrada, enSegundoPlano],
-  );
-  const [calculada, setCalculada] = useState<{
-    datos: DatosPlanificacion;
-    entrada: typeof entrada;
-    resultado: ResultadoSimulacion;
-  } | null>(null);
-  const [errorCalculo, setErrorCalculo] = useState<{
-    entrada: typeof entrada;
-    mensaje: string;
-  } | null>(null);
-  useEffect(() => {
-    if (!enSegundoPlano) return;
-    let vigente = true;
-    let worker: Worker | undefined;
-    const fallar = () => {
-      worker?.terminate();
-      if (vigente)
-        setErrorCalculo({
-          entrada,
-          mensaje:
-            "No se pudo calcular la planificación. Volvé a actualizar la vista.",
-        });
-    };
-    try {
-      worker = new Worker(
-        new URL("./planificacion-calculo.worker.ts", import.meta.url),
-      );
-      worker.onmessage = (
-        evento: MessageEvent<{
-          resultado?: ResultadoSimulacion;
-          error?: string;
-        }>,
-      ) => {
-        if (!vigente) return;
-        if (evento.data.resultado)
-          setCalculada({ datos, entrada, resultado: evento.data.resultado });
-        else fallar();
-        worker?.terminate();
-      };
-      worker.onerror = fallar;
-      worker.postMessage(entrada);
-    } catch {
-      fallar();
-    }
-    return () => {
-      vigente = false;
-      worker?.terminate();
-    };
-  }, [datos, entrada, enSegundoPlano]);
-  // Durante una actualización conservamos un conjunto coherente: nunca tareas
-  // de la consulta nueva con ventanas calculadas para la consulta anterior.
-  const datosVisibles = directa ? datos : (calculada?.datos ?? datos);
-  const contextoVisible = directa ? entrada : (calculada?.entrada ?? entrada);
-  const simulacion = directa ?? calculada?.resultado ?? SIMULACION_VACIA;
+  const consulta = useMemo(() => ({ datos, entrada }), [datos, entrada]);
+  const proyeccion = useSimulacionProduccion(consulta);
+  // La grilla usa los datos que corresponden a las ventanas calculadas.
+  const visible = proyeccion.ultima?.consulta ?? consulta;
+  const datosVisibles = visible.datos;
+  const contextoVisible = visible.entrada;
+  const simulacion = proyeccion.ultima?.resultado ?? SIMULACION_VACIA;
   const operaciones = useMemo(
     () =>
       crearOperacionesPlan(
@@ -187,8 +129,6 @@ export function usePlanificacion(inicial: DatosPlanificacion) {
       ),
     [datosVisibles, simulacion],
   );
-  const errorActual =
-    errorCalculo?.entrada === entrada ? errorCalculo.mensaje : null;
   return {
     datos: datosVisibles,
     operaciones,
@@ -198,9 +138,8 @@ export function usePlanificacion(inicial: DatosPlanificacion) {
     noLaborables: contextoVisible.noLaborables,
     actualizar,
     actualizando,
-    error: errorActual ?? error,
-    calculando:
-      enSegundoPlano && calculada?.entrada !== entrada && !errorActual,
-    sinSimulacion: !directa && !calculada,
+    error: proyeccion.error ?? error,
+    calculando: proyeccion.calculando,
+    sinSimulacion: !proyeccion.ultima,
   };
 }

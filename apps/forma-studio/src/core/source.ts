@@ -2,6 +2,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import opentype from "opentype.js";
 import type { Contours, Source } from "./types";
 import { publicAsset } from "../lib/public-asset";
+import { svgDocument } from "./svg-document";
 const fonts = new Map<string, Promise<opentype.Font>>();
 function textPath(
   font: opentype.Font,
@@ -54,33 +55,7 @@ export const FONT_NAMES = [
   "Syne",
 ];
 export function parseSvg(svg: string): Contours[] {
-  if (svg.length > 4_000_000)
-    throw new Error(
-      "El SVG supera los 4 MB. Simplificá los contornos antes de cargarlo.",
-    );
-  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
-  if (
-    doc.querySelector("parsererror") ||
-    doc.documentElement.localName !== "svg"
-  )
-    throw new Error("El archivo no es un SVG válido.");
-  if (
-    doc.querySelector("script,foreignObject,image,text,iframe") ||
-    /<!DOCTYPE|<!ENTITY/i.test(svg)
-  )
-    throw new Error(
-      "Convertí textos e imágenes a curvas. Se admiten sólo vectores SVG.",
-    );
-  for (const el of doc.querySelectorAll("*"))
-    for (const attr of [...el.attributes])
-      if (
-        attr.name.startsWith("on") ||
-        ((attr.localName === "href" || attr.name === "src") &&
-          !attr.value.startsWith("#"))
-      )
-        throw new Error(
-          "El SVG contiene referencias externas o código activo.",
-        );
+  const doc = svgDocument(svg);
   const loader=new SVGLoader();
   // Usamos el mismo píxel CSS (96/in) para las longitudes del SVG y su escala física.
   loader.defaultDPI = 96;
@@ -112,7 +87,7 @@ export function parseSvg(svg: string): Contours[] {
   return shapes;
 }
 export function physicalHeight(svg: string, shapes = parseSvg(svg)): number {
-  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const doc = svgDocument(svg);
   const value = doc.documentElement.getAttribute("height") || "";
   const match = /^([\d.]+)\s*(mm|cm|in|pt|px)?$/.exec(value);
   if (!match) return 100;

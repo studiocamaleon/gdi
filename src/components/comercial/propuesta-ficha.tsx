@@ -185,6 +185,10 @@ import {
 } from "@/components/comercial/cupon-aviso";
 import { useImpresionDocumentos } from "@/components/impresion/documentos-impresion-contexto";
 import { EmisionDocumentosDialog } from "@/components/impresion/emision-documentos-dialog";
+import { DistintivoDespacho } from "@/components/produccion/distintivo-despacho";
+import { DespachoOrdenCampo } from "./despacho-orden";
+import type { DespachoOrden } from "@/lib/ordenes-trabajo";
+import type { EditarOrdenTrabajoPayload } from "@/lib/ordenes-trabajo-api";
 import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
 import { HistorialImpresionDialog } from "@/components/impresion/historial-impresion-dialog";
 import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
@@ -4377,60 +4381,29 @@ function descuentoParaMotor(
   return input ? { tipo: input.tipo, valor: input.valor } : undefined;
 }
 
-/**
- * Overlay de emisión (diseño Grafo V2 · ordenes.jsx): pasos animados mientras
- * corre la emisión real; el check final aparece recién cuando llega el número
- * de OT asignado por el backend (`numero != null`).
- */
+const mensajesEmision = {
+  cotizacion: "Guardando cotización",
+  orden: "Registrando la orden de trabajo",
+  cobros: "Confirmando cobros y entrega",
+  archivos: "Guardando archivos de la orden",
+};
+type EtapaEmision = keyof typeof mensajesEmision;
+
 function EmitOverlay({
+  etapa,
   listosEnMostrador = false,
   entregada = false,
   numero,
-  onDone,
 }: {
+  etapa: EtapaEmision;
   numero: string | null;
   listosEnMostrador?: boolean;
   entregada?: boolean;
-  onDone: () => void;
 }) {
-  const [phase, setPhase] = React.useState(0);
-  // 0: guardando · 1: asignando Nº · 2: notificando taller · 3: listo · 4: salir
-  const STEPS = [
-    "Guardando cotización",
-    "Asignando número de OT",
-    listosEnMostrador ? "Registrando producción finalizada" : "Notificando al taller",
-  ];
-
-  React.useEffect(() => {
-    const timers = [
-      setTimeout(() => setPhase((p) => Math.max(p, 1)), 620),
-      setTimeout(() => setPhase((p) => Math.max(p, 2)), 1240),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, []);
-
-  // onDone vive en un ref para que el efecto dependa SÓLO de `numero`: si
-  // dependiera de `phase`, el cleanup al pasar a fase 3 cancelaría los timers
-  // de salida y la redirección nunca dispararía (bug del overlay "clavado").
-  const onDoneRef = React.useRef(onDone);
-  React.useEffect(() => {
-    onDoneRef.current = onDone;
-  }, [onDone]);
-
-  React.useEffect(() => {
-    if (numero === null) return;
-    const timers = [
-      setTimeout(() => setPhase(3), 400),
-      setTimeout(() => setPhase(4), 1900),
-      setTimeout(() => onDoneRef.current(), 2300),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [numero]);
-
-  const done = phase >= 3;
+  const done = numero !== null;
 
   return (
-    <div className={`emit-overlay ${phase >= 4 ? "leaving" : ""}`}>
+    <div className="emit-overlay">
       <div className="emit-card">
         <div className={`emit-seal ${done ? "done" : ""}`}>
           <span className="ring r1" />
@@ -4479,33 +4452,11 @@ function EmitOverlay({
           {!done ? (
             <>
               <div className="emit-title">Emitiendo orden de trabajo…</div>
-              <div className="emit-steps">
-                {STEPS.map((lbl, i) => {
-                  const state = phase > i ? "ok" : phase === i ? "run" : "wait";
-                  return (
-                    <div key={i} className={`emit-step ${state}`}>
-                      <span className="es-dot">
-                        {state === "ok" ? (
-                          <svg
-                            width="11"
-                            height="11"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3.4"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : state === "run" ? (
-                          <GdiSpinner />
-                        ) : null}
-                      </span>
-                      <span className="es-lbl">{lbl}</span>
-                    </div>
-                  );
-                })}
+              <div className="emit-steps" role="status">
+                <div className="emit-step run">
+                  <span className="es-dot"><GdiSpinner /></span>
+                  <span className="es-lbl">{mensajesEmision[etapa]}</span>
+                </div>
               </div>
             </>
           ) : (
@@ -4623,11 +4574,14 @@ function camposEditablesOrden(
         "clienteId",
         "vendedorEmpleadoId",
         "canalVenta",
+        "despacho",
         "fechaEntrega",
         "observaciones",
       ]);
     case "produccion":
-      return new Set(["fechaEntrega", "observaciones"]);
+      return new Set(["fechaEntrega", "observaciones", "despacho"]);
+    case "finalizada":
+      return new Set(["despacho"]);
     default:
       return new Set();
   }
@@ -5099,7 +5053,6 @@ function PropuestaFichaContenido({
   const conPrevision = useCapacidad("prevision_materiales");
   const impresionDocumentos = useImpresionDocumentos();
   const [confirmarEmisionDocumentos, setConfirmarEmisionDocumentos] = React.useState<"nueva" | "borrador" | null>(null);
-  const imprimirAlEmitirRef = React.useRef(false);
   const puedeImprimirEtiqueta = usePuede("produccion.tablero.ver");
   const puedeVerMaterialesComercial = usePuede("comercial.ordenes.ver");
   const puedeEjecutarProduccion = usePuede("produccion.ejecutar");
@@ -5154,7 +5107,18 @@ function PropuestaFichaContenido({
     0,
     totalPropuestaAntesCanje - fidelizacionCanjeMonto,
   );
+  const [despacho, setDespacho] = React.useState<DespachoOrden | null>(orden?.despacho ?? null);
+  React.useEffect(() => {
+    if (orden && !editandoOrden) setDespacho(orden.despacho ?? null);
+  }, [orden, editandoOrden]);
+  const validarDespacho = React.useCallback(() => {
+    if (ordenTipo !== "orden" || !despacho || (despacho.localidad.trim() && despacho.direccion.trim())) return true;
+    toast.error("Completá la localidad y el domicilio o sucursal del despacho.");
+    setTab("datos");
+    return false;
+  }, [ordenTipo, despacho]);
   const emitirYEntregar =
+    !despacho &&
     (!orden || orden.estado === "borrador") &&
     ordenTipo === "orden" &&
     items.length > 0 &&
@@ -5235,6 +5199,13 @@ function PropuestaFichaContenido({
   } | null>(null);
   const [panelSaving, setPanelSaving] = React.useState(false);
   const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? presupuestoBase?.clienteId ?? "");
+  const clienteDespachoRef = React.useRef(clienteId);
+  React.useEffect(() => {
+    if (clienteDespachoRef.current !== clienteId) {
+      clienteDespachoRef.current = clienteId;
+      if (!orden || editandoOrden) setDespacho(null);
+    }
+  }, [clienteId, orden, editandoOrden]);
   const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
     orden?.proyectoCampana?.id ?? presupuestoBase?.proyectoCampanaId ?? "",
   );
@@ -5427,12 +5398,6 @@ function PropuestaFichaContenido({
   const { porItem: demoraPorItem, calculando: calculandoEntrega } = useDemoraCotizacion(
     nuevosParaDemora, colasTaller, conDemoraSistema,
   );
-  const validarEntregaCalculada = React.useCallback(() => {
-    if (!calculandoEntrega) return true;
-    toast.info("Esperá a que termine el cálculo de entrega.");
-    return false;
-  }, [calculandoEntrega]);
-
   const margenPorProducto = React.useCallback(
     (productoId?: string) => margenEntregaProducto(
       margenEtaDias, productoId, colasTaller?.productosSinMargenEntrega,
@@ -5457,6 +5422,19 @@ function PropuestaFichaContenido({
         [],
     ),
   );
+
+  // En una OT, la ETA sólo condiciona el guardado si todavía puede escribir
+  // alguna fecha. Un presupuesto también usa la fecha estimada global.
+  const entregaPendiente = calculandoEntrega && (
+    ordenTipo !== "orden" || (!emitirYEntregar && items.some((item) =>
+      !item.fechaEntrega || (!item.listoEnMostrador && !itemFechaTocadaRef.current.has(item.id)),
+    ))
+  );
+  const validarEntregaCalculada = React.useCallback(() => {
+    if (!entregaPendiente) return true;
+    toast.info("Esperá a que termine el cálculo de entrega.");
+    return false;
+  }, [entregaPendiente]);
 
   // Por defecto, cada item se compromete en la fecha que el sistema estima
   // (ETA + colchón). Sigue a la estimación hasta que el usuario la toca.
@@ -5509,10 +5487,10 @@ function PropuestaFichaContenido({
 
   const router = useRouter();
   const [emitiendo, setEmitiendo] = React.useState(false);
+  const [etapaEmision, setEtapaEmision] = React.useState<EtapaEmision>("cotizacion");
   const [emisionNumero, setEmisionNumero] = React.useState<string | null>(null);
   const [emisionEntregada, setEmisionEntregada] = React.useState(false);
   const emisionEnCursoRef = React.useRef(false);
-  const emisionOrdenIdRef = React.useRef<string | null>(null);
   const emisionIdempotencyRef = React.useRef<string | null>(null);
   const borradorIdempotencyRef = React.useRef<string | null>(null);
   const tomosIdempotencyRef = React.useRef<Map<string, string>>(new Map());
@@ -5683,8 +5661,12 @@ function PropuestaFichaContenido({
 
   /** Cambios de datos comerciales (field-cards) sin guardar. */
   const cambiosFields = React.useMemo(() => {
-    if (!orden || !editandoOrden) return {} as Record<string, string>;
-    const payload: Record<string, string> = {};
+    if (!orden || !editandoOrden) return {} as EditarOrdenTrabajoPayload;
+    const payload: EditarOrdenTrabajoPayload = {};
+    const previo = orden.despacho;
+    if ((despacho?.localidad ?? null) !== (previo?.localidad ?? null) ||
+        despacho?.direccion !== previo?.direccion || despacho?.transporte !== previo?.transporte)
+      payload.despacho = despacho;
     if (clienteId && clienteId !== (orden.clienteId ?? "")) {
       payload.clienteId = clienteId;
     }
@@ -5695,13 +5677,14 @@ function PropuestaFichaContenido({
       payload.fechaEntrega = fechaFinalVisible;
     }
     return payload;
-  }, [orden, editandoOrden, clienteId, canalVenta, fechaFinalVisible, emitirYEntregar]);
+  }, [orden, editandoOrden, clienteId, canalVenta, fechaFinalVisible, emitirYEntregar, despacho]);
 
   const cambiosCreacion = !orden
     ? items.length +
       cargosOrden.length +
       cobrosStaged.length +
       Number(Boolean(clienteId)) +
+      Number(ordenTipo === "orden" && Boolean(despacho)) +
       Number(canalVenta !== creacionDefaultsRef.current.canalVenta) +
       Number(fechaEstimada !== creacionDefaultsRef.current.fechaEstimada) +
       Number(sinComprobante)
@@ -5722,10 +5705,10 @@ function PropuestaFichaContenido({
   const revisionPropuesta = React.useMemo(
     () => ({
       items, cargosOrden, cobrosStaged, clienteId, proyectoCampanaId, canalVenta,
-      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo,
+      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo, despacho,
     }),
     [items, cargosOrden, cobrosStaged, clienteId, proyectoCampanaId, canalVenta,
-      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo],
+      fechaEstimada, sinComprobante, fidelizacionCanjePuntos, tipo, despacho],
   );
   const presupuestoGuardadoRef = React.useRef<{
     revision: typeof revisionPropuesta;
@@ -5971,6 +5954,13 @@ function PropuestaFichaContenido({
     string | null
   >(null);
   const [revisandoCopiado, setRevisandoCopiado] = React.useState(false);
+  const motivoEsperaEmision = entregaPendiente ? "Calculando la fecha de entrega…"
+    : revisandoCopiado ? "Actualizando precios de copiado…"
+    : cuponValidando ? "Validando el cupón…"
+    : descuentoAplicando ? "Aplicando el descuento…"
+    : undefined;
+  const bloqueoEmision = bloqueoEntregaInmediata ?? motivoEsperaEmision;
+
   const revisionCopiadoEnCurso = React.useRef(false);
   const [errorRevisionCopiado, setErrorRevisionCopiado] = React.useState<string | null>(
     null,
@@ -6121,6 +6111,7 @@ function PropuestaFichaContenido({
     if (!orden || togglingFiscal || cancelando || precioOrdenPendiente) return;
     // Descarta TODO el staging: field-cards e items vuelven a lo persistido.
     setClienteId(orden.clienteId ?? "");
+    setDespacho(orden.despacho ?? null);
     setCanalVenta(orden.canalVenta ?? "");
     setErrorCanalVenta(false);
     setFechaEstimada(orden.fechaEntrega ?? orden.creadaEl.slice(0, 10));
@@ -6151,7 +6142,7 @@ function PropuestaFichaContenido({
    */
   const guardarEdicion = React.useCallback(
     async (opciones?: { destino?: string }) => {
-    if (!validarEntregaCalculada()) return;
+    if (!validarEntregaCalculada() || !validarDespacho()) return;
       if (revisionCopiadoEnCurso.current) {
         toast.info("Esperá a que termine la actualización de precios de copiado.");
         return;
@@ -6276,7 +6267,7 @@ function PropuestaFichaContenido({
       }
     },
     [
-      validarEntregaCalculada,
+      validarEntregaCalculada, validarDespacho,
       orden,
       cambioDocumento,
       validarCanalVenta,
@@ -6985,7 +6976,7 @@ function PropuestaFichaContenido({
   ]);
 
   const emitirOrden = React.useCallback(async (imprimir = false) => {
-    if (!validarEntregaCalculada()) return;
+    if (!validarEntregaCalculada() || !validarDespacho()) return;
     if (emisionEnCursoRef.current) return;
     if (bloqueoEntregaInmediata) {
       setTab("pagos");
@@ -7022,17 +7013,18 @@ function PropuestaFichaContenido({
       );
       return;
     }
-    imprimirAlEmitirRef.current = imprimir;
     emisionEnCursoRef.current = true;
+    setEtapaEmision("cotizacion");
     setEmitiendo(true);
     setEmisionEntregada(false);
     setEmisionNumero(null);
-    emisionOrdenIdRef.current = null;
     const idempotencyKey = emisionIdempotencyRef.current ?? crypto.randomUUID();
     emisionIdempotencyRef.current = idempotencyKey;
+    let ordenId: string;
     try {
       const { itemsConSnapshot, cotizacionId } =
         await persistirSnapshotsItems();
+      setEtapaEmision("orden");
       const orden = await crearOrdenTrabajo({
         idempotencyKey,
         clienteId: clienteId || undefined,
@@ -7040,6 +7032,7 @@ function PropuestaFichaContenido({
         proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         estado: "pendiente",
+        despacho,
         fechaEntrega,
         canalVenta,
         cargos: cargosOrden.map(cargoToOrdenInput),
@@ -7049,12 +7042,12 @@ function PropuestaFichaContenido({
         ),
       });
 
-      emisionOrdenIdRef.current = orden.id;
-
+      setEtapaEmision("cobros");
       setEmisionEntregada(await completarCobrosYEntrega(orden));
 
       // La OT ya existe: los adjuntos son tareas posteriores y un fallo no puede
       // convertir una emisión exitosa en un falso error reintentable.
+      setEtapaEmision("archivos");
       const adjuntos = await Promise.allSettled([
         publicarArtes(orden.productos),
         publicarAdjuntosDeItems(orden.productos, itemsConSnapshot),
@@ -7074,18 +7067,24 @@ function PropuestaFichaContenido({
         );
       }
 
+      ordenId = orden.id;
       setEmisionNumero(orden.numero);
     } catch (error) {
+      emisionEnCursoRef.current = false;
       setEmitiendo(false);
       toast.error(
         error instanceof Error
           ? error.message
           : "No se pudo emitir la orden de trabajo.",
       );
-    } finally {
-      emisionEnCursoRef.current = false;
+      return;
     }
+    // Hasta que se abra el detalle, la ficha sigue protegiendo el envío.
+    if (imprimir) impresionDocumentos.abrir(ordenId, true);
+    router.push(`/produccion/ordenes/${ordenId}?emitida=1`);
   }, [
+    impresionDocumentos,
+    router,
     validarEntregaCalculada,
     conOrdenes,
     conCotizacion,
@@ -7095,6 +7094,8 @@ function PropuestaFichaContenido({
     proyectoCampanaId,
     fidelizacionCanjePuntos,
     canalVenta,
+    despacho,
+    validarDespacho,
     validarCanalVenta,
     bloqueoEntregaInmediata,
     emitirYEntregar,
@@ -7110,20 +7111,6 @@ function PropuestaFichaContenido({
     sinComprobante,
   ]);
 
-  const finalizarEmision = React.useCallback(() => {
-    const ordenId = emisionOrdenIdRef.current;
-    setEmitiendo(false);
-    // ?emitida=1 → el detalle muestra el tag "RECIÉN EMITIDA" sólo en esta
-    // llegada (la ficha limpia el param al montar).
-    if (ordenId) {
-      if (imprimirAlEmitirRef.current) {
-        imprimirAlEmitirRef.current = false;
-        impresionDocumentos.abrir(ordenId, true);
-      }
-      router.push(`/produccion/ordenes/${ordenId}?emitida=1`);
-    }
-  }, [router, impresionDocumentos]);
-
   /**
    * Guardar borrador: misma persistencia que emitir (snapshots + OT) pero
    * en estado `borrador` — sin exigir cliente ni fecha (se completan antes
@@ -7131,7 +7118,7 @@ function PropuestaFichaContenido({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
-    if (!validarEntregaCalculada()) return;
+    if (!validarEntregaCalculada() || !validarDespacho()) return;
     if (revisionCopiadoEnCurso.current) {
       toast.info("Esperá a que termine la actualización de precios de copiado.");
       return;
@@ -7184,6 +7171,7 @@ function PropuestaFichaContenido({
         proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         estado: "borrador",
+        despacho,
         fechaEntrega: fechaEntrega || undefined,
         canalVenta,
         cargos: cargosOrden.map(cargoToOrdenInput),
@@ -7224,7 +7212,7 @@ function PropuestaFichaContenido({
       setGuardandoBorrador(false);
     }
   }, [
-    validarEntregaCalculada,
+    validarEntregaCalculada, validarDespacho, despacho,
     presupuestoBase,
     conOrdenes,
     conPresupuestos,
@@ -8026,6 +8014,7 @@ function PropuestaFichaContenido({
                 }
                 onShowData={puedeEditarOrden ? () => setTab("datos") : undefined}
               >
+                <DistintivoDespacho localidad={orden?.despachoLocalidad} />
                 <TipoCambioPanel
                   editable={puedeModificarProductos}
                   onAplicar={aplicarTipoCambio}
@@ -8178,9 +8167,9 @@ function PropuestaFichaContenido({
                   {orden && <FacturarOrdenAccion ordenId={orden.id} numero={orden.numero} total={orden.total} facturado={orden.facturadoTotal} descuentoTotal={orden.descuentoTotal} habilitada={!["borrador", "cancelada"].includes(orden.estado) && !sinComprobante} bloqueada={editandoOrden || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando} onFacturada={() => { recargarOrden(); setRefrescosComprobantes((n) => n + 1); }} />}
                   {!modoOrden && puedeEditarOrden ? (
                     <OrdenSaveActions
-                      operacionPendiente={calculandoEntrega || cuponValidando || descuentoAplicando || revisandoCopiado}
+                      operacionPendiente={Boolean(motivoEsperaEmision)}
                       emitirYEntregar={emitirYEntregar}
-                      bloqueoEmision={bloqueoEntregaInmediata}
+                      bloqueoEmision={bloqueoEmision}
                       tipo={ordenTipo}
                       clienteSeleccionado={Boolean(clienteId)}
                       empty={items.length === 0}
@@ -8217,7 +8206,7 @@ function PropuestaFichaContenido({
                             variant="primary"
                             size="sm"
                             onPress={() => void guardarEdicion()}
-                            isDisabled={calculandoEntrega || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador || cambiandoTipoBorrador}
+                            isDisabled={entregaPendiente || guardandoEdicion || precioOrdenPendiente || togglingFiscal || cancelando || emitiendoBorrador || cambiandoTipoBorrador}
                           >
                             <CheckIcon />
                             {guardandoEdicion
@@ -8264,7 +8253,7 @@ function PropuestaFichaContenido({
                       {permisoOrdenes && orden.estado === "borrador" && <CambiarTipoBorrador
                         id={orden.id} tipo="orden" version={orden.version}
                         onPendienteChange={setCambiandoTipoBorrador}
-                        disabled={calculandoEntrega || cambiosSinGuardar > 0 || cobrosStaged.length > 0 || guardandoEdicion || precioOrdenPendiente || revisandoCopiado || cuponValidando || descuentoAplicando || togglingFiscal || cancelando || emitiendoBorrador}
+                        disabled={entregaPendiente || cambiosSinGuardar > 0 || cobrosStaged.length > 0 || guardandoEdicion || precioOrdenPendiente || revisandoCopiado || cuponValidando || descuentoAplicando || togglingFiscal || cancelando || emitiendoBorrador}
                         motivoBloqueo={cobrosStaged.length > 0 ? "Quitá los pagos pendientes antes de cambiar el tipo de borrador." : undefined}
                       />}
                       {puedeEditarOrden && orden.estado === "borrador" ? (
@@ -8282,21 +8271,21 @@ function PropuestaFichaContenido({
                             emitiendoBorrador ||
                             cambiosSinGuardar > 0 ||
                             !orden.clienteId ||
-                            Boolean(bloqueoEntregaInmediata)
+                            Boolean(bloqueoEmision)
                           }
                           title={
                             !orden.clienteId
                               ? "Asigná un cliente y guardá el borrador para emitir"
-                              : bloqueoEntregaInmediata
+                              : bloqueoEmision
                           }
                         >
                           <CheckIcon />
                           {emitiendoBorrador ? "Emitiendo…" : emitirYEntregar ? "Emitir y entregar" : "Emitir OT"}
                         </HeroButton>
                       ) : null}
-                      {puedeEditarOrden && orden.estado === "borrador" && bloqueoEntregaInmediata ? (
+                      {puedeEditarOrden && orden.estado === "borrador" && bloqueoEmision ? (
                         <span role="status" className="text-sm text-muted-foreground">
-                          {bloqueoEntregaInmediata}
+                          {bloqueoEmision}
                         </span>
                       ) : null}
                       {puedeAbrirEntrega ? (
@@ -8550,6 +8539,14 @@ function PropuestaFichaContenido({
                           </div>
                         )}
                       </FieldCard>
+                      {ordenTipo === "orden" && (
+                        <DespachoOrdenCampo
+                          valor={campoEditable("despacho") ? despacho : orden?.despacho ?? null}
+                          editable={campoEditable("despacho")}
+                          direcciones={clienteSeleccionado?.direcciones}
+                          onChange={setDespacho}
+                        />
+                      )}
                       {(() => {
                         if (!conEta) return null;
                         const porProducto = items.some((i) =>
@@ -9047,7 +9044,7 @@ function PropuestaFichaContenido({
         </HeroTabs>
 
         {emitiendo ? (
-          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} entregada={emisionEntregada} listosEnMostrador={items.length > 0 && items.every(item => item.listoEnMostrador)} />
+          <EmitOverlay etapa={etapaEmision} numero={emisionNumero} entregada={emisionEntregada} listosEnMostrador={items.length > 0 && items.every(item => item.listoEnMostrador)} />
         ) : null}
 
         {/* Montado SIEMPRE y controlado por `open`, igual que los demás
@@ -9310,7 +9307,7 @@ function PropuestaFichaContenido({
           <HistorialImpresionDialog key={orden.id} ordenId={orden.id} onClose={() => setHistorialImpresionOpen(false)} />
         )}
         {etiquetaOpen && orden && (
-          <EtiquetaOrdenDialog ordenId={orden.id} onClose={() => setEtiquetaOpen(false)} />
+          <EtiquetaOrdenDialog ordenId={orden.id} conEnvio={!!orden.despacho} onClose={() => setEtiquetaOpen(false)} />
         )}
         {qrRetiroOpen && orden ? (
           <QrRetiroModal

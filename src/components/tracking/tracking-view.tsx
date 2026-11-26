@@ -360,10 +360,10 @@ export function TrackingView({
           </EstadoPublico>
         </div>
         <h1 id="seguimiento-titulo" className={cn(p.heroTitle, s.heroTitle)}>
-          Tu pedido está <strong>{estadoNarrativo(data.estado)}.</strong>
+          Tu pedido está <strong>{estadoNarrativo(data.estado, data.requiereDespacho)}.</strong>
         </h1>
         <p className={p.heroDescription}>
-          {resumenEstadoTracking(data.estado)}
+          {resumenEstadoTracking(data.estado, data.requiereDespacho)}
         </p>
         <dl className={p.heroMeta}>
           <div>
@@ -401,7 +401,7 @@ export function TrackingView({
         </span>
       </div>
 
-      {data.estado === "finalizada" ? (
+      {data.estado === "finalizada" && !data.requiereDespacho ? (
         <SeccionPublica titulo="¡Listo para retirar!" icon={QrCodeIcon}>
           <div className={s.pickup}>
             <div className={s.qr}>

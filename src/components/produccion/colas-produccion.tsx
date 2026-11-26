@@ -1,5 +1,7 @@
 'use client';
 
+import { OrdenFinalizadaDialog } from "./orden-finalizada-dialog";
+import type { AvisoFinalizacionOrden } from "@/lib/ordenes-trabajo-api";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from 'react';
 import { ArrowUpRight, Ban, ChevronLeft, ChevronRight, CircleCheck, CirclePause, Clock3, Factory, Layers, Scan, LoaderCircle, LockKeyhole, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
@@ -144,6 +146,8 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
   const scope = useDesignScope();
   const designTheme = useDesignTheme();
   const { className: legacyTheme } = useLegacyDesignScope();
+  const [avisosDespacho, setAvisosDespacho] = React.useState<AvisoFinalizacionOrden[]>([]);
+  const puedeVerOrden = usePuede("comercial.ordenes.ver");
   const [resumen, setResumen] = React.useState(initialResumen);
   const [maquinaId, setMaquinaId] = React.useState(initialMaquinaId ?? initialResumen.maquinas.find(m => m.pendientes > 0)?.id ?? initialResumen.maquinas[0]?.id ?? '');
   const [filtro, setFiltro] = React.useState({ estado: 'todos' as EstadoCola, q: '', page: 1 });
@@ -225,6 +229,7 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
     enviando.current = true; setCompletando(true); setErrorAccion(null);
     try {
       const r = await completarTrabajosCola(maquinaId, seleccion.ids, tiempos);
+      if (r.avisosDespacho?.length) setAvisosDespacho(r.avisosDespacho);
       setRevisionTiempos(null);
       setSeleccion(SELECCION_COLA_VACIA);
       toast.success(`${r.completados} ${r.completados === 1 ? 'trabajo completado' : 'trabajos completados'}`);
@@ -246,7 +251,8 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
     if (enviando.current) return;
     enviando.current = true; setAccionId(item.id); setErrorAccion(null);
     try {
-      await accionTrabajoCola(maquinaId, item.id, accion, opts);
+      const r = await accionTrabajoCola(maquinaId, item.id, accion, opts);
+      if (r.avisosDespacho?.length) setAvisosDespacho(r.avisosDespacho);
       setSeleccion(actual => ({ ids: actual.ids.filter(id => id !== item.id) }));
       toast.success(`${item.ordenNumero}: ${ETIQUETAS_ACCION[accion].toLocaleLowerCase('es')} registrado`);
       await refrescar();
@@ -372,5 +378,7 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
         {tablaAmpliada && contenidoCola}
       </DialogContent>
     </Dialog>
+    {avisosDespacho[0] && <OrdenFinalizadaDialog key={avisosDespacho[0].ordenId} aviso={avisosDespacho[0]} puedeVerOrden={puedeVerOrden}
+      onClose={() => setAvisosDespacho(actual => actual.slice(1))} />}
   </div>;
 }

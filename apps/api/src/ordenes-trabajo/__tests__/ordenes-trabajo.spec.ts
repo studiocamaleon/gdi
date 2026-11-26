@@ -525,7 +525,7 @@ describe('OrdenesTrabajoService — camposEditables (gating por estado)', () => 
     }
   });
 
-  it('produccion permite sólo fecha y observaciones', () => {
+  it('producción permite editar entrega, observaciones y despacho', () => {
     const campos = svc().camposEditables('produccion');
     expect(campos.has('fechaEntrega')).toBe(true);
     expect(campos.has('observaciones')).toBe(true);
@@ -533,8 +533,8 @@ describe('OrdenesTrabajoService — camposEditables (gating por estado)', () => 
     expect(campos.has('canalVenta')).toBe(false);
   });
 
-  it('finalizada y entregada no permiten nada', () => {
-    expect(svc().camposEditables('finalizada').size).toBe(0);
+  it('permite preparar el despacho de una OT finalizada hasta su entrega', () => {
+    expect([...svc().camposEditables('finalizada')]).toEqual(['despacho']);
     expect(svc().camposEditables('entregada').size).toBe(0);
   });
 });

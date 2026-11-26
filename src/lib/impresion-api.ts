@@ -29,7 +29,9 @@ export type TrabajoQz = FirmaQz & {
   };
   totalPaginas: number;
 };
+export type TipoEtiqueta = "interna" | "envio";
 export type VistaEtiqueta = {
+  tipo?: TipoEtiqueta;
   numero: string;
   anchoMm: number;
   altoMm: number;
@@ -44,18 +46,19 @@ export const getFirmaDetallesImpresoras = (timestamp: number) =>
     method: "POST",
     body: JSON.stringify({ timestamp }),
   });
-export const getVistaEtiqueta = (id: string) =>
+export const getVistaEtiqueta = (id: string, tipo: TipoEtiqueta = "interna") =>
   apiRequest<VistaEtiqueta>(
-    `/impresion/ordenes/${encodeURIComponent(id)}/etiqueta`,
+    `/impresion/ordenes/${encodeURIComponent(id)}/etiqueta${tipo === "envio" ? "?tipo=envio" : ""}`,
   );
 export const prepararEtiqueta = (
   id: string,
   impresora: string,
   copias: number,
   pagina: number,
+  tipo: TipoEtiqueta = "interna",
 ) =>
   apiRequest<TrabajoQz>(
-    `/impresion/ordenes/${encodeURIComponent(id)}/etiqueta`,
+    `/impresion/ordenes/${encodeURIComponent(id)}/etiqueta${tipo === "envio" ? "?tipo=envio" : ""}`,
     { method: "POST", body: JSON.stringify({ impresora, copias, pagina }) },
   );
 

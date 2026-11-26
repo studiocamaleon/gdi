@@ -1,6 +1,8 @@
 # Preparación de staging de Grafoprint
 
-> **Estado vigente: 2026-11-25.** Lote #133, revisión funcional `101ed93273837bfbbb96a60497f3d9f33f9c4563`, con los doce PR pendientes, Chile/RUT/CLP y los avances locales revisados. Web, API, workers, PDF y copiador actualizados. 323 migraciones; Trabajo a medida, pago y archivo sin editar la orden, notas amarillas, alta pública Chile, geometría y PDF aprobados. Respaldo posterior firmado y manifiesto verificado. Se conserva la operación bajo demanda. Detalles, límites y digests en [VALIDACION.md](VALIDACION.md).
+> **Estado vigente al 26/11/2026.** La aplicación ejecuta `aa75cf6248ffc7205376fe4015b48c07f82767b1`, publicada en el [PR #138](https://github.com/studiocamaleon/gdi/pull/138). Incluye las mejoras de emisión y ejecución de OT, despachos por transporte, etiqueta horizontal y las correcciones de CodeQL. Se verificaron los servicios, las 325 migraciones y el comprobante posterior. [Pruebas, imágenes y reversión](VALIDACION.md).
+
+> **Publicación anterior del 25/11/2026.** La aplicación de staging ejecuta la revisión de rendimiento de OT `9264c668b` del PR #135, sobre el lote #133. Web, API y ambos workers verificados. [Imágenes, pruebas y recuperación](VALIDACION.md).
 
 > **Inicio de la operación bajo demanda: 10/11/2026.** Los cinco servicios de la aplicación funcionan
 > bajo demanda: abrir staging los enciende; 15 minutos sin actividad y sin tareas

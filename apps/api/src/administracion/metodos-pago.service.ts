@@ -129,7 +129,8 @@ function slugify(nombre: string): string {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
+    // La sustitución anterior ya dejó un único separador en cada extremo.
+    .replace(/^_|_$/g, '')
     .slice(0, 60);
 }
 

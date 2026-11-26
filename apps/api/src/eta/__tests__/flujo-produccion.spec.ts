@@ -1,3 +1,4 @@
+import { simularRepartoProgramado } from '../reparto-computo';
 import type { CalendarioEstacion } from '../../produccion/calendario';
 import type { Estacion } from '../motor/estaciones-tipos';
 import {
@@ -211,6 +212,27 @@ describe('sumarDiasHabiles', () => {
   });
 });
 
+it('el reparto programado de un taller grande conserva las fechas, estaciones y traza del motor', async () => {
+  const entrada = {
+    items: Array.from({ length: 201 }, (_, i) =>
+      item(String(i), [interno(0, 'corte', 5)]),
+    ),
+    estaciones: [estacion({ id: 'corte', familias: ['corte'] })],
+    ahora: AHORA,
+    zona: 'America/Argentina/Buenos_Aires',
+    medianas: new Map<string, number>(),
+    noLaborables: new Set(['2026-07-21']),
+  };
+  const esperado = simularFlujo(entrada);
+  expect(esperado.traza).toHaveLength(201);
+  const resultado = await simularRepartoProgramado(entrada);
+  expect([...resultado.porItem]).toEqual([...esperado.porItem]);
+  expect([...resultado.llegadasPorEstacion]).toEqual([
+    ...esperado.llegadasPorEstacion,
+  ]);
+  expect(resultado.traza).toEqual(esperado.traza);
+});
+
 describe('simularFlujo', () => {
   it('programa un paso simple contra el calendario', () => {
     const r = correr([item('a', [interno(0, 'impresion', 120)])]);
@@ -316,4 +338,16 @@ describe('simularFlujo', () => {
     // p0: 8→9, +30 sep, p1: 9:30→10:30.
     expect(r.porItem.get('a')?.finEstimado).toEqual(jul(20, 10, 30));
   });
+});
+
+it("conserva las fechas y las llegadas cuando la emisión omite la traza de planificación", () => {
+  const entrada = {
+    items: ["A", "B", "C"].map((id) => item(id, [
+      interno(1, "impresion", 40), interno(2, "impresion", 15),
+    ])),
+    estaciones: TALLER, ahora: AHORA, medianas: new Map<string, number>(),
+  };
+  const completa = simularFlujo(entrada);
+  expect(completa.traza).toHaveLength(6);
+  expect(simularFlujo({ ...entrada, incluirTraza: false })).toEqual({ ...completa, traza: [] });
 });

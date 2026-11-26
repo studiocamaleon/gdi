@@ -169,8 +169,11 @@ export async function renderizarEtiquetas(
 export async function etiquetaTspl(
   png: Buffer,
   copias: number,
+  horizontal = false,
 ): Promise<Buffer> {
-  const { data, info } = await sharp(png)
+  // El rollo físico conserva 100 mm de ancho. El envío se lee al girar el paquete.
+  const imagen = horizontal ? sharp(png).rotate(90) : sharp(png);
+  const { data, info } = await imagen
     .greyscale()
     .removeAlpha()
     .raw()

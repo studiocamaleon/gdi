@@ -21,6 +21,12 @@ const desde = Number(desdeS);
 const hasta = Number(hastaS);
 const GLOBALS = "src/app/globals.css";
 
+if (!prefijo || !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(prefijo)) {
+  throw new Error("El prefijo debe empezar con una letra y contener sólo letras, números, guiones o guiones bajos.");
+}
+// El argumento identifica una familia literal; nunca es una expresión regular.
+const prefijoRegex = prefijo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const camel = (kebab) => kebab.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
 
 // ---------- 1. CSS ----------
@@ -32,7 +38,7 @@ const locales = new Set(); // nombres camel generados
 
 function transformarSelectorLinea(linea) {
   // 1) clases de la familia -> placeholder local
-  let out = linea.replace(new RegExp(`\\.${prefijo}-([a-zA-Z0-9-]+)`, "g"), (_, resto) => {
+  let out = linea.replace(new RegExp(`\\.${prefijoRegex}-([a-zA-Z0-9-]+)`, "g"), (_, resto) => {
     const nombre = camel(resto);
     locales.add(nombre);
     return `.__L_${nombre}__`;
@@ -83,7 +89,7 @@ const resultTsx = [];
 for (const tsx of tsxs) {
   let src = readFileSync(tsx, "utf8");
   let reemplazos = 0;
-  const famToken = new RegExp(`^${prefijo}-([a-zA-Z0-9-]+)$`);
+  const famToken = new RegExp(`^${prefijoRegex}-([a-zA-Z0-9-]+)$`);
 
   // className="a b c"  (string literal)
   src = src.replace(/className="([^"]*)"/g, (m, contenido) => {
@@ -106,8 +112,8 @@ for (const tsx of tsxs) {
 
   // className={`...`} (template literal): sólo tokens de la familia
   src = src.replace(/className=\{`([^`]*)`\}/g, (m, contenido) => {
-    if (!new RegExp(`(^|\\s)${prefijo}-`).test(contenido)) return m;
-    const nuevo = contenido.replace(new RegExp(`(^|\\s)${prefijo}-([a-zA-Z0-9-]+)`, "g"), (todo, pre, resto) => {
+    if (!new RegExp(`(^|\\s)${prefijoRegex}-`).test(contenido)) return m;
+    const nuevo = contenido.replace(new RegExp(`(^|\\s)${prefijoRegex}-([a-zA-Z0-9-]+)`, "g"), (todo, pre, resto) => {
       const nombre = camel(resto);
       if (!locales.has(nombre)) {
         console.warn(`  ⚠ ${tsx}: ${prefijo}-${resto} sin regla en el bloque; queda literal`);
@@ -133,7 +139,7 @@ for (const tsx of tsxs) {
 // ---------- salida ----------
 console.log(`bloque: ${bloque.length} líneas · clases locales: ${locales.size}`);
 for (const r of resultTsx) console.log(`${r.tsx}: ${r.reemplazos} tokens reemplazados`);
-const restantes = nuevoGlobals.match(new RegExp(`\\.${prefijo}-`, "g"));
+const restantes = nuevoGlobals.match(new RegExp(`\\.${prefijoRegex}-`, "g"));
 console.log(`.${prefijo}- restantes en globals.css: ${restantes ? restantes.length : 0}`);
 
 if (dry) {

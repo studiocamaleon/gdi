@@ -36,16 +36,18 @@ export type DatosCola = {
   page: number; pages: number; limit: number; items: TrabajoCola[]; consultadoEl: string;
 };
 
+type AvisosDespacho = { avisosDespacho?: import("./ordenes-trabajo-api").AvisoFinalizacionOrden[] };
+
 export type TiempoCola = OpcionesAccionProduccion & { pasoId: string };
 export async function completarTrabajosCola(maquinaId: string, pasoIds: string[], tiempos: TiempoCola[] = []) {
-  const r = await apiRequest<{ completados: number; pasoIds: string[] }>(`/produccion/colas/${encodeURIComponent(maquinaId)}/completar`, {
+  const r = await apiRequest<{ completados: number; pasoIds: string[] } & AvisosDespacho>(`/produccion/colas/${encodeURIComponent(maquinaId)}/completar`, {
     method: 'POST', body: JSON.stringify({ pasoIds, tiempos }),
   });
   avisarTramosCambiaron();
   return r;
 }
 export async function accionTrabajoCola(maquinaId: string, pasoId: string, accion: TableroPasoAccion, opts?: OpcionesAccionProduccion) {
-  const r = await apiRequest<{ pasoId: string }>(`/produccion/colas/${encodeURIComponent(maquinaId)}/pasos/${encodeURIComponent(pasoId)}/accion`, { method: 'POST', body: JSON.stringify({ accion, ...opts }) });
+  const r = await apiRequest<{ pasoId: string } & AvisosDespacho>(`/produccion/colas/${encodeURIComponent(maquinaId)}/pasos/${encodeURIComponent(pasoId)}/accion`, { method: 'POST', body: JSON.stringify({ accion, ...opts }) });
   avisarTramosCambiaron();
   return r;
 }

@@ -782,6 +782,15 @@ export async function getCatalogoComercial(): Promise<
   );
 }
 
+type GrupoConConteos = Omit<ProductoCategoriaComercial, "subcategorias"> & {
+  productos: number;
+  subcategorias: (ProductoCategoriaComercial["subcategorias"][number] & { productos: number })[];
+};
+
+export function getCatalogoComercialConConteos() {
+  return apiRequest<GrupoConConteos[]>("/productos-servicios/catalogo-comercial?conteos=1");
+}
+
 export interface ValidacionProducto {
   exitoso: boolean;
   errores: Array<{

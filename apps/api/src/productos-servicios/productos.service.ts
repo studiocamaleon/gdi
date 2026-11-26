@@ -1069,7 +1069,8 @@ export class ProductosService {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^A-Za-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+      // La sustitución anterior ya dejó un único separador en cada extremo.
+      .replace(/^-|-$/g, '')
       .replace(/-{2,}/g, '-')
       .toUpperCase();
     return codigo || fallback;
@@ -2103,7 +2104,31 @@ export class ProductosService {
     return options;
   }
 
-  listarCatalogoComercial() {
+  async listarCatalogoComercial(tenantConteos?: string) {
+    if (tenantConteos) {
+      const grupos = await this.prisma.productoCategoriaComercial.findMany({
+        where: { activo: true },
+        orderBy: { orden: 'asc' },
+        include: {
+          subcategorias: {
+            orderBy: { orden: 'asc' },
+            include: {
+              _count: { select: { productos: { where: { tenantId: tenantConteos, sistemaCodigo: null } } } },
+            },
+          },
+        },
+      });
+      return grupos.map(({ subcategorias, ...grupo }) => ({
+        ...grupo,
+        // Las subcategorías archivadas todavía pueden tener productos en la tabla.
+        productos: subcategorias.reduce((total, sub) => total + sub._count.productos, 0),
+        subcategorias: subcategorias.filter((sub) => sub.activo).map(({ _count, ...sub }) => ({
+          ...sub,
+          productos: _count.productos,
+        })),
+      }));
+    }
+
     return this.prisma.productoCategoriaComercial.findMany({
       where: { activo: true },
       orderBy: { orden: 'asc' },

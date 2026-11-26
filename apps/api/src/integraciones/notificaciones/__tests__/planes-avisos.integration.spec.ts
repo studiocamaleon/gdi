@@ -640,6 +640,18 @@ describe('Aviso de orden finalizada y reintento manual', () => {
         });
         expect(avisoQr.evento).toBe(qr);
         expect(avisoQr.plantilla).toBe(`grafo_${qr}_v2`);
+        const envio = await c.tx.ordenTrabajo.create({
+          data: {
+            tenantId: x.tenantId, numero: 'OT-ENVIO', estado: 'finalizada',
+            clienteId: x.cliente.id, total: 100, cobradoTotal: conSaldo ? 40 : 100, publicToken: randomUUID(),
+            despachoJson: { localidad: 'Puerto Deseado', direccion: 'Sucursal QA' },
+          },
+        });
+        await x.dentro(() => servicio.sincronizar(envio.id));
+        const avisoEnvio = await c.tx.notificacionWhatsapp.findFirstOrThrow({
+          where: { tenantId: x.tenantId, ordenId: envio.id },
+        });
+        expect(avisoEnvio.evento).toBe(texto);
         // Cerrar de nuevo después de un cobro tampoco cambia el aviso existente.
         await c.tx.ordenTrabajo.update({
           where: { id: segunda.id },

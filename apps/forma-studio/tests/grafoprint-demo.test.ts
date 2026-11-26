@@ -1,5 +1,5 @@
-import { beforeAll, expect, it, vi } from "vitest";
-import { DOMParser } from "linkedom";
+import "./svg-test-dom";
+import { expect, it } from "vitest";
 import Module from "manifold-3d";
 import { grafoprintDemo, editorDraft } from "../src/core/grafoprint-demo";
 import { contoursFromSource } from "../src/core/source";
@@ -7,10 +7,6 @@ import { parseProject } from "../src/core/storage";
 import { buildModel } from "../src/core/engine";
 import { assemblyOffset } from "../src/core/assembly";
 
-beforeAll(() => {
-  vi.stubGlobal("DOMParser", DOMParser);
-  vi.stubGlobal("XMLSerializer", class { serializeToString(doc: Document) { return doc.toString(); } });
-});
 
 it("el isologo genera un solo cuerpo conectado, acrílico y base válidos", async () => {
   const wasm = await Module();

@@ -66,6 +66,12 @@ export class ImpresoraDto {
   impresora!: string;
 }
 
+class TipoEtiquetaQuery {
+  @IsOptional()
+  @IsIn(['interna', 'envio'])
+  tipo?: 'interna' | 'envio';
+}
+
 export class PrepararEtiquetaDto extends ImpresoraDto {
   @IsInt()
   @Min(1)
@@ -448,8 +454,9 @@ export class ImpresionController {
   async descargarEtiqueta(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: TipoEtiquetaQuery = {},
   ) {
-    return new StreamableFile(await this.service.descargarPdf(auth, id));
+    return new StreamableFile(await this.service.descargarPdf(auth, id, query.tipo));
   }
 
   @ImpresionManual()
@@ -459,8 +466,9 @@ export class ImpresionController {
   etiqueta(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: TipoEtiquetaQuery = {},
   ) {
-    return this.service.vistaPrevia(auth, id);
+    return this.service.vistaPrevia(auth, id, query.tipo);
   }
   @Post('ordenes/:id/etiqueta')
   @Permiso("produccion.tablero.ver", "produccion.ejecutar")
@@ -469,6 +477,7 @@ export class ImpresionController {
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: PrepararEtiquetaDto,
+    @Query() query: TipoEtiquetaQuery = {},
   ) {
     return this.service.preparar(
       auth,
@@ -476,6 +485,7 @@ export class ImpresionController {
       body.impresora,
       body.copias,
       body.pagina,
+      query.tipo,
     );
   }
 }

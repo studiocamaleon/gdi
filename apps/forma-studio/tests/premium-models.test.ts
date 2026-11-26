@@ -1,6 +1,6 @@
+import "./svg-test-dom";
 import { afterEach, beforeAll, it, expect, describe, vi } from "vitest";
 import Module, { type ManifoldToplevel } from "manifold-3d";
-import { DOMParser } from "linkedom";
 import { readFile } from "node:fs/promises";
 import { buildModel } from "../src/core/engine";
 import {
@@ -43,15 +43,6 @@ const wide: Contours[] = [
 beforeAll(async () => {
   wasm = await Module();
   wasm.setup();
-  vi.stubGlobal("DOMParser", DOMParser);
-  vi.stubGlobal(
-    "XMLSerializer",
-    class {
-      serializeToString(doc: Document) {
-        return doc.toString();
-      }
-    },
-  );
   const font = await readFile(
     new URL("../public/fonts/BebasNeue.ttf", import.meta.url),
   );
