@@ -162,8 +162,8 @@ export function useProduccionOperativa({
 
   /**
    * Acción sobre un paso: el backend devuelve el item re-proyectado, pero
-   * la acción puede promover la orden (pendiente → produccion) y eso afecta
-   * a los items hermanos: se refresca el dataset completo (es chico).
+   * los cambios de estado y dependencias pueden afectar a otros trabajos.
+   * Confirmamos el ítem con la respuesta y reconciliamos el resto en paralelo.
    */
   const handleAccion = React.useCallback(
     async (
@@ -191,11 +191,13 @@ export function useProduccionOperativa({
           { accion, ...opts },
         );
         avisoFinalizacion = actualizado.avisoFinalizacion ?? null;
+        ultimoSnapshotRef.current = null;
         setItems((current) =>
           current.map((entry) =>
             entry.id === actualizado.id ? actualizado : entry,
           ),
         );
+        return actualizado;
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "No se pudo ejecutar la acción.",
@@ -203,9 +205,9 @@ export function useProduccionOperativa({
         throw err;
       } finally {
         mutacionesRef.current -= 1;
-        await refrescar();
         if (montadoRef.current) {
           setBusy(false);
+          void refrescar();
           if (avisoFinalizacion) onOrdenFinalizada?.(avisoFinalizacion);
         }
       }
