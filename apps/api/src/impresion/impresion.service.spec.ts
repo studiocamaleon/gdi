@@ -96,8 +96,8 @@ describe('etiquetas por tenant', () => {
       );
     },
   );
-  it('genera una página horizontal de envío y la rota para el rollo térmico', async () => {
-    const envio = { ...orden, despachoJson: { localidad: 'El Calafate', direccion: 'Sucursal QA' } };
+  it.each([{}, { direccion: 'Sucursal QA' }])('genera la etiqueta de envío horizontal y térmica con datos opcionales %j', async (opcionales) => {
+    const envio = { ...orden, despachoJson: { localidad: 'El Calafate', ...opcionales } };
     findFirst.mockResolvedValue(envio);
     const vista = await service().vistaPrevia(auth, 'ot-a', 'envio');
     expect(vista).toMatchObject({ tipo: 'envio', anchoMm: 150, altoMm: 100 });
