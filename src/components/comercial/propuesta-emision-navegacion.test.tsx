@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
+import * as cargasEmision from "@/lib/archivos-emision";
 import * as archivosApi from "@/lib/archivos-api";
 import type { Archivo } from "@/lib/archivos";
 import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   editarOrden: vi.fn(),
   revisarCopiado: vi.fn(),
   copiado: false,
+  adjunto: null as File | null,
   eta: false,
   cotizar: vi.fn(),
   recotizar: vi.fn(),
@@ -162,6 +164,7 @@ vi.mock("./agregar-producto-sheet", async (original) => {
               50000,
             ),
             motorCodigo: "producto-qa",
+            archivosPendientes: mocks.adjunto ? [mocks.adjunto] : [],
             jobContext: {
               cantidad: 500,
               ...(mocks.copiado
@@ -246,6 +249,7 @@ beforeEach(() => {
   mocks.confirmar = null;
   mocks.cambiarTipo.mockReset();
   mocks.copiado = false;
+  mocks.adjunto = null;
   mocks.eta = false;
   mocks.finalizado = false;
   mocks.puedeEntregar = true;
@@ -1220,6 +1224,38 @@ it("emite, registra pago y entrega en ese orden; evita doble clic", async () => 
     mocks.entregar.mock.invocationCallOrder[0],
   );
 });
+it("abre la ficha con el pago confirmado y los bytes del archivo en la cola local", async () => {
+  mocks.adjunto = new File(["referencia ficticia"], "muestra.pdf");
+  mocks.crearOrden.mockResolvedValueOnce({
+    id: "ot-qa", numero: "OT-QA", productos: [{ id: "item-qa", cotizacionItemId: "snapshot-qa" }],
+  });
+  let guardar!: (ok: boolean) => void;
+  const encolar = vi.spyOn(cargasEmision, "encolarAdjuntos").mockImplementationOnce(
+    () => new Promise(resolve => { guardar = resolve; }),
+  );
+  const subir = vi.spyOn(archivosApi, "subirArchivo");
+  try {
+    await montar();
+    await click("Canal de prueba");
+    await seleccionarCliente("cliente-ficticio");
+    await click("Agregar producto ficticio");
+    await verPagos();
+    await click("Pago parcial ficticio");
+    await click("Emitir OT");
+    expect(mocks.cobrar).toHaveBeenCalledOnce();
+    expect(encolar.mock.calls[0][1]).toEqual([expect.objectContaining({
+      ordenId: "ot-qa", itemId: "item-qa", fuente: { file: mocks.adjunto },
+    })]);
+    expect(mocks.push).not.toHaveBeenCalled();
+    await act(async () => guardar(true));
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/produccion/ordenes/ot-qa?emitida=1");
+    expect(subir).not.toHaveBeenCalled();
+  } finally {
+    encolar.mockRestore();
+    subir.mockRestore();
+  }
+});
+
 it("muestra el número de OT antes de que termine un cobro", async () => {
   let completar!: () => void;
   mocks.cobrar.mockImplementationOnce(() => new Promise<void>((resolve) => { completar = resolve; }));

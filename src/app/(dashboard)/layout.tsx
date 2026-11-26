@@ -1,3 +1,4 @@
+import { ReanudarCargasOt } from "@/components/archivos/reanudar-cargas-ot";
 import { AccesoPorVista } from "@/components/navigation/acceso-por-vista";
 import { redirect } from "next/navigation";
 
@@ -74,6 +75,7 @@ export default async function DashboardLayout({
                 key={currentUser.tenantActual?.id}
                 tenantId={currentUser.tenantActual?.id ?? ""}
               >
+                {currentUser.tenantActual && <ReanudarCargasOt ambito={`${currentUser.tenantActual.id}/${currentUser.id}`} />}
                 <ImpersonacionBanner currentUser={currentUser} />
                 <DashboardFrame>
                   <AppSidebar currentUser={currentUser} />

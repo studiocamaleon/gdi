@@ -325,6 +325,7 @@ import {
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { TandasCopiadoPanel } from "./tandas-copiado-panel";
+import { encolarAdjuntos, prepararAdjuntos } from "@/lib/archivos-emision";
 import { subirArchivosPendientesDeItem } from "@/lib/archivos-pendientes-item";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
@@ -7083,27 +7084,37 @@ function PropuestaFichaContenido({
       // La OT ya existe: los adjuntos son tareas posteriores y un fallo no puede
       // convertir una emisión exitosa en un falso error reintentable.
       setEtapaEmision("archivos");
-      const porCotizacion = new Map(itemsConSnapshot.map(({ cotizacionItemId, item }) => [cotizacionItemId, item]));
-      const adjuntos = await Promise.allSettled([
-        publicarArtes(orden.productos.map((p) => {
-          const preparado = porCotizacion.get(p.cotizacionItemId ?? "");
-          return { id: p.id, nombre: preparado?.productoNombre, snapshot: { jobContext: preparado?.jobContext } };
-        })),
-        publicarAdjuntosDeItems(orden.productos, itemsConSnapshot),
-        subirArchivosBriefDiseno(
-          orden.productos,
-          mapaArchivosBrief(itemsConSnapshot),
-        ),
-        publicarPlanosDeOrden(itemsConSnapshot, orden.productos),
-      ]);
-      const adjuntosFallidos = adjuntos.filter(
-        (resultado) => resultado.status === "rejected",
-      ).length;
-      if (adjuntosFallidos > 0) {
-        toast.warning(
-          `La orden se emitió, pero ${adjuntosFallidos} tarea${adjuntosFallidos === 1 ? "" : "s"} de archivos quedó pendiente. Revisá los adjuntos desde la orden.`,
-          { duration: 10000 },
-        );
+      const ambito = currentUser?.tenantActual?.id ? `${currentUser.tenantActual.id}/${currentUser.id}` : "";
+      let encolados = false;
+      try {
+        encolados = await encolarAdjuntos(ambito, prepararAdjuntos(orden, itemsConSnapshot));
+      } catch {
+        // La OT ya existe. Si el navegador no admite la copia local, completar aquí.
+      }
+      if (!encolados) {
+        toast.info("Mantené la ficha abierta mientras se guardan los archivos.");
+        const porCotizacion = new Map(itemsConSnapshot.map(({ cotizacionItemId, item }) => [cotizacionItemId, item]));
+        const adjuntos = await Promise.allSettled([
+          publicarArtes(orden.productos.map((p) => {
+            const preparado = porCotizacion.get(p.cotizacionItemId ?? "");
+            return { id: p.id, nombre: preparado?.productoNombre, snapshot: { jobContext: preparado?.jobContext } };
+          })),
+          publicarAdjuntosDeItems(orden.productos, itemsConSnapshot),
+          subirArchivosBriefDiseno(
+            orden.productos,
+            mapaArchivosBrief(itemsConSnapshot),
+          ),
+          publicarPlanosDeOrden(itemsConSnapshot, orden.productos),
+        ]);
+        const adjuntosFallidos = adjuntos.filter(
+          (resultado) => resultado.status === "rejected",
+        ).length;
+        if (adjuntosFallidos > 0) {
+          toast.warning(
+            `La orden se emitió, pero ${adjuntosFallidos} tarea${adjuntosFallidos === 1 ? "" : "s"} de archivos quedó pendiente. Revisá los adjuntos desde la orden.`,
+            { duration: 10000 },
+          );
+        }
       }
 
       ordenId = orden.id;
@@ -7138,6 +7149,7 @@ function PropuestaFichaContenido({
     validarCanalVenta,
     bloqueoEntregaInmediata,
     emitirYEntregar,
+    currentUser,
     completarCobrosYEntrega,
     persistirSnapshotsItems,
     fechaEntregaOrden,
@@ -8950,7 +8962,9 @@ function PropuestaFichaContenido({
             {tab === "archivos" ? (
               orden ? (
                 <ArchivosOrdenTab
+                  key={orden.id}
                   ordenId={orden.id}
+                  ambitoCargas={currentUser?.tenantActual?.id ? `${currentUser.tenantActual.id}/${currentUser.id}` : undefined}
                   estadoDocumental={initialDocumentos}
                   tomos={Object.fromEntries(orden.productos.map((p) => [
                     p.id,

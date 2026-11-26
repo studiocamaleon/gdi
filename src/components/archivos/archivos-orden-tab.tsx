@@ -14,6 +14,8 @@ import { DesarrolloDocumentalOrden } from "@/components/comercial/desarrollo-doc
 import { ArchivosProduccionPanel } from "./archivos-produccion-panel";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { contarArchivosDeOrden } from "@/lib/archivos-presentacion";
+import { estadoAdjuntos, observarAdjuntos, procesarAdjuntos } from "@/lib/archivos-emision";
+import { Button } from "@/components/ui/button";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
 import { formatBytes, type Archivo } from "@/lib/archivos";
 import {
@@ -132,6 +134,7 @@ function PapeleraOrden({
  */
 export function ArchivosOrdenTab({
   ordenId,
+  ambitoCargas,
   soloLectura = false,
   puedeSubir = !soloLectura,
   onTotalCambio,
@@ -139,6 +142,7 @@ export function ArchivosOrdenTab({
   tomos = {},
 }: {
   ordenId: string;
+  ambitoCargas?: string;
   tomos?: Record<string, ReturnType<typeof metaCentroCopiado>>;
   estadoDocumental?: EstadoDocumentalOrden | null;
   soloLectura?: boolean;
@@ -157,6 +161,18 @@ export function ArchivosOrdenTab({
   const [cargando, setCargando] = React.useState(true);
   const [token, setToken] = React.useState(0);
   const recargar = React.useCallback(() => setToken((n) => n + 1), []);
+
+  const [cargas, setCargas] = React.useState({ pendientes: 0, errores: 0 });
+  React.useEffect(() => {
+    if (!ambitoCargas || !window.indexedDB) return;
+    let vivo = true;
+    const leer = () => void estadoAdjuntos(ambitoCargas, ordenId).then(estado => {
+      if (vivo) setCargas(estado);
+    }).catch(() => {});
+    const dejar = observarAdjuntos(ambitoCargas, ordenId, () => { leer(); recargar(); });
+    leer();
+    return () => { vivo = false; dejar(); };
+  }, [ambitoCargas, ordenId, recargar]);
 
   React.useEffect(() => {
     let vivo = true;
@@ -208,10 +224,15 @@ export function ArchivosOrdenTab({
 
   return (
     <>
+      {cargas.pendientes > 0 && <p role="status">Subiendo archivos de esta OT en segundo plano…</p>}
+      {cargas.errores > 0 && ambitoCargas && <div role="status">
+        {cargas.errores === 1 ? "Un archivo necesita reintento." : `${cargas.errores} archivos necesitan reintento.`}{" "}
+        <Button variant="outline" size="sm" onClick={() => procesarAdjuntos(ambitoCargas, true, ordenId)}>Reintentar carga</Button>
+      </div>}
       {documentalActual !== undefined ? (
         <ArchivosProduccionPanel data={documentalActual} />
       ) : null}
-      {cargando ? (
+      {cargando && !data ? (
         <div className="otd-noprod">Cargando archivos…</div>
       ) : !data ? (
         <div className="otd-noprod">No se pudieron cargar los archivos.</div>
