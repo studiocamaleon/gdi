@@ -91,6 +91,16 @@ export function fechaRecomendadaEta(
   );
 }
 
+/** La última entrega se puede anunciar cuando todos los productos tienen fecha. */
+export function fechaConfirmadaDeOrden(fechas: Array<string | undefined>): string | undefined {
+  let ultima: string | undefined;
+  for (const fecha of fechas) {
+    if (!fecha) return undefined;
+    if (!ultima || fecha > ultima) ultima = fecha;
+  }
+  return ultima;
+}
+
 /** La promesa de la OT es la última entrega individual, cada una con su margen. */
 export function describirEtaOrden(
   items: Array<{ eta: SimulacionItem | null | undefined; margenDias: number }>,

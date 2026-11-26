@@ -43,7 +43,7 @@ import { getContextoPrevision } from "@/lib/eta-api";
 import { entregarItems } from "@/lib/entrega-api";
 import { itemHipoteticoDesdeCotizacion } from "@/lib/eta-cotizacion";
 import { margenEntregaProducto } from "@/lib/margen-entrega-producto";
-import { describirEta, describirEtaOrden, fechaRecomendadaEta } from "@/lib/eta-fechas";
+import { describirEta, describirEtaOrden, fechaConfirmadaDeOrden, fechaRecomendadaEta } from "@/lib/eta-fechas";
 import fechasStyles from "./propuesta-fechas.module.css";
 
 import { DesgloseOperacionesCorte } from "./desglose-operaciones-corte";
@@ -151,12 +151,13 @@ import type {
   CargoDirectoCatalogo,
   ProductoListItem,
 } from "@/lib/productos-servicios";
-import { type NestingViewerInput } from "@/lib/productos-servicios-api";
+import { getProductos, getCargosDirectosCatalogo, type NestingViewerInput } from "@/lib/productos-servicios-api";
 import {
   cambiarEstadoOrdenTrabajo,
   cancelarOrdenTrabajo,
   descartarBorradorOrden,
   crearOrdenTrabajo,
+  emitirOrdenTrabajo,
   editarOrdenTrabajoLote,
   getOrdenTrabajo,
   setTratamientoFiscalOrden,
@@ -170,7 +171,7 @@ import {
 } from "@/lib/presupuestos-api";
 import { type ValidarCuponResultado } from "@/lib/cupones-api";
 import { validarYAplicarCuponOrden } from "@/lib/cupones-orden";
-import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
+import { CLIENTE_ESCANEADO_EVENT, getClientes } from "@/lib/clientes-api";
 import {
   getCampanasOpciones,
   type CampanaReferencia,
@@ -4386,6 +4387,7 @@ const mensajesEmision = {
   orden: "Registrando la orden de trabajo",
   cobros: "Confirmando cobros y entrega",
   archivos: "Guardando archivos de la orden",
+  lista: "Abriendo la orden",
 };
 type EtapaEmision = keyof typeof mensajesEmision;
 
@@ -4463,8 +4465,8 @@ function EmitOverlay({
             <div className="emit-success">
               <div className="emit-title">¡Orden emitida!</div>
               <div className="emit-nro">{numero}</div>
-              <div className="emit-note">
-                {entregada ? "Pagada y entregada" : listosEnMostrador ? "Producción finalizada" : "Enviada al taller · visible en Producción → Órdenes"}
+              <div className="emit-note" role="status">
+                {etapa === "cobros" || etapa === "archivos" ? mensajesEmision[etapa] : entregada ? "Pagada y entregada" : listosEnMostrador ? "Producción finalizada" : "Enviada al taller · visible en Producción → Órdenes"}
               </div>
             </div>
           )}
@@ -4939,6 +4941,26 @@ function PropuestaFichaContenido({
   const conCobros = useCapacidad("cobros");
   const modoOrden = Boolean(orden);
   const [editandoOrden, setEditandoOrden] = React.useState(false);
+  const [catalogosEdicion, setCatalogosEdicion] = React.useState<{
+    clientes: ClienteDetalle[]; productos: ProductoListItem[]; cargos: CargoDirectoCatalogo[];
+  } | null>(null);
+  const [cargandoEdicion, setCargandoEdicion] = React.useState(false);
+  const abrirEdicionOrden = async () => {
+    if (cargandoEdicion) return;
+    if (recienEmitida && !catalogosEdicion) {
+      setCargandoEdicion(true);
+      try {
+        const [clientes, productos, cargos] = await Promise.all([
+          getClientes({ limit: 30 }, true), getProductos(true, true), getCargosDirectosCatalogo(true, true),
+        ]);
+        setCatalogosEdicion({ clientes, productos, cargos });
+      } catch {
+        toast.error("No se pudieron cargar los datos de edición. Podés volver a intentarlo.");
+        return;
+      } finally { setCargandoEdicion(false); }
+    }
+    setEditandoOrden(true);
+  };
   const [cambiandoTipoBorrador, setCambiandoTipoBorrador] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
   const [precioOrdenPendiente, setPrecioOrdenPendiente] = React.useState(false);
@@ -5262,11 +5284,8 @@ function PropuestaFichaContenido({
   }, []);
 
   const clientesDisponibles = React.useMemo(
-    () =>
-      clientesEscaneados.length === 0
-        ? initialClientes
-        : [...initialClientes, ...clientesEscaneados],
-    [initialClientes, clientesEscaneados],
+    () => [...(catalogosEdicion?.clientes ?? initialClientes), ...clientesEscaneados],
+    [catalogosEdicion, initialClientes, clientesEscaneados],
   );
   const clientePersistido = React.useMemo(
     () => orden?.clienteId ? {
@@ -5430,6 +5449,19 @@ function PropuestaFichaContenido({
       !item.fechaEntrega || (!item.listoEnMostrador && !itemFechaTocadaRef.current.has(item.id)),
     ))
   );
+  const admiteFechaDiferida = ordenTipo === "orden" && conDemoraSistema && !emitirYEntregar;
+  const fechaAlEmitir = React.useCallback((item: PropuestaItem) => {
+    const pactada = entregasPrevias.fechaPara(item) ?? fechaFinalDistribucion(item.distribucionEntregas);
+    if (pactada) return pactada;
+    if (item.listoEnMostrador) return item.fechaEntrega || offsetDate(0, zonaHoraria);
+    if (!admiteFechaDiferida || itemFechaTocadaRef.current.has(item.id) || trabajoMedidaDe(item))
+      return item.fechaEntrega || undefined;
+    if (calculandoEntrega || !demoraPorItem) return undefined;
+    return fechaRecomendadaEta(demoraPorItem.get(item.id), {
+      margenDias: margenPorProducto(item.motorCodigo), noLaborables: colasTaller?.noLaborables,
+      zona: colasTaller?.zona ?? zonaHoraria,
+    }) ?? undefined;
+  }, [entregasPrevias, admiteFechaDiferida, calculandoEntrega, demoraPorItem, margenPorProducto, colasTaller, zonaHoraria]);
   const validarEntregaCalculada = React.useCallback(() => {
     if (!entregaPendiente) return true;
     toast.info("Esperá a que termine el cálculo de entrega.");
@@ -5801,7 +5833,7 @@ function PropuestaFichaContenido({
    * guardado.
    */
   const publicarArtes = React.useCallback(
-    async (productos: OrdenTrabajoProducto[]) => {
+    async (productos: Parameters<typeof itemsConSelloDe>[0]) => {
       const conSello = itemsConSelloDe(productos);
       if (conSello.length === 0) return;
       const resultado = await publicarArtesDeSello(conSello);
@@ -5821,7 +5853,7 @@ function PropuestaFichaContenido({
         item: PropuestaItem;
         cotizacionItemId?: string;
       }>,
-      productos: OrdenTrabajoProducto[],
+      productos: Array<Pick<OrdenTrabajoProducto, "id" | "cotizacionItemId">>,
     ) => {
       const porCotiz = new Map<string, string>();
       productos.forEach((p) => {
@@ -5847,7 +5879,7 @@ function PropuestaFichaContenido({
 
   const publicarAdjuntosDeItems = React.useCallback(
     async (
-      productos: OrdenTrabajoProducto[],
+      productos: Array<Pick<OrdenTrabajoProducto, "id" | "cotizacionItemId">>,
       preparados: Array<{ item: PropuestaItem; cotizacionItemId?: string }>,
     ) => {
       const porCotizacion = new Map(preparados.map((p) => [p.cotizacionItemId, p.item]));
@@ -5897,7 +5929,7 @@ function PropuestaFichaContenido({
   /** Publica logos y referencias del brief una vez que existe el ítem real. */
   const subirArchivosBriefDiseno = React.useCallback(
     async (
-      productos: OrdenTrabajoProducto[],
+      productos: Array<Pick<OrdenTrabajoProducto, "id" | "cotizacionItemId">>,
       archivosPorCotItem: Map<string, BriefDisenoArchivoPendiente[]>,
     ) => {
       if (archivosPorCotItem.size === 0) return;
@@ -5954,7 +5986,7 @@ function PropuestaFichaContenido({
     string | null
   >(null);
   const [revisandoCopiado, setRevisandoCopiado] = React.useState(false);
-  const motivoEsperaEmision = entregaPendiente ? "Calculando la fecha de entrega…"
+  const motivoEsperaEmision = entregaPendiente && !admiteFechaDiferida ? "Calculando la fecha de entrega…"
     : revisandoCopiado ? "Actualizando precios de copiado…"
     : cuponValidando ? "Validando el cupón…"
     : descuentoAplicando ? "Aplicando el descuento…"
@@ -6329,7 +6361,7 @@ function PropuestaFichaContenido({
   // La OT ya existe cuando se registran los cobros. Un fallo posterior se
   // informa sobre esa misma OT y nunca vuelve a emitirla ni la entrega impaga.
   const completarCobrosYEntrega = React.useCallback(
-    async (emitida: OrdenTrabajoDetalle) => {
+    async (emitida: Pick<OrdenTrabajoDetalle, "id"> & { productos: Array<{ id?: string }> }) => {
       const fallidos: string[] = [];
       for (const draft of cobrosStaged) {
         try {
@@ -6374,7 +6406,7 @@ function PropuestaFichaContenido({
 
   const emitirBorrador = React.useCallback(
     async (imprimir = false) => {
-    if (!validarEntregaCalculada()) return;
+    if (!admiteFechaDiferida && !validarEntregaCalculada()) return;
       if (emisionEnCursoRef.current) return;
       if (bloqueoEntregaInmediata) {
         setTab("pagos");
@@ -6409,7 +6441,7 @@ function PropuestaFichaContenido({
       }
       if (
         !emitirYEntregar &&
-        (!orden.fechaEntrega || orden.fechaEntrega < offsetDate(0, zonaHoraria))
+        (!orden.fechaEntrega ? !admiteFechaDiferida : orden.fechaEntrega < offsetDate(0, zonaHoraria))
       ) {
         toast.error(
           "Definí una fecha de entrega vigente antes de emitir (Editar orden → Fecha).",
@@ -6433,7 +6465,7 @@ function PropuestaFichaContenido({
           setOrden(actualizada);
         }
         const emitida = await cambiarEstadoOrdenTrabajo(orden.id, {
-          estado: "pendiente",
+          estado: "pendiente", diferirFechaEntrega: admiteFechaDiferida && !orden.fechaEntrega,
         });
         setOrden(emitida);
         const entregada = await completarCobrosYEntrega(emitida);
@@ -6467,7 +6499,7 @@ function PropuestaFichaContenido({
       }
     },
     [
-      validarEntregaCalculada,
+      validarEntregaCalculada, admiteFechaDiferida,
       conOrdenes,
       orden,
       router,
@@ -6976,7 +7008,7 @@ function PropuestaFichaContenido({
   ]);
 
   const emitirOrden = React.useCallback(async (imprimir = false) => {
-    if (!validarEntregaCalculada() || !validarDespacho()) return;
+    if ((!admiteFechaDiferida && !validarEntregaCalculada()) || !validarDespacho()) return;
     if (emisionEnCursoRef.current) return;
     if (bloqueoEntregaInmediata) {
       setTab("pagos");
@@ -7002,12 +7034,13 @@ function PropuestaFichaContenido({
       );
       return;
     }
-    const fechaEntrega = fechaEntregaOrden();
-    if (!fechaEntrega) {
+    const fechaEntrega = admiteFechaDiferida ? fechaConfirmadaDeOrden(items.map(fechaAlEmitir)) : fechaEntregaOrden();
+    const diferirFechaEntrega = admiteFechaDiferida && !fechaEntrega;
+    if (!fechaEntrega && !diferirFechaEntrega) {
       toast.error("La entrega está por confirmar. Podés guardar un borrador o fijar la fecha del producto antes de emitir.");
       return;
     }
-    if (fechaEntrega < offsetDate(0, zonaHoraria)) {
+    if (fechaEntrega && fechaEntrega < offsetDate(0, zonaHoraria)) {
       toast.error(
         "La fecha de entrega no puede ser anterior a hoy. Revisá la fecha estimada.",
       );
@@ -7025,7 +7058,7 @@ function PropuestaFichaContenido({
       const { itemsConSnapshot, cotizacionId } =
         await persistirSnapshotsItems();
       setEtapaEmision("orden");
-      const orden = await crearOrdenTrabajo({
+      const orden = await emitirOrdenTrabajo({
         idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
@@ -7033,23 +7066,29 @@ function PropuestaFichaContenido({
         fidelizacionCanjePuntos,
         estado: "pendiente",
         despacho,
-        fechaEntrega,
+        fechaEntrega: fechaEntrega || undefined,
+        diferirFechaEntrega,
         canalVenta,
         cargos: cargosOrden.map(cargoToOrdenInput),
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId, planEntrega }) =>
-          itemToOrdenItemPayload(emitirYEntregar ? { ...item, fechaEntrega } : item, cotizacionItemId, planEntrega),
+          itemToOrdenItemPayload({ ...item, fechaEntrega: (emitirYEntregar ? fechaEntrega : fechaAlEmitir(item)) || "" }, cotizacionItemId, planEntrega),
         ),
       });
 
+      setEmisionNumero(orden.numero);
       setEtapaEmision("cobros");
       setEmisionEntregada(await completarCobrosYEntrega(orden));
 
       // La OT ya existe: los adjuntos son tareas posteriores y un fallo no puede
       // convertir una emisión exitosa en un falso error reintentable.
       setEtapaEmision("archivos");
+      const porCotizacion = new Map(itemsConSnapshot.map(({ cotizacionItemId, item }) => [cotizacionItemId, item]));
       const adjuntos = await Promise.allSettled([
-        publicarArtes(orden.productos),
+        publicarArtes(orden.productos.map((p) => {
+          const preparado = porCotizacion.get(p.cotizacionItemId ?? "");
+          return { id: p.id, nombre: preparado?.productoNombre, snapshot: { jobContext: preparado?.jobContext } };
+        })),
         publicarAdjuntosDeItems(orden.productos, itemsConSnapshot),
         subirArchivosBriefDiseno(
           orden.productos,
@@ -7068,7 +7107,7 @@ function PropuestaFichaContenido({
       }
 
       ordenId = orden.id;
-      setEmisionNumero(orden.numero);
+      setEtapaEmision("lista");
     } catch (error) {
       emisionEnCursoRef.current = false;
       setEmitiendo(false);
@@ -7085,7 +7124,7 @@ function PropuestaFichaContenido({
   }, [
     impresionDocumentos,
     router,
-    validarEntregaCalculada,
+    validarEntregaCalculada, admiteFechaDiferida, fechaAlEmitir,
     conOrdenes,
     conCotizacion,
     items,
@@ -8221,12 +8260,12 @@ function PropuestaFichaContenido({
                           type="button"
                           variant="primary"
                           size="sm"
-                          onPress={() => setEditandoOrden(true)}
-                          isDisabled={cambiandoTipoBorrador || (orden.estado === "borrador" && !conOrdenes)}
+                          onPress={() => void abrirEdicionOrden()}
+                          isDisabled={cargandoEdicion || cambiandoTipoBorrador || (orden.estado === "borrador" && !conOrdenes)}
                           title={orden.estado === "borrador" && !conOrdenes ? "La edición de borradores no está incluida en el plan actual." : undefined}
                         >
                           <Edit3Icon />
-                          Editar orden
+                          {cargandoEdicion ? "Abriendo edición…" : "Editar orden"}
                         </HeroButton>
                       )}
                       {puedeEditarOrden && esCancelable(orden.estado) ? (
@@ -8534,7 +8573,7 @@ function PropuestaFichaContenido({
                         ) : (
                           <div className="text-sm text-foreground">
                             <span>
-                              {formatFechaOrden(orden?.fechaEntrega ?? null)}
+                              {orden?.fechaEntrega ? formatFechaOrden(orden.fechaEntrega) : "Por confirmar"}
                             </span>
                           </div>
                         )}
@@ -8651,7 +8690,7 @@ function PropuestaFichaContenido({
             )}
             {tab === "productos" ? (
               <OrdenProductosTable
-                catalogo={initialProductos}
+                catalogo={catalogosEdicion?.productos ?? initialProductos}
                 items={items}
                 sinComprobante={sinComprobante}
                 expandedIds={openIds}
@@ -9139,7 +9178,7 @@ function PropuestaFichaContenido({
             setAddOpen(open);
             if (!open) setEditingItem(null);
           }}
-          productos={initialProductos}
+          productos={catalogosEdicion?.productos ?? initialProductos}
           clienteId={clienteId || null}
           fechaEntregaDefault={fechaEstimada}
           editingItem={editingItem}
@@ -9261,7 +9300,7 @@ function PropuestaFichaContenido({
         />
         <CargoOrdenDialog
           open={cargoOpen}
-          cargos={initialCargosDirectos}
+          cargos={catalogosEdicion?.cargos ?? initialCargosDirectos}
           subtotalBase={calcularResumen(items).subtotal}
           onClose={() => setCargoOpen(false)}
           onAdd={(cargo) => {

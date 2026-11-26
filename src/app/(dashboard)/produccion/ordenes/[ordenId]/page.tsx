@@ -33,6 +33,13 @@ export default async function OrdenTrabajoDetallePage({
     throw error;
   }
 
+  // El catálogo recorre todas sus páginas. Al abrir la OT recién emitida,
+  // la ficha ya puede mostrar sus productos y pide los selectores al editar.
+  if (emitida === "1") {
+    const documentos = await getEstadoDocumentalOrden(ordenId).catch(() => null);
+    return <PropuestaFicha orden={detalle} recienEmitida initialDocumentos={documentos} />;
+  }
+
   // Clientes para el combobox del modo edición y catálogo de productos
   // para agregar/editar items (mientras la orden esté en borrador/pendiente).
   const [cargos, documentos, clientes, productos] = await Promise.all([
@@ -50,7 +57,6 @@ export default async function OrdenTrabajoDetallePage({
       initialClientes={clientes}
       initialProductos={productos}
       initialCargosDirectos={cargos}
-      recienEmitida={emitida === "1"}
       recienConvertida={convertida === "1"}
       initialDocumentos={documentos}
     />
