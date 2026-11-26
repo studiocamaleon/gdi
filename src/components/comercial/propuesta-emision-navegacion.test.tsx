@@ -43,7 +43,8 @@ vi.mock("@/lib/centro-copiado-pedidos-api", async (original) => ({
 vi.mock("@/lib/ordenes-trabajo-api", async (original) => ({
   ...(await original<typeof import("@/lib/ordenes-trabajo-api")>()),
   editarOrdenTrabajoLote: mocks.editarOrden,
-  crearOrdenTrabajo: mocks.crearOrden,
+  crearOrdenTrabajo: vi.fn(),
+  emitirOrdenTrabajo: mocks.crearOrden,
   cambiarEstadoOrdenTrabajo: mocks.cambiarEstado,
 }));
 vi.mock("@/lib/administracion-api", async (original) => ({
@@ -1042,7 +1043,7 @@ it("si cambia el cliente durante la revisión descarta el cálculo anterior y ap
   expect(mocks.recotizar).not.toHaveBeenCalled();
   expect(container.textContent).toContain("121,00");
 });
-it("espera la ETA automática y permite emitir en cuanto el vendedor fija la fecha del producto", async () => {
+it.each([false, true])("emite con el cálculo detenido y respeta la fecha manual si el vendedor la fija (%s)", async (pactada) => {
   mocks.eta = true;
   vi.stubGlobal("Worker", class {
     postMessage() {}
@@ -1054,8 +1055,15 @@ it("espera la ETA automática y permite emitir en cuanto el vendedor fija la fec
   await click("Agregar producto ficticio");
   const emitir = () => [...container.querySelectorAll<HTMLButtonElement>("button")]
     .find((b) => b.textContent === "Emitir OT")!;
-  expect(emitir().disabled).toBe(true);
-  expect(container.textContent).toContain("Calculando la fecha de entrega…");
+  expect(emitir().disabled).toBe(false);
+  if (!pactada) {
+    await act(async () => emitir().click());
+    expect(mocks.crearOrden).toHaveBeenCalledWith(expect.objectContaining({
+      diferirFechaEntrega: true, fechaEntrega: undefined, items: [expect.objectContaining({ fechaEntrega: undefined })],
+    }));
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/produccion/ordenes/orden-emitida?emitida=1");
+    return;
+  }
   await verTab("Productos");
   const expandir = container.querySelector<HTMLButtonElement>('[aria-label="Ver detalle de Tarjetas ficticias"]')!;
   await act(async () => expandir.click());
@@ -1212,6 +1220,20 @@ it("emite, registra pago y entrega en ese orden; evita doble clic", async () => 
     mocks.entregar.mock.invocationCallOrder[0],
   );
 });
+it("muestra el número de OT antes de que termine un cobro", async () => {
+  let completar!: () => void;
+  mocks.cobrar.mockImplementationOnce(() => new Promise<void>((resolve) => { completar = resolve; }));
+  await prepararCopiadoFinalizado();
+  await verPagos();
+  await click("Pago completo ficticio");
+  await click("Emitir y entregar");
+  expect(container.textContent).toContain("OT-FICTICIA");
+  expect(container.textContent).toContain("Confirmando cobros y entrega");
+  expect(mocks.entregar).not.toHaveBeenCalled();
+  await act(async () => completar());
+  expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/produccion/ordenes/orden-emitida?emitida=1");
+});
+
 it("si falla un pago deja la OT emitida pendiente de entrega, sin reemitir ni entregar", async () => {
   mocks.cobrar.mockRejectedValueOnce(new Error("Cobro rechazado ficticio"));
   await prepararCopiadoFinalizado();
