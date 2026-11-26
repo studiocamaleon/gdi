@@ -76,7 +76,10 @@ export function OrdenProductosTable({
   const table = useOrdenProductosTable(items, sinComprobante);
   const rows = table.getRowModel().rows;
   const tableId = React.useId();
-  const catalogoPorId = new Map(catalogo?.map((producto) => [producto.id, producto]));
+  const catalogoPorId = React.useMemo(
+    () => new Map(catalogo?.map((producto) => [producto.id, producto])),
+    [catalogo],
+  );
   const fmt = (n: number) => formatCurrency(n, moneda);
   return (
     <section className={s.card} aria-label="Productos de la orden">

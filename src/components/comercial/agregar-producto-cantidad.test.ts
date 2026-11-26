@@ -120,11 +120,17 @@ describe("cantidad enviada a cotización y al snapshot del ítem", () => {
     expect(buildJobContext(productoPolyfan(), config, 2, []).cantidad).toBe(2);
   });
 
-  it("mantiene la cantidad del producto al estimar por placas", () => {
-    const config = { ...configVectorial(), modoCotizacionVectorial: "placas" as const };
+  it("al pasar de SVG a placas usa la estimación manual y descarta la geometría anterior", () => {
+    const config = {
+      ...configVectorial(),
+      modoCotizacionVectorial: "placas" as const,
+      cotizacionVectorialManual: { placas: 4, metrosCortePorPlaca: 3, entradasPorPlaca: 1 },
+    };
     const ctx = buildJobContext(productoPolyfan(), config, 2, []);
 
-    expect(ctx.cantidad).toBe(2);
+    expect(ctx.cantidad).toBe(1);
+    expect(ctx.placasVectorialesManuales).toBe(4);
+    expect(ctx.piezaPerimetroTotalM).toBe(12);
     expect(ctx.piezas).toBeUndefined();
     expect(ctx.disenoVectorialFuente).toBeUndefined();
   });

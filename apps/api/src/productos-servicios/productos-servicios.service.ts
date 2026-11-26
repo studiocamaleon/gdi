@@ -63,8 +63,8 @@ export class ProductosServiciosService {
     return this.productos.listarProductos(tenantId, opts);
   }
 
-  listarCatalogoComercial() {
-    return this.productos.listarCatalogoComercial();
+  listarCatalogoComercial(tenantConteos?: string) {
+    return this.productos.listarCatalogoComercial(tenantConteos);
   }
 
   crearProducto(tenantId: string, dto: CrearProductoDto) {
