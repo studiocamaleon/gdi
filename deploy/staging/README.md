@@ -1,6 +1,8 @@
 # Preparación de staging de Grafoprint
 
-> **Estado vigente al 26/11/2026.** Web, API y los dos workers ejecutan `c96ba2fe4bb335e6d439f10faf457c6553218f6b` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). La planificación puede continuar después de emitir. [Mediciones, imágenes y verificación](VALIDACION.md).
+> **Estado vigente al 26/11/2026.** Web, API y los dos workers ejecutan `573428967301ada397310dfa057175be5fec341e` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). La ficha se puede usar durante la carga de los archivos y permite reintentar los pendientes. [Mediciones, imágenes y verificación](VALIDACION.md).
+
+> **Publicación anterior del 26/11/2026.** Web, API y los dos workers ejecutan `c96ba2fe4bb335e6d439f10faf457c6553218f6b` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). La planificación puede continuar después de emitir. [Mediciones, imágenes y verificación](VALIDACION.md).
 
 > **Publicación anterior del 26/11/2026.** Web, API y ambos workers ejecutan `ddcb0a8399932b1aa78ceb4711822650337ad19f` del [PR #139](https://github.com/studiocamaleon/gdi/pull/139). Las OT permiten elegir retiro en el local o despacho indicando solo la localidad. [Pruebas, imágenes, respaldo y reversión](VALIDACION.md).
 

@@ -1,5 +1,20 @@
 # Validación de producción
 
+## 2026-11-26 — Carga de archivos en segundo plano al emitir la OT
+
+Web, API y los dos workers ejecutan `573428967301ada397310dfa057175be5fec341e` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). El historial tiene 326 migraciones, incluida `20261126190000_trabajo_emision_ot`. La carga de archivos usa el almacenamiento local del navegador y el servicio de archivos existente. Se verificaron los permisos de las tablas nuevas y la lectura de OT.
+
+| Servicio | Digest |
+| --- | --- |
+| API y ambos workers | `sha256:9b97f6781f1cd0a4324421823dd2fac004fffc09d867a8b2407835ef86dbacc4` |
+| Web | `sha256:002da44c60f3844ece63807a1af48587117271c567cca96504a82496898ad813` |
+
+Se promovieron los mismos dos digests de staging. La web respondió al ingreso. Desde la API se comprobó la lectura de una OT, un cobro vinculado y un archivo confirmado en un ítem. El generador PDF convirtió una página ficticia. La migración conservó los recuentos de empresas, usuarios, órdenes y lotes fiscales activos. Las pruebas que crean órdenes, movimientos de caja y adjuntos se ejecutaron en staging. [Mediciones por escenario](../staging/VALIDACION.md).
+
+La publicación conservó los recursos de las máquinas. Se verificaron la firma y el manifiesto descifrado del comprobante posterior `8f954f7e-d1ef-4e4b-bc68-85a24ffbeb1c` del 2026-11-26T19:57:01.075Z, junto con las fuentes y las imágenes desplegadas. El último ensayo de restauración integral figura en el registro anterior.
+
+Antes de revertir, terminar o reintentar las cargas pendientes desde el navegador de origen y drenar la cola de emisión. Conservar las dos tablas y restaurar la web `sha256:1365485109290971eae955fceb37aedf7ae5218e5fba19e2b005f94c8547fa1b` y el backend `sha256:dbfd74f4e0aba840152c2ffc43f80444ed182ed55313432b29eaad0376677a55` en este entorno.
+
 ## 2026-11-26 — Punto de entrega y despacho por localidad
 
 La web, la API y ambos workers ejecutan `ddcb0a8399932b1aa78ceb4711822650337ad19f` del [PR #139](https://github.com/studiocamaleon/gdi/pull/139). El cambio usa el campo de despacho que ya tenían las OT y la misma serie de 325 migraciones. Las máquinas conservaron sus recursos.

@@ -1,5 +1,43 @@
 # Validación de staging — historial
 
+## 2026-11-26 — Carga de archivos en segundo plano al emitir la OT
+
+Web, API y los dos workers ejecutan `573428967301ada397310dfa057175be5fec341e` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). El historial tiene 326 migraciones, incluida `20261126190000_trabajo_emision_ot`. La carga de archivos usa el almacenamiento local del navegador y el servicio de archivos existente. Se verificaron los permisos de las tablas nuevas y la lectura de OT.
+
+| Servicio | Digest |
+| --- | --- |
+| API y ambos workers | `sha256:9b97f6781f1cd0a4324421823dd2fac004fffc09d867a8b2407835ef86dbacc4` |
+| Web | `sha256:002da44c60f3844ece63807a1af48587117271c567cca96504a82496898ad813` |
+
+La comparación con el registro anterior usa tres emisiones completas por escenario y versión en Chromium, con staging ya despierto. El reloj arrancó al hacer clic en **Emitir OT**. Se detuvo al seleccionar **Datos** en la ficha emitida y ver **Punto de entrega**. Cada OT contenía un trabajo a medida con un paso manual. El cobro ficticio fue de ARS 100. Para los adjuntos se usó un PNG de 1.080.993 bytes. Se verificaron la asociación del cobro con la OT, el importe, la asociación del archivo con el ítem y el SHA-256 de la descarga.
+
+| Emisión | Antes de desacoplar el adjunto | Con carga en segundo plano | Mínimo–máximo |
+| --- | ---: | ---: | ---: |
+| Solo OT | 1,11 s | 2,02 s | 2,00 s–2,17 s |
+| Con cobro | 1,37 s | 3,04 s | 2,91 s–3,12 s |
+| Con archivo | 4,52 s | 2,05 s | 1,89 s–2,23 s |
+| Con cobro y archivo | 4,79 s | 2,84 s | 2,73 s–2,85 s |
+
+Con cobro y archivo, la confirmación del archivo llegó a los 5,32 s de mediana desde el clic. En dos pruebas el usuario salió a otra pantalla mientras seguía la carga y volvió a ver el archivo en la OT. En la restante apareció en la pestaña Archivos ya abierta. Además se interrumpió la transferencia de una decimotercera OT de prueba y se recargó la página. La carga se reanudó y se comprobó un solo archivo y un solo cobro. Este ensayo de interrupción se excluyó de los tiempos. Se verificaron las fechas y el fin del procesamiento de las trece órdenes. En local también pasaron 54 pruebas de regresión. En Chromium se ensayó la pérdida de la respuesta de confirmación y el reintento de una transferencia fallida. Si el navegador no puede conservar la copia local, el formulario espera a que termine la transferencia.
+
+En otras dos emisiones se registró el clic y se verificaron después el cobro y el contenido descargado. El navegador de pruebas había interrumpido la comprobación al volver a abrir la ficha. Tomando las cinco emisiones naturales con cobro y archivo, la mediana hasta poder usar la ficha fue de 2,85 s.
+
+En la misma sesión de pruebas se desactivó la carga en segundo plano en el navegador para ejercitar el flujo que espera al almacenamiento. Con el mismo cobro y archivo la ficha tardó 5,33 s de mediana (tres emisiones). La tabla compara también los controles sin adjuntos con la sesión histórica de staging. En esta sesión, la petición de emisión y la de cobro tardaron más, incluso cuando no había una transferencia en curso.
+
+Para comparar bajo condiciones equivalentes, se alternaron las dos versiones web en la misma máquina de staging, con el mismo backend, base, cliente, archivo y recorrido. Se hicieron tres emisiones por escenario para cada versión y se verificó el contenido en ambos casos. La tabla muestra las medianas desde el clic hasta usar la ficha.
+
+| Escenario | Web anterior | Web publicada |
+| --- | ---: | ---: |
+| Solo OT | 2,00 s | 1,99 s |
+| Con cobro | 2,82 s | 2,68 s |
+| Con cobro y archivo | 5,64 s | 2,96 s |
+
+En la comparación consecutiva, con la web nueva, la ficha se pudo usar entre 2,63 y 3,10 s. El almacenamiento terminó de confirmar el archivo a los 5,62 s de mediana desde el clic.
+
+La publicación conservó los recursos de las máquinas. Se verificaron la firma y el manifiesto descifrado del comprobante posterior `1973b9b4-424c-4f64-9f83-b595b6065b32` del 2026-11-26T19:24:50.959Z, junto con las fuentes y las imágenes desplegadas. El último ensayo de restauración integral figura en el registro anterior.
+
+Antes de revertir, terminar o reintentar las cargas pendientes desde el navegador de origen y drenar la cola de emisión. Conservar las dos tablas y restaurar la web `sha256:aa3844ec14d5f11d90468d7811ffb0b94637093113f7a06a30d921f4a5f9bfc4` y el backend `sha256:40c4fa0e2f5edc84d4dcc29f2c036f2d0f25367b8453ba2ab93ff400cab6de5c` en este entorno. La configuración de control de actividad ya contemplaba la cola de emisión.
+
 ## 2026-11-26 — Emisión de OT y cálculo de fechas en segundo plano
 
 Web, API y los dos workers ejecutan `c96ba2fe4bb335e6d439f10faf457c6553218f6b` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). La migración aditiva `20261126190000_trabajo_emision_ot` llevó el historial a 326. Se verificaron los permisos de las tablas nuevas y la lectura de OT.

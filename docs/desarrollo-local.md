@@ -2,7 +2,7 @@
 
 ## Base de trabajo después del cierre de noviembre de 2026
 
-La carpeta principal es la base habitual de desarrollo. El [PR #139](https://github.com/studiocamaleon/gdi/pull/139) integró el selector de punto de entrega. La aplicación publicada ejecuta `ddcb0a8399932b1aa78ceb4711822650337ad19f`. El registro operativo del mismo PR documenta la promoción de las imágenes a producción.
+La carpeta principal es la base habitual de desarrollo. La aplicación publicada ejecuta `573428967301ada397310dfa057175be5fec341e` de los [PR #140](https://github.com/studiocamaleon/gdi/pull/140) y [PR #141](https://github.com/studiocamaleon/gdi/pull/141). [Registro de producción](../deploy/produccion/VALIDACION.md).
 
 En la Mac de desarrollo, el lanzador privado `Abrir-Grafoprint-local.command` arranca la rama actual de la carpeta principal: web en `localhost:3000`, API en `127.0.0.1:3001`, base habitual `gdi_saas` en el puerto 5436. Comprueba las conexiones locales, conserva los datos y sólo aplica migraciones revisadas. No copia accesos de staging o producción. Usa Node 24, límites de memoria, tareas programadas y envíos externos desactivados; no inicia workers. Los servicios existentes de Docker mantienen sus recursos.
 
