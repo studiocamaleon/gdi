@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProduccionService } from '../produccion/produccion.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import { EtaService } from './eta.service';
+import { EtaSnapshotScheduler } from './eta-snapshot.scheduler';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   leerAsignacionPersonal,
@@ -400,6 +401,37 @@ it('una persona del equipo ejecuta la previsión de otra y la agenda conserva al
   expect(paso.iniciadoPorId).toBe(noAsignado.userId);
   expect((await leer(paso.id)).personas.map((p) => p.empleadoId)).toContain(
     noAsignado.id,
+  );
+  const reparto = jest.spyOn(eta, 'sincronizarAsignaciones');
+  const siguiente = pasos[1].id;
+  const previo = await leer(siguiente);
+  reloj = new Date(ahora.getTime() + 24 * 60 * 60_000);
+  await service.accionesPasos(auth(noAsignado.userId!), [
+    {
+      ordenId,
+      itemId: paso.itemId,
+      pasoId: paso.id,
+      payload: { accion: 'completar', tiempoDeclaradoMin: 5 },
+    },
+  ]);
+  expect(reparto).not.toHaveBeenCalled();
+  const completado = await db.ordenTrabajoItemPaso.findUniqueOrThrow({
+    where: { id: paso.id },
+    include: { tramos: true },
+  });
+  expect(completado.estado).toBe('hecho');
+  expect(completado.completadoPorId).toBe(noAsignado.userId);
+  expect(completado.tramos[0].motivoFin).toBe('completado');
+  expect(await leer(siguiente)).toEqual(previo);
+
+  // Ejecutar sólo el ciclo de este taller ficticio, con el motor real.
+  jest.spyOn(eta, 'tenantsConActividad').mockResolvedValue([tenantId]);
+  await new EtaSnapshotScheduler(eta, db).asignarPersonal();
+  expect(reparto).toHaveBeenCalledWith(tenantId);
+  const actualizado = await leer(siguiente);
+  expect(actualizado.franjas.length).toBeGreaterThan(0);
+  expect(Date.parse(actualizado.franjas[0].inicio)).toBeGreaterThanOrEqual(
+    reloj.getTime(),
   );
 });
 
