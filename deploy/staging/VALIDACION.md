@@ -1,5 +1,42 @@
 # Validación de staging — historial
 
+## 2026-11-26 — Rendimiento de OT, producción y despachos
+
+[PR integrador #138](https://github.com/studiocamaleon/gdi/pull/138), con los PR #134, #135, #136 y #137. Web, API y ambos workers ejecutan `aa75cf6248ffc7205376fe4015b48c07f82767b1`. La API consultó la base y el servicio PDF convirtió una página ficticia. El historial pasó de 324 a 325 migraciones y se conservaron los recuentos de control.
+
+| Servicio | Digest vigente |
+| --- | --- |
+| API y ambos workers | `sha256:a5fa71bbdcf7ac43093301863a3bf9704cdb004229f3800f4e9555c21fcf0ec5` |
+| Web | `sha256:5403118e6634e4be845020b67536aba3c0ecc8242114e1a3d5a84580a5e54c43` |
+| PDF | `sha256:c0fa0448556408845ed177f395e8b054c488b96e024c4420e55b5182cfff03fd` |
+| Copiador | `sha256:d7fea1e72a9742a8f33df5296983be41ac30012dafbd878361b9fd737a8ef258` |
+
+### Emisión y edición de producto
+
+En Chrome se emitió la orden ficticia `OT-2026-0010`. Desde agregar el producto hasta habilitar **Emitir OT** transcurrieron 0,66 s. El clic en emitir abrió el detalle en 2,12 s. La edición abrió directamente las especificaciones en 0,32 s. Son mediciones de una emisión. [Comparación con tres emisiones por versión y carga multiempresa](../../docs/rendimiento-ordenes-2026-11-25.md).
+
+### Fecha de entrega
+
+Con el cálculo automático retenido, una fecha manual habilitó la emisión en 25 ms. Al liberar el cálculo se conservó la fecha elegida.
+
+### Producción y despacho
+
+La orden indicaba despacho por Expreso QA a Puerto Deseado. La petición que completó el paso tardó 675 ms. Al completar el último paso apareció «OT terminada · Para despachar», con el destino y la opción de etiqueta. Se descargó y revisó una etiqueta horizontal de 150 × 100 mm, con remitente, destinatario, sucursal y campos manuscritos para los bultos. Se verificó el PDF en pantalla.
+
+### Trabajo a medida, pagos, archivos y notas
+
+La orden ficticia chilena `OT-2026-0001` conservó el trabajo a medida de CLP 10000, su cobro de CLP 2500 y el archivo original de 59 bytes. La nota tuvo el mismo fondo amarillo en el detalle de la orden y en el panel de producción. En la nueva OT de despacho se registró otro pago ficticio en efectivo y se adjuntó un CSV desde la orden, sin entrar en «Editar orden». Al descargar el archivo se comprobaron sus 44 bytes contra el original.
+
+### Controles locales y de GitHub
+
+844 pruebas locales aprobadas. Los controles del candidato incluyeron permisos HTTP, contenedores, CodeQL y Grafo3D. La preview de Vercel permitió preparar un modelo para exportar.
+
+### Respaldo y reversión
+
+Comprobante posterior `c55cad39-3aa5-4853-acd9-cdd9200d1e08`, completado el 2026-11-26T05:44:13.997Z (UTC). Se verificaron la firma y el manifiesto descifrado, incluida la revisión y las imágenes. La última restauración integral corresponde a un ensayo anterior.
+
+Para volver a la aplicación anterior, restablecer web `sha256:f41799bfadb76483fab137c873c2fd7f98eb508c52f1f01bc8a840d0596dbb8d` y API/ambos workers `sha256:9e7a9e2f23ff0ba194c88c8edd6219ade86eccd69dad65d6d22f886152d191a0` en los registros propios del entorno. El índice y el campo opcional son aditivos. Conservar los datos de despacho capturados y el esquema al revertir el código.
+
 ## 2026-11-25 — Rendimiento de las órdenes de trabajo
 
 [PR #135](https://github.com/studiocamaleon/gdi/pull/135), revisión funcional `9264c668b1a9937a18b2530bd9ddc821239b37f9`. La web, la API y ambos workers ejecutan esa revisión en staging. Cada máquina conservó su configuración y recursos. El índice parcial de medianas por empresa está listo y válido. Staging pasó de 323 a 324 migraciones aplicadas y conservó los recuentos de control. Gotenberg respondió y generó el PDF ficticio.
